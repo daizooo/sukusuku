@@ -1,12 +1,13 @@
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
+import type { Database } from '@/types/supabase';
 
 // Server Components / Route Handlers から利用するSupabaseクライアント。
 // Cookieベースのセッションを読み書きし、認証状態をサーバー側で解決する。
 export async function createClient() {
   const cookieStore = await cookies();
 
-  return createServerClient(
+  return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {

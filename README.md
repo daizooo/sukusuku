@@ -60,11 +60,18 @@ supabase/migrations/
 - [x] Gemini AIチャットをRoute Handler経由に変更（APIキーをサーバー側に隔離）
 - [x] Supabaseスキーマ（9テーブル）・RLSポリシー・Storageポリシーのマイグレーションを追加
 - [x] Supabaseクライアント（ブラウザ/サーバー）の雛形を追加
-- [ ] Supabaseプロジェクトの実際の作成・マイグレーション適用
+- [x] Supabaseプロジェクト作成・マイグレーション適用・Security/Performance Advisor対応・型生成 (`src/types/supabase.ts`)
 - [ ] 認証（メール/Google）・招待コードによる夫婦の家族紐付け機能
 - [ ] 画面のダミーデータをSupabaseからの取得・保存に置き換え
 - [ ] 書類箱の画像アップロード（Supabase Storage）
 - [ ] Vercelへのデプロイ・GitHub連携
+
+### Supabaseプロジェクト
+
+- 組織: `daizooo` / プロジェクト名: `sukusuku` / リージョン: `ap-northeast-1`（東京）
+- URL・anonキーはSupabaseダッシュボード（Project Settings > API）から取得し、`.env.local` に設定してください
+- スキーマは `supabase/migrations/` を上から順に適用したものと同一です（`apply_migration` で反映済み）
+- `src/types/supabase.ts` はこのプロジェクトから `generate_typescript_types` で生成した型です。スキーマ変更後は再生成してください
 
 ## デプロイ
 
