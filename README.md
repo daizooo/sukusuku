@@ -61,10 +61,25 @@ supabase/migrations/
 - [x] Supabaseスキーマ（9テーブル）・RLSポリシー・Storageポリシーのマイグレーションを追加
 - [x] Supabaseクライアント（ブラウザ/サーバー）の雛形を追加
 - [x] Supabaseプロジェクト作成・マイグレーション適用・Security/Performance Advisor対応・型生成 (`src/types/supabase.ts`)
-- [ ] 認証（メール/Google）・招待コードによる夫婦の家族紐付け機能
-- [ ] 画面のダミーデータをSupabaseからの取得・保存に置き換え
+- [x] 認証（メール/パスワード）・招待コード（家族UUID）による夫婦の家族紐付け機能 (`/login`, `/family-setup`)
+- [x] 予定(tasks)タブをSupabase実データに接続（一覧取得・追加・編集・完了切替・削除、家族作成時に定番ToDoを自動投入）
+- [ ] Google認証などの追加サインイン方法
+- [ ] プロフィール（子供の名前・誕生日、パパママの名前・勤務先、住所）のSupabase連携
+- [ ] 育児記録・成長グラフ・お祝い管理・保活メモ・書類箱のSupabase連携
 - [ ] 書類箱の画像アップロード（Supabase Storage）
 - [ ] Vercelへのデプロイ・GitHub連携
+
+### 認証・データ連携の仕組み
+
+- `src/proxy.ts`（Next.js 16の`middleware`は`proxy`に名称変更）: 未ログイン時は`/login`へ、`family_id`未設定時は`/family-setup`へリダイレクト
+- `/login`: メール/パスワードでのサインアップ・ログイン（Supabase Auth）
+- `/family-setup`: 家族の新規作成（`families`にINSERT→自分の`users.family_id`を更新→定番ToDoを一括投入）、または招待コード（家族のUUID）を入力して既存家族に参加
+- `src/lib/api/tasks.ts`: `tasks`テーブルのCRUDとDB行⇔アプリ型のマッピング。`SukusukuApp`から呼び出し、楽観的UI更新＋失敗時ロールバックを行う
+- サインアップ時は`auth.users`へのINSERTをトリガーに`public.users`へ空プロフィール行を自動作成（`0005_auth_user_trigger.sql`）
+
+### 既知の制約 / 動作確認について
+
+この開発環境（サンドボックス）はネットワークポリシーにより`*.supabase.co`への直接アクセスがブロックされているため、ブラウザから実際にサインアップ〜家族作成〜タスク登録までの動作確認は行えていません（`npm run build` / `next lint` / `tsc --noEmit` は通過済み、DBスキーマとRLSポリシーはSupabase側で適用・Advisorでの警告なしを確認済み）。Vercelへのデプロイ後、またはローカル環境（`npm run dev`）で一度実際にサインアップ〜家族作成〜予定追加の一連の流れをご確認ください。
 
 ### Supabaseプロジェクト
 

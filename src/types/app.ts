@@ -6,7 +6,7 @@ export type Assignee = 'パパ' | 'ママ' | '二人で' | '未定';
 export type TaskCategory = '手続き' | '健診' | 'イベント' | 'お買い物';
 
 export interface Task {
-  id: number;
+  id: string;
   category: TaskCategory | string;
   title: string;
   place: string;

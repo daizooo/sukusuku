@@ -19,10 +19,11 @@ import { getDaysInMonth, getFirstDayOfMonth } from '@/lib/dateUtils';
 
 interface ScheduleTabProps {
   dynamicTodos: DynamicTask[];
+  isLoadingTodos?: boolean;
   today: Date;
   currentCalendarDate: Date;
   onChangeCalendarDate: (date: Date) => void;
-  onToggleTodo: (id: number) => void;
+  onToggleTodo: (id: string) => void;
   onOpenTask: (task: DynamicTask) => void;
 }
 
@@ -30,6 +31,7 @@ const ASSIGNEE_FILTERS: (Assignee | 'すべて')[] = ['すべて', 'パパ', '�
 
 export default function ScheduleTab({
   dynamicTodos,
+  isLoadingTodos,
   today,
   currentCalendarDate,
   onChangeCalendarDate,
@@ -95,6 +97,10 @@ export default function ScheduleTab({
             ))}
           </div>
           <div className="flex-1 overflow-y-auto space-y-3 pb-6">
+            {isLoadingTodos && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
+            {!isLoadingTodos && filteredTodos.length === 0 && (
+              <p className="text-sm text-gray-400 text-center py-8">予定はまだありません</p>
+            )}
             {filteredTodos.map((task) => (
               <div
                 key={task.id}

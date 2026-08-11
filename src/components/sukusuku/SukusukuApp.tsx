@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Home,
   CalendarDays,
@@ -26,15 +26,22 @@ import type {
 } from '@/types/app';
 import {
   INITIAL_DOCUMENTS,
-  INITIAL_EVENTS,
   INITIAL_GIFTS,
   INITIAL_GROWTH_DATA,
   INITIAL_NURSERIES,
   INITIAL_PROFILE,
-  INITIAL_TODOS,
   createInitialLogs,
 } from '@/lib/seedData';
 import { calculateTargetDate, formatDateString } from '@/lib/dateUtils';
+import { createClient } from '@/lib/supabase/client';
+import {
+  deleteTask as deleteTaskApi,
+  insertTask,
+  listTasks,
+  updateTask as updateTaskApi,
+  updateTaskDone,
+  type NewTaskInput,
+} from '@/lib/api/tasks';
 
 import HomeTab from './tabs/HomeTab';
 import ScheduleTab from './tabs/ScheduleTab';
@@ -65,9 +72,18 @@ const EMPTY_NEW_TASK: NewTaskDraft = {
   notification: false,
 };
 
-export default function SukusukuApp() {
+interface SukusukuAppProps {
+  familyId: string;
+  userId: string;
+}
+
+export default function SukusukuApp({ familyId }: SukusukuAppProps) {
+  const supabase = useMemo(() => createClient(), []);
+
   const [activeTab, setActiveTab] = useState<TabId>('home');
-  const [todos, setTodos] = useState<Task[]>([...INITIAL_TODOS, ...INITIAL_EVENTS]);
+  const [todos, setTodos] = useState<Task[]>([]);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true);
+  const [taskError, setTaskError] = useState('');
   const [logs, setLogs] = useState<CareLog[]>(() => createInitialLogs());
   const [gifts] = useState<Gift[]>(INITIAL_GIFTS);
   const [growthData] = useState<GrowthRecord[]>(INITIAL_GROWTH_DATA);
@@ -84,6 +100,7 @@ export default function SukusukuApp() {
 
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
 
+  // TODO: プロフィール(子供の名前・誕生日、パパママ情報)はまだSupabase未連携（次のステップ）
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [tempProfile, setTempProfile] = useState<UserProfile>(userProfile);
@@ -94,6 +111,27 @@ export default function SukusukuApp() {
   ]);
 
   const today = new Date();
+
+  // 家族のタスクをSupabaseから取得
+  useEffect(() => {
+    let cancelled = false;
+    listTasks(supabase, familyId)
+      .then((data) => {
+        if (cancelled) return;
+        setTodos(data);
+        setTaskError('');
+      })
+      .catch((err) => {
+        console.error('Failed to load tasks:', err);
+        if (!cancelled) setTaskError('予定の読み込みに失敗しました。時間を置いて再度お試しください。');
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingTasks(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, familyId]);
 
   const dynamicTodos = useMemo<DynamicTask[]>(() => {
     return todos.map((todo) => {
@@ -133,9 +171,23 @@ export default function SukusukuApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile.birthDate]);
 
-  const toggleTodo = (id: number) => {
-    setTodos((prev) => prev.map((todo) => (todo.id === id ? { ...todo, done: !todo.done } : todo)));
-    setSelectedTask((prev) => (prev && prev.id === id ? { ...prev, done: !prev.done } : prev));
+  const toggleTodo = async (id: string) => {
+    const target = todos.find((t) => t.id === id);
+    if (!target) return;
+    const nextDone = !target.done;
+
+    // 楽観的更新
+    setTodos((prev) => prev.map((todo) => (todo.id === id ? { ...todo, done: nextDone } : todo)));
+    setSelectedTask((prev) => (prev && prev.id === id ? { ...prev, done: nextDone } : prev));
+
+    try {
+      await updateTaskDone(supabase, id, nextDone);
+    } catch (err) {
+      console.error('Failed to update task:', err);
+      // 失敗時はロールバック
+      setTodos((prev) => prev.map((todo) => (todo.id === id ? { ...todo, done: !nextDone } : todo)));
+      setSelectedTask((prev) => (prev && prev.id === id ? { ...prev, done: !nextDone } : prev));
+    }
   };
 
   const openTaskDetail = (task: DynamicTask) => {
@@ -146,16 +198,34 @@ export default function SukusukuApp() {
 
   const closeTaskDetail = () => setSelectedTask(null);
 
-  const saveTaskEdit = () => {
+  const saveTaskEdit = async () => {
     if (!tempEditingTask) return;
-    setTodos((prev) => prev.map((todo) => (todo.id === tempEditingTask.id ? { ...todo, ...tempEditingTask } : todo)));
-    setSelectedTask(tempEditingTask);
+    const updated = tempEditingTask;
+
+    setTodos((prev) => prev.map((todo) => (todo.id === updated.id ? { ...todo, ...updated } : todo)));
+    setSelectedTask(updated);
     setIsEditingTask(false);
+
+    try {
+      await updateTaskApi(supabase, updated);
+    } catch (err) {
+      console.error('Failed to save task:', err);
+      alert('保存に失敗しました。もう一度お試しください。');
+    }
   };
 
-  const deleteTask = (id: number) => {
+  const handleDeleteTask = async (id: string) => {
+    const previousTodos = todos;
     setTodos((prev) => prev.filter((todo) => todo.id !== id));
     setSelectedTask(null);
+
+    try {
+      await deleteTaskApi(supabase, id);
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+      setTodos(previousTodos);
+      alert('削除に失敗しました。もう一度お試しください。');
+    }
   };
 
   const handleProfileSave = () => {
@@ -168,28 +238,31 @@ export default function SukusukuApp() {
     setIsEditingProfile(true);
   };
 
-  const handleAddTask = () => {
+  const handleAddTask = async () => {
     if (!newTask.title) return;
     const daysAfterBirth = Number(newTask.daysAfterBirth) || 0;
-    const newId = Date.now();
-    setTodos((prev) => [
-      ...prev,
-      {
-        id: newId,
-        title: newTask.title,
-        category: newTask.category,
-        daysAfterBirth,
-        timing: newTask.timing || `生後${daysAfterBirth}日頃`,
-        place: newTask.place || '未定',
-        done: false,
-        note: newTask.note,
-        belongings: newTask.belongings,
-        assignee: newTask.assignee,
-        notification: newTask.notification,
-      },
-    ]);
+    const input: NewTaskInput = {
+      title: newTask.title,
+      category: newTask.category,
+      daysAfterBirth,
+      timing: newTask.timing || `生後${daysAfterBirth}日頃`,
+      place: newTask.place || '未定',
+      note: newTask.note,
+      belongings: newTask.belongings,
+      assignee: newTask.assignee,
+      notification: newTask.notification,
+    };
+
     setShowAddModal(false);
     setNewTask(EMPTY_NEW_TASK);
+
+    try {
+      const created = await insertTask(supabase, familyId, input);
+      setTodos((prev) => [...prev, created]);
+    } catch (err) {
+      console.error('Failed to add task:', err);
+      alert('タスクの追加に失敗しました。もう一度お試しください。');
+    }
   };
 
   const addLog = (type: CareLog['type'], label: string) => {
@@ -211,6 +284,10 @@ export default function SukusukuApp() {
         <h1 className="font-bold text-gray-800 tracking-wide text-lg">すくすく手帳</h1>
       </header>
 
+      {taskError && (
+        <p className="flex-none bg-red-50 text-red-600 text-xs text-center py-2 px-4 border-b border-red-100">{taskError}</p>
+      )}
+
       <main className="flex-1 overflow-hidden">
         {activeTab === 'home' && (
           <HomeTab
@@ -218,6 +295,7 @@ export default function SukusukuApp() {
             ageInDays={ageInDays}
             ageInMonths={ageInMonths}
             dynamicTodos={dynamicTodos}
+            isLoadingTodos={isLoadingTasks}
             onToggleTodo={toggleTodo}
             onOpenTask={openTaskDetail}
             onViewAllSchedule={() => setActiveTab('schedule')}
@@ -226,6 +304,7 @@ export default function SukusukuApp() {
         {activeTab === 'schedule' && (
           <ScheduleTab
             dynamicTodos={dynamicTodos}
+            isLoadingTodos={isLoadingTasks}
             today={today}
             currentCalendarDate={currentCalendarDate}
             onChangeCalendarDate={setCurrentCalendarDate}
@@ -299,7 +378,7 @@ export default function SukusukuApp() {
         onSaveEdit={saveTaskEdit}
         onClose={closeTaskDetail}
         onToggleDone={() => selectedTask && toggleTodo(selectedTask.id)}
-        onDelete={() => selectedTask && deleteTask(selectedTask.id)}
+        onDelete={() => selectedTask && handleDeleteTask(selectedTask.id)}
       />
       <AiChatModal
         show={showAiModal}

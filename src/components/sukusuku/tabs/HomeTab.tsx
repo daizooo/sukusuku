@@ -16,7 +16,8 @@ interface HomeTabProps {
   ageInDays: number;
   ageInMonths: { months: number; days: number };
   dynamicTodos: DynamicTask[];
-  onToggleTodo: (id: number) => void;
+  isLoadingTodos?: boolean;
+  onToggleTodo: (id: string) => void;
   onOpenTask: (task: DynamicTask) => void;
   onViewAllSchedule: () => void;
 }
@@ -26,6 +27,7 @@ export default function HomeTab({
   ageInDays,
   ageInMonths,
   dynamicTodos,
+  isLoadingTodos,
   onToggleTodo,
   onOpenTask,
   onViewAllSchedule,
@@ -103,7 +105,8 @@ export default function HomeTab({
           </button>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50">
-          {upcomingTasks.length === 0 && (
+          {isLoadingTodos && <p className="p-4 text-sm text-gray-400 text-center">読み込み中...</p>}
+          {!isLoadingTodos && upcomingTasks.length === 0 && (
             <p className="p-4 text-sm text-gray-400 text-center">直近の予定はありません</p>
           )}
           {upcomingTasks.map((task) => (
