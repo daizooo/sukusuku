@@ -1,0 +1,314 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import {
+  Home,
+  CalendarDays,
+  FileText,
+  Gift as GiftIcon,
+  Folder,
+  Plus,
+  Sparkles,
+  Bot,
+} from 'lucide-react';
+
+import type {
+  AiChatMessage,
+  CareLog,
+  DocumentItem,
+  DynamicTask,
+  Gift,
+  GrowthRecord,
+  Nursery,
+  Task,
+  TabId,
+  UserProfile,
+} from '@/types/app';
+import {
+  INITIAL_DOCUMENTS,
+  INITIAL_EVENTS,
+  INITIAL_GIFTS,
+  INITIAL_GROWTH_DATA,
+  INITIAL_NURSERIES,
+  INITIAL_PROFILE,
+  INITIAL_TODOS,
+  createInitialLogs,
+} from '@/lib/seedData';
+import { calculateTargetDate, formatDateString } from '@/lib/dateUtils';
+
+import HomeTab from './tabs/HomeTab';
+import ScheduleTab from './tabs/ScheduleTab';
+import LogTab from './tabs/LogTab';
+import GiftTab from './tabs/GiftTab';
+import InfoTab from './tabs/InfoTab';
+import AddTaskModal, { type NewTaskDraft } from './modals/AddTaskModal';
+import TaskDetailModal from './modals/TaskDetailModal';
+import AiChatModal from './modals/AiChatModal';
+
+const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
+  { id: 'home', icon: Home, label: 'ホーム' },
+  { id: 'schedule', icon: CalendarDays, label: '予定' },
+  { id: 'log', icon: FileText, label: '記録' },
+  { id: 'gift', icon: GiftIcon, label: 'お祝い' },
+  { id: 'info', icon: Folder, label: 'ストック' },
+];
+
+const EMPTY_NEW_TASK: NewTaskDraft = {
+  title: '',
+  category: '手続き',
+  timing: '',
+  daysAfterBirth: 0,
+  place: '',
+  note: '',
+  belongings: '',
+  assignee: '未定',
+  notification: false,
+};
+
+export default function SukusukuApp() {
+  const [activeTab, setActiveTab] = useState<TabId>('home');
+  const [todos, setTodos] = useState<Task[]>([...INITIAL_TODOS, ...INITIAL_EVENTS]);
+  const [logs, setLogs] = useState<CareLog[]>(() => createInitialLogs());
+  const [gifts] = useState<Gift[]>(INITIAL_GIFTS);
+  const [growthData] = useState<GrowthRecord[]>(INITIAL_GROWTH_DATA);
+  const [documents] = useState<DocumentItem[]>(INITIAL_DOCUMENTS);
+  const [nurseries] = useState<Nursery[]>(INITIAL_NURSERIES);
+
+  // --- UI状態 ---
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<DynamicTask | null>(null);
+  const [isEditingTask, setIsEditingTask] = useState(false);
+  const [tempEditingTask, setTempEditingTask] = useState<DynamicTask | null>(null);
+
+  const [newTask, setNewTask] = useState<NewTaskDraft>(EMPTY_NEW_TASK);
+
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
+
+  const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [tempProfile, setTempProfile] = useState<UserProfile>(userProfile);
+
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [aiHistory, setAiHistory] = useState<AiChatMessage[]>([
+    { role: 'model', text: 'こんにちは！AI育児アシスタントです。お子様の様子で気になることや、悩みがあれば何でも聞いてくださいね。' },
+  ]);
+
+  const today = new Date();
+
+  const dynamicTodos = useMemo<DynamicTask[]>(() => {
+    return todos.map((todo) => {
+      const targetDateObj = calculateTargetDate(userProfile.birthDate, todo.daysAfterBirth);
+      return {
+        ...todo,
+        targetDateObj,
+        targetDate: formatDateString(targetDateObj),
+      };
+    });
+  }, [todos, userProfile.birthDate]);
+
+  const ageInDays = useMemo(() => {
+    if (!userProfile.birthDate) return 0;
+    const birth = new Date(userProfile.birthDate);
+    if (isNaN(birth.getTime())) return 0;
+    const birthDateOnly = new Date(birth.getFullYear(), birth.getMonth(), birth.getDate());
+    const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const diffTime = todayDateOnly.getTime() - birthDateOnly.getTime();
+    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile.birthDate]);
+
+  const ageInMonths = useMemo(() => {
+    if (!userProfile.birthDate) return { months: 0, days: 0 };
+    const birth = new Date(userProfile.birthDate);
+    if (isNaN(birth.getTime())) return { months: 0, days: 0 };
+    let months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
+    let tempDate = new Date(birth.getFullYear(), birth.getMonth() + months, birth.getDate());
+
+    if (today < tempDate) {
+      months -= 1;
+      tempDate = new Date(birth.getFullYear(), birth.getMonth() + months, birth.getDate());
+    }
+    const days = Math.floor((today.getTime() - tempDate.getTime()) / (1000 * 60 * 60 * 24));
+    return { months, days };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile.birthDate]);
+
+  const toggleTodo = (id: number) => {
+    setTodos((prev) => prev.map((todo) => (todo.id === id ? { ...todo, done: !todo.done } : todo)));
+    setSelectedTask((prev) => (prev && prev.id === id ? { ...prev, done: !prev.done } : prev));
+  };
+
+  const openTaskDetail = (task: DynamicTask) => {
+    setSelectedTask(task);
+    setIsEditingTask(false);
+    setTempEditingTask(task);
+  };
+
+  const closeTaskDetail = () => setSelectedTask(null);
+
+  const saveTaskEdit = () => {
+    if (!tempEditingTask) return;
+    setTodos((prev) => prev.map((todo) => (todo.id === tempEditingTask.id ? { ...todo, ...tempEditingTask } : todo)));
+    setSelectedTask(tempEditingTask);
+    setIsEditingTask(false);
+  };
+
+  const deleteTask = (id: number) => {
+    setTodos((prev) => prev.filter((todo) => todo.id !== id));
+    setSelectedTask(null);
+  };
+
+  const handleProfileSave = () => {
+    setUserProfile(tempProfile);
+    setIsEditingProfile(false);
+  };
+
+  const startEditingProfile = () => {
+    setTempProfile(userProfile);
+    setIsEditingProfile(true);
+  };
+
+  const handleAddTask = () => {
+    if (!newTask.title) return;
+    const daysAfterBirth = Number(newTask.daysAfterBirth) || 0;
+    const newId = Date.now();
+    setTodos((prev) => [
+      ...prev,
+      {
+        id: newId,
+        title: newTask.title,
+        category: newTask.category,
+        daysAfterBirth,
+        timing: newTask.timing || `生後${daysAfterBirth}日頃`,
+        place: newTask.place || '未定',
+        done: false,
+        note: newTask.note,
+        belongings: newTask.belongings,
+        assignee: newTask.assignee,
+        notification: newTask.notification,
+      },
+    ]);
+    setShowAddModal(false);
+    setNewTask(EMPTY_NEW_TASK);
+  };
+
+  const addLog = (type: CareLog['type'], label: string) => {
+    const newLog: CareLog = {
+      id: Date.now(),
+      type,
+      label,
+      amount: type === 'milk' ? '100ml' : '',
+      time: new Date(),
+      note: '',
+      user: 'あなた',
+    };
+    setLogs((prev) => [newLog, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()));
+  };
+
+  return (
+    <div className="max-w-md mx-auto h-screen sm:h-[850px] relative bg-gray-50 flex flex-col font-sans overflow-hidden shadow-2xl sm:rounded-3xl sm:my-8 border sm:border-gray-200">
+      <header className="flex-none bg-white px-4 py-3 flex flex-col items-center justify-center shadow-sm z-10 relative">
+        <h1 className="font-bold text-gray-800 tracking-wide text-lg">すくすく手帳</h1>
+      </header>
+
+      <main className="flex-1 overflow-hidden">
+        {activeTab === 'home' && (
+          <HomeTab
+            userProfile={userProfile}
+            ageInDays={ageInDays}
+            ageInMonths={ageInMonths}
+            dynamicTodos={dynamicTodos}
+            onToggleTodo={toggleTodo}
+            onOpenTask={openTaskDetail}
+            onViewAllSchedule={() => setActiveTab('schedule')}
+          />
+        )}
+        {activeTab === 'schedule' && (
+          <ScheduleTab
+            dynamicTodos={dynamicTodos}
+            today={today}
+            currentCalendarDate={currentCalendarDate}
+            onChangeCalendarDate={setCurrentCalendarDate}
+            onToggleTodo={toggleTodo}
+            onOpenTask={openTaskDetail}
+          />
+        )}
+        {activeTab === 'log' && (
+          <LogTab logs={logs} growthData={growthData} onAddLog={addLog} />
+        )}
+        {activeTab === 'gift' && <GiftTab gifts={gifts} />}
+        {activeTab === 'info' && (
+          <InfoTab
+            userProfile={userProfile}
+            tempProfile={tempProfile}
+            isEditingProfile={isEditingProfile}
+            onStartEditProfile={startEditingProfile}
+            onChangeTempProfile={setTempProfile}
+            onSaveProfile={handleProfileSave}
+            documents={documents}
+            nurseries={nurseries}
+          />
+        )}
+      </main>
+
+      {activeTab === 'schedule' && (
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="absolute bottom-20 right-4 w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-all active:scale-95 z-20"
+        >
+          <Plus size={28} />
+        </button>
+      )}
+
+      <button
+        onClick={() => setShowAiModal(true)}
+        className="absolute bottom-20 left-4 w-14 h-14 bg-gradient-to-tr from-purple-600 to-indigo-500 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-xl hover:scale-105 transition-all active:scale-95 z-20"
+      >
+        <Sparkles size={26} className="absolute -top-1 -right-1 text-yellow-300 w-4 h-4 animate-pulse" />
+        <Bot size={28} />
+      </button>
+
+      <nav className="flex-none bg-white border-t border-gray-200 flex justify-around items-center h-16 absolute bottom-0 left-0 right-0 w-full z-30 px-1">
+        {NAV_ITEMS.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setActiveTab(item.id)}
+            className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition ${
+              activeTab === item.id ? 'text-blue-500' : 'text-gray-400 hover:text-gray-500'
+            }`}
+          >
+            <item.icon size={22} className={activeTab === item.id ? 'stroke-[2.5px]' : 'stroke-2'} />
+            <span className="text-[9px] font-medium">{item.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      <AddTaskModal
+        show={showAddModal}
+        newTask={newTask}
+        onChange={setNewTask}
+        onClose={() => setShowAddModal(false)}
+        onSubmit={handleAddTask}
+      />
+      <TaskDetailModal
+        selectedTask={selectedTask}
+        isEditingTask={isEditingTask}
+        tempEditingTask={tempEditingTask}
+        onStartEdit={() => setIsEditingTask(true)}
+        onChangeTempEditingTask={setTempEditingTask}
+        onSaveEdit={saveTaskEdit}
+        onClose={closeTaskDetail}
+        onToggleDone={() => selectedTask && toggleTodo(selectedTask.id)}
+        onDelete={() => selectedTask && deleteTask(selectedTask.id)}
+      />
+      <AiChatModal
+        show={showAiModal}
+        onClose={() => setShowAiModal(false)}
+        history={aiHistory}
+        onChangeHistory={setAiHistory}
+        babyName={userProfile.babyName}
+        ageInDays={ageInDays}
+      />
+    </div>
+  );
+}
