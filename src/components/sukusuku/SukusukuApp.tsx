@@ -17,6 +17,7 @@ import type {
   FamilyMember,
   Gift,
   GrowthRecord,
+  LoginRole,
   LogType,
   Nursery,
   Task,
@@ -106,9 +107,10 @@ const parseNullableNumber = (value: string): number | null => (value === '' ? nu
 interface SukusukuAppProps {
   familyId: string;
   userId: string;
+  role: LoginRole;
 }
 
-export default function SukusukuApp({ familyId, userId }: SukusukuAppProps) {
+export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps) {
   const supabase = useMemo(() => createClient(), []);
 
   const [activeTab, setActiveTab] = useState<TabId>('home');
@@ -600,6 +602,7 @@ export default function SukusukuApp({ familyId, userId }: SukusukuAppProps) {
         {activeTab === 'home' && (
           <HomeTab
             userProfile={userProfile}
+            loginRole={role}
             ageInDays={ageInDays}
             ageInMonths={ageInMonths}
             dynamicTodos={dynamicTodos}

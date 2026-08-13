@@ -266,6 +266,129 @@ export default function InfoTab({
                 </div>
               )}
             </section>
+
+            <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+              <h3 className="font-bold text-gray-800 mb-4 flex items-center border-b pb-2">
+                <Phone size={18} className="mr-2 text-blue-500" /> 緊急連絡先
+              </h3>
+              {isEditingProfile ? (
+                <div className="space-y-4">
+                  <div className="p-3 bg-rose-50 rounded-lg space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-rose-700 mb-1">産院名</label>
+                      <input
+                        type="text"
+                        value={tempProfile.hospitalName}
+                        onChange={(e) => onChangeTempProfile({ ...tempProfile, hospitalName: e.target.value })}
+                        className="w-full border border-rose-200 rounded p-1.5 text-sm outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-rose-700 mb-1">産院 電話番号</label>
+                      <input
+                        type="tel"
+                        value={tempProfile.hospitalPhone}
+                        onChange={(e) => onChangeTempProfile({ ...tempProfile, hospitalPhone: e.target.value })}
+                        className="w-full border border-rose-200 rounded p-1.5 text-sm outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="p-3 bg-sky-50 rounded-lg space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-sky-700 mb-1">小児科名</label>
+                      <input
+                        type="text"
+                        value={tempProfile.pediatricName}
+                        onChange={(e) => onChangeTempProfile({ ...tempProfile, pediatricName: e.target.value })}
+                        className="w-full border border-sky-200 rounded p-1.5 text-sm outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-sky-700 mb-1">小児科 電話番号</label>
+                      <input
+                        type="tel"
+                        value={tempProfile.pediatricPhone}
+                        onChange={(e) => onChangeTempProfile({ ...tempProfile, pediatricPhone: e.target.value })}
+                        className="w-full border border-sky-200 rounded p-1.5 text-sm outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="p-3 bg-blue-50 rounded-lg space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-blue-700 mb-1">パパ会社 電話番号</label>
+                      <input
+                        type="tel"
+                        value={tempProfile.papaCompanyPhone}
+                        onChange={(e) => onChangeTempProfile({ ...tempProfile, papaCompanyPhone: e.target.value })}
+                        className="w-full border border-blue-200 rounded p-1.5 text-sm outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-blue-700 mb-1">パパ連絡先（携帯）</label>
+                      <input
+                        type="tel"
+                        value={tempProfile.papaContactPhone}
+                        onChange={(e) => onChangeTempProfile({ ...tempProfile, papaContactPhone: e.target.value })}
+                        className="w-full border border-blue-200 rounded p-1.5 text-sm outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="p-3 bg-pink-50 rounded-lg space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-pink-700 mb-1">ママ会社 電話番号</label>
+                      <input
+                        type="tel"
+                        value={tempProfile.mamaCompanyPhone}
+                        onChange={(e) => onChangeTempProfile({ ...tempProfile, mamaCompanyPhone: e.target.value })}
+                        className="w-full border border-pink-200 rounded p-1.5 text-sm outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-pink-700 mb-1">ママ連絡先（携帯）</label>
+                      <input
+                        type="tel"
+                        value={tempProfile.mamaContactPhone}
+                        onChange={(e) => onChangeTempProfile({ ...tempProfile, mamaContactPhone: e.target.value })}
+                        className="w-full border border-pink-200 rounded p-1.5 text-sm outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <ul className="space-y-3 text-sm text-gray-700">
+                  <li className="flex justify-between items-center py-1">
+                    <span className="text-gray-500">産院</span>
+                    <span className="font-medium">
+                      {userProfile.hospitalName || '未設定'}
+                      {userProfile.hospitalPhone && <span className="text-gray-400 ml-1">({userProfile.hospitalPhone})</span>}
+                    </span>
+                  </li>
+                  <li className="flex justify-between items-center py-1">
+                    <span className="text-gray-500">小児科</span>
+                    <span className="font-medium">
+                      {userProfile.pediatricName || '未設定'}
+                      {userProfile.pediatricPhone && <span className="text-gray-400 ml-1">({userProfile.pediatricPhone})</span>}
+                    </span>
+                  </li>
+                  <li className="flex justify-between items-center py-1">
+                    <span className="text-gray-500">パパ会社</span>
+                    <span className="font-medium">{userProfile.papaCompanyPhone || '未設定'}</span>
+                  </li>
+                  <li className="flex justify-between items-center py-1">
+                    <span className="text-gray-500">パパ連絡先</span>
+                    <span className="font-medium">{userProfile.papaContactPhone || '未設定'}</span>
+                  </li>
+                  <li className="flex justify-between items-center py-1">
+                    <span className="text-gray-500">ママ会社</span>
+                    <span className="font-medium">{userProfile.mamaCompanyPhone || '未設定'}</span>
+                  </li>
+                  <li className="flex justify-between items-center py-1">
+                    <span className="text-gray-500">ママ連絡先</span>
+                    <span className="font-medium">{userProfile.mamaContactPhone || '未設定'}</span>
+                  </li>
+                </ul>
+              )}
+            </section>
           </div>
         )}
 

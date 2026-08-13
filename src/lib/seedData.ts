@@ -30,4 +30,12 @@ export const INITIAL_PROFILE: UserProfile = {
   dadName: '',
   dadWorkplace: '',
   address: '',
+  hospitalName: '福田病院',
+  hospitalPhone: '096-322-2995',
+  pediatricName: 'にしくまもと病院',
+  pediatricPhone: '096-358-1118',
+  papaCompanyPhone: '096-368-4222',
+  papaContactPhone: '080-2742-0550',
+  mamaCompanyPhone: '',
+  mamaContactPhone: '090-9575-3278',
 };
