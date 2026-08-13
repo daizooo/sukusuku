@@ -271,7 +271,7 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
 
   return (
     <div className="w-full max-w-md mx-auto h-dvh sm:h-[min(850px,calc(100dvh-4rem))] relative bg-gray-50 flex flex-col font-sans overflow-hidden shadow-2xl sm:rounded-3xl sm:my-8 border sm:border-gray-200">
-      <header className="flex-none bg-white px-4 py-3 flex flex-col items-center justify-center shadow-sm z-10 relative">
+      <header className="flex-none bg-white px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 flex flex-col items-center justify-center shadow-sm z-10 relative">
         <h1 className="font-bold text-gray-800 tracking-wide text-lg">すくすく手帳</h1>
       </header>
 
@@ -324,25 +324,27 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
       {activeTab === 'schedule' && (
         <button
           onClick={() => setShowAddModal(true)}
-          className="absolute bottom-20 right-4 w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-all active:scale-95 z-20"
+          className="absolute bottom-[calc(4rem+env(safe-area-inset-bottom)+1rem)] right-4 w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-all active:scale-95 z-20"
         >
           <Plus size={28} />
         </button>
       )}
 
-      <nav className="flex-none bg-white border-t border-gray-200 flex justify-around items-center h-16 absolute bottom-0 left-0 right-0 w-full z-30 px-1">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setActiveTab(item.id)}
-            className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition ${
-              activeTab === item.id ? 'text-blue-500' : 'text-gray-400 hover:text-gray-500'
-            }`}
-          >
-            <item.icon size={22} className={activeTab === item.id ? 'stroke-[2.5px]' : 'stroke-2'} />
-            <span className="text-[9px] font-medium">{item.label}</span>
-          </button>
-        ))}
+      <nav className="flex-none bg-white border-t border-gray-200 w-full z-30 pb-[env(safe-area-inset-bottom)]">
+        <div className="flex justify-around items-center h-16 px-1">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition ${
+                activeTab === item.id ? 'text-blue-500' : 'text-gray-400 hover:text-gray-500'
+              }`}
+            >
+              <item.icon size={22} className={activeTab === item.id ? 'stroke-[2.5px]' : 'stroke-2'} />
+              <span className="text-[9px] font-medium">{item.label}</span>
+            </button>
+          ))}
+        </div>
       </nav>
 
       <AddTaskModal
