@@ -1,18 +1,29 @@
 'use client';
 
+import { useState } from 'react';
 import { Gift as GiftIcon, Plus } from 'lucide-react';
 import type { Gift } from '@/types/app';
+import GiftFormModal, { type GiftDraft } from '../modals/GiftFormModal';
 
 interface GiftTabProps {
   gifts: Gift[];
+  isLoading?: boolean;
+  onAddGift: (draft: GiftDraft) => void;
+  onUpdateGift: (gift: Gift, draft: GiftDraft) => void;
+  onDeleteGift: (id: string) => void;
 }
 
-export default function GiftTab({ gifts }: GiftTabProps) {
+export default function GiftTab({ gifts, isLoading, onAddGift, onUpdateGift, onDeleteGift }: GiftTabProps) {
+  const [modal, setModal] = useState<{ mode: 'add' | 'edit'; gift: Gift | null } | null>(null);
+
   return (
     <div className="p-4 h-full flex flex-col">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold text-gray-800">お祝い・内祝い</h2>
-        <button className="text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition">
+        <button
+          onClick={() => setModal({ mode: 'add', gift: null })}
+          className="text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition"
+        >
           <Plus size={20} />
         </button>
       </div>
@@ -25,9 +36,14 @@ export default function GiftTab({ gifts }: GiftTabProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-3 pb-6">
-        {gifts.length === 0 && <p className="text-sm text-gray-400 text-center py-8">記録されたお祝いはありません</p>}
+        {isLoading && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
+        {!isLoading && gifts.length === 0 && <p className="text-sm text-gray-400 text-center py-8">記録されたお祝いはありません</p>}
         {gifts.map((gift) => (
-          <div key={gift.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+          <button
+            key={gift.id}
+            onClick={() => setModal({ mode: 'edit', gift })}
+            className="w-full text-left bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 transition"
+          >
             <div className="flex justify-between items-start mb-2 border-b border-gray-50 pb-2">
               <div>
                 <span className="text-[10px] text-gray-500">{gift.date}</span>
@@ -54,9 +70,28 @@ export default function GiftTab({ gifts }: GiftTabProps) {
               )}
               {gift.note && <div className="mt-2 text-xs text-gray-500 bg-gray-50 p-2 rounded-lg">{gift.note}</div>}
             </div>
-          </div>
+          </button>
         ))}
       </div>
+
+      <GiftFormModal
+        key={modal ? `${modal.mode}-${modal.gift?.id ?? 'new'}` : 'none'}
+        mode={modal?.mode ?? null}
+        gift={modal?.gift ?? null}
+        onClose={() => setModal(null)}
+        onSubmit={(draft) => {
+          if (modal?.mode === 'edit' && modal.gift) {
+            onUpdateGift(modal.gift, draft);
+          } else {
+            onAddGift(draft);
+          }
+          setModal(null);
+        }}
+        onDelete={(id) => {
+          onDeleteGift(id);
+          setModal(null);
+        }}
+      />
     </div>
   );
 }
