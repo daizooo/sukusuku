@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "すくすく手帳",
   description: "夫婦で育児タスク・記録・スケジュールを共有するWebアプリ",
+  appleWebApp: {
+    title: "すくすく手帳",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#CE6B74",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
