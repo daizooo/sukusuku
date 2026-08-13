@@ -83,9 +83,4 @@ export interface UserProfile {
   address: string;
 }
 
-export interface AiChatMessage {
-  role: 'user' | 'model';
-  text: string;
-}
-
 export type TabId = 'home' | 'schedule' | 'log' | 'gift' | 'info';

@@ -8,12 +8,9 @@ import {
   Gift as GiftIcon,
   Folder,
   Plus,
-  Sparkles,
-  Bot,
 } from 'lucide-react';
 
 import type {
-  AiChatMessage,
   CareLog,
   DocumentItem,
   DynamicTask,
@@ -50,7 +47,6 @@ import GiftTab from './tabs/GiftTab';
 import InfoTab from './tabs/InfoTab';
 import AddTaskModal, { type NewTaskDraft } from './modals/AddTaskModal';
 import TaskDetailModal from './modals/TaskDetailModal';
-import AiChatModal from './modals/AiChatModal';
 
 const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
   { id: 'home', icon: Home, label: 'ホーム' },
@@ -104,11 +100,6 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [tempProfile, setTempProfile] = useState<UserProfile>(userProfile);
-
-  const [showAiModal, setShowAiModal] = useState(false);
-  const [aiHistory, setAiHistory] = useState<AiChatMessage[]>([
-    { role: 'model', text: 'こんにちは！AI育児アシスタントです。お子様の様子で気になることや、悩みがあれば何でも聞いてくださいね。' },
-  ]);
 
   const today = new Date();
 
@@ -339,14 +330,6 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
         </button>
       )}
 
-      <button
-        onClick={() => setShowAiModal(true)}
-        className="absolute bottom-20 left-4 w-14 h-14 bg-gradient-to-tr from-purple-600 to-indigo-500 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-xl hover:scale-105 transition-all active:scale-95 z-20"
-      >
-        <Sparkles size={26} className="absolute -top-1 -right-1 text-yellow-300 w-4 h-4 animate-pulse" />
-        <Bot size={28} />
-      </button>
-
       <nav className="flex-none bg-white border-t border-gray-200 flex justify-around items-center h-16 absolute bottom-0 left-0 right-0 w-full z-30 px-1">
         {NAV_ITEMS.map((item) => (
           <button
@@ -379,14 +362,6 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
         onClose={closeTaskDetail}
         onToggleDone={() => selectedTask && toggleTodo(selectedTask.id)}
         onDelete={() => selectedTask && handleDeleteTask(selectedTask.id)}
-      />
-      <AiChatModal
-        show={showAiModal}
-        onClose={() => setShowAiModal(false)}
-        history={aiHistory}
-        onChangeHistory={setAiHistory}
-        babyName={userProfile.babyName}
-        ageInDays={ageInDays}
       />
     </div>
   );
