@@ -15,6 +15,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "すくすく手帳",
   description: "夫婦で育児タスク・記録・スケジュールを共有するWebアプリ",
+  appleWebApp: {
+    title: "すくすく手帳",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#CE6B74",
 };
 
 // viewport-fit: 'cover' でノッチ/ホームインジケーターのある端末でも画面いっぱいに
