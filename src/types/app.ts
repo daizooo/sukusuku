@@ -81,6 +81,18 @@ export interface UserProfile {
   dadName: string;
   dadWorkplace: string;
   address: string;
+  // 緊急連絡先（ホーム画面のクイックアクションから電話をかけるために使用）
+  hospitalName: string;
+  hospitalPhone: string;
+  pediatricName: string;
+  pediatricPhone: string;
+  papaCompanyPhone: string;
+  papaContactPhone: string;
+  mamaCompanyPhone: string;
+  mamaContactPhone: string;
 }
 
 export type TabId = 'home' | 'schedule' | 'log' | 'gift' | 'info';
+
+// ログイン中のユーザーの役割。users.role (Supabase) に対応。未設定の場合はnull。
+export type LoginRole = 'papa' | 'mama' | null;

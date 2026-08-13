@@ -16,6 +16,7 @@ import type {
   DynamicTask,
   Gift,
   GrowthRecord,
+  LoginRole,
   Nursery,
   Task,
   TabId,
@@ -71,9 +72,10 @@ const EMPTY_NEW_TASK: NewTaskDraft = {
 interface SukusukuAppProps {
   familyId: string;
   userId: string;
+  role: LoginRole;
 }
 
-export default function SukusukuApp({ familyId }: SukusukuAppProps) {
+export default function SukusukuApp({ familyId, role }: SukusukuAppProps) {
   const supabase = useMemo(() => createClient(), []);
 
   const [activeTab, setActiveTab] = useState<TabId>('home');
@@ -283,6 +285,7 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
         {activeTab === 'home' && (
           <HomeTab
             userProfile={userProfile}
+            loginRole={role}
             ageInDays={ageInDays}
             ageInMonths={ageInMonths}
             dynamicTodos={dynamicTodos}
