@@ -3,6 +3,11 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* このアプリはライトテーマ専用のUI（白カード・淡いグレー背景）のみを想定しており、
+     ダークモードには対応していない。color-schemeを固定しないと、OS/ブラウザが
+     ダークモードのとき input 等のネイティブフォームコントロールが暗色テーマの配色
+     （白背景に薄い文字色）で描画され、文字が読めなくなる。 */
+  color-scheme: light;
 }
 
 @theme inline {
@@ -10,13 +15,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
