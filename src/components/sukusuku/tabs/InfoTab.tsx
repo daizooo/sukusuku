@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { Baby, Camera, ClipboardList, Edit2, Folder, Image as ImageIcon, MapPin, Phone, Plus, Save, Settings, User } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Baby, Camera, ClipboardList, Edit2, Folder, Image as ImageIcon, MapPin, Phone, Plus, Save, Settings, Trash2, User } from 'lucide-react';
 import type { DocumentItem, Nursery, UserProfile } from '@/types/app';
+import DocumentUploadModal from '../modals/DocumentUploadModal';
+import NurseryFormModal, { type NurseryDraft } from '../modals/NurseryFormModal';
 
 type InfoView = 'profile' | 'documents' | 'nursery';
 
@@ -14,7 +16,60 @@ interface InfoTabProps {
   onChangeTempProfile: (profile: UserProfile) => void;
   onSaveProfile: () => void;
   documents: DocumentItem[];
+  isLoadingDocuments?: boolean;
+  onAddDocument: (file: File, title: string) => Promise<void>;
+  onDeleteDocument: (doc: DocumentItem) => void;
+  getDocumentUrl: (filePath: string) => Promise<string | null>;
   nurseries: Nursery[];
+  isLoadingNurseries?: boolean;
+  onAddNursery: (draft: NurseryDraft) => void;
+  onUpdateNursery: (nursery: Nursery, draft: NurseryDraft) => void;
+  onDeleteNursery: (id: string) => void;
+}
+
+function DocumentCard({
+  doc,
+  getDocumentUrl,
+  onDelete,
+}: {
+  doc: DocumentItem;
+  getDocumentUrl: (filePath: string) => Promise<string | null>;
+  onDelete: (doc: DocumentItem) => void;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getDocumentUrl(doc.filePath).then((signedUrl) => {
+      if (!cancelled) setUrl(signedUrl);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [doc.filePath, getDocumentUrl]);
+
+  return (
+    <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition relative group">
+      <a href={url ?? undefined} target="_blank" rel="noopener noreferrer" className="block">
+        <div className="w-full h-28 bg-gray-100 rounded-lg flex items-center justify-center mb-2 text-gray-400 border border-gray-200 overflow-hidden">
+          {url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={url} alt={doc.title} className="w-full h-full object-cover" />
+          ) : (
+            <ImageIcon size={32} />
+          )}
+        </div>
+        <p className="font-bold text-gray-800 text-xs leading-tight mb-1 line-clamp-2">{doc.title}</p>
+        <p className="text-[10px] text-gray-400">{new Date(doc.date).toLocaleDateString('ja-JP')}</p>
+      </a>
+      <button
+        onClick={() => onDelete(doc)}
+        className="absolute top-1.5 right-1.5 bg-white/90 text-red-500 p-1.5 rounded-full shadow-sm hover:bg-red-50 transition"
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
+  );
 }
 
 export default function InfoTab({
@@ -25,9 +80,19 @@ export default function InfoTab({
   onChangeTempProfile,
   onSaveProfile,
   documents,
+  isLoadingDocuments,
+  onAddDocument,
+  onDeleteDocument,
+  getDocumentUrl,
   nurseries,
+  isLoadingNurseries,
+  onAddNursery,
+  onUpdateNursery,
+  onDeleteNursery,
 }: InfoTabProps) {
   const [infoView, setInfoView] = useState<InfoView>('profile');
+  const [showUpload, setShowUpload] = useState(false);
+  const [nurseryModal, setNurseryModal] = useState<{ mode: 'add' | 'edit'; nursery: Nursery | null } | null>(null);
   const birthDate = userProfile.birthDate ? new Date(userProfile.birthDate) : null;
 
   return (
@@ -53,8 +118,16 @@ export default function InfoTab({
             <Save size={16} className="mr-1" /> 保存
           </button>
         )}
-        {(infoView === 'documents' || infoView === 'nursery') && (
-          <button className="text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition">
+        {infoView === 'documents' && (
+          <button onClick={() => setShowUpload(true)} className="text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition">
+            <Plus size={20} />
+          </button>
+        )}
+        {infoView === 'nursery' && (
+          <button
+            onClick={() => setNurseryModal({ mode: 'add', nursery: null })}
+            className="text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition"
+          >
             <Plus size={20} />
           </button>
         )}
@@ -321,20 +394,21 @@ export default function InfoTab({
 
         {infoView === 'documents' && (
           <div className="space-y-4">
-            <button className="w-full bg-blue-50 text-blue-600 border border-blue-200 border-dashed rounded-xl py-5 flex flex-col items-center justify-center hover:bg-blue-100 transition shadow-sm">
+            <button
+              onClick={() => setShowUpload(true)}
+              className="w-full bg-blue-50 text-blue-600 border border-blue-200 border-dashed rounded-xl py-5 flex flex-col items-center justify-center hover:bg-blue-100 transition shadow-sm"
+            >
               <Camera size={28} className="mb-2" />
               <span className="text-sm font-bold">カメラで書類を追加</span>
               <span className="text-xs text-blue-400 mt-1">健診案内や控えを保存</span>
             </button>
+            {isLoadingDocuments && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
+            {!isLoadingDocuments && documents.length === 0 && (
+              <p className="text-sm text-gray-400 text-center py-8">保存された書類はありません</p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               {documents.map((doc) => (
-                <div key={doc.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition cursor-pointer">
-                  <div className="w-full h-28 bg-gray-100 rounded-lg flex items-center justify-center mb-2 text-gray-400 border border-gray-200">
-                    <ImageIcon size={32} />
-                  </div>
-                  <p className="font-bold text-gray-800 text-xs leading-tight mb-1 line-clamp-2">{doc.title}</p>
-                  <p className="text-[10px] text-gray-400">{doc.date}</p>
-                </div>
+                <DocumentCard key={doc.id} doc={doc} getDocumentUrl={getDocumentUrl} onDelete={onDeleteDocument} />
               ))}
             </div>
           </div>
@@ -345,8 +419,16 @@ export default function InfoTab({
             <div className="bg-orange-50 border border-orange-100 p-3 rounded-xl text-xs text-orange-800 mb-4 leading-relaxed">
               候補の保育園情報や、見学時のメモを夫婦で共有しましょう。見学時のチェックポイントなども残せます。
             </div>
+            {isLoadingNurseries && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
+            {!isLoadingNurseries && nurseries.length === 0 && (
+              <p className="text-sm text-gray-400 text-center py-8">保育園の記録はまだありません</p>
+            )}
             {nurseries.map((nursery) => (
-              <div key={nursery.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+              <button
+                key={nursery.id}
+                onClick={() => setNurseryModal({ mode: 'edit', nursery })}
+                className="w-full text-left bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:bg-gray-50 transition"
+              >
                 <div className="flex justify-between items-start mb-3">
                   <h3 className="font-bold text-gray-800 text-sm">{nursery.name}</h3>
                   <span
@@ -362,18 +444,47 @@ export default function InfoTab({
                     <MapPin size={12} className="mr-1" /> {nursery.distance}
                   </p>
                   <p className="flex items-center text-blue-500">
-                    <Phone size={12} className="mr-1" /> <a href={`tel:${nursery.phone}`}>{nursery.phone}</a>
+                    <Phone size={12} className="mr-1" /> {nursery.phone}
                   </p>
-                  <div className="mt-3 bg-gray-50 p-3 rounded-lg text-gray-700 border border-gray-100">
-                    <strong className="block text-[10px] text-gray-400 mb-1">メモ</strong>
-                    {nursery.memo}
-                  </div>
+                  {nursery.memo && (
+                    <div className="mt-3 bg-gray-50 p-3 rounded-lg text-gray-700 border border-gray-100">
+                      <strong className="block text-[10px] text-gray-400 mb-1">メモ</strong>
+                      {nursery.memo}
+                    </div>
+                  )}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
       </div>
+
+      <DocumentUploadModal
+        show={showUpload}
+        onClose={() => setShowUpload(false)}
+        onSubmit={async (file, title) => {
+          await onAddDocument(file, title);
+          setShowUpload(false);
+        }}
+      />
+      <NurseryFormModal
+        key={nurseryModal ? `${nurseryModal.mode}-${nurseryModal.nursery?.id ?? 'new'}` : 'none'}
+        mode={nurseryModal?.mode ?? null}
+        nursery={nurseryModal?.nursery ?? null}
+        onClose={() => setNurseryModal(null)}
+        onSubmit={(draft) => {
+          if (nurseryModal?.mode === 'edit' && nurseryModal.nursery) {
+            onUpdateNursery(nurseryModal.nursery, draft);
+          } else {
+            onAddNursery(draft);
+          }
+          setNurseryModal(null);
+        }}
+        onDelete={(id) => {
+          onDeleteNursery(id);
+          setNurseryModal(null);
+        }}
+      />
     </div>
   );
 }
