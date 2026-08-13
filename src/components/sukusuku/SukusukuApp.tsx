@@ -270,7 +270,7 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
   };
 
   return (
-    <div className="w-full max-w-md mx-auto h-dvh sm:h-[850px] relative bg-gray-50 flex flex-col font-sans overflow-hidden shadow-2xl sm:rounded-3xl sm:my-8 border sm:border-gray-200">
+    <div className="w-full max-w-md mx-auto h-dvh sm:h-[min(850px,calc(100dvh-4rem))] relative bg-gray-50 flex flex-col font-sans overflow-hidden shadow-2xl sm:rounded-3xl sm:my-8 border sm:border-gray-200">
       <header className="flex-none bg-white px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 flex flex-col items-center justify-center shadow-sm z-10 relative">
         <h1 className="font-bold text-gray-800 tracking-wide text-lg">すくすく手帳</h1>
       </header>
