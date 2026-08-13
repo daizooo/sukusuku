@@ -30,8 +30,11 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login');
   const isApiRoute = request.nextUrl.pathname.startsWith('/api');
+  // メール確認リンク(/auth/confirm)は未ログイン状態でアクセスしてセッションを
+  // 確立するためのルートなので、未ログインリダイレクトの対象から除外する。
+  const isAuthCallbackRoute = request.nextUrl.pathname.startsWith('/auth/');
 
-  if (!user && !isAuthRoute && !isApiRoute) {
+  if (!user && !isAuthRoute && !isApiRoute && !isAuthCallbackRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);

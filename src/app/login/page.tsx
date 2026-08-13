@@ -1,11 +1,21 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Baby, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 type Mode = 'signin' | 'signup';
+
+function ConfirmErrorBanner() {
+  const searchParams = useSearchParams();
+  if (searchParams.get('error') !== 'confirm_failed') return null;
+  return (
+    <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg p-2.5 mb-4">
+      確認リンクが無効か、有効期限切れです。もう一度お試しください。
+    </p>
+  );
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -61,6 +71,10 @@ export default function LoginPage() {
           <h1 className="font-bold text-gray-800 text-lg">すくすく手帳</h1>
           <p className="text-xs text-gray-500 mt-1">夫婦で育児を共有しよう</p>
         </div>
+
+        <Suspense fallback={null}>
+          <ConfirmErrorBanner />
+        </Suspense>
 
         <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
           <button
