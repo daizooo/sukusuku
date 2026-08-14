@@ -147,6 +147,7 @@ export type Database = {
           address: string
           baby_name: string
           birth_date: string | null
+          custom_fields: Json
           dad_name: string
           dad_workplace: string
           family_id: string
@@ -166,6 +167,7 @@ export type Database = {
           address?: string
           baby_name?: string
           birth_date?: string | null
+          custom_fields?: Json
           dad_name?: string
           dad_workplace?: string
           family_id: string
@@ -185,6 +187,7 @@ export type Database = {
           address?: string
           baby_name?: string
           birth_date?: string | null
+          custom_fields?: Json
           dad_name?: string
           dad_workplace?: string
           family_id?: string

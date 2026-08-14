@@ -1,7 +1,8 @@
 'use client';
 
-import { Baby, Edit2, Phone, Save, Settings, User } from 'lucide-react';
-import type { UserProfile } from '@/types/app';
+import { Baby, Edit2, ListPlus, Phone, Save, Settings, Trash2, User } from 'lucide-react';
+import type { ProfileField, UserProfile } from '@/types/app';
+import { isPhoneNumberLike, toTelHref } from '@/lib/uiUtils';
 
 interface InfoTabProps {
   userProfile: UserProfile;
@@ -21,6 +22,27 @@ export default function InfoTab({
   onSaveProfile,
 }: InfoTabProps) {
   const birthDate = userProfile.birthDate ? new Date(userProfile.birthDate) : null;
+
+  const updateCustomField = (id: string, patch: Partial<Pick<ProfileField, 'label' | 'value'>>) => {
+    onChangeTempProfile({
+      ...tempProfile,
+      customFields: tempProfile.customFields.map((field) => (field.id === id ? { ...field, ...patch } : field)),
+    });
+  };
+
+  const addCustomField = () => {
+    onChangeTempProfile({
+      ...tempProfile,
+      customFields: [...tempProfile.customFields, { id: crypto.randomUUID(), label: '', value: '' }],
+    });
+  };
+
+  const removeCustomField = (id: string) => {
+    onChangeTempProfile({
+      ...tempProfile,
+      customFields: tempProfile.customFields.filter((field) => field.id !== id),
+    });
+  };
 
   return (
     <div className="p-4 h-full flex flex-col">
@@ -254,37 +276,115 @@ export default function InfoTab({
                   <span className="text-gray-500">産院</span>
                   <span className="font-medium">
                     {userProfile.hospitalName || '未設定'}
-                    {userProfile.hospitalPhone && <span className="text-gray-400 ml-1">({userProfile.hospitalPhone})</span>}
+                    {userProfile.hospitalPhone && (
+                      <span className="text-gray-400 ml-1">(<PhoneValue phone={userProfile.hospitalPhone} />)</span>
+                    )}
                   </span>
                 </li>
                 <li className="flex justify-between items-center py-1">
                   <span className="text-gray-500">小児科</span>
                   <span className="font-medium">
                     {userProfile.pediatricName || '未設定'}
-                    {userProfile.pediatricPhone && <span className="text-gray-400 ml-1">({userProfile.pediatricPhone})</span>}
+                    {userProfile.pediatricPhone && (
+                      <span className="text-gray-400 ml-1">(<PhoneValue phone={userProfile.pediatricPhone} />)</span>
+                    )}
                   </span>
                 </li>
                 <li className="flex justify-between items-center py-1">
                   <span className="text-gray-500">パパ会社</span>
-                  <span className="font-medium">{userProfile.papaCompanyPhone || '未設定'}</span>
+                  <span className="font-medium"><PhoneValue phone={userProfile.papaCompanyPhone} /></span>
                 </li>
                 <li className="flex justify-between items-center py-1">
                   <span className="text-gray-500">パパ連絡先</span>
-                  <span className="font-medium">{userProfile.papaContactPhone || '未設定'}</span>
+                  <span className="font-medium"><PhoneValue phone={userProfile.papaContactPhone} /></span>
                 </li>
                 <li className="flex justify-between items-center py-1">
                   <span className="text-gray-500">ママ会社</span>
-                  <span className="font-medium">{userProfile.mamaCompanyPhone || '未設定'}</span>
+                  <span className="font-medium"><PhoneValue phone={userProfile.mamaCompanyPhone} /></span>
                 </li>
                 <li className="flex justify-between items-center py-1">
                   <span className="text-gray-500">ママ連絡先</span>
-                  <span className="font-medium">{userProfile.mamaContactPhone || '未設定'}</span>
+                  <span className="font-medium"><PhoneValue phone={userProfile.mamaContactPhone} /></span>
                 </li>
               </ul>
+            )}
+          </section>
+
+          <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center border-b pb-2">
+              <ListPlus size={18} className="mr-2 text-blue-500" /> カスタム項目
+            </h3>
+            {isEditingProfile ? (
+              <div className="space-y-3">
+                {tempProfile.customFields.map((field) => (
+                  <div key={field.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 relative">
+                    <button
+                      type="button"
+                      onClick={() => removeCustomField(field.id)}
+                      aria-label="この項目を削除"
+                      className="absolute top-2 right-2 text-gray-400 hover:text-red-500 hover:bg-red-50 p-1 rounded transition"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                    <div className="pr-7 space-y-2">
+                      <div>
+                        <label className="block text-[10px] font-medium text-gray-500 mb-1">見出し</label>
+                        <input
+                          type="text"
+                          value={field.label}
+                          onChange={(e) => updateCustomField(field.id, { label: e.target.value })}
+                          placeholder="例: ママの携帯番号"
+                          className="w-full border border-gray-300 rounded p-1.5 text-sm outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-gray-500 mb-1">内容</label>
+                        <input
+                          type="text"
+                          value={field.value}
+                          onChange={(e) => updateCustomField(field.id, { value: e.target.value })}
+                          placeholder="例: 090-1234-5678"
+                          className="w-full border border-gray-300 rounded p-1.5 text-sm outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addCustomField}
+                  className="w-full flex items-center justify-center text-sm text-blue-600 border border-blue-200 border-dashed rounded-lg py-2.5 hover:bg-blue-50 transition"
+                >
+                  <ListPlus size={16} className="mr-1" /> 項目を追加
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-1 text-sm">
+                {userProfile.customFields.length === 0 && <p className="text-gray-400 text-center py-2">項目がありません</p>}
+                {userProfile.customFields.map((field) => (
+                  <div key={field.id} className="flex justify-between items-center py-2 px-1 border-b border-gray-50 last:border-b-0">
+                    <span className="text-gray-500">{field.label || '未設定の見出し'}</span>
+                    <span className="font-medium text-gray-700">
+                      {field.value ? <PhoneValue phone={field.value} /> : '未設定'}
+                    </span>
+                  </div>
+                ))}
+              </div>
             )}
           </section>
         </div>
       </div>
     </div>
+  );
+}
+
+// 電話番号らしい文字列であればtel:リンクとして表示する。そうでなければ通常のテキストとして表示する。
+function PhoneValue({ phone }: { phone: string }) {
+  if (!phone) return <>未設定</>;
+  if (!isPhoneNumberLike(phone)) return <>{phone}</>;
+  return (
+    <a href={toTelHref(phone)} className="text-blue-600 hover:underline">
+      {phone}
+    </a>
   );
 }

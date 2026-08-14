@@ -83,6 +83,13 @@ export interface FamilyMember {
   role: string | null;
 }
 
+// 設定タブのカスタム項目（見出し + 内容）。ユーザーが自由に追加・削除できる。
+export interface ProfileField {
+  id: string;
+  label: string;
+  value: string;
+}
+
 export interface UserProfile {
   babyName: string;
   birthDate: string;
@@ -100,6 +107,8 @@ export interface UserProfile {
   papaContactPhone: string;
   mamaCompanyPhone: string;
   mamaContactPhone: string;
+  // ユーザーが自由に追加・削除できるカスタム項目
+  customFields: ProfileField[];
 }
 
 export type TabId = 'home' | 'schedule' | 'log' | 'memo' | 'info';

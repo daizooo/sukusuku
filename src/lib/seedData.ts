@@ -38,4 +38,5 @@ export const INITIAL_PROFILE: UserProfile = {
   papaContactPhone: '080-2742-0550',
   mamaCompanyPhone: '',
   mamaContactPhone: '090-9575-3278',
+  customFields: [],
 };
