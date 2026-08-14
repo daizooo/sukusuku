@@ -1,14 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import type { BreastSide, FeedingMethod } from '@/types/app';
-import {
-  BREAST_MINUTE_OPTIONS,
-  MILK_AMOUNT_OPTIONS,
-  getSideLabel,
-} from '@/lib/careLogUtils';
+import type { BreastSide, FeedingMethod, MilkLog } from '@/types/app';
+import { BREAST_MINUTE_OPTIONS, MILK_AMOUNT_OPTIONS, getSideLabel } from '@/lib/careLogUtils';
 import { parseTimeInput, toTimeInputValue } from '@/lib/dateUtils';
 import {
+  DeleteButton,
   FieldLabel,
   HintBanner,
   LogModalShell,
@@ -30,10 +27,15 @@ export interface MilkLogInput {
 }
 
 interface MilkLogModalProps {
+  /** 編集する記録。新規追加なら null。 */
+  log: MilkLog | null;
+  /** 新規追加時に記録する日。過去の日を表示中でもその日に登録する。 */
+  baseDate: Date;
   /** 直近の授乳から割り出した「次に飲ませる側」。判断材料がなければ null。 */
   nextSide: BreastSide | null;
   onClose: () => void;
   onSubmit: (input: MilkLogInput) => void;
+  onDelete: () => void;
 }
 
 const METHOD_OPTIONS: { value: FeedingMethod; label: string }[] = [
@@ -49,22 +51,24 @@ const SIDE_OPTIONS: { value: BreastSide; label: string }[] = [
 const AMOUNT_OPTIONS = MILK_AMOUNT_OPTIONS.map((ml) => ({ value: ml, label: String(ml) }));
 const MINUTE_OPTIONS = BREAST_MINUTE_OPTIONS.map((min) => ({ value: min, label: String(min) }));
 
-/** 開くたびに入力内容を初期状態へ戻したいので、閉じている間は中身ごと外す。 */
+/** 開くたびに入力内容を作り直したいので、閉じている間は中身ごと外す。 */
 export default function MilkLogModal({ show, ...props }: MilkLogModalProps & { show: boolean }) {
   if (!show) return null;
   return <MilkLogModalBody {...props} />;
 }
 
-function MilkLogModalBody({ nextSide, onClose, onSubmit }: MilkLogModalProps) {
-  const [method, setMethod] = useState<FeedingMethod>('breast');
-  const [amountMl, setAmountMl] = useState<number>(100);
-  const [customAmount, setCustomAmount] = useState('');
+function MilkLogModalBody({ log, baseDate, nextSide, onClose, onSubmit, onDelete }: MilkLogModalProps) {
+  const [method, setMethod] = useState<FeedingMethod>(log?.method ?? 'breast');
+  const [amountMl, setAmountMl] = useState<number>(log?.amountMl ?? 100);
+  const [customAmount, setCustomAmount] = useState(() =>
+    log?.amountMl && !MILK_AMOUNT_OPTIONS.includes(log.amountMl) ? String(log.amountMl) : '',
+  );
   // 未選択と「0分」を区別するため、初期値は undefined にしておく。
-  const [leftMinutes, setLeftMinutes] = useState<number | undefined>(undefined);
-  const [rightMinutes, setRightMinutes] = useState<number | undefined>(undefined);
-  const [lastSide, setLastSide] = useState<BreastSide | undefined>(undefined);
-  const [time, setTime] = useState(() => toTimeInputValue(new Date()));
-  const [note, setNote] = useState('');
+  const [leftMinutes, setLeftMinutes] = useState<number | undefined>(log?.leftMinutes);
+  const [rightMinutes, setRightMinutes] = useState<number | undefined>(log?.rightMinutes);
+  const [lastSide, setLastSide] = useState<BreastSide | undefined>(log?.lastSide);
+  const [time, setTime] = useState(() => toTimeInputValue(log?.time ?? new Date()));
+  const [note, setNote] = useState(log?.note ?? '');
 
   const handleCustomAmount = (value: string) => {
     setCustomAmount(value);
@@ -73,11 +77,7 @@ function MilkLogModalBody({ nextSide, onClose, onSubmit }: MilkLogModalProps) {
   };
 
   const handleSubmit = () => {
-    const base: Pick<MilkLogInput, 'time' | 'note' | 'method'> = {
-      method,
-      time: parseTimeInput(time),
-      note,
-    };
+    const base = { method, time: parseTimeInput(time, log?.time ?? baseDate), note };
     if (method === 'formula') {
       onSubmit({ ...base, amountMl });
       return;
@@ -94,12 +94,12 @@ function MilkLogModalBody({ nextSide, onClose, onSubmit }: MilkLogModalProps) {
   };
 
   return (
-    <LogModalShell title="授乳・ミルクを記録" onClose={onClose}>
+    <LogModalShell title={log ? '授乳・ミルクの記録を編集' : '授乳・ミルクを記録'} onClose={onClose}>
       <Segmented options={METHOD_OPTIONS} value={method} onChange={setMethod} />
 
       {method === 'breast' ? (
         <>
-          {nextSide && (
+          {!log && nextSide && (
             <HintBanner accent="milk">
               前回は{getSideLabel(nextSide === 'left' ? 'right' : 'left')}で終了 → 次は
               <span className="font-bold">{getSideLabel(nextSide)}</span>からがおすすめ
@@ -107,33 +107,15 @@ function MilkLogModalBody({ nextSide, onClose, onSubmit }: MilkLogModalProps) {
           )}
           <div>
             <FieldLabel>左（分）</FieldLabel>
-            <OptionGrid
-              options={MINUTE_OPTIONS}
-              value={leftMinutes}
-              onChange={setLeftMinutes}
-              columns={7}
-              accent="milk"
-            />
+            <OptionGrid options={MINUTE_OPTIONS} value={leftMinutes} onChange={setLeftMinutes} columns={7} accent="milk" />
           </div>
           <div>
             <FieldLabel>右（分）</FieldLabel>
-            <OptionGrid
-              options={MINUTE_OPTIONS}
-              value={rightMinutes}
-              onChange={setRightMinutes}
-              columns={7}
-              accent="milk"
-            />
+            <OptionGrid options={MINUTE_OPTIONS} value={rightMinutes} onChange={setRightMinutes} columns={7} accent="milk" />
           </div>
           <div>
             <FieldLabel>最後に飲ませた側</FieldLabel>
-            <OptionGrid
-              options={SIDE_OPTIONS}
-              value={lastSide}
-              onChange={setLastSide}
-              columns={2}
-              accent="milk"
-            />
+            <OptionGrid options={SIDE_OPTIONS} value={lastSide} onChange={setLastSide} columns={2} accent="milk" />
             <p className="text-[10px] text-gray-400 mt-1.5">次にどちらから授乳するかの目安になります。</p>
           </div>
         </>
@@ -172,6 +154,7 @@ function MilkLogModalBody({ nextSide, onClose, onSubmit }: MilkLogModalProps) {
       <SubmitButton accent="milk" onClick={handleSubmit}>
         保存する
       </SubmitButton>
+      {log && <DeleteButton onDelete={onDelete} />}
     </LogModalShell>
   );
 }

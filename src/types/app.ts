@@ -1,25 +1,40 @@
 // すくすく手帳 - 共有ドメイン型定義
 // 将来的に src/lib/supabase から取得するデータもこの形に正規化して扱う。
 
-export type Assignee = 'パパ' | 'ママ' | '二人で' | '未定';
+// 予定に付けるラベル
+export type Label = 'パパ' | 'ママ' | '家族';
+
+export const LABELS: Label[] = ['パパ', 'ママ', '家族'];
 
 export type TaskCategory = '手続き' | '健診' | 'イベント' | 'お買い物';
+
+// 日付の決まり方。
+// - absolute:       start_date を直接指定する
+// - birth_relative: 子の誕生日 + daysAfterBirth で決まる
+export type AnchorType = 'absolute' | 'birth_relative';
 
 export interface Task {
   id: string;
   category: TaskCategory | string;
   title: string;
   place: string;
-  timing: string;
-  daysAfterBirth: number;
-  done: boolean;
   note: string;
+  // 日付・時刻
+  anchorType: AnchorType;
+  startDate: string | null; // 'YYYY-MM-DD'
+  startTime: string | null; // 'HH:mm' / null なら終日
+  endTime: string | null; // 'HH:mm'
+  daysAfterBirth: number; // anchorType === 'birth_relative' のときのみ意味を持つ
+  // ラベル・リマインダー
+  label: Label;
+  remindMinutesBefore: number | null; // null は通知なし
+  done: boolean;
+  // 既存機能
+  timing: string;
   belongings: string;
-  assignee: Assignee;
-  notification: boolean;
 }
 
-// UI表示用に目安日を計算して付与したタスク
+// UI表示用に実際の日付を解決して付与したタスク
 export interface DynamicTask extends Task {
   targetDateObj: Date | null;
   targetDate: string;
@@ -27,8 +42,8 @@ export interface DynamicTask extends Task {
 
 export type LogType = 'milk' | 'diaper' | 'sleep';
 
-// --- 育児記録 ---
 // 記録の種類ごとに必要な項目が違うため、type で判別する共用体として持つ。
+// DBでは種類ごとの項目を care_logs.details (jsonb) に入れ、読み込み時にこの形へ復元する。
 
 export type FeedingMethod = 'breast' | 'formula';
 export type BreastSide = 'left' | 'right';
@@ -38,11 +53,16 @@ export type PoopColor = 'yellow' | 'green' | 'brown' | 'white' | 'red' | 'black'
 export type PoopConsistency = 'loose' | 'normal' | 'hard';
 
 interface CareLogBase {
-  id: number;
+  id: string;
   /** タイムラインの並び順に使う時刻。睡眠は寝始めの時刻。 */
   time: Date;
   note: string;
-  user: string;
+  createdBy: string | null;
+  /**
+   * 種類別の項目が入る前に記録された分の「量・時間など」。
+   * この値が入っている記録は種類別の項目を持たないため、表示は文字列のまま行う。
+   */
+  legacyAmount?: string;
 }
 
 export interface MilkLog extends CareLogBase {
@@ -77,7 +97,7 @@ export type CareLog = MilkLog | DiaperLog | SleepLog;
 export type ReturnStatus = '未完了' | '済' | '不要';
 
 export interface Gift {
-  id: number;
+  id: string;
   from: string;
   item: string;
   date: string;
@@ -87,22 +107,25 @@ export interface Gift {
 }
 
 export interface GrowthRecord {
-  month: number;
-  height: number;
-  weight: number;
+  id: string;
+  month: number | null;
+  height: number | null;
+  weight: number | null;
+  recordedDate: string;
 }
 
 export interface DocumentItem {
-  id: number;
+  id: string;
   title: string;
   date: string;
   type: 'image';
+  filePath: string;
 }
 
 export type NurseryStatus = '未見学' | '見学予約済' | '見学済';
 
 export interface Nursery {
-  id: number;
+  id: string;
   name: string;
   distance: string;
   status: NurseryStatus | string;
@@ -110,14 +133,45 @@ export interface Nursery {
   memo: string;
 }
 
-export interface UserProfile {
-  babyName: string;
-  birthDate: string;
-  momName: string;
-  momWorkplace: string;
-  dadName: string;
-  dadWorkplace: string;
-  address: string;
+// familyメンバー(パパ/ママ)の表示名解決用
+export interface FamilyMember {
+  id: string;
+  name: string;
+  role: string | null;
 }
 
-export type TabId = 'home' | 'schedule' | 'log' | 'gift' | 'info';
+// 設定タブの1項目（見出し + 内容）。各セクションでユーザーが自由に追加・削除できる。
+// keyは特定の機能(生後日数の計算やホーム画面のクイック発信など)からこの項目の値を
+// 参照するための予約識別子。ユーザーが追加した項目には付与されない。
+export interface ProfileField {
+  id: string;
+  label: string;
+  value: string;
+  key?: ProfileFieldKey;
+}
+
+export type ProfileFieldKey =
+  | 'babyName'
+  | 'birthDate'
+  | 'hospitalPhone'
+  | 'pediatricPhone'
+  | 'papaCompanyPhone'
+  | 'papaContactPhone'
+  | 'mamaCompanyPhone'
+  | 'mamaContactPhone';
+
+export interface UserProfile {
+  // お子様の情報
+  childFields: ProfileField[];
+  // パパ・ママ情報
+  familyFields: ProfileField[];
+  // 緊急連絡先（産院・小児科・パパママの連絡先）
+  emergencyFields: ProfileField[];
+  // どのセクションにも属さない、ユーザーが自由に追加・削除できるカスタム項目
+  customFields: ProfileField[];
+}
+
+export type TabId = 'home' | 'schedule' | 'log' | 'memo' | 'info';
+
+// ログイン中のユーザーの役割。users.role (Supabase) に対応。未設定の場合はnull。
+export type LoginRole = 'papa' | 'mama' | null;

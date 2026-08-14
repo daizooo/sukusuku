@@ -4,7 +4,7 @@
 // 記録の種類ごとにモーダルは分かれるが、枠・選択ボタン・時刻欄の見た目は揃える。
 
 import type { ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 
 export type LogAccent = 'milk' | 'diaper' | 'sleep';
 
@@ -171,6 +171,19 @@ export function SubmitButton({ accent, onClick, children }: SubmitButtonProps) {
       className={`w-full text-white font-bold py-3 rounded-xl transition active:scale-[0.99] ${ACCENT_BUTTON[accent]}`}
     >
       {children}
+    </button>
+  );
+}
+
+/** 既存の記録を編集しているときだけ出す削除ボタン。 */
+export function DeleteButton({ onDelete }: { onDelete: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onDelete}
+      className="w-full flex items-center justify-center text-xs text-red-500 font-medium py-2 hover:text-red-600"
+    >
+      <Trash2 size={14} className="mr-1" /> 削除する
     </button>
   );
 }

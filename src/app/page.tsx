@@ -14,15 +14,15 @@ export default async function Home() {
     redirect('/login');
   }
 
-  const { data: profile } = await supabase.from('users').select('family_id').eq('id', user.id).single();
+  const { data: profile } = await supabase.from('users').select('family_id, role').eq('id', user.id).single();
 
   if (!profile?.family_id) {
     redirect('/family-setup');
   }
 
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-gray-100">
-      <SukusukuAppLoader familyId={profile.family_id} userId={user.id} />
+    <div className="flex flex-col flex-1 bg-gray-50">
+      <SukusukuAppLoader familyId={profile.family_id} userId={user.id} role={profile.role === 'papa' || profile.role === 'mama' ? profile.role : null} />
     </div>
   );
 }

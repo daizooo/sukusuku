@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import type { DiaperKind, PoopColor, PoopConsistency } from '@/types/app';
+import type { DiaperKind, DiaperLog, PoopColor, PoopConsistency } from '@/types/app';
 import {
   ATTENTION_POOP_COLORS,
   DIAPER_KIND_OPTIONS,
@@ -13,6 +13,7 @@ import {
 } from '@/lib/careLogUtils';
 import { parseTimeInput, toTimeInputValue } from '@/lib/dateUtils';
 import {
+  DeleteButton,
   FieldLabel,
   LogModalShell,
   NoteField,
@@ -31,12 +32,16 @@ export interface DiaperLogInput {
 }
 
 interface DiaperLogModalProps {
+  /** 編集する記録。新規追加なら null。 */
+  log: DiaperLog | null;
+  /** 新規追加時に記録する日。 */
+  baseDate: Date;
   onClose: () => void;
   onSubmit: (input: DiaperLogInput) => void;
+  onDelete: () => void;
 }
 
 const KIND_OPTIONS = DIAPER_KIND_OPTIONS.map(({ value, label }) => ({ value, label }));
-const CONSISTENCY_OPTIONS = POOP_CONSISTENCY_OPTIONS;
 
 interface ColorSwatchesProps {
   options: PoopColorOption[];
@@ -61,10 +66,7 @@ function ColorSwatches({ options, value, onChange }: ColorSwatchesProps) {
               selected ? `border-2 ${selectedRing}` : 'border-gray-300 text-gray-600 hover:bg-gray-50'
             }`}
           >
-            <span
-              className="w-5 h-5 rounded-full border border-black/10"
-              style={{ backgroundColor: option.swatch }}
-            />
+            <span className="w-5 h-5 rounded-full border border-black/10" style={{ backgroundColor: option.swatch }} />
             {option.label}
           </button>
         );
@@ -73,18 +75,20 @@ function ColorSwatches({ options, value, onChange }: ColorSwatchesProps) {
   );
 }
 
-/** 開くたびに入力内容を初期状態へ戻したいので、閉じている間は中身ごと外す。 */
+/** 開くたびに入力内容を作り直したいので、閉じている間は中身ごと外す。 */
 export default function DiaperLogModal({ show, ...props }: DiaperLogModalProps & { show: boolean }) {
   if (!show) return null;
   return <DiaperLogModalBody {...props} />;
 }
 
-function DiaperLogModalBody({ onClose, onSubmit }: DiaperLogModalProps) {
-  const [kind, setKind] = useState<DiaperKind>('pee');
-  const [poopColor, setPoopColor] = useState<PoopColor | undefined>(undefined);
-  const [poopConsistency, setPoopConsistency] = useState<PoopConsistency | undefined>('normal');
-  const [time, setTime] = useState(() => toTimeInputValue(new Date()));
-  const [note, setNote] = useState('');
+function DiaperLogModalBody({ log, baseDate, onClose, onSubmit, onDelete }: DiaperLogModalProps) {
+  const [kind, setKind] = useState<DiaperKind>(log?.kind ?? 'pee');
+  const [poopColor, setPoopColor] = useState<PoopColor | undefined>(log?.poopColor);
+  const [poopConsistency, setPoopConsistency] = useState<PoopConsistency | undefined>(
+    log?.poopConsistency ?? 'normal',
+  );
+  const [time, setTime] = useState(() => toTimeInputValue(log?.time ?? new Date()));
+  const [note, setNote] = useState(log?.note ?? '');
 
   const hasPoop = DIAPER_KIND_OPTIONS.find((option) => option.value === kind)?.hasPoop ?? false;
 
@@ -94,13 +98,13 @@ function DiaperLogModalBody({ onClose, onSubmit }: DiaperLogModalProps) {
       // おしっこだけのときは、うんちの項目を持たせない。
       poopColor: hasPoop ? poopColor : undefined,
       poopConsistency: hasPoop ? poopConsistency : undefined,
-      time: parseTimeInput(time),
+      time: parseTimeInput(time, log?.time ?? baseDate),
       note,
     });
   };
 
   return (
-    <LogModalShell title="おむつを記録" onClose={onClose}>
+    <LogModalShell title={log ? 'おむつの記録を編集' : 'おむつを記録'} onClose={onClose}>
       <div>
         <FieldLabel>種類</FieldLabel>
         <Segmented options={KIND_OPTIONS} value={kind} onChange={setKind} />
@@ -128,7 +132,7 @@ function DiaperLogModalBody({ onClose, onSubmit }: DiaperLogModalProps) {
           <div>
             <FieldLabel>状態</FieldLabel>
             <OptionGrid
-              options={CONSISTENCY_OPTIONS}
+              options={POOP_CONSISTENCY_OPTIONS}
               value={poopConsistency}
               onChange={setPoopConsistency}
               columns={3}
@@ -143,6 +147,7 @@ function DiaperLogModalBody({ onClose, onSubmit }: DiaperLogModalProps) {
       <SubmitButton accent="diaper" onClick={handleSubmit}>
         保存する
       </SubmitButton>
+      {log && <DeleteButton onDelete={onDelete} />}
     </LogModalShell>
   );
 }

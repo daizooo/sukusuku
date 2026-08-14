@@ -9,8 +9,8 @@
 //   - 通知が使えない・許可されていない場合も、アプリ内のバーで通常どおり記録できる。
 
 import { formatTimeString } from '@/lib/dateUtils';
+import { registerServiceWorker } from '@/lib/push';
 
-const SW_URL = '/sw.js';
 const NOTIFICATION_TAG = 'sukusuku-sleep';
 const WAKE_CACHE = 'sukusuku-sleep';
 const WAKE_URL = '/__sukusuku_sleep_wake';
@@ -30,14 +30,11 @@ let registrationPromise: Promise<ServiceWorkerRegistration | null> | null = null
 const getRegistration = (): Promise<ServiceWorkerRegistration | null> => {
   if (!isSleepNotificationSupported()) return Promise.resolve(null);
   if (!registrationPromise) {
-    // 登録直後はまだ有効化されていないことがあるため、ready を待ってから使う。
-    registrationPromise = navigator.serviceWorker
-      .register(SW_URL)
-      .then(() => navigator.serviceWorker.ready)
-      .catch((err) => {
-        console.error('Failed to register service worker:', err);
-        return null;
-      });
+    // 予定のリマインダーと同じService Workerを使う。
+    registrationPromise = registerServiceWorker().catch((err) => {
+      console.error('Failed to register service worker:', err);
+      return null;
+    });
   }
   return registrationPromise;
 };
@@ -67,6 +64,9 @@ export const showSleepNotification = async (startedAt: Date): Promise<void> => {
   try {
     await registration.showNotification('ねんね中', {
       body: `${formatTimeString(startedAt)} から計測しています`,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      lang: 'ja',
       tag: NOTIFICATION_TAG,
       // 起床まで通知欄に残す。対応していない端末では通知センターに残る。
       requireInteraction: true,

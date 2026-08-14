@@ -78,7 +78,13 @@ export const getNextBreastSide = (logs: CareLog[]): BreastSide | null => {
 
 /** 計測中（起床時刻が未確定）の睡眠記録。 */
 export const findActiveSleepLog = (logs: CareLog[]): SleepLog | undefined =>
-  logs.find((log): log is SleepLog => log.type === 'sleep' && log.endedAt === null);
+  logs.find(isActiveSleepLog);
+
+export const isActiveSleepLog = (log: CareLog): log is SleepLog =>
+  log.type === 'sleep' && log.endedAt === null;
+
+/** 種類別の項目が入る前に記録された分か。 */
+export const isLegacyLog = (log: CareLog): boolean => log.legacyAmount !== undefined;
 
 // --- 表示整形 ---
 
@@ -99,8 +105,17 @@ export const formatStopwatch = (ms: number): string => {
   return `${pad(Math.floor(totalSeconds / 3600))}:${pad(Math.floor(totalSeconds / 60) % 60)}:${pad(totalSeconds % 60)}`;
 };
 
+const LOG_TYPE_LABEL: Record<CareLog['type'], string> = {
+  milk: 'ミルク',
+  diaper: 'おむつ',
+  sleep: '睡眠',
+};
+
 /** タイムラインカードの見出し。 */
 export const getLogTitle = (log: CareLog): string => {
+  // 種類別の項目を持たない記録は、種類名だけを見出しにする。
+  if (isLegacyLog(log)) return LOG_TYPE_LABEL[log.type];
+
   switch (log.type) {
     case 'milk':
       return log.method === 'breast' ? '母乳' : 'ミルク';
@@ -115,7 +130,7 @@ export const getLogTitle = (log: CareLog): string => {
 
 /** タイムラインカードの時刻表示。睡眠だけ「開始 → 起床」。 */
 export const getLogTimeText = (log: CareLog): string => {
-  if (log.type === 'sleep') {
+  if (log.type === 'sleep' && !isLegacyLog(log)) {
     if (!log.endedAt) return `${formatTimeString(log.startedAt)} 〜 計測中`;
     return `${formatTimeString(log.startedAt)} → ${formatTimeString(log.endedAt)}`;
   }
@@ -133,6 +148,9 @@ export interface LogBadge {
 
 /** カードに並べるバッジ。記録の種類ごとに中身が変わる。 */
 export const getLogBadges = (log: CareLog): LogBadge[] => {
+  // 種類別の項目を持たない記録は、当時入力された文字列をそのまま出す。
+  if (isLegacyLog(log)) return log.legacyAmount ? [{ text: log.legacyAmount, tone: 'neutral' }] : [];
+
   switch (log.type) {
     case 'milk': {
       if (log.method === 'formula') {
@@ -169,3 +187,59 @@ export const getLogBadges = (log: CareLog): LogBadge[] => {
 /** カード全体を強調するか（白・赤・黒の便）。 */
 export const isAlertLog = (log: CareLog): boolean =>
   log.type === 'diaper' && needsMedicalAttention(log.poopColor);
+
+export interface DailySummary {
+  milk: { count: number; ml: number; breastMinutes: number };
+  diaper: { count: number; poopCount: number };
+  sleep: { count: number; minutes: number };
+}
+
+// 種類別の項目を持たない記録の「量・時間など」は自由入力なので、
+// 数値として読めるぶんだけ合計に使う。
+const parseLegacyMl = (amount: string): number => {
+  const withUnit = amount.match(/(\d+(?:\.\d+)?)\s*(?:ml|ｍｌ|cc)/i);
+  if (withUnit) return Number(withUnit[1]);
+  const bare = amount.match(/^\s*(\d+(?:\.\d+)?)\s*$/);
+  return bare ? Number(bare[1]) : 0;
+};
+
+const parseLegacyMinutes = (amount: string): number => {
+  const hours = amount.match(/(\d+(?:\.\d+)?)\s*(?:時間|h)/i);
+  const minutes = amount.match(/(\d+(?:\.\d+)?)\s*(?:分|m(?:in)?\b)/i);
+  if (hours || minutes) {
+    return (hours ? Number(hours[1]) * 60 : 0) + (minutes ? Number(minutes[1]) : 0);
+  }
+  const bare = amount.match(/^\s*(\d+(?:\.\d+)?)\s*$/);
+  return bare ? Number(bare[1]) : 0;
+};
+
+/** その日の合計。計測中の睡眠は確定していないので合計時間には入れない。 */
+export const summarizeLogs = (logs: CareLog[]): DailySummary => {
+  const summary: DailySummary = {
+    milk: { count: 0, ml: 0, breastMinutes: 0 },
+    diaper: { count: 0, poopCount: 0 },
+    sleep: { count: 0, minutes: 0 },
+  };
+
+  for (const log of logs) {
+    const legacy = log.legacyAmount;
+
+    if (log.type === 'milk') {
+      summary.milk.count += 1;
+      summary.milk.ml += legacy !== undefined ? parseLegacyMl(legacy) : (log.amountMl ?? 0);
+      summary.milk.breastMinutes += (log.leftMinutes ?? 0) + (log.rightMinutes ?? 0);
+    } else if (log.type === 'diaper') {
+      summary.diaper.count += 1;
+      if (legacy === undefined && log.kind !== 'pee') summary.diaper.poopCount += 1;
+    } else {
+      summary.sleep.count += 1;
+      if (legacy !== undefined) {
+        summary.sleep.minutes += parseLegacyMinutes(legacy);
+      } else if (log.endedAt) {
+        summary.sleep.minutes += (log.endedAt.getTime() - log.startedAt.getTime()) / 60000;
+      }
+    }
+  }
+
+  return summary;
+};
