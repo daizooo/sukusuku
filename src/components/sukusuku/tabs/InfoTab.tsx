@@ -5,6 +5,7 @@ import { Baby, Edit2, ListPlus, Phone, Save, Settings, Trash2, User } from 'luci
 import type { ProfileField, UserProfile } from '@/types/app';
 import { isPhoneNumberLike, toTelHref } from '@/lib/uiUtils';
 import NotificationSetting from '@/components/sukusuku/NotificationSetting';
+import AccountSection from '@/components/sukusuku/AccountSection';
 
 // UserProfileのうち、ProfileField[]を値に持つキー（＝設定タブで編集可能なセクション）
 type ProfileSectionKey = {
@@ -114,6 +115,8 @@ export default function InfoTab({
           />
 
           <NotificationSetting familyId={familyId} userId={userId} />
+
+          <AccountSection familyId={familyId} userId={userId} />
         </div>
       </div>
     </div>

@@ -65,6 +65,7 @@ supabase/migrations/
 - [x] 予定(tasks)タブをSupabase実データに接続（一覧取得・追加・編集・完了切替・削除、家族作成時に定番ToDoを自動投入）
 - [x] カレンダー機能（日付・時刻・場所・詳細・ラベル・リマインダーの入力、月カレンダーの日付選択）→ [docs/calendar.md](docs/calendar.md)
 - [ ] リマインダーの配信（PWA + Web Push）※現在は通知タイミングを保存するのみ
+- [x] アカウント設定（役割（パパ/ママ）の変更・表示名の変更・招待コードの確認・ログアウト）
 - [ ] Google認証などの追加サインイン方法
 - [ ] 育児記録・成長グラフ・お祝い管理・保活メモ・書類箱のSupabase連携
 - [ ] 書類箱の画像アップロード（Supabase Storage）
@@ -76,7 +77,31 @@ supabase/migrations/
 - `/login`: メール/パスワードでのサインアップ・ログイン（Supabase Auth）
 - `/family-setup`: 家族の新規作成（`families`にINSERT→自分の`users.family_id`を更新→定番ToDoを一括投入）、または招待コード（家族のUUID）を入力して既存家族に参加
 - `src/lib/api/tasks.ts`: `tasks`テーブルのCRUDとDB行⇔アプリ型のマッピング。`SukusukuApp`から呼び出し、楽観的UI更新＋失敗時ロールバックを行う
+- `src/lib/api/account.ts`: `users`テーブルのうち自分の役割（パパ/ママ）・表示名の取得と更新
 - サインアップ時は`auth.users`へのINSERTをトリガーに`public.users`へ空プロフィール行を自動作成（`0005_auth_user_trigger.sql`）
+- 設定タブの一番下に**アカウント**カード（`AccountSection`）があり、役割（パパ/ママ）の変更・表示名の変更・招待コードの再確認・ログアウトができる。家族参加時に役割を選び間違えた場合はここで修正する
+
+### メール確認リンクの挙動について
+
+サインアップ確認メールのリンクはSupabaseの`/auth/v1/verify`を経由し、**そこでメールアドレスの確認が完了してから**アプリの`/auth/confirm`へ`code=`付きでリダイレクトされます。
+
+`code`をセッションに交換する処理（PKCE）には、登録操作を行ったブラウザに保存された`code_verifier`が必要です。そのため、**登録した端末と別の端末やメールアプリ内のブラウザでリンクを開くと交換に失敗します**。このときメール確認自体は成功しているため、以前は「確認リンクが無効か、有効期限切れです」と表示されるのに登録自体は完了している、という食い違いが起きていました。
+
+現在の`/auth/confirm`はこの2つを区別します。
+
+| 状況 | 遷移先 | 表示 |
+| --- | --- | --- |
+| セッション交換に成功 | `/`（そのままログイン状態） | — |
+| Supabase側の検証に失敗（`error`/`error_code`付き。期限切れ・使用済みリンク） | `/login?error=confirm_failed` | 「確認リンクが無効か、有効期限切れです」 |
+| 検証は成功したがセッション交換に失敗（別ブラウザで開いた等） | `/login?message=email_confirmed` | 「メールアドレスの確認が完了しました。…ログインしてください」 |
+
+端末をまたいでもそのままログイン状態にしたい場合は、Supabaseダッシュボードの Authentication > Email Templates で確認メールのリンクを
+
+```
+{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/
+```
+
+に変更してください。`token_hash`形式は`code_verifier`に依存しない`verifyOtp()`フローを使うため、どの端末で開いてもその場でログイン状態になります（`/auth/confirm`は両方の形式に対応済み）。
 
 ### 既知の制約 / 動作確認について
 
