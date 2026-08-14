@@ -5,7 +5,7 @@ import {
   Home,
   CalendarDays,
   FileText,
-  Gift as GiftIcon,
+  StickyNote,
   Folder,
   Plus,
 } from 'lucide-react';
@@ -67,7 +67,7 @@ import { getProfile, saveProfile } from '@/lib/api/profile';
 import HomeTab from './tabs/HomeTab';
 import ScheduleTab from './tabs/ScheduleTab';
 import LogTab from './tabs/LogTab';
-import GiftTab from './tabs/GiftTab';
+import MemoTab from './tabs/MemoTab';
 import InfoTab from './tabs/InfoTab';
 import AddTaskModal, { type NewTaskDraft } from './modals/AddTaskModal';
 import TaskDetailModal from './modals/TaskDetailModal';
@@ -80,7 +80,7 @@ const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
   { id: 'home', icon: Home, label: 'ホーム' },
   { id: 'schedule', icon: CalendarDays, label: '予定' },
   { id: 'log', icon: FileText, label: '記録' },
-  { id: 'gift', icon: GiftIcon, label: 'お祝い' },
+  { id: 'memo', icon: StickyNote, label: 'メモ' },
   { id: 'info', icon: Folder, label: '設定' },
 ];
 
@@ -666,23 +666,13 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
             onDeleteGrowthRecord={deleteGrowthRecordHandler}
           />
         )}
-        {activeTab === 'gift' && (
-          <GiftTab
+        {activeTab === 'memo' && (
+          <MemoTab
             gifts={gifts}
-            isLoading={isLoadingGifts}
+            isLoadingGifts={isLoadingGifts}
             onAddGift={addGift}
             onUpdateGift={updateGiftHandler}
             onDeleteGift={deleteGiftHandler}
-          />
-        )}
-        {activeTab === 'info' && (
-          <InfoTab
-            userProfile={userProfile}
-            tempProfile={tempProfile}
-            isEditingProfile={isEditingProfile}
-            onStartEditProfile={startEditingProfile}
-            onChangeTempProfile={setTempProfile}
-            onSaveProfile={handleProfileSave}
             documents={documents}
             isLoadingDocuments={isLoadingDocuments}
             onAddDocument={addDocument}
@@ -693,6 +683,16 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
             onAddNursery={addNurseryHandler}
             onUpdateNursery={updateNurseryHandler}
             onDeleteNursery={deleteNurseryHandler}
+          />
+        )}
+        {activeTab === 'info' && (
+          <InfoTab
+            userProfile={userProfile}
+            tempProfile={tempProfile}
+            isEditingProfile={isEditingProfile}
+            onStartEditProfile={startEditingProfile}
+            onChangeTempProfile={setTempProfile}
+            onSaveProfile={handleProfileSave}
           />
         )}
       </main>
