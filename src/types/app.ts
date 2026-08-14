@@ -28,19 +28,19 @@ export interface DynamicTask extends Task {
 export type LogType = 'milk' | 'diaper' | 'sleep';
 
 export interface CareLog {
-  id: number;
+  id: string;
   type: LogType;
   label: string;
   amount: string;
   time: Date;
   note: string;
-  user: string;
+  createdBy: string | null;
 }
 
 export type ReturnStatus = '未完了' | '済' | '不要';
 
 export interface Gift {
-  id: number;
+  id: string;
   from: string;
   item: string;
   date: string;
@@ -50,22 +50,25 @@ export interface Gift {
 }
 
 export interface GrowthRecord {
-  month: number;
-  height: number;
-  weight: number;
+  id: string;
+  month: number | null;
+  height: number | null;
+  weight: number | null;
+  recordedDate: string;
 }
 
 export interface DocumentItem {
-  id: number;
+  id: string;
   title: string;
   date: string;
   type: 'image';
+  filePath: string;
 }
 
 export type NurseryStatus = '未見学' | '見学予約済' | '見学済';
 
 export interface Nursery {
-  id: number;
+  id: string;
   name: string;
   distance: string;
   status: NurseryStatus | string;
@@ -73,17 +76,33 @@ export interface Nursery {
   memo: string;
 }
 
-// パパ・ママ情報の1項目（見出し + 内容）。ユーザーが自由に追加・削除できる。
-export interface ProfileField {
+// familyメンバー(パパ/ママ)の表示名解決用
+export interface FamilyMember {
   id: string;
-  label: string;
-  value: string;
+  name: string;
+  role: string | null;
 }
 
 export interface UserProfile {
   babyName: string;
   birthDate: string;
-  familyFields: ProfileField[];
+  momName: string;
+  momWorkplace: string;
+  dadName: string;
+  dadWorkplace: string;
+  address: string;
+  // 緊急連絡先（ホーム画面のクイックアクションから電話をかけるために使用）
+  hospitalName: string;
+  hospitalPhone: string;
+  pediatricName: string;
+  pediatricPhone: string;
+  papaCompanyPhone: string;
+  papaContactPhone: string;
+  mamaCompanyPhone: string;
+  mamaContactPhone: string;
 }
 
-export type TabId = 'home' | 'schedule' | 'log' | 'gift' | 'info';
+export type TabId = 'home' | 'schedule' | 'log' | 'memo' | 'info';
+
+// ログイン中のユーザーの役割。users.role (Supabase) に対応。未設定の場合はnull。
+export type LoginRole = 'papa' | 'mama' | null;

@@ -1,18 +1,8 @@
-import type {
-  CareLog,
-  DocumentItem,
-  Gift,
-  GrowthRecord,
-  Nursery,
-  Task,
-  UserProfile,
-} from '@/types/app';
-
-// --- 初期ダミーデータ ---
-// Supabase連携までの間、画面確認用に使用するプレースホルダー。
-// 実データ移行後（Step 4後半）はここを撤去し、Supabaseからの取得に置き換える。
+import type { Task, UserProfile } from '@/types/app';
 
 // 家族の新規作成時にSupabaseへ登録する定番ToDoのテンプレート（idはDB側で採番するため持たない）
+// スケジュール(tasks)のみ、初回セットアップ時の定番項目としてこのテンプレートを使用する。
+// それ以外のデータ(育児記録・お祝い・成長記録・書類・保活メモ)はSupabaseから取得する実データのみを扱う。
 type TaskTemplate = Omit<Task, 'id'>;
 
 export const INITIAL_TODOS: TaskTemplate[] = [
@@ -32,43 +22,20 @@ export const INITIAL_EVENTS: TaskTemplate[] = [
   { category: '健診', title: '予防接種①', place: '北野小児科', timing: '生後2ヶ月', daysAfterBirth: 60, done: false, note: '五種混合, 肺炎球菌, B型肝炎, ロタ', belongings: '母子手帳、予防接種番号', assignee: '未定', notification: true },
 ];
 
-export const createInitialLogs = (): CareLog[] => [
-  { id: 1, type: 'milk', label: 'ミルク', amount: '100ml', time: new Date(new Date().setHours(8, 30, 0, 0)), note: 'よく飲んだ', user: 'パパ' },
-  { id: 2, type: 'diaper', label: 'うんち', amount: '', time: new Date(new Date().setHours(10, 15, 0, 0)), note: '色・硬さ普通', user: 'ママ' },
-  { id: 3, type: 'sleep', label: '睡眠', amount: '2時間', time: new Date(new Date().setHours(11, 0, 0, 0)), note: 'お昼寝', user: 'ママ' },
-];
-
-export const INITIAL_GIFTS: Gift[] = [
-  { id: 1, from: '祖父母(夫)', item: 'お祝い金 10万円', date: '2026-08-15', returnStatus: '不要', returnItem: '-', note: 'ベビーベッド購入費用として' },
-  { id: 2, from: '友人A', item: 'ベビー服(80サイズ)', date: '2026-09-01', returnStatus: '未完了', returnItem: 'カタログギフト3000円', note: '住所確認済' },
-];
-
-export const INITIAL_GROWTH_DATA: GrowthRecord[] = [
-  { month: 0, height: 50.0, weight: 3.0 },
-  { month: 1, height: 54.5, weight: 4.2 },
-  { month: 2, height: 58.1, weight: 5.5 },
-  { month: 3, height: 61.4, weight: 6.4 },
-];
-
-export const INITIAL_DOCUMENTS: DocumentItem[] = [
-  { id: 1, title: '予防接種スケジュール表', date: '2026-08-20', type: 'image' },
-  { id: 2, title: '出産手当金 申請控え', date: '2026-08-25', type: 'image' },
-];
-
-export const INITIAL_NURSERIES: Nursery[] = [
-  { id: 1, name: '舞原保育園', distance: '車5分', status: '見学済', memo: '園庭が広く、のびのびしている。オムツのサブスクあり。', phone: '0964-28-2121' },
-  { id: 2, name: 'くすのき保育園', distance: '車10分', status: '見学予約済', memo: '9/15 10:00 見学予定。妻の職場に近い。', phone: '0964-28-6163' },
-  { id: 3, name: '和光保育園', distance: '徒歩15分', status: '未見学', memo: '近くて便利。見学の電話をする。', phone: '0964-28-4993' },
-];
-
 export const INITIAL_PROFILE: UserProfile = {
   babyName: '',
   birthDate: '',
-  familyFields: [
-    { id: 'mom-name', label: 'ママのお名前', value: '' },
-    { id: 'mom-workplace', label: 'ママの勤務先', value: '' },
-    { id: 'dad-name', label: 'パパのお名前', value: '' },
-    { id: 'dad-workplace', label: 'パパの勤務先', value: '' },
-    { id: 'address', label: 'ご住所', value: '' },
-  ],
+  momName: '',
+  momWorkplace: '',
+  dadName: '',
+  dadWorkplace: '',
+  address: '',
+  hospitalName: '福田病院',
+  hospitalPhone: '096-322-2995',
+  pediatricName: 'にしくまもと病院',
+  pediatricPhone: '096-358-1118',
+  papaCompanyPhone: '096-368-4222',
+  papaContactPhone: '080-2742-0550',
+  mamaCompanyPhone: '',
+  mamaContactPhone: '090-9575-3278',
 };
