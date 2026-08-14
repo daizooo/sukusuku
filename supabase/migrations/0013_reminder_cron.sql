@@ -36,7 +36,12 @@ select cron.schedule(
       (select decrypted_secret from vault.decrypted_secrets where name = 'reminder_cron_secret')
     ),
     body := '{}'::jsonb,
-    timeout_milliseconds := 20000
+    -- 送信は端末ごとに順番にHTTPを叩くため、通知が多い日は時間がかかる。
+    -- またEdge Functionはしばらく呼ばれないとコールドスタートで数秒〜数十秒かかる
+    -- (実際に初回の起動が20秒で足りなかった)。
+    -- ここで切れてもEdge Function自体は動き続けるが、結果が記録されず
+    -- 成否を追えなくなるため、余裕をもって60秒にしている。
+    timeout_milliseconds := 60000
   );
   $cron$
 );
