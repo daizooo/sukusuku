@@ -30,9 +30,12 @@
 - 出生届や健診など、出生日を起点に時期が決まる予定のために `birth_relative` を残している。
 - **出生日が未登録のときだけ**、入力欄に「生後日数で指定」の選択肢が出る。
   登録済みの場合は日付指定に一本化される。
-- 誕生日を保存すると `refresh_birth_relative_dates()` が走り、
-  出生日基準の予定の `start_date` が一括で再計算される。
-  予定日がずれても定番の予定がまとめて追随する。
+- 誕生日は設定タブ（`family_profiles` の `child_fields`）に保存される。
+  誕生日を変更すると出生日基準の予定の日付がまとめて追随する。
+- 出生日基準の予定の日付解決は**クライアント側**（`SukusukuApp` の `dynamicTodos`）で行う。
+  誕生日が jsonb に入っているためSQLからは引きにくく、
+  予定は全件まとめて読み込むため日付での絞り込みも不要なため。
+  `start_date` カラムは日付指定（`absolute`）の予定でのみ使う。
 
 ## 3. 画面
 
@@ -69,13 +72,12 @@
 
 ## 6. マイグレーション
 
-`supabase/migrations/0006_calendar_fields.sql` で以下を適用済み。
+`supabase/migrations/0010_calendar_fields.sql` で以下を適用済み。
 
 - `start_date` / `start_time` / `end_time` / `anchor_type` / `remind_minutes_before` を追加
 - 既存の予定は `days_after_birth` から作られているため `anchor_type = 'birth_relative'` に設定
 - ラベルの旧値 `'二人で'` `'未定'` を `'家族'` へ移行
 - `has_notification = true` の予定を `remind_minutes_before = 1440`（前日）へ移行
-- `refresh_birth_relative_dates()` の追加
 - `(family_id, start_date)` のインデックス追加
 
 ### 残っている後片付け

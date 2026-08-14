@@ -142,6 +142,41 @@ export type Database = {
         }
         Relationships: []
       }
+      family_profiles: {
+        Row: {
+          child_fields: Json
+          custom_fields: Json
+          emergency_fields: Json
+          family_fields: Json
+          family_id: string
+          updated_at: string
+        }
+        Insert: {
+          child_fields?: Json
+          custom_fields?: Json
+          emergency_fields?: Json
+          family_fields?: Json
+          family_id: string
+          updated_at?: string
+        }
+        Update: {
+          child_fields?: Json
+          custom_fields?: Json
+          emergency_fields?: Json
+          family_fields?: Json
+          family_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "family_profiles_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: true
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gifts: {
         Row: {
           family_id: string
@@ -371,10 +406,6 @@ export type Database = {
     }
     Functions: {
       current_family_id: { Args: never; Returns: string }
-      refresh_birth_relative_dates: {
-        Args: { p_family_id: string }
-        Returns: undefined
-      }
     }
     Enums: {
       [_ in never]: never

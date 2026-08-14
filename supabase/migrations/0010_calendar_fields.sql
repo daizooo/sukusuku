@@ -61,27 +61,13 @@ update public.tasks
 comment on column public.tasks.has_notification is
   '非推奨: remind_minutes_before に置き換え済み。次のマイグレーションで削除する。';
 
--- ============================================================
--- 5. 出生日基準の予定に絶対日付を焼き付ける関数
--- ============================================================
--- 子の誕生日が登録・変更されたタイミングで呼び、start_date を再計算する。
-create or replace function public.refresh_birth_relative_dates(p_family_id uuid)
-returns void
-language sql
-security invoker
-set search_path = public
-as $$
-  update public.tasks t
-     set start_date = c.birth_date + t.days_after_birth
-    from public.children c
-   where t.family_id    = p_family_id
-     and c.family_id    = t.family_id
-     and t.anchor_type  = 'birth_relative'
-     and c.birth_date is not null;
-$$;
+-- 出生日基準の予定の日付は「子の誕生日 + days_after_birth」で決まる。
+-- 誕生日は family_profiles の child_fields (jsonb) に保存されるため、
+-- 日付の解決はクライアント側(SukusukuApp の dynamicTodos)で行う。
+-- start_date は日付指定(anchor_type = 'absolute')の予定でのみ使う。
 
 -- ============================================================
--- 6. インデックス
+-- 5. インデックス
 -- ============================================================
 create index if not exists idx_tasks_family_start_date
   on public.tasks (family_id, start_date);

@@ -94,18 +94,6 @@ export async function deleteTask(supabase: SupabaseDb, id: string): Promise<void
   if (error) throw error;
 }
 
-// 出生日基準の予定の start_date を、子の誕生日をもとに再計算する。
-// 誕生日を保存した直後に呼ぶ。
-export async function refreshBirthRelativeDates(
-  supabase: SupabaseDb,
-  familyId: string,
-): Promise<void> {
-  const { error } = await supabase.rpc('refresh_birth_relative_dates', {
-    p_family_id: familyId,
-  });
-  if (error) throw error;
-}
-
 // 家族を新規作成した直後に、出生手続き等の定番ToDoをまとめて登録する。
 export async function seedDefaultTasks(supabase: SupabaseDb, familyId: string): Promise<void> {
   const rows: TablesInsert<'tasks'>[] = [...INITIAL_TODOS, ...INITIAL_EVENTS].map((t) => ({

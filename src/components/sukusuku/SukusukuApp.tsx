@@ -5,7 +5,7 @@ import {
   Home,
   CalendarDays,
   FileText,
-  Gift as GiftIcon,
+  StickyNote,
   Folder,
   Plus,
 } from 'lucide-react';
@@ -14,21 +14,18 @@ import type {
   CareLog,
   DocumentItem,
   DynamicTask,
+  FamilyMember,
   Gift,
   GrowthRecord,
+  LoginRole,
+  LogType,
   Nursery,
   Task,
   TabId,
   UserProfile,
 } from '@/types/app';
-import {
-  INITIAL_DOCUMENTS,
-  INITIAL_GIFTS,
-  INITIAL_GROWTH_DATA,
-  INITIAL_NURSERIES,
-  INITIAL_PROFILE,
-  createInitialLogs,
-} from '@/lib/seedData';
+import { INITIAL_PROFILE } from '@/lib/seedData';
+import { getProfileFieldValue } from '@/lib/uiUtils';
 import {
   calculateTargetDate,
   formatDateString,
@@ -41,27 +38,57 @@ import {
   deleteTask as deleteTaskApi,
   insertTask,
   listTasks,
-  refreshBirthRelativeDates,
   updateTask as updateTaskApi,
   updateTaskDone,
 } from '@/lib/api/tasks';
-import { fetchChild, saveChild } from '@/lib/api/children';
+import {
+  deleteCareLog,
+  insertCareLog,
+  listCareLogs,
+  updateCareLog as updateCareLogApi,
+} from '@/lib/api/careLogs';
+import { deleteGift, insertGift, listGifts, updateGift as updateGiftApi } from '@/lib/api/gifts';
+import { ensureChildId } from '@/lib/api/children';
+import {
+  deleteGrowthRecord,
+  insertGrowthRecord,
+  listGrowthRecords,
+  updateGrowthRecord as updateGrowthRecordApi,
+} from '@/lib/api/growthRecords';
+import {
+  deleteDocument,
+  getDocumentSignedUrl,
+  listDocuments,
+  uploadDocument,
+} from '@/lib/api/documents';
+import {
+  deleteNursery,
+  insertNursery,
+  listNurseries,
+  updateNursery as updateNurseryApi,
+} from '@/lib/api/nurseries';
+import { listFamilyMembers } from '@/lib/api/familyMembers';
+import { getProfile, saveProfile } from '@/lib/api/profile';
 
 import HomeTab from './tabs/HomeTab';
 import ScheduleTab from './tabs/ScheduleTab';
 import LogTab from './tabs/LogTab';
-import GiftTab from './tabs/GiftTab';
+import MemoTab from './tabs/MemoTab';
 import InfoTab from './tabs/InfoTab';
 import AddTaskModal from './modals/AddTaskModal';
 import type { TaskDraft } from './modals/TaskForm';
 import TaskDetailModal from './modals/TaskDetailModal';
+import type { CareLogDraft } from './modals/CareLogFormModal';
+import type { GiftDraft } from './modals/GiftFormModal';
+import type { GrowthRecordDraft } from './modals/GrowthRecordFormModal';
+import type { NurseryDraft } from './modals/NurseryFormModal';
 
 const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
   { id: 'home', icon: Home, label: 'ホーム' },
   { id: 'schedule', icon: CalendarDays, label: '予定' },
   { id: 'log', icon: FileText, label: '記録' },
-  { id: 'gift', icon: GiftIcon, label: 'お祝い' },
-  { id: 'info', icon: Folder, label: 'ストック' },
+  { id: 'memo', icon: StickyNote, label: 'メモ' },
+  { id: 'info', icon: Folder, label: '設定' },
 ];
 
 const emptyTaskDraft = (date: Date): TaskDraft => ({
@@ -80,23 +107,46 @@ const emptyTaskDraft = (date: Date): TaskDraft => ({
   belongings: '',
 });
 
+const applyTimeToDate = (base: Date, hhmm: string): Date => {
+  const [hours, minutes] = hhmm.split(':').map(Number);
+  const next = new Date(base);
+  if (!Number.isNaN(hours) && !Number.isNaN(minutes)) next.setHours(hours, minutes, 0, 0);
+  return next;
+};
+
+const parseNullableNumber = (value: string): number | null => (value === '' ? null : Number(value));
+
 interface SukusukuAppProps {
   familyId: string;
   userId: string;
+  role: LoginRole;
 }
 
-export default function SukusukuApp({ familyId }: SukusukuAppProps) {
+export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps) {
   const supabase = useMemo(() => createClient(), []);
 
   const [activeTab, setActiveTab] = useState<TabId>('home');
   const [todos, setTodos] = useState<Task[]>([]);
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
   const [taskError, setTaskError] = useState('');
-  const [logs, setLogs] = useState<CareLog[]>(() => createInitialLogs());
-  const [gifts] = useState<Gift[]>(INITIAL_GIFTS);
-  const [growthData] = useState<GrowthRecord[]>(INITIAL_GROWTH_DATA);
-  const [documents] = useState<DocumentItem[]>(INITIAL_DOCUMENTS);
-  const [nurseries] = useState<Nursery[]>(INITIAL_NURSERIES);
+
+  const [logs, setLogs] = useState<CareLog[]>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(true);
+
+  const [gifts, setGifts] = useState<Gift[]>([]);
+  const [isLoadingGifts, setIsLoadingGifts] = useState(true);
+
+  const [growthData, setGrowthData] = useState<GrowthRecord[]>([]);
+  const [isLoadingGrowth, setIsLoadingGrowth] = useState(true);
+  const [childId, setChildId] = useState<string | null>(null);
+
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
+
+  const [nurseries, setNurseries] = useState<Nursery[]>([]);
+  const [isLoadingNurseries, setIsLoadingNurseries] = useState(true);
+
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
 
   // --- UI状態 ---
   const [showAddModal, setShowAddModal] = useState(false);
@@ -111,28 +161,21 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
 
   const [currentCalendarDate, setCurrentCalendarDate] = useState(today);
 
-  // 子供の名前・誕生日はSupabaseの children テーブルに保存する。
-  // パパママ情報・住所は保存先のカラムが未定のため、現状は画面内の状態のみ。
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
-  const [childId, setChildId] = useState<string | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [tempProfile, setTempProfile] = useState<UserProfile>(userProfile);
 
-  // 家族のタスクと子供情報をSupabaseから取得
+  // 家族のタスクをSupabaseから取得
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listTasks(supabase, familyId), fetchChild(supabase, familyId)])
-      .then(([tasks, child]) => {
+    listTasks(supabase, familyId)
+      .then((data) => {
         if (cancelled) return;
-        setTodos(tasks);
-        if (child) {
-          setChildId(child.id);
-          setUserProfile((prev) => ({ ...prev, babyName: child.name, birthDate: child.birthDate }));
-        }
+        setTodos(data);
         setTaskError('');
       })
       .catch((err) => {
-        console.error('Failed to load family data:', err);
+        console.error('Failed to load tasks:', err);
         if (!cancelled) setTaskError('予定の読み込みに失敗しました。時間を置いて再度お試しください。');
       })
       .finally(() => {
@@ -143,6 +186,130 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
     };
   }, [supabase, familyId]);
 
+  // 育児記録をSupabaseから取得
+  useEffect(() => {
+    let cancelled = false;
+    listCareLogs(supabase, familyId)
+      .then((data) => {
+        if (!cancelled) setLogs(data);
+      })
+      .catch((err) => console.error('Failed to load care logs:', err))
+      .finally(() => {
+        if (!cancelled) setIsLoadingLogs(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, familyId]);
+
+  // お祝いをSupabaseから取得
+  useEffect(() => {
+    let cancelled = false;
+    listGifts(supabase, familyId)
+      .then((data) => {
+        if (!cancelled) setGifts(data);
+      })
+      .catch((err) => console.error('Failed to load gifts:', err))
+      .finally(() => {
+        if (!cancelled) setIsLoadingGifts(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, familyId]);
+
+  // 成長記録をSupabaseから取得(childレコードを確保してから取得する)
+  useEffect(() => {
+    let cancelled = false;
+    ensureChildId(supabase, familyId)
+      .then((id) => {
+        if (cancelled) return;
+        setChildId(id);
+        return listGrowthRecords(supabase, id);
+      })
+      .then((data) => {
+        if (!cancelled && data) setGrowthData(data);
+      })
+      .catch((err) => console.error('Failed to load growth records:', err))
+      .finally(() => {
+        if (!cancelled) setIsLoadingGrowth(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, familyId]);
+
+  // 書類箱をSupabaseから取得
+  useEffect(() => {
+    let cancelled = false;
+    listDocuments(supabase, familyId)
+      .then((data) => {
+        if (!cancelled) setDocuments(data);
+      })
+      .catch((err) => console.error('Failed to load documents:', err))
+      .finally(() => {
+        if (!cancelled) setIsLoadingDocuments(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, familyId]);
+
+  // 保活メモをSupabaseから取得
+  useEffect(() => {
+    let cancelled = false;
+    listNurseries(supabase, familyId)
+      .then((data) => {
+        if (!cancelled) setNurseries(data);
+      })
+      .catch((err) => console.error('Failed to load nurseries:', err))
+      .finally(() => {
+        if (!cancelled) setIsLoadingNurseries(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, familyId]);
+
+  // 家族メンバー(パパ/ママ)の表示名解決用
+  useEffect(() => {
+    let cancelled = false;
+    listFamilyMembers(supabase, familyId)
+      .then((data) => {
+        if (!cancelled) setFamilyMembers(data);
+      })
+      .catch((err) => console.error('Failed to load family members:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, familyId]);
+
+  // 設定タブ(お子様情報・パパママ情報)をSupabaseから取得
+  useEffect(() => {
+    let cancelled = false;
+    getProfile(supabase, familyId)
+      .then((profile) => {
+        if (cancelled || !profile) return;
+        setUserProfile(profile);
+      })
+      .catch((err) => {
+        console.error('Failed to load profile:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, familyId]);
+
+  const memberLabel = (id: string | null): string => {
+    if (!id) return '不明';
+    const member = familyMembers.find((m) => m.id === id);
+    if (member?.name) return member.name;
+    if (id === userId) return 'あなた';
+    return 'パートナー';
+  };
+
+  const birthDateValue = getProfileFieldValue(userProfile, 'birthDate');
+
   const dynamicTodos = useMemo<DynamicTask[]>(() => {
     return todos.map((todo) => {
       // 日付指定の予定は start_date をそのまま使い、
@@ -150,24 +317,24 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
       const targetDateObj =
         todo.anchorType === 'absolute'
           ? parseDateString(todo.startDate ?? '')
-          : calculateTargetDate(userProfile.birthDate, todo.daysAfterBirth);
+          : calculateTargetDate(birthDateValue, todo.daysAfterBirth);
       return {
         ...todo,
         targetDateObj,
         targetDate: formatDateString(targetDateObj),
       };
     });
-  }, [todos, userProfile.birthDate]);
+  }, [todos, birthDateValue]);
 
   const ageInDays = useMemo(() => {
-    const birth = parseDateString(userProfile.birthDate);
+    const birth = parseDateString(birthDateValue);
     if (!birth) return 0;
     const diffTime = today.getTime() - birth.getTime();
     return Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  }, [userProfile.birthDate, today]);
+  }, [birthDateValue, today]);
 
   const ageInMonths = useMemo(() => {
-    const birth = parseDateString(userProfile.birthDate);
+    const birth = parseDateString(birthDateValue);
     if (!birth) return { months: 0, days: 0 };
     let months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
     let tempDate = new Date(birth.getFullYear(), birth.getMonth() + months, birth.getDate());
@@ -178,7 +345,7 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
     }
     const days = Math.floor((today.getTime() - tempDate.getTime()) / (1000 * 60 * 60 * 24));
     return { months, days };
-  }, [userProfile.birthDate, today]);
+  }, [birthDateValue, today]);
 
   const toggleTodo = async (id: string) => {
     const target = todos.find((t) => t.id === id);
@@ -239,28 +406,18 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
 
   const handleProfileSave = async () => {
     const previousProfile = userProfile;
-    const birthDateChanged = tempProfile.birthDate !== userProfile.birthDate;
+    const updated = tempProfile;
 
-    setUserProfile(tempProfile);
+    setUserProfile(updated);
     setIsEditingProfile(false);
 
     try {
-      const saved = await saveChild(supabase, familyId, {
-        id: childId,
-        name: tempProfile.babyName,
-        birthDate: tempProfile.birthDate,
-      });
-      setChildId(saved.id);
-
-      // 誕生日が変わったら、出生日基準の予定の日付を計算し直す
-      if (birthDateChanged) {
-        await refreshBirthRelativeDates(supabase, familyId);
-        setTodos(await listTasks(supabase, familyId));
-      }
+      await saveProfile(supabase, familyId, updated);
     } catch (err) {
       console.error('Failed to save profile:', err);
+      // 失敗時はロールバック
       setUserProfile(previousProfile);
-      alert('プロフィールの保存に失敗しました。もう一度お試しください。');
+      alert('保存に失敗しました。もう一度お試しください。');
     }
   };
 
@@ -285,22 +442,185 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
     }
   };
 
-  const addLog = (type: CareLog['type'], label: string) => {
-    const newLog: CareLog = {
-      id: Date.now(),
-      type,
-      label,
-      amount: type === 'milk' ? '100ml' : '',
-      time: new Date(),
-      note: '',
-      user: 'あなた',
+  // --- 育児記録 ---
+  const addLog = async (type: LogType) => {
+    try {
+      const created = await insertCareLog(supabase, familyId, userId, { type, amount: '', note: '' });
+      setLogs((prev) => [created, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()));
+    } catch (err) {
+      console.error('Failed to add care log:', err);
+      alert('記録の追加に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const updateLog = async (log: CareLog, draft: CareLogDraft) => {
+    const updated: CareLog = { ...log, amount: draft.amount, note: draft.note, time: applyTimeToDate(log.time, draft.time) };
+    setLogs((prev) => prev.map((l) => (l.id === log.id ? updated : l)).sort((a, b) => b.time.getTime() - a.time.getTime()));
+    try {
+      await updateCareLogApi(supabase, updated);
+    } catch (err) {
+      console.error('Failed to update care log:', err);
+      alert('記録の更新に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const deleteLog = async (id: string) => {
+    const previous = logs;
+    setLogs((prev) => prev.filter((l) => l.id !== id));
+    try {
+      await deleteCareLog(supabase, id);
+    } catch (err) {
+      console.error('Failed to delete care log:', err);
+      setLogs(previous);
+      alert('記録の削除に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  // --- お祝い ---
+  const addGift = async (draft: GiftDraft) => {
+    try {
+      const created = await insertGift(supabase, familyId, draft);
+      setGifts((prev) => [created, ...prev]);
+    } catch (err) {
+      console.error('Failed to add gift:', err);
+      alert('お祝いの追加に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const updateGiftHandler = async (gift: Gift, draft: GiftDraft) => {
+    const updated: Gift = { ...gift, ...draft };
+    setGifts((prev) => prev.map((g) => (g.id === gift.id ? updated : g)));
+    try {
+      await updateGiftApi(supabase, updated);
+    } catch (err) {
+      console.error('Failed to update gift:', err);
+      alert('お祝いの更新に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const deleteGiftHandler = async (id: string) => {
+    const previous = gifts;
+    setGifts((prev) => prev.filter((g) => g.id !== id));
+    try {
+      await deleteGift(supabase, id);
+    } catch (err) {
+      console.error('Failed to delete gift:', err);
+      setGifts(previous);
+      alert('お祝いの削除に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  // --- 成長記録 ---
+  const addGrowthRecordHandler = async (draft: GrowthRecordDraft) => {
+    try {
+      const id = childId ?? (await ensureChildId(supabase, familyId));
+      if (!childId) setChildId(id);
+      const created = await insertGrowthRecord(supabase, id, {
+        monthAge: parseNullableNumber(draft.monthAge),
+        height: parseNullableNumber(draft.height),
+        weight: parseNullableNumber(draft.weight),
+        recordedDate: draft.recordedDate,
+      });
+      setGrowthData((prev) => [...prev, created].sort((a, b) => a.recordedDate.localeCompare(b.recordedDate)));
+    } catch (err) {
+      console.error('Failed to add growth record:', err);
+      alert('成長記録の追加に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const updateGrowthRecordHandler = async (record: GrowthRecord, draft: GrowthRecordDraft) => {
+    const updated: GrowthRecord = {
+      ...record,
+      month: parseNullableNumber(draft.monthAge),
+      height: parseNullableNumber(draft.height),
+      weight: parseNullableNumber(draft.weight),
+      recordedDate: draft.recordedDate,
     };
-    setLogs((prev) => [newLog, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()));
+    setGrowthData((prev) =>
+      prev.map((r) => (r.id === record.id ? updated : r)).sort((a, b) => a.recordedDate.localeCompare(b.recordedDate)),
+    );
+    try {
+      await updateGrowthRecordApi(supabase, updated);
+    } catch (err) {
+      console.error('Failed to update growth record:', err);
+      alert('成長記録の更新に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const deleteGrowthRecordHandler = async (id: string) => {
+    const previous = growthData;
+    setGrowthData((prev) => prev.filter((r) => r.id !== id));
+    try {
+      await deleteGrowthRecord(supabase, id);
+    } catch (err) {
+      console.error('Failed to delete growth record:', err);
+      setGrowthData(previous);
+      alert('成長記録の削除に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  // --- 書類箱 ---
+  const addDocument = async (file: File, title: string) => {
+    try {
+      const created = await uploadDocument(supabase, familyId, file, title);
+      setDocuments((prev) => [created, ...prev]);
+    } catch (err) {
+      console.error('Failed to upload document:', err);
+      alert('書類の追加に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const deleteDocumentHandler = async (doc: DocumentItem) => {
+    const previous = documents;
+    setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+    try {
+      await deleteDocument(supabase, doc);
+    } catch (err) {
+      console.error('Failed to delete document:', err);
+      setDocuments(previous);
+      alert('書類の削除に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const getDocumentUrl = (filePath: string) => getDocumentSignedUrl(supabase, filePath);
+
+  // --- 保活メモ ---
+  const addNurseryHandler = async (draft: NurseryDraft) => {
+    try {
+      const created = await insertNursery(supabase, familyId, draft);
+      setNurseries((prev) => [...prev, created]);
+    } catch (err) {
+      console.error('Failed to add nursery:', err);
+      alert('保育園の追加に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const updateNurseryHandler = async (nursery: Nursery, draft: NurseryDraft) => {
+    const updated: Nursery = { ...nursery, ...draft };
+    setNurseries((prev) => prev.map((n) => (n.id === nursery.id ? updated : n)));
+    try {
+      await updateNurseryApi(supabase, updated);
+    } catch (err) {
+      console.error('Failed to update nursery:', err);
+      alert('保育園情報の更新に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const deleteNurseryHandler = async (id: string) => {
+    const previous = nurseries;
+    setNurseries((prev) => prev.filter((n) => n.id !== id));
+    try {
+      await deleteNursery(supabase, id);
+    } catch (err) {
+      console.error('Failed to delete nursery:', err);
+      setNurseries(previous);
+      alert('保育園情報の削除に失敗しました。もう一度お試しください。');
+    }
   };
 
   return (
-    <div className="w-full max-w-md mx-auto h-screen sm:h-[850px] relative bg-gray-50 flex flex-col font-sans overflow-hidden shadow-2xl sm:rounded-3xl sm:my-8 border sm:border-gray-200">
-      <header className="flex-none bg-white px-4 py-3 flex flex-col items-center justify-center shadow-sm z-10 relative">
+    <div className="w-full max-w-md mx-auto h-dvh sm:h-[min(850px,calc(100dvh-4rem))] relative bg-gray-50 flex flex-col font-sans overflow-hidden shadow-2xl sm:rounded-3xl sm:my-8 border sm:border-gray-200">
+      <header className="flex-none bg-white px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 flex flex-col items-center justify-center shadow-sm z-10 relative">
         <h1 className="font-bold text-gray-800 tracking-wide text-lg">すくすく手帳</h1>
       </header>
 
@@ -312,6 +632,7 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
         {activeTab === 'home' && (
           <HomeTab
             userProfile={userProfile}
+            loginRole={role}
             ageInDays={ageInDays}
             ageInMonths={ageInMonths}
             dynamicTodos={dynamicTodos}
@@ -333,9 +654,39 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
           />
         )}
         {activeTab === 'log' && (
-          <LogTab logs={logs} growthData={growthData} onAddLog={addLog} />
+          <LogTab
+            logs={logs}
+            growthData={growthData}
+            isLoadingLogs={isLoadingLogs}
+            isLoadingGrowth={isLoadingGrowth}
+            memberLabel={memberLabel}
+            onAddLog={addLog}
+            onUpdateLog={updateLog}
+            onDeleteLog={deleteLog}
+            onAddGrowthRecord={addGrowthRecordHandler}
+            onUpdateGrowthRecord={updateGrowthRecordHandler}
+            onDeleteGrowthRecord={deleteGrowthRecordHandler}
+          />
         )}
-        {activeTab === 'gift' && <GiftTab gifts={gifts} />}
+        {activeTab === 'memo' && (
+          <MemoTab
+            gifts={gifts}
+            isLoadingGifts={isLoadingGifts}
+            onAddGift={addGift}
+            onUpdateGift={updateGiftHandler}
+            onDeleteGift={deleteGiftHandler}
+            documents={documents}
+            isLoadingDocuments={isLoadingDocuments}
+            onAddDocument={addDocument}
+            onDeleteDocument={deleteDocumentHandler}
+            getDocumentUrl={getDocumentUrl}
+            nurseries={nurseries}
+            isLoadingNurseries={isLoadingNurseries}
+            onAddNursery={addNurseryHandler}
+            onUpdateNursery={updateNurseryHandler}
+            onDeleteNursery={deleteNurseryHandler}
+          />
+        )}
         {activeTab === 'info' && (
           <InfoTab
             userProfile={userProfile}
@@ -344,8 +695,6 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
             onStartEditProfile={startEditingProfile}
             onChangeTempProfile={setTempProfile}
             onSaveProfile={handleProfileSave}
-            documents={documents}
-            nurseries={nurseries}
           />
         )}
       </main>
@@ -353,31 +702,33 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
       {activeTab === 'schedule' && (
         <button
           onClick={() => setShowAddModal(true)}
-          className="absolute bottom-20 right-4 w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-all active:scale-95 z-20"
+          className="absolute bottom-[calc(4rem+env(safe-area-inset-bottom)+1rem)] right-4 w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-all active:scale-95 z-20"
         >
           <Plus size={28} />
         </button>
       )}
 
-      <nav className="flex-none bg-white border-t border-gray-200 flex justify-around items-center h-16 absolute bottom-0 left-0 right-0 w-full z-30 px-1">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setActiveTab(item.id)}
-            className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition ${
-              activeTab === item.id ? 'text-blue-500' : 'text-gray-400 hover:text-gray-500'
-            }`}
-          >
-            <item.icon size={22} className={activeTab === item.id ? 'stroke-[2.5px]' : 'stroke-2'} />
-            <span className="text-[9px] font-medium">{item.label}</span>
-          </button>
-        ))}
+      <nav className="flex-none bg-white border-t border-gray-200 w-full z-30 pb-[env(safe-area-inset-bottom)]">
+        <div className="flex justify-around items-center h-16 px-1">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition ${
+                activeTab === item.id ? 'text-blue-500' : 'text-gray-400 hover:text-gray-500'
+              }`}
+            >
+              <item.icon size={22} className={activeTab === item.id ? 'stroke-[2.5px]' : 'stroke-2'} />
+              <span className="text-[9px] font-medium">{item.label}</span>
+            </button>
+          ))}
+        </div>
       </nav>
 
       <AddTaskModal
         show={showAddModal}
         newTask={newTask}
-        allowBirthRelative={!userProfile.birthDate}
+        allowBirthRelative={!birthDateValue}
         onChange={setNewTask}
         onClose={() => setShowAddModal(false)}
         onSubmit={handleAddTask}
@@ -386,7 +737,7 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
         selectedTask={selectedTask}
         isEditingTask={isEditingTask}
         tempEditingTask={tempEditingTask}
-        allowBirthRelative={!userProfile.birthDate}
+        allowBirthRelative={!birthDateValue}
         onStartEdit={() => setIsEditingTask(true)}
         onChangeTempEditingTask={setTempEditingTask}
         onSaveEdit={saveTaskEdit}

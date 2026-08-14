@@ -1,19 +1,9 @@
-import type {
-  CareLog,
-  DocumentItem,
-  Gift,
-  GrowthRecord,
-  Nursery,
-  Task,
-  UserProfile,
-} from '@/types/app';
-
-// --- 初期ダミーデータ ---
-// Supabase連携までの間、画面確認用に使用するプレースホルダー。
-// 実データ移行後（Step 4後半）はここを撤去し、Supabaseからの取得に置き換える。
+import type { Task, UserProfile } from '@/types/app';
 
 // 家族の新規作成時にSupabaseへ登録する定番ToDoのテンプレート（idはDB側で採番するため持たない）
-// いずれも出生日を起点に日付が決まるため anchorType は 'birth_relative'。
+// スケジュール(tasks)のみ、初回セットアップ時の定番項目としてこのテンプレートを使用する。
+// それ以外のデータ(育児記録・お祝い・成長記録・書類・保活メモ)はSupabaseから取得する実データのみを扱う。
+// いずれも出生日を起点に時期が決まるため anchorType は 'birth_relative'。
 type TaskTemplate = Omit<Task, 'id'>;
 
 const birthRelative = (
@@ -34,6 +24,11 @@ export const INITIAL_TODOS: TaskTemplate[] = [
   birthRelative({ category: '手続き', title: '出産手当金・育休申請', place: '郵送', timing: '退院したら', daysAfterBirth: 5, done: false, note: '病院記入あり', belongings: '申請書、同意書', label: 'ママ', remindMinutesBefore: 1440 }),
   birthRelative({ category: '手続き', title: '妻の扶養申請', place: '郵送', timing: '戸籍ができたら', daysAfterBirth: 10, done: false, note: '', belongings: '住民票(全員)、夫給与明細(直近3ヶ月)、戸籍謄本', label: 'パパ', remindMinutesBefore: null }),
   birthRelative({ category: '手続き', title: '保育園見学・相談', place: '各保育園', timing: '生後1ヶ月〜', daysAfterBirth: 30, done: false, note: '', belongings: '', label: '家族', remindMinutesBefore: null }),
+  birthRelative({ category: '手続き', title: '夫の勤務先へマイナンバー提出', place: 'WEB', timing: 'マイナンバーが届いたら', daysAfterBirth: 20, done: false, note: '', belongings: 'マイナンバー(夫)', label: 'パパ', remindMinutesBefore: null }),
+  birthRelative({ category: '手続き', title: 'マイナンバーと健康保険証の紐づけ', place: 'マイナポータル', timing: '健康保険証が届いたら', daysAfterBirth: 25, done: false, note: '', belongings: 'マイナンバー(夫)、健康保険証', label: '家族', remindMinutesBefore: null }),
+  birthRelative({ category: '手続き', title: 'ひまわりカード申請', place: 'WEB', timing: '健康保険証が届いたら', daysAfterBirth: 25, done: false, note: '', belongings: '健康保険証', label: '家族', remindMinutesBefore: null }),
+  birthRelative({ category: '手続き', title: '保育園申請案内の確認', place: '郵送', timing: '9月〜', daysAfterBirth: 30, done: false, note: '就労証明書の依頼をする', belongings: '', label: '家族', remindMinutesBefore: 1440 }),
+  birthRelative({ category: '手続き', title: '保育園入園申請', place: 'WEB', timing: '10月〜', daysAfterBirth: 70, done: false, note: '', belongings: '就労証明書ほか', label: '家族', remindMinutesBefore: 1440 }),
 ];
 
 export const INITIAL_EVENTS: TaskTemplate[] = [
@@ -41,43 +36,45 @@ export const INITIAL_EVENTS: TaskTemplate[] = [
   birthRelative({ category: '健診', title: '1ヶ月検診 (母体・赤ちゃん)', place: 'まつばせL.C / 北野小児科', timing: '出生1ヶ月', daysAfterBirth: 30, done: false, note: '', belongings: '母子手帳、乳幼児健診番号', label: '家族', remindMinutesBefore: 1440 }),
   birthRelative({ category: 'イベント', title: 'お宮参り', place: '-', timing: '1ヶ月〜', daysAfterBirth: 35, done: false, note: '', belongings: '', label: '家族', remindMinutesBefore: null }),
   birthRelative({ category: '健診', title: '予防接種①', place: '北野小児科', timing: '生後2ヶ月', daysAfterBirth: 60, done: false, note: '五種混合, 肺炎球菌, B型肝炎, ロタ', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
-];
-
-export const createInitialLogs = (): CareLog[] => [
-  { id: 1, type: 'milk', label: 'ミルク', amount: '100ml', time: new Date(new Date().setHours(8, 30, 0, 0)), note: 'よく飲んだ', user: 'パパ' },
-  { id: 2, type: 'diaper', label: 'うんち', amount: '', time: new Date(new Date().setHours(10, 15, 0, 0)), note: '色・硬さ普通', user: 'ママ' },
-  { id: 3, type: 'sleep', label: '睡眠', amount: '2時間', time: new Date(new Date().setHours(11, 0, 0, 0)), note: 'お昼寝', user: 'ママ' },
-];
-
-export const INITIAL_GIFTS: Gift[] = [
-  { id: 1, from: '祖父母(夫)', item: 'お祝い金 10万円', date: '2026-08-15', returnStatus: '不要', returnItem: '-', note: 'ベビーベッド購入費用として' },
-  { id: 2, from: '友人A', item: 'ベビー服(80サイズ)', date: '2026-09-01', returnStatus: '未完了', returnItem: 'カタログギフト3000円', note: '住所確認済' },
-];
-
-export const INITIAL_GROWTH_DATA: GrowthRecord[] = [
-  { month: 0, height: 50.0, weight: 3.0 },
-  { month: 1, height: 54.5, weight: 4.2 },
-  { month: 2, height: 58.1, weight: 5.5 },
-  { month: 3, height: 61.4, weight: 6.4 },
-];
-
-export const INITIAL_DOCUMENTS: DocumentItem[] = [
-  { id: 1, title: '予防接種スケジュール表', date: '2026-08-20', type: 'image' },
-  { id: 2, title: '出産手当金 申請控え', date: '2026-08-25', type: 'image' },
-];
-
-export const INITIAL_NURSERIES: Nursery[] = [
-  { id: 1, name: '舞原保育園', distance: '車5分', status: '見学済', memo: '園庭が広く、のびのびしている。オムツのサブスクあり。', phone: '0964-28-2121' },
-  { id: 2, name: 'くすのき保育園', distance: '車10分', status: '見学予約済', memo: '9/15 10:00 見学予定。妻の職場に近い。', phone: '0964-28-6163' },
-  { id: 3, name: '和光保育園', distance: '徒歩15分', status: '未見学', memo: '近くて便利。見学の電話をする。', phone: '0964-28-4993' },
+  birthRelative({ category: '健診', title: '予防接種予約', place: '北野小児科', timing: '1ヶ月健診が終わったら', daysAfterBirth: 30, done: false, note: 'RSワクチン接種済を伝える', belongings: '母子手帳', label: '家族', remindMinutesBefore: 1440 }),
+  birthRelative({ category: '健診', title: '3ヶ月健診', place: '北野小児科', timing: '生後3ヶ月', daysAfterBirth: 90, done: false, note: '', belongings: '母子手帳', label: '家族', remindMinutesBefore: 1440 }),
+  birthRelative({ category: 'イベント', title: 'お食い初め', place: '-', timing: '生後100日', daysAfterBirth: 100, done: false, note: '', belongings: '', label: '家族', remindMinutesBefore: null }),
+  birthRelative({ category: '健診', title: '予防接種②', place: '北野小児科', timing: '生後3ヶ月〜4ヶ月になる前日', daysAfterBirth: 119, done: false, note: '五種混合②, 小児用肺炎球菌②, B型肝炎②, ロタウイルス②', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
+  birthRelative({ category: '健診', title: '予防接種③', place: '北野小児科', timing: '生後4ヶ月', daysAfterBirth: 120, done: false, note: '五種混合③, 小児用肺炎球菌③, ロタウイルス③(ワクチン次第)', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
+  birthRelative({ category: '健診', title: 'インフルエンザ予防接種', place: '北野小児科', timing: '生後6ヶ月〜', daysAfterBirth: 180, done: false, note: '流行次第で任意', belongings: '母子手帳', label: '家族', remindMinutesBefore: null }),
+  birthRelative({ category: '健診', title: '7ヶ月健診', place: '北野小児科', timing: '生後7ヶ月〜8ヶ月', daysAfterBirth: 210, done: false, note: '', belongings: '母子手帳', label: '家族', remindMinutesBefore: 1440 }),
+  birthRelative({ category: '健診', title: '予防接種④', place: '北野小児科', timing: '生後7ヶ月〜8ヶ月', daysAfterBirth: 210, done: false, note: 'BCG, B型肝炎③', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
+  birthRelative({ category: '健診', title: '予防接種(1歳)', place: '北野小児科', timing: '1歳', daysAfterBirth: 365, done: false, note: 'MR(麻しん風しん), 水痘(水ぼうそう), 小児用肺炎球菌④, 五種混合④, おたふくかぜ(任意だが必須)', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
+  birthRelative({ category: '健診', title: '予防接種(1歳6ヶ月)', place: '北野小児科', timing: '1歳6ヶ月', daysAfterBirth: 545, done: false, note: '水痘(水ぼうそう)②', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
+  birthRelative({ category: '健診', title: '予防接種(3歳)①', place: '', timing: '3歳', daysAfterBirth: 1095, done: false, note: '日本脳炎①', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
+  birthRelative({ category: '健診', title: '予防接種(3歳)②', place: '', timing: '3歳', daysAfterBirth: 1125, done: false, note: '日本脳炎②', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
+  birthRelative({ category: '健診', title: '予防接種(4歳)', place: '', timing: '4歳', daysAfterBirth: 1460, done: false, note: '日本脳炎③', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
+  birthRelative({ category: '健診', title: '予防接種(就学前)', place: '', timing: '小学校入学前の1年間', daysAfterBirth: 2190, done: false, note: 'MR(麻しん風しん)②, おたふくかぜ②', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
+  birthRelative({ category: '健診', title: '予防接種(9歳)', place: '', timing: '9歳', daysAfterBirth: 3285, done: false, note: '日本脳炎④', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
+  birthRelative({ category: '健診', title: '予防接種(11歳)', place: '', timing: '11歳', daysAfterBirth: 4015, done: false, note: '2種混合', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
 ];
 
 export const INITIAL_PROFILE: UserProfile = {
-  babyName: '',
-  birthDate: '',
-  momName: '',
-  momWorkplace: '',
-  dadName: '',
-  dadWorkplace: '',
-  address: '',
+  childFields: [
+    { id: 'baby-name', label: 'お名前', value: '', key: 'babyName' },
+    { id: 'birth-date', label: 'お誕生日', value: '', key: 'birthDate' },
+  ],
+  familyFields: [
+    { id: 'mom-name', label: 'ママのお名前', value: '' },
+    { id: 'mom-workplace', label: 'ママの勤務先', value: '' },
+    { id: 'dad-name', label: 'パパのお名前', value: '' },
+    { id: 'dad-workplace', label: 'パパの勤務先', value: '' },
+    { id: 'address', label: 'ご住所', value: '' },
+  ],
+  emergencyFields: [
+    { id: 'hospital-name', label: '産院名', value: '福田病院' },
+    { id: 'hospital-phone', label: '産院 電話番号', value: '096-322-2995', key: 'hospitalPhone' },
+    { id: 'pediatric-name', label: '小児科名', value: '北野小児科' },
+    { id: 'pediatric-phone', label: '小児科 電話番号', value: '096-352-8990', key: 'pediatricPhone' },
+    { id: 'papa-company-phone', label: 'パパ会社 電話番号', value: '096-368-4222', key: 'papaCompanyPhone' },
+    { id: 'papa-contact-phone', label: 'パパ連絡先（携帯）', value: '080-2742-0550', key: 'papaContactPhone' },
+    { id: 'mama-company-phone', label: 'ママ会社 電話番号', value: '', key: 'mamaCompanyPhone' },
+    { id: 'mama-contact-phone', label: 'ママ連絡先（携帯）', value: '090-9575-3278', key: 'mamaContactPhone' },
+  ],
+  customFields: [],
 };

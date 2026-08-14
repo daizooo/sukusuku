@@ -41,7 +41,7 @@ src/
     auth/confirm/         # メール確認リンクのコールバック
   components/sukusuku/
     SukusukuApp.tsx        # アプリ本体（状態管理・タブ/モーダルの組み立て）
-    tabs/                  # ホーム/予定/記録/お祝い/ストックの各タブ
+    tabs/                  # ホーム/予定/記録/お祝い/設定の各タブ
     modals/                # タスク追加・詳細の各モーダル
   lib/
     dateUtils.ts / uiUtils.ts / seedData.ts
@@ -51,23 +51,21 @@ src/
 supabase/migrations/
   0001_init_schema.sql     # テーブル定義 + RLSポリシー
   0002_storage.sql         # 書類箱用Storageバケット + ポリシー
-  0006_calendar_fields.sql # カレンダー用カラム(日付・時刻・ラベル・リマインダー)
+  0010_calendar_fields.sql # カレンダー用カラム(日付・時刻・ラベル・リマインダー)
 ```
 
 ## 現在の実装状況
 
 - [x] Next.jsプロジェクトの初期化・Tailwind設定
-- [x] プロトタイプUI（ホーム/予定/記録/お祝い/ストックの5タブ、各種モーダル）をTypeScriptコンポーネントとして移植（画面は現時点ではダミーデータで動作）
+- [x] プロトタイプUI（ホーム/予定/記録/お祝い/設定の5タブ、各種モーダル）をTypeScriptコンポーネントとして移植（画面は現時点ではダミーデータで動作）
 - [x] Supabaseスキーマ（9テーブル）・RLSポリシー・Storageポリシーのマイグレーションを追加
 - [x] Supabaseクライアント（ブラウザ/サーバー）の雛形を追加
 - [x] Supabaseプロジェクト作成・マイグレーション適用・Security/Performance Advisor対応・型生成 (`src/types/supabase.ts`)
 - [x] 認証（メール/パスワード）・招待コード（家族UUID）による夫婦の家族紐付け機能 (`/login`, `/family-setup`)
 - [x] 予定(tasks)タブをSupabase実データに接続（一覧取得・追加・編集・完了切替・削除、家族作成時に定番ToDoを自動投入）
 - [x] カレンダー機能（日付・時刻・場所・詳細・ラベル・リマインダーの入力、月カレンダーの日付選択）→ [docs/calendar.md](docs/calendar.md)
-- [x] 子供の名前・誕生日のSupabase連携（`children`テーブル。保存時に出生日基準の予定の日付を再計算）
 - [ ] リマインダーの配信（PWA + Web Push）※現在は通知タイミングを保存するのみ
 - [ ] Google認証などの追加サインイン方法
-- [ ] プロフィールのうちパパママの名前・勤務先・住所のSupabase連携（保存先カラムが未定）
 - [ ] 育児記録・成長グラフ・お祝い管理・保活メモ・書類箱のSupabase連携
 - [ ] 書類箱の画像アップロード（Supabase Storage）
 - [ ] Vercelへのデプロイ・GitHub連携
