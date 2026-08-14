@@ -64,9 +64,11 @@ export const INITIAL_NURSERIES: Nursery[] = [
 export const INITIAL_PROFILE: UserProfile = {
   babyName: '',
   birthDate: '',
-  momName: '',
-  momWorkplace: '',
-  dadName: '',
-  dadWorkplace: '',
-  address: '',
+  familyFields: [
+    { id: 'mom-name', label: 'ママのお名前', value: '' },
+    { id: 'mom-workplace', label: 'ママの勤務先', value: '' },
+    { id: 'dad-name', label: 'パパのお名前', value: '' },
+    { id: 'dad-workplace', label: 'パパの勤務先', value: '' },
+    { id: 'address', label: 'ご住所', value: '' },
+  ],
 };

@@ -73,14 +73,17 @@ export interface Nursery {
   memo: string;
 }
 
+// パパ・ママ情報の1項目（見出し + 内容）。ユーザーが自由に追加・削除できる。
+export interface ProfileField {
+  id: string;
+  label: string;
+  value: string;
+}
+
 export interface UserProfile {
   babyName: string;
   birthDate: string;
-  momName: string;
-  momWorkplace: string;
-  dadName: string;
-  dadWorkplace: string;
-  address: string;
+  familyFields: ProfileField[];
 }
 
 export type TabId = 'home' | 'schedule' | 'log' | 'gift' | 'info';

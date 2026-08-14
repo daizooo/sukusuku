@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Baby, Camera, ClipboardList, Edit2, Folder, Image as ImageIcon, MapPin, Phone, Plus, Save, Settings, User } from 'lucide-react';
-import type { DocumentItem, Nursery, UserProfile } from '@/types/app';
+import { Baby, Camera, ClipboardList, Edit2, Folder, Image as ImageIcon, MapPin, Phone, Plus, Save, Settings, Trash2, User } from 'lucide-react';
+import type { DocumentItem, Nursery, ProfileField, UserProfile } from '@/types/app';
+import { isPhoneNumberLike, toTelHref } from '@/lib/uiUtils';
 
 type InfoView = 'profile' | 'documents' | 'nursery';
 
@@ -29,6 +30,27 @@ export default function InfoTab({
 }: InfoTabProps) {
   const [infoView, setInfoView] = useState<InfoView>('profile');
   const birthDate = userProfile.birthDate ? new Date(userProfile.birthDate) : null;
+
+  const updateFamilyField = (id: string, patch: Partial<Pick<ProfileField, 'label' | 'value'>>) => {
+    onChangeTempProfile({
+      ...tempProfile,
+      familyFields: tempProfile.familyFields.map((field) => (field.id === id ? { ...field, ...patch } : field)),
+    });
+  };
+
+  const addFamilyField = () => {
+    onChangeTempProfile({
+      ...tempProfile,
+      familyFields: [...tempProfile.familyFields, { id: crypto.randomUUID(), label: '', value: '' }],
+    });
+  };
+
+  const removeFamilyField = (id: string) => {
+    onChangeTempProfile({
+      ...tempProfile,
+      familyFields: tempProfile.familyFields.filter((field) => field.id !== id),
+    });
+  };
 
   return (
     <div className="p-4 h-full flex flex-col pb-24">
@@ -119,77 +141,64 @@ export default function InfoTab({
                 <User size={18} className="mr-2 text-blue-500" /> パパ・ママ情報
               </h3>
               {isEditingProfile ? (
-                <div className="space-y-4">
-                  <div className="p-3 bg-pink-50 rounded-lg space-y-3">
-                    <div>
-                      <label className="block text-xs font-medium text-pink-700 mb-1">ママのお名前</label>
-                      <input
-                        type="text"
-                        value={tempProfile.momName}
-                        onChange={(e) => onChangeTempProfile({ ...tempProfile, momName: e.target.value })}
-                        className="w-full border border-pink-200 rounded p-1.5 text-sm outline-none"
-                      />
+                <div className="space-y-3">
+                  {tempProfile.familyFields.map((field) => (
+                    <div key={field.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 relative">
+                      <button
+                        type="button"
+                        onClick={() => removeFamilyField(field.id)}
+                        aria-label="この項目を削除"
+                        className="absolute top-2 right-2 text-gray-400 hover:text-red-500 hover:bg-red-50 p-1 rounded transition"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      <div className="pr-7 space-y-2">
+                        <div>
+                          <label className="block text-[10px] font-medium text-gray-500 mb-1">見出し</label>
+                          <input
+                            type="text"
+                            value={field.label}
+                            onChange={(e) => updateFamilyField(field.id, { label: e.target.value })}
+                            placeholder="例: ママの携帯番号"
+                            className="w-full border border-gray-300 rounded p-1.5 text-sm outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-medium text-gray-500 mb-1">内容</label>
+                          <input
+                            type="text"
+                            value={field.value}
+                            onChange={(e) => updateFamilyField(field.id, { value: e.target.value })}
+                            placeholder="例: 090-1234-5678"
+                            className="w-full border border-gray-300 rounded p-1.5 text-sm outline-none"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-pink-700 mb-1">ママの勤務先</label>
-                      <input
-                        type="text"
-                        value={tempProfile.momWorkplace}
-                        onChange={(e) => onChangeTempProfile({ ...tempProfile, momWorkplace: e.target.value })}
-                        className="w-full border border-pink-200 rounded p-1.5 text-sm outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div className="p-3 bg-blue-50 rounded-lg space-y-3">
-                    <div>
-                      <label className="block text-xs font-medium text-blue-700 mb-1">パパのお名前</label>
-                      <input
-                        type="text"
-                        value={tempProfile.dadName}
-                        onChange={(e) => onChangeTempProfile({ ...tempProfile, dadName: e.target.value })}
-                        className="w-full border border-blue-200 rounded p-1.5 text-sm outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-blue-700 mb-1">パパの勤務先</label>
-                      <input
-                        type="text"
-                        value={tempProfile.dadWorkplace}
-                        onChange={(e) => onChangeTempProfile({ ...tempProfile, dadWorkplace: e.target.value })}
-                        className="w-full border border-blue-200 rounded p-1.5 text-sm outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">ご住所</label>
-                    <input
-                      type="text"
-                      value={tempProfile.address}
-                      onChange={(e) => onChangeTempProfile({ ...tempProfile, address: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none"
-                    />
-                  </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addFamilyField}
+                    className="w-full flex items-center justify-center text-sm text-blue-600 border border-blue-200 border-dashed rounded-lg py-2.5 hover:bg-blue-50 transition"
+                  >
+                    <Plus size={16} className="mr-1" /> 項目を追加
+                  </button>
                 </div>
               ) : (
-                <div className="space-y-4 text-sm">
-                  <div className="bg-pink-50 p-3 rounded-lg text-pink-800">
-                    <strong className="block mb-1 border-b border-pink-200 pb-1">ママ {userProfile.momName && `(${userProfile.momName})`}</strong>
-                    <div className="flex justify-between mt-2">
-                      <span className="text-pink-600/80">勤務先</span>
-                      <span>{userProfile.momWorkplace || '未設定'}</span>
+                <div className="space-y-1 text-sm">
+                  {userProfile.familyFields.length === 0 && <p className="text-gray-400 text-center py-2">項目がありません</p>}
+                  {userProfile.familyFields.map((field) => (
+                    <div key={field.id} className="flex justify-between items-center py-2 px-1 border-b border-gray-50 last:border-b-0">
+                      <span className="text-gray-500">{field.label || '未設定の見出し'}</span>
+                      {field.value && isPhoneNumberLike(field.value) ? (
+                        <a href={toTelHref(field.value)} className="font-medium text-blue-600 flex items-center hover:underline">
+                          <Phone size={12} className="mr-1" /> {field.value}
+                        </a>
+                      ) : (
+                        <span className="font-medium text-gray-700">{field.value || '未設定'}</span>
+                      )}
                     </div>
-                  </div>
-                  <div className="bg-blue-50 p-3 rounded-lg text-blue-800">
-                    <strong className="block mb-1 border-b border-blue-200 pb-1">パパ {userProfile.dadName && `(${userProfile.dadName})`}</strong>
-                    <div className="flex justify-between mt-2">
-                      <span className="text-blue-600/80">勤務先</span>
-                      <span>{userProfile.dadWorkplace || '未設定'}</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center py-2 px-1 border-b border-gray-50">
-                    <span className="text-gray-500">ご住所</span>
-                    <span className="font-medium text-gray-700">{userProfile.address || '未設定'}</span>
-                  </div>
+                  ))}
                 </div>
               )}
             </section>
