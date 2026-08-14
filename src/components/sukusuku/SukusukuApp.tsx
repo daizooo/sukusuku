@@ -689,6 +689,8 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
         )}
         {activeTab === 'info' && (
           <InfoTab
+            familyId={familyId}
+            userId={userId}
             userProfile={userProfile}
             tempProfile={tempProfile}
             isEditingProfile={isEditingProfile}

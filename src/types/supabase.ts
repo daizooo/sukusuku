@@ -291,6 +291,112 @@ export type Database = {
           },
         ]
       }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          failure_count: number
+          family_id: string
+          id: string
+          last_success_at: string | null
+          p256dh: string
+          user_agent: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          failure_count?: number
+          family_id: string
+          id?: string
+          last_success_at?: string | null
+          p256dh: string
+          user_agent?: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          failure_count?: number
+          family_id?: string
+          id?: string
+          last_success_at?: string | null
+          p256dh?: string
+          user_agent?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reminder_deliveries: {
+        Row: {
+          error: string | null
+          id: string
+          scheduled_for: string
+          sent_at: string
+          status: string
+          subscription_id: string
+          task_id: string
+        }
+        Insert: {
+          error?: string | null
+          id?: string
+          scheduled_for: string
+          sent_at?: string
+          status?: string
+          subscription_id: string
+          task_id: string
+        }
+        Update: {
+          error?: string | null
+          id?: string
+          scheduled_for?: string
+          sent_at?: string
+          status?: string
+          subscription_id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminder_deliveries_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "push_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reminder_deliveries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_reminder_schedule"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "reminder_deliveries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           anchor_type: string
@@ -402,10 +508,37 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      task_reminder_schedule: {
+        Row: {
+          category: string | null
+          family_id: string | null
+          place: string | null
+          remind_at: string | null
+          remind_minutes_before: number | null
+          start_time: string | null
+          starts_at: string | null
+          target_date: string | null
+          task_id: string | null
+          title: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       current_family_id: { Args: never; Returns: string }
+      family_birth_date: { Args: { p_family_id: string }; Returns: string }
+      increment_push_failure: {
+        Args: { p_subscription_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

@@ -15,8 +15,11 @@ export const config = {
      *   ホーム画面追加時にブラウザが認証状態と無関係に取得するため、
      *   ここで除外しないとログイン画面へリダイレクトされてしまい
      *   PWAとして認識されなくなる)
+     * - sw.js (Service Worker。ブラウザが定期的に更新を取りに来るが、その取得は
+     *   ページのセッションとは別に走るため、ここで除外しないとログイン画面の
+     *   HTMLが返ってきて登録・更新に失敗する)
      * - 画像ファイル各種
      */
-    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
