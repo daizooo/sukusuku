@@ -48,6 +48,19 @@ export const formatTimeString = (dateObj: Date | null): string => {
   ).padStart(2, '0')}`;
 };
 
+/** <input type="time"> に渡す "HH:MM" 形式へ。 */
+export const toTimeInputValue = (dateObj: Date): string => formatTimeString(dateObj);
+
+/** <input type="time"> の値を Date に戻す。日付は base（既定は今日）を使う。 */
+export const parseTimeInput = (value: string, base: Date = new Date()): Date => {
+  const [hours, minutes] = value.split(':').map(Number);
+  const result = new Date(base);
+  if (Number.isFinite(hours) && Number.isFinite(minutes)) {
+    result.setHours(hours, minutes, 0, 0);
+  }
+  return result;
+};
+
 // DB の time 型は 'HH:MM:SS' で返るため 'HH:MM' に整える
 export const normalizeTime = (time: string | null): string | null => {
   if (!time) return null;

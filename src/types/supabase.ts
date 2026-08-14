@@ -22,6 +22,7 @@ export type Database = {
         Row: {
           amount: string | null
           created_by: string | null
+          details: Json
           family_id: string
           id: string
           logged_at: string
@@ -31,6 +32,7 @@ export type Database = {
         Insert: {
           amount?: string | null
           created_by?: string | null
+          details?: Json
           family_id: string
           id?: string
           logged_at?: string
@@ -40,6 +42,7 @@ export type Database = {
         Update: {
           amount?: string | null
           created_by?: string | null
+          details?: Json
           family_id?: string
           id?: string
           logged_at?: string
