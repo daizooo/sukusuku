@@ -1,25 +1,40 @@
 // すくすく手帳 - 共有ドメイン型定義
 // 将来的に src/lib/supabase から取得するデータもこの形に正規化して扱う。
 
-export type Assignee = 'パパ' | 'ママ' | '二人で' | '未定';
+// 予定に付けるラベル
+export type Label = 'パパ' | 'ママ' | '家族';
+
+export const LABELS: Label[] = ['パパ', 'ママ', '家族'];
 
 export type TaskCategory = '手続き' | '健診' | 'イベント' | 'お買い物';
+
+// 日付の決まり方。
+// - absolute:       start_date を直接指定する
+// - birth_relative: 子の誕生日 + daysAfterBirth で決まる
+export type AnchorType = 'absolute' | 'birth_relative';
 
 export interface Task {
   id: string;
   category: TaskCategory | string;
   title: string;
   place: string;
-  timing: string;
-  daysAfterBirth: number;
-  done: boolean;
   note: string;
+  // 日付・時刻
+  anchorType: AnchorType;
+  startDate: string | null; // 'YYYY-MM-DD'
+  startTime: string | null; // 'HH:mm' / null なら終日
+  endTime: string | null; // 'HH:mm'
+  daysAfterBirth: number; // anchorType === 'birth_relative' のときのみ意味を持つ
+  // ラベル・リマインダー
+  label: Label;
+  remindMinutesBefore: number | null; // null は通知なし
+  done: boolean;
+  // 既存機能
+  timing: string;
   belongings: string;
-  assignee: Assignee;
-  notification: boolean;
 }
 
-// UI表示用に目安日を計算して付与したタスク
+// UI表示用に実際の日付を解決して付与したタスク
 export interface DynamicTask extends Task {
   targetDateObj: Date | null;
   targetDate: string;

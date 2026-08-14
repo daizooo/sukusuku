@@ -1,10 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Tables, TablesInsert } from '@/types/supabase';
-import type { Assignee, Task } from '@/types/app';
+import type { AnchorType, Label, Task } from '@/types/app';
+import { normalizeTime } from '@/lib/dateUtils';
 import { INITIAL_EVENTS, INITIAL_TODOS } from '@/lib/seedData';
 
 type TaskRow = Tables<'tasks'>;
 type SupabaseDb = SupabaseClient<Database>;
+
+// 旧ラベル('二人で'/'未定')が残っている行は '家族' として扱う
+const toLabel = (value: string | null): Label => {
+  if (value === 'パパ' || value === 'ママ') return value;
+  return '家族';
+};
 
 // DBの行(snake_case) <-> アプリの型(camelCase) を変換する
 export const rowToTask = (row: TaskRow): Task => ({
@@ -12,38 +19,39 @@ export const rowToTask = (row: TaskRow): Task => ({
   category: row.category,
   title: row.title,
   place: row.place ?? '',
-  timing: row.timing_memo ?? '',
-  daysAfterBirth: row.days_after_birth,
-  done: row.is_done,
   note: row.note ?? '',
+  anchorType: (row.anchor_type as AnchorType) ?? 'absolute',
+  startDate: row.start_date,
+  startTime: normalizeTime(row.start_time),
+  endTime: normalizeTime(row.end_time),
+  daysAfterBirth: row.days_after_birth,
+  label: toLabel(row.assignee),
+  remindMinutesBefore: row.remind_minutes_before,
+  done: row.is_done,
+  timing: row.timing_memo ?? '',
   belongings: row.belongings ?? '',
-  assignee: (row.assignee as Assignee) ?? '未定',
-  notification: row.has_notification,
 });
 
-export interface NewTaskInput {
-  title: string;
-  category: string;
-  timing: string;
-  daysAfterBirth: number;
-  place: string;
-  note: string;
-  belongings: string;
-  assignee: Assignee;
-  notification: boolean;
-}
+export type NewTaskInput = Omit<Task, 'id' | 'done'>;
 
-const toInsertRow = (familyId: string, input: NewTaskInput): TablesInsert<'tasks'> => ({
-  family_id: familyId,
+const toWritableRow = (input: NewTaskInput) => ({
   title: input.title,
   category: input.category,
-  days_after_birth: input.daysAfterBirth,
-  timing_memo: input.timing,
   place: input.place,
   note: input.note,
+  anchor_type: input.anchorType,
+  // 出生日基準のときだけ日数が意味を持つ。日付指定のときは start_date を使う。
+  start_date: input.anchorType === 'absolute' ? input.startDate : null,
+  start_time: input.startTime,
+  end_time: input.endTime,
+  days_after_birth: input.daysAfterBirth,
+  assignee: input.label,
+  remind_minutes_before: input.remindMinutesBefore,
+  // has_notification は remind_minutes_before に置き換えたが、
+  // カラムが残っている間は整合させておく（0007 で削除予定）。
+  has_notification: input.remindMinutesBefore !== null,
+  timing_memo: input.timing,
   belongings: input.belongings,
-  assignee: input.assignee,
-  has_notification: input.notification,
 });
 
 export async function listTasks(supabase: SupabaseDb, familyId: string): Promise<Task[]> {
@@ -51,13 +59,19 @@ export async function listTasks(supabase: SupabaseDb, familyId: string): Promise
     .from('tasks')
     .select('*')
     .eq('family_id', familyId)
+    .order('start_date', { ascending: true, nullsFirst: false })
     .order('days_after_birth', { ascending: true });
   if (error) throw error;
   return (data ?? []).map(rowToTask);
 }
 
-export async function insertTask(supabase: SupabaseDb, familyId: string, input: NewTaskInput): Promise<Task> {
-  const { data, error } = await supabase.from('tasks').insert(toInsertRow(familyId, input)).select('*').single();
+export async function insertTask(
+  supabase: SupabaseDb,
+  familyId: string,
+  input: NewTaskInput,
+): Promise<Task> {
+  const row: TablesInsert<'tasks'> = { family_id: familyId, ...toWritableRow(input) };
+  const { data, error } = await supabase.from('tasks').insert(row).select('*').single();
   if (error) throw error;
   return rowToTask(data);
 }
@@ -70,18 +84,7 @@ export async function updateTaskDone(supabase: SupabaseDb, id: string, done: boo
 export async function updateTask(supabase: SupabaseDb, task: Task): Promise<void> {
   const { error } = await supabase
     .from('tasks')
-    .update({
-      title: task.title,
-      category: task.category,
-      days_after_birth: task.daysAfterBirth,
-      timing_memo: task.timing,
-      place: task.place,
-      note: task.note,
-      belongings: task.belongings,
-      assignee: task.assignee,
-      is_done: task.done,
-      has_notification: task.notification,
-    })
+    .update({ ...toWritableRow(task), is_done: task.done })
     .eq('id', task.id);
   if (error) throw error;
 }
@@ -91,20 +94,23 @@ export async function deleteTask(supabase: SupabaseDb, id: string): Promise<void
   if (error) throw error;
 }
 
+// 出生日基準の予定の start_date を、子の誕生日をもとに再計算する。
+// 誕生日を保存した直後に呼ぶ。
+export async function refreshBirthRelativeDates(
+  supabase: SupabaseDb,
+  familyId: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('refresh_birth_relative_dates', {
+    p_family_id: familyId,
+  });
+  if (error) throw error;
+}
+
 // 家族を新規作成した直後に、出生手続き等の定番ToDoをまとめて登録する。
-// (基本設計書のプロトタイプに含まれていた初期チェックリストを踏襲)
 export async function seedDefaultTasks(supabase: SupabaseDb, familyId: string): Promise<void> {
   const rows: TablesInsert<'tasks'>[] = [...INITIAL_TODOS, ...INITIAL_EVENTS].map((t) => ({
     family_id: familyId,
-    title: t.title,
-    category: t.category,
-    days_after_birth: t.daysAfterBirth,
-    timing_memo: t.timing,
-    place: t.place,
-    note: t.note,
-    belongings: t.belongings,
-    assignee: t.assignee,
-    has_notification: t.notification,
+    ...toWritableRow(t),
     is_done: false,
   }));
   const { error } = await supabase.from('tasks').insert(rows);

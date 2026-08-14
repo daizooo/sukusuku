@@ -29,23 +29,31 @@ import {
   INITIAL_PROFILE,
   createInitialLogs,
 } from '@/lib/seedData';
-import { calculateTargetDate, formatDateString } from '@/lib/dateUtils';
+import {
+  calculateTargetDate,
+  formatDateString,
+  parseDateString,
+  startOfDay,
+  toDateString,
+} from '@/lib/dateUtils';
 import { createClient } from '@/lib/supabase/client';
 import {
   deleteTask as deleteTaskApi,
   insertTask,
   listTasks,
+  refreshBirthRelativeDates,
   updateTask as updateTaskApi,
   updateTaskDone,
-  type NewTaskInput,
 } from '@/lib/api/tasks';
+import { fetchChild, saveChild } from '@/lib/api/children';
 
 import HomeTab from './tabs/HomeTab';
 import ScheduleTab from './tabs/ScheduleTab';
 import LogTab from './tabs/LogTab';
 import GiftTab from './tabs/GiftTab';
 import InfoTab from './tabs/InfoTab';
-import AddTaskModal, { type NewTaskDraft } from './modals/AddTaskModal';
+import AddTaskModal from './modals/AddTaskModal';
+import type { TaskDraft } from './modals/TaskForm';
 import TaskDetailModal from './modals/TaskDetailModal';
 
 const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
@@ -56,17 +64,21 @@ const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
   { id: 'info', icon: Folder, label: 'ストック' },
 ];
 
-const EMPTY_NEW_TASK: NewTaskDraft = {
+const emptyTaskDraft = (date: Date): TaskDraft => ({
   title: '',
   category: '手続き',
-  timing: '',
-  daysAfterBirth: 0,
   place: '',
   note: '',
+  anchorType: 'absolute',
+  startDate: toDateString(date),
+  startTime: null,
+  endTime: null,
+  daysAfterBirth: 0,
+  label: '家族',
+  remindMinutesBefore: null,
+  timing: '',
   belongings: '',
-  assignee: '未定',
-  notification: false,
-};
+});
 
 interface SukusukuAppProps {
   familyId: string;
@@ -92,28 +104,35 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
   const [isEditingTask, setIsEditingTask] = useState(false);
   const [tempEditingTask, setTempEditingTask] = useState<DynamicTask | null>(null);
 
-  const [newTask, setNewTask] = useState<NewTaskDraft>(EMPTY_NEW_TASK);
+  // 「今日」は日付が変わらない限り同じ参照を使う（useMemo の依存に安全に渡せるようにするため）
+  const today = useMemo(() => startOfDay(new Date()), []);
 
-  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
+  const [newTask, setNewTask] = useState<TaskDraft>(() => emptyTaskDraft(today));
 
-  // TODO: プロフィール(子供の名前・誕生日、パパママ情報)はまだSupabase未連携（次のステップ）
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(today);
+
+  // 子供の名前・誕生日はSupabaseの children テーブルに保存する。
+  // パパママ情報・住所は保存先のカラムが未定のため、現状は画面内の状態のみ。
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
+  const [childId, setChildId] = useState<string | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [tempProfile, setTempProfile] = useState<UserProfile>(userProfile);
 
-  const today = new Date();
-
-  // 家族のタスクをSupabaseから取得
+  // 家族のタスクと子供情報をSupabaseから取得
   useEffect(() => {
     let cancelled = false;
-    listTasks(supabase, familyId)
-      .then((data) => {
+    Promise.all([listTasks(supabase, familyId), fetchChild(supabase, familyId)])
+      .then(([tasks, child]) => {
         if (cancelled) return;
-        setTodos(data);
+        setTodos(tasks);
+        if (child) {
+          setChildId(child.id);
+          setUserProfile((prev) => ({ ...prev, babyName: child.name, birthDate: child.birthDate }));
+        }
         setTaskError('');
       })
       .catch((err) => {
-        console.error('Failed to load tasks:', err);
+        console.error('Failed to load family data:', err);
         if (!cancelled) setTaskError('予定の読み込みに失敗しました。時間を置いて再度お試しください。');
       })
       .finally(() => {
@@ -126,7 +145,12 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
 
   const dynamicTodos = useMemo<DynamicTask[]>(() => {
     return todos.map((todo) => {
-      const targetDateObj = calculateTargetDate(userProfile.birthDate, todo.daysAfterBirth);
+      // 日付指定の予定は start_date をそのまま使い、
+      // 出生日基準の予定は「子の誕生日 + 生後日数」で解決する。
+      const targetDateObj =
+        todo.anchorType === 'absolute'
+          ? parseDateString(todo.startDate ?? '')
+          : calculateTargetDate(userProfile.birthDate, todo.daysAfterBirth);
       return {
         ...todo,
         targetDateObj,
@@ -136,20 +160,15 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
   }, [todos, userProfile.birthDate]);
 
   const ageInDays = useMemo(() => {
-    if (!userProfile.birthDate) return 0;
-    const birth = new Date(userProfile.birthDate);
-    if (isNaN(birth.getTime())) return 0;
-    const birthDateOnly = new Date(birth.getFullYear(), birth.getMonth(), birth.getDate());
-    const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const diffTime = todayDateOnly.getTime() - birthDateOnly.getTime();
+    const birth = parseDateString(userProfile.birthDate);
+    if (!birth) return 0;
+    const diffTime = today.getTime() - birth.getTime();
     return Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userProfile.birthDate]);
+  }, [userProfile.birthDate, today]);
 
   const ageInMonths = useMemo(() => {
-    if (!userProfile.birthDate) return { months: 0, days: 0 };
-    const birth = new Date(userProfile.birthDate);
-    if (isNaN(birth.getTime())) return { months: 0, days: 0 };
+    const birth = parseDateString(userProfile.birthDate);
+    if (!birth) return { months: 0, days: 0 };
     let months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
     let tempDate = new Date(birth.getFullYear(), birth.getMonth() + months, birth.getDate());
 
@@ -159,8 +178,7 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
     }
     const days = Math.floor((today.getTime() - tempDate.getTime()) / (1000 * 60 * 60 * 24));
     return { months, days };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userProfile.birthDate]);
+  }, [userProfile.birthDate, today]);
 
   const toggleTodo = async (id: string) => {
     const target = todos.find((t) => t.id === id);
@@ -219,9 +237,31 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
     }
   };
 
-  const handleProfileSave = () => {
+  const handleProfileSave = async () => {
+    const previousProfile = userProfile;
+    const birthDateChanged = tempProfile.birthDate !== userProfile.birthDate;
+
     setUserProfile(tempProfile);
     setIsEditingProfile(false);
+
+    try {
+      const saved = await saveChild(supabase, familyId, {
+        id: childId,
+        name: tempProfile.babyName,
+        birthDate: tempProfile.birthDate,
+      });
+      setChildId(saved.id);
+
+      // 誕生日が変わったら、出生日基準の予定の日付を計算し直す
+      if (birthDateChanged) {
+        await refreshBirthRelativeDates(supabase, familyId);
+        setTodos(await listTasks(supabase, familyId));
+      }
+    } catch (err) {
+      console.error('Failed to save profile:', err);
+      setUserProfile(previousProfile);
+      alert('プロフィールの保存に失敗しました。もう一度お試しください。');
+    }
   };
 
   const startEditingProfile = () => {
@@ -231,28 +271,17 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
 
   const handleAddTask = async () => {
     if (!newTask.title) return;
-    const daysAfterBirth = Number(newTask.daysAfterBirth) || 0;
-    const input: NewTaskInput = {
-      title: newTask.title,
-      category: newTask.category,
-      daysAfterBirth,
-      timing: newTask.timing || `生後${daysAfterBirth}日頃`,
-      place: newTask.place || '未定',
-      note: newTask.note,
-      belongings: newTask.belongings,
-      assignee: newTask.assignee,
-      notification: newTask.notification,
-    };
+    const input = { ...newTask };
 
     setShowAddModal(false);
-    setNewTask(EMPTY_NEW_TASK);
+    setNewTask(emptyTaskDraft(today));
 
     try {
       const created = await insertTask(supabase, familyId, input);
       setTodos((prev) => [...prev, created]);
     } catch (err) {
       console.error('Failed to add task:', err);
-      alert('タスクの追加に失敗しました。もう一度お試しください。');
+      alert('予定の追加に失敗しました。もう一度お試しください。');
     }
   };
 
@@ -348,6 +377,7 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
       <AddTaskModal
         show={showAddModal}
         newTask={newTask}
+        allowBirthRelative={!userProfile.birthDate}
         onChange={setNewTask}
         onClose={() => setShowAddModal(false)}
         onSubmit={handleAddTask}
@@ -356,6 +386,7 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
         selectedTask={selectedTask}
         isEditingTask={isEditingTask}
         tempEditingTask={tempEditingTask}
+        allowBirthRelative={!userProfile.birthDate}
         onStartEdit={() => setIsEditingTask(true)}
         onChangeTempEditingTask={setTempEditingTask}
         onSaveEdit={saveTaskEdit}
