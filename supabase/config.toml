@@ -1,0 +1,6 @@
+project_id = "nbkpwjtkkiaklewtegzh"
+
+[functions.send-reminders]
+# pg_cron から呼ぶため Supabase の JWT 検証は使わない。
+# 代わりに関数側で x-reminder-secret ヘッダー(REMINDER_CRON_SECRET)を検証している。
+verify_jwt = false

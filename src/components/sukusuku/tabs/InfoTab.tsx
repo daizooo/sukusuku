@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Baby, Edit2, ListPlus, Phone, Save, Settings, Trash2, User } from 'lucide-react';
 import type { ProfileField, UserProfile } from '@/types/app';
 import { isPhoneNumberLike, toTelHref } from '@/lib/uiUtils';
+import NotificationSetting from '@/components/sukusuku/NotificationSetting';
 
 // UserProfileのうち、ProfileField[]を値に持つキー（＝設定タブで編集可能なセクション）
 type ProfileSectionKey = {
@@ -11,6 +12,8 @@ type ProfileSectionKey = {
 }[keyof UserProfile];
 
 interface InfoTabProps {
+  familyId: string;
+  userId: string;
   userProfile: UserProfile;
   tempProfile: UserProfile;
   isEditingProfile: boolean;
@@ -20,6 +23,8 @@ interface InfoTabProps {
 }
 
 export default function InfoTab({
+  familyId,
+  userId,
   userProfile,
   tempProfile,
   isEditingProfile,
@@ -107,6 +112,8 @@ export default function InfoTab({
             onRemoveField={(id) => removeField('customFields', id)}
             onAddField={() => addField('customFields')}
           />
+
+          <NotificationSetting familyId={familyId} userId={userId} />
         </div>
       </div>
     </div>

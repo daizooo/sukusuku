@@ -47,9 +47,6 @@ const toWritableRow = (input: NewTaskInput) => ({
   days_after_birth: input.daysAfterBirth,
   assignee: input.label,
   remind_minutes_before: input.remindMinutesBefore,
-  // has_notification は remind_minutes_before に置き換えたが、
-  // カラムが残っている間は整合させておく（0007 で削除予定）。
-  has_notification: input.remindMinutesBefore !== null,
   timing_memo: input.timing,
   belongings: input.belongings,
 });
