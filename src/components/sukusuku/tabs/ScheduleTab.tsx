@@ -108,7 +108,7 @@ export default function ScheduleTab({
   const undatedTasks = filteredTodos.filter((t) => !t.targetDateObj);
 
   return (
-    <div className="p-4 h-full flex flex-col">
+    <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold text-gray-800">スケジュール</h2>
         <div className="flex bg-gray-200 p-1 rounded-lg">

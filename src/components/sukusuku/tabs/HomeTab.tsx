@@ -59,7 +59,7 @@ export default function HomeTab({
   ];
 
   return (
-    <div className="p-4 space-y-6 h-full overflow-y-auto">
+    <div className="p-4 space-y-6 h-full overflow-y-auto md:max-w-2xl lg:max-w-3xl md:mx-auto">
       <div className="bg-gradient-to-br from-blue-500 via-blue-400 to-teal-300 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl -mr-10 -mt-10" />
         <Baby className="absolute -right-2 -bottom-2 w-32 h-32 text-white opacity-20 drop-shadow-md" />

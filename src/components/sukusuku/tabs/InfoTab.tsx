@@ -55,7 +55,7 @@ export default function InfoTab({
   };
 
   return (
-    <div className="p-4 h-full flex flex-col">
+    <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <div className="flex justify-between items-center mb-4 shrink-0">
         <h2 className="text-xl font-bold text-gray-800 flex items-center">
           <Settings className="mr-2" size={24} />
