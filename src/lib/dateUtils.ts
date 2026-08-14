@@ -77,6 +77,12 @@ export const getFirstDayOfMonth = (year: number, month: number): number => {
 export const startOfDay = (date: Date): Date =>
   new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
+export const addDays = (date: Date, days: number): Date => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
 export const isSameDay = (a: Date | null, b: Date | null): boolean => {
   if (!a || !b) return false;
   return (
