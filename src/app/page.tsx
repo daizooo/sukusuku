@@ -21,7 +21,7 @@ export default async function Home() {
   }
 
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-gray-100">
+    <div className="flex flex-col flex-1 bg-gray-50">
       <SukusukuAppLoader familyId={profile.family_id} userId={user.id} role={profile.role === 'papa' || profile.role === 'mama' ? profile.role : null} />
     </div>
   );

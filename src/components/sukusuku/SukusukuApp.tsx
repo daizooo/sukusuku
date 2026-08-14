@@ -29,6 +29,8 @@ import { getProfileFieldValue } from '@/lib/uiUtils';
 import {
   calculateTargetDate,
   formatDateString,
+  formatTimeString,
+  isSameDay,
   parseDateString,
   startOfDay,
   toDateString,
@@ -44,7 +46,7 @@ import {
 import {
   deleteCareLog,
   insertCareLog,
-  listCareLogs,
+  listCareLogsByDate,
   updateCareLog as updateCareLogApi,
 } from '@/lib/api/careLogs';
 import { deleteGift, insertGift, listGifts, updateGift as updateGiftApi } from '@/lib/api/gifts';
@@ -131,7 +133,11 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
   const [taskError, setTaskError] = useState('');
 
   const [logs, setLogs] = useState<CareLog[]>([]);
-  const [isLoadingLogs, setIsLoadingLogs] = useState(true);
+  // 記録タブで表示中の日（1日区切りで過去に遡れる）
+  const [logDate, setLogDate] = useState(() => startOfDay(new Date()));
+  // 取得済みの日。表示中の日と一致していなければ読み込み中とみなす
+  const [loadedLogDate, setLoadedLogDate] = useState<Date | null>(null);
+  const isLoadingLogs = loadedLogDate?.getTime() !== logDate.getTime();
 
   const [gifts, setGifts] = useState<Gift[]>([]);
   const [isLoadingGifts, setIsLoadingGifts] = useState(true);
@@ -186,21 +192,25 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
     };
   }, [supabase, familyId]);
 
-  // 育児記録をSupabaseから取得
+  // 育児記録をSupabaseから取得（表示中の1日分のみ。日を切り替えるたびに取り直す）
   useEffect(() => {
     let cancelled = false;
-    listCareLogs(supabase, familyId)
+    listCareLogsByDate(supabase, familyId, logDate)
       .then((data) => {
         if (!cancelled) setLogs(data);
       })
-      .catch((err) => console.error('Failed to load care logs:', err))
+      .catch((err) => {
+        console.error('Failed to load care logs:', err);
+        if (!cancelled) setLogs([]);
+      })
       .finally(() => {
-        if (!cancelled) setIsLoadingLogs(false);
+        // 成功・失敗どちらでも「この日は取得済み」にして読み込み表示を終わらせる
+        if (!cancelled) setLoadedLogDate(logDate);
       });
     return () => {
       cancelled = true;
     };
-  }, [supabase, familyId]);
+  }, [supabase, familyId, logDate]);
 
   // お祝いをSupabaseから取得
   useEffect(() => {
@@ -444,8 +454,12 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
 
   // --- 育児記録 ---
   const addLog = async (type: LogType) => {
+    const now = new Date();
+    // 表示中の日に記録する。過去の日を見ているときは「その日の現在時刻」で入れておき、
+    // 正確な時刻は記録をタップして編集してもらう。
+    const loggedAt = isSameDay(logDate, now) ? now : applyTimeToDate(logDate, formatTimeString(now));
     try {
-      const created = await insertCareLog(supabase, familyId, userId, { type, amount: '', note: '' });
+      const created = await insertCareLog(supabase, familyId, userId, { type, amount: '', note: '', loggedAt });
       setLogs((prev) => [created, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()));
     } catch (err) {
       console.error('Failed to add care log:', err);
@@ -618,8 +632,9 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
     }
   };
 
+  // スマホ・タブレット・PCのいずれでもビューポート全体を使う（PCで中央の細長いカードにしない）
   return (
-    <div className="w-full max-w-md mx-auto h-dvh sm:h-[min(850px,calc(100dvh-4rem))] relative bg-gray-50 flex flex-col font-sans overflow-hidden shadow-2xl sm:rounded-3xl sm:my-8 border sm:border-gray-200">
+    <div className="w-full h-dvh relative bg-gray-50 flex flex-col font-sans overflow-hidden">
       <header className="flex-none bg-white px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 flex flex-col items-center justify-center shadow-sm z-10 relative">
         <h1 className="font-bold text-gray-800 tracking-wide text-lg">すくすく手帳</h1>
       </header>
@@ -656,6 +671,9 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
         {activeTab === 'log' && (
           <LogTab
             logs={logs}
+            logDate={logDate}
+            today={today}
+            onChangeLogDate={setLogDate}
             growthData={growthData}
             isLoadingLogs={isLoadingLogs}
             isLoadingGrowth={isLoadingGrowth}

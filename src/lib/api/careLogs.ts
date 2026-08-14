@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Tables, TablesInsert } from '@/types/supabase';
 import type { CareLog, LogType } from '@/types/app';
+import { addDays, startOfDay } from '@/lib/dateUtils';
 
 type CareLogRow = Tables<'care_logs'>;
 type SupabaseDb = SupabaseClient<Database>;
@@ -22,11 +23,21 @@ export const rowToCareLog = (row: CareLogRow): CareLog => ({
   createdBy: row.created_by,
 });
 
-export async function listCareLogs(supabase: SupabaseDb, familyId: string): Promise<CareLog[]> {
+// 指定した1日分（ローカルタイムの 0:00 〜 翌0:00）の記録を取得する。
+// 記録は日数が経つほど増えていくため、全件ではなく表示する日だけを取りに行く。
+export async function listCareLogsByDate(
+  supabase: SupabaseDb,
+  familyId: string,
+  date: Date,
+): Promise<CareLog[]> {
+  const from = startOfDay(date);
+  const to = addDays(from, 1);
   const { data, error } = await supabase
     .from('care_logs')
     .select('*')
     .eq('family_id', familyId)
+    .gte('logged_at', from.toISOString())
+    .lt('logged_at', to.toISOString())
     .order('logged_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(rowToCareLog);
