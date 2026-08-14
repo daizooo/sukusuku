@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Home,
   CalendarDays,
@@ -16,7 +16,9 @@ import type {
   DynamicTask,
   Gift,
   GrowthRecord,
+  LogType,
   Nursery,
+  SleepLog,
   Task,
   TabId,
   UserProfile,
@@ -30,6 +32,16 @@ import {
   createInitialLogs,
 } from '@/lib/seedData';
 import { calculateTargetDate, formatDateString } from '@/lib/dateUtils';
+import { findActiveSleepLog, getNextBreastSide } from '@/lib/careLogUtils';
+import { clearActiveSleep, loadActiveSleep, saveActiveSleep } from '@/lib/activeSleepStorage';
+import {
+  clearPendingWake,
+  clearSleepNotification,
+  requestSleepNotificationPermission,
+  showSleepNotification,
+  subscribeToWake,
+  takePendingWake,
+} from '@/lib/sleepNotification';
 import { createClient } from '@/lib/supabase/client';
 import {
   deleteTask as deleteTaskApi,
@@ -47,6 +59,9 @@ import GiftTab from './tabs/GiftTab';
 import InfoTab from './tabs/InfoTab';
 import AddTaskModal, { type NewTaskDraft } from './modals/AddTaskModal';
 import TaskDetailModal from './modals/TaskDetailModal';
+import MilkLogModal, { type MilkLogInput } from './modals/MilkLogModal';
+import DiaperLogModal, { type DiaperLogInput } from './modals/DiaperLogModal';
+import SleepLogModal, { type ManualSleepInput } from './modals/SleepLogModal';
 
 const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
   { id: 'home', icon: Home, label: 'ホーム' },
@@ -67,6 +82,9 @@ const EMPTY_NEW_TASK: NewTaskDraft = {
   assignee: '未定',
   notification: false,
 };
+
+// TODO: 育児記録の記録者名。プロフィールのSupabase連携時に実際のユーザー名へ差し替える。
+const LOG_USER = 'あなた';
 
 interface SukusukuAppProps {
   familyId: string;
@@ -93,6 +111,7 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
   const [tempEditingTask, setTempEditingTask] = useState<DynamicTask | null>(null);
 
   const [newTask, setNewTask] = useState<NewTaskDraft>(EMPTY_NEW_TASK);
+  const [openLogModal, setOpenLogModal] = useState<LogType | null>(null);
 
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
 
@@ -134,6 +153,9 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
       };
     });
   }, [todos, userProfile.birthDate]);
+
+  const activeSleep = useMemo<SleepLog | null>(() => findActiveSleepLog(logs) ?? null, [logs]);
+  const nextBreastSide = useMemo(() => getNextBreastSide(logs), [logs]);
 
   const ageInDays = useMemo(() => {
     if (!userProfile.birthDate) return 0;
@@ -256,18 +278,101 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
     }
   };
 
-  const addLog = (type: CareLog['type'], label: string) => {
-    const newLog: CareLog = {
-      id: Date.now(),
-      type,
-      label,
-      amount: type === 'milk' ? '100ml' : '',
-      time: new Date(),
-      note: '',
-      user: 'あなた',
-    };
-    setLogs((prev) => [newLog, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()));
+  // --- 育児記録 ---
+
+  const appendLog = useCallback((log: CareLog) => {
+    setLogs((prev) =>
+      prev.some((existing) => existing.id === log.id)
+        ? prev
+        : [log, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()),
+    );
+  }, []);
+
+  const handleAddMilkLog = (input: MilkLogInput) => {
+    appendLog({ id: Date.now(), type: 'milk', user: LOG_USER, ...input });
+    setOpenLogModal(null);
   };
+
+  const handleAddDiaperLog = (input: DiaperLogInput) => {
+    appendLog({ id: Date.now(), type: 'diaper', user: LOG_USER, ...input });
+    setOpenLogModal(null);
+  };
+
+  const handleAddManualSleepLog = ({ startedAt, endedAt, note }: ManualSleepInput) => {
+    appendLog({ id: Date.now(), type: 'sleep', time: startedAt, startedAt, endedAt, note, user: LOG_USER });
+    setOpenLogModal(null);
+  };
+
+  /** ねんね計測の開始。端末側にも控え、通知欄にも出す。 */
+  const handleStartSleep = async () => {
+    const startedAt = new Date();
+    const id = Date.now();
+    appendLog({ id, type: 'sleep', time: startedAt, startedAt, endedAt: null, note: '', user: LOG_USER });
+    saveActiveSleep({ id, startedAt: startedAt.getTime(), user: LOG_USER });
+
+    // 通知が使えない・許可されない場合も計測はそのまま続けられる。
+    if (await requestSleepNotificationPermission()) {
+      await showSleepNotification(startedAt);
+    }
+  };
+
+  /** 起床。アプリ内のバー・入力画面・通知のいずれからでもここに来る。 */
+  const endSleep = useCallback(
+    (endedAt: Date) => {
+      setLogs((prev) =>
+        prev.map((log) => (log.type === 'sleep' && log.endedAt === null ? { ...log, endedAt } : log)),
+      );
+      clearActiveSleep();
+      void clearSleepNotification();
+      // 通知側に控えが残っていると、次の計測を古い時刻で終わらせてしまうため消しておく。
+      void clearPendingWake();
+    },
+    [],
+  );
+
+  const handleEndSleepNow = () => {
+    endSleep(new Date());
+    setOpenLogModal(null);
+  };
+
+  // 計測中の睡眠を復元する。アプリを閉じている間に通知から終了していれば、その時刻で確定させる。
+  useEffect(() => {
+    let cancelled = false;
+
+    const restore = async () => {
+      const stored = loadActiveSleep();
+      const pendingWake = await takePendingWake();
+      if (cancelled) return;
+
+      if (!stored) {
+        // 記録が残っていないのに通知だけ残っている場合は片付ける。
+        if (pendingWake) void clearSleepNotification();
+        return;
+      }
+
+      const startedAt = new Date(stored.startedAt);
+      appendLog({
+        id: stored.id,
+        type: 'sleep',
+        time: startedAt,
+        startedAt,
+        endedAt: null,
+        note: '',
+        user: stored.user,
+      });
+
+      // 通知から終了済みなら、その時刻で確定させる（計測開始より前の古い控えは捨てる）。
+      if (pendingWake && pendingWake.getTime() >= startedAt.getTime()) endSleep(pendingWake);
+    };
+
+    void restore();
+    return () => {
+      cancelled = true;
+    };
+  }, [appendLog, endSleep]);
+
+  // アプリを開いたまま通知の「起きた」が押された場合。
+  useEffect(() => subscribeToWake(endSleep), [endSleep]);
 
   return (
     <div className="w-full max-w-md mx-auto h-screen sm:h-[850px] relative bg-gray-50 flex flex-col font-sans overflow-hidden shadow-2xl sm:rounded-3xl sm:my-8 border sm:border-gray-200">
@@ -304,7 +409,14 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
           />
         )}
         {activeTab === 'log' && (
-          <LogTab logs={logs} growthData={growthData} onAddLog={addLog} />
+          <LogTab
+            logs={logs}
+            growthData={growthData}
+            activeSleep={activeSleep}
+            nextBreastSide={nextBreastSide}
+            onOpenLog={setOpenLogModal}
+            onEndSleep={handleEndSleepNow}
+          />
         )}
         {activeTab === 'gift' && <GiftTab gifts={gifts} />}
         {activeTab === 'info' && (
@@ -351,6 +463,25 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
         onChange={setNewTask}
         onClose={() => setShowAddModal(false)}
         onSubmit={handleAddTask}
+      />
+      <MilkLogModal
+        show={openLogModal === 'milk'}
+        nextSide={nextBreastSide}
+        onClose={() => setOpenLogModal(null)}
+        onSubmit={handleAddMilkLog}
+      />
+      <DiaperLogModal
+        show={openLogModal === 'diaper'}
+        onClose={() => setOpenLogModal(null)}
+        onSubmit={handleAddDiaperLog}
+      />
+      <SleepLogModal
+        show={openLogModal === 'sleep'}
+        activeSleep={activeSleep}
+        onClose={() => setOpenLogModal(null)}
+        onStart={handleStartSleep}
+        onEnd={handleEndSleepNow}
+        onSubmitManual={handleAddManualSleepLog}
       />
       <TaskDetailModal
         selectedTask={selectedTask}

@@ -32,11 +32,17 @@ export const INITIAL_EVENTS: TaskTemplate[] = [
   { category: '健診', title: '予防接種①', place: '北野小児科', timing: '生後2ヶ月', daysAfterBirth: 60, done: false, note: '五種混合, 肺炎球菌, B型肝炎, ロタ', belongings: '母子手帳、予防接種番号', assignee: '未定', notification: true },
 ];
 
-export const createInitialLogs = (): CareLog[] => [
-  { id: 1, type: 'milk', label: 'ミルク', amount: '100ml', time: new Date(new Date().setHours(8, 30, 0, 0)), note: 'よく飲んだ', user: 'パパ' },
-  { id: 2, type: 'diaper', label: 'うんち', amount: '', time: new Date(new Date().setHours(10, 15, 0, 0)), note: '色・硬さ普通', user: 'ママ' },
-  { id: 3, type: 'sleep', label: '睡眠', amount: '2時間', time: new Date(new Date().setHours(11, 0, 0, 0)), note: 'お昼寝', user: 'ママ' },
-];
+const todayAt = (hours: number, minutes: number): Date => new Date(new Date().setHours(hours, minutes, 0, 0));
+
+export const createInitialLogs = (): CareLog[] => {
+  const logs: CareLog[] = [
+    { id: 1, type: 'milk', time: todayAt(8, 30), method: 'formula', amountMl: 100, note: 'よく飲んだ', user: 'パパ' },
+    { id: 2, type: 'diaper', time: todayAt(10, 15), kind: 'poop', poopColor: 'yellow', poopConsistency: 'normal', note: '', user: 'ママ' },
+    { id: 3, type: 'sleep', time: todayAt(11, 0), startedAt: todayAt(11, 0), endedAt: todayAt(13, 0), note: 'お昼寝', user: 'ママ' },
+    { id: 4, type: 'milk', time: todayAt(13, 30), method: 'breast', leftMinutes: 10, rightMinutes: 15, lastSide: 'right', note: '', user: 'ママ' },
+  ];
+  return logs.sort((a, b) => b.time.getTime() - a.time.getTime());
+};
 
 export const INITIAL_GIFTS: Gift[] = [
   { id: 1, from: '祖父母(夫)', item: 'お祝い金 10万円', date: '2026-08-15', returnStatus: '不要', returnItem: '-', note: 'ベビーベッド購入費用として' },
