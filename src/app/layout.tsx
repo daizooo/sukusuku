@@ -20,10 +20,6 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport: Viewport = {
-  themeColor: "#CE6B74",
-};
-
 // viewport-fit: 'cover' でノッチ/ホームインジケーターのある端末でも画面いっぱいに
 // 描画し、env(safe-area-inset-*) を使ってヘッダー・下部ナビが機種ごとの安全領域に
 // ぴったり収まるようにする。
@@ -31,6 +27,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#CE6B74",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
