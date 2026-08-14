@@ -23,20 +23,26 @@ export const INITIAL_EVENTS: TaskTemplate[] = [
 ];
 
 export const INITIAL_PROFILE: UserProfile = {
-  babyName: '',
-  birthDate: '',
-  momName: '',
-  momWorkplace: '',
-  dadName: '',
-  dadWorkplace: '',
-  address: '',
-  hospitalName: '福田病院',
-  hospitalPhone: '096-322-2995',
-  pediatricName: 'にしくまもと病院',
-  pediatricPhone: '096-358-1118',
-  papaCompanyPhone: '096-368-4222',
-  papaContactPhone: '080-2742-0550',
-  mamaCompanyPhone: '',
-  mamaContactPhone: '090-9575-3278',
+  childFields: [
+    { id: 'baby-name', label: 'お名前', value: '', key: 'babyName' },
+    { id: 'birth-date', label: 'お誕生日', value: '', key: 'birthDate' },
+  ],
+  familyFields: [
+    { id: 'mom-name', label: 'ママのお名前', value: '' },
+    { id: 'mom-workplace', label: 'ママの勤務先', value: '' },
+    { id: 'dad-name', label: 'パパのお名前', value: '' },
+    { id: 'dad-workplace', label: 'パパの勤務先', value: '' },
+    { id: 'address', label: 'ご住所', value: '' },
+  ],
+  emergencyFields: [
+    { id: 'hospital-name', label: '産院名', value: '福田病院' },
+    { id: 'hospital-phone', label: '産院 電話番号', value: '096-322-2995', key: 'hospitalPhone' },
+    { id: 'pediatric-name', label: '小児科名', value: 'にしくまもと病院' },
+    { id: 'pediatric-phone', label: '小児科 電話番号', value: '096-358-1118', key: 'pediatricPhone' },
+    { id: 'papa-company-phone', label: 'パパ会社 電話番号', value: '096-368-4222', key: 'papaCompanyPhone' },
+    { id: 'papa-contact-phone', label: 'パパ連絡先（携帯）', value: '080-2742-0550', key: 'papaContactPhone' },
+    { id: 'mama-company-phone', label: 'ママ会社 電話番号', value: '', key: 'mamaCompanyPhone' },
+    { id: 'mama-contact-phone', label: 'ママ連絡先（携帯）', value: '090-9575-3278', key: 'mamaContactPhone' },
+  ],
   customFields: [],
 };

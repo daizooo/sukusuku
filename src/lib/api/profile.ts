@@ -1,45 +1,50 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json, Tables } from '@/types/supabase';
-import type { ProfileField, UserProfile } from '@/types/app';
+import type { ProfileField, ProfileFieldKey, UserProfile } from '@/types/app';
 
 type FamilyProfileRow = Tables<'family_profiles'>;
 type SupabaseDb = SupabaseClient<Database>;
 
+const RESERVED_KEYS: ReadonlySet<string> = new Set<ProfileFieldKey>([
+  'babyName',
+  'birthDate',
+  'hospitalPhone',
+  'pediatricPhone',
+  'papaCompanyPhone',
+  'papaContactPhone',
+  'mamaCompanyPhone',
+  'mamaContactPhone',
+]);
+
 // DBのjsonbカラムを安全にProfileField[]へ変換する（想定外の形式は無視して空配列にする）
-const parseCustomFields = (value: Json | null): ProfileField[] => {
+const parseFieldArray = (value: Json | null): ProfileField[] => {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item): ProfileField[] => {
     if (typeof item !== 'object' || item === null || Array.isArray(item)) return [];
-    const { id, label, value: fieldValue } = item as Record<string, Json | undefined>;
+    const { id, label, value: fieldValue, key } = item as Record<string, Json | undefined>;
     if (typeof id !== 'string' || typeof label !== 'string' || typeof fieldValue !== 'string') return [];
-    return [{ id, label, value: fieldValue }];
+    const field: ProfileField = { id, label, value: fieldValue };
+    if (typeof key === 'string' && RESERVED_KEYS.has(key)) field.key = key as ProfileFieldKey;
+    return [field];
   });
 };
 
-const customFieldsToJson = (fields: ProfileField[]): Json =>
-  fields.map((field) => ({ id: field.id, label: field.label, value: field.value }));
+const fieldsToJson = (fields: ProfileField[]): Json =>
+  fields.map((field) =>
+    field.key
+      ? { id: field.id, label: field.label, value: field.value, key: field.key }
+      : { id: field.id, label: field.label, value: field.value },
+  );
 
 // DBの行(snake_case) <-> アプリの型(camelCase) を変換する
 const rowToProfile = (row: FamilyProfileRow): UserProfile => ({
-  babyName: row.baby_name,
-  birthDate: row.birth_date ?? '',
-  momName: row.mom_name,
-  momWorkplace: row.mom_workplace,
-  dadName: row.dad_name,
-  dadWorkplace: row.dad_workplace,
-  address: row.address,
-  hospitalName: row.hospital_name,
-  hospitalPhone: row.hospital_phone,
-  pediatricName: row.pediatric_name,
-  pediatricPhone: row.pediatric_phone,
-  papaCompanyPhone: row.papa_company_phone,
-  papaContactPhone: row.papa_contact_phone,
-  mamaCompanyPhone: row.mama_company_phone,
-  mamaContactPhone: row.mama_contact_phone,
-  customFields: parseCustomFields(row.custom_fields),
+  childFields: parseFieldArray(row.child_fields),
+  familyFields: parseFieldArray(row.family_fields),
+  emergencyFields: parseFieldArray(row.emergency_fields),
+  customFields: parseFieldArray(row.custom_fields),
 });
 
-// 設定タブ（お子様情報・パパママ情報・緊急連絡先）を取得する。まだ保存されていない場合はnull。
+// 設定タブ（お子様情報・パパママ情報・緊急連絡先・カスタム項目）を取得する。まだ保存されていない場合はnull。
 export async function getProfile(supabase: SupabaseDb, familyId: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
     .from('family_profiles')
@@ -54,22 +59,10 @@ export async function getProfile(supabase: SupabaseDb, familyId: string): Promis
 export async function saveProfile(supabase: SupabaseDb, familyId: string, profile: UserProfile): Promise<void> {
   const { error } = await supabase.from('family_profiles').upsert({
     family_id: familyId,
-    baby_name: profile.babyName,
-    birth_date: profile.birthDate || null,
-    mom_name: profile.momName,
-    mom_workplace: profile.momWorkplace,
-    dad_name: profile.dadName,
-    dad_workplace: profile.dadWorkplace,
-    address: profile.address,
-    hospital_name: profile.hospitalName,
-    hospital_phone: profile.hospitalPhone,
-    pediatric_name: profile.pediatricName,
-    pediatric_phone: profile.pediatricPhone,
-    papa_company_phone: profile.papaCompanyPhone,
-    papa_contact_phone: profile.papaContactPhone,
-    mama_company_phone: profile.mamaCompanyPhone,
-    mama_contact_phone: profile.mamaContactPhone,
-    custom_fields: customFieldsToJson(profile.customFields),
+    child_fields: fieldsToJson(profile.childFields),
+    family_fields: fieldsToJson(profile.familyFields),
+    emergency_fields: fieldsToJson(profile.emergencyFields),
+    custom_fields: fieldsToJson(profile.customFields),
   });
   if (error) throw error;
 }

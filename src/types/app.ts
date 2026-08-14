@@ -83,31 +83,34 @@ export interface FamilyMember {
   role: string | null;
 }
 
-// 設定タブのカスタム項目（見出し + 内容）。ユーザーが自由に追加・削除できる。
+// 設定タブの1項目（見出し + 内容）。各セクションでユーザーが自由に追加・削除できる。
+// keyは特定の機能(生後日数の計算やホーム画面のクイック発信など)からこの項目の値を
+// 参照するための予約識別子。ユーザーが追加した項目には付与されない。
 export interface ProfileField {
   id: string;
   label: string;
   value: string;
+  key?: ProfileFieldKey;
 }
 
+export type ProfileFieldKey =
+  | 'babyName'
+  | 'birthDate'
+  | 'hospitalPhone'
+  | 'pediatricPhone'
+  | 'papaCompanyPhone'
+  | 'papaContactPhone'
+  | 'mamaCompanyPhone'
+  | 'mamaContactPhone';
+
 export interface UserProfile {
-  babyName: string;
-  birthDate: string;
-  momName: string;
-  momWorkplace: string;
-  dadName: string;
-  dadWorkplace: string;
-  address: string;
-  // 緊急連絡先（ホーム画面のクイックアクションから電話をかけるために使用）
-  hospitalName: string;
-  hospitalPhone: string;
-  pediatricName: string;
-  pediatricPhone: string;
-  papaCompanyPhone: string;
-  papaContactPhone: string;
-  mamaCompanyPhone: string;
-  mamaContactPhone: string;
-  // ユーザーが自由に追加・削除できるカスタム項目
+  // お子様の情報
+  childFields: ProfileField[];
+  // パパ・ママ情報
+  familyFields: ProfileField[];
+  // 緊急連絡先（産院・小児科・パパママの連絡先）
+  emergencyFields: ProfileField[];
+  // どのセクションにも属さない、ユーザーが自由に追加・削除できるカスタム項目
   customFields: ProfileField[];
 }
 

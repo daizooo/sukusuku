@@ -144,63 +144,27 @@ export type Database = {
       }
       family_profiles: {
         Row: {
-          address: string
-          baby_name: string
-          birth_date: string | null
+          child_fields: Json
           custom_fields: Json
-          dad_name: string
-          dad_workplace: string
+          emergency_fields: Json
+          family_fields: Json
           family_id: string
-          hospital_name: string
-          hospital_phone: string
-          mama_company_phone: string
-          mama_contact_phone: string
-          mom_name: string
-          mom_workplace: string
-          papa_company_phone: string
-          papa_contact_phone: string
-          pediatric_name: string
-          pediatric_phone: string
           updated_at: string
         }
         Insert: {
-          address?: string
-          baby_name?: string
-          birth_date?: string | null
+          child_fields?: Json
           custom_fields?: Json
-          dad_name?: string
-          dad_workplace?: string
+          emergency_fields?: Json
+          family_fields?: Json
           family_id: string
-          hospital_name?: string
-          hospital_phone?: string
-          mama_company_phone?: string
-          mama_contact_phone?: string
-          mom_name?: string
-          mom_workplace?: string
-          papa_company_phone?: string
-          papa_contact_phone?: string
-          pediatric_name?: string
-          pediatric_phone?: string
           updated_at?: string
         }
         Update: {
-          address?: string
-          baby_name?: string
-          birth_date?: string | null
+          child_fields?: Json
           custom_fields?: Json
-          dad_name?: string
-          dad_workplace?: string
+          emergency_fields?: Json
+          family_fields?: Json
           family_id?: string
-          hospital_name?: string
-          hospital_phone?: string
-          mama_company_phone?: string
-          mama_contact_phone?: string
-          mom_name?: string
-          mom_workplace?: string
-          papa_company_phone?: string
-          papa_contact_phone?: string
-          pediatric_name?: string
-          pediatric_phone?: string
           updated_at?: string
         }
         Relationships: [
