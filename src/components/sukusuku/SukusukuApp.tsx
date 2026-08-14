@@ -632,118 +632,142 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
     }
   };
 
-  // スマホ・タブレット・PCのいずれでもビューポート全体を使う（PCで中央の細長いカードにしない）
+  // スマホ・タブレット・PCのいずれでもビューポート全体を使う（PCで中央の細長いカードにしない）。
+  // ただし単に画面幅いっぱいに引き伸ばすと一覧やグリッドの間延びで読みにくくなるため、
+  // md(768px)以上ではボトムタブバーの代わりに左サイドナビを常時表示し、各タブ側でも
+  // 本文の幅を読みやすい範囲に収めている（記録タブの2カラム表示など、幅を必要とする
+  // 画面はタブ側で個別に対応する）。
   return (
-    <div className="w-full h-dvh relative bg-gray-50 flex flex-col font-sans overflow-hidden">
-      <header className="flex-none bg-white px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 flex flex-col items-center justify-center shadow-sm z-10 relative">
-        <h1 className="font-bold text-gray-800 tracking-wide text-lg">すくすく手帳</h1>
-      </header>
-
-      {taskError && (
-        <p className="flex-none bg-red-50 text-red-600 text-xs text-center py-2 px-4 border-b border-red-100">{taskError}</p>
-      )}
-
-      <main className="flex-1 overflow-hidden">
-        {activeTab === 'home' && (
-          <HomeTab
-            userProfile={userProfile}
-            loginRole={role}
-            ageInDays={ageInDays}
-            ageInMonths={ageInMonths}
-            dynamicTodos={dynamicTodos}
-            isLoadingTodos={isLoadingTasks}
-            onToggleTodo={toggleTodo}
-            onOpenTask={openTaskDetail}
-            onViewAllSchedule={() => setActiveTab('schedule')}
-          />
-        )}
-        {activeTab === 'schedule' && (
-          <ScheduleTab
-            dynamicTodos={dynamicTodos}
-            isLoadingTodos={isLoadingTasks}
-            today={today}
-            currentCalendarDate={currentCalendarDate}
-            onChangeCalendarDate={setCurrentCalendarDate}
-            onToggleTodo={toggleTodo}
-            onOpenTask={openTaskDetail}
-          />
-        )}
-        {activeTab === 'log' && (
-          <LogTab
-            logs={logs}
-            logDate={logDate}
-            today={today}
-            onChangeLogDate={setLogDate}
-            growthData={growthData}
-            isLoadingLogs={isLoadingLogs}
-            isLoadingGrowth={isLoadingGrowth}
-            memberLabel={memberLabel}
-            onAddLog={addLog}
-            onUpdateLog={updateLog}
-            onDeleteLog={deleteLog}
-            onAddGrowthRecord={addGrowthRecordHandler}
-            onUpdateGrowthRecord={updateGrowthRecordHandler}
-            onDeleteGrowthRecord={deleteGrowthRecordHandler}
-          />
-        )}
-        {activeTab === 'memo' && (
-          <MemoTab
-            gifts={gifts}
-            isLoadingGifts={isLoadingGifts}
-            onAddGift={addGift}
-            onUpdateGift={updateGiftHandler}
-            onDeleteGift={deleteGiftHandler}
-            documents={documents}
-            isLoadingDocuments={isLoadingDocuments}
-            onAddDocument={addDocument}
-            onDeleteDocument={deleteDocumentHandler}
-            getDocumentUrl={getDocumentUrl}
-            nurseries={nurseries}
-            isLoadingNurseries={isLoadingNurseries}
-            onAddNursery={addNurseryHandler}
-            onUpdateNursery={updateNurseryHandler}
-            onDeleteNursery={deleteNurseryHandler}
-          />
-        )}
-        {activeTab === 'info' && (
-          <InfoTab
-            familyId={familyId}
-            userId={userId}
-            userProfile={userProfile}
-            tempProfile={tempProfile}
-            isEditingProfile={isEditingProfile}
-            onStartEditProfile={startEditingProfile}
-            onChangeTempProfile={setTempProfile}
-            onSaveProfile={handleProfileSave}
-          />
-        )}
-      </main>
-
-      {activeTab === 'schedule' && (
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="absolute bottom-[calc(4rem+env(safe-area-inset-bottom)+1rem)] right-4 w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-all active:scale-95 z-20"
-        >
-          <Plus size={28} />
-        </button>
-      )}
-
-      <nav className="flex-none bg-white border-t border-gray-200 w-full z-30 pb-[env(safe-area-inset-bottom)]">
-        <div className="flex justify-around items-center h-16 px-1">
+    <div className="w-full h-dvh relative bg-gray-50 flex font-sans overflow-hidden">
+      <nav className="hidden md:flex md:flex-col md:w-56 lg:w-64 flex-none bg-white border-r border-gray-200 px-3 py-6">
+        <h1 className="font-bold text-gray-800 tracking-wide text-lg px-3 mb-8">すくすく手帳</h1>
+        <div className="flex flex-col space-y-1">
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition ${
-                activeTab === item.id ? 'text-blue-500' : 'text-gray-400 hover:text-gray-500'
+              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${
+                activeTab === item.id ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
               }`}
             >
-              <item.icon size={22} className={activeTab === item.id ? 'stroke-[2.5px]' : 'stroke-2'} />
-              <span className="text-[9px] font-medium">{item.label}</span>
+              <item.icon size={20} className={activeTab === item.id ? 'stroke-[2.5px]' : 'stroke-2'} />
+              <span>{item.label}</span>
             </button>
           ))}
         </div>
       </nav>
+
+      <div className="flex flex-col flex-1 min-w-0 relative">
+        <header className="flex-none bg-white px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 flex flex-col items-center justify-center shadow-sm z-10 relative md:hidden">
+          <h1 className="font-bold text-gray-800 tracking-wide text-lg">すくすく手帳</h1>
+        </header>
+
+        {taskError && (
+          <p className="flex-none bg-red-50 text-red-600 text-xs text-center py-2 px-4 border-b border-red-100">{taskError}</p>
+        )}
+
+        <main className="flex-1 overflow-hidden">
+          {activeTab === 'home' && (
+            <HomeTab
+              userProfile={userProfile}
+              loginRole={role}
+              ageInDays={ageInDays}
+              ageInMonths={ageInMonths}
+              dynamicTodos={dynamicTodos}
+              isLoadingTodos={isLoadingTasks}
+              onToggleTodo={toggleTodo}
+              onOpenTask={openTaskDetail}
+              onViewAllSchedule={() => setActiveTab('schedule')}
+            />
+          )}
+          {activeTab === 'schedule' && (
+            <ScheduleTab
+              dynamicTodos={dynamicTodos}
+              isLoadingTodos={isLoadingTasks}
+              today={today}
+              currentCalendarDate={currentCalendarDate}
+              onChangeCalendarDate={setCurrentCalendarDate}
+              onToggleTodo={toggleTodo}
+              onOpenTask={openTaskDetail}
+            />
+          )}
+          {activeTab === 'log' && (
+            <LogTab
+              logs={logs}
+              logDate={logDate}
+              today={today}
+              onChangeLogDate={setLogDate}
+              growthData={growthData}
+              isLoadingLogs={isLoadingLogs}
+              isLoadingGrowth={isLoadingGrowth}
+              memberLabel={memberLabel}
+              onAddLog={addLog}
+              onUpdateLog={updateLog}
+              onDeleteLog={deleteLog}
+              onAddGrowthRecord={addGrowthRecordHandler}
+              onUpdateGrowthRecord={updateGrowthRecordHandler}
+              onDeleteGrowthRecord={deleteGrowthRecordHandler}
+            />
+          )}
+          {activeTab === 'memo' && (
+            <MemoTab
+              gifts={gifts}
+              isLoadingGifts={isLoadingGifts}
+              onAddGift={addGift}
+              onUpdateGift={updateGiftHandler}
+              onDeleteGift={deleteGiftHandler}
+              documents={documents}
+              isLoadingDocuments={isLoadingDocuments}
+              onAddDocument={addDocument}
+              onDeleteDocument={deleteDocumentHandler}
+              getDocumentUrl={getDocumentUrl}
+              nurseries={nurseries}
+              isLoadingNurseries={isLoadingNurseries}
+              onAddNursery={addNurseryHandler}
+              onUpdateNursery={updateNurseryHandler}
+              onDeleteNursery={deleteNurseryHandler}
+            />
+          )}
+          {activeTab === 'info' && (
+            <InfoTab
+              familyId={familyId}
+              userId={userId}
+              userProfile={userProfile}
+              tempProfile={tempProfile}
+              isEditingProfile={isEditingProfile}
+              onStartEditProfile={startEditingProfile}
+              onChangeTempProfile={setTempProfile}
+              onSaveProfile={handleProfileSave}
+            />
+          )}
+        </main>
+
+        {activeTab === 'schedule' && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="absolute bottom-[calc(4rem+env(safe-area-inset-bottom)+1rem)] right-4 md:bottom-8 md:right-8 w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-all active:scale-95 z-20"
+          >
+            <Plus size={28} />
+          </button>
+        )}
+
+        <nav className="flex-none bg-white border-t border-gray-200 w-full z-30 pb-[env(safe-area-inset-bottom)] md:hidden">
+          <div className="flex justify-around items-center h-16 px-1">
+            {NAV_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition ${
+                  activeTab === item.id ? 'text-blue-500' : 'text-gray-400 hover:text-gray-500'
+                }`}
+              >
+                <item.icon size={22} className={activeTab === item.id ? 'stroke-[2.5px]' : 'stroke-2'} />
+                <span className="text-[9px] font-medium">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
+      </div>
 
       <AddTaskModal
         show={showAddModal}

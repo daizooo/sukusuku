@@ -101,7 +101,7 @@ export default function MemoTab({
   const [nurseryModal, setNurseryModal] = useState<{ mode: 'add' | 'edit'; nursery: Nursery | null } | null>(null);
 
   return (
-    <div className="p-4 h-full flex flex-col">
+    <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <div className="flex justify-between items-center mb-4 shrink-0">
         <h2 className="text-xl font-bold text-gray-800 flex items-center">
           {memoView === 'gift' ? (
