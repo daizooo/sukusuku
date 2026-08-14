@@ -51,6 +51,7 @@ src/
 supabase/migrations/
   0001_init_schema.sql     # テーブル定義 + RLSポリシー
   0002_storage.sql         # 書類箱用Storageバケット + ポリシー
+  0010_calendar_fields.sql # カレンダー用カラム(日付・時刻・ラベル・リマインダー)
 ```
 
 ## 現在の実装状況
@@ -62,8 +63,9 @@ supabase/migrations/
 - [x] Supabaseプロジェクト作成・マイグレーション適用・Security/Performance Advisor対応・型生成 (`src/types/supabase.ts`)
 - [x] 認証（メール/パスワード）・招待コード（家族UUID）による夫婦の家族紐付け機能 (`/login`, `/family-setup`)
 - [x] 予定(tasks)タブをSupabase実データに接続（一覧取得・追加・編集・完了切替・削除、家族作成時に定番ToDoを自動投入）
+- [x] カレンダー機能（日付・時刻・場所・詳細・ラベル・リマインダーの入力、月カレンダーの日付選択）→ [docs/calendar.md](docs/calendar.md)
+- [ ] リマインダーの配信（PWA + Web Push）※現在は通知タイミングを保存するのみ
 - [ ] Google認証などの追加サインイン方法
-- [ ] プロフィール（子供の名前・誕生日、パパママの名前・勤務先、住所）のSupabase連携
 - [ ] 育児記録・成長グラフ・お祝い管理・保活メモ・書類箱のSupabase連携
 - [ ] 書類箱の画像アップロード（Supabase Storage）
 - [ ] Vercelへのデプロイ・GitHub連携

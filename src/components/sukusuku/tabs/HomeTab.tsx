@@ -1,8 +1,9 @@
 'use client';
 
-import { Baby, Building2, Calendar, ChevronRight, CheckCircle2, Circle, Heart, Phone, Stethoscope, BellRing } from 'lucide-react';
+import { Baby, Building2, Calendar, ChevronRight, CheckCircle2, Circle, Clock, Heart, MapPin, Phone, Stethoscope, BellRing } from 'lucide-react';
 import type { DynamicTask, LoginRole, UserProfile } from '@/types/app';
-import { getAssigneeColor, getProfileFieldValue } from '@/lib/uiUtils';
+import { getLabelColor, getProfileFieldValue } from '@/lib/uiUtils';
+import { formatTimeRange, parseDateString } from '@/lib/dateUtils';
 
 interface QuickAction {
   icon: typeof Phone;
@@ -34,9 +35,13 @@ export default function HomeTab({
   onOpenTask,
   onViewAllSchedule,
 }: HomeTabProps) {
-  const upcomingTasks = dynamicTodos.filter((t) => !t.done).slice(0, 3);
+  // 未完了のうち日付の近いものから3件。日付未設定は後ろに回す。
+  const upcomingTasks = dynamicTodos
+    .filter((t) => !t.done)
+    .sort((a, b) => (a.targetDateObj?.getTime() ?? Infinity) - (b.targetDateObj?.getTime() ?? Infinity))
+    .slice(0, 3);
   const birthDateValue = getProfileFieldValue(userProfile, 'birthDate');
-  const birthDate = birthDateValue ? new Date(birthDateValue) : null;
+  const birthDate = parseDateString(birthDateValue);
   const babyName = getProfileFieldValue(userProfile, 'babyName');
 
   // ママがログイン中(または役割未設定)はパパの連絡先を、パパがログイン中はママの連絡先を表示する
@@ -152,17 +157,29 @@ export default function HomeTab({
                 <div className="flex justify-between items-start">
                   <p className={`font-medium ${task.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
                     {task.title}
-                    {task.notification && !task.done && <BellRing size={12} className="inline ml-1.5 text-yellow-500 mb-0.5" />}
+                    {task.remindMinutesBefore !== null && !task.done && (
+                      <BellRing size={12} className="inline ml-1.5 text-yellow-500 mb-0.5" />
+                    )}
                   </p>
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ml-2 ${getAssigneeColor(task.assignee)}`}>
-                    {task.assignee}
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ml-2 ${getLabelColor(task.label)}`}>
+                    {task.label}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center text-xs text-gray-500 mt-1 gap-x-3 gap-y-1">
                   <span className="flex items-center text-blue-600 font-medium">
                     <Calendar size={12} className="mr-1" />
-                    目安: {task.targetDate}
+                    {task.targetDate}
                   </span>
+                  <span className="flex items-center">
+                    <Clock size={12} className="mr-1" />
+                    {formatTimeRange(task.startTime, task.endTime)}
+                  </span>
+                  {task.place && (
+                    <span className="flex items-center truncate">
+                      <MapPin size={12} className="mr-1 flex-none" />
+                      <span className="truncate">{task.place}</span>
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

@@ -293,49 +293,64 @@ export type Database = {
       }
       tasks: {
         Row: {
+          anchor_type: string
           assignee: string
           belongings: string | null
           category: string
           created_at: string
           days_after_birth: number
+          end_time: string | null
           family_id: string
           has_notification: boolean
           id: string
           is_done: boolean
           note: string | null
           place: string | null
+          remind_minutes_before: number | null
+          start_date: string | null
+          start_time: string | null
           timing_memo: string | null
           title: string
           updated_at: string
         }
         Insert: {
+          anchor_type?: string
           assignee?: string
           belongings?: string | null
           category?: string
           created_at?: string
           days_after_birth?: number
+          end_time?: string | null
           family_id: string
           has_notification?: boolean
           id?: string
           is_done?: boolean
           note?: string | null
           place?: string | null
+          remind_minutes_before?: number | null
+          start_date?: string | null
+          start_time?: string | null
           timing_memo?: string | null
           title: string
           updated_at?: string
         }
         Update: {
+          anchor_type?: string
           assignee?: string
           belongings?: string | null
           category?: string
           created_at?: string
           days_after_birth?: number
+          end_time?: string | null
           family_id?: string
           has_notification?: boolean
           id?: string
           is_done?: boolean
           note?: string | null
           place?: string | null
+          remind_minutes_before?: number | null
+          start_date?: string | null
+          start_time?: string | null
           timing_memo?: string | null
           title?: string
           updated_at?: string
