@@ -1,18 +1,20 @@
 'use client';
 
-import { Baby, Building2, Calendar, ChevronRight, CheckCircle2, Circle, Heart, Phone, Stethoscope, BellRing } from 'lucide-react';
-import type { DynamicTask, UserProfile } from '@/types/app';
-import { getAssigneeColor } from '@/lib/uiUtils';
+import { Baby, Building2, Calendar, ChevronRight, CheckCircle2, Circle, Clock, Heart, MapPin, Phone, Stethoscope, BellRing } from 'lucide-react';
+import type { DynamicTask, LoginRole, UserProfile } from '@/types/app';
+import { getLabelColor, getProfileFieldValue } from '@/lib/uiUtils';
+import { formatTimeRange, parseDateString } from '@/lib/dateUtils';
 
 interface QuickAction {
   icon: typeof Phone;
   label: string;
+  phone: string;
   color: string;
-  action: () => void;
 }
 
 interface HomeTabProps {
   userProfile: UserProfile;
+  loginRole?: LoginRole;
   ageInDays: number;
   ageInMonths: { months: number; days: number };
   dynamicTodos: DynamicTask[];
@@ -24,6 +26,7 @@ interface HomeTabProps {
 
 export default function HomeTab({
   userProfile,
+  loginRole,
   ageInDays,
   ageInMonths,
   dynamicTodos,
@@ -32,14 +35,27 @@ export default function HomeTab({
   onOpenTask,
   onViewAllSchedule,
 }: HomeTabProps) {
-  const upcomingTasks = dynamicTodos.filter((t) => !t.done).slice(0, 3);
-  const birthDate = userProfile.birthDate ? new Date(userProfile.birthDate) : null;
+  // 未完了のうち日付の近いものから3件。日付未設定は後ろに回す。
+  const upcomingTasks = dynamicTodos
+    .filter((t) => !t.done)
+    .sort((a, b) => (a.targetDateObj?.getTime() ?? Infinity) - (b.targetDateObj?.getTime() ?? Infinity))
+    .slice(0, 3);
+  const birthDateValue = getProfileFieldValue(userProfile, 'birthDate');
+  const birthDate = parseDateString(birthDateValue);
+  const babyName = getProfileFieldValue(userProfile, 'babyName');
+
+  // ママがログイン中(または役割未設定)はパパの連絡先を、パパがログイン中はママの連絡先を表示する
+  const showPapaContact = loginRole !== 'papa';
+  const partnerCompanyLabel = showPapaContact ? 'パパ会社' : 'ママ会社';
+  const partnerCompanyPhone = getProfileFieldValue(userProfile, showPapaContact ? 'papaCompanyPhone' : 'mamaCompanyPhone');
+  const partnerContactLabel = showPapaContact ? 'パパ連絡' : 'ママ連絡';
+  const partnerContactPhone = getProfileFieldValue(userProfile, showPapaContact ? 'papaContactPhone' : 'mamaContactPhone');
 
   const quickActions: QuickAction[] = [
-    { icon: Phone, label: '産院', color: 'bg-rose-100 text-rose-600', action: () => alert('産院へ電話をかけます（デモ）') },
-    { icon: Stethoscope, label: '小児科', color: 'bg-blue-100 text-blue-600', action: () => alert('小児科へ電話をかけます（デモ）') },
-    { icon: Building2, label: '市役所', color: 'bg-green-100 text-green-600', action: () => alert('市役所情報を開きます') },
-    { icon: Heart, label: 'パパ連絡', color: 'bg-purple-100 text-purple-600', action: () => alert('パートナーへ連絡します') },
+    { icon: Phone, label: '産院', phone: getProfileFieldValue(userProfile, 'hospitalPhone'), color: 'bg-rose-100 text-rose-600' },
+    { icon: Stethoscope, label: '小児科', phone: getProfileFieldValue(userProfile, 'pediatricPhone'), color: 'bg-blue-100 text-blue-600' },
+    { icon: Building2, label: partnerCompanyLabel, phone: partnerCompanyPhone, color: 'bg-green-100 text-green-600' },
+    { icon: Heart, label: partnerContactLabel, phone: partnerContactPhone, color: 'bg-purple-100 text-purple-600' },
   ];
 
   return (
@@ -50,7 +66,7 @@ export default function HomeTab({
         <div className="relative z-10">
           <h2 className="text-sm font-medium opacity-90 mb-1 flex items-center">
             <Heart size={14} className="mr-1 fill-white" />
-            {userProfile.babyName ? `${userProfile.babyName}が生まれてから` : '赤ちゃんが生まれてから'}
+            {babyName ? `${babyName}が生まれてから` : '赤ちゃんが生まれてから'}
           </h2>
           <div className="flex flex-col mt-2">
             <div className="flex items-baseline space-x-1">
@@ -83,18 +99,31 @@ export default function HomeTab({
       </div>
 
       <div className="grid grid-cols-4 gap-3">
-        {quickActions.map((item) => (
-          <button
-            key={item.label}
-            onClick={item.action}
-            className="flex flex-col items-center justify-center p-3 bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 transition"
-          >
-            <div className={`p-3 rounded-full ${item.color} mb-2`}>
-              <item.icon size={20} />
-            </div>
-            <span className="text-[11px] text-gray-600 font-medium">{item.label}</span>
-          </button>
-        ))}
+        {quickActions.map((item) =>
+          item.phone ? (
+            <a
+              key={item.label}
+              href={`tel:${item.phone}`}
+              className="flex flex-col items-center justify-center p-3 bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 transition"
+            >
+              <div className={`p-3 rounded-full ${item.color} mb-2`}>
+                <item.icon size={20} />
+              </div>
+              <span className="text-[11px] text-gray-600 font-medium">{item.label}</span>
+            </a>
+          ) : (
+            <button
+              key={item.label}
+              onClick={() => alert(`${item.label}の電話番号が未設定です。設定画面から登録してください。`)}
+              className="flex flex-col items-center justify-center p-3 bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 transition"
+            >
+              <div className={`p-3 rounded-full ${item.color} mb-2 opacity-60`}>
+                <item.icon size={20} />
+              </div>
+              <span className="text-[11px] text-gray-400 font-medium">{item.label}</span>
+            </button>
+          )
+        )}
       </div>
 
       <div>
@@ -128,17 +157,29 @@ export default function HomeTab({
                 <div className="flex justify-between items-start">
                   <p className={`font-medium ${task.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
                     {task.title}
-                    {task.notification && !task.done && <BellRing size={12} className="inline ml-1.5 text-yellow-500 mb-0.5" />}
+                    {task.remindMinutesBefore !== null && !task.done && (
+                      <BellRing size={12} className="inline ml-1.5 text-yellow-500 mb-0.5" />
+                    )}
                   </p>
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ml-2 ${getAssigneeColor(task.assignee)}`}>
-                    {task.assignee}
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ml-2 ${getLabelColor(task.label)}`}>
+                    {task.label}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center text-xs text-gray-500 mt-1 gap-x-3 gap-y-1">
                   <span className="flex items-center text-blue-600 font-medium">
                     <Calendar size={12} className="mr-1" />
-                    目安: {task.targetDate}
+                    {task.targetDate}
                   </span>
+                  <span className="flex items-center">
+                    <Clock size={12} className="mr-1" />
+                    {formatTimeRange(task.startTime, task.endTime)}
+                  </span>
+                  {task.place && (
+                    <span className="flex items-center truncate">
+                      <MapPin size={12} className="mr-1 flex-none" />
+                      <span className="truncate">{task.place}</span>
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

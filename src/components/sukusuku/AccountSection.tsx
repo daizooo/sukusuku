@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Copy, Edit2, Loader2, LogOut, Save, UserCog } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { listFamilyMembers, updateMyProfile, ROLE_LABEL, type FamilyMember, type FamilyRole } from '@/lib/api/profile';
+import { listAccountMembers, updateMyAccount, ROLE_LABEL, type AccountMember, type FamilyRole } from '@/lib/api/account';
 
 interface AccountSectionProps {
   familyId: string;
@@ -20,7 +20,7 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
   const router = useRouter();
 
   const [email, setEmail] = useState('');
-  const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [members, setMembers] = useState<AccountMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
@@ -43,7 +43,7 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
     let cancelled = false;
     const supabase = createClient();
 
-    Promise.all([supabase.auth.getUser(), listFamilyMembers(supabase, familyId)])
+    Promise.all([supabase.auth.getUser(), listAccountMembers(supabase, familyId)])
       .then(([{ data: authData }, familyMembers]) => {
         if (cancelled) return;
         setEmail(authData.user?.email ?? '');
@@ -81,11 +81,13 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
     setIsSaving(true);
     setSaveError('');
     try {
-      const updated = await updateMyProfile(createClient(), userId, { role: tempRole, name: tempName });
+      const updated = await updateMyAccount(createClient(), userId, { role: tempRole, name: tempName });
       setMembers((prev) => prev.map((member) => (member.id === userId ? updated : member)));
       setIsEditing(false);
       setSavedMessage('保存しました。');
       setTimeout(() => setSavedMessage(''), 3000);
+      // ホーム画面などはサーバー側で読んだ役割(users.role)を使うため、再取得させる
+      router.refresh();
     } catch (err) {
       console.error('Failed to update profile:', err);
       setSaveError('保存に失敗しました。時間を置いて再度お試しください。');
