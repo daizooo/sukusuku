@@ -3,10 +3,13 @@
 import { useState } from 'react';
 import { Baby, Camera, ClipboardList, Edit2, Folder, Image as ImageIcon, MapPin, Phone, Plus, Save, Settings, User } from 'lucide-react';
 import type { DocumentItem, Nursery, UserProfile } from '@/types/app';
+import AccountSection from '../AccountSection';
 
 type InfoView = 'profile' | 'documents' | 'nursery';
 
 interface InfoTabProps {
+  familyId: string;
+  userId: string;
   userProfile: UserProfile;
   tempProfile: UserProfile;
   isEditingProfile: boolean;
@@ -18,6 +21,8 @@ interface InfoTabProps {
 }
 
 export default function InfoTab({
+  familyId,
+  userId,
   userProfile,
   tempProfile,
   isEditingProfile,
@@ -75,6 +80,8 @@ export default function InfoTab({
       <div className="flex-1 overflow-y-auto">
         {infoView === 'profile' && (
           <div className="space-y-6">
+            <AccountSection familyId={familyId} userId={userId} />
+
             <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
               <h3 className="font-bold text-gray-800 mb-4 flex items-center border-b pb-2">
                 <Baby size={18} className="mr-2 text-blue-500" /> お子様の情報

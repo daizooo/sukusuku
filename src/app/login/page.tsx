@@ -7,14 +7,28 @@ import { createClient } from '@/lib/supabase/client';
 
 type Mode = 'signin' | 'signup';
 
-function ConfirmErrorBanner() {
+function ConfirmResultBanner() {
   const searchParams = useSearchParams();
-  if (searchParams.get('error') !== 'confirm_failed') return null;
-  return (
-    <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg p-2.5 mb-4">
-      確認リンクが無効か、有効期限切れです。もう一度お試しください。
-    </p>
-  );
+
+  // メールの確認自体は完了しているが、登録した端末と別のブラウザでリンクを開いたため
+  // その場でログイン状態にできなかったケース。エラーではないので案内文を出す。
+  if (searchParams.get('message') === 'email_confirmed') {
+    return (
+      <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg p-2.5 mb-4">
+        メールアドレスの確認が完了しました。登録したメールアドレスとパスワードでログインしてください。
+      </p>
+    );
+  }
+
+  if (searchParams.get('error') === 'confirm_failed') {
+    return (
+      <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg p-2.5 mb-4">
+        確認リンクが無効か、有効期限切れです。すでに確認済みの場合はそのままログインできます。
+      </p>
+    );
+  }
+
+  return null;
 }
 
 export default function LoginPage() {
@@ -57,7 +71,9 @@ export default function LoginPage() {
           router.push('/');
           router.refresh();
         } else {
-          setInfoMessage('確認メールを送信しました。メール内のリンクから登録を完了してください。');
+          setInfoMessage(
+            '確認メールを送信しました。メール内のリンクから登録を完了してください。別の端末やメールアプリ内のブラウザでリンクを開いた場合は、確認後にこの画面からログインしてください。',
+          );
         }
       }
     } finally {
@@ -77,7 +93,7 @@ export default function LoginPage() {
         </div>
 
         <Suspense fallback={null}>
-          <ConfirmErrorBanner />
+          <ConfirmResultBanner />
         </Suspense>
 
         <div className="flex bg-gray-100 p-1 rounded-lg mb-6">

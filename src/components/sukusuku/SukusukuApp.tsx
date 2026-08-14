@@ -8,6 +8,7 @@ import {
   Gift as GiftIcon,
   Folder,
   Plus,
+  Settings,
 } from 'lucide-react';
 
 import type {
@@ -73,7 +74,7 @@ interface SukusukuAppProps {
   userId: string;
 }
 
-export default function SukusukuApp({ familyId }: SukusukuAppProps) {
+export default function SukusukuApp({ familyId, userId }: SukusukuAppProps) {
   const supabase = useMemo(() => createClient(), []);
 
   const [activeTab, setActiveTab] = useState<TabId>('home');
@@ -273,6 +274,14 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
     <div className="w-full max-w-md mx-auto h-screen sm:h-[850px] relative bg-gray-50 flex flex-col font-sans overflow-hidden shadow-2xl sm:rounded-3xl sm:my-8 border sm:border-gray-200">
       <header className="flex-none bg-white px-4 py-3 flex flex-col items-center justify-center shadow-sm z-10 relative">
         <h1 className="font-bold text-gray-800 tracking-wide text-lg">すくすく手帳</h1>
+        {/* アカウント設定(役割の変更・ログアウト)へのショートカット */}
+        <button
+          onClick={() => setActiveTab('info')}
+          aria-label="アカウント設定"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 p-2 rounded-full transition"
+        >
+          <Settings size={20} />
+        </button>
       </header>
 
       {taskError && (
@@ -309,6 +318,8 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
         {activeTab === 'gift' && <GiftTab gifts={gifts} />}
         {activeTab === 'info' && (
           <InfoTab
+            familyId={familyId}
+            userId={userId}
             userProfile={userProfile}
             tempProfile={tempProfile}
             isEditingProfile={isEditingProfile}
