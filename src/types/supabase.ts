@@ -150,8 +150,16 @@ export type Database = {
           dad_name: string
           dad_workplace: string
           family_id: string
+          hospital_name: string
+          hospital_phone: string
+          mama_company_phone: string
+          mama_contact_phone: string
           mom_name: string
           mom_workplace: string
+          papa_company_phone: string
+          papa_contact_phone: string
+          pediatric_name: string
+          pediatric_phone: string
           updated_at: string
         }
         Insert: {
@@ -161,8 +169,16 @@ export type Database = {
           dad_name?: string
           dad_workplace?: string
           family_id: string
+          hospital_name?: string
+          hospital_phone?: string
+          mama_company_phone?: string
+          mama_contact_phone?: string
           mom_name?: string
           mom_workplace?: string
+          papa_company_phone?: string
+          papa_contact_phone?: string
+          pediatric_name?: string
+          pediatric_phone?: string
           updated_at?: string
         }
         Update: {
@@ -172,8 +188,16 @@ export type Database = {
           dad_name?: string
           dad_workplace?: string
           family_id?: string
+          hospital_name?: string
+          hospital_phone?: string
+          mama_company_phone?: string
+          mama_contact_phone?: string
           mom_name?: string
           mom_workplace?: string
+          papa_company_phone?: string
+          papa_contact_phone?: string
+          pediatric_name?: string
+          pediatric_phone?: string
           updated_at?: string
         }
         Relationships: [

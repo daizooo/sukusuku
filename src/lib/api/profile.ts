@@ -14,9 +14,17 @@ const rowToProfile = (row: FamilyProfileRow): UserProfile => ({
   dadName: row.dad_name,
   dadWorkplace: row.dad_workplace,
   address: row.address,
+  hospitalName: row.hospital_name,
+  hospitalPhone: row.hospital_phone,
+  pediatricName: row.pediatric_name,
+  pediatricPhone: row.pediatric_phone,
+  papaCompanyPhone: row.papa_company_phone,
+  papaContactPhone: row.papa_contact_phone,
+  mamaCompanyPhone: row.mama_company_phone,
+  mamaContactPhone: row.mama_contact_phone,
 });
 
-// 設定タブ（お子様情報・パパママ情報）を取得する。まだ保存されていない場合はnull。
+// 設定タブ（お子様情報・パパママ情報・緊急連絡先）を取得する。まだ保存されていない場合はnull。
 export async function getProfile(supabase: SupabaseDb, familyId: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
     .from('family_profiles')
@@ -38,6 +46,14 @@ export async function saveProfile(supabase: SupabaseDb, familyId: string, profil
     dad_name: profile.dadName,
     dad_workplace: profile.dadWorkplace,
     address: profile.address,
+    hospital_name: profile.hospitalName,
+    hospital_phone: profile.hospitalPhone,
+    pediatric_name: profile.pediatricName,
+    pediatric_phone: profile.pediatricPhone,
+    papa_company_phone: profile.papaCompanyPhone,
+    papa_contact_phone: profile.papaContactPhone,
+    mama_company_phone: profile.mamaCompanyPhone,
+    mama_contact_phone: profile.mamaContactPhone,
   });
   if (error) throw error;
 }
