@@ -62,6 +62,7 @@ import {
   updateNursery as updateNurseryApi,
 } from '@/lib/api/nurseries';
 import { listFamilyMembers } from '@/lib/api/familyMembers';
+import { getProfile, saveProfile } from '@/lib/api/profile';
 
 import HomeTab from './tabs/HomeTab';
 import ScheduleTab from './tabs/ScheduleTab';
@@ -80,7 +81,7 @@ const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
   { id: 'schedule', icon: CalendarDays, label: '予定' },
   { id: 'log', icon: FileText, label: '記録' },
   { id: 'gift', icon: GiftIcon, label: 'お祝い' },
-  { id: 'info', icon: Folder, label: 'ストック' },
+  { id: 'info', icon: Folder, label: '設定' },
 ];
 
 const EMPTY_NEW_TASK: NewTaskDraft = {
@@ -146,7 +147,6 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
 
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
 
-  // TODO: プロフィール(子供の名前・誕生日、パパママ情報)はまだSupabase未連携（次のステップ）
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [tempProfile, setTempProfile] = useState<UserProfile>(userProfile);
@@ -272,6 +272,22 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
     };
   }, [supabase, familyId]);
 
+  // 設定タブ(お子様情報・パパママ情報)をSupabaseから取得
+  useEffect(() => {
+    let cancelled = false;
+    getProfile(supabase, familyId)
+      .then((profile) => {
+        if (cancelled || !profile) return;
+        setUserProfile(profile);
+      })
+      .catch((err) => {
+        console.error('Failed to load profile:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, familyId]);
+
   const memberLabel = (id: string | null): string => {
     if (!id) return '不明';
     const member = familyMembers.find((m) => m.id === id);
@@ -375,9 +391,21 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
     }
   };
 
-  const handleProfileSave = () => {
-    setUserProfile(tempProfile);
+  const handleProfileSave = async () => {
+    const previousProfile = userProfile;
+    const updated = tempProfile;
+
+    setUserProfile(updated);
     setIsEditingProfile(false);
+
+    try {
+      await saveProfile(supabase, familyId, updated);
+    } catch (err) {
+      console.error('Failed to save profile:', err);
+      // 失敗時はロールバック
+      setUserProfile(previousProfile);
+      alert('保存に失敗しました。もう一度お試しください。');
+    }
   };
 
   const startEditingProfile = () => {
