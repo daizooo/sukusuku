@@ -142,6 +142,50 @@ export type Database = {
         }
         Relationships: []
       }
+      family_profiles: {
+        Row: {
+          address: string
+          baby_name: string
+          birth_date: string | null
+          dad_name: string
+          dad_workplace: string
+          family_id: string
+          mom_name: string
+          mom_workplace: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string
+          baby_name?: string
+          birth_date?: string | null
+          dad_name?: string
+          dad_workplace?: string
+          family_id: string
+          mom_name?: string
+          mom_workplace?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          baby_name?: string
+          birth_date?: string | null
+          dad_name?: string
+          dad_workplace?: string
+          family_id?: string
+          mom_name?: string
+          mom_workplace?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "family_profiles_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: true
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gifts: {
         Row: {
           family_id: string

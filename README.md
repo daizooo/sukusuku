@@ -41,7 +41,7 @@ src/
     auth/confirm/         # メール確認リンクのコールバック
   components/sukusuku/
     SukusukuApp.tsx        # アプリ本体（状態管理・タブ/モーダルの組み立て）
-    tabs/                  # ホーム/予定/記録/お祝い/ストックの各タブ
+    tabs/                  # ホーム/予定/記録/お祝い/設定の各タブ
     modals/                # タスク追加・詳細の各モーダル
   lib/
     dateUtils.ts / uiUtils.ts / seedData.ts
@@ -56,7 +56,7 @@ supabase/migrations/
 ## 現在の実装状況
 
 - [x] Next.jsプロジェクトの初期化・Tailwind設定
-- [x] プロトタイプUI（ホーム/予定/記録/お祝い/ストックの5タブ、各種モーダル）をTypeScriptコンポーネントとして移植（画面は現時点ではダミーデータで動作）
+- [x] プロトタイプUI（ホーム/予定/記録/お祝い/設定の5タブ、各種モーダル）をTypeScriptコンポーネントとして移植（画面は現時点ではダミーデータで動作）
 - [x] Supabaseスキーマ（9テーブル）・RLSポリシー・Storageポリシーのマイグレーションを追加
 - [x] Supabaseクライアント（ブラウザ/サーバー）の雛形を追加
 - [x] Supabaseプロジェクト作成・マイグレーション適用・Security/Performance Advisor対応・型生成 (`src/types/supabase.ts`)
