@@ -25,6 +25,7 @@ import type {
   UserProfile,
 } from '@/types/app';
 import { INITIAL_PROFILE } from '@/lib/seedData';
+import { getProfileFieldValue } from '@/lib/uiUtils';
 import { calculateTargetDate, formatDateString } from '@/lib/dateUtils';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -296,31 +297,33 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
     return 'パートナー';
   };
 
+  const birthDateValue = getProfileFieldValue(userProfile, 'birthDate');
+
   const dynamicTodos = useMemo<DynamicTask[]>(() => {
     return todos.map((todo) => {
-      const targetDateObj = calculateTargetDate(userProfile.birthDate, todo.daysAfterBirth);
+      const targetDateObj = calculateTargetDate(birthDateValue, todo.daysAfterBirth);
       return {
         ...todo,
         targetDateObj,
         targetDate: formatDateString(targetDateObj),
       };
     });
-  }, [todos, userProfile.birthDate]);
+  }, [todos, birthDateValue]);
 
   const ageInDays = useMemo(() => {
-    if (!userProfile.birthDate) return 0;
-    const birth = new Date(userProfile.birthDate);
+    if (!birthDateValue) return 0;
+    const birth = new Date(birthDateValue);
     if (isNaN(birth.getTime())) return 0;
     const birthDateOnly = new Date(birth.getFullYear(), birth.getMonth(), birth.getDate());
     const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const diffTime = todayDateOnly.getTime() - birthDateOnly.getTime();
     return Math.floor(diffTime / (1000 * 60 * 60 * 24));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userProfile.birthDate]);
+  }, [birthDateValue]);
 
   const ageInMonths = useMemo(() => {
-    if (!userProfile.birthDate) return { months: 0, days: 0 };
-    const birth = new Date(userProfile.birthDate);
+    if (!birthDateValue) return { months: 0, days: 0 };
+    const birth = new Date(birthDateValue);
     if (isNaN(birth.getTime())) return { months: 0, days: 0 };
     let months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
     let tempDate = new Date(birth.getFullYear(), birth.getMonth() + months, birth.getDate());
@@ -332,7 +335,7 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
     const days = Math.floor((today.getTime() - tempDate.getTime()) / (1000 * 60 * 60 * 24));
     return { months, days };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userProfile.birthDate]);
+  }, [birthDateValue]);
 
   const toggleTodo = async (id: string) => {
     const target = todos.find((t) => t.id === id);

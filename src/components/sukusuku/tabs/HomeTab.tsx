@@ -2,7 +2,7 @@
 
 import { Baby, Building2, Calendar, ChevronRight, CheckCircle2, Circle, Heart, Phone, Stethoscope, BellRing } from 'lucide-react';
 import type { DynamicTask, LoginRole, UserProfile } from '@/types/app';
-import { getAssigneeColor } from '@/lib/uiUtils';
+import { getAssigneeColor, getProfileFieldValue } from '@/lib/uiUtils';
 
 interface QuickAction {
   icon: typeof Phone;
@@ -35,18 +35,20 @@ export default function HomeTab({
   onViewAllSchedule,
 }: HomeTabProps) {
   const upcomingTasks = dynamicTodos.filter((t) => !t.done).slice(0, 3);
-  const birthDate = userProfile.birthDate ? new Date(userProfile.birthDate) : null;
+  const birthDateValue = getProfileFieldValue(userProfile, 'birthDate');
+  const birthDate = birthDateValue ? new Date(birthDateValue) : null;
+  const babyName = getProfileFieldValue(userProfile, 'babyName');
 
   // ママがログイン中(または役割未設定)はパパの連絡先を、パパがログイン中はママの連絡先を表示する
   const showPapaContact = loginRole !== 'papa';
   const partnerCompanyLabel = showPapaContact ? 'パパ会社' : 'ママ会社';
-  const partnerCompanyPhone = showPapaContact ? userProfile.papaCompanyPhone : userProfile.mamaCompanyPhone;
+  const partnerCompanyPhone = getProfileFieldValue(userProfile, showPapaContact ? 'papaCompanyPhone' : 'mamaCompanyPhone');
   const partnerContactLabel = showPapaContact ? 'パパ連絡' : 'ママ連絡';
-  const partnerContactPhone = showPapaContact ? userProfile.papaContactPhone : userProfile.mamaContactPhone;
+  const partnerContactPhone = getProfileFieldValue(userProfile, showPapaContact ? 'papaContactPhone' : 'mamaContactPhone');
 
   const quickActions: QuickAction[] = [
-    { icon: Phone, label: '産院', phone: userProfile.hospitalPhone, color: 'bg-rose-100 text-rose-600' },
-    { icon: Stethoscope, label: '小児科', phone: userProfile.pediatricPhone, color: 'bg-blue-100 text-blue-600' },
+    { icon: Phone, label: '産院', phone: getProfileFieldValue(userProfile, 'hospitalPhone'), color: 'bg-rose-100 text-rose-600' },
+    { icon: Stethoscope, label: '小児科', phone: getProfileFieldValue(userProfile, 'pediatricPhone'), color: 'bg-blue-100 text-blue-600' },
     { icon: Building2, label: partnerCompanyLabel, phone: partnerCompanyPhone, color: 'bg-green-100 text-green-600' },
     { icon: Heart, label: partnerContactLabel, phone: partnerContactPhone, color: 'bg-purple-100 text-purple-600' },
   ];
@@ -59,7 +61,7 @@ export default function HomeTab({
         <div className="relative z-10">
           <h2 className="text-sm font-medium opacity-90 mb-1 flex items-center">
             <Heart size={14} className="mr-1 fill-white" />
-            {userProfile.babyName ? `${userProfile.babyName}が生まれてから` : '赤ちゃんが生まれてから'}
+            {babyName ? `${babyName}が生まれてから` : '赤ちゃんが生まれてから'}
           </h2>
           <div className="flex flex-col mt-2">
             <div className="flex items-baseline space-x-1">

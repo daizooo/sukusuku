@@ -1,4 +1,4 @@
-import type { Assignee } from '@/types/app';
+import type { Assignee, ProfileFieldKey, UserProfile } from '@/types/app';
 
 // 担当者ごとのバッジ配色
 export const getAssigneeColor = (assignee: Assignee | string): string => {
@@ -31,4 +31,14 @@ export const isPhoneNumberLike = (value: string): boolean => {
 export const toTelHref = (value: string): string => {
   const digits = toHalfWidthDigits(value.trim()).replace(/[^0-9+]/g, '');
   return `tel:${digits}`;
+};
+
+// 設定タブの各セクションはユーザーが自由に項目を追加・削除できるため、
+// 生後日数の計算やホーム画面のクイック発信のように特定の値を必要とする機能は、
+// 項目の並び順やラベルではなくkey(予約識別子)を頼りに値を探す。
+export const getProfileFieldValue = (profile: UserProfile, key: ProfileFieldKey): string => {
+  const field = [...profile.childFields, ...profile.familyFields, ...profile.emergencyFields].find(
+    (f) => f.key === key,
+  );
+  return field?.value ?? '';
 };
