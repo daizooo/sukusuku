@@ -5,8 +5,8 @@ import {
   Home,
   CalendarDays,
   FileText,
-  Gift as GiftIcon,
-  Folder,
+  StickyNote,
+  Settings,
   Plus,
 } from 'lucide-react';
 
@@ -43,7 +43,7 @@ import {
 import HomeTab from './tabs/HomeTab';
 import ScheduleTab from './tabs/ScheduleTab';
 import LogTab from './tabs/LogTab';
-import GiftTab from './tabs/GiftTab';
+import MemoTab from './tabs/MemoTab';
 import InfoTab from './tabs/InfoTab';
 import AddTaskModal, { type NewTaskDraft } from './modals/AddTaskModal';
 import TaskDetailModal from './modals/TaskDetailModal';
@@ -52,8 +52,8 @@ const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
   { id: 'home', icon: Home, label: 'ホーム' },
   { id: 'schedule', icon: CalendarDays, label: '予定' },
   { id: 'log', icon: FileText, label: '記録' },
-  { id: 'gift', icon: GiftIcon, label: 'お祝い' },
-  { id: 'info', icon: Folder, label: 'ストック' },
+  { id: 'memo', icon: StickyNote, label: 'メモ' },
+  { id: 'info', icon: Settings, label: '設定' },
 ];
 
 const EMPTY_NEW_TASK: NewTaskDraft = {
@@ -306,7 +306,9 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
         {activeTab === 'log' && (
           <LogTab logs={logs} growthData={growthData} onAddLog={addLog} />
         )}
-        {activeTab === 'gift' && <GiftTab gifts={gifts} />}
+        {activeTab === 'memo' && (
+          <MemoTab gifts={gifts} documents={documents} nurseries={nurseries} />
+        )}
         {activeTab === 'info' && (
           <InfoTab
             userProfile={userProfile}
@@ -315,8 +317,6 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
             onStartEditProfile={startEditingProfile}
             onChangeTempProfile={setTempProfile}
             onSaveProfile={handleProfileSave}
-            documents={documents}
-            nurseries={nurseries}
           />
         )}
       </main>

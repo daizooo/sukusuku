@@ -83,4 +83,4 @@ export interface UserProfile {
   address: string;
 }
 
-export type TabId = 'home' | 'schedule' | 'log' | 'gift' | 'info';
+export type TabId = 'home' | 'schedule' | 'log' | 'memo' | 'info';
