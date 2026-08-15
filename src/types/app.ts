@@ -173,5 +173,8 @@ export interface UserProfile {
 
 export type TabId = 'home' | 'schedule' | 'log' | 'memo' | 'info';
 
+// スケジュールタブの表示切り替え。既定は月（カレンダー）。
+export type ScheduleView = 'month' | 'week' | 'day' | 'list';
+
 // ログイン中のユーザーの役割。users.role (Supabase) に対応。未設定の場合はnull。
 export type LoginRole = 'papa' | 'mama' | null;

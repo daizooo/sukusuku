@@ -34,7 +34,7 @@ export const formatDateString = (dateObj: Date | null): string => {
   return `${dateObj.getFullYear()}年${dateObj.getMonth() + 1}月${dateObj.getDate()}日`;
 };
 
-const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
+export const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
 export const formatDateWithWeekday = (dateObj: Date | null): string => {
   if (!dateObj) return '未設定';
@@ -119,4 +119,26 @@ export const REMINDER_OPTIONS: { value: number | null; label: string }[] = [
 export const formatReminder = (minutes: number | null): string => {
   const option = REMINDER_OPTIONS.find((o) => o.value === minutes);
   return option ? option.label : `${minutes}分前`;
+};
+
+// --- カレンダー表示用 ---
+
+// その週の日曜0:00を返す（月グリッド・週表示の起点）
+export const startOfWeek = (date: Date): Date => {
+  const start = startOfDay(date);
+  start.setDate(start.getDate() - start.getDay());
+  return start;
+};
+
+// 月をまたいだ「その月の1日」。月末日の繰り上がりを避けるため日は1で作る。
+export const addMonths = (date: Date, months: number): Date =>
+  new Date(date.getFullYear(), date.getMonth() + months, 1);
+
+export const isSameMonth = (a: Date, b: Date): boolean =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+
+// 日表示の見出し。年が変わるときだけ年を出す。
+export const formatDateHeading = (date: Date, today: Date): string => {
+  const base = formatDateWithWeekday(date);
+  return date.getFullYear() === today.getFullYear() ? base : `${date.getFullYear()}年${base}`;
 };

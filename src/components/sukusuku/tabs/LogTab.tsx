@@ -26,6 +26,7 @@ import type {
   SleepLog,
 } from '@/types/app';
 import {
+  BADGE_TONE_CLASS,
   formatDuration,
   formatStopwatch,
   getLogBadges,
@@ -34,7 +35,6 @@ import {
   getSideLabel,
   isAlertLog,
   summarizeLogs,
-  type BadgeTone,
 } from '@/lib/careLogUtils';
 import {
   addDays,
@@ -97,14 +97,6 @@ const getLogColor = (type: LogType) => {
     default:
       return 'bg-gray-100';
   }
-};
-
-const BADGE_CLASS: Record<BadgeTone, string> = {
-  milk: 'bg-amber-100 text-amber-800 font-bold',
-  diaper: 'bg-blue-100 text-blue-700',
-  sleep: 'bg-indigo-100 text-indigo-700 font-bold',
-  alert: 'bg-red-100 text-red-700 font-bold',
-  neutral: 'bg-gray-100 text-gray-600',
 };
 
 export default function LogTab({
@@ -354,7 +346,7 @@ export default function LogTab({
                           {badges.map((badge) => (
                             <span
                               key={badge.text}
-                              className={`text-[11px] px-2 py-0.5 rounded flex items-center tabular-nums ${BADGE_CLASS[badge.tone]}`}
+                              className={`text-[11px] px-2 py-0.5 rounded flex items-center tabular-nums ${BADGE_TONE_CLASS[badge.tone]}`}
                             >
                               {badge.swatch && (
                                 <span

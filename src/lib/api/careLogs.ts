@@ -134,15 +134,15 @@ const careLogToAmount = (log: CareLog): string => {
   return minutes >= 60 ? `${Math.floor(minutes / 60)}時間${minutes % 60}分` : `${minutes}分`;
 };
 
-// 指定した1日分（ローカルタイムの 0:00 〜 翌0:00）の記録を取得する。
-// 記録は日数が経つほど増えていくため、全件ではなく表示する日だけを取りに行く。
-export async function listCareLogsByDate(
+// 指定した期間（from 以上 to 未満）の記録を取得する。
+// 記録は日数が経つほど増えていくため、全件ではなく表示する範囲だけを取りに行く。
+// カレンダーの日表示・週表示もこれを使う（1日=20件前後、1週=150件前後）。
+export async function listCareLogsInRange(
   supabase: SupabaseDb,
   familyId: string,
-  date: Date,
+  from: Date,
+  to: Date,
 ): Promise<CareLog[]> {
-  const from = startOfDay(date);
-  const to = addDays(from, 1);
   const { data, error } = await supabase
     .from('care_logs')
     .select('*')
@@ -152,6 +152,16 @@ export async function listCareLogsByDate(
     .order('logged_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(rowToCareLog);
+}
+
+/** 指定した1日分（ローカルタイムの 0:00 〜 翌0:00）の記録。 */
+export async function listCareLogsByDate(
+  supabase: SupabaseDb,
+  familyId: string,
+  date: Date,
+): Promise<CareLog[]> {
+  const from = startOfDay(date);
+  return listCareLogsInRange(supabase, familyId, from, addDays(from, 1));
 }
 
 /** 計測中の睡眠（起床時刻が未確定のもの）を1件だけ取り出す。表示中の日に関わらず探す。 */

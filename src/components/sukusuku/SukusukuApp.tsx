@@ -23,6 +23,7 @@ import type {
   GrowthRecord,
   LoginRole,
   Nursery,
+  ScheduleView,
   Task,
   TabId,
   UserProfile,
@@ -30,11 +31,13 @@ import type {
 import { INITIAL_PROFILE } from '@/lib/seedData';
 import { getProfileFieldValue } from '@/lib/uiUtils';
 import {
+  addDays,
   calculateTargetDate,
   formatDateString,
   isSameDay,
   parseDateString,
   startOfDay,
+  startOfWeek,
   toDateString,
 } from '@/lib/dateUtils';
 import { createClient } from '@/lib/supabase/client';
@@ -51,6 +54,7 @@ import {
   findActiveSleepCareLog,
   insertCareLog,
   listCareLogsByDate,
+  listCareLogsInRange,
   updateCareLog as updateCareLogApi,
 } from '@/lib/api/careLogs';
 import { getNextBreastSide, isActiveSleepLog } from '@/lib/careLogUtils';
@@ -177,7 +181,14 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
 
   const [newTask, setNewTask] = useState<TaskDraft>(() => emptyTaskDraft(today));
 
+  // --- スケジュール（カレンダー） ---
+  // 既定は月表示。日をタップすると日表示へ移り、そこで予定と育児記録を合わせて見る。
+  const [scheduleView, setScheduleView] = useState<ScheduleView>('month');
   const [currentCalendarDate, setCurrentCalendarDate] = useState(today);
+  const [selectedScheduleDate, setSelectedScheduleDate] = useState(today);
+  // 週表示・日表示に出す育児記録。記録タブの1日分(logs)とは表示範囲が違うため別に持つ。
+  const [scheduleLogs, setScheduleLogs] = useState<CareLog[]>([]);
+  const [loadedScheduleLogFrom, setLoadedScheduleLogFrom] = useState<number | null>(null);
 
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -223,6 +234,51 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
       cancelled = true;
     };
   }, [supabase, familyId, logDate]);
+
+  // カレンダーの週表示・日表示に出す育児記録。表示中の範囲だけを取りに行く。
+  // 月表示は記録を出さないため、月をめくっても問い合わせは起きない。
+  const scheduleLogRange = useMemo(() => {
+    if (activeTab !== 'schedule') return null;
+    if (scheduleView === 'day') {
+      const from = startOfDay(selectedScheduleDate);
+      return { from, to: addDays(from, 1) };
+    }
+    if (scheduleView === 'week') {
+      const from = startOfWeek(selectedScheduleDate);
+      return { from, to: addDays(from, 7) };
+    }
+    return null;
+  }, [activeTab, scheduleView, selectedScheduleDate]);
+
+  // 範囲が変わったときだけ取り直す（週表示で同じ週の中の日を選び直しても再取得しない）。
+  // これから来る日には記録が存在しないため、未来だけの範囲は問い合わせない。
+  const scheduleLogFrom = scheduleLogRange?.from.getTime() ?? null;
+  const scheduleLogTo = scheduleLogRange?.to.getTime() ?? null;
+  const needsScheduleLogs = scheduleLogFrom !== null && scheduleLogTo !== null && scheduleLogFrom <= today.getTime();
+  // 取得済みの範囲。表示中の範囲と一致していなければ読み込み中とみなす（記録タブと同じ考え方）。
+  const isScheduleLogsLoaded = loadedScheduleLogFrom === scheduleLogFrom;
+  const visibleScheduleLogs = needsScheduleLogs && isScheduleLogsLoaded ? scheduleLogs : [];
+  const isLoadingScheduleLogs = needsScheduleLogs && !isScheduleLogsLoaded;
+
+  useEffect(() => {
+    if (!needsScheduleLogs || scheduleLogFrom === null || scheduleLogTo === null) return;
+    let cancelled = false;
+    listCareLogsInRange(supabase, familyId, new Date(scheduleLogFrom), new Date(scheduleLogTo))
+      .then((data) => {
+        if (!cancelled) setScheduleLogs(data);
+      })
+      .catch((err) => {
+        console.error('Failed to load care logs for calendar:', err);
+        if (!cancelled) setScheduleLogs([]);
+      })
+      .finally(() => {
+        // 成功・失敗どちらでも「この範囲は取得済み」にして読み込み表示を終わらせる
+        if (!cancelled) setLoadedScheduleLogFrom(scheduleLogFrom);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, familyId, needsScheduleLogs, scheduleLogFrom, scheduleLogTo]);
 
   // 計測中の睡眠を読み込む。アプリを閉じている間に通知の「起きた」が押されていたら、その時刻で確定させる。
   useEffect(() => {
@@ -510,6 +566,18 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
     }
   };
 
+  // カレンダーで選んでいる日を初期値にして予定を追加する。
+  const openAddTaskModal = (date: Date) => {
+    setNewTask(emptyTaskDraft(date));
+    setShowAddModal(true);
+  };
+
+  // カレンダーの日表示から、その日の記録タブへ移る。
+  const openLogTabForDate = (date: Date) => {
+    setLogDate(startOfDay(date));
+    setActiveTab('log');
+  };
+
   // --- 育児記録 ---
 
   // 記録の追加・更新を画面の状態へ反映する。表示中の日以外の記録は一覧から外す。
@@ -522,6 +590,8 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
       });
       // 計測中の睡眠は日をまたいで表示するため、一覧とは別に持つ。
       setActiveSleep((prev) => (isActiveSleepLog(log) ? log : prev?.id === log.id ? null : prev));
+      // カレンダー側は別途取得しているため、取得済みの印を落として次に開いたときに取り直させる。
+      setLoadedScheduleLogFrom(null);
     },
     [logDate],
   );
@@ -562,6 +632,7 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
     const previous = logs;
     setLogs((prev) => prev.filter((l) => l.id !== id));
     setActiveSleep((prev) => (prev?.id === id ? null : prev));
+    setLoadedScheduleLogFrom(null);
     try {
       await deleteCareLog(supabase, id);
     } catch (err) {
@@ -817,10 +888,19 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
               dynamicTodos={dynamicTodos}
               isLoadingTodos={isLoadingTasks}
               today={today}
+              birthDate={birthDateValue}
+              view={scheduleView}
+              onChangeView={setScheduleView}
+              selectedDate={selectedScheduleDate}
+              onChangeSelectedDate={setSelectedScheduleDate}
               currentCalendarDate={currentCalendarDate}
               onChangeCalendarDate={setCurrentCalendarDate}
+              careLogs={visibleScheduleLogs}
+              isLoadingCareLogs={isLoadingScheduleLogs}
               onToggleTodo={toggleTodo}
               onOpenTask={openTaskDetail}
+              onAddTask={openAddTaskModal}
+              onOpenLogTab={openLogTabForDate}
             />
           )}
           {activeTab === 'log' && (
@@ -881,7 +961,7 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
 
         {activeTab === 'schedule' && (
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => openAddTaskModal(selectedScheduleDate)}
             className="absolute bottom-[calc(4rem+env(safe-area-inset-bottom)+1rem)] right-4 md:bottom-8 md:right-8 w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-all active:scale-95 z-20"
           >
             <Plus size={28} />
