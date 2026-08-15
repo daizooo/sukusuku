@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { ChevronRight, Coffee, Droplet, Moon } from 'lucide-react';
 import type { CareLog } from '@/types/app';
 import {
@@ -46,6 +47,8 @@ export function CareLogSummaryLine({ logs }: CareLogSummaryProps) {
 interface CareLogSectionProps {
   logs: CareLog[];
   isLoading?: boolean;
+  /** 合計の上に置く24時間の帯。前夜から続く睡眠も含むため、記録の一覧とは別に受け取る。 */
+  timeline?: ReactNode;
   onOpenLogTab: () => void;
 }
 
@@ -53,7 +56,7 @@ interface CareLogSectionProps {
  * 日表示に出す育児記録。ここでは閲覧だけを行い、追加・編集は記録タブに任せる
  * （同じ入力導線を2か所に置かないため）。
  */
-export default function CareLogSection({ logs, isLoading, onOpenLogTab }: CareLogSectionProps) {
+export default function CareLogSection({ logs, isLoading, timeline, onOpenLogTab }: CareLogSectionProps) {
   // 記録タブは最新が上だが、1日の流れを追う面なので古い順に並べる。
   const ordered = [...logs].sort((a, b) => a.time.getTime() - b.time.getTime());
 
@@ -70,6 +73,7 @@ export default function CareLogSection({ logs, isLoading, onOpenLogTab }: CareLo
         <p className="text-sm text-gray-400 text-center py-4">読み込み中...</p>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 space-y-2">
+          {timeline}
           <CareLogSummaryLine logs={logs} />
 
           {ordered.length > 0 && (
