@@ -270,6 +270,8 @@ export default function ScheduleTab({
           <ListView
             tasks={filteredTodos}
             isLoading={isLoadingTodos}
+            today={today}
+            birthDate={birthDate}
             onToggleTodo={onToggleTodo}
             onOpenTask={onOpenTask}
           />
