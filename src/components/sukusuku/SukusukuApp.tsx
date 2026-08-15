@@ -130,7 +130,7 @@ const emptyTaskDraft = (date: Date): TaskDraft => ({
 
 const parseNullableNumber = (value: string): number | null => (value === '' ? null : Number(value));
 
-// 週表示の帯で、範囲の頭にかかる前夜の睡眠を取りこぼさないための遡り幅。
+// 週表示・日表示の帯で、範囲の頭にかかる前夜の睡眠を取りこぼさないための遡り幅。
 const SLEEP_LOOKBACK_MS = 12 * 60 * 60 * 1000;
 
 interface SukusukuAppProps {
@@ -191,7 +191,7 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
   const [selectedScheduleDate, setSelectedScheduleDate] = useState(today);
   // 週表示・日表示に出す育児記録。記録タブの1日分(logs)とは表示範囲が違うため別に持つ。
   const [scheduleLogs, setScheduleLogs] = useState<CareLog[]>([]);
-  const [loadedScheduleLogFrom, setLoadedScheduleLogFrom] = useState<number | null>(null);
+  const [loadedScheduleLogRange, setLoadedScheduleLogRange] = useState<string | null>(null);
 
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -242,15 +242,14 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
   // 月表示は記録を出さないため、月をめくっても問い合わせは起きない。
   const scheduleLogRange = useMemo(() => {
     if (activeTab !== 'schedule') return null;
+    // 睡眠は寝始めの時刻で絞り込まれるため、範囲の頭を半日ぶん広げないと、
+    // 24時間の帯に出す「前夜から続く睡眠」が抜ける（一覧はその日のぶんに絞って出す）。
     if (scheduleView === 'day') {
-      // 日表示は取得した記録をそのまま並べるため、範囲は広げない。
       const from = startOfDay(selectedScheduleDate);
-      return { from, queryFrom: from, to: addDays(from, 1) };
+      return { from, queryFrom: new Date(from.getTime() - SLEEP_LOOKBACK_MS), to: addDays(from, 1) };
     }
     if (scheduleView === 'week') {
       const from = startOfWeek(selectedScheduleDate);
-      // 週表示は睡眠を24時間の帯で描く。睡眠は寝始めの時刻で絞り込まれるため、
-      // 範囲の頭を半日ぶん広げないと、週の初日の朝にかかる前夜の睡眠が抜ける。
       return { from, queryFrom: new Date(from.getTime() - SLEEP_LOOKBACK_MS), to: addDays(from, 7) };
     }
     return null;
@@ -263,12 +262,16 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
   const scheduleLogTo = scheduleLogRange?.to.getTime() ?? null;
   const needsScheduleLogs = scheduleLogFrom !== null && scheduleLogTo !== null && scheduleLogFrom <= today.getTime();
   // 取得済みの範囲。表示中の範囲と一致していなければ読み込み中とみなす（記録タブと同じ考え方）。
-  const isScheduleLogsLoaded = loadedScheduleLogFrom === scheduleLogFrom;
+  // 週の初日を日表示で開くと頭の時刻が週表示と同じになるため、終わりも含めて見分ける。
+  const scheduleLogRangeKey =
+    scheduleLogQueryFrom === null || scheduleLogTo === null ? null : `${scheduleLogQueryFrom}-${scheduleLogTo}`;
+  const isScheduleLogsLoaded = loadedScheduleLogRange === scheduleLogRangeKey;
   const visibleScheduleLogs = needsScheduleLogs && isScheduleLogsLoaded ? scheduleLogs : [];
   const isLoadingScheduleLogs = needsScheduleLogs && !isScheduleLogsLoaded;
 
   useEffect(() => {
-    if (!needsScheduleLogs || scheduleLogFrom === null || scheduleLogQueryFrom === null || scheduleLogTo === null) return;
+    if (!needsScheduleLogs || scheduleLogQueryFrom === null || scheduleLogTo === null || scheduleLogRangeKey === null)
+      return;
     let cancelled = false;
     listCareLogsInRange(supabase, familyId, new Date(scheduleLogQueryFrom), new Date(scheduleLogTo))
       .then((data) => {
@@ -280,12 +283,12 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
       })
       .finally(() => {
         // 成功・失敗どちらでも「この範囲は取得済み」にして読み込み表示を終わらせる
-        if (!cancelled) setLoadedScheduleLogFrom(scheduleLogFrom);
+        if (!cancelled) setLoadedScheduleLogRange(scheduleLogRangeKey);
       });
     return () => {
       cancelled = true;
     };
-  }, [supabase, familyId, needsScheduleLogs, scheduleLogFrom, scheduleLogQueryFrom, scheduleLogTo]);
+  }, [supabase, familyId, needsScheduleLogs, scheduleLogQueryFrom, scheduleLogTo, scheduleLogRangeKey]);
 
   // 計測中の睡眠を読み込む。アプリを閉じている間に通知の「起きた」が押されていたら、その時刻で確定させる。
   useEffect(() => {
@@ -598,7 +601,7 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
       // 計測中の睡眠は日をまたいで表示するため、一覧とは別に持つ。
       setActiveSleep((prev) => (isActiveSleepLog(log) ? log : prev?.id === log.id ? null : prev));
       // カレンダー側は別途取得しているため、取得済みの印を落として次に開いたときに取り直させる。
-      setLoadedScheduleLogFrom(null);
+      setLoadedScheduleLogRange(null);
     },
     [logDate],
   );
@@ -639,7 +642,7 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
     const previous = logs;
     setLogs((prev) => prev.filter((l) => l.id !== id));
     setActiveSleep((prev) => (prev?.id === id ? null : prev));
-    setLoadedScheduleLogFrom(null);
+    setLoadedScheduleLogRange(null);
     try {
       await deleteCareLog(supabase, id);
     } catch (err) {

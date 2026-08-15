@@ -2,9 +2,12 @@
 
 import { Plus } from 'lucide-react';
 import type { CareLog, DynamicTask } from '@/types/app';
+import { isSameDay } from '@/lib/dateUtils';
 import { formatBabyAgeAt, getMilestoneLabel } from '@/lib/milestones';
 import TaskRow from './TaskRow';
 import CareLogSection from './CareLogSection';
+import DayTimeline from './DayTimeline';
+import { useTimelineNow } from './useTimelineNow';
 
 interface DayViewProps {
   date: Date;
@@ -12,6 +15,7 @@ interface DayViewProps {
   /** その日の予定（時刻順に並べ済み）。 */
   tasks: DynamicTask[];
   birthDate: string;
+  /** 表示中の範囲の記録。前夜から続く睡眠を帯に出すため、その日のぶんに絞らず渡す。 */
   careLogs: CareLog[];
   isLoadingCareLogs?: boolean;
   onToggleTodo: (id: string) => void;
@@ -37,6 +41,10 @@ export default function DayView({
   const milestone = getMilestoneLabel(birthDate, date);
   // 未来の日には記録が存在しないため、記録の枠自体を出さない。
   const isPastOrToday = date.getTime() <= today.getTime();
+  // 一覧と合計はその日のぶんだけ。前夜から続く睡眠は帯の中でこの日のぶんに切り分ける。
+  const dayLogs = careLogs.filter((log) => isSameDay(log.time, date));
+  // 計測中の睡眠は現在時刻まで伸ばすため、分ごとに描き直す。
+  const now = useTimelineNow(careLogs);
 
   return (
     <div className="space-y-5">
@@ -72,7 +80,12 @@ export default function DayView({
       </section>
 
       {isPastOrToday && (
-        <CareLogSection logs={careLogs} isLoading={isLoadingCareLogs} onOpenLogTab={() => onOpenLogTab(date)} />
+        <CareLogSection
+          logs={dayLogs}
+          isLoading={isLoadingCareLogs}
+          timeline={<DayTimeline logs={careLogs} day={date} now={now ?? today} variant="day" />}
+          onOpenLogTab={() => onOpenLogTab(date)}
+        />
       )}
     </div>
   );
