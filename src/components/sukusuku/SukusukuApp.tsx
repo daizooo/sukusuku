@@ -860,11 +860,9 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
         </div>
       </nav>
 
-      <div className="flex flex-col flex-1 min-w-0 relative">
-        <header className="flex-none bg-white px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 flex flex-col items-center justify-center shadow-sm z-10 relative md:hidden">
-          <h1 className="font-bold text-gray-800 tracking-wide text-lg">すくすく手帳</h1>
-        </header>
-
+      {/* アプリを開いたあとはタブごとの見出しがあるため、アプリ名の見出しは出さない。
+          画面の高さをできるだけ本文に使う（各タブは画面全体をスクロールさせない作り）。 */}
+      <div className="flex flex-col flex-1 min-w-0 relative pt-[env(safe-area-inset-top)]">
         {taskError && (
           <p className="flex-none bg-red-50 text-red-600 text-xs text-center py-2 px-4 border-b border-red-100">{taskError}</p>
         )}

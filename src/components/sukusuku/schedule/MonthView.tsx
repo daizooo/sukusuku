@@ -25,12 +25,17 @@ interface MonthViewProps {
   onOpenTask: (task: DynamicTask) => void;
 }
 
-// 1マスに出す予定の数。これを超えたぶんは「+n」にまとめる。
-const MAX_CHIPS = 3;
+// 1マスに出す予定の数。画面の高さに収める必要があるため、狭い画面では2件までにする。
+// これを超えたぶんは「+n件」にまとめる。
+const CHIPS_NARROW = 2;
+const CHIPS_WIDE = 3;
 
 /**
  * 月グリッド。予定はタイトル入りのチップで積み、育児記録はここには出さない
  * （月表示は予定を見渡すための面。記録は日をタップした先で見る）。
+ *
+ * 高さは親から与えられたぶんを週の数で等分する。画面全体をスクロールさせないため、
+ * マスに入りきらない予定は「+n件」に寄せる。
  */
 export default function MonthView({
   month,
@@ -50,8 +55,8 @@ export default function MonthView({
   const days = Array.from({ length: weekCount * 7 }, (_, i) => addDays(gridStart, i));
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="grid grid-cols-7 border-b border-gray-100">
+    <div className="h-full flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="grid grid-cols-7 border-b border-gray-100 flex-none">
         {WEEKDAY_LABELS.map((d, i) => (
           <div
             key={d}
@@ -62,7 +67,10 @@ export default function MonthView({
         ))}
       </div>
 
-      <div className="grid grid-cols-7 auto-rows-[minmax(4.75rem,auto)]">
+      <div
+        className="flex-1 min-h-0 grid grid-cols-7"
+        style={{ gridTemplateRows: `repeat(${weekCount}, minmax(0, 1fr))` }}
+      >
         {days.map((date) => {
           const dayTasks = tasksOnDate(tasks, date);
           const isToday = isSameDay(date, today);
@@ -83,7 +91,7 @@ export default function MonthView({
                   onSelectDate(date);
                 }
               }}
-              className={`border-r border-b border-gray-100 [&:nth-child(7n)]:border-r-0 px-1 pt-1 pb-1.5 text-left cursor-pointer transition ${
+              className={`min-w-0 overflow-hidden border-r border-b border-gray-100 [&:nth-child(7n)]:border-r-0 px-1 pt-1 pb-1 text-left cursor-pointer transition ${
                 isSelected ? 'bg-blue-50/70 ring-1 ring-inset ring-blue-400' : 'hover:bg-gray-50'
               } ${isOtherMonth ? 'bg-gray-50/60' : ''}`}
             >
@@ -110,7 +118,7 @@ export default function MonthView({
               )}
 
               <div className="mt-0.5 space-y-0.5">
-                {dayTasks.slice(0, MAX_CHIPS).map((task) => (
+                {dayTasks.slice(0, CHIPS_WIDE).map((task, i) => (
                   <button
                     key={task.id}
                     onClick={(e) => {
@@ -119,13 +127,22 @@ export default function MonthView({
                     }}
                     className={`w-full text-left text-[9px] leading-tight px-1 py-0.5 rounded border truncate ${
                       task.done ? 'bg-gray-100 text-gray-400 border-gray-200 line-through' : getLabelColor(task.label)
-                    } ${isOtherMonth ? 'opacity-50' : ''}`}
+                    } ${isOtherMonth ? 'opacity-50' : ''} ${i >= CHIPS_NARROW ? 'hidden md:block' : ''}`}
                   >
                     {task.title}
                   </button>
                 ))}
-                {dayTasks.length > MAX_CHIPS && (
-                  <p className="text-[9px] leading-tight text-gray-400 px-1">+{dayTasks.length - MAX_CHIPS}件</p>
+                {dayTasks.length > CHIPS_NARROW && (
+                  <p
+                    className={`text-[9px] leading-tight text-gray-400 px-1 ${
+                      dayTasks.length <= CHIPS_WIDE ? 'md:hidden' : ''
+                    }`}
+                  >
+                    <span className="md:hidden">+{dayTasks.length - CHIPS_NARROW}件</span>
+                    {dayTasks.length > CHIPS_WIDE && (
+                      <span className="hidden md:inline">+{dayTasks.length - CHIPS_WIDE}件</span>
+                    )}
+                  </p>
                 )}
               </div>
             </div>

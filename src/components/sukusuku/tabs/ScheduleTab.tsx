@@ -122,8 +122,8 @@ export default function ScheduleTab({
     .sort(byDateThenTime)[0]?.targetDateObj;
 
   return (
-    <div className="h-full overflow-y-auto p-4 md:max-w-3xl lg:max-w-4xl md:mx-auto md:w-full">
-      <div className="flex justify-between items-center mb-3">
+    <div className="p-4 h-full flex flex-col md:max-w-3xl lg:max-w-4xl md:mx-auto md:w-full">
+      <div className="flex justify-between items-center mb-3 flex-none">
         <h2 className="text-xl font-bold text-gray-800">スケジュール</h2>
         <div className="flex bg-gray-200 p-1 rounded-lg">
           {VIEW_TABS.map((tab) => (
@@ -140,7 +140,7 @@ export default function ScheduleTab({
         </div>
       </div>
 
-      <div className="flex space-x-2 mb-3 overflow-x-auto pb-2">
+      <div className="flex space-x-2 mb-3 overflow-x-auto pb-2 flex-none">
         <span className="flex items-center text-gray-500 text-xs font-medium mr-1">
           <Filter size={14} />
         </span>
@@ -162,7 +162,7 @@ export default function ScheduleTab({
       </div>
 
       {view !== 'list' && (
-        <div className="flex items-center justify-between mb-3 bg-white p-2 rounded-xl shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between mb-3 bg-white p-2 rounded-xl shadow-sm border border-gray-100 flex-none">
           <button onClick={() => step(-1)} className="p-2 text-gray-600" aria-label="前へ">
             <ChevronLeft size={20} />
           </button>
@@ -210,7 +210,7 @@ export default function ScheduleTab({
       )}
 
       {view === 'month' && (
-        <>
+        <div className="flex-1 min-h-0 flex flex-col">
           <MonthView
             month={monthStart}
             today={today}
@@ -223,54 +223,58 @@ export default function ScheduleTab({
           {!isLoadingTodos && tasksInMonth.length === 0 && nextMonthWithTask && (
             <button
               onClick={() => onChangeCalendarDate(new Date(nextMonthWithTask.getFullYear(), nextMonthWithTask.getMonth(), 1))}
-              className="w-full mt-3 py-2.5 text-sm text-blue-600 font-medium bg-white rounded-xl border border-gray-100 shadow-sm flex items-center justify-center"
+              className="flex-none w-full mt-3 py-2.5 text-sm text-blue-600 font-medium bg-white rounded-xl border border-gray-100 shadow-sm flex items-center justify-center"
             >
               <CornerDownRight size={14} className="mr-1.5" />
               次に予定がある月へ ({nextMonthWithTask.getFullYear()}年{nextMonthWithTask.getMonth() + 1}月)
             </button>
           )}
-        </>
+        </div>
       )}
 
       {view === 'week' && (
-        <WeekView
-          date={selectedDate}
-          today={today}
-          tasks={filteredTodos}
-          birthDate={birthDate}
-          careLogs={careLogs}
-          isLoadingCareLogs={isLoadingCareLogs}
-          onSelectDate={(date) => selectDate(date)}
-          onToggleTodo={onToggleTodo}
-          onOpenTask={onOpenTask}
-        />
+        <div className="flex-1 min-h-0 overflow-y-auto pb-24">
+          <WeekView
+            date={selectedDate}
+            today={today}
+            tasks={filteredTodos}
+            birthDate={birthDate}
+            careLogs={careLogs}
+            isLoadingCareLogs={isLoadingCareLogs}
+            onSelectDate={(date) => selectDate(date)}
+            onToggleTodo={onToggleTodo}
+            onOpenTask={onOpenTask}
+          />
+        </div>
       )}
 
       {view === 'day' && (
-        <DayView
-          date={selectedDate}
-          today={today}
-          tasks={tasksOnDate(filteredTodos, selectedDate)}
-          birthDate={birthDate}
-          careLogs={careLogs}
-          isLoadingCareLogs={isLoadingCareLogs}
-          onToggleTodo={onToggleTodo}
-          onOpenTask={onOpenTask}
-          onAddTask={onAddTask}
-          onOpenLogTab={onOpenLogTab}
-        />
+        <div className="flex-1 min-h-0 overflow-y-auto pb-24">
+          <DayView
+            date={selectedDate}
+            today={today}
+            tasks={tasksOnDate(filteredTodos, selectedDate)}
+            birthDate={birthDate}
+            careLogs={careLogs}
+            isLoadingCareLogs={isLoadingCareLogs}
+            onToggleTodo={onToggleTodo}
+            onOpenTask={onOpenTask}
+            onAddTask={onAddTask}
+            onOpenLogTab={onOpenLogTab}
+          />
+        </div>
       )}
 
       {view === 'list' && (
-        <ListView
-          tasks={filteredTodos}
-          isLoading={isLoadingTodos}
-          onToggleTodo={onToggleTodo}
-          onOpenTask={onOpenTask}
-        />
+        <div className="flex-1 min-h-0 overflow-y-auto pb-24">
+          <ListView
+            tasks={filteredTodos}
+            isLoading={isLoadingTodos}
+            onToggleTodo={onToggleTodo}
+            onOpenTask={onOpenTask}
+          />
+        </div>
       )}
-
-      <div className="h-20" />
     </div>
   );
 }
