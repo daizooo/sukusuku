@@ -256,7 +256,7 @@ export default function MemoTab({
       </div>
 
       <GiftFormModal
-        key={giftModal ? `${giftModal.mode}-${giftModal.gift?.id ?? 'new'}` : 'none'}
+        key={`gift-${giftModal ? `${giftModal.mode}-${giftModal.gift?.id ?? 'new'}` : 'none'}`}
         mode={giftModal?.mode ?? null}
         gift={giftModal?.gift ?? null}
         onClose={() => setGiftModal(null)}
@@ -282,7 +282,7 @@ export default function MemoTab({
         }}
       />
       <NurseryFormModal
-        key={nurseryModal ? `${nurseryModal.mode}-${nurseryModal.nursery?.id ?? 'new'}` : 'none'}
+        key={`nursery-${nurseryModal ? `${nurseryModal.mode}-${nurseryModal.nursery?.id ?? 'new'}` : 'none'}`}
         mode={nurseryModal?.mode ?? null}
         nursery={nurseryModal?.nursery ?? null}
         onClose={() => setNurseryModal(null)}
