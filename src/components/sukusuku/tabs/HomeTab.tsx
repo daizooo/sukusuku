@@ -59,8 +59,8 @@ export default function HomeTab({
   ];
 
   return (
-    <div className="p-4 space-y-6 h-full overflow-y-auto md:max-w-2xl lg:max-w-3xl md:mx-auto">
-      <div className="bg-gradient-to-br from-blue-500 via-blue-400 to-teal-300 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+    <div className="p-4 h-full flex flex-col space-y-4 md:max-w-2xl lg:max-w-3xl md:mx-auto">
+      <div className="flex-none bg-gradient-to-br from-blue-500 via-blue-400 to-teal-300 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl -mr-10 -mt-10" />
         <Baby className="absolute -right-2 -bottom-2 w-32 h-32 text-white opacity-20 drop-shadow-md" />
         <div className="relative z-10">
@@ -98,7 +98,7 @@ export default function HomeTab({
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 gap-3 flex-none">
         {quickActions.map((item) =>
           item.phone ? (
             <a
@@ -126,14 +126,14 @@ export default function HomeTab({
         )}
       </div>
 
-      <div>
-        <div className="flex justify-between items-end mb-3">
+      <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex justify-between items-end mb-3 flex-none">
           <h3 className="text-gray-800 font-bold text-lg">直近のスケジュール</h3>
           <button onClick={onViewAllSchedule} className="text-blue-500 text-sm font-medium flex items-center">
             すべて見る <ChevronRight size={16} />
           </button>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50">
+        <div className="min-h-0 overflow-y-auto bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50">
           {isLoadingTodos && <p className="p-4 text-sm text-gray-400 text-center">読み込み中...</p>}
           {!isLoadingTodos && upcomingTasks.length === 0 && (
             <p className="p-4 text-sm text-gray-400 text-center">直近の予定はありません</p>

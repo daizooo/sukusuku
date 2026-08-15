@@ -184,6 +184,15 @@ export const getLogBadges = (log: CareLog): LogBadge[] => {
   }
 };
 
+/** バッジの配色。記録タブとカレンダーの日表示で共通して使う。 */
+export const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
+  milk: 'bg-amber-100 text-amber-800 font-bold',
+  diaper: 'bg-blue-100 text-blue-700',
+  sleep: 'bg-indigo-100 text-indigo-700 font-bold',
+  alert: 'bg-red-100 text-red-700 font-bold',
+  neutral: 'bg-gray-100 text-gray-600',
+};
+
 /** カード全体を強調するか（白・赤・黒の便）。 */
 export const isAlertLog = (log: CareLog): boolean =>
   log.type === 'diaper' && needsMedicalAttention(log.poopColor);
