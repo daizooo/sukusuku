@@ -1,10 +1,12 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import type { CareLog, DynamicTask } from '@/types/app';
 import { WEEKDAY_LABELS, addDays, isSameDay, startOfWeek } from '@/lib/dateUtils';
 import { getMilestoneLabel } from '@/lib/milestones';
 import TaskRow from './TaskRow';
 import { CareLogSummaryLine } from './CareLogSection';
+import DayTimeline from './DayTimeline';
 import { tasksOnDate } from './utils';
 
 interface WeekViewProps {
@@ -39,8 +41,30 @@ export default function WeekView({
   const start = startOfWeek(date);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
 
+  // 計測中の睡眠は現在時刻まで伸ばすため、分ごとに描き直す。
+  // 最初の描画では持たず（サーバー側の描画と食い違わせない）、
+  // 時刻が分かるまで確定していない帯は描かない。
+  const [now, setNow] = useState<Date | null>(null);
+  const hasActiveSleep = careLogs.some((log) => log.type === 'sleep' && log.endedAt === null);
+  useEffect(() => {
+    if (!hasActiveSleep) return;
+    const update = () => setNow(new Date());
+    update();
+    const timer = setInterval(update, 60000);
+    return () => clearInterval(timer);
+  }, [hasActiveSleep]);
+
   return (
     <div className="space-y-3">
+      {/* 帯の目盛り。7日ぶんの帯に共通するので、上に1本だけ置く。
+          記録がなく帯が1本も出ない週（これから来る週など）では出さない。 */}
+      {careLogs.length > 0 && !isLoadingCareLogs && (
+        <div className="flex justify-between px-1 text-[10px] text-gray-400 tabular-nums">
+          {[0, 6, 12, 18, 24].map((hour) => (
+            <span key={hour}>{hour}時</span>
+          ))}
+        </div>
+      )}
       {days.map((day) => {
         const dayTasks = tasksOnDate(tasks, day);
         const dayLogs = careLogs.filter((log) => isSameDay(log.time, day));
@@ -84,7 +108,9 @@ export default function WeekView({
             )}
 
             {isPastOrToday && !isLoadingCareLogs && (
-              <div className="mt-1.5 px-1">
+              <div className="mt-1.5 px-1 space-y-1">
+                {/* 帯には前夜から続く睡眠も入るため、その日のぶんに絞らず渡す。 */}
+                <DayTimeline logs={careLogs} day={day} now={now ?? today} />
                 <CareLogSummaryLine logs={dayLogs} />
               </div>
             )}

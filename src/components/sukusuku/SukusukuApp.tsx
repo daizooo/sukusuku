@@ -130,6 +130,9 @@ const emptyTaskDraft = (date: Date): TaskDraft => ({
 
 const parseNullableNumber = (value: string): number | null => (value === '' ? null : Number(value));
 
+// 週表示の帯で、範囲の頭にかかる前夜の睡眠を取りこぼさないための遡り幅。
+const SLEEP_LOOKBACK_MS = 12 * 60 * 60 * 1000;
+
 interface SukusukuAppProps {
   familyId: string;
   userId: string;
@@ -240,12 +243,15 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
   const scheduleLogRange = useMemo(() => {
     if (activeTab !== 'schedule') return null;
     if (scheduleView === 'day') {
+      // 日表示は取得した記録をそのまま並べるため、範囲は広げない。
       const from = startOfDay(selectedScheduleDate);
-      return { from, to: addDays(from, 1) };
+      return { from, queryFrom: from, to: addDays(from, 1) };
     }
     if (scheduleView === 'week') {
       const from = startOfWeek(selectedScheduleDate);
-      return { from, to: addDays(from, 7) };
+      // 週表示は睡眠を24時間の帯で描く。睡眠は寝始めの時刻で絞り込まれるため、
+      // 範囲の頭を半日ぶん広げないと、週の初日の朝にかかる前夜の睡眠が抜ける。
+      return { from, queryFrom: new Date(from.getTime() - SLEEP_LOOKBACK_MS), to: addDays(from, 7) };
     }
     return null;
   }, [activeTab, scheduleView, selectedScheduleDate]);
@@ -253,6 +259,7 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
   // 範囲が変わったときだけ取り直す（週表示で同じ週の中の日を選び直しても再取得しない）。
   // これから来る日には記録が存在しないため、未来だけの範囲は問い合わせない。
   const scheduleLogFrom = scheduleLogRange?.from.getTime() ?? null;
+  const scheduleLogQueryFrom = scheduleLogRange?.queryFrom.getTime() ?? null;
   const scheduleLogTo = scheduleLogRange?.to.getTime() ?? null;
   const needsScheduleLogs = scheduleLogFrom !== null && scheduleLogTo !== null && scheduleLogFrom <= today.getTime();
   // 取得済みの範囲。表示中の範囲と一致していなければ読み込み中とみなす（記録タブと同じ考え方）。
@@ -261,9 +268,9 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
   const isLoadingScheduleLogs = needsScheduleLogs && !isScheduleLogsLoaded;
 
   useEffect(() => {
-    if (!needsScheduleLogs || scheduleLogFrom === null || scheduleLogTo === null) return;
+    if (!needsScheduleLogs || scheduleLogFrom === null || scheduleLogQueryFrom === null || scheduleLogTo === null) return;
     let cancelled = false;
-    listCareLogsInRange(supabase, familyId, new Date(scheduleLogFrom), new Date(scheduleLogTo))
+    listCareLogsInRange(supabase, familyId, new Date(scheduleLogQueryFrom), new Date(scheduleLogTo))
       .then((data) => {
         if (!cancelled) setScheduleLogs(data);
       })
@@ -278,7 +285,7 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
     return () => {
       cancelled = true;
     };
-  }, [supabase, familyId, needsScheduleLogs, scheduleLogFrom, scheduleLogTo]);
+  }, [supabase, familyId, needsScheduleLogs, scheduleLogFrom, scheduleLogQueryFrom, scheduleLogTo]);
 
   // 計測中の睡眠を読み込む。アプリを閉じている間に通知の「起きた」が押されていたら、その時刻で確定させる。
   useEffect(() => {
