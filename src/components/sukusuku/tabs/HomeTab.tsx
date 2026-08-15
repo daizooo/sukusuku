@@ -1,9 +1,10 @@
 'use client';
 
-import { Baby, Building2, Calendar, ChevronRight, CheckCircle2, Circle, Clock, Heart, MapPin, Phone, Stethoscope, BellRing } from 'lucide-react';
-import type { DynamicTask, LoginRole, UserProfile } from '@/types/app';
+import { AlertTriangle, Baby, Building2, Calendar, ChevronRight, CheckCircle2, Circle, Clock, Heart, MapPin, Phone, Stethoscope, BellRing } from 'lucide-react';
+import type { DynamicTask, LoginRole, ScheduleView, UserProfile } from '@/types/app';
 import { getLabelColor, getProfileFieldValue } from '@/lib/uiUtils';
-import { formatTimeRange, parseDateString } from '@/lib/dateUtils';
+import { formatTimeRange, parseDateString, startOfDay } from '@/lib/dateUtils';
+import { formatRelativeDay } from '../schedule/utils';
 
 interface QuickAction {
   icon: typeof Phone;
@@ -19,9 +20,11 @@ interface HomeTabProps {
   ageInMonths: { months: number; days: number };
   dynamicTodos: DynamicTask[];
   isLoadingTodos?: boolean;
+  today: Date;
   onToggleTodo: (id: string) => void;
   onOpenTask: (task: DynamicTask) => void;
-  onViewAllSchedule: () => void;
+  /** スケジュールタブへ移る。表示を指定すると、その表示で開く。 */
+  onViewAllSchedule: (view?: ScheduleView) => void;
 }
 
 export default function HomeTab({
@@ -31,13 +34,23 @@ export default function HomeTab({
   ageInMonths,
   dynamicTodos,
   isLoadingTodos,
+  today,
   onToggleTodo,
   onOpenTask,
   onViewAllSchedule,
 }: HomeTabProps) {
-  // 未完了のうち日付の近いものから3件。日付未設定は後ろに回す。
-  const upcomingTasks = dynamicTodos
-    .filter((t) => !t.done)
+  const startOfToday = startOfDay(today).getTime();
+  const pendingTasks = dynamicTodos.filter((t) => !t.done);
+
+  // 期限切れは古いものほど先頭に来るため、そのまま並べると直近の3件を
+  // 食いつぶしてしまう。件数だけ知らせて、中身はスケジュールのリスト表示に任せる。
+  const overdueCount = pendingTasks.filter(
+    (t) => t.targetDateObj && startOfDay(t.targetDateObj).getTime() < startOfToday,
+  ).length;
+
+  // 今日以降の予定を近い順に3件。日付未設定は後ろに回す。
+  const upcomingTasks = pendingTasks
+    .filter((t) => !t.targetDateObj || startOfDay(t.targetDateObj).getTime() >= startOfToday)
     .sort((a, b) => (a.targetDateObj?.getTime() ?? Infinity) - (b.targetDateObj?.getTime() ?? Infinity))
     .slice(0, 3);
   const birthDateValue = getProfileFieldValue(userProfile, 'birthDate');
@@ -129,10 +142,24 @@ export default function HomeTab({
       <div className="flex-1 min-h-0 flex flex-col">
         <div className="flex justify-between items-end mb-3 flex-none">
           <h3 className="text-gray-800 font-bold text-lg">直近のスケジュール</h3>
-          <button onClick={onViewAllSchedule} className="text-blue-500 text-sm font-medium flex items-center">
+          <button onClick={() => onViewAllSchedule()} className="text-blue-500 text-sm font-medium flex items-center">
             すべて見る <ChevronRight size={16} />
           </button>
         </div>
+
+        {overdueCount > 0 && (
+          <button
+            onClick={() => onViewAllSchedule('list')}
+            className="flex-none w-full mb-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-700 flex items-center justify-between hover:bg-red-100 transition"
+          >
+            <span className="flex items-center text-sm font-medium">
+              <AlertTriangle size={14} className="mr-1.5" />
+              期限切れ {overdueCount}件
+            </span>
+            <ChevronRight size={16} />
+          </button>
+        )}
+
         <div className="min-h-0 overflow-y-auto bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50">
           {isLoadingTodos && <p className="p-4 text-sm text-gray-400 text-center">読み込み中...</p>}
           {!isLoadingTodos && upcomingTasks.length === 0 && (
@@ -169,6 +196,12 @@ export default function HomeTab({
                   <span className="flex items-center text-blue-600 font-medium">
                     <Calendar size={12} className="mr-1" />
                     {task.targetDate}
+                    {/* 何日後かはスケジュールのリスト表示と同じ表記に揃える。 */}
+                    {task.targetDateObj && (
+                      <span className="ml-1.5 text-gray-500 font-normal">
+                        {formatRelativeDay(task.targetDateObj, today)}
+                      </span>
+                    )}
                   </span>
                   <span className="flex items-center">
                     <Clock size={12} className="mr-1" />
