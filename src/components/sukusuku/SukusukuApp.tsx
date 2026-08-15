@@ -876,9 +876,13 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
               ageInMonths={ageInMonths}
               dynamicTodos={dynamicTodos}
               isLoadingTodos={isLoadingTasks}
+              today={today}
               onToggleTodo={toggleTodo}
               onOpenTask={openTaskDetail}
-              onViewAllSchedule={() => setActiveTab('schedule')}
+              onViewAllSchedule={(view) => {
+                setActiveTab('schedule');
+                if (view) setScheduleView(view);
+              }}
             />
           )}
           {activeTab === 'schedule' && (
