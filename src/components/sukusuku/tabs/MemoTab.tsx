@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Camera, ClipboardList, Folder, Gift as GiftIcon, Image as ImageIcon, MapPin, Phone, Plus, Trash2 } from 'lucide-react';
+import { Camera, Gift as GiftIcon, Image as ImageIcon, MapPin, Phone, Plus, Trash2 } from 'lucide-react';
 import type { DocumentItem, Gift, Nursery } from '@/types/app';
 import TabHeading from '../ui/TabHeading';
 import SegmentedTabs from '../ui/SegmentedTabs';
@@ -104,18 +104,7 @@ export default function MemoTab({
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
-      <TabHeading
-        title={VIEW_TITLES[memoView]}
-        icon={
-          memoView === 'gift' ? (
-            <GiftIcon size={22} />
-          ) : memoView === 'nursery' ? (
-            <ClipboardList size={22} />
-          ) : (
-            <Folder size={22} />
-          )
-        }
-      >
+      <TabHeading title={VIEW_TITLES[memoView]}>
         {memoView === 'gift' && (
           <button
             onClick={() => setGiftModal({ mode: 'add', gift: null })}

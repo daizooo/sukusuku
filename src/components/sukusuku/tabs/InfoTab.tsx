@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Baby, Edit2, ListPlus, Phone, Save, Settings, Trash2, User } from 'lucide-react';
+import { Baby, Edit2, ListPlus, Phone, Save, Trash2, User } from 'lucide-react';
 import type { ProfileField, UserProfile } from '@/types/app';
 import { isPhoneNumberLike, toTelHref } from '@/lib/uiUtils';
 import NotificationSetting from '@/components/sukusuku/NotificationSetting';
@@ -57,7 +57,7 @@ export default function InfoTab({
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
-      <TabHeading title="設定・プロフ" icon={<Settings size={22} />}>
+      <TabHeading title="設定・プロフ">
         {!isEditingProfile ? (
           <button onClick={onStartEditProfile} className="flex-none text-blue-600 flex items-center text-sm font-bold bg-blue-50 px-3 py-2 rounded-lg hover:bg-blue-100">
             <Edit2 size={16} className="mr-1" /> 編集
