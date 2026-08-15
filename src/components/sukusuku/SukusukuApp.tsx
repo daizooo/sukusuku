@@ -588,6 +588,14 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
     setActiveTab('log');
   };
 
+  // ナビゲーションからタブを切り替える。
+  // 記録タブは開くたびに今日を出す（前に遡って見ていた日を引きずると、
+  // 気づかないまま過去の日に記録してしまうため）。
+  const selectTab = (tab: TabId) => {
+    if (tab === 'log') setLogDate(startOfDay(new Date()));
+    setActiveTab(tab);
+  };
+
   // --- 育児記録 ---
 
   // 記録の追加・更新を画面の状態へ反映する。表示中の日以外の記録は一覧から外す。
@@ -858,7 +866,7 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => selectTab(item.id)}
               className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${
                 activeTab === item.id ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
               }`}
@@ -985,13 +993,13 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
             {NAV_ITEMS.map((item) => (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => selectTab(item.id)}
                 className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition ${
-                  activeTab === item.id ? 'text-blue-500' : 'text-gray-400 hover:text-gray-500'
+                  activeTab === item.id ? 'text-blue-500' : 'text-gray-500 hover:text-gray-600'
                 }`}
               >
                 <item.icon size={22} className={activeTab === item.id ? 'stroke-[2.5px]' : 'stroke-2'} />
-                <span className="text-[9px] font-medium">{item.label}</span>
+                <span className="text-[11px] font-semibold">{item.label}</span>
               </button>
             ))}
           </div>

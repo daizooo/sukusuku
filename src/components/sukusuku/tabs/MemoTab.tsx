@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Camera, ClipboardList, Folder, Gift as GiftIcon, Image as ImageIcon, MapPin, Phone, Plus, Trash2 } from 'lucide-react';
 import type { DocumentItem, Gift, Nursery } from '@/types/app';
+import TabHeading from '../ui/TabHeading';
+import SegmentedTabs from '../ui/SegmentedTabs';
 import GiftFormModal, { type GiftDraft } from '../modals/GiftFormModal';
 import DocumentUploadModal from '../modals/DocumentUploadModal';
 import NurseryFormModal, { type NurseryDraft } from '../modals/NurseryFormModal';
@@ -102,17 +104,18 @@ export default function MemoTab({
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
-      <div className="flex justify-between items-center mb-4 shrink-0">
-        <h2 className="text-xl font-bold text-gray-800 flex items-center">
-          {memoView === 'gift' ? (
-            <GiftIcon className="mr-2" size={24} />
+      <TabHeading
+        title={VIEW_TITLES[memoView]}
+        icon={
+          memoView === 'gift' ? (
+            <GiftIcon size={22} />
           ) : memoView === 'nursery' ? (
-            <ClipboardList className="mr-2" size={24} />
+            <ClipboardList size={22} />
           ) : (
-            <Folder className="mr-2" size={24} />
-          )}
-          {VIEW_TITLES[memoView]}
-        </h2>
+            <Folder size={22} />
+          )
+        }
+      >
         {memoView === 'gift' && (
           <button
             onClick={() => setGiftModal({ mode: 'add', gift: null })}
@@ -134,19 +137,19 @@ export default function MemoTab({
             <Plus size={20} />
           </button>
         )}
-      </div>
+      </TabHeading>
 
-      <div className="flex bg-gray-200 p-1 rounded-lg mb-4 shrink-0">
-        <button onClick={() => setMemoView('gift')} className={`flex-1 py-1.5 text-xs font-medium rounded-md text-center transition ${memoView === 'gift' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}>
-          お祝い
-        </button>
-        <button onClick={() => setMemoView('nursery')} className={`flex-1 py-1.5 text-xs font-medium rounded-md text-center transition ${memoView === 'nursery' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}>
-          保活
-        </button>
-        <button onClick={() => setMemoView('documents')} className={`flex-1 py-1.5 text-xs font-medium rounded-md text-center transition ${memoView === 'documents' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}>
-          書籍
-        </button>
-      </div>
+      <SegmentedTabs
+        ariaLabel="メモの表示"
+        value={memoView}
+        onChange={setMemoView}
+        className="mb-3 shrink-0"
+        options={[
+          { id: 'gift', label: 'お祝い' },
+          { id: 'nursery', label: '保活' },
+          { id: 'documents', label: '書類' },
+        ]}
+      />
 
       <div className="flex-1 overflow-y-auto">
         {memoView === 'gift' && (

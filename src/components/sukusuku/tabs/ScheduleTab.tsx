@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, CornerDownRight, Filter } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CornerDownRight, Filter } from 'lucide-react';
 import type { CareLog, DynamicTask, Label, ScheduleView } from '@/types/app';
 import { LABELS } from '@/types/app';
 import { getLabelColor } from '@/lib/uiUtils';
@@ -16,6 +16,8 @@ import {
   startOfWeek,
   toDateString,
 } from '@/lib/dateUtils';
+import TabHeading from '../ui/TabHeading';
+import SegmentedTabs from '../ui/SegmentedTabs';
 import MonthView from '../schedule/MonthView';
 import WeekView from '../schedule/WeekView';
 import DayView from '../schedule/DayView';
@@ -123,42 +125,37 @@ export default function ScheduleTab({
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-3xl lg:max-w-4xl md:mx-auto md:w-full">
-      <div className="flex justify-between items-center mb-3 flex-none">
-        <h2 className="text-xl font-bold text-gray-800">スケジュール</h2>
-        <div className="flex bg-gray-200 p-1 rounded-lg">
-          {VIEW_TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => onChangeView(tab.id)}
-              className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition ${
-                view === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <TabHeading title="スケジュール" />
 
-      <div className="flex space-x-2 mb-3 overflow-x-auto pb-2 flex-none">
-        <span className="flex items-center text-gray-500 text-xs font-medium mr-1">
-          <Filter size={14} />
-        </span>
-        {LABEL_FILTERS.map((a) => (
-          <button
-            key={a}
-            onClick={() => setLabelFilter(a)}
-            className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap font-medium transition border ${
-              labelFilter === a
-                ? a === 'すべて'
-                  ? 'bg-gray-700 text-white border-gray-700'
-                  : getLabelColor(a)
-                : 'bg-white text-gray-600 border-gray-200'
+      {/* 表示の切り替えと担当の絞り込みは同じ1段に置く（スマホで縦の高さを予定表に回すため）。
+          絞り込みは選択肢が増えても幅が変わらないよう、横並びのボタンではなく選択にしている。 */}
+      <div className="flex items-center gap-2 mb-3 flex-none">
+        <SegmentedTabs
+          ariaLabel="スケジュールの表示"
+          value={view}
+          onChange={onChangeView}
+          options={VIEW_TABS}
+          fill={false}
+          className="flex-none"
+        />
+        <div className="relative flex-none ml-auto">
+          <select
+            value={labelFilter}
+            onChange={(e) => setLabelFilter(e.target.value as Label | 'すべて')}
+            aria-label="担当で絞り込む"
+            className={`appearance-none h-11 pl-8 pr-7 rounded-xl border text-sm font-bold transition ${
+              labelFilter === 'すべて' ? 'bg-white text-gray-700 border-gray-200' : getLabelColor(labelFilter)
             }`}
           >
-            {a}
-          </button>
-        ))}
+            {LABEL_FILTERS.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+          <Filter size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 opacity-70" />
+          <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 opacity-70" />
+        </div>
       </div>
 
       {view !== 'list' && (
@@ -168,7 +165,7 @@ export default function ScheduleTab({
           </button>
 
           <div className="flex items-center gap-1">
-            <h3 className="text-base font-bold text-gray-800">{title}</h3>
+            <h3 className="text-[17px] font-bold text-gray-900">{title}</h3>
             {/* ネイティブのピッカーで任意の月・日へ直接ジャンプする */}
             <span className="relative w-7 h-7 inline-flex items-center justify-center rounded-full text-gray-400 hover:text-blue-500 hover:bg-gray-100 transition">
               <CalendarDays size={16} />
@@ -197,7 +194,10 @@ export default function ScheduleTab({
               )}
             </span>
             {!isShowingToday && (
-              <button onClick={goToday} className="text-[11px] text-blue-500 font-medium hover:underline ml-1">
+              <button
+                onClick={goToday}
+                className="ml-1 text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition"
+              >
                 今日
               </button>
             )}
