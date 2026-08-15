@@ -44,6 +44,8 @@ import {
   parseDateString,
   toDateString,
 } from '@/lib/dateUtils';
+import TabHeading from '../ui/TabHeading';
+import SegmentedTabs from '../ui/SegmentedTabs';
 import MilkLogModal, { type MilkLogInput } from '../modals/MilkLogModal';
 import DiaperLogModal, { type DiaperLogInput } from '../modals/DiaperLogModal';
 import SleepLogModal, { type ManualSleepInput } from '../modals/SleepLogModal';
@@ -144,6 +146,21 @@ export default function LogTab({
     return () => clearInterval(timer);
   }, [activeSleep]);
 
+  // 種類ごとの記録ボタンに出すその日の合計。回数を主、量・時間を従にして1行に収める。
+  const milkSummaryText = [
+    `${summary.milk.count}回`,
+    ...(summary.milk.ml > 0 ? [`${summary.milk.ml}ml`] : []),
+    ...(summary.milk.breastMinutes > 0 ? [`${summary.milk.breastMinutes}分`] : []),
+  ].join('・');
+  const diaperSummaryText =
+    summary.diaper.poopCount > 0
+      ? `${summary.diaper.count}回・うんち${summary.diaper.poopCount}`
+      : `${summary.diaper.count}回`;
+  const sleepSummaryText =
+    summary.sleep.minutes > 0
+      ? `${summary.sleep.count}回・${formatDuration(summary.sleep.minutes * 60000)}`
+      : `${summary.sleep.count}回`;
+
   const closeLogModal = () => setLogModal(null);
 
   const handleDelete = (log: CareLog) => {
@@ -153,62 +170,56 @@ export default function LogTab({
 
   return (
     <div className="p-4 h-full flex flex-col">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-gray-800">育児記録</h2>
-      </div>
+      <TabHeading title="育児記録" />
 
-      <div className="flex bg-gray-200 p-1 rounded-lg mb-4 shrink-0">
-        <button
-          onClick={() => setLogView('timeline')}
-          className={`flex-1 py-1.5 text-xs font-medium rounded-md flex justify-center items-center transition ${logView === 'timeline' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
-        >
-          <List size={14} className="mr-1" /> タイムライン
-        </button>
-        <button
-          onClick={() => setLogView('growth')}
-          className={`flex-1 py-1.5 text-xs font-medium rounded-md flex justify-center items-center transition ${logView === 'growth' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
-        >
-          <TrendingUp size={14} className="mr-1" /> 成長曲線
-        </button>
-      </div>
+      <SegmentedTabs
+        ariaLabel="育児記録の表示"
+        value={logView}
+        onChange={setLogView}
+        className="mb-3 shrink-0"
+        options={[
+          { id: 'timeline', label: 'タイムライン', icon: <List size={15} /> },
+          { id: 'growth', label: '成長曲線', icon: <TrendingUp size={15} /> },
+        ]}
+      />
 
       {logView === 'timeline' ? (
         <div className="flex-1 min-h-0 flex flex-col gap-4 lg:grid lg:grid-cols-[20rem_1fr] lg:gap-6">
-          <div className="shrink-0 space-y-4 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
-            {/* 日付ナビゲーション: 1日区切りで過去の記録を遡る */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex items-center justify-between">
+          <div className="shrink-0 space-y-3 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
+            {/* 日付の送り: 1日区切りで過去の記録を遡る。タブを開いた時点では常に今日なので、
+                「今日」の表示は今日以外を見ているときに戻るボタンとしてだけ出す。 */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-1 flex items-center justify-between gap-1">
               <button
                 onClick={() => onChangeLogDate(addDays(logDate, -1))}
                 aria-label="前の日"
-                className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition active:scale-95"
+                className="flex-none w-9 h-9 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 transition active:scale-95"
               >
                 <ChevronLeft size={20} />
               </button>
 
-              <div className="flex flex-col items-center">
-                <div className="flex items-center">
-                  <span className="font-bold text-gray-800 text-sm">{dateLabel}</span>
-                  {/* ネイティブの日付ピッカーで任意の日へジャンプできるようにする */}
-                  <span className="relative ml-1 w-7 h-7 inline-flex items-center justify-center rounded-full text-gray-400 hover:text-blue-500 hover:bg-gray-100 transition">
-                    <CalendarDays size={16} />
-                    <input
-                      type="date"
-                      aria-label="日付を選ぶ"
-                      value={toDateString(logDate)}
-                      max={toDateString(today)}
-                      onChange={(e) => {
-                        const picked = parseDateString(e.target.value);
-                        if (picked) onChangeLogDate(picked);
-                      }}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    />
-                  </span>
-                </div>
-                {isToday ? (
-                  <span className="text-[10px] text-blue-500 font-medium">今日</span>
-                ) : (
-                  <button onClick={() => onChangeLogDate(today)} className="text-[10px] text-blue-500 font-medium hover:underline">
-                    今日へ戻る
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="font-bold text-gray-800 text-[15px] truncate">{dateLabel}</span>
+                {/* ネイティブの日付ピッカーで任意の日へジャンプできるようにする */}
+                <span className="relative flex-none w-8 h-8 inline-flex items-center justify-center rounded-full text-gray-400 hover:text-blue-500 hover:bg-gray-100 transition">
+                  <CalendarDays size={16} />
+                  <input
+                    type="date"
+                    aria-label="日付を選ぶ"
+                    value={toDateString(logDate)}
+                    max={toDateString(today)}
+                    onChange={(e) => {
+                      const picked = parseDateString(e.target.value);
+                      if (picked) onChangeLogDate(picked);
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                </span>
+                {!isToday && (
+                  <button
+                    onClick={() => onChangeLogDate(today)}
+                    className="flex-none text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition"
+                  >
+                    今日
                   </button>
                 )}
               </div>
@@ -217,7 +228,7 @@ export default function LogTab({
                 onClick={() => onChangeLogDate(addDays(logDate, 1))}
                 disabled={isToday}
                 aria-label="次の日"
-                className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition active:scale-95 disabled:opacity-30 disabled:hover:bg-transparent"
+                className="flex-none w-9 h-9 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 transition active:scale-95 disabled:opacity-30 disabled:hover:bg-transparent"
               >
                 <ChevronRight size={20} />
               </button>
@@ -243,80 +254,62 @@ export default function LogTab({
               </div>
             )}
 
-            {/* この日の合計 */}
+            {/* 記録ボタン。その日の合計を同じボタンに載せ、「見る」と「記録する」を1つにまとめている。 */}
             <div className="grid grid-cols-3 gap-2">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-2 text-center">
-                <Coffee size={14} className="text-amber-600 mx-auto mb-1" />
-                <p className="text-sm font-bold text-gray-800 leading-tight">
-                  {summary.milk.ml > 0 ? `${summary.milk.ml}ml` : `${summary.milk.count}回`}
-                </p>
-                <p className="text-[10px] text-gray-400">
-                  ミルク {summary.milk.count}回
-                  {summary.milk.breastMinutes > 0 && ` / 母乳${summary.milk.breastMinutes}分`}
-                </p>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-2 text-center">
-                <Droplet size={14} className="text-blue-500 mx-auto mb-1" />
-                <p className="text-sm font-bold text-gray-800 leading-tight">{summary.diaper.count}回</p>
-                <p className="text-[10px] text-gray-400">
-                  おむつ{summary.diaper.poopCount > 0 && ` / うんち${summary.diaper.poopCount}回`}
-                </p>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-2 text-center">
-                <Moon size={14} className="text-indigo-500 mx-auto mb-1" />
-                <p className="text-sm font-bold text-gray-800 leading-tight">
-                  {summary.sleep.minutes > 0 ? formatDuration(summary.sleep.minutes * 60000) : `${summary.sleep.count}回`}
-                </p>
-                <p className="text-[10px] text-gray-400">睡眠 {summary.sleep.count}回</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
               <button
                 onClick={() => setLogModal({ type: 'milk', log: null })}
-                className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-amber-50 transition active:scale-95"
+                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-amber-50 transition active:scale-95"
               >
-                <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center mb-2">
-                  <Coffee size={20} className="text-amber-600" />
-                </div>
-                <span className="text-xs font-bold text-gray-700">ミルク</span>
+                <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
+                <span className="flex items-center gap-1.5">
+                  <Coffee size={17} className="text-amber-600" />
+                  <span className="text-sm font-bold text-gray-800">ミルク</span>
+                </span>
+                <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
+                  {milkSummaryText}
+                </span>
                 {nextBreastSide && (
-                  <span className="text-[9px] font-bold text-amber-600 mt-0.5">
+                  <span className="text-[10px] font-bold text-amber-600 leading-tight">
                     次は{getSideLabel(nextBreastSide)}から
                   </span>
                 )}
               </button>
               <button
                 onClick={() => setLogModal({ type: 'diaper', log: null })}
-                className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-blue-50 transition active:scale-95"
+                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-blue-50 transition active:scale-95"
               >
-                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mb-2">
-                  <Droplet size={20} className="text-blue-500" />
-                </div>
-                <span className="text-xs font-bold text-gray-700">おむつ</span>
+                <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
+                <span className="flex items-center gap-1.5">
+                  <Droplet size={17} className="text-blue-500" />
+                  <span className="text-sm font-bold text-gray-800">おむつ</span>
+                </span>
+                <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
+                  {diaperSummaryText}
+                </span>
               </button>
               <button
                 onClick={() => setLogModal({ type: 'sleep', log: null })}
-                className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-indigo-50 transition active:scale-95"
+                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-indigo-50 transition active:scale-95"
               >
-                <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center mb-2">
-                  <Moon size={20} className="text-indigo-500" />
-                </div>
-                <span className="text-xs font-bold text-gray-700">睡眠</span>
-                {activeSleep && <span className="text-[9px] font-bold text-indigo-600 mt-0.5">計測中</span>}
+                <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
+                <span className="flex items-center gap-1.5">
+                  <Moon size={17} className="text-indigo-500" />
+                  <span className="text-sm font-bold text-gray-800">睡眠</span>
+                </span>
+                <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
+                  {activeSleep ? '計測中' : sleepSummaryText}
+                </span>
               </button>
             </div>
             {!isToday && (
-              <p className="text-[10px] text-gray-400 leading-relaxed">
+              <p className="text-[11px] text-gray-500 leading-relaxed">
                 過去の日を表示中です。記録を追加すると{dateLabel}に登録されます。
               </p>
             )}
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto lg:max-w-3xl">
-            <h3 className="text-sm font-bold text-gray-500 mb-3 px-1">
-              {isToday ? '今日' : dateLabel}の記録 ({visibleLogs.length}件)
-            </h3>
+            <h3 className="text-sm font-bold text-gray-600 mb-2 px-1">{dateLabel}の記録 {visibleLogs.length}件</h3>
             {isLoadingLogs && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
             {!isLoadingLogs && visibleLogs.length === 0 && (
               <p className="text-sm text-gray-400 text-center py-8">この日の記録はありません</p>
@@ -336,8 +329,8 @@ export default function LogTab({
                       }`}
                     >
                       <div className="flex justify-between items-start mb-1 gap-2">
-                        <span className="font-bold text-gray-800 text-sm">{getLogTitle(log)}</span>
-                        <span className="text-xs text-gray-400 font-medium tabular-nums shrink-0">
+                        <span className="font-bold text-gray-800 text-[15px]">{getLogTitle(log)}</span>
+                        <span className="text-xs text-gray-500 font-medium tabular-nums shrink-0">
                           {getLogTimeText(log)}
                         </span>
                       </div>
@@ -360,9 +353,9 @@ export default function LogTab({
                         </div>
                       )}
                       <div className="flex justify-between items-end mt-2 gap-2">
-                        <p className="text-xs text-gray-500">{log.note || 'メモなし'}</p>
-                        <span className="text-[10px] text-gray-400 flex items-center shrink-0">
-                          <User size={10} className="mr-1" />
+                        <p className="text-xs text-gray-600">{log.note || 'メモなし'}</p>
+                        <span className="text-[11px] text-gray-400 flex items-center shrink-0">
+                          <User size={11} className="mr-1" />
                           {memberLabel(log.createdBy)}が記録
                         </span>
                       </div>

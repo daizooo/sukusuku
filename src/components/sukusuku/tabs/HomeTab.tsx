@@ -117,32 +117,33 @@ export default function HomeTab({
             <a
               key={item.label}
               href={`tel:${item.phone}`}
-              className="flex flex-col items-center justify-center p-3 bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 transition"
+              className="flex flex-col items-center justify-center px-1 py-3 bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 transition"
             >
               <div className={`p-3 rounded-full ${item.color} mb-2`}>
                 <item.icon size={20} />
               </div>
-              <span className="text-[11px] text-gray-600 font-medium">{item.label}</span>
+              <span className="text-xs text-gray-700 font-medium whitespace-nowrap">{item.label}</span>
             </a>
           ) : (
             <button
               key={item.label}
               onClick={() => alert(`${item.label}の電話番号が未設定です。設定画面から登録してください。`)}
-              className="flex flex-col items-center justify-center p-3 bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 transition"
+              className="flex flex-col items-center justify-center px-1 py-3 bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 transition"
             >
               <div className={`p-3 rounded-full ${item.color} mb-2 opacity-60`}>
                 <item.icon size={20} />
               </div>
-              <span className="text-[11px] text-gray-400 font-medium">{item.label}</span>
+              <span className="text-xs text-gray-400 font-medium whitespace-nowrap">{item.label}</span>
             </button>
           )
         )}
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col">
-        <div className="flex justify-between items-end mb-3 flex-none">
-          <h3 className="text-gray-800 font-bold text-lg">直近のスケジュール</h3>
-          <button onClick={() => onViewAllSchedule()} className="text-blue-500 text-sm font-medium flex items-center">
+        <div className="flex justify-between items-end gap-3 mb-3 flex-none">
+          {/* タブの見出し(22px)より一段小さくして、画面内の見出しの上下関係が分かるようにする */}
+          <h3 className="text-gray-900 font-bold text-lg tracking-tight">直近のスケジュール</h3>
+          <button onClick={() => onViewAllSchedule()} className="flex-none text-blue-600 text-sm font-medium flex items-center">
             すべて見る <ChevronRight size={16} />
           </button>
         </div>

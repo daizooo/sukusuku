@@ -1,11 +1,12 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Baby, Edit2, ListPlus, Phone, Save, Settings, Trash2, User } from 'lucide-react';
+import { Baby, Edit2, ListPlus, Phone, Save, Trash2, User } from 'lucide-react';
 import type { ProfileField, UserProfile } from '@/types/app';
 import { isPhoneNumberLike, toTelHref } from '@/lib/uiUtils';
 import NotificationSetting from '@/components/sukusuku/NotificationSetting';
 import AccountSection from '@/components/sukusuku/AccountSection';
+import TabHeading from '../ui/TabHeading';
 
 // UserProfileのうち、ProfileField[]を値に持つキー（＝設定タブで編集可能なセクション）
 type ProfileSectionKey = {
@@ -56,21 +57,17 @@ export default function InfoTab({
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
-      <div className="flex justify-between items-center mb-4 shrink-0">
-        <h2 className="text-xl font-bold text-gray-800 flex items-center">
-          <Settings className="mr-2" size={24} />
-          設定・プロフ
-        </h2>
+      <TabHeading title="設定・プロフ">
         {!isEditingProfile ? (
-          <button onClick={onStartEditProfile} className="text-blue-600 flex items-center text-sm font-medium bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100">
+          <button onClick={onStartEditProfile} className="flex-none text-blue-600 flex items-center text-sm font-bold bg-blue-50 px-3 py-2 rounded-lg hover:bg-blue-100">
             <Edit2 size={16} className="mr-1" /> 編集
           </button>
         ) : (
-          <button onClick={onSaveProfile} className="text-white flex items-center text-sm font-medium bg-blue-500 px-4 py-1.5 rounded-lg shadow-sm hover:bg-blue-600">
+          <button onClick={onSaveProfile} className="flex-none text-white flex items-center text-sm font-bold bg-blue-500 px-4 py-2 rounded-lg shadow-sm hover:bg-blue-600">
             <Save size={16} className="mr-1" /> 保存
           </button>
         )}
-      </div>
+      </TabHeading>
 
       <div className="flex-1 overflow-y-auto">
         <div className="space-y-6 pb-6">

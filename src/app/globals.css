@@ -17,8 +17,16 @@
   --font-mono: var(--font-geist-mono);
 }
 
+html {
+  /* iOSで横向きにしたときに本文だけが勝手に拡大され、行の詰まり方が変わるのを防ぐ */
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* 数字・英字は読み取りやすい Geist、日本語は端末標準のゴシック体に任せる
+     （Arial 指定のままだと日本語のフォールバック先が端末ごとにばらつく）。 */
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN',
+    'Noto Sans JP', 'Yu Gothic', Meiryo, sans-serif;
 }
