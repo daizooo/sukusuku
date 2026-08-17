@@ -25,12 +25,13 @@ export default function FamilySetupPage() {
   // 既にfamily_idを持っているユーザーがこの画面に来た場合はトップへ戻す
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) {
+    supabase.auth.getClaims().then(async ({ data: claimsData }) => {
+      const userId = claimsData?.claims.sub;
+      if (!userId) {
         router.replace('/login');
         return;
       }
-      const { data } = await supabase.from('users').select('family_id').eq('id', user.id).single();
+      const { data } = await supabase.from('users').select('family_id').eq('id', userId).single();
       if (data?.family_id) {
         router.replace('/');
         return;
