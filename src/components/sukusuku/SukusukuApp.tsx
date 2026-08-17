@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import {
   Home,
   CalendarDays,
@@ -90,10 +91,6 @@ import { listFamilyMembers } from '@/lib/api/familyMembers';
 import { getProfile, saveProfile } from '@/lib/api/profile';
 
 import HomeTab from './tabs/HomeTab';
-import ScheduleTab from './tabs/ScheduleTab';
-import LogTab from './tabs/LogTab';
-import MemoTab from './tabs/MemoTab';
-import InfoTab from './tabs/InfoTab';
 import AddTaskModal from './modals/AddTaskModal';
 import type { TaskDraft } from './modals/TaskForm';
 import TaskDetailModal from './modals/TaskDetailModal';
@@ -103,6 +100,21 @@ import type { ManualSleepInput } from './modals/SleepLogModal';
 import type { GiftDraft } from './modals/GiftFormModal';
 import type { GrowthRecordDraft } from './modals/GrowthRecordFormModal';
 import type { NurseryDraft } from './modals/NurseryFormModal';
+
+// 起動直後に表示するのはホームタブだけなので、残りのタブは実際に開かれるまで読み込まない。
+// 特にLogTabは成長グラフのためにrecharts(単体で約350KB)を持ち込むため、静的importのままだと
+// グラフを一度も開かないユーザーにも初期バンドルとしてダウンロード・パースさせてしまう。
+// モーダルはタップ直後に開く必要があり、かつ小さいので静的importのまま残す。
+const TabFallback = () => (
+  <div className="h-full w-full flex items-center justify-center">
+    <div className="w-6 h-6 rounded-full border-2 border-gray-200 border-t-blue-500 animate-spin" />
+  </div>
+);
+
+const ScheduleTab = dynamic(() => import('./tabs/ScheduleTab'), { loading: TabFallback });
+const LogTab = dynamic(() => import('./tabs/LogTab'), { loading: TabFallback });
+const MemoTab = dynamic(() => import('./tabs/MemoTab'), { loading: TabFallback });
+const InfoTab = dynamic(() => import('./tabs/InfoTab'), { loading: TabFallback });
 
 const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
   { id: 'home', icon: Home, label: 'ホーム' },
