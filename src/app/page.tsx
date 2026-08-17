@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { listTasks } from '@/lib/api/tasks';
-import SukusukuAppLoader from '@/components/sukusuku/SukusukuAppLoader';
+import { toDateString } from '@/lib/dateUtils';
+import SukusukuApp from '@/components/sukusuku/SukusukuApp';
 
 export default async function Home() {
   const supabase = await createClient();
@@ -30,13 +31,19 @@ export default async function Home() {
     return null;
   });
 
+  // 「今日」をサーバー側で確定させてクライアントへ渡す。
+  // クライアント側で new Date() を独自に評価すると、サーバーとクライアントで
+  // 「今日」がずれてhydration mismatchになるため（SukusukuApp側で詳細をコメント）。
+  const todayDateString = toDateString(new Date());
+
   return (
     <div className="flex flex-col flex-1 bg-gray-50">
-      <SukusukuAppLoader
+      <SukusukuApp
         familyId={profile.family_id}
         userId={userId}
         role={profile.role === 'papa' || profile.role === 'mama' ? profile.role : null}
         initialTasks={initialTasks}
+        todayDateString={todayDateString}
       />
     </div>
   );
