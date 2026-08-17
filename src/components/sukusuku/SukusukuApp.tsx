@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import dynamic from 'next/dynamic';
 import {
   Home,
@@ -142,6 +142,16 @@ const emptyTaskDraft = (date: Date): TaskDraft => ({
 
 const parseNullableNumber = (value: string): number | null => (value === '' ? null : Number(value));
 
+// 「今日」('YYYY-MM-DD')の取得は useSyncExternalStore 経由にする。
+// 時間の経過でしか変わらず、変化を知らせてくれるイベントは存在しないため購読は何もしない。
+// これにより、SSR/初回hydrationはサーバーが確定させた値（getServerSnapshot）で揃い、
+// hydration後はクライアントのローカル日時（getSnapshot）に切り替わる。
+// new Date() を直接 useState/useMemo の初期値にすると、SSR時点とhydration時点で
+// 「今日」の評価タイミング・タイムゾーンがずれ得て、描画結果が食い違いhydration
+// mismatchになるため、この仕組みで回避する。
+const noopSubscribe = () => () => {};
+const getClientTodayDateString = (): string => toDateString(new Date());
+
 // 週表示・日表示の帯で、範囲の頭にかかる前夜の睡眠を取りこぼさないための遡り幅。
 const SLEEP_LOOKBACK_MS = 12 * 60 * 60 * 1000;
 
@@ -152,9 +162,11 @@ interface SukusukuAppProps {
   // サーバー側(page.tsx)で取得済みのタスク。あればhydration後の再取得を省略する。
   // 取得に失敗していた場合はnullで、その場合は従来通りクライアント側で取得する。
   initialTasks: Task[] | null;
+  // サーバー側(page.tsx)で確定させた「今日」('YYYY-MM-DD')。todayステートの初期値に使う。
+  todayDateString: string;
 }
 
-export default function SukusukuApp({ familyId, userId, role, initialTasks }: SukusukuAppProps) {
+export default function SukusukuApp({ familyId, userId, role, initialTasks, todayDateString }: SukusukuAppProps) {
   const supabase = useMemo(() => createClient(), []);
 
   const [activeTab, setActiveTab] = useState<TabId>('home');
@@ -194,8 +206,14 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks }: Su
   const [isEditingTask, setIsEditingTask] = useState(false);
   const [tempEditingTask, setTempEditingTask] = useState<DynamicTask | null>(null);
 
-  // 「今日」は日付が変わらない限り同じ参照を使う（useMemo の依存に安全に渡せるようにするため）
-  const today = useMemo(() => startOfDay(new Date()), []);
+  // 「今日」は日付が変わらない限り同じ参照を使う（useMemo の依存に安全に渡せるようにするため）。
+  // SSR/初回hydrationはサーバーが確定させた todayDateString、hydration後はクライアントの
+  // ローカル日時に切り替わる（詳細は noopSubscribe 付近のコメントを参照）。
+  const todayDateStringSynced = useSyncExternalStore(noopSubscribe, getClientTodayDateString, () => todayDateString);
+  const today = useMemo(
+    () => parseDateString(todayDateStringSynced) ?? startOfDay(new Date()),
+    [todayDateStringSynced],
+  );
 
   const [newTask, setNewTask] = useState<TaskDraft>(() => emptyTaskDraft(today));
 
