@@ -149,14 +149,17 @@ interface SukusukuAppProps {
   familyId: string;
   userId: string;
   role: LoginRole;
+  // サーバー側(page.tsx)で取得済みのタスク。あればhydration後の再取得を省略する。
+  // 取得に失敗していた場合はnullで、その場合は従来通りクライアント側で取得する。
+  initialTasks: Task[] | null;
 }
 
-export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps) {
+export default function SukusukuApp({ familyId, userId, role, initialTasks }: SukusukuAppProps) {
   const supabase = useMemo(() => createClient(), []);
 
   const [activeTab, setActiveTab] = useState<TabId>('home');
-  const [todos, setTodos] = useState<Task[]>([]);
-  const [isLoadingTasks, setIsLoadingTasks] = useState(true);
+  const [todos, setTodos] = useState<Task[]>(initialTasks ?? []);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(initialTasks === null);
   const [taskError, setTaskError] = useState('');
 
   const [logs, setLogs] = useState<CareLog[]>([]);
@@ -210,7 +213,9 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
   const [tempProfile, setTempProfile] = useState<UserProfile>(userProfile);
 
   // 家族のタスクをSupabaseから取得
+  // サーバー側(page.tsx)で取得済み(initialTasks)なら、hydration後の再取得はスキップする。
   useEffect(() => {
+    if (initialTasks !== null) return;
     let cancelled = false;
     listTasks(supabase, familyId)
       .then((data) => {
@@ -228,6 +233,8 @@ export default function SukusukuApp({ familyId, userId, role }: SukusukuAppProps
     return () => {
       cancelled = true;
     };
+    // initialTasksはマウント時点の値のみ見る（マウント後に変わることはない）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, familyId]);
 
   // 育児記録をSupabaseから取得（表示中の1日分のみ。日を切り替えるたびに取り直す）
