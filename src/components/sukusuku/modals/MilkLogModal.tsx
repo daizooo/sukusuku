@@ -1,8 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { Pause, Play, RotateCcw } from 'lucide-react';
 import type { BreastSide, FeedingMethod, MilkLog } from '@/types/app';
-import { BREAST_MINUTE_OPTIONS, MILK_AMOUNT_OPTIONS, getSideLabel } from '@/lib/careLogUtils';
+import {
+  BREAST_MINUTE_OPTIONS,
+  MILK_AMOUNT_OPTIONS,
+  formatStopwatch,
+  getSideLabel,
+} from '@/lib/careLogUtils';
+import { nursingMinutes, type NursingTimer } from '@/lib/nursingTimer';
 import { parseTimeInput, toTimeInputValue } from '@/lib/dateUtils';
 import {
   DeleteButton,
@@ -33,6 +40,8 @@ interface MilkLogModalProps {
   baseDate: Date;
   /** 直近の授乳から割り出した「次に飲ませる側」。判断材料がなければ null。 */
   nextSide: BreastSide | null;
+  /** 母乳の左右別ストップウォッチ。新規に記録するときだけ使う。 */
+  timer: NursingTimer;
   onClose: () => void;
   onSubmit: (input: MilkLogInput) => void;
   onDelete: () => void;
@@ -57,23 +66,64 @@ export default function MilkLogModal({ show, ...props }: MilkLogModalProps & { s
   return <MilkLogModalBody {...props} />;
 }
 
-function MilkLogModalBody({ log, baseDate, nextSide, onClose, onSubmit, onDelete }: MilkLogModalProps) {
+function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, onDelete }: MilkLogModalProps) {
   const [method, setMethod] = useState<FeedingMethod>(log?.method ?? 'breast');
   const [amountMl, setAmountMl] = useState<number>(log?.amountMl ?? 100);
   const [customAmount, setCustomAmount] = useState(() =>
     log?.amountMl && !MILK_AMOUNT_OPTIONS.includes(log.amountMl) ? String(log.amountMl) : '',
   );
+  // 計測した時間があれば、開き直したときもその値から始める。
+  const measured = !log && timer.hasSession;
   // 未選択と「0分」を区別するため、初期値は undefined にしておく。
-  const [leftMinutes, setLeftMinutes] = useState<number | undefined>(log?.leftMinutes);
-  const [rightMinutes, setRightMinutes] = useState<number | undefined>(log?.rightMinutes);
-  const [lastSide, setLastSide] = useState<BreastSide | undefined>(log?.lastSide);
+  const [leftMinutes, setLeftMinutes] = useState<number | undefined>(
+    log?.leftMinutes ?? (measured ? nursingMinutes(timer.leftMs) : undefined),
+  );
+  const [rightMinutes, setRightMinutes] = useState<number | undefined>(
+    log?.rightMinutes ?? (measured ? nursingMinutes(timer.rightMs) : undefined),
+  );
+  const [lastSide, setLastSide] = useState<BreastSide | undefined>(
+    log?.lastSide ?? (measured ? (timer.lastSide ?? undefined) : undefined),
+  );
+  // 分数を手で選び直した側は、計測した値より手入力を優先する。
+  const [editedLeft, setEditedLeft] = useState(false);
+  const [editedRight, setEditedRight] = useState(false);
   const [time, setTime] = useState(() => toTimeInputValue(log?.time ?? new Date()));
   const [note, setNote] = useState(log?.note ?? '');
+
+  // 過去の記録を編集しているときは、いま計測しているものと混ざらないよう出さない。
+  const showTimer = !log && method === 'breast';
+
+  // 計測した時間をそのまま記録する。計測中のまま保存されても、その分を含める。
+  // 分数を手で選び直した側は、その値を優先する。
+  const measuring = showTimer && timer.hasSession;
+  const recordedLeft = measuring && !editedLeft ? nursingMinutes(timer.leftMs) : (leftMinutes ?? 0);
+  const recordedRight = measuring && !editedRight ? nursingMinutes(timer.rightMs) : (rightMinutes ?? 0);
 
   const handleCustomAmount = (value: string) => {
     setCustomAmount(value);
     const parsed = Number(value);
     if (value !== '' && Number.isFinite(parsed) && parsed > 0) setAmountMl(parsed);
+  };
+
+  // 計測を始める・止める・切り替えるたびに、その時点の合計を分数の入力欄へ入れる。
+  // 押した側が「最後に飲ませた側」になる。
+  const handleToggleSide = (side: BreastSide) => {
+    const settled = timer.toggleSide(side);
+    setLeftMinutes(nursingMinutes(settled.leftMs));
+    setRightMinutes(nursingMinutes(settled.rightMs));
+    setLastSide(side);
+    // 測り直した側は計測の値に戻す。
+    if (side === 'left') setEditedLeft(false);
+    else setEditedRight(false);
+  };
+
+  const handleResetTimer = () => {
+    timer.reset();
+    setLeftMinutes(undefined);
+    setRightMinutes(undefined);
+    setLastSide(undefined);
+    setEditedLeft(false);
+    setEditedRight(false);
   };
 
   const handleSubmit = () => {
@@ -82,8 +132,8 @@ function MilkLogModalBody({ log, baseDate, nextSide, onClose, onSubmit, onDelete
       onSubmit({ ...base, amountMl });
       return;
     }
-    const left = leftMinutes ?? 0;
-    const right = rightMinutes ?? 0;
+    const left = recordedLeft;
+    const right = recordedRight;
     onSubmit({
       ...base,
       leftMinutes: left,
@@ -105,13 +155,43 @@ function MilkLogModalBody({ log, baseDate, nextSide, onClose, onSubmit, onDelete
               <span className="font-bold">{getSideLabel(nextSide)}</span>からがおすすめ
             </HintBanner>
           )}
+          {showTimer && (
+            <BreastStopwatch
+              leftMs={timer.leftMs}
+              rightMs={timer.rightMs}
+              runningSide={timer.runningSide}
+              hasSession={timer.hasSession}
+              recordedLeft={recordedLeft}
+              recordedRight={recordedRight}
+              onToggleSide={handleToggleSide}
+              onReset={handleResetTimer}
+            />
+          )}
           <div>
             <FieldLabel>左（分）</FieldLabel>
-            <OptionGrid options={MINUTE_OPTIONS} value={leftMinutes} onChange={setLeftMinutes} columns={7} accent="milk" />
+            <OptionGrid
+              options={MINUTE_OPTIONS}
+              value={leftMinutes}
+              onChange={(value) => {
+                setLeftMinutes(value);
+                setEditedLeft(true);
+              }}
+              columns={7}
+              accent="milk"
+            />
           </div>
           <div>
             <FieldLabel>右（分）</FieldLabel>
-            <OptionGrid options={MINUTE_OPTIONS} value={rightMinutes} onChange={setRightMinutes} columns={7} accent="milk" />
+            <OptionGrid
+              options={MINUTE_OPTIONS}
+              value={rightMinutes}
+              onChange={(value) => {
+                setRightMinutes(value);
+                setEditedRight(true);
+              }}
+              columns={7}
+              accent="milk"
+            />
           </div>
           <div>
             <FieldLabel>最後に飲ませた側</FieldLabel>
@@ -156,5 +236,91 @@ function MilkLogModalBody({ log, baseDate, nextSide, onClose, onSubmit, onDelete
       </SubmitButton>
       {log && <DeleteButton onDelete={onDelete} />}
     </LogModalShell>
+  );
+}
+
+interface BreastStopwatchProps {
+  leftMs: number;
+  rightMs: number;
+  runningSide: BreastSide | null;
+  hasSession: boolean;
+  /** この内容で保存したときに記録される分数。 */
+  recordedLeft: number;
+  recordedRight: number;
+  onToggleSide: (side: BreastSide) => void;
+  onReset: () => void;
+}
+
+/** 左右それぞれの授乳時間を測るストップウォッチ。飲ませている側をタップして使う。 */
+function BreastStopwatch({
+  leftMs,
+  rightMs,
+  runningSide,
+  hasSession,
+  recordedLeft,
+  recordedRight,
+  onToggleSide,
+  onReset,
+}: BreastStopwatchProps) {
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3">
+      <div className="flex justify-between items-center mb-2">
+        <span className="text-xs font-bold text-amber-700">授乳時間を計測</span>
+        {hasSession && (
+          <button
+            type="button"
+            onClick={onReset}
+            className="text-[11px] text-amber-700 font-medium flex items-center hover:text-amber-900"
+          >
+            <RotateCcw size={12} className="mr-1" /> リセット
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {SIDE_OPTIONS.map((side) => {
+          const isRunning = runningSide === side.value;
+          return (
+            <button
+              key={side.value}
+              type="button"
+              aria-pressed={isRunning}
+              onClick={() => onToggleSide(side.value)}
+              className={`rounded-xl border p-3 flex flex-col items-center transition active:scale-[0.98] ${
+                isRunning
+                  ? 'bg-amber-600 border-amber-600 text-white'
+                  : 'bg-white border-amber-200 text-gray-700 hover:bg-amber-100'
+              }`}
+            >
+              <span className={`text-xs font-bold ${isRunning ? 'text-amber-50' : 'text-gray-500'}`}>
+                {side.label}
+              </span>
+              <span className="text-2xl font-bold tabular-nums tracking-tight">
+                {formatStopwatch(side.value === 'left' ? leftMs : rightMs)}
+              </span>
+              <span className={`mt-1 text-[10px] font-medium flex items-center ${isRunning ? 'text-amber-50' : 'text-amber-700'}`}>
+                {isRunning ? (
+                  <>
+                    <Pause size={10} className="mr-1" /> 計測中 / タップで停止
+                  </>
+                ) : (
+                  <>
+                    <Play size={10} className="mr-1" /> タップで開始
+                  </>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {hasSession ? (
+        <p className="text-[11px] font-bold text-amber-700 mt-2">
+          左{recordedLeft}分・右{recordedRight}分で記録します
+        </p>
+      ) : (
+        <p className="text-[10px] text-gray-500 mt-2">
+          反対側をタップすると自動で切り替わります。この画面を閉じても計測は続きます。
+        </p>
+      )}
+    </div>
   );
 }

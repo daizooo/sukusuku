@@ -36,6 +36,7 @@ import {
   isAlertLog,
   summarizeLogs,
 } from '@/lib/careLogUtils';
+import { useNursingTimer } from '@/lib/nursingTimer';
 import {
   addDays,
   formatDateWithWeekday,
@@ -127,6 +128,8 @@ export default function LogTab({
   const [logModal, setLogModal] = useState<{ type: LogType; log: CareLog | null } | null>(null);
   const [growthModal, setGrowthModal] = useState<{ mode: 'add' | 'edit'; record: GrowthRecord | null } | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  // 母乳の左右別ストップウォッチ。入力画面を閉じても測り続けられるよう、ここで持つ。
+  const nursingTimer = useNursingTimer();
 
   // 日を切り替えた直後は前の日の記録が残っているため、読み込み中は空として扱う
   const visibleLogs = useMemo(() => (isLoadingLogs ? [] : logs), [isLoadingLogs, logs]);
@@ -254,6 +257,29 @@ export default function LogTab({
               </div>
             )}
 
+            {/* 計測中の授乳。ねんね中と同じく、上部で今の状態が分かるようにする */}
+            {nursingTimer.hasSession && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-amber-700 flex items-center">
+                    <Coffee size={12} className="mr-1" />
+                    {nursingTimer.runningSide
+                      ? `授乳中（${getSideLabel(nursingTimer.runningSide)}）`
+                      : '授乳の計測中'}
+                  </p>
+                  <p className="text-[11px] text-amber-600 tabular-nums">
+                    左 {formatStopwatch(nursingTimer.leftMs)} / 右 {formatStopwatch(nursingTimer.rightMs)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setLogModal({ type: 'milk', log: null })}
+                  className="bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-amber-700 transition active:scale-95"
+                >
+                  開く
+                </button>
+              </div>
+            )}
+
             {/* 記録ボタン。その日の合計を同じボタンに載せ、「見る」と「記録する」を1つにまとめている。 */}
             <div className="grid grid-cols-3 gap-2">
               <button
@@ -266,9 +292,9 @@ export default function LogTab({
                   <span className="text-sm font-bold text-gray-800">ミルク</span>
                 </span>
                 <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
-                  {milkSummaryText}
+                  {nursingTimer.hasSession ? '計測中' : milkSummaryText}
                 </span>
-                {nextBreastSide && (
+                {nextBreastSide && !nursingTimer.hasSession && (
                   <span className="text-[10px] font-bold text-amber-600 leading-tight">
                     次は{getSideLabel(nextBreastSide)}から
                   </span>
@@ -437,9 +463,13 @@ export default function LogTab({
         log={logModal?.log?.type === 'milk' ? logModal.log : null}
         baseDate={logDate}
         nextSide={nextBreastSide}
+        timer={nursingTimer}
         onClose={closeLogModal}
         onSubmit={(input) => {
-          onSaveMilkLog(input, logModal?.log?.type === 'milk' ? logModal.log : null);
+          const existing = logModal?.log?.type === 'milk' ? logModal.log : null;
+          onSaveMilkLog(input, existing);
+          // 記録できた分の計測はもう不要なので片付ける。
+          if (!existing) nursingTimer.reset();
           closeLogModal();
         }}
         onDelete={() => logModal?.log && handleDelete(logModal.log)}
