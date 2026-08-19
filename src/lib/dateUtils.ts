@@ -61,6 +61,16 @@ export const parseTimeInput = (value: string, base: Date = new Date()): Date => 
   return result;
 };
 
+/**
+ * <input type="date"> と <input type="time"> の値を1つの Date にまとめる。
+ * 日付が読めないときは fallback の日付を使う。
+ */
+export const parseDateTimeInput = (
+  dateValue: string,
+  timeValue: string,
+  fallback: Date,
+): Date => parseTimeInput(timeValue, parseDateString(dateValue) ?? fallback);
+
 // DB の time 型は 'HH:MM:SS' で返るため 'HH:MM' に整える
 export const normalizeTime = (time: string | null): string | null => {
   if (!time) return null;

@@ -3,16 +3,16 @@
 import { useEffect, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import type { SleepLog } from '@/types/app';
-import { formatStopwatch } from '@/lib/careLogUtils';
+import { formatDuration, formatStopwatch } from '@/lib/careLogUtils';
 import { isSleepNotificationSupported, sleepNotificationPermission } from '@/lib/sleepNotification';
-import { parseTimeInput, toTimeInputValue } from '@/lib/dateUtils';
+import { parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUtils';
 import {
+  DateTimeField,
   DeleteButton,
   FieldLabel,
   HintBanner,
   LogModalShell,
   NoteField,
-  TimeField,
 } from './logModalParts';
 
 export interface ManualSleepInput {
@@ -35,6 +35,8 @@ interface SleepLogModalProps {
   onDelete: () => void;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /** 開くたびに入力内容を作り直したいので、閉じている間は中身ごと外す。 */
 export default function SleepLogModal({ show, ...props }: SleepLogModalProps & { show: boolean }) {
   if (!show) return null;
@@ -51,11 +53,20 @@ function SleepLogModalBody({
   onSubmitManual,
   onDelete,
 }: SleepLogModalProps) {
-  // 計測中の睡眠を開いたときは、時刻の手入力ではなくストップウォッチを見せる。
+  // 計測中の睡眠を開いたときは、ストップウォッチを主にして見せる。
   const running = log ? (activeSleep?.id === log.id ? activeSleep : null) : activeSleep;
 
-  const [startTime, setStartTime] = useState(() => toTimeInputValue(log?.startedAt ?? new Date()));
-  const [endTime, setEndTime] = useState(() => toTimeInputValue(log?.endedAt ?? new Date()));
+  // 入力欄の初期値。計測中なら開始時刻と「今」を入れて、そのまま直せるようにする。
+  const initialStart = log?.startedAt ?? running?.startedAt ?? null;
+  const initialEnd = log?.endedAt ?? null;
+
+  const [startDate, setStartDate] = useState(() => toDateString(initialStart ?? baseDate));
+  const [startTime, setStartTime] = useState(() => toTimeInputValue(initialStart ?? new Date()));
+  // 計測を止め忘れた場合の起床は「今」、あとから手で入れる場合は表示中の日を初期値にする。
+  const [endDate, setEndDate] = useState(() =>
+    toDateString(initialEnd ?? (running ? new Date() : baseDate)),
+  );
+  const [endTime, setEndTime] = useState(() => toTimeInputValue(initialEnd ?? new Date()));
   const [note, setNote] = useState(log?.note ?? '');
   const [elapsed, setElapsed] = useState(() => (running ? Date.now() - running.startedAt.getTime() : 0));
 
@@ -70,19 +81,63 @@ function SleepLogModalBody({
     return () => clearInterval(timer);
   }, [running]);
 
+  const startedAt = parseDateTimeInput(startDate, startTime, initialStart ?? baseDate);
+  const endedAtInput = parseDateTimeInput(endDate, endTime, initialStart ?? baseDate);
+  // 22:00 → 06:00 のように日付を変えずに日をまたぐ入力は、翌日として扱う。
+  const endedAt =
+    endDate === startDate && endedAtInput.getTime() < startedAt.getTime()
+      ? new Date(endedAtInput.getTime() + DAY_MS)
+      : endedAtInput;
+  const durationMs = endedAt.getTime() - startedAt.getTime();
+  const isInvalidRange = durationMs < 0;
+
   const handleManualSubmit = () => {
-    const base = log?.startedAt ?? baseDate;
-    const startedAt = parseTimeInput(startTime, base);
-    let endedAt = parseTimeInput(endTime, base);
-    // 22:00 → 06:00 のように日をまたぐ場合は翌日として扱う。
-    if (endedAt.getTime() < startedAt.getTime()) {
-      endedAt = new Date(endedAt.getTime() + 24 * 60 * 60 * 1000);
-    }
+    if (isInvalidRange) return;
     onSubmitManual({ startedAt, endedAt, note });
   };
 
+  // 寝た日時・起きた日時の入力欄。計測中でも同じものを使って直せるようにする。
+  const timeFields = (
+    <div className="space-y-3">
+      <DateTimeField
+        label="寝た日時"
+        date={startDate}
+        time={startTime}
+        onChangeDate={setStartDate}
+        onChangeTime={setStartTime}
+      />
+      <DateTimeField
+        label="起きた日時"
+        date={endDate}
+        time={endTime}
+        onChangeDate={setEndDate}
+        onChangeTime={setEndTime}
+      />
+      <p className={`text-[11px] font-medium ${isInvalidRange ? 'text-red-600' : 'text-gray-500'}`}>
+        {isInvalidRange
+          ? '起きた日時が寝た日時より前になっています。'
+          : `この内容で ${formatDuration(durationMs)} として記録します。`}
+      </p>
+    </div>
+  );
+
+  const manualSubmitButton = (label: string, filled: boolean) => (
+    <button
+      type="button"
+      onClick={handleManualSubmit}
+      disabled={isInvalidRange}
+      className={`w-full font-bold py-3 rounded-xl transition active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100 ${
+        filled
+          ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+          : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
+      }`}
+    >
+      {label}
+    </button>
+  );
+
   return (
-    <LogModalShell title={log ? '睡眠の記録を編集' : '睡眠を記録'} onClose={onClose}>
+    <LogModalShell title={log || running ? '睡眠の記録を編集' : '睡眠を記録'} onClose={onClose}>
       {running ? (
         <>
           <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 text-center">
@@ -100,11 +155,22 @@ function SleepLogModalBody({
             className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-4 rounded-xl transition active:scale-[0.99] flex items-center justify-center"
           >
             <Sun size={18} className="mr-2" />
-            起きた
+            今すぐ「起きた」にする
           </button>
           <p className="text-[10px] text-gray-400 text-center">
             この画面を閉じても計測は続きます。記録タブ上部のバーからも終了できます。
           </p>
+
+          {/* 止めるのを忘れたときのための逃げ道。実際の時刻を入れて計測を終わらせる。 */}
+          <div className="pt-3 border-t border-gray-100 space-y-3">
+            <FieldLabel>時刻を直して終わる</FieldLabel>
+            <HintBanner accent="sleep">
+              計測を止めるのを忘れたときは、実際に寝た・起きた日時を入れて記録できます。
+            </HintBanner>
+            {timeFields}
+            <NoteField value={note} onChange={setNote} placeholder="お昼寝 / 寝つきが悪かった など" />
+            {manualSubmitButton('この日時で記録する', true)}
+          </div>
           {log && <DeleteButton onDelete={onDelete} />}
         </>
       ) : (
@@ -132,23 +198,10 @@ function SleepLogModalBody({
 
           <div className={log ? '' : 'pt-1 border-t border-gray-100'}>
             {!log && <FieldLabel>あとから記録する</FieldLabel>}
-            <div className="grid grid-cols-2 gap-3">
-              <TimeField label="寝た時刻" value={startTime} onChange={setStartTime} />
-              <TimeField label="起きた時刻" value={endTime} onChange={setEndTime} />
-            </div>
+            {timeFields}
           </div>
           <NoteField value={note} onChange={setNote} placeholder="お昼寝 / 寝つきが悪かった など" />
-          <button
-            type="button"
-            onClick={handleManualSubmit}
-            className={`w-full font-bold py-3 rounded-xl transition active:scale-[0.99] ${
-              log
-                ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            {log ? '保存する' : '時刻を指定して保存'}
-          </button>
+          {manualSubmitButton(log ? '保存する' : '日時を指定して保存', !!log)}
           {log && <DeleteButton onDelete={onDelete} />}
         </>
       )}

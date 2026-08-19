@@ -10,8 +10,9 @@ import {
   getSideLabel,
 } from '@/lib/careLogUtils';
 import { nursingMinutes, type NursingTimer } from '@/lib/nursingTimer';
-import { parseTimeInput, toTimeInputValue } from '@/lib/dateUtils';
+import { parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUtils';
 import {
+  DateTimeField,
   DeleteButton,
   FieldLabel,
   HintBanner,
@@ -20,7 +21,6 @@ import {
   OptionGrid,
   Segmented,
   SubmitButton,
-  TimeField,
 } from './logModalParts';
 
 export interface MilkLogInput {
@@ -60,6 +60,10 @@ const SIDE_OPTIONS: { value: BreastSide; label: string }[] = [
 const AMOUNT_OPTIONS = MILK_AMOUNT_OPTIONS.map((ml) => ({ value: ml, label: String(ml) }));
 const MINUTE_OPTIONS = BREAST_MINUTE_OPTIONS.map((min) => ({ value: min, label: String(min) }));
 
+/** ボタンに無い分数（計測した端数や、止め忘れを直した値）だけ直接入力欄に出す。 */
+const toCustomMinutes = (minutes: number | undefined): string =>
+  minutes !== undefined && !BREAST_MINUTE_OPTIONS.includes(minutes) ? String(minutes) : '';
+
 /** 開くたびに入力内容を作り直したいので、閉じている間は中身ごと外す。 */
 export default function MilkLogModal({ show, ...props }: MilkLogModalProps & { show: boolean }) {
   if (!show) return null;
@@ -75,18 +79,21 @@ function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, o
   // 計測した時間があれば、開き直したときもその値から始める。
   const measured = !log && timer.hasSession;
   // 未選択と「0分」を区別するため、初期値は undefined にしておく。
-  const [leftMinutes, setLeftMinutes] = useState<number | undefined>(
-    log?.leftMinutes ?? (measured ? nursingMinutes(timer.leftMs) : undefined),
-  );
-  const [rightMinutes, setRightMinutes] = useState<number | undefined>(
-    log?.rightMinutes ?? (measured ? nursingMinutes(timer.rightMs) : undefined),
-  );
+  const initialLeft = log?.leftMinutes ?? (measured ? nursingMinutes(timer.leftMs) : undefined);
+  const initialRight = log?.rightMinutes ?? (measured ? nursingMinutes(timer.rightMs) : undefined);
+  const [leftMinutes, setLeftMinutes] = useState<number | undefined>(initialLeft);
+  const [rightMinutes, setRightMinutes] = useState<number | undefined>(initialRight);
+  // ボタンに無い分数は直接入力欄の側で持つ。
+  const [customLeft, setCustomLeft] = useState(() => toCustomMinutes(initialLeft));
+  const [customRight, setCustomRight] = useState(() => toCustomMinutes(initialRight));
   const [lastSide, setLastSide] = useState<BreastSide | undefined>(
     log?.lastSide ?? (measured ? (timer.lastSide ?? undefined) : undefined),
   );
   // 分数を手で選び直した側は、計測した値より手入力を優先する。
   const [editedLeft, setEditedLeft] = useState(false);
   const [editedRight, setEditedRight] = useState(false);
+  // 新規は表示中の日 + 今の時刻。編集は保存されている日時をそのまま出す。
+  const [date, setDate] = useState(() => toDateString(log?.time ?? baseDate));
   const [time, setTime] = useState(() => toTimeInputValue(log?.time ?? new Date()));
   const [note, setNote] = useState(log?.note ?? '');
 
@@ -105,12 +112,41 @@ function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, o
     if (value !== '' && Number.isFinite(parsed) && parsed > 0) setAmountMl(parsed);
   };
 
+  // 分数を手で決め直したときの反映。ボタン・直接入力のどちらからでもここを通る。
+  const applyMinutes = (side: BreastSide, minutes: number | undefined, custom: string) => {
+    if (side === 'left') {
+      setLeftMinutes(minutes);
+      setCustomLeft(custom);
+      setEditedLeft(true);
+    } else {
+      setRightMinutes(minutes);
+      setCustomRight(custom);
+      setEditedRight(true);
+    }
+  };
+
+  const handleCustomMinutes = (side: BreastSide, value: string) => {
+    const parsed = Number(value);
+    // 読めない値を入れている途中でも入力欄は書き換えられるようにする。
+    const minutes =
+      value !== '' && Number.isFinite(parsed) && parsed >= 0
+        ? Math.round(parsed)
+        : side === 'left'
+          ? leftMinutes
+          : rightMinutes;
+    applyMinutes(side, minutes, value);
+  };
+
   // 計測を始める・止める・切り替えるたびに、その時点の合計を分数の入力欄へ入れる。
   // 押した側が「最後に飲ませた側」になる。
   const handleToggleSide = (side: BreastSide) => {
     const settled = timer.toggleSide(side);
-    setLeftMinutes(nursingMinutes(settled.leftMs));
-    setRightMinutes(nursingMinutes(settled.rightMs));
+    const left = nursingMinutes(settled.leftMs);
+    const right = nursingMinutes(settled.rightMs);
+    setLeftMinutes(left);
+    setRightMinutes(right);
+    setCustomLeft(toCustomMinutes(left));
+    setCustomRight(toCustomMinutes(right));
     setLastSide(side);
     // 測り直した側は計測の値に戻す。
     if (side === 'left') setEditedLeft(false);
@@ -121,13 +157,15 @@ function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, o
     timer.reset();
     setLeftMinutes(undefined);
     setRightMinutes(undefined);
+    setCustomLeft('');
+    setCustomRight('');
     setLastSide(undefined);
     setEditedLeft(false);
     setEditedRight(false);
   };
 
   const handleSubmit = () => {
-    const base = { method, time: parseTimeInput(time, log?.time ?? baseDate), note };
+    const base = { method, time: parseDateTimeInput(date, time, log?.time ?? baseDate), note };
     if (method === 'formula') {
       onSubmit({ ...base, amountMl });
       return;
@@ -167,32 +205,20 @@ function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, o
               onReset={handleResetTimer}
             />
           )}
-          <div>
-            <FieldLabel>左（分）</FieldLabel>
-            <OptionGrid
-              options={MINUTE_OPTIONS}
-              value={leftMinutes}
-              onChange={(value) => {
-                setLeftMinutes(value);
-                setEditedLeft(true);
-              }}
-              columns={7}
-              accent="milk"
-            />
-          </div>
-          <div>
-            <FieldLabel>右（分）</FieldLabel>
-            <OptionGrid
-              options={MINUTE_OPTIONS}
-              value={rightMinutes}
-              onChange={(value) => {
-                setRightMinutes(value);
-                setEditedRight(true);
-              }}
-              columns={7}
-              accent="milk"
-            />
-          </div>
+          <MinuteField
+            label="左（分）"
+            value={leftMinutes}
+            custom={customLeft}
+            onSelect={(value) => applyMinutes('left', value, '')}
+            onCustomChange={(value) => handleCustomMinutes('left', value)}
+          />
+          <MinuteField
+            label="右（分）"
+            value={rightMinutes}
+            custom={customRight}
+            onSelect={(value) => applyMinutes('right', value, '')}
+            onCustomChange={(value) => handleCustomMinutes('right', value)}
+          />
           <div>
             <FieldLabel>最後に飲ませた側</FieldLabel>
             <OptionGrid options={SIDE_OPTIONS} value={lastSide} onChange={setLastSide} columns={2} accent="milk" />
@@ -229,13 +255,57 @@ function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, o
         </>
       )}
 
-      <TimeField label="時刻" value={time} onChange={setTime} />
+      <DateTimeField
+        label="日時"
+        date={date}
+        time={time}
+        onChangeDate={setDate}
+        onChangeTime={setTime}
+      />
       <NoteField value={note} onChange={setNote} placeholder="よく飲んだ / 途中で寝た など" />
       <SubmitButton accent="milk" onClick={handleSubmit}>
         保存する
       </SubmitButton>
       {log && <DeleteButton onDelete={onDelete} />}
     </LogModalShell>
+  );
+}
+
+interface MinuteFieldProps {
+  label: string;
+  value: number | undefined;
+  /** ボタンに無い分数を入れている間だけ中身が入る。 */
+  custom: string;
+  onSelect: (value: number) => void;
+  onCustomChange: (value: string) => void;
+}
+
+/**
+ * 母乳の授乳時間。よく使う分数はボタンで選び、それ以外は直接入力する。
+ * 計測を止め忘れて長い時間が入ってしまったときも、ここで実際の時間に直せる。
+ */
+function MinuteField({ label, value, custom, onSelect, onCustomChange }: MinuteFieldProps) {
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <OptionGrid
+        options={MINUTE_OPTIONS}
+        value={custom === '' ? value : undefined}
+        onChange={onSelect}
+        columns={7}
+        accent="milk"
+      />
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        aria-label={`${label}を直接入力`}
+        value={custom}
+        onChange={(e) => onCustomChange(e.target.value)}
+        className="mt-1.5 w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500"
+        placeholder="上記以外の分数を直接入力"
+      />
+    </div>
   );
 }
 
@@ -313,9 +383,14 @@ function BreastStopwatch({
         })}
       </div>
       {hasSession ? (
-        <p className="text-[11px] font-bold text-amber-700 mt-2">
-          左{recordedLeft}分・右{recordedRight}分で記録します
-        </p>
+        <>
+          <p className="text-[11px] font-bold text-amber-700 mt-2">
+            左{recordedLeft}分・右{recordedRight}分で記録します
+          </p>
+          <p className="text-[10px] text-gray-500 mt-0.5">
+            止めるのを忘れたときは、下の「左（分）」「右（分）」で実際の時間に直せます。
+          </p>
+        </>
       ) : (
         <p className="text-[10px] text-gray-500 mt-2">
           反対側をタップすると自動で切り替わります。この画面を閉じても計測は続きます。
