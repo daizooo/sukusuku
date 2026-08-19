@@ -258,6 +258,7 @@ export type Database = {
       }
       nurseries: {
         Row: {
+          checklist: Json
           distance: string | null
           family_id: string
           id: string
@@ -267,6 +268,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          checklist?: Json
           distance?: string | null
           family_id: string
           id?: string
@@ -276,6 +278,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          checklist?: Json
           distance?: string | null
           family_id?: string
           id?: string

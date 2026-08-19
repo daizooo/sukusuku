@@ -124,6 +124,15 @@ export interface DocumentItem {
 
 export type NurseryStatus = '未見学' | '見学予約済' | '見学済';
 
+/** 見学チェックリストの1項目の状態。項目の定義は src/lib/nurseryChecklist.ts にある。 */
+export interface NurseryCheckState {
+  checked: boolean;
+  memo: string;
+}
+
+/** 見学チェックリストの状態。キーは NurseryCheckItem の id。 */
+export type NurseryChecklist = Record<string, NurseryCheckState>;
+
 export interface Nursery {
   id: string;
   name: string;
@@ -131,6 +140,8 @@ export interface Nursery {
   status: NurseryStatus | string;
   phone: string;
   memo: string;
+  /** 見学チェックリストの状態。未チェックの項目はキー自体を持たない。 */
+  checklist: NurseryChecklist;
 }
 
 // familyメンバー(パパ/ママ)の表示名解決用

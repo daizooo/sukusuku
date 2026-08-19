@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Copy, Heart, LogOut, Loader2, UserPlus, Users } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { seedDefaultNurseries } from '@/lib/api/nurseries';
 import { seedDefaultTasks } from '@/lib/api/tasks';
 
 type Role = 'papa' | 'mama';
@@ -78,6 +79,13 @@ export default function FamilySetupPage() {
       } catch (seedError) {
         // 定番ToDoの登録に失敗しても家族作成自体は成功しているため、続行する
         console.error('Failed to seed default tasks:', seedError);
+      }
+
+      try {
+        await seedDefaultNurseries(supabase, newFamilyId);
+      } catch (seedError) {
+        // 見学候補の保育園はアプリ側からも追加できるため、失敗しても続行する
+        console.error('Failed to seed default nurseries:', seedError);
       }
 
       setCreatedFamilyId(newFamilyId);
