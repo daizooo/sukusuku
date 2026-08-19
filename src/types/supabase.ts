@@ -258,31 +258,40 @@ export type Database = {
       }
       nurseries: {
         Row: {
-          distance: string | null
+          address: string | null
+          checklist: Json
           family_id: string
           id: string
           memo: string | null
           name: string
           phone: string | null
           status: string
+          visit_date: string | null
+          visit_time: string | null
         }
         Insert: {
-          distance?: string | null
+          address?: string | null
+          checklist?: Json
           family_id: string
           id?: string
           memo?: string | null
           name: string
           phone?: string | null
           status?: string
+          visit_date?: string | null
+          visit_time?: string | null
         }
         Update: {
-          distance?: string | null
+          address?: string | null
+          checklist?: Json
           family_id?: string
           id?: string
           memo?: string | null
           name?: string
           phone?: string | null
           status?: string
+          visit_date?: string | null
+          visit_time?: string | null
         }
         Relationships: [
           {

@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Camera, Gift as GiftIcon, Image as ImageIcon, MapPin, Phone, Plus, Trash2 } from 'lucide-react';
+import { CalendarDays, Camera, ClipboardCheck, Gift as GiftIcon, Image as ImageIcon, MapPin, Phone, Plus, Trash2 } from 'lucide-react';
 import type { DocumentItem, Gift, Nursery } from '@/types/app';
+import { countChecked, NURSERY_CHECK_TOTAL } from '@/lib/nurseryChecklist';
+import { formatDateWithWeekday, parseDateString } from '@/lib/dateUtils';
 import TabHeading from '../ui/TabHeading';
 import SegmentedTabs from '../ui/SegmentedTabs';
 import GiftFormModal, { type GiftDraft } from '../modals/GiftFormModal';
@@ -27,6 +29,7 @@ interface MemoTabProps {
   onAddNursery: (draft: NurseryDraft) => void;
   onUpdateNursery: (nursery: Nursery, draft: NurseryDraft) => void;
   onDeleteNursery: (id: string) => void;
+  onAddDefaultNurseries: () => void;
 }
 
 const VIEW_TITLES: Record<MemoView, string> = {
@@ -96,6 +99,7 @@ export default function MemoTab({
   onAddNursery,
   onUpdateNursery,
   onDeleteNursery,
+  onAddDefaultNurseries,
 }: MemoTabProps) {
   const [memoView, setMemoView] = useState<MemoView>('gift');
   const [giftModal, setGiftModal] = useState<{ mode: 'add' | 'edit'; gift: Gift | null } | null>(null);
@@ -191,44 +195,85 @@ export default function MemoTab({
         {memoView === 'nursery' && (
           <div className="space-y-4 pb-6">
             <div className="bg-orange-50 border border-orange-100 p-3 rounded-xl text-xs text-orange-800 leading-relaxed">
-              候補の保育園情報や、見学時のメモを夫婦で共有しましょう。見学時のチェックポイントなども残せます。
+              園の連絡先・見学の日時・見学チェックリスト（10項目）を園ごとに1枚でまとめて残せます。カードを開いて編集してください。
             </div>
             {isLoadingNurseries && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
             {!isLoadingNurseries && nurseries.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-8">保育園の記録はまだありません</p>
-            )}
-            {nurseries.map((nursery) => (
-              <button
-                key={nursery.id}
-                onClick={() => setNurseryModal({ mode: 'edit', nursery })}
-                className="w-full text-left bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:bg-gray-50 transition"
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <h3 className="font-bold text-gray-800 text-sm">{nursery.name}</h3>
-                  <span
-                    className={`text-[10px] font-bold px-2 py-1 rounded-md whitespace-nowrap ml-2 ${
-                      nursery.status === '見学済' ? 'bg-green-100 text-green-700' : nursery.status === '未見学' ? 'bg-gray-100 text-gray-600' : 'bg-blue-100 text-blue-700'
-                    }`}
-                  >
-                    {nursery.status}
+              <div className="text-center py-8 space-y-3">
+                <p className="text-sm text-gray-400">保育園の記録はまだありません</p>
+                <button
+                  onClick={onAddDefaultNurseries}
+                  className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 hover:bg-blue-100 transition"
+                >
+                  見学候補の3園を追加
+                  <span className="block font-normal text-[10px] text-blue-400 mt-1">
+                    舞原保育園・くすのき保育園・和光こども園
                   </span>
-                </div>
-                <div className="space-y-1.5 text-xs">
-                  <p className="flex items-center text-gray-600">
-                    <MapPin size={12} className="mr-1" /> {nursery.distance}
-                  </p>
-                  <p className="flex items-center text-blue-500">
-                    <Phone size={12} className="mr-1" /> {nursery.phone}
-                  </p>
-                  {nursery.memo && (
-                    <div className="mt-3 bg-gray-50 p-3 rounded-lg text-gray-700 border border-gray-100">
-                      <strong className="block text-[10px] text-gray-400 mb-1">メモ</strong>
-                      {nursery.memo}
+                </button>
+              </div>
+            )}
+            {nurseries.map((nursery) => {
+              const checkedCount = countChecked(nursery.checklist);
+              const visitDate = parseDateString(nursery.visitDate ?? '');
+              return (
+                <button
+                  key={nursery.id}
+                  onClick={() => setNurseryModal({ mode: 'edit', nursery })}
+                  className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm hover:bg-gray-50 transition"
+                >
+                  <div className="p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <h3 className="font-bold text-gray-800 text-sm">{nursery.name}</h3>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-1 rounded-md whitespace-nowrap ml-2 ${
+                          nursery.status === '見学済' ? 'bg-green-100 text-green-700' : nursery.status === '未見学' ? 'bg-gray-100 text-gray-600' : 'bg-blue-100 text-blue-700'
+                        }`}
+                      >
+                        {nursery.status}
+                      </span>
                     </div>
-                  )}
-                </div>
-              </button>
-            ))}
+                    <div className="space-y-1.5 text-xs">
+                      {nursery.address && (
+                        <p className="flex items-start text-gray-600">
+                          <MapPin size={12} className="mr-1 mt-0.5 shrink-0" /> {nursery.address}
+                        </p>
+                      )}
+                      {nursery.phone && (
+                        <p className="flex items-center text-blue-500">
+                          <Phone size={12} className="mr-1 shrink-0" /> {nursery.phone}
+                        </p>
+                      )}
+                      <p className={`flex items-center ${visitDate ? 'text-gray-700 font-bold' : 'text-gray-400'}`}>
+                        <CalendarDays size={12} className="mr-1 shrink-0" />
+                        {visitDate ? `${formatDateWithWeekday(visitDate)}${nursery.visitTime ? ` ${nursery.visitTime}〜` : ''}` : '見学日は未定'}
+                      </p>
+                      {nursery.memo && (
+                        <div className="mt-3 bg-gray-50 p-3 rounded-lg text-gray-700 border border-gray-100">
+                          <strong className="block text-[10px] text-gray-400 mb-1">メモ</strong>
+                          {nursery.memo}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-gray-100 px-4 py-2.5">
+                    <span className="flex items-center text-[11px] font-bold text-gray-500">
+                      <ClipboardCheck size={13} className="mr-1.5 text-blue-500" /> 見学チェックリスト
+                    </span>
+                    <span className="flex items-center">
+                      <span className="w-16 h-1.5 bg-gray-100 rounded-full mr-2 overflow-hidden">
+                        <span
+                          className="block h-full bg-blue-400 rounded-full"
+                          style={{ width: `${(checkedCount / NURSERY_CHECK_TOTAL) * 100}%` }}
+                        />
+                      </span>
+                      <span className="text-[10px] font-bold text-gray-500">
+                        {checkedCount}/{NURSERY_CHECK_TOTAL}
+                      </span>
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
 

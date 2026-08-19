@@ -1,9 +1,10 @@
+import type { NurseryInput } from '@/lib/api/nurseries';
 import type { Task, UserProfile } from '@/types/app';
 
-// 家族の新規作成時にSupabaseへ登録する定番ToDoのテンプレート（idはDB側で採番するため持たない）
-// スケジュール(tasks)のみ、初回セットアップ時の定番項目としてこのテンプレートを使用する。
-// それ以外のデータ(育児記録・お祝い・成長記録・書類・保活メモ)はSupabaseから取得する実データのみを扱う。
-// いずれも出生日を起点に時期が決まるため anchorType は 'birth_relative'。
+// 家族の新規作成時にSupabaseへ登録する定番項目のテンプレート（idはDB側で採番するため持たない）
+// スケジュール(tasks)と保活メモ(nurseries)のみ、初回セットアップ時の定番項目としてこのテンプレートを使用する。
+// それ以外のデータ(育児記録・お祝い・成長記録・書類)はSupabaseから取得する実データのみを扱う。
+// ToDo・イベントはいずれも出生日を起点に時期が決まるため anchorType は 'birth_relative'。
 type TaskTemplate = Omit<Task, 'id'>;
 
 const birthRelative = (
@@ -52,6 +53,41 @@ export const INITIAL_EVENTS: TaskTemplate[] = [
   birthRelative({ category: '健診', title: '予防接種(就学前)', place: '', timing: '小学校入学前の1年間', daysAfterBirth: 2190, done: false, note: 'MR(麻しん風しん)②, おたふくかぜ②', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
   birthRelative({ category: '健診', title: '予防接種(9歳)', place: '', timing: '9歳', daysAfterBirth: 3285, done: false, note: '日本脳炎④', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
   birthRelative({ category: '健診', title: '予防接種(11歳)', place: '', timing: '11歳', daysAfterBirth: 4015, done: false, note: '2種混合', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
+];
+
+// 見学候補の保育園。熊本市南区（城南町）の3園を初期登録する。
+// 住所・電話番号は公開情報をもとにした初期値なので、電話をかける前に園のサイト等で確認する。
+export const INITIAL_NURSERIES: NurseryInput[] = [
+  {
+    name: '舞原保育園',
+    address: '熊本市南区城南町舞原291-7',
+    status: '未見学',
+    phone: '0964-28-2121',
+    visitDate: null,
+    visitTime: null,
+    memo: '',
+    checklist: {},
+  },
+  {
+    name: 'くすのき保育園',
+    address: '熊本市南区城南町六田475-2',
+    status: '未見学',
+    phone: '0964-28-6163',
+    visitDate: null,
+    visitTime: null,
+    memo: '',
+    checklist: {},
+  },
+  {
+    name: '和光こども園',
+    address: '熊本市南区城南町隈庄736',
+    status: '未見学',
+    phone: '0964-28-4993',
+    visitDate: null,
+    visitTime: null,
+    memo: '',
+    checklist: {},
+  },
 ];
 
 export const INITIAL_PROFILE: UserProfile = {

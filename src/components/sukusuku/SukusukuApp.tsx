@@ -85,6 +85,7 @@ import {
   deleteNursery,
   insertNursery,
   listNurseries,
+  seedDefaultNurseries,
   updateNursery as updateNurseryApi,
 } from '@/lib/api/nurseries';
 import { listFamilyMembers } from '@/lib/api/familyMembers';
@@ -884,6 +885,17 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
     }
   };
 
+  // 保活メモが空のときに、見学候補の保育園をまとめて登録する
+  const addDefaultNurseriesHandler = async () => {
+    try {
+      const created = await seedDefaultNurseries(supabase, familyId);
+      setNurseries((prev) => [...prev, ...created]);
+    } catch (err) {
+      console.error('Failed to add default nurseries:', err);
+      alert('見学候補の追加に失敗しました。もう一度お試しください。');
+    }
+  };
+
   const deleteNurseryHandler = async (id: string) => {
     const previous = nurseries;
     setNurseries((prev) => prev.filter((n) => n.id !== id));
@@ -1006,6 +1018,7 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               onAddNursery={addNurseryHandler}
               onUpdateNursery={updateNurseryHandler}
               onDeleteNursery={deleteNurseryHandler}
+              onAddDefaultNurseries={addDefaultNurseriesHandler}
             />
           )}
           {activeTab === 'info' && (
