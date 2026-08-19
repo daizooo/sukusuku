@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Check, Trash2, X } from 'lucide-react';
 import type { Nursery, NurseryStatus } from '@/types/app';
-import { countChecked, NURSERY_CHECK_GROUPS, NURSERY_CHECK_TOTAL } from '@/lib/nurseryChecklist';
+import { checkItemNumber, countChecked, NURSERY_CHECK_GROUPS, NURSERY_CHECK_TOTAL } from '@/lib/nurseryChecklist';
 
 // 園の情報と見学チェックリストは1つの画面でまとめて編集・保存する
 export type NurseryDraft = Omit<Nursery, 'id'>;
@@ -11,7 +11,6 @@ export type NurseryDraft = Omit<Nursery, 'id'>;
 const EMPTY_DRAFT: NurseryDraft = {
   name: '',
   address: '',
-  distance: '',
   status: '未見学',
   phone: '',
   visitDate: null,
@@ -41,7 +40,6 @@ export default function NurseryFormModal({ mode, nursery, onClose, onSubmit, onD
       ? {
           name: nursery.name,
           address: nursery.address,
-          distance: nursery.distance,
           status: nursery.status,
           phone: nursery.phone,
           visitDate: nursery.visitDate,
@@ -110,29 +108,17 @@ export default function NurseryFormModal({ mode, nursery, onClose, onSubmit, onD
                   placeholder="例: 0964-28-2121"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">距離・アクセス</label>
-                  <input
-                    type="text"
-                    value={draft.distance}
-                    onChange={(e) => set({ distance: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500"
-                    placeholder="例: 車5分"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">状況</label>
-                  <select
-                    value={draft.status}
-                    onChange={(e) => set({ status: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white"
-                  >
-                    {STATUSES.map((status) => (
-                      <option key={status}>{status}</option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">状況</label>
+                <select
+                  value={draft.status}
+                  onChange={(e) => set({ status: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white"
+                >
+                  {STATUSES.map((status) => (
+                    <option key={status}>{status}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
@@ -160,6 +146,7 @@ export default function NurseryFormModal({ mode, nursery, onClose, onSubmit, onD
             <SectionTitle>
               見学チェックリスト（{checkedCount}/{NURSERY_CHECK_TOTAL}）
             </SectionTitle>
+            <p className="text-[10px] text-gray-400 -mt-1 mb-2">見学当日に確認しやすい順に並べています。</p>
             <div className="space-y-4">
               {NURSERY_CHECK_GROUPS.map((group) => (
                 <div key={group.id} className="space-y-2">
@@ -181,7 +168,10 @@ export default function NurseryFormModal({ mode, nursery, onClose, onSubmit, onD
                             <Check size={14} strokeWidth={3} />
                           </span>
                           <span>
-                            <span className="block text-sm font-bold text-gray-800 leading-tight">{item.title}</span>
+                            <span className="block text-sm font-bold text-gray-800 leading-tight">
+                              <span className="text-gray-400 mr-1">{checkItemNumber(item.id)}.</span>
+                              {item.title}
+                            </span>
                             <span className="block text-[11px] text-gray-500 leading-relaxed mt-1">{item.point}</span>
                           </span>
                         </button>

@@ -61,7 +61,6 @@ export const INITIAL_NURSERIES: NurseryInput[] = [
   {
     name: '舞原保育園',
     address: '熊本市南区城南町舞原291-7',
-    distance: '',
     status: '未見学',
     phone: '0964-28-2121',
     visitDate: null,
@@ -72,7 +71,6 @@ export const INITIAL_NURSERIES: NurseryInput[] = [
   {
     name: 'くすのき保育園',
     address: '熊本市南区城南町六田475-2',
-    distance: '',
     status: '未見学',
     phone: '0964-28-6163',
     visitDate: null,
@@ -83,7 +81,6 @@ export const INITIAL_NURSERIES: NurseryInput[] = [
   {
     name: '和光こども園',
     address: '熊本市南区城南町隈庄736',
-    distance: '',
     status: '未見学',
     phone: '0964-28-4993',
     visitDate: null,

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CalendarDays, Camera, ClipboardCheck, Gift as GiftIcon, Image as ImageIcon, MapPin, Navigation, Phone, Plus, Trash2 } from 'lucide-react';
+import { CalendarDays, Camera, ClipboardCheck, Gift as GiftIcon, Image as ImageIcon, MapPin, Phone, Plus, Trash2 } from 'lucide-react';
 import type { DocumentItem, Gift, Nursery } from '@/types/app';
 import { countChecked, NURSERY_CHECK_TOTAL } from '@/lib/nurseryChecklist';
 import { formatDateWithWeekday, parseDateString } from '@/lib/dateUtils';
@@ -241,11 +241,6 @@ export default function MemoTab({
                       {nursery.phone && (
                         <p className="flex items-center text-blue-500">
                           <Phone size={12} className="mr-1 shrink-0" /> {nursery.phone}
-                        </p>
-                      )}
-                      {nursery.distance && (
-                        <p className="flex items-center text-gray-600">
-                          <Navigation size={12} className="mr-1 shrink-0" /> {nursery.distance}
                         </p>
                       )}
                       <p className={`flex items-center ${visitDate ? 'text-gray-700 font-bold' : 'text-gray-400'}`}>

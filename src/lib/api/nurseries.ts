@@ -27,7 +27,6 @@ export const rowToNursery = (row: NurseryRow): Nursery => ({
   id: row.id,
   name: row.name,
   address: row.address ?? '',
-  distance: row.distance ?? '',
   status: row.status,
   phone: row.phone ?? '',
   visitDate: row.visit_date,
@@ -41,7 +40,6 @@ export type NurseryInput = Omit<Nursery, 'id'>;
 const toWritableRow = (input: NurseryInput) => ({
   name: input.name,
   address: input.address,
-  distance: input.distance,
   status: input.status,
   phone: input.phone,
   visit_date: input.visitDate,

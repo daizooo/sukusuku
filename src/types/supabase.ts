@@ -260,7 +260,6 @@ export type Database = {
         Row: {
           address: string | null
           checklist: Json
-          distance: string | null
           family_id: string
           id: string
           memo: string | null
@@ -273,7 +272,6 @@ export type Database = {
         Insert: {
           address?: string | null
           checklist?: Json
-          distance?: string | null
           family_id: string
           id?: string
           memo?: string | null
@@ -286,7 +284,6 @@ export type Database = {
         Update: {
           address?: string | null
           checklist?: Json
-          distance?: string | null
           family_id?: string
           id?: string
           memo?: string | null

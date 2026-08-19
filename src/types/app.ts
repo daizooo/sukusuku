@@ -137,7 +137,6 @@ export interface Nursery {
   id: string;
   name: string;
   address: string;
-  distance: string;
   status: NurseryStatus | string;
   phone: string;
   /** 見学日 'YYYY-MM-DD'。未定なら null。 */

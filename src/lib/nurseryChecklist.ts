@@ -19,31 +19,54 @@ export interface NurseryCheckGroup {
   items: NurseryCheckItem[];
 }
 
+// 見学当日の流れ（到着 → 園内を回る → 最後の質問タイム）に沿った順番で並べる。
+// その場で目に入るものから先に確認し、園長・主任に時間をもらって聞くことは最後にまとめる。
 export const NURSERY_CHECK_GROUPS: NurseryCheckGroup[] = [
   {
-    id: 'daily',
-    title: '送迎・持ち物の手間',
+    id: 'arrival',
+    title: '到着〜玄関で',
     items: [
       {
-        id: 'diaper',
-        title: 'おむつのサブスク・持ち帰り',
-        point: '1枚ずつ記名が必要か。使用済みおむつは園で捨てられるか、サブスクはあるか。',
+        id: 'parking',
+        title: 'ベビーカー・抱っこ紐・自転車の置き場',
+        point: '置いたまま通勤できるか。雨の日に困らないか。',
       },
       {
         id: 'belongings',
         title: '荷物の持ち込みとセット作業',
         point: '荷物は玄関で預かってもらえるか。布団は持参かレンタル（コット）か。',
       },
+    ],
+  },
+  {
+    id: 'tour',
+    title: '園内を見ながら（0歳児クラス）',
+    items: [
       {
-        id: 'parking',
-        title: 'ベビーカー・抱っこ紐・自転車の置き場',
-        point: '置いたまま通勤できるか。雨の日に困らないか。',
+        id: 'sids',
+        title: '睡眠中（SIDS対策）の見守り',
+        point: 'センサー任せになっていないか。5分おきの目視・触診まで徹底しているか。',
+      },
+      {
+        id: 'diaper',
+        title: 'おむつのサブスク・持ち帰り',
+        point: '1枚ずつ記名が必要か。使用済みおむつは園で捨てられるか、サブスクはあるか。',
+      },
+      {
+        id: 'meal',
+        title: '離乳食・アレルギー・ミルクの柔軟さ',
+        point: 'ミルクの銘柄指定や冷凍母乳の可否。未導入食材のルールが厳しすぎないか。',
+      },
+      {
+        id: 'staff',
+        title: '先生の勤続年数と雰囲気',
+        point: '先生同士が笑顔で話しているか。ベテランと若手のバランス、離職の多さ。',
       },
     ],
   },
   {
-    id: 'health',
-    title: '0歳児の健康・復職後の仕事',
+    id: 'questions',
+    title: '最後の質問タイムで',
     items: [
       {
         id: 'fever',
@@ -51,35 +74,14 @@ export const NURSERY_CHECK_GROUPS: NurseryCheckGroup[] = [
         point: '呼び出しは機嫌や平熱も見てくれるか。解熱後24時間は登園不可などの条件があるか。',
       },
       {
-        id: 'sids',
-        title: '睡眠中（SIDS対策）の見守り',
-        point: 'センサー任せになっていないか。5分おきの目視・触診まで徹底しているか。',
-      },
-      {
-        id: 'meal',
-        title: '離乳食・アレルギー・ミルクの柔軟さ',
-        point: 'ミルクの銘柄指定や冷凍母乳の可否。未導入食材のルールが厳しすぎないか。',
-      },
-    ],
-  },
-  {
-    id: 'culture',
-    title: '園の雰囲気・親の出番',
-    items: [
-      {
-        id: 'staff',
-        title: '先生の勤続年数と雰囲気',
-        point: '先生同士が笑顔で話しているか。ベテランと若手のバランス、離職の多さ。',
+        id: 'contact',
+        title: '連絡帳の形式と写真配信',
+        point: '連絡アプリ（コドモン等）か手書きか。日中の写真を送ってもらえるか。',
       },
       {
         id: 'parents',
         title: '保護者会・平日行事の多さ',
         point: '平日行事や保護者会の頻度。オンライン参加や土日開催があるか。',
-      },
-      {
-        id: 'contact',
-        title: '連絡帳の形式と写真配信',
-        point: '連絡アプリ（コドモン等）か手書きか。日中の写真を送ってもらえるか。',
       },
       {
         id: 'director',
@@ -93,6 +95,10 @@ export const NURSERY_CHECK_GROUPS: NurseryCheckGroup[] = [
 export const NURSERY_CHECK_ITEMS: NurseryCheckItem[] = NURSERY_CHECK_GROUPS.flatMap((g) => g.items);
 
 export const NURSERY_CHECK_TOTAL = NURSERY_CHECK_ITEMS.length;
+
+/** 聞く順番（1始まり）。定義の並び順がそのまま当日の流れになる。 */
+export const checkItemNumber = (itemId: string): number =>
+  NURSERY_CHECK_ITEMS.findIndex((item) => item.id === itemId) + 1;
 
 /** チェック済みの項目数。定義から消えた項目IDが残っていても数えない。 */
 export const countChecked = (checklist: NurseryChecklist): number =>
