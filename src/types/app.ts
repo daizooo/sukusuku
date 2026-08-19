@@ -136,9 +136,14 @@ export type NurseryChecklist = Record<string, NurseryCheckState>;
 export interface Nursery {
   id: string;
   name: string;
+  address: string;
   distance: string;
   status: NurseryStatus | string;
   phone: string;
+  /** 見学日 'YYYY-MM-DD'。未定なら null。 */
+  visitDate: string | null;
+  /** 見学の時刻 'HH:mm'。未定なら null。 */
+  visitTime: string | null;
   memo: string;
   /** 見学チェックリストの状態。未チェックの項目はキー自体を持たない。 */
   checklist: NurseryChecklist;

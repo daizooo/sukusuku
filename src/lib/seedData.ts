@@ -55,12 +55,42 @@ export const INITIAL_EVENTS: TaskTemplate[] = [
   birthRelative({ category: '健診', title: '予防接種(11歳)', place: '', timing: '11歳', daysAfterBirth: 4015, done: false, note: '2種混合', belongings: '母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
 ];
 
-// 見学候補の保育園。熊本市南区の3園を初期登録する。
-// 電話番号は園ごとに調べて入れる想定のため空にしてある。
+// 見学候補の保育園。熊本市南区（城南町）の3園を初期登録する。
+// 住所・電話番号は公開情報をもとにした初期値なので、電話をかける前に園のサイト等で確認する。
 export const INITIAL_NURSERIES: NurseryInput[] = [
-  { name: '舞原保育園', distance: '熊本市南区', status: '未見学', phone: '', memo: '' },
-  { name: 'くすのき保育園', distance: '熊本市南区', status: '未見学', phone: '', memo: '' },
-  { name: '和光こども園', distance: '熊本市南区', status: '未見学', phone: '', memo: '' },
+  {
+    name: '舞原保育園',
+    address: '熊本市南区城南町舞原291-7',
+    distance: '',
+    status: '未見学',
+    phone: '0964-28-2121',
+    visitDate: null,
+    visitTime: null,
+    memo: '',
+    checklist: {},
+  },
+  {
+    name: 'くすのき保育園',
+    address: '熊本市南区城南町六田475-2',
+    distance: '',
+    status: '未見学',
+    phone: '0964-28-6163',
+    visitDate: null,
+    visitTime: null,
+    memo: '',
+    checklist: {},
+  },
+  {
+    name: '和光こども園',
+    address: '熊本市南区城南町隈庄736',
+    distance: '',
+    status: '未見学',
+    phone: '0964-28-4993',
+    visitDate: null,
+    visitTime: null,
+    memo: '',
+    checklist: {},
+  },
 ];
 
 export const INITIAL_PROFILE: UserProfile = {

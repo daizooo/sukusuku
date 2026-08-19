@@ -258,6 +258,7 @@ export type Database = {
       }
       nurseries: {
         Row: {
+          address: string | null
           checklist: Json
           distance: string | null
           family_id: string
@@ -266,8 +267,11 @@ export type Database = {
           name: string
           phone: string | null
           status: string
+          visit_date: string | null
+          visit_time: string | null
         }
         Insert: {
+          address?: string | null
           checklist?: Json
           distance?: string | null
           family_id: string
@@ -276,8 +280,11 @@ export type Database = {
           name: string
           phone?: string | null
           status?: string
+          visit_date?: string | null
+          visit_time?: string | null
         }
         Update: {
+          address?: string | null
           checklist?: Json
           distance?: string | null
           family_id?: string
@@ -286,6 +293,8 @@ export type Database = {
           name?: string
           phone?: string | null
           status?: string
+          visit_date?: string | null
+          visit_time?: string | null
         }
         Relationships: [
           {

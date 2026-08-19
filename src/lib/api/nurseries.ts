@@ -26,28 +26,33 @@ const toChecklist = (value: Json): NurseryChecklist => {
 export const rowToNursery = (row: NurseryRow): Nursery => ({
   id: row.id,
   name: row.name,
+  address: row.address ?? '',
   distance: row.distance ?? '',
   status: row.status,
   phone: row.phone ?? '',
+  visitDate: row.visit_date,
+  visitTime: row.visit_time,
   memo: row.memo ?? '',
   checklist: toChecklist(row.checklist),
 });
 
-export interface NurseryInput {
-  name: string;
-  distance: string;
-  status: string;
-  phone: string;
-  memo: string;
-}
+export type NurseryInput = Omit<Nursery, 'id'>;
 
-const toInsertRow = (familyId: string, input: NurseryInput): TablesInsert<'nurseries'> => ({
-  family_id: familyId,
+const toWritableRow = (input: NurseryInput) => ({
   name: input.name,
+  address: input.address,
   distance: input.distance,
   status: input.status,
   phone: input.phone,
+  visit_date: input.visitDate,
+  visit_time: input.visitTime,
   memo: input.memo,
+  checklist: input.checklist as unknown as Json,
+});
+
+const toInsertRow = (familyId: string, input: NurseryInput): TablesInsert<'nurseries'> => ({
+  family_id: familyId,
+  ...toWritableRow(input),
 });
 
 export async function listNurseries(supabase: SupabaseDb, familyId: string): Promise<Nursery[]> {
@@ -63,28 +68,7 @@ export async function insertNursery(supabase: SupabaseDb, familyId: string, inpu
 }
 
 export async function updateNursery(supabase: SupabaseDb, nursery: Nursery): Promise<void> {
-  const { error } = await supabase
-    .from('nurseries')
-    .update({
-      name: nursery.name,
-      distance: nursery.distance,
-      status: nursery.status,
-      phone: nursery.phone,
-      memo: nursery.memo,
-    })
-    .eq('id', nursery.id);
-  if (error) throw error;
-}
-
-export async function updateNurseryChecklist(
-  supabase: SupabaseDb,
-  id: string,
-  checklist: NurseryChecklist,
-): Promise<void> {
-  const { error } = await supabase
-    .from('nurseries')
-    .update({ checklist: checklist as unknown as Json })
-    .eq('id', id);
+  const { error } = await supabase.from('nurseries').update(toWritableRow(nursery)).eq('id', nursery.id);
   if (error) throw error;
 }
 

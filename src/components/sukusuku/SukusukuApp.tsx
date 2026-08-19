@@ -24,7 +24,6 @@ import type {
   GrowthRecord,
   LoginRole,
   Nursery,
-  NurseryChecklist,
   ScheduleView,
   Task,
   TabId,
@@ -88,7 +87,6 @@ import {
   listNurseries,
   seedDefaultNurseries,
   updateNursery as updateNurseryApi,
-  updateNurseryChecklist,
 } from '@/lib/api/nurseries';
 import { listFamilyMembers } from '@/lib/api/familyMembers';
 import { getProfile, saveProfile } from '@/lib/api/profile';
@@ -887,18 +885,6 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
     }
   };
 
-  const updateNurseryChecklistHandler = async (nursery: Nursery, checklist: NurseryChecklist) => {
-    const previous = nurseries;
-    setNurseries((prev) => prev.map((n) => (n.id === nursery.id ? { ...n, checklist } : n)));
-    try {
-      await updateNurseryChecklist(supabase, nursery.id, checklist);
-    } catch (err) {
-      console.error('Failed to update nursery checklist:', err);
-      setNurseries(previous);
-      alert('見学チェックリストの保存に失敗しました。もう一度お試しください。');
-    }
-  };
-
   // 保活メモが空のときに、見学候補の保育園をまとめて登録する
   const addDefaultNurseriesHandler = async () => {
     try {
@@ -1032,7 +1018,6 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               onAddNursery={addNurseryHandler}
               onUpdateNursery={updateNurseryHandler}
               onDeleteNursery={deleteNurseryHandler}
-              onUpdateNurseryChecklist={updateNurseryChecklistHandler}
               onAddDefaultNurseries={addDefaultNurseriesHandler}
             />
           )}

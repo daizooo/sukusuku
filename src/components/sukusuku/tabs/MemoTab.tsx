@@ -1,15 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Camera, ClipboardCheck, Gift as GiftIcon, Image as ImageIcon, MapPin, Phone, Plus, Trash2 } from 'lucide-react';
-import type { DocumentItem, Gift, Nursery, NurseryChecklist } from '@/types/app';
+import { CalendarDays, Camera, ClipboardCheck, Gift as GiftIcon, Image as ImageIcon, MapPin, Navigation, Phone, Plus, Trash2 } from 'lucide-react';
+import type { DocumentItem, Gift, Nursery } from '@/types/app';
 import { countChecked, NURSERY_CHECK_TOTAL } from '@/lib/nurseryChecklist';
+import { formatDateWithWeekday, parseDateString } from '@/lib/dateUtils';
 import TabHeading from '../ui/TabHeading';
 import SegmentedTabs from '../ui/SegmentedTabs';
 import GiftFormModal, { type GiftDraft } from '../modals/GiftFormModal';
 import DocumentUploadModal from '../modals/DocumentUploadModal';
 import NurseryFormModal, { type NurseryDraft } from '../modals/NurseryFormModal';
-import NurseryChecklistModal from '../modals/NurseryChecklistModal';
 
 type MemoView = 'gift' | 'nursery' | 'documents';
 
@@ -29,7 +29,6 @@ interface MemoTabProps {
   onAddNursery: (draft: NurseryDraft) => void;
   onUpdateNursery: (nursery: Nursery, draft: NurseryDraft) => void;
   onDeleteNursery: (id: string) => void;
-  onUpdateNurseryChecklist: (nursery: Nursery, checklist: NurseryChecklist) => void;
   onAddDefaultNurseries: () => void;
 }
 
@@ -100,14 +99,12 @@ export default function MemoTab({
   onAddNursery,
   onUpdateNursery,
   onDeleteNursery,
-  onUpdateNurseryChecklist,
   onAddDefaultNurseries,
 }: MemoTabProps) {
   const [memoView, setMemoView] = useState<MemoView>('gift');
   const [giftModal, setGiftModal] = useState<{ mode: 'add' | 'edit'; gift: Gift | null } | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [nurseryModal, setNurseryModal] = useState<{ mode: 'add' | 'edit'; nursery: Nursery | null } | null>(null);
-  const [checklistNursery, setChecklistNursery] = useState<Nursery | null>(null);
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
@@ -198,7 +195,7 @@ export default function MemoTab({
         {memoView === 'nursery' && (
           <div className="space-y-4 pb-6">
             <div className="bg-orange-50 border border-orange-100 p-3 rounded-xl text-xs text-orange-800 leading-relaxed">
-              候補の保育園情報や、見学時のメモを夫婦で共有しましょう。園ごとに見学チェックリスト（10項目）を残せます。
+              園の連絡先・見学の日時・見学チェックリスト（10項目）を園ごとに1枚でまとめて残せます。カードを開いて編集してください。
             </div>
             {isLoadingNurseries && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
             {!isLoadingNurseries && nurseries.length === 0 && (
@@ -217,12 +214,14 @@ export default function MemoTab({
             )}
             {nurseries.map((nursery) => {
               const checkedCount = countChecked(nursery.checklist);
+              const visitDate = parseDateString(nursery.visitDate ?? '');
               return (
-                <div key={nursery.id} className="bg-white rounded-xl border border-gray-100 shadow-sm">
-                  <button
-                    onClick={() => setNurseryModal({ mode: 'edit', nursery })}
-                    className="w-full text-left p-4 hover:bg-gray-50 transition rounded-t-xl"
-                  >
+                <button
+                  key={nursery.id}
+                  onClick={() => setNurseryModal({ mode: 'edit', nursery })}
+                  className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm hover:bg-gray-50 transition"
+                >
+                  <div className="p-4">
                     <div className="flex justify-between items-start mb-3">
                       <h3 className="font-bold text-gray-800 text-sm">{nursery.name}</h3>
                       <span
@@ -234,11 +233,24 @@ export default function MemoTab({
                       </span>
                     </div>
                     <div className="space-y-1.5 text-xs">
-                      <p className="flex items-center text-gray-600">
-                        <MapPin size={12} className="mr-1" /> {nursery.distance}
-                      </p>
-                      <p className="flex items-center text-blue-500">
-                        <Phone size={12} className="mr-1" /> {nursery.phone}
+                      {nursery.address && (
+                        <p className="flex items-start text-gray-600">
+                          <MapPin size={12} className="mr-1 mt-0.5 shrink-0" /> {nursery.address}
+                        </p>
+                      )}
+                      {nursery.phone && (
+                        <p className="flex items-center text-blue-500">
+                          <Phone size={12} className="mr-1 shrink-0" /> {nursery.phone}
+                        </p>
+                      )}
+                      {nursery.distance && (
+                        <p className="flex items-center text-gray-600">
+                          <Navigation size={12} className="mr-1 shrink-0" /> {nursery.distance}
+                        </p>
+                      )}
+                      <p className={`flex items-center ${visitDate ? 'text-gray-700 font-bold' : 'text-gray-400'}`}>
+                        <CalendarDays size={12} className="mr-1 shrink-0" />
+                        {visitDate ? `${formatDateWithWeekday(visitDate)}${nursery.visitTime ? ` ${nursery.visitTime}〜` : ''}` : '見学日は未定'}
                       </p>
                       {nursery.memo && (
                         <div className="mt-3 bg-gray-50 p-3 rounded-lg text-gray-700 border border-gray-100">
@@ -247,13 +259,10 @@ export default function MemoTab({
                         </div>
                       )}
                     </div>
-                  </button>
-                  <button
-                    onClick={() => setChecklistNursery(nursery)}
-                    className="w-full flex items-center justify-between border-t border-gray-100 px-4 py-3 hover:bg-gray-50 transition rounded-b-xl"
-                  >
-                    <span className="flex items-center text-xs font-bold text-gray-700">
-                      <ClipboardCheck size={14} className="mr-1.5 text-blue-500" /> 見学チェックリスト
+                  </div>
+                  <div className="flex items-center justify-between border-t border-gray-100 px-4 py-2.5">
+                    <span className="flex items-center text-[11px] font-bold text-gray-500">
+                      <ClipboardCheck size={13} className="mr-1.5 text-blue-500" /> 見学チェックリスト
                     </span>
                     <span className="flex items-center">
                       <span className="w-16 h-1.5 bg-gray-100 rounded-full mr-2 overflow-hidden">
@@ -266,8 +275,8 @@ export default function MemoTab({
                         {checkedCount}/{NURSERY_CHECK_TOTAL}
                       </span>
                     </span>
-                  </button>
-                </div>
+                  </div>
+                </button>
               );
             })}
           </div>
@@ -320,15 +329,6 @@ export default function MemoTab({
         onSubmit={async (file, title) => {
           await onAddDocument(file, title);
           setShowUpload(false);
-        }}
-      />
-      <NurseryChecklistModal
-        key={`checklist-${checklistNursery?.id ?? 'none'}`}
-        nursery={checklistNursery}
-        onClose={() => setChecklistNursery(null)}
-        onSubmit={(checklist) => {
-          if (checklistNursery) onUpdateNurseryChecklist(checklistNursery, checklist);
-          setChecklistNursery(null);
         }}
       />
       <NurseryFormModal
