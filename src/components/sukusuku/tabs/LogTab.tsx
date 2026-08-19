@@ -313,8 +313,9 @@ export default function LogTab({
                   {diaperSummaryText}
                 </span>
               </button>
+              {/* 計測中なら、その記録を開いて時刻を直したり終わらせたりできるようにする。 */}
               <button
-                onClick={() => setLogModal({ type: 'sleep', log: null })}
+                onClick={() => setLogModal({ type: 'sleep', log: activeSleep })}
                 className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-indigo-50 transition active:scale-95"
               >
                 <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />

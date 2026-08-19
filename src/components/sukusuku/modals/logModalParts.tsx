@@ -137,23 +137,43 @@ export function NoteField({ value, onChange, placeholder }: NoteFieldProps) {
   );
 }
 
-interface TimeFieldProps {
+interface DateTimeFieldProps {
   label: string;
-  value: string;
-  onChange: (value: string) => void;
+  /** 'YYYY-MM-DD' */
+  date: string;
+  /** 'HH:MM' */
+  time: string;
+  onChangeDate: (value: string) => void;
+  onChangeTime: (value: string) => void;
 }
 
-export function TimeField({ label, value, onChange }: TimeFieldProps) {
+/**
+ * 記録の日時。時刻だけでなく日付も直せるようにして、日をまたいだ記録や
+ * 日を間違えて保存した記録をあとから正せるようにする。
+ */
+export function DateTimeField({ label, date, time, onChangeDate, onChangeTime }: DateTimeFieldProps) {
+  const inputClass =
+    'border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500 tabular-nums';
   return (
-    <label className="block">
+    <div>
       <FieldLabel>{label}</FieldLabel>
-      <input
-        type="time"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500 tabular-nums"
-      />
-    </label>
+      <div className="flex gap-2">
+        <input
+          type="date"
+          aria-label={`${label}（日付）`}
+          value={date}
+          onChange={(e) => onChangeDate(e.target.value)}
+          className={`flex-1 min-w-0 ${inputClass}`}
+        />
+        <input
+          type="time"
+          aria-label={`${label}（時刻）`}
+          value={time}
+          onChange={(e) => onChangeTime(e.target.value)}
+          className={`w-28 shrink-0 ${inputClass}`}
+        />
+      </div>
+    </div>
   );
 }
 

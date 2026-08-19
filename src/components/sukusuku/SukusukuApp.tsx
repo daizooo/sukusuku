@@ -680,8 +680,14 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   const saveDiaperLog = (input: DiaperLogInput, existing: DiaperLog | null) =>
     saveLog(existing, { type: 'diaper', ...input });
 
-  const saveSleepLog = ({ startedAt, endedAt, note }: ManualSleepInput, existing: SleepLog | null) =>
-    saveLog(existing, { type: 'sleep', time: startedAt, startedAt, endedAt, note });
+  const saveSleepLog = ({ startedAt, endedAt, note }: ManualSleepInput, existing: SleepLog | null) => {
+    // 計測中の記録を時刻指定で終わらせたときも、通知と控えを片付ける（「起きた」と同じ扱い）。
+    if (existing && activeSleep?.id === existing.id) {
+      void clearSleepNotification();
+      void clearPendingWake();
+    }
+    return saveLog(existing, { type: 'sleep', time: startedAt, startedAt, endedAt, note });
+  };
 
   const deleteLog = async (id: string) => {
     const previous = logs;

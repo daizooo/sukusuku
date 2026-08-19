@@ -11,8 +11,9 @@ import {
   needsMedicalAttention,
   type PoopColorOption,
 } from '@/lib/careLogUtils';
-import { parseTimeInput, toTimeInputValue } from '@/lib/dateUtils';
+import { parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUtils';
 import {
+  DateTimeField,
   DeleteButton,
   FieldLabel,
   LogModalShell,
@@ -20,7 +21,6 @@ import {
   OptionGrid,
   Segmented,
   SubmitButton,
-  TimeField,
 } from './logModalParts';
 
 export interface DiaperLogInput {
@@ -87,6 +87,8 @@ function DiaperLogModalBody({ log, baseDate, onClose, onSubmit, onDelete }: Diap
   const [poopConsistency, setPoopConsistency] = useState<PoopConsistency | undefined>(
     log?.poopConsistency ?? 'normal',
   );
+  // 新規は表示中の日 + 今の時刻。編集は保存されている日時をそのまま出す。
+  const [date, setDate] = useState(() => toDateString(log?.time ?? baseDate));
   const [time, setTime] = useState(() => toTimeInputValue(log?.time ?? new Date()));
   const [note, setNote] = useState(log?.note ?? '');
 
@@ -98,7 +100,7 @@ function DiaperLogModalBody({ log, baseDate, onClose, onSubmit, onDelete }: Diap
       // おしっこだけのときは、うんちの項目を持たせない。
       poopColor: hasPoop ? poopColor : undefined,
       poopConsistency: hasPoop ? poopConsistency : undefined,
-      time: parseTimeInput(time, log?.time ?? baseDate),
+      time: parseDateTimeInput(date, time, log?.time ?? baseDate),
       note,
     });
   };
@@ -142,7 +144,13 @@ function DiaperLogModalBody({ log, baseDate, onClose, onSubmit, onDelete }: Diap
         </>
       )}
 
-      <TimeField label="時刻" value={time} onChange={setTime} />
+      <DateTimeField
+        label="日時"
+        date={date}
+        time={time}
+        onChangeDate={setDate}
+        onChangeTime={setTime}
+      />
       <NoteField value={note} onChange={setNote} placeholder="色が気になる など" />
       <SubmitButton accent="diaper" onClick={handleSubmit}>
         保存する
