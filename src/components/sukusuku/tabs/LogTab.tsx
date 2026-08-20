@@ -269,6 +269,9 @@ export default function LogTab({
                   </p>
                   <p className="text-[11px] text-amber-600 tabular-nums">
                     左 {formatStopwatch(nursingTimer.leftMs)} / 右 {formatStopwatch(nursingTimer.rightMs)}
+                    {nursingTimer.remainingToAlarmMs !== null && (
+                      <> ・お知らせまで {formatStopwatch(nursingTimer.remainingToAlarmMs)}</>
+                    )}
                   </p>
                 </div>
                 <button
