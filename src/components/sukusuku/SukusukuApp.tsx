@@ -67,6 +67,7 @@ import {
   subscribeToWake,
   takePendingWake,
 } from '@/lib/sleepNotification';
+import { useNursingAlarmWatcher } from '@/lib/nursingTimer';
 import { deleteGift, insertGift, listGifts, updateGift as updateGiftApi } from '@/lib/api/gifts';
 import { ensureChildId } from '@/lib/api/children';
 import {
@@ -166,6 +167,10 @@ interface SukusukuAppProps {
 }
 
 export default function SukusukuApp({ familyId, userId, role, initialTasks, todayDateString }: SukusukuAppProps) {
+  // 授乳の経過時間のお知らせ（音・バイブ）。記録タブを開いていなくても鳴らせるよう、
+  // アプリ全体で1つだけ見張りを動かす。
+  useNursingAlarmWatcher();
+
   const supabase = useMemo(() => createClient(), []);
 
   const [activeTab, setActiveTab] = useState<TabId>('home');

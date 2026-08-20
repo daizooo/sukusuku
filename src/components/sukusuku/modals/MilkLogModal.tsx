@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Pause, Play, RotateCcw } from 'lucide-react';
+import { Pause, Play, RotateCcw, Vibrate, Volume2, VolumeX } from 'lucide-react';
 import type { BreastSide, FeedingMethod, MilkLog } from '@/types/app';
 import {
   BREAST_MINUTE_OPTIONS,
@@ -9,7 +9,13 @@ import {
   formatStopwatch,
   getSideLabel,
 } from '@/lib/careLogUtils';
-import { nursingMinutes, type NursingTimer } from '@/lib/nursingTimer';
+import {
+  ALARM_INTERVAL_OPTIONS,
+  nursingMinutes,
+  useNursingAlarm,
+  type NursingTimer,
+} from '@/lib/nursingTimer';
+import { buildAlarmPattern, describeAlarmPattern } from '@/lib/alarm';
 import { parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUtils';
 import {
   DateTimeField,
@@ -199,6 +205,7 @@ function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, o
               rightMs={timer.rightMs}
               runningSide={timer.runningSide}
               hasSession={timer.hasSession}
+              remainingToAlarmMs={timer.remainingToAlarmMs}
               recordedLeft={recordedLeft}
               recordedRight={recordedRight}
               onToggleSide={handleToggleSide}
@@ -314,6 +321,8 @@ interface BreastStopwatchProps {
   rightMs: number;
   runningSide: BreastSide | null;
   hasSession: boolean;
+  /** 次のお知らせまでの残り(ミリ秒)。計測していなければ null。 */
+  remainingToAlarmMs: number | null;
   /** この内容で保存したときに記録される分数。 */
   recordedLeft: number;
   recordedRight: number;
@@ -327,6 +336,7 @@ function BreastStopwatch({
   rightMs,
   runningSide,
   hasSession,
+  remainingToAlarmMs,
   recordedLeft,
   recordedRight,
   onToggleSide,
@@ -396,6 +406,112 @@ function BreastStopwatch({
           反対側をタップすると自動で切り替わります。この画面を閉じても計測は続きます。
         </p>
       )}
+
+      <NursingAlarmField remainingToAlarmMs={remainingToAlarmMs} />
+    </div>
+  );
+}
+
+/**
+ * 授乳中は手が離せないので、一定間隔で音とバイブで経過時間を知らせる。
+ * 画面を見なくても分かるよう、鳴らす回数と長さで経過時間そのものを表す。
+ */
+function NursingAlarmField({ remainingToAlarmMs }: { remainingToAlarmMs: number | null }) {
+  const { settings, vibrationSupported, update, test } = useNursingAlarm();
+  const { intervalMinutes } = settings;
+  // 対応表は「お知らせ間隔ごと → 30分」まで。多くなりすぎないよう5つで打ち切る。
+  const legendMinutes: number[] = [];
+  for (let m = intervalMinutes; m < 30 && legendMinutes.length < 5; m += intervalMinutes) {
+    legendMinutes.push(m);
+  }
+  legendMinutes.push(30);
+
+  return (
+    <div className="mt-3 pt-3 border-t border-amber-200">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[11px] font-bold text-amber-700">経過時間のお知らせ</span>
+        {remainingToAlarmMs !== null && (
+          <span className="text-[11px] text-amber-700 tabular-nums">
+            次まで {formatStopwatch(remainingToAlarmMs)}
+          </span>
+        )}
+      </div>
+
+      <div className="flex gap-1.5">
+        {ALARM_INTERVAL_OPTIONS.map((minutes) => (
+          <button
+            key={minutes}
+            type="button"
+            aria-pressed={intervalMinutes === minutes}
+            onClick={() => update({ intervalMinutes: minutes })}
+            className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition ${
+              intervalMinutes === minutes
+                ? 'bg-amber-600 border-amber-600 text-white'
+                : 'bg-white border-amber-200 text-gray-600 hover:bg-amber-100'
+            }`}
+          >
+            {minutes}分
+          </button>
+        ))}
+      </div>
+
+      <div className="flex gap-1.5 mt-1.5">
+        <button
+          type="button"
+          aria-pressed={settings.soundEnabled}
+          onClick={() => update({ soundEnabled: !settings.soundEnabled })}
+          className={`flex-1 py-1.5 text-xs font-bold rounded-lg border flex items-center justify-center transition ${
+            settings.soundEnabled
+              ? 'bg-white border-amber-300 text-amber-700'
+              : 'bg-white border-gray-200 text-gray-400'
+          }`}
+        >
+          {settings.soundEnabled ? <Volume2 size={13} className="mr-1" /> : <VolumeX size={13} className="mr-1" />}
+          音 {settings.soundEnabled ? 'ON' : 'OFF'}
+        </button>
+        <button
+          type="button"
+          aria-pressed={settings.vibrationEnabled && vibrationSupported}
+          disabled={!vibrationSupported}
+          onClick={() => update({ vibrationEnabled: !settings.vibrationEnabled })}
+          className={`flex-1 py-1.5 text-xs font-bold rounded-lg border flex items-center justify-center transition ${
+            !vibrationSupported
+              ? 'bg-gray-50 border-gray-200 text-gray-300'
+              : settings.vibrationEnabled
+                ? 'bg-white border-amber-300 text-amber-700'
+                : 'bg-white border-gray-200 text-gray-400'
+          }`}
+        >
+          <Vibrate size={13} className="mr-1" />
+          バイブ {!vibrationSupported ? '非対応' : settings.vibrationEnabled ? 'ON' : 'OFF'}
+        </button>
+        <button
+          type="button"
+          onClick={test}
+          className="px-3 py-1.5 text-xs font-bold rounded-lg border border-amber-200 bg-white text-gray-600 hover:bg-amber-100 transition"
+        >
+          テスト
+        </button>
+      </div>
+
+      {/* 画面を見なくても分かるよう、鳴り方と経過時間の対応を出しておく */}
+      <div className="mt-2 bg-white/70 rounded-lg px-2.5 py-2">
+        <div className="grid grid-cols-2 gap-x-3">
+          {legendMinutes.map((minutes) => (
+            <div key={minutes} className="flex items-baseline justify-between">
+              <span className="text-[11px] font-bold text-gray-700 tabular-nums">{minutes}分</span>
+              <span className="text-[11px] text-gray-500">
+                {describeAlarmPattern(buildAlarmPattern(minutes, intervalMinutes))}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[10px] text-gray-400 mt-1.5 leading-relaxed">
+          短い「ピッ」1回＝{intervalMinutes}分、長い「ポーン」1回＝30分。バイブも同じ長短で振動します。
+          計測中は画面が消えないようにしますが、画面を消したり他のアプリに切り替えたりすると
+          お知らせが遅れることがあります。
+        </p>
+      </div>
     </div>
   );
 }
