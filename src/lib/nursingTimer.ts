@@ -9,6 +9,7 @@ import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import type { BreastSide } from '@/types/app';
 import {
   buildAlarmPattern,
+  flushPendingVibration,
   isVibrationSupported,
   playAlarmPattern,
   requestScreenWakeLock,
@@ -163,10 +164,10 @@ const subscribeNothing = (): (() => void) => () => {};
 // --- お知らせ（音・バイブ）の設定 ---
 // 授乳中は手が離せないため、一定間隔で音とバイブを鳴らし、
 // 「鳴り方」だけで経過時間が分かるようにする。
-// （短い「ピッ」1回＝お知らせ間隔1つ分、長い「ポーン」1回＝30分）
+// （短い「ピッ」1回＝5分、長い「ポーン」1回＝30分。設定はいつ鳴らすかだけを決める）
 
-// 長音1回=30分で表すため、30の約数だけを選べるようにしている。
-export const ALARM_INTERVAL_OPTIONS = [3, 5, 10, 15] as const;
+// 短音=5分・長音=30分で言い表せる間隔だけを選べるようにしている。
+export const ALARM_INTERVAL_OPTIONS = [5, 10, 15] as const;
 export type AlarmIntervalMinutes = (typeof ALARM_INTERVAL_OPTIONS)[number];
 
 export interface NursingAlarmSettings {
@@ -230,8 +231,19 @@ const storeAlarm = (next: NursingAlarmSettings) => {
 };
 
 const fireAlarm = (pattern: AlarmPattern, settings: NursingAlarmSettings) => {
-  if (settings.soundEnabled) playAlarmPattern(pattern);
+  // 振動を先に出す。ユーザー操作起点で呼ばれたとき、音の準備を待つ間に
+  // 「操作の直後」という扱いから外れて端末に無視されるのを避けるため。
   if (settings.vibrationEnabled) vibrateAlarmPattern(pattern);
+  if (settings.soundEnabled) playAlarmPattern(pattern);
+};
+
+/** 計測中の側について、次のお知らせが鳴る経過分数。計測していなければ最初のお知らせの分数。 */
+const nextAlarmMinutes = (intervalMinutes: number): number => {
+  const active = getSnapshot();
+  const side = active.runningSide;
+  if (!side) return intervalMinutes;
+  const elapsedMinutes = sideElapsed(active, side, Date.now()) / 60000;
+  return (Math.floor(elapsedMinutes / intervalMinutes) + 1) * intervalMinutes;
 };
 
 /** 計測中の側が次の区切りに達していたら鳴らす。 */
@@ -244,7 +256,7 @@ const checkAlarm = () => {
   const notified = side === 'left' ? active.notifiedLeft : active.notifiedRight;
   if (step < 1 || step <= notified) return;
 
-  fireAlarm(buildAlarmPattern(step * settings.intervalMinutes, settings.intervalMinutes), settings);
+  fireAlarm(buildAlarmPattern(step * settings.intervalMinutes), settings);
   store(side === 'left' ? { ...active, notifiedLeft: step } : { ...active, notifiedRight: step });
 };
 
@@ -276,6 +288,10 @@ const handleVisibilityChange = () => {
   if (document.visibilityState !== 'visible') return;
   // 裏に回っている間はタイマーが間引かれるので、戻った時点で鳴らし損ねた分を確認する。
   // 画面ロックもタブを離れると自動解放されるため取り直す。
+  // 画面が消えている間の振動は端末に無視されるので、戻ってきたここで鳴らし直す。
+  // 先に鳴らし直しておけば、直後のcheckAlarmでさらに新しいお知らせが出たときは
+  // そちら（より新しい経過時間）で上書きされる。
+  flushPendingVibration();
   checkAlarm();
   void acquireWakeLock();
 };
@@ -310,7 +326,7 @@ export interface NursingAlarm {
   /** バイブに対応していない端末（iOSのSafariなど）では音だけになる。 */
   vibrationSupported: boolean;
   update: (patch: Partial<NursingAlarmSettings>) => void;
-  /** 設定した鳴り方を試聴する。 */
+  /** 次に鳴るお知らせを試聴する。 */
   test: () => void;
 }
 
@@ -336,9 +352,13 @@ export function useNursingAlarm(): NursingAlarm {
   }, []);
 
   const test = useCallback(() => {
+    const current = getAlarmSnapshot();
+    // 次に実際に鳴る音をそのまま鳴らす（計測していなければ最初のお知らせの音）。
+    const pattern = buildAlarmPattern(nextAlarmMinutes(current.intervalMinutes));
+    // 振動はタップの処理の中で出さないと端末に無視されるため、音の準備より先に。
+    if (current.vibrationEnabled) vibrateAlarmPattern(pattern);
     void unlockAudio().then(() => {
-      // 「ポーン」＋「ピッ」= 30分＋間隔1つ分。長短どちらの鳴り方も確認できる。
-      fireAlarm({ long: 1, short: 1 }, getAlarmSnapshot());
+      if (current.soundEnabled) playAlarmPattern(pattern);
     });
   }, []);
 
