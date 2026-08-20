@@ -1,9 +1,10 @@
 // 授乳タイマーのアラーム（音・バイブ・画面スリープ防止）ユーティリティ。
 //
 // - 音   : Web Audio APIでビープを合成する。音声ファイルを同梱せずに済み、
-//          「長音=30分／短音=お知らせ間隔1つ分」を鳴らす回数で組み合わせることで、
+//          「長音=30分／短音=5分」を鳴らす回数で組み合わせることで、
 //          画面を見なくても経過時間そのものが分かる。
 // - バイブ: navigator.vibrate。Android Chrome等のみ対応（iOS Safariは非対応）。
+//          端末は画面が消えている間の振動要求を無視するので、その分は戻ってきたときに鳴らし直す。
 // - 画面  : Screen Wake Lock APIで、タイマー稼働中は画面を消灯させない。
 //          画面が消える（タブがバックグラウンドになる）とブラウザのタイマーが
 //          間引かれ、アラームが遅れるため。
@@ -49,35 +50,30 @@ export const isAudioReady = (): boolean => audioContext?.state === 'running';
 const SHORT_BEEP_SEC = 0.18;
 const LONG_BEEP_SEC = 0.6;
 const GAP_SEC = 0.12;
-const SHORT_BEEP_HZ = 880; // 高い「ピッ」= 区切り1つ分
+const SHORT_BEEP_HZ = 880; // 高い「ピッ」= 5分
 const LONG_BEEP_HZ = 440; // 低い「ポーン」= 30分
+
+/** 長音1回で表す分数。 */
+export const LONG_UNIT_MINUTES = 30;
+/** 短音1回で表す分数。 */
+export const SHORT_UNIT_MINUTES = 5;
 
 /**
  * 鳴らし方のパターン。音（と振動）の回数だけで経過時間が分かるようにするため、
- * 30分を長音1回、それ未満の端数を「お知らせ間隔」ごとの短音1回で表す。
- * 例）5分間隔のとき: 5分=短1, 15分=短3, 30分=長1, 40分=長1+短2
+ * 30分を長音1回、その端数を5分ごとの短音1回で表す。
+ * 例）5分=短1, 15分=短3, 30分=長1, 40分=長1+短2
+ * お知らせ間隔の設定に関係なく同じ数え方なので、間隔を変えても経過時間の読み方は変わらない。
  */
 export interface AlarmPattern {
   long: number;
   short: number;
 }
 
-/** 経過分数を、長音（30分）と短音（intervalMinutes）の回数に分解する。 */
-export const buildAlarmPattern = (
-  elapsedMinutes: number,
-  intervalMinutes: number,
-): AlarmPattern => {
-  const long = Math.floor(elapsedMinutes / 30);
-  const remainder = elapsedMinutes - long * 30;
-  return { long, short: intervalMinutes > 0 ? Math.round(remainder / intervalMinutes) : 0 };
-};
-
-/** パターンを「ポーン ピッピッ」のような表記にする（画面での凡例表示用）。 */
-export const describeAlarmPattern = ({ long, short }: AlarmPattern): string => {
-  const parts: string[] = [];
-  if (long > 0) parts.push('ポーン'.repeat(long));
-  if (short > 0) parts.push('ピッ'.repeat(short));
-  return parts.join(' ') || '—';
+/** 経過分数を、長音（30分）と短音（5分）の回数に分解する。 */
+export const buildAlarmPattern = (elapsedMinutes: number): AlarmPattern => {
+  const long = Math.floor(elapsedMinutes / LONG_UNIT_MINUTES);
+  const remainder = elapsedMinutes - long * LONG_UNIT_MINUTES;
+  return { long, short: Math.round(remainder / SHORT_UNIT_MINUTES) };
 };
 
 const scheduleBeep = (
@@ -122,25 +118,51 @@ export const playAlarmPattern = ({ long, short }: AlarmPattern): void => {
 export const isVibrationSupported = (): boolean =>
   typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
 
-/** 音と同じパターンで振動させる（長い振動=30分、短い振動=お知らせ間隔1つ分）。 */
-export const vibrateAlarmPattern = ({ long, short }: AlarmPattern): void => {
+/** [振動, 停止, 振動, 停止, ...] のバイブパターンに変換する。 */
+const toVibrationSequence = ({ long, short }: AlarmPattern): number[] => {
+  const sequence: number[] = [];
+  for (let i = 0; i < long; i += 1) sequence.push(700, 250);
+  // 長い振動と短い振動の境目は長めに空けて、感じ分けやすくする
+  if (long > 0 && short > 0) sequence[sequence.length - 1] = 600;
+  for (let i = 0; i < short; i += 1) sequence.push(250, 200);
+  sequence.pop(); // 末尾の停止時間は不要
+  return sequence;
+};
+
+/**
+ * 画面が消えている・他のアプリを見ている間、ブラウザは振動の要求を無視する
+ * （仕様上、非表示のページからは振動できない）。授乳中はまさにその状態になりやすいので、
+ * 鳴らし損ねた分を控えておき、アプリに戻ってきたときに振動させ直す。
+ */
+let pendingVibration: AlarmPattern | null = null;
+
+/** 音と同じパターンで振動させる（長い振動=30分、短い振動=5分）。 */
+export const vibrateAlarmPattern = (pattern: AlarmPattern): void => {
   if (!isVibrationSupported()) return;
-  // [振動, 停止, 振動, 停止, ...] の形式
-  const pattern: number[] = [];
-  for (let i = 0; i < long; i += 1) pattern.push(700, 250);
-  // 長い振動と短い振動の境目は長めに空けて聞き分け（感じ分け）やすくする
-  if (long > 0 && short > 0) pattern[pattern.length - 1] = 600;
-  for (let i = 0; i < short; i += 1) pattern.push(250, 200);
-  if (pattern.length === 0) return;
-  pattern.pop(); // 末尾の停止時間は不要
+  const sequence = toVibrationSequence(pattern);
+  if (sequence.length === 0) return;
+  if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+    pendingVibration = pattern;
+    return;
+  }
   try {
-    navigator.vibrate(pattern);
+    // 端末が受け付けなかった場合もfalseが返るので、戻ってきたときに鳴らし直す
+    pendingVibration = navigator.vibrate(sequence) ? null : pattern;
   } catch {
     // 端末が拒否した場合は黙って諦める（音側で気づけるため）
+    pendingVibration = null;
   }
 };
 
+/** 鳴らし損ねた振動が残っていれば、いま振動させる。 */
+export const flushPendingVibration = (): void => {
+  const pattern = pendingVibration;
+  pendingVibration = null;
+  if (pattern) vibrateAlarmPattern(pattern);
+};
+
 export const stopVibration = (): void => {
+  pendingVibration = null;
   if (!isVibrationSupported()) return;
   try {
     navigator.vibrate(0);
