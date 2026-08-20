@@ -25,7 +25,7 @@ export interface DynamicTask extends Task {
   targetDate: string;
 }
 
-export type LogType = 'milk' | 'diaper' | 'sleep';
+export type LogType = 'nursing' | 'milk' | 'diaper' | 'sleep';
 
 export interface CareLog {
   id: number;

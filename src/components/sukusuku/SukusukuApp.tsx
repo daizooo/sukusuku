@@ -8,6 +8,7 @@ import {
   Gift as GiftIcon,
   Folder,
   Plus,
+  Baby,
 } from 'lucide-react';
 
 import type {
@@ -29,7 +30,13 @@ import {
   INITIAL_PROFILE,
   createInitialLogs,
 } from '@/lib/seedData';
-import { calculateTargetDate, formatDateString } from '@/lib/dateUtils';
+import {
+  calculateTargetDate,
+  formatDateString,
+  formatDurationClock,
+  formatDurationLabel,
+} from '@/lib/dateUtils';
+import { NURSING_SIDE_LABELS, useNursingTimer } from '@/hooks/useNursingTimer';
 import { createClient } from '@/lib/supabase/client';
 import {
   deleteTask as deleteTaskApi,
@@ -95,6 +102,9 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
   const [newTask, setNewTask] = useState<NewTaskDraft>(EMPTY_NEW_TASK);
 
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
+
+  // 授乳タイマー。タブを切り替えても計測が止まらないよう、アプリ直下で保持する。
+  const nursingTimer = useNursingTimer();
 
   // TODO: プロフィール(子供の名前・誕生日、パパママ情報)はまだSupabase未連携（次のステップ）
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
@@ -256,6 +266,22 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
     }
   };
 
+  // 授乳タイマーを終了し、経過時間を育児記録に残す
+  const finishNursing = () => {
+    const result = nursingTimer.finish();
+    if (!result) return;
+    const newLog: CareLog = {
+      id: Date.now(),
+      type: 'nursing',
+      label: `授乳（${NURSING_SIDE_LABELS[result.side]}）`,
+      amount: formatDurationLabel(result.durationMs),
+      time: new Date(),
+      note: '',
+      user: 'あなた',
+    };
+    setLogs((prev) => [newLog, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()));
+  };
+
   const addLog = (type: CareLog['type'], label: string) => {
     const newLog: CareLog = {
       id: Date.now(),
@@ -277,6 +303,17 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
 
       {taskError && (
         <p className="flex-none bg-red-50 text-red-600 text-xs text-center py-2 px-4 border-b border-red-100">{taskError}</p>
+      )}
+
+      {nursingTimer.isRunning && activeTab !== 'log' && (
+        <button
+          onClick={() => setActiveTab('log')}
+          className="flex-none bg-rose-500 text-white text-xs font-bold py-2 px-4 flex items-center justify-center gap-2 hover:bg-rose-600 transition"
+        >
+          <Baby size={14} />
+          授乳タイマー計測中
+          <span className="tabular-nums">{formatDurationClock(nursingTimer.elapsedMs)}</span>
+        </button>
       )}
 
       <main className="flex-1 overflow-hidden">
@@ -304,7 +341,13 @@ export default function SukusukuApp({ familyId }: SukusukuAppProps) {
           />
         )}
         {activeTab === 'log' && (
-          <LogTab logs={logs} growthData={growthData} onAddLog={addLog} />
+          <LogTab
+            logs={logs}
+            growthData={growthData}
+            onAddLog={addLog}
+            nursingTimer={nursingTimer}
+            onFinishNursing={finishNursing}
+          />
         )}
         {activeTab === 'gift' && <GiftTab gifts={gifts} />}
         {activeTab === 'info' && (

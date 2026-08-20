@@ -1,19 +1,25 @@
 'use client';
 
 import { useState } from 'react';
-import { Coffee, Droplet, FileText, List, Moon, Plus, TrendingUp, User } from 'lucide-react';
+import { Baby, Coffee, Droplet, FileText, List, Moon, Plus, TrendingUp, User } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { CareLog, GrowthRecord } from '@/types/app';
 import { formatTimeString } from '@/lib/dateUtils';
+import type { NursingTimer as NursingTimerState } from '@/hooks/useNursingTimer';
+import NursingTimer from '../NursingTimer';
 
 interface LogTabProps {
   logs: CareLog[];
   growthData: GrowthRecord[];
   onAddLog: (type: CareLog['type'], label: string) => void;
+  nursingTimer: NursingTimerState;
+  onFinishNursing: () => void;
 }
 
 const getLogIcon = (type: CareLog['type']) => {
   switch (type) {
+    case 'nursing':
+      return <Baby size={16} className="text-rose-500" />;
     case 'milk':
       return <Coffee size={16} className="text-amber-600" />;
     case 'diaper':
@@ -27,6 +33,8 @@ const getLogIcon = (type: CareLog['type']) => {
 
 const getLogColor = (type: CareLog['type']) => {
   switch (type) {
+    case 'nursing':
+      return 'bg-rose-100';
     case 'milk':
       return 'bg-amber-100';
     case 'diaper':
@@ -38,7 +46,7 @@ const getLogColor = (type: CareLog['type']) => {
   }
 };
 
-export default function LogTab({ logs, growthData, onAddLog }: LogTabProps) {
+export default function LogTab({ logs, growthData, onAddLog, nursingTimer, onFinishNursing }: LogTabProps) {
   const [logView, setLogView] = useState<'timeline' | 'growth'>('timeline');
 
   return (
@@ -63,8 +71,11 @@ export default function LogTab({ logs, growthData, onAddLog }: LogTabProps) {
       </div>
 
       {logView === 'timeline' ? (
-        <>
-          <div className="grid grid-cols-3 gap-3 mb-6 shrink-0">
+        /* タイマーカードを載せると1画面に収まらないため、タイムライン全体をスクロールさせる */
+        <div className="flex-1 overflow-y-auto pb-6">
+          <NursingTimer timer={nursingTimer} onFinish={onFinishNursing} />
+
+          <div className="grid grid-cols-3 gap-3 mb-6">
             <button
               onClick={() => onAddLog('milk', 'ミルク')}
               className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-amber-50 transition active:scale-95"
@@ -94,7 +105,7 @@ export default function LogTab({ logs, growthData, onAddLog }: LogTabProps) {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div>
             <h3 className="text-sm font-bold text-gray-500 mb-3 px-1">今日の記録 ({logs.length}件)</h3>
             <div className="relative border-l-2 border-gray-200 ml-4 space-y-6 pb-6">
               {logs.map((log) => (
@@ -122,7 +133,7 @@ export default function LogTab({ logs, growthData, onAddLog }: LogTabProps) {
               ))}
             </div>
           </div>
-        </>
+        </div>
       ) : (
         <div className="flex-1 overflow-y-auto space-y-6 pb-6">
           <button className="w-full bg-blue-50 text-blue-600 font-medium py-3 rounded-xl shadow-sm border border-blue-200 transition flex items-center justify-center hover:bg-blue-100">

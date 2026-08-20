@@ -30,3 +30,23 @@ export const getDaysInMonth = (year: number, month: number): number => {
 export const getFirstDayOfMonth = (year: number, month: number): number => {
   return new Date(year, month, 1).getDay();
 };
+
+/** 経過ミリ秒を mm:ss（1時間以上は h:mm:ss）に整形する。 */
+export const formatDurationClock = (ms: number): string => {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const mm = String(minutes).padStart(2, '0');
+  const ss = String(seconds).padStart(2, '0');
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+};
+
+/** 経過ミリ秒を「12分」「1時間5分」のような記録用ラベルにする。 */
+export const formatDurationLabel = (ms: number): string => {
+  const totalMinutes = Math.max(0, Math.round(ms / 60000));
+  if (totalMinutes < 60) return `${totalMinutes}分`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes === 0 ? `${hours}時間` : `${hours}時間${minutes}分`;
+};
