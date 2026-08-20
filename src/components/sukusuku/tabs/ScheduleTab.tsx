@@ -1,211 +1,280 @@
 'use client';
 
 import { useState } from 'react';
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CornerDownRight, Filter } from 'lucide-react';
+import type { CareLog, DynamicTask, Label, ScheduleView } from '@/types/app';
+import { LABELS } from '@/types/app';
+import { getLabelColor } from '@/lib/uiUtils';
 import {
-  Calendar,
-  CalendarDays,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Circle,
-  Clock,
-  Filter,
-  List,
-  BellRing,
-} from 'lucide-react';
-import type { Assignee, DynamicTask } from '@/types/app';
-import { getAssigneeColor } from '@/lib/uiUtils';
-import { getDaysInMonth, getFirstDayOfMonth } from '@/lib/dateUtils';
+  addDays,
+  addMonths,
+  formatDateHeading,
+  isSameDay,
+  isSameMonth,
+  parseDateString,
+  startOfDay,
+  startOfWeek,
+  toDateString,
+} from '@/lib/dateUtils';
+import TabHeading from '../ui/TabHeading';
+import SegmentedTabs from '../ui/SegmentedTabs';
+import MonthView from '../schedule/MonthView';
+import WeekView from '../schedule/WeekView';
+import DayView from '../schedule/DayView';
+import ListView from '../schedule/ListView';
+import { byDateThenTime, tasksOnDate } from '../schedule/utils';
 
 interface ScheduleTabProps {
   dynamicTodos: DynamicTask[];
   isLoadingTodos?: boolean;
   today: Date;
+  /** 節目・月齢の表示に使う。未登録なら空文字。 */
+  birthDate: string;
+  view: ScheduleView;
+  onChangeView: (view: ScheduleView) => void;
+  /** 週表示・日表示の対象日。月表示では選択中の日。 */
+  selectedDate: Date;
+  onChangeSelectedDate: (date: Date) => void;
+  /** 月グリッドで表示中の月。 */
   currentCalendarDate: Date;
   onChangeCalendarDate: (date: Date) => void;
+  /** 週表示・日表示で表示中の範囲の育児記録。 */
+  careLogs: CareLog[];
+  isLoadingCareLogs?: boolean;
   onToggleTodo: (id: string) => void;
   onOpenTask: (task: DynamicTask) => void;
+  onAddTask: (date: Date) => void;
+  onOpenLogTab: (date: Date) => void;
 }
 
-const ASSIGNEE_FILTERS: (Assignee | 'すべて')[] = ['すべて', 'パパ', 'ママ', '二人で', '未定'];
+const LABEL_FILTERS: (Label | 'すべて')[] = ['すべて', ...LABELS];
+
+const VIEW_TABS: { id: ScheduleView; label: string }[] = [
+  { id: 'month', label: '月' },
+  { id: 'week', label: '週' },
+  { id: 'day', label: '日' },
+  { id: 'list', label: 'リスト' },
+];
+
+const formatShortDate = (date: Date): string => `${date.getMonth() + 1}月${date.getDate()}日`;
 
 export default function ScheduleTab({
   dynamicTodos,
   isLoadingTodos,
   today,
+  birthDate,
+  view,
+  onChangeView,
+  selectedDate,
+  onChangeSelectedDate,
   currentCalendarDate,
   onChangeCalendarDate,
+  careLogs,
+  isLoadingCareLogs,
   onToggleTodo,
   onOpenTask,
+  onAddTask,
+  onOpenLogTab,
 }: ScheduleTabProps) {
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
-  const [assigneeFilter, setAssigneeFilter] = useState<Assignee | 'すべて'>('すべて');
+  const [labelFilter, setLabelFilter] = useState<Label | 'すべて'>('すべて');
 
-  const filteredTodos = dynamicTodos.filter((t) => assigneeFilter === 'すべて' || t.assignee === assigneeFilter);
+  const filteredTodos = dynamicTodos.filter((t) => labelFilter === 'すべて' || t.label === labelFilter);
 
-  const year = currentCalendarDate.getFullYear();
-  const month = currentCalendarDate.getMonth();
-  const days: (Date | null)[] = [];
-  const firstDay = getFirstDayOfMonth(year, month);
-  for (let i = 0; i < firstDay; i += 1) days.push(null);
-  for (let i = 1; i <= getDaysInMonth(year, month); i += 1) days.push(new Date(year, month, i));
+  const weekStart = startOfWeek(selectedDate);
+  const monthStart = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth(), 1);
 
-  const tasksInMonth = dynamicTodos.filter(
-    (t) => t.targetDateObj && t.targetDateObj.getFullYear() === year && t.targetDateObj.getMonth() === month,
-  );
+  // 日を選ぶと日表示へ移る（月・週は俯瞰、日は詳細という役割分担）。
+  const selectDate = (date: Date, openDayView = true) => {
+    const day = startOfDay(date);
+    onChangeSelectedDate(day);
+    if (!isSameMonth(day, currentCalendarDate)) {
+      onChangeCalendarDate(new Date(day.getFullYear(), day.getMonth(), 1));
+    }
+    if (openDayView) onChangeView('day');
+  };
+
+  const step = (delta: number) => {
+    if (view === 'month') {
+      onChangeCalendarDate(addMonths(monthStart, delta));
+      return;
+    }
+    selectDate(addDays(selectedDate, view === 'week' ? delta * 7 : delta), false);
+  };
+
+  const goToday = () => {
+    onChangeCalendarDate(new Date(today.getFullYear(), today.getMonth(), 1));
+    onChangeSelectedDate(today);
+  };
+
+  const title =
+    view === 'month'
+      ? `${monthStart.getFullYear()}年 ${monthStart.getMonth() + 1}月`
+      : view === 'week'
+        ? `${formatShortDate(weekStart)} - ${formatShortDate(addDays(weekStart, 6))}`
+        : formatDateHeading(selectedDate, today);
+
+  const isShowingToday =
+    view === 'month' ? isSameMonth(monthStart, today) : view === 'week' ? isSameDay(weekStart, startOfWeek(today)) : isSameDay(selectedDate, today);
+
+  const tasksInMonth = filteredTodos.filter((t) => t.targetDateObj && isSameMonth(t.targetDateObj, monthStart));
+
+  // 予定のない月をめくり続けなくて済むよう、次に予定がある日へ直接飛べるようにする。
+  const nextMonthWithTask = filteredTodos
+    .filter((t) => t.targetDateObj && t.targetDateObj >= addMonths(monthStart, 1))
+    .sort(byDateThenTime)[0]?.targetDateObj;
 
   return (
-    <div className="p-4 h-full flex flex-col">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-gray-800">スケジュール</h2>
-        <div className="flex bg-gray-200 p-1 rounded-lg">
-          <button
-            onClick={() => setViewMode('list')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md flex items-center transition ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+    <div className="p-4 h-full flex flex-col md:max-w-3xl lg:max-w-4xl md:mx-auto md:w-full">
+      <TabHeading title="スケジュール" />
+
+      {/* 表示の切り替えと担当の絞り込みは同じ1段に置く（スマホで縦の高さを予定表に回すため）。
+          絞り込みは選択肢が増えても幅が変わらないよう、横並びのボタンではなく選択にしている。 */}
+      <div className="flex items-center gap-2 mb-3 flex-none">
+        <SegmentedTabs
+          ariaLabel="スケジュールの表示"
+          value={view}
+          onChange={onChangeView}
+          options={VIEW_TABS}
+          fill={false}
+          className="flex-none"
+        />
+        <div className="relative flex-none ml-auto">
+          <select
+            value={labelFilter}
+            onChange={(e) => setLabelFilter(e.target.value as Label | 'すべて')}
+            aria-label="担当で絞り込む"
+            className={`appearance-none h-11 pl-8 pr-7 rounded-xl border text-sm font-bold transition ${
+              labelFilter === 'すべて' ? 'bg-white text-gray-700 border-gray-200' : getLabelColor(labelFilter)
+            }`}
           >
-            <List size={14} className="mr-1" /> リスト
-          </button>
-          <button
-            onClick={() => setViewMode('calendar')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md flex items-center transition ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
-          >
-            <CalendarDays size={14} className="mr-1" /> カレンダー
-          </button>
+            {LABEL_FILTERS.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+          <Filter size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 opacity-70" />
+          <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 opacity-70" />
         </div>
       </div>
 
-      {viewMode === 'list' ? (
-        <>
-          <div className="flex space-x-2 mb-4 overflow-x-auto pb-2">
-            <span className="flex items-center text-gray-500 text-xs font-medium mr-1">
-              <Filter size={14} />
-            </span>
-            {ASSIGNEE_FILTERS.map((a) => (
-              <button
-                key={a}
-                onClick={() => setAssigneeFilter(a)}
-                className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap font-medium transition border ${
-                  assigneeFilter === a
-                    ? a === 'すべて'
-                      ? 'bg-gray-700 text-white border-gray-700'
-                      : getAssigneeColor(a)
-                    : 'bg-white text-gray-600 border-gray-200'
-                }`}
-              >
-                {a}
-              </button>
-            ))}
-          </div>
-          <div className="flex-1 overflow-y-auto space-y-3 pb-6">
-            {isLoadingTodos && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
-            {!isLoadingTodos && filteredTodos.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-8">予定はまだありません</p>
-            )}
-            {filteredTodos.map((task) => (
-              <div
-                key={task.id}
-                className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-start space-x-3 cursor-pointer hover:bg-gray-50 transition"
-                onClick={() => onOpenTask(task)}
-              >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleTodo(task.id);
+      {view !== 'list' && (
+        <div className="flex items-center justify-between mb-3 bg-white p-2 rounded-xl shadow-sm border border-gray-100 flex-none">
+          <button onClick={() => step(-1)} className="p-2 text-gray-600" aria-label="前へ">
+            <ChevronLeft size={20} />
+          </button>
+
+          <div className="flex items-center gap-1">
+            <h3 className="text-[17px] font-bold text-gray-900">{title}</h3>
+            {/* ネイティブのピッカーで任意の月・日へ直接ジャンプする */}
+            <span className="relative w-7 h-7 inline-flex items-center justify-center rounded-full text-gray-400 hover:text-blue-500 hover:bg-gray-100 transition">
+              <CalendarDays size={16} />
+              {view === 'month' ? (
+                <input
+                  type="month"
+                  aria-label="月を選ぶ"
+                  value={`${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, '0')}`}
+                  onChange={(e) => {
+                    const picked = parseDateString(`${e.target.value}-01`);
+                    if (picked) onChangeCalendarDate(picked);
                   }}
-                  className={`mt-1 flex-shrink-0 p-1 -ml-1 transition-colors ${task.done ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}
-                >
-                  {task.done ? <CheckCircle2 size={24} /> : <Circle size={24} />}
-                </button>
-                <div className="flex-1">
-                  <div className="flex justify-between items-start">
-                    <p className={`font-medium text-base leading-tight ${task.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
-                      {task.title}
-                      {task.notification && !task.done && <BellRing size={14} className="inline ml-1.5 text-yellow-500 mb-0.5" />}
-                    </p>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ml-2 ${getAssigneeColor(task.assignee)}`}>
-                      {task.assignee}
-                    </span>
-                  </div>
-                  <div className="text-sm text-gray-500 mt-2 space-y-1.5">
-                    <p className="flex items-center text-blue-600 font-medium">
-                      <Calendar size={14} className="mr-2" /> 目安: {task.targetDate}
-                    </p>
-                    <p className="flex items-center">
-                      <Clock size={14} className="mr-2" /> {task.timing}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+              ) : (
+                <input
+                  type="date"
+                  aria-label="日付を選ぶ"
+                  value={toDateString(selectedDate)}
+                  onChange={(e) => {
+                    const picked = parseDateString(e.target.value);
+                    if (picked) selectDate(picked, false);
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+              )}
+            </span>
+            {!isShowingToday && (
+              <button
+                onClick={goToday}
+                className="ml-1 text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition"
+              >
+                今日
+              </button>
+            )}
           </div>
-        </>
-      ) : (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between mb-3 bg-white p-2 rounded-xl shadow-sm border border-gray-100">
-            <button onClick={() => onChangeCalendarDate(new Date(year, month - 1, 1))} className="p-2 text-gray-600">
-              <ChevronLeft size={20} />
+
+          <button onClick={() => step(1)} className="p-2 text-gray-600" aria-label="次へ">
+            <ChevronRight size={20} />
+          </button>
+        </div>
+      )}
+
+      {view === 'month' && (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <MonthView
+            month={monthStart}
+            today={today}
+            selectedDate={selectedDate}
+            tasks={filteredTodos}
+            birthDate={birthDate}
+            onSelectDate={(date) => selectDate(date)}
+            onOpenTask={onOpenTask}
+          />
+          {!isLoadingTodos && tasksInMonth.length === 0 && nextMonthWithTask && (
+            <button
+              onClick={() => onChangeCalendarDate(new Date(nextMonthWithTask.getFullYear(), nextMonthWithTask.getMonth(), 1))}
+              className="flex-none w-full mt-3 py-2.5 text-sm text-blue-600 font-medium bg-white rounded-xl border border-gray-100 shadow-sm flex items-center justify-center"
+            >
+              <CornerDownRight size={14} className="mr-1.5" />
+              次に予定がある月へ ({nextMonthWithTask.getFullYear()}年{nextMonthWithTask.getMonth() + 1}月)
             </button>
-            <h3 className="text-base font-bold text-gray-800">
-              {year}年 {month + 1}月
-            </h3>
-            <button onClick={() => onChangeCalendarDate(new Date(year, month + 1, 1))} className="p-2 text-gray-600">
-              <ChevronRight size={20} />
-            </button>
-          </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-3 flex-none">
-            <div className="grid grid-cols-7 gap-1 mb-2">
-              {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
-                <div key={d} className={`text-center text-[10px] font-medium ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-500'}`}>
-                  {d}
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 gap-y-1 gap-x-1">
-              {days.map((date, idx) => {
-                if (!date) return <div key={`empty-${idx}`} className="h-10" />;
-                const dayTasks = tasksInMonth.filter((t) => t.targetDateObj!.getDate() === date.getDate());
-                const isToday =
-                  date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
-                return (
-                  <div key={date.toISOString()} className={`flex flex-col items-center p-1 rounded-md h-12 ${isToday ? 'bg-blue-50' : ''}`}>
-                    <span className={`text-xs ${isToday ? 'text-blue-700 font-bold' : 'text-gray-700'}`}>{date.getDate()}</span>
-                    {dayTasks.length > 0 && (
-                      <div className="flex space-x-0.5 mt-0.5">
-                        {dayTasks.slice(0, 3).map((t, i) => (
-                          <div key={i} className={`w-1.5 h-1.5 rounded-full ${t.done ? 'bg-gray-300' : 'bg-blue-500'}`} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto pb-4">
-            <h4 className="text-xs font-bold text-gray-500 mb-2 px-1">{month + 1}月の予定 ({tasksInMonth.length}件)</h4>
-            <div className="space-y-2">
-              {[...tasksInMonth]
-                .sort((a, b) => a.targetDateObj!.getTime() - b.targetDateObj!.getTime())
-                .map((task) => (
-                  <div
-                    key={task.id}
-                    className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center space-x-3 cursor-pointer"
-                    onClick={() => onOpenTask(task)}
-                  >
-                    <div className="flex-shrink-0 text-center w-10">
-                      <span className="text-[10px] text-gray-500 block">{month + 1}月</span>
-                      <span className="text-base font-bold text-gray-800">{task.targetDateObj!.getDate()}</span>
-                    </div>
-                    <div className="flex-1 border-l pl-3 border-gray-100 min-w-0">
-                      <p className={`font-medium text-sm truncate ${task.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{task.title}</p>
-                      <span className={`text-[9px] font-bold px-1 py-0.5 rounded border inline-block mt-1 ${getAssigneeColor(task.assignee)}`}>
-                        {task.assignee}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
+          )}
+        </div>
+      )}
+
+      {view === 'week' && (
+        <div className="flex-1 min-h-0 overflow-y-auto pb-24">
+          <WeekView
+            date={selectedDate}
+            today={today}
+            tasks={filteredTodos}
+            birthDate={birthDate}
+            careLogs={careLogs}
+            isLoadingCareLogs={isLoadingCareLogs}
+            onSelectDate={(date) => selectDate(date)}
+            onToggleTodo={onToggleTodo}
+            onOpenTask={onOpenTask}
+          />
+        </div>
+      )}
+
+      {view === 'day' && (
+        <div className="flex-1 min-h-0 overflow-y-auto pb-24">
+          <DayView
+            date={selectedDate}
+            today={today}
+            tasks={tasksOnDate(filteredTodos, selectedDate)}
+            birthDate={birthDate}
+            careLogs={careLogs}
+            isLoadingCareLogs={isLoadingCareLogs}
+            onToggleTodo={onToggleTodo}
+            onOpenTask={onOpenTask}
+            onAddTask={onAddTask}
+            onOpenLogTab={onOpenLogTab}
+          />
+        </div>
+      )}
+
+      {view === 'list' && (
+        <div className="flex-1 min-h-0 overflow-y-auto pb-24">
+          <ListView
+            tasks={filteredTodos}
+            isLoading={isLoadingTodos}
+            today={today}
+            birthDate={birthDate}
+            onToggleTodo={onToggleTodo}
+            onOpenTask={onOpenTask}
+          />
         </div>
       )}
     </div>
