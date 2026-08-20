@@ -13,13 +13,21 @@ const toLabel = (value: string | null): Label => {
   return '家族';
 };
 
+// 「持ち物」は詳細(note)に統合したため、旧データの belongings は詳細の末尾に取り込んで扱う。
+// 一度保存し直せば belongings は空になり、以降は詳細だけを見ればよくなる。
+const mergeBelongingsIntoNote = (note: string | null, belongings: string | null): string => {
+  const base = note ?? '';
+  const items = (belongings ?? '').trim();
+  if (!items) return base;
+  return base ? `${base}\n持ち物: ${items}` : `持ち物: ${items}`;
+};
+
 // DBの行(snake_case) <-> アプリの型(camelCase) を変換する
 export const rowToTask = (row: TaskRow): Task => ({
   id: row.id,
-  category: row.category,
   title: row.title,
   place: row.place ?? '',
-  note: row.note ?? '',
+  note: mergeBelongingsIntoNote(row.note, row.belongings),
   anchorType: (row.anchor_type as AnchorType) ?? 'absolute',
   startDate: row.start_date,
   startTime: normalizeTime(row.start_time),
@@ -29,14 +37,12 @@ export const rowToTask = (row: TaskRow): Task => ({
   remindMinutesBefore: row.remind_minutes_before,
   done: row.is_done,
   timing: row.timing_memo ?? '',
-  belongings: row.belongings ?? '',
 });
 
 export type NewTaskInput = Omit<Task, 'id' | 'done'>;
 
 const toWritableRow = (input: NewTaskInput) => ({
   title: input.title,
-  category: input.category,
   place: input.place,
   note: input.note,
   anchor_type: input.anchorType,
@@ -48,7 +54,8 @@ const toWritableRow = (input: NewTaskInput) => ({
   assignee: input.label,
   remind_minutes_before: input.remindMinutesBefore,
   timing_memo: input.timing,
-  belongings: input.belongings,
+  // 持ち物は詳細(note)へ統合済み。旧データを保存し直したときに残らないよう空にする。
+  belongings: null,
 });
 
 export async function listTasks(supabase: SupabaseDb, familyId: string): Promise<Task[]> {

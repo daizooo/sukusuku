@@ -127,7 +127,6 @@ const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
 
 const emptyTaskDraft = (date: Date): TaskDraft => ({
   title: '',
-  category: '手続き',
   place: '',
   note: '',
   anchorType: 'absolute',
@@ -138,7 +137,6 @@ const emptyTaskDraft = (date: Date): TaskDraft => ({
   label: '家族',
   remindMinutesBefore: null,
   timing: '',
-  belongings: '',
 });
 
 const parseNullableNumber = (value: string): number | null => (value === '' ? null : Number(value));
