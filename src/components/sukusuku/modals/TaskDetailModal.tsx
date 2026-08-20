@@ -1,6 +1,6 @@
 'use client';
 
-import { BellRing, Briefcase, Calendar, CheckCircle2, Clock, Edit2, MapPin, Save, Text } from 'lucide-react';
+import { BellRing, Calendar, CheckCircle2, Clock, Edit2, MapPin, Save, Text } from 'lucide-react';
 import type { DynamicTask } from '@/types/app';
 import { getLabelColor } from '@/lib/uiUtils';
 import { formatReminder, formatTimeRange } from '@/lib/dateUtils';
@@ -58,7 +58,7 @@ export default function TaskDetailModal({
 
   return (
     <ModalShell
-      title={selectedTask.category}
+      title="予定の詳細"
       onClose={onClose}
       footer={
         <div className="space-y-2">
@@ -140,15 +140,6 @@ export default function TaskDetailModal({
             <Text size={14} className="mr-1" /> 詳細
           </p>
           <p className="text-blue-900 leading-relaxed whitespace-pre-wrap">{selectedTask.note}</p>
-        </div>
-      )}
-
-      {selectedTask.belongings && (
-        <div className="mt-3 p-3 bg-orange-50/80 rounded-xl border border-orange-100 text-sm">
-          <p className="font-bold text-orange-800 text-xs mb-1 flex items-center">
-            <Briefcase size={14} className="mr-1" /> 持ち物
-          </p>
-          <p className="text-orange-900 leading-relaxed whitespace-pre-wrap">{selectedTask.belongings}</p>
         </div>
       )}
     </ModalShell>

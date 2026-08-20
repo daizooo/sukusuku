@@ -16,8 +16,6 @@ interface TaskFormProps {
   allowBirthRelative: boolean;
 }
 
-const CATEGORIES = ['手続き', '健診', 'イベント', 'お買い物'];
-
 export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFormProps) {
   const set = (patch: Partial<TaskDraft>) => onChange({ ...value, ...patch });
 
@@ -163,6 +161,19 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
         />
       </div>
 
+      {/* 詳細（持ち物もここにまとめて書く） */}
+      <div>
+        <span className="flex items-center text-xs font-medium text-gray-700 mb-1.5">
+          <Text size={14} className="mr-1.5 text-gray-400" /> 詳細
+        </span>
+        <textarea
+          value={value.note}
+          onChange={(e) => set({ note: e.target.value })}
+          className="w-full border border-gray-300 rounded-lg p-2.5 text-sm outline-none h-24 resize-none focus:border-blue-500 text-gray-800"
+          placeholder="メモ・持ち物（母子手帳、印鑑など）を入力"
+        />
+      </div>
+
       {/* リマインダー */}
       <div>
         <span className="flex items-center text-xs font-medium text-gray-700 mb-1.5">
@@ -180,48 +191,6 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
           ))}
         </select>
       </div>
-
-      {/* 詳細 */}
-      <div>
-        <span className="flex items-center text-xs font-medium text-gray-700 mb-1.5">
-          <Text size={14} className="mr-1.5 text-gray-400" /> 詳細
-        </span>
-        <textarea
-          value={value.note}
-          onChange={(e) => set({ note: e.target.value })}
-          className="w-full border border-gray-300 rounded-lg p-2.5 text-sm outline-none h-24 resize-none focus:border-blue-500 text-gray-800"
-          placeholder="メモを入力"
-        />
-      </div>
-
-      {/* 既存機能（カテゴリ・持ち物） */}
-      <details className="border-t border-gray-100 pt-3">
-        <summary className="text-xs text-gray-500 cursor-pointer select-none">その他の項目</summary>
-        <div className="mt-3 space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">カテゴリ</label>
-            <select
-              value={value.category}
-              onChange={(e) => set({ category: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white text-gray-800"
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">持ち物</label>
-            <input
-              type="text"
-              value={value.belongings}
-              onChange={(e) => set({ belongings: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none text-gray-800"
-              placeholder="母子手帳、印鑑など"
-            />
-          </div>
-        </div>
-      </details>
     </div>
   );
 }

@@ -6,8 +6,6 @@ export type Label = 'パパ' | 'ママ' | '家族';
 
 export const LABELS: Label[] = ['パパ', 'ママ', '家族'];
 
-export type TaskCategory = '手続き' | '健診' | 'イベント' | 'お買い物';
-
 // 日付の決まり方。
 // - absolute:       start_date を直接指定する
 // - birth_relative: 子の誕生日 + daysAfterBirth で決まる
@@ -15,7 +13,6 @@ export type AnchorType = 'absolute' | 'birth_relative';
 
 export interface Task {
   id: string;
-  category: TaskCategory | string;
   title: string;
   place: string;
   note: string;
@@ -31,7 +28,6 @@ export interface Task {
   done: boolean;
   // 既存機能
   timing: string;
-  belongings: string;
 }
 
 // UI表示用に実際の日付を解決して付与したタスク
