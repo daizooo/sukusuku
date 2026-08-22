@@ -157,7 +157,10 @@ export interface FamilyMember {
 export interface ProfileField {
   id: string;
   label: string;
-  value: string;
+  // 1つの見出しに複数の内容を並べられる（例: 「祖父母の連絡先」に2件の電話番号）。
+  // 空配列にはせず、内容が未入力でも空文字を1つ持たせる。
+  // keyを持つ項目(生後日数やクイック発信が参照する項目)は先頭の1件だけを使う。
+  values: string[];
   key?: ProfileFieldKey;
 }
 

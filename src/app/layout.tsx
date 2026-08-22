@@ -32,9 +32,14 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
+    // h-svh(小さい方のビューポート高さ)にしているのは、スマホのブラウザで
+    // アドレスバーが出ている状態でもドキュメント全体が画面に収まるようにするため。
+    // h-full(=100%)だとアドレスバーが隠れている前提の高さになるので、更新直後の
+    // ようにアドレスバーが出ているときはその分だけページがはみ出し、
+    // 下のタブバーを見るのに画面をスクロールしなければならなくなる。
     <html
       lang="ja"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-svh antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

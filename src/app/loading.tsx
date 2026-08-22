@@ -8,7 +8,7 @@ const NAV_SLOTS = [0, 1, 2, 3, 4];
 export default function Loading() {
   return (
     <div className="flex flex-col flex-1 bg-gray-50">
-      <div className="w-full h-dvh relative bg-gray-50 flex font-sans overflow-hidden" aria-busy="true" aria-label="読み込み中">
+      <div className="w-full h-svh relative bg-gray-50 flex font-sans overflow-hidden" aria-busy="true" aria-label="読み込み中">
         <nav className="hidden md:flex md:flex-col md:w-56 lg:w-64 flex-none bg-white border-r border-gray-200 px-3 py-6">
           <h1 className="font-bold text-gray-800 tracking-wide text-lg px-3 mb-8">すくすく手帳</h1>
           <div className="flex flex-col space-y-1">
