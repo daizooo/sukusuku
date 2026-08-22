@@ -54,5 +54,6 @@ export const getProfileFieldValue = (profile: UserProfile, key: ProfileFieldKey)
   const field = [...profile.childFields, ...profile.familyFields, ...profile.emergencyFields].find(
     (f) => f.key === key,
   );
-  return field?.value ?? '';
+  // keyを持つ項目は内容を1つだけ持つ想定だが、念のため最初の入力済みの内容を返す。
+  return field?.values.find((value) => value.trim() !== '') ?? '';
 };

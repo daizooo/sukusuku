@@ -917,7 +917,7 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   // 本文の幅を読みやすい範囲に収めている（記録タブの2カラム表示など、幅を必要とする
   // 画面はタブ側で個別に対応する）。
   return (
-    <div className="w-full h-dvh relative bg-gray-50 flex font-sans overflow-hidden">
+    <div className="w-full h-svh relative bg-gray-50 flex font-sans overflow-hidden">
       <nav className="hidden md:flex md:flex-col md:w-56 lg:w-64 flex-none bg-white border-r border-gray-200 px-3 py-6">
         <h1 className="font-bold text-gray-800 tracking-wide text-lg px-3 mb-8">すくすく手帳</h1>
         <div className="flex flex-col space-y-1">
