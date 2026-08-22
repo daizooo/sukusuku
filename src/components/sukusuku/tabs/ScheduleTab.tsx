@@ -16,7 +16,6 @@ import {
   startOfWeek,
   toDateString,
 } from '@/lib/dateUtils';
-import TabHeading from '../ui/TabHeading';
 import SegmentedTabs from '../ui/SegmentedTabs';
 import MonthView from '../schedule/MonthView';
 import WeekView from '../schedule/WeekView';
@@ -125,8 +124,6 @@ export default function ScheduleTab({
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-3xl lg:max-w-4xl md:mx-auto md:w-full">
-      <TabHeading title="スケジュール" />
-
       {/* 表示の切り替えと担当の絞り込みは同じ1段に置く（スマホで縦の高さを予定表に回すため）。
           絞り込みは選択肢が増えても幅が変わらないよう、横並びのボタンではなく選択にしている。 */}
       <div className="flex items-center gap-2 mb-3 flex-none">

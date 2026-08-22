@@ -19,7 +19,6 @@ import {
 import type { DocumentItem, Gift, Nursery } from '@/types/app';
 import { countChecked, NURSERY_CHECK_TOTAL } from '@/lib/nurseryChecklist';
 import { formatDateWithWeekday, parseDateString } from '@/lib/dateUtils';
-import TabHeading from '../ui/TabHeading';
 import SegmentedTabs from '../ui/SegmentedTabs';
 import GiftFormModal, { type GiftDraft } from '../modals/GiftFormModal';
 import DocumentUploadModal from '../modals/DocumentUploadModal';
@@ -45,12 +44,6 @@ interface MemoTabProps {
   onDeleteNursery: (id: string) => void;
   onAddDefaultNurseries: () => void;
 }
-
-const VIEW_TITLES: Record<MemoView, string> = {
-  gift: 'お祝い・内祝い',
-  nursery: '保活メモ',
-  documents: '書類箱',
-};
 
 function DocumentCard({
   doc,
@@ -191,41 +184,47 @@ export default function MemoTab({
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
-      <TabHeading title={VIEW_TITLES[memoView]}>
+      {/* 表示の切り替えと追加は同じ1段に置く（見出しを出さない分、一覧に高さを回すため）。 */}
+      <div className="flex items-center gap-2 mb-3 shrink-0">
+        <SegmentedTabs
+          ariaLabel="メモの表示"
+          value={memoView}
+          onChange={setMemoView}
+          className="flex-1 min-w-0"
+          options={[
+            { id: 'gift', label: 'お祝い' },
+            { id: 'nursery', label: '保活' },
+            { id: 'documents', label: '書類' },
+          ]}
+        />
         {memoView === 'gift' && (
           <button
             onClick={() => setGiftModal({ mode: 'add', gift: null })}
-            className="text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition"
+            aria-label="お祝いを追加"
+            className="flex-none text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition"
           >
             <Plus size={20} />
           </button>
         )}
         {memoView === 'documents' && (
-          <button onClick={() => setShowUpload(true)} className="text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition">
+          <button
+            onClick={() => setShowUpload(true)}
+            aria-label="書類を追加"
+            className="flex-none text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition"
+          >
             <Plus size={20} />
           </button>
         )}
         {memoView === 'nursery' && (
           <button
             onClick={() => setNurseryModal({ mode: 'add', nursery: null })}
-            className="text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition"
+            aria-label="保育園を追加"
+            className="flex-none text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition"
           >
             <Plus size={20} />
           </button>
         )}
-      </TabHeading>
-
-      <SegmentedTabs
-        ariaLabel="メモの表示"
-        value={memoView}
-        onChange={setMemoView}
-        className="mb-3 shrink-0"
-        options={[
-          { id: 'gift', label: 'お祝い' },
-          { id: 'nursery', label: '保活' },
-          { id: 'documents', label: '書類' },
-        ]}
-      />
+      </div>
 
       <div className="flex-1 overflow-y-auto">
         {memoView === 'gift' && (
