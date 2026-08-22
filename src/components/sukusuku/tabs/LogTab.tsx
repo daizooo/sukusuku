@@ -45,7 +45,6 @@ import {
   parseDateString,
   toDateString,
 } from '@/lib/dateUtils';
-import TabHeading from '../ui/TabHeading';
 import SegmentedTabs from '../ui/SegmentedTabs';
 import MilkLogModal, { type MilkLogInput } from '../modals/MilkLogModal';
 import DiaperLogModal, { type DiaperLogInput } from '../modals/DiaperLogModal';
@@ -173,8 +172,6 @@ export default function LogTab({
 
   return (
     <div className="p-4 h-full flex flex-col">
-      <TabHeading title="育児記録" />
-
       <SegmentedTabs
         ariaLabel="育児記録の表示"
         value={logView}

@@ -6,7 +6,6 @@ import type { ProfileField, ProfileFieldKey, UserProfile } from '@/types/app';
 import { isPhoneNumberLike, toTelHref } from '@/lib/uiUtils';
 import NotificationSetting from '@/components/sukusuku/NotificationSetting';
 import AccountSection from '@/components/sukusuku/AccountSection';
-import TabHeading from '../ui/TabHeading';
 
 // UserProfileのうち、ProfileField[]を値に持つキー（＝設定タブで編集可能なセクション）
 type ProfileSectionKey = {
@@ -57,7 +56,8 @@ export default function InfoTab({
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
-      <TabHeading title="設定・プロフ">
+      {/* 見出しは出さず、編集・保存だけを右端に置く。 */}
+      <div className="flex items-center justify-end mb-3 shrink-0">
         {!isEditingProfile ? (
           <button onClick={onStartEditProfile} className="flex-none text-blue-600 flex items-center text-sm font-bold bg-blue-50 px-3 py-2 rounded-lg hover:bg-blue-100">
             <Edit2 size={16} className="mr-1" /> 編集
@@ -67,7 +67,7 @@ export default function InfoTab({
             <Save size={16} className="mr-1" /> 保存
           </button>
         )}
-      </TabHeading>
+      </div>
 
       <div className="flex-1 overflow-y-auto">
         <div className="space-y-6 pb-6">

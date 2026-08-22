@@ -42,17 +42,17 @@ export default function HomeTab({
   const startOfToday = startOfDay(today).getTime();
   const pendingTasks = dynamicTodos.filter((t) => !t.done);
 
-  // 期限切れは古いものほど先頭に来るため、そのまま並べると直近の3件を
+  // 期限切れは古いものほど先頭に来るため、そのまま並べると直近の4件を
   // 食いつぶしてしまう。件数だけ知らせて、中身はスケジュールのリスト表示に任せる。
   const overdueCount = pendingTasks.filter(
     (t) => t.targetDateObj && startOfDay(t.targetDateObj).getTime() < startOfToday,
   ).length;
 
-  // 今日以降の予定を近い順に3件。日付未設定は後ろに回す。
+  // 今日以降の予定を近い順に4件。日付未設定は後ろに回す。
   const upcomingTasks = pendingTasks
     .filter((t) => !t.targetDateObj || startOfDay(t.targetDateObj).getTime() >= startOfToday)
     .sort((a, b) => (a.targetDateObj?.getTime() ?? Infinity) - (b.targetDateObj?.getTime() ?? Infinity))
-    .slice(0, 3);
+    .slice(0, 4);
   const birthDateValue = getProfileFieldValue(userProfile, 'birthDate');
   const birthDate = parseDateString(birthDateValue);
   const babyName = getProfileFieldValue(userProfile, 'babyName');
