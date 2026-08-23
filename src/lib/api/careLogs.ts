@@ -8,6 +8,7 @@ import type {
   LogType,
   PoopColor,
   PoopConsistency,
+  PumpedBatch,
 } from '@/types/app';
 import { addDays, startOfDay } from '@/lib/dateUtils';
 
@@ -18,8 +19,12 @@ type SupabaseDb = SupabaseClient<Database>;
 export const LOG_TYPE_LABEL: Record<LogType, string> = {
   milk: 'ミルク',
   diaper: 'おむつ',
-  sleep: '睡眠',
+  pumping: '搾乳',
 };
+
+// 記録タブから睡眠の記録を取り止めたあとも、すでに保存されている type = 'sleep' の行は
+// DBに残っている。アプリ側では扱わないので、取得の時点で除いておく。
+const ACTIVE_LOG_TYPES: LogType[] = ['milk', 'diaper', 'pumping'];
 
 // 記録の種類ごとの項目は care_logs.details (jsonb) に入れる。
 // 想定外の値が入っていても表示を壊さないよう、読み出しは1項目ずつ検証する。
@@ -34,11 +39,10 @@ const readEnum = <T extends string>(value: unknown, allowed: readonly T[]): T | 
 const readNumber = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
-const readDate = (value: unknown): Date | null => {
-  if (typeof value !== 'string') return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
+const readStringArray = (value: unknown): string[] | undefined =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string')
+    ? (value as string[])
+    : undefined;
 
 export const rowToCareLog = (row: CareLogRow): CareLog => {
   const details = toDetails(row.details);
@@ -69,23 +73,20 @@ export const rowToCareLog = (row: CareLogRow): CareLog => {
     };
   }
 
-  if (row.type === 'sleep') {
-    const startedAt = readDate(details.startedAt) ?? new Date(row.logged_at);
+  if (row.type === 'pumping') {
     return {
       ...base,
-      type: 'sleep',
-      startedAt,
-      // endedAt が null なのは計測中のときだけ。details を持たない過去の記録は
-      // 起床時刻が分からないため、計測中と取り違えないよう開始時刻を入れておく。
-      endedAt: isLegacy ? startedAt : readDate(details.endedAt),
+      type: 'pumping',
+      amountMl: readNumber(details.amountMl) ?? 0,
     };
   }
 
   return {
     ...base,
     type: 'milk',
-    method: readEnum<FeedingMethod>(details.method, ['breast', 'formula']) ?? 'formula',
+    method: readEnum<FeedingMethod>(details.method, ['breast', 'pumped', 'formula']) ?? 'formula',
     amountMl: readNumber(details.amountMl),
+    pumpedFrom: readStringArray(details.pumpedFrom),
     leftMinutes: readNumber(details.leftMinutes),
     rightMinutes: readNumber(details.rightMinutes),
     lastSide: readEnum<BreastSide>(details.lastSide, ['left', 'right']),
@@ -102,6 +103,7 @@ const careLogToDetails = (log: CareLog): Json => {
   if (log.type === 'milk') {
     set('method', log.method);
     set('amountMl', log.amountMl);
+    set('pumpedFrom', log.pumpedFrom);
     set('leftMinutes', log.leftMinutes);
     set('rightMinutes', log.rightMinutes);
     set('lastSide', log.lastSide);
@@ -110,9 +112,7 @@ const careLogToDetails = (log: CareLog): Json => {
     set('poopColor', log.poopColor);
     set('poopConsistency', log.poopConsistency);
   } else {
-    set('startedAt', log.startedAt.toISOString());
-    // 計測中であることを表すため、endedAt は null のまま入れる。
-    details.endedAt = log.endedAt ? log.endedAt.toISOString() : null;
+    set('amountMl', log.amountMl);
   }
 
   return details as Json;
@@ -121,7 +121,7 @@ const careLogToDetails = (log: CareLog): Json => {
 /** 一覧に出す短い要約。details を持たない過去の記録との互換のため amount にも残す。 */
 const careLogToAmount = (log: CareLog): string => {
   if (log.type === 'milk') {
-    if (log.method === 'formula') return log.amountMl ? `${log.amountMl}ml` : '';
+    if (log.method !== 'breast') return log.amountMl ? `${log.amountMl}ml` : '';
     const parts = [
       log.leftMinutes ? `左${log.leftMinutes}分` : '',
       log.rightMinutes ? `右${log.rightMinutes}分` : '',
@@ -129,9 +129,7 @@ const careLogToAmount = (log: CareLog): string => {
     return parts.join(' ');
   }
   if (log.type === 'diaper') return '';
-  if (!log.endedAt) return '';
-  const minutes = Math.max(0, Math.round((log.endedAt.getTime() - log.startedAt.getTime()) / 60000));
-  return minutes >= 60 ? `${Math.floor(minutes / 60)}時間${minutes % 60}分` : `${minutes}分`;
+  return log.amountMl ? `${log.amountMl}ml` : '';
 };
 
 // 指定した期間（from 以上 to 未満）の記録を取得する。
@@ -147,6 +145,7 @@ export async function listCareLogsInRange(
     .from('care_logs')
     .select('*')
     .eq('family_id', familyId)
+    .in('type', ACTIVE_LOG_TYPES)
     .gte('logged_at', from.toISOString())
     .lt('logged_at', to.toISOString())
     .order('logged_at', { ascending: false });
@@ -164,24 +163,49 @@ export async function listCareLogsByDate(
   return listCareLogsInRange(supabase, familyId, from, addDays(from, 1));
 }
 
-/** 計測中の睡眠（起床時刻が未確定のもの）を1件だけ取り出す。表示中の日に関わらず探す。 */
-export async function findActiveSleepCareLog(
-  supabase: SupabaseDb,
-  familyId: string,
-): Promise<CareLog | null> {
-  const { data, error } = await supabase
-    .from('care_logs')
-    .select('*')
-    .eq('family_id', familyId)
-    .eq('type', 'sleep')
-    // ->> で取り出すと JSON の null も SQL の NULL として扱われる（-> のままだと一致しない）
-    .is('details->>endedAt', null)
-    .not('details->>startedAt', 'is', null)
-    .order('logged_at', { ascending: false })
-    .limit(1);
-  if (error) throw error;
-  const row = data?.[0];
-  return row ? rowToCareLog(row) : null;
+/**
+ * 搾乳ストックの一覧。ためた搾乳1件ずつに「どの授乳で飲ませたか」を添えて返す。
+ *
+ * どの搾乳を飲ませるかは記録するときに選ぶので、残量ではなく1パックずつ持つ必要がある。
+ * 使ったかどうかは飲ませた側（method: 'pumped' のミルクの記録）の pumpedFrom が持ち、
+ * 搾乳の記録そのものは書き換えない。授乳の記録を消せば、その搾乳はストックに戻る。
+ *
+ * 表示中の日だけでは求まらないため全期間ぶんを数えるが、どちらも1日に数件しか増えず
+ * 必要な列も少ないので、2本の軽い問い合わせで足りる。並びは古い順（先に搾ったものから使う）。
+ */
+export async function listPumpedBatches(supabase: SupabaseDb, familyId: string): Promise<PumpedBatch[]> {
+  const [pumped, fed] = await Promise.all([
+    supabase
+      .from('care_logs')
+      .select('id, logged_at, details')
+      .eq('family_id', familyId)
+      .eq('type', 'pumping')
+      .order('logged_at', { ascending: true }),
+    supabase
+      .from('care_logs')
+      .select('id, details')
+      .eq('family_id', familyId)
+      .eq('type', 'milk')
+      .eq('details->>method', 'pumped'),
+  ]);
+  if (pumped.error) throw pumped.error;
+  if (fed.error) throw fed.error;
+
+  // 搾乳のid -> それを飲ませた授乳の記録のid。
+  const usedBy = new Map<string, string>();
+  for (const row of fed.data ?? []) {
+    for (const pumpingId of readStringArray(toDetails(row.details).pumpedFrom) ?? []) {
+      // 同じ搾乳が2つの記録から参照されていても、ストックから外れることは変わらない。
+      if (!usedBy.has(pumpingId)) usedBy.set(pumpingId, row.id);
+    }
+  }
+
+  return (pumped.data ?? []).map((row) => ({
+    id: row.id,
+    time: new Date(row.logged_at),
+    amountMl: readNumber(toDetails(row.details).amountMl) ?? 0,
+    usedBy: usedBy.get(row.id) ?? null,
+  }));
 }
 
 // 共用体のまま各要素から取り除く（Omit をそのまま使うと種類ごとの項目が消えてしまう）

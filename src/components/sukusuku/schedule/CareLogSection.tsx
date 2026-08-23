@@ -1,19 +1,16 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { ChevronRight, Coffee, Droplet, Moon } from 'lucide-react';
+import { ChevronRight, Coffee, Droplet, Milk } from 'lucide-react';
 import type { CareLog } from '@/types/app';
 import {
   BADGE_TONE_CLASS,
-  formatDuration,
   getLogBadges,
   getLogTimeText,
   getLogTitle,
   isAlertLog,
   summarizeLogs,
 } from '@/lib/careLogUtils';
-
-const formatMinutes = (minutes: number): string => formatDuration(minutes * 60000);
 
 interface CareLogSummaryProps {
   logs: CareLog[];
@@ -37,8 +34,9 @@ export function CareLogSummaryLine({ logs }: CareLogSummaryProps) {
         {summary.diaper.poopCount > 0 && <span className="ml-1">(💩{summary.diaper.poopCount})</span>}
       </span>
       <span className="flex items-center">
-        <Moon size={12} className="text-indigo-500 mr-1" />
-        {summary.sleep.minutes > 0 ? formatMinutes(summary.sleep.minutes) : `${summary.sleep.count}回`}
+        <Milk size={12} className="text-rose-500 mr-1" />
+        {summary.pumping.count}回
+        {summary.pumping.ml > 0 && <span className="ml-1">{summary.pumping.ml}ml</span>}
       </span>
     </div>
   );
@@ -47,7 +45,7 @@ export function CareLogSummaryLine({ logs }: CareLogSummaryProps) {
 interface CareLogSectionProps {
   logs: CareLog[];
   isLoading?: boolean;
-  /** 合計の上に置く24時間の帯。前夜から続く睡眠も含むため、記録の一覧とは別に受け取る。 */
+  /** 合計の上に置く24時間の帯。 */
   timeline?: ReactNode;
   onOpenLogTab: () => void;
 }

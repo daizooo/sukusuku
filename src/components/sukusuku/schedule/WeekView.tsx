@@ -6,7 +6,6 @@ import { getMilestoneLabel } from '@/lib/milestones';
 import TaskRow from './TaskRow';
 import { CareLogSummaryLine } from './CareLogSection';
 import DayTimeline, { TimelineScale } from './DayTimeline';
-import { useTimelineNow } from './useTimelineNow';
 import { tasksOnDate } from './utils';
 
 interface WeekViewProps {
@@ -40,9 +39,6 @@ export default function WeekView({
 }: WeekViewProps) {
   const start = startOfWeek(date);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
-
-  // 計測中の睡眠は現在時刻まで伸ばすため、分ごとに描き直す。
-  const now = useTimelineNow(careLogs);
 
   return (
     <div className="space-y-3">
@@ -97,8 +93,7 @@ export default function WeekView({
 
             {isPastOrToday && !isLoadingCareLogs && (
               <div className="mt-1.5 px-1 space-y-1">
-                {/* 帯には前夜から続く睡眠も入るため、その日のぶんに絞らず渡す。 */}
-                <DayTimeline logs={careLogs} day={day} now={now ?? today} />
+                <DayTimeline logs={dayLogs} day={day} />
                 <CareLogSummaryLine logs={dayLogs} />
               </div>
             )}

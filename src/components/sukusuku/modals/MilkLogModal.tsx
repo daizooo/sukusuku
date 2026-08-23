@@ -1,20 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { Pause, Play, RotateCcw, Vibrate, Volume2, VolumeX } from 'lucide-react';
-import type { BreastSide, FeedingMethod, MilkLog } from '@/types/app';
+import { Check, Pause, Play, RotateCcw } from 'lucide-react';
+import type { BreastSide, FeedingMethod, MilkLog, PumpedBatch } from '@/types/app';
 import {
   BREAST_MINUTE_OPTIONS,
   MILK_AMOUNT_OPTIONS,
+  formatBatchTime,
   formatStopwatch,
   getSideLabel,
+  pumpedStockMl,
+  selectablePumpedBatches,
+  sumBatchesMl,
 } from '@/lib/careLogUtils';
-import {
-  ALARM_INTERVAL_OPTIONS,
-  nursingMinutes,
-  useNursingAlarm,
-  type NursingTimer,
-} from '@/lib/nursingTimer';
+import { nursingMinutes, type NursingTimer } from '@/lib/nursingTimer';
 import { parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUtils';
 import {
   DateTimeField,
@@ -31,6 +30,8 @@ import {
 export interface MilkLogInput {
   method: FeedingMethod;
   amountMl?: number;
+  /** method: 'pumped' のとき、飲ませた搾乳の記録のid。 */
+  pumpedFrom?: string[];
   leftMinutes?: number;
   rightMinutes?: number;
   lastSide?: BreastSide;
@@ -47,6 +48,8 @@ interface MilkLogModalProps {
   nextSide: BreastSide | null;
   /** 母乳の左右別ストップウォッチ。新規に記録するときだけ使う。 */
   timer: NursingTimer;
+  /** 搾乳ストックの全量（使用済みも含む）。「搾乳」を選んだときの選択肢に使う。 */
+  pumpedBatches: PumpedBatch[];
   onClose: () => void;
   onSubmit: (input: MilkLogInput) => void;
   onDelete: () => void;
@@ -54,6 +57,7 @@ interface MilkLogModalProps {
 
 const METHOD_OPTIONS: { value: FeedingMethod; label: string }[] = [
   { value: 'breast', label: '母乳' },
+  { value: 'pumped', label: '搾乳' },
   { value: 'formula', label: 'ミルク' },
 ];
 
@@ -75,9 +79,20 @@ export default function MilkLogModal({ show, ...props }: MilkLogModalProps & { s
   return <MilkLogModalBody {...props} />;
 }
 
-function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, onDelete }: MilkLogModalProps) {
+function MilkLogModalBody({
+  log,
+  baseDate,
+  nextSide,
+  timer,
+  pumpedBatches,
+  onClose,
+  onSubmit,
+  onDelete,
+}: MilkLogModalProps) {
   const [method, setMethod] = useState<FeedingMethod>(log?.method ?? 'breast');
   const [amountMl, setAmountMl] = useState<number>(log?.amountMl ?? 100);
+  // 「搾乳」で飲ませる搾乳ストック。編集中なら、その記録が使っているパックを選んだ状態で開く。
+  const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>(() => log?.pumpedFrom ?? []);
   const [customAmount, setCustomAmount] = useState(() =>
     log?.amountMl && !MILK_AMOUNT_OPTIONS.includes(log.amountMl) ? String(log.amountMl) : '',
   );
@@ -104,6 +119,15 @@ function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, o
 
   // 過去の記録を編集しているときは、いま計測しているものと混ざらないよう出さない。
   const showTimer = !log && method === 'breast';
+
+  // 選べる搾乳ストック。編集中の記録が使っているパックも、選び直せるよう残す。
+  const selectableBatches = selectablePumpedBatches(pumpedBatches, log?.id);
+  const selectedBatches = selectableBatches.filter((batch) => selectedBatchIds.includes(batch.id));
+  // 「搾乳」で記録する量は、選んだ搾乳の合計。
+  const selectedMl = sumBatchesMl(selectedBatches);
+
+  const toggleBatch = (id: string) =>
+    setSelectedBatchIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   // 計測した時間をそのまま記録する。計測中のまま保存されても、その分を含める。
   // 分数を手で選び直した側は、その値を優先する。
@@ -171,6 +195,11 @@ function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, o
 
   const handleSubmit = () => {
     const base = { method, time: parseDateTimeInput(date, time, log?.time ?? baseDate), note };
+    if (method === 'pumped') {
+      if (selectedBatches.length === 0) return;
+      onSubmit({ ...base, amountMl: selectedMl, pumpedFrom: selectedBatches.map((batch) => batch.id) });
+      return;
+    }
     if (method === 'formula') {
       onSubmit({ ...base, amountMl });
       return;
@@ -204,7 +233,6 @@ function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, o
               rightMs={timer.rightMs}
               runningSide={timer.runningSide}
               hasSession={timer.hasSession}
-              remainingToAlarmMs={timer.remainingToAlarmMs}
               recordedLeft={recordedLeft}
               recordedRight={recordedRight}
               onToggleSide={handleToggleSide}
@@ -231,6 +259,14 @@ function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, o
             <p className="text-[10px] text-gray-400 mt-1.5">次にどちらから授乳するかの目安になります。</p>
           </div>
         </>
+      ) : method === 'pumped' ? (
+        <PumpedBatchPicker
+          batches={selectableBatches}
+          selectedIds={selectedBatchIds}
+          selectedMl={selectedMl}
+          stockMl={pumpedStockMl(pumpedBatches)}
+          onToggle={toggleBatch}
+        />
       ) : (
         <>
           <div>
@@ -269,11 +305,88 @@ function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, o
         onChangeTime={setTime}
       />
       <NoteField value={note} onChange={setNote} placeholder="よく飲んだ / 途中で寝た など" />
-      <SubmitButton accent="milk" onClick={handleSubmit}>
+      <SubmitButton
+        accent="milk"
+        onClick={handleSubmit}
+        disabled={method === 'pumped' && selectedBatches.length === 0}
+      >
         保存する
       </SubmitButton>
       {log && <DeleteButton onDelete={onDelete} />}
     </LogModalShell>
+  );
+}
+
+interface PumpedBatchPickerProps {
+  /** 選べる搾乳（まだ使っていないパック + 編集中の記録が使っているパック）。古い順。 */
+  batches: PumpedBatch[];
+  selectedIds: string[];
+  /** 選んだ搾乳の合計(ml)。この値がそのまま記録される。 */
+  selectedMl: number;
+  /** ストック全体の残り(ml)。編集中の記録が使っている分は含まない。 */
+  stockMl: number;
+  onToggle: (id: string) => void;
+}
+
+/**
+ * 飲ませる搾乳を搾乳ストックから選ぶ。選んだパックの合計がそのまま記録する量になる。
+ *
+ * 何mlを飲ませたかは、どの搾乳を使ったかで決まる（母乳パック1つ＝1回の搾乳）ため、
+ * 量を打ち直すのではなくパックを選ぶ形にしている。選んだ搾乳はストックから外れ、
+ * この記録を消すとストックに戻る。古いものから使えるよう、並びは搾った順。
+ */
+function PumpedBatchPicker({ batches, selectedIds, selectedMl, stockMl, onToggle }: PumpedBatchPickerProps) {
+  if (batches.length === 0) {
+    return (
+      <HintBanner accent="pumping">
+        搾乳ストックがありません。先に「搾乳」で搾った分を記録してください。
+      </HintBanner>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-end justify-between mb-1.5">
+        <FieldLabel>飲ませる搾乳を選ぶ</FieldLabel>
+        <span className="text-[11px] text-gray-500 tabular-nums mb-1.5">残り {stockMl}ml</span>
+      </div>
+
+      <div className="space-y-1.5 max-h-56 overflow-y-auto">
+        {batches.map((batch) => {
+          const selected = selectedIds.includes(batch.id);
+          return (
+            <button
+              key={batch.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onToggle(batch.id)}
+              className={`w-full flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm transition active:scale-[0.99] ${
+                selected
+                  ? 'bg-rose-50 border-rose-400 text-rose-800'
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <span className="flex items-center min-w-0">
+                <span
+                  aria-hidden
+                  className={`w-4 h-4 mr-2 shrink-0 rounded border flex items-center justify-center ${
+                    selected ? 'bg-rose-600 border-rose-600' : 'border-gray-300'
+                  }`}
+                >
+                  {selected && <Check size={12} className="text-white" />}
+                </span>
+                <span className="tabular-nums truncate">{formatBatchTime(batch)}</span>
+              </span>
+              <span className="font-bold tabular-nums shrink-0 ml-2">{batch.amountMl}ml</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="mt-2 text-xs font-bold text-rose-700 tabular-nums">
+        {selectedIds.length === 0 ? '搾乳を選んでください' : `${selectedIds.length}パック・合計 ${selectedMl}ml で記録します`}
+      </p>
+    </div>
   );
 }
 
@@ -320,8 +433,6 @@ interface BreastStopwatchProps {
   rightMs: number;
   runningSide: BreastSide | null;
   hasSession: boolean;
-  /** 次のお知らせまでの残り(ミリ秒)。計測していなければ null。 */
-  remainingToAlarmMs: number | null;
   /** この内容で保存したときに記録される分数。 */
   recordedLeft: number;
   recordedRight: number;
@@ -335,7 +446,6 @@ function BreastStopwatch({
   rightMs,
   runningSide,
   hasSession,
-  remainingToAlarmMs,
   recordedLeft,
   recordedRight,
   onToggleSide,
@@ -405,88 +515,6 @@ function BreastStopwatch({
           反対側をタップすると自動で切り替わります。この画面を閉じても計測は続きます。
         </p>
       )}
-
-      <NursingAlarmField remainingToAlarmMs={remainingToAlarmMs} />
-    </div>
-  );
-}
-
-/**
- * 授乳中は手が離せないので、一定間隔で音とバイブで経過時間を知らせる。
- * 画面を見なくても分かるよう、短い「ピッ」1回＝5分・長い「ポーン」1回＝30分の
- * 鳴らす回数で経過時間そのものを表す。「テスト」は次に鳴るお知らせをそのまま鳴らす。
- */
-function NursingAlarmField({ remainingToAlarmMs }: { remainingToAlarmMs: number | null }) {
-  const { settings, vibrationSupported, update, test } = useNursingAlarm();
-  const { intervalMinutes } = settings;
-
-  return (
-    <div className="mt-3 pt-3 border-t border-amber-200">
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[11px] font-bold text-amber-700">経過時間のお知らせ</span>
-        {remainingToAlarmMs !== null && (
-          <span className="text-[11px] text-amber-700 tabular-nums">
-            次まで {formatStopwatch(remainingToAlarmMs)}
-          </span>
-        )}
-      </div>
-
-      <div className="flex gap-1.5">
-        {ALARM_INTERVAL_OPTIONS.map((minutes) => (
-          <button
-            key={minutes}
-            type="button"
-            aria-pressed={intervalMinutes === minutes}
-            onClick={() => update({ intervalMinutes: minutes })}
-            className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition ${
-              intervalMinutes === minutes
-                ? 'bg-amber-600 border-amber-600 text-white'
-                : 'bg-white border-amber-200 text-gray-600 hover:bg-amber-100'
-            }`}
-          >
-            {minutes}分
-          </button>
-        ))}
-      </div>
-
-      <div className="flex gap-1.5 mt-1.5">
-        <button
-          type="button"
-          aria-pressed={settings.soundEnabled}
-          onClick={() => update({ soundEnabled: !settings.soundEnabled })}
-          className={`flex-1 py-1.5 text-xs font-bold rounded-lg border flex items-center justify-center transition ${
-            settings.soundEnabled
-              ? 'bg-white border-amber-300 text-amber-700'
-              : 'bg-white border-gray-200 text-gray-400'
-          }`}
-        >
-          {settings.soundEnabled ? <Volume2 size={13} className="mr-1" /> : <VolumeX size={13} className="mr-1" />}
-          音 {settings.soundEnabled ? 'ON' : 'OFF'}
-        </button>
-        <button
-          type="button"
-          aria-pressed={settings.vibrationEnabled && vibrationSupported}
-          disabled={!vibrationSupported}
-          onClick={() => update({ vibrationEnabled: !settings.vibrationEnabled })}
-          className={`flex-1 py-1.5 text-xs font-bold rounded-lg border flex items-center justify-center transition ${
-            !vibrationSupported
-              ? 'bg-gray-50 border-gray-200 text-gray-300'
-              : settings.vibrationEnabled
-                ? 'bg-white border-amber-300 text-amber-700'
-                : 'bg-white border-gray-200 text-gray-400'
-          }`}
-        >
-          <Vibrate size={13} className="mr-1" />
-          バイブ {!vibrationSupported ? '非対応' : settings.vibrationEnabled ? 'ON' : 'OFF'}
-        </button>
-        <button
-          type="button"
-          onClick={test}
-          className="px-3 py-1.5 text-xs font-bold rounded-lg border border-amber-200 bg-white text-gray-600 hover:bg-amber-100 transition"
-        >
-          テスト
-        </button>
-      </div>
     </div>
   );
 }

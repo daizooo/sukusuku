@@ -6,24 +6,24 @@
 import type { ReactNode } from 'react';
 import { Trash2, X } from 'lucide-react';
 
-export type LogAccent = 'milk' | 'diaper' | 'sleep';
+export type LogAccent = 'milk' | 'diaper' | 'pumping';
 
 const ACCENT_SELECTED: Record<LogAccent, string> = {
   milk: 'bg-amber-600 border-amber-600 text-white',
   diaper: 'bg-blue-600 border-blue-600 text-white',
-  sleep: 'bg-indigo-600 border-indigo-600 text-white',
+  pumping: 'bg-rose-600 border-rose-600 text-white',
 };
 
 const ACCENT_BUTTON: Record<LogAccent, string> = {
   milk: 'bg-amber-600 hover:bg-amber-700',
   diaper: 'bg-blue-600 hover:bg-blue-700',
-  sleep: 'bg-indigo-600 hover:bg-indigo-700',
+  pumping: 'bg-rose-600 hover:bg-rose-700',
 };
 
 const ACCENT_TEXT: Record<LogAccent, string> = {
   milk: 'text-amber-700',
   diaper: 'text-blue-700',
-  sleep: 'text-indigo-700',
+  pumping: 'text-rose-700',
 };
 
 interface LogModalShellProps {
@@ -58,7 +58,7 @@ interface SegmentedProps<T extends string> {
   onChange: (value: T) => void;
 }
 
-/** 母乳/ミルク、おしっこ/うんち など、まず選ぶ切り替え。 */
+/** 母乳/搾乳/ミルク、おしっこ/うんち など、まず選ぶ切り替え。 */
 export function Segmented<T extends string>({ options, value, onChange }: SegmentedProps<T>) {
   return (
     <div className="flex bg-gray-200 p-1 rounded-lg">
@@ -180,15 +180,18 @@ export function DateTimeField({ label, date, time, onChangeDate, onChangeTime }:
 interface SubmitButtonProps {
   accent: LogAccent;
   onClick: () => void;
+  /** 必須の入力が埋まっていないときに押せなくする。 */
+  disabled?: boolean;
   children: ReactNode;
 }
 
-export function SubmitButton({ accent, onClick, children }: SubmitButtonProps) {
+export function SubmitButton({ accent, onClick, disabled, children }: SubmitButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`w-full text-white font-bold py-3 rounded-xl transition active:scale-[0.99] ${ACCENT_BUTTON[accent]}`}
+      disabled={disabled}
+      className={`w-full text-white font-bold py-3 rounded-xl transition active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100 ${ACCENT_BUTTON[accent]}`}
     >
       {children}
     </button>
@@ -208,8 +211,14 @@ export function DeleteButton({ onDelete }: { onDelete: () => void }) {
   );
 }
 
+const ACCENT_BANNER: Record<LogAccent, string> = {
+  milk: 'bg-amber-50 border-amber-200',
+  diaper: 'bg-blue-50 border-blue-200',
+  pumping: 'bg-rose-50 border-rose-200',
+};
+
 export function HintBanner({ accent, children }: { accent: LogAccent; children: ReactNode }) {
-  const background = accent === 'sleep' ? 'bg-indigo-50 border-indigo-200' : 'bg-amber-50 border-amber-200';
+  const background = ACCENT_BANNER[accent];
   return (
     <p className={`border rounded-xl px-3 py-2 text-xs font-medium ${background} ${ACCENT_TEXT[accent]}`}>
       {children}
