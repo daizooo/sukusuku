@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import type { PumpingLog } from '@/types/app';
+import type { PumpedBatch, PumpingLog } from '@/types/app';
+import { pumpedStockMl } from '@/lib/careLogUtils';
 import { parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUtils';
 import {
   DateTimeField,
@@ -24,8 +25,8 @@ interface PumpingLogModalProps {
   log: PumpingLog | null;
   /** 新規追加時に記録する日。過去の日を表示中でもその日に登録する。 */
   baseDate: Date;
-  /** 搾乳ストック（ためてある搾乳母乳の残り, ml）。 */
-  pumpedStockMl: number;
+  /** 搾乳ストックの全量（使用済みも含む）。残りの表示に使う。 */
+  pumpedBatches: PumpedBatch[];
   onClose: () => void;
   onSubmit: (input: PumpingLogInput) => void;
   onDelete: () => void;
@@ -38,16 +39,16 @@ export default function PumpingLogModal({ show, ...props }: PumpingLogModalProps
 }
 
 /**
- * 搾乳してためた母乳の記録。
+ * 搾乳してためた母乳の記録。1件が搾乳ストックの1本（哺乳瓶1本ぶん）にあたる。
  *
  * 搾れる量は毎回まちまちで、決まった刻みのボタンでは当てはまらないため、
  * 量は数値の直接入力だけにしている。飲ませるときは授乳・ミルクの記録で
- * 「搾乳」を選ぶと、ここでためた分から引かれる。
+ * 「搾乳」を選び、ここでためた本の中から使うものを選ぶ。
  */
 function PumpingLogModalBody({
   log,
   baseDate,
-  pumpedStockMl,
+  pumpedBatches,
   onClose,
   onSubmit,
   onDelete,
@@ -58,6 +59,9 @@ function PumpingLogModalBody({
   const [date, setDate] = useState(() => toDateString(log?.time ?? baseDate));
   const [time, setTime] = useState(() => toTimeInputValue(log?.time ?? new Date()));
   const [note, setNote] = useState(log?.note ?? '');
+
+  // すでに授乳の記録で使われている搾乳は、量を直すとその記録の量とずれる。
+  const isUsed = pumpedBatches.some((batch) => batch.id === log?.id && batch.usedBy !== null);
 
   const parsed = Number(amount);
   const amountMl = amount !== '' && Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : null;
@@ -74,8 +78,14 @@ function PumpingLogModalBody({
   return (
     <LogModalShell title={log ? '搾乳の記録を編集' : '搾乳を記録'} onClose={onClose}>
       <HintBanner accent="pumping">
-        搾乳ストックの残りは<span className="font-bold">{pumpedStockMl}ml</span>
-        。飲ませたときは授乳・ミルクの記録で「搾乳」を選びます。
+        {isUsed ? (
+          <>この搾乳は授乳の記録ですでに飲ませた分です。量を直すと、その記録の量とずれます。</>
+        ) : (
+          <>
+            搾乳ストックの残りは<span className="font-bold">{pumpedStockMl(pumpedBatches)}ml</span>
+            。飲ませるときは授乳・ミルクの記録で「搾乳」を選び、ここで記録した分から選びます。
+          </>
+        )}
       </HintBanner>
 
       <label className="block">

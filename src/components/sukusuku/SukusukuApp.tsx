@@ -16,6 +16,7 @@ import type {
   CareLog,
   DiaperLog,
   MilkLog,
+  PumpedBatch,
   PumpingLog,
   DocumentItem,
   DynamicTask,
@@ -52,8 +53,8 @@ import {
 import type { NewCareLogInput } from '@/lib/api/careLogs';
 import {
   deleteCareLog,
-  getPumpedStockMl,
   insertCareLog,
+  listPumpedBatches,
   listCareLogsByDate,
   listCareLogsInRange,
   updateCareLog as updateCareLogApi,
@@ -173,9 +174,9 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   // 取得済みの日。表示中の日と一致していなければ読み込み中とみなす
   const [loadedLogDate, setLoadedLogDate] = useState<Date | null>(null);
   const isLoadingLogs = loadedLogDate?.getTime() !== logDate.getTime();
-  // 搾乳ストック（ためてある搾乳母乳の残り, ml）。ためた分と飲ませた分の差し引きなので
-  // 表示中の日だけでは求まらず、全期間ぶんをまとめて数えて持つ。
-  const [pumpedStockMl, setPumpedStockMl] = useState(0);
+  // 搾乳ストック。飲ませるときにどの搾乳を使うか選べるよう、残量ではなく1本ずつ持つ。
+  // 表示中の日だけでは求まらないため、全期間ぶんをまとめて持つ。
+  const [pumpedBatches, setPumpedBatches] = useState<PumpedBatch[]>([]);
 
   const [gifts, setGifts] = useState<Gift[]>([]);
   const [isLoadingGifts, setIsLoadingGifts] = useState(true);
@@ -316,11 +317,11 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
     };
   }, [supabase, familyId, needsScheduleLogs, scheduleLogFrom, scheduleLogTo, scheduleLogRangeKey]);
 
-  // 搾乳ストックを読み込む。記録を触るたびに数え直す。
+  // 搾乳ストックを読み込む。記録を触るたびに取り直す。
   const refreshPumpedStock = useCallback(() => {
-    getPumpedStockMl(supabase, familyId)
-      .then(setPumpedStockMl)
-      .catch((err) => console.error('Failed to load pumped milk stock:', err));
+    listPumpedBatches(supabase, familyId)
+      .then(setPumpedBatches)
+      .catch((err: unknown) => console.error('Failed to load pumped milk stock:', err));
   }, [supabase, familyId]);
 
   useEffect(() => {
@@ -889,7 +890,7 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               isLoadingGrowth={isLoadingGrowth}
               memberLabel={memberLabel}
               nextBreastSide={nextBreastSide}
-              pumpedStockMl={pumpedStockMl}
+              pumpedBatches={pumpedBatches}
               onSaveMilkLog={saveMilkLog}
               onSaveDiaperLog={saveDiaperLog}
               onSavePumpingLog={savePumpingLog}

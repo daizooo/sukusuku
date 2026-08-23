@@ -22,6 +22,7 @@ import type {
   GrowthRecord,
   LogType,
   MilkLog,
+  PumpedBatch,
   PumpingLog,
 } from '@/types/app';
 import {
@@ -32,6 +33,7 @@ import {
   getLogTitle,
   getSideLabel,
   isAlertLog,
+  sumBatchesMl,
   summarizeLogs,
 } from '@/lib/careLogUtils';
 import { useNursingTimer } from '@/lib/nursingTimer';
@@ -59,8 +61,8 @@ interface LogTabProps {
   memberLabel: (id: string | null) => string;
   /** 次に飲ませる乳首。判断材料がなければ null。 */
   nextBreastSide: BreastSide | null;
-  /** 搾乳ストック（ためてある搾乳母乳の残り, ml）。 */
-  pumpedStockMl: number;
+  /** 搾乳ストックの全量（使用済みも含む）。残りの表示と、飲ませる搾乳の選択に使う。 */
+  pumpedBatches: PumpedBatch[];
   onSaveMilkLog: (input: MilkLogInput, existing: MilkLog | null) => void;
   onSaveDiaperLog: (input: DiaperLogInput, existing: DiaperLog | null) => void;
   onSavePumpingLog: (input: PumpingLogInput, existing: PumpingLog | null) => void;
@@ -106,7 +108,7 @@ export default function LogTab({
   isLoadingGrowth,
   memberLabel,
   nextBreastSide,
-  pumpedStockMl,
+  pumpedBatches,
   onSaveMilkLog,
   onSaveDiaperLog,
   onSavePumpingLog,
@@ -145,6 +147,9 @@ export default function LogTab({
     summary.pumping.ml > 0
       ? `${summary.pumping.count}回・${summary.pumping.ml}ml`
       : `${summary.pumping.count}回`;
+  // 搾乳ストックの残り。まだ飲ませていない本の数と合計。
+  const stockBatches = pumpedBatches.filter((batch) => batch.usedBy === null);
+  const stockMl = sumBatchesMl(stockBatches);
 
   const closeLogModal = () => setLogModal(null);
 
@@ -294,7 +299,9 @@ export default function LogTab({
               <span className="text-xs font-bold text-rose-700 flex items-center">
                 <Milk size={13} className="mr-1" /> 搾乳ストック
               </span>
-              <span className="text-sm font-bold text-rose-700 tabular-nums">{pumpedStockMl}ml</span>
+              <span className="text-sm font-bold text-rose-700 tabular-nums">
+                {stockBatches.length}本・{stockMl}ml
+              </span>
             </div>
             {!isToday && (
               <p className="text-[11px] text-gray-500 leading-relaxed">
@@ -433,7 +440,7 @@ export default function LogTab({
         baseDate={logDate}
         nextSide={nextBreastSide}
         timer={nursingTimer}
-        pumpedStockMl={pumpedStockMl}
+        pumpedBatches={pumpedBatches}
         onClose={closeLogModal}
         onSubmit={(input) => {
           const existing = logModal?.log?.type === 'milk' ? logModal.log : null;
@@ -459,7 +466,7 @@ export default function LogTab({
         show={logModal?.type === 'pumping'}
         log={logModal?.log?.type === 'pumping' ? logModal.log : null}
         baseDate={logDate}
-        pumpedStockMl={pumpedStockMl}
+        pumpedBatches={pumpedBatches}
         onClose={closeLogModal}
         onSubmit={(input) => {
           onSavePumpingLog(input, logModal?.log?.type === 'pumping' ? logModal.log : null);

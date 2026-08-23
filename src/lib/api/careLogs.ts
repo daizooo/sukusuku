@@ -8,6 +8,7 @@ import type {
   LogType,
   PoopColor,
   PoopConsistency,
+  PumpedBatch,
 } from '@/types/app';
 import { addDays, startOfDay } from '@/lib/dateUtils';
 
@@ -37,6 +38,11 @@ const readEnum = <T extends string>(value: unknown, allowed: readonly T[]): T | 
 
 const readNumber = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const readStringArray = (value: unknown): string[] | undefined =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string')
+    ? (value as string[])
+    : undefined;
 
 export const rowToCareLog = (row: CareLogRow): CareLog => {
   const details = toDetails(row.details);
@@ -80,6 +86,7 @@ export const rowToCareLog = (row: CareLogRow): CareLog => {
     type: 'milk',
     method: readEnum<FeedingMethod>(details.method, ['breast', 'pumped', 'formula']) ?? 'formula',
     amountMl: readNumber(details.amountMl),
+    pumpedFrom: readStringArray(details.pumpedFrom),
     leftMinutes: readNumber(details.leftMinutes),
     rightMinutes: readNumber(details.rightMinutes),
     lastSide: readEnum<BreastSide>(details.lastSide, ['left', 'right']),
@@ -96,6 +103,7 @@ const careLogToDetails = (log: CareLog): Json => {
   if (log.type === 'milk') {
     set('method', log.method);
     set('amountMl', log.amountMl);
+    set('pumpedFrom', log.pumpedFrom);
     set('leftMinutes', log.leftMinutes);
     set('rightMinutes', log.rightMinutes);
     set('lastSide', log.lastSide);
@@ -156,18 +164,26 @@ export async function listCareLogsByDate(
 }
 
 /**
- * 搾乳ストック（ためてある搾乳母乳の残り, ml）。
+ * 搾乳ストックの一覧。ためた搾乳1件ずつに「どの授乳で飲ませたか」を添えて返す。
  *
- * 「搾乳してためた」記録と「ためた分を飲ませた」記録の差し引きなので、
- * 表示中の日だけでは求まらず、全期間ぶんを数える。どちらも1日に数件しか増えず
- * details だけあれば足りるため、必要な行だけを2本の問い合わせで取りに行く。
+ * どの搾乳を飲ませるかは記録するときに選ぶので、残量ではなく1本ずつ持つ必要がある。
+ * 使ったかどうかは飲ませた側（method: 'pumped' のミルクの記録）の pumpedFrom が持ち、
+ * 搾乳の記録そのものは書き換えない。授乳の記録を消せば、その搾乳はストックに戻る。
+ *
+ * 表示中の日だけでは求まらないため全期間ぶんを数えるが、どちらも1日に数件しか増えず
+ * 必要な列も少ないので、2本の軽い問い合わせで足りる。並びは古い順（先に搾ったものから使う）。
  */
-export async function getPumpedStockMl(supabase: SupabaseDb, familyId: string): Promise<number> {
+export async function listPumpedBatches(supabase: SupabaseDb, familyId: string): Promise<PumpedBatch[]> {
   const [pumped, fed] = await Promise.all([
-    supabase.from('care_logs').select('details').eq('family_id', familyId).eq('type', 'pumping'),
     supabase
       .from('care_logs')
-      .select('details')
+      .select('id, logged_at, details')
+      .eq('family_id', familyId)
+      .eq('type', 'pumping')
+      .order('logged_at', { ascending: true }),
+    supabase
+      .from('care_logs')
+      .select('id, details')
       .eq('family_id', familyId)
       .eq('type', 'milk')
       .eq('details->>method', 'pumped'),
@@ -175,10 +191,21 @@ export async function getPumpedStockMl(supabase: SupabaseDb, familyId: string): 
   if (pumped.error) throw pumped.error;
   if (fed.error) throw fed.error;
 
-  const total = (rows: { details: Json }[]) =>
-    rows.reduce((sum, row) => sum + (readNumber(toDetails(row.details).amountMl) ?? 0), 0);
+  // 搾乳のid -> それを飲ませた授乳の記録のid。
+  const usedBy = new Map<string, string>();
+  for (const row of fed.data ?? []) {
+    for (const pumpingId of readStringArray(toDetails(row.details).pumpedFrom) ?? []) {
+      // 同じ搾乳が2つの記録から参照されていても、ストックから外れることは変わらない。
+      if (!usedBy.has(pumpingId)) usedBy.set(pumpingId, row.id);
+    }
+  }
 
-  return total(pumped.data ?? []) - total(fed.data ?? []);
+  return (pumped.data ?? []).map((row) => ({
+    id: row.id,
+    time: new Date(row.logged_at),
+    amountMl: readNumber(toDetails(row.details).amountMl) ?? 0,
+    usedBy: usedBy.get(row.id) ?? null,
+  }));
 }
 
 // 共用体のまま各要素から取り除く（Omit をそのまま使うと種類ごとの項目が消えてしまう）

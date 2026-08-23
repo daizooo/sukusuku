@@ -70,8 +70,13 @@ interface CareLogBase {
 export interface MilkLog extends CareLogBase {
   type: 'milk';
   method: FeedingMethod;
-  /** ミルク(formula)・搾乳した母乳(pumped)の量。 */
+  /** ミルク(formula)・搾乳した母乳(pumped)の量。pumped では選んだ搾乳の合計。 */
   amountMl?: number;
+  /**
+   * method: 'pumped' のとき、飲ませた搾乳の記録(PumpingLog)のid。
+   * ここに挙がっている搾乳は「使用済み」として搾乳ストックから外れる。
+   */
+  pumpedFrom?: string[];
   /** 母乳(breast)の左右それぞれの授乳時間（分, 0〜30の5分刻み）。 */
   leftMinutes?: number;
   rightMinutes?: number;
@@ -88,8 +93,8 @@ export interface DiaperLog extends CareLogBase {
 }
 
 /**
- * 搾乳した母乳を「ためた」記録。飲ませた分は method: 'pumped' のミルクの記録として残し、
- * この2つの差し引きが搾乳ストック（いま残っている量）になる。
+ * 搾乳した母乳を「ためた」1回ぶんの記録。搾乳ストックの1本にあたる。
+ * 飲ませるときは、ミルクの記録(method: 'pumped')でこの記録を選ぶ。
  */
 export interface PumpingLog extends CareLogBase {
   type: 'pumping';
@@ -98,6 +103,20 @@ export interface PumpingLog extends CareLogBase {
 }
 
 export type CareLog = MilkLog | DiaperLog | PumpingLog;
+
+/**
+ * 搾乳ストックの1本。搾乳の記録に「どの授乳で使ったか」を添えたもの。
+ * 使い切ったぶんも含めて持ち、まだ使っていない本の合計が「残り」になる。
+ */
+export interface PumpedBatch {
+  /** もとになった PumpingLog の id。 */
+  id: string;
+  /** 搾乳した日時。 */
+  time: Date;
+  amountMl: number;
+  /** この搾乳を飲ませた MilkLog の id。まだ使っていなければ null。 */
+  usedBy: string | null;
+}
 
 export type ReturnStatus = '未完了' | '済' | '不要';
 

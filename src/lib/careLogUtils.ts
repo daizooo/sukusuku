@@ -8,12 +8,13 @@ import type {
   MilkLog,
   PoopColor,
   PoopConsistency,
+  PumpedBatch,
 } from '@/types/app';
 import { formatTimeString } from '@/lib/dateUtils';
 
 // --- 選択肢 ---
 
-/** ミルク・搾乳した母乳の量(ml)。20〜200mlを20刻みで。 */
+/** ミルクの量(ml)。20〜200mlを20刻みで。 */
 export const MILK_AMOUNT_OPTIONS = [20, 40, 60, 80, 100, 120, 140, 160, 180, 200];
 
 /** 母乳の授乳時間(分)。0〜30分を5分刻みで。 */
@@ -75,6 +76,25 @@ export const getNextBreastSide = (logs: CareLog[]): BreastSide | null => {
   return latest.lastSide === 'left' ? 'right' : 'left';
 };
 
+/**
+ * いま選べる搾乳ストック。まだ使っていない本と、編集中の記録が使っている本を返す。
+ * （編集中の記録が使っている本は「使用済み」だが、選び直せるよう外さない）
+ */
+export const selectablePumpedBatches = (batches: PumpedBatch[], editingLogId?: string): PumpedBatch[] =>
+  batches.filter((batch) => batch.usedBy === null || batch.usedBy === editingLogId);
+
+/** 搾乳ストックの残り(ml)。まだ使っていない本の合計。 */
+export const pumpedStockMl = (batches: PumpedBatch[]): number =>
+  sumBatchesMl(batches.filter((batch) => batch.usedBy === null));
+
+/** 渡された搾乳の合計(ml)。 */
+export const sumBatchesMl = (batches: PumpedBatch[]): number =>
+  batches.reduce((total, batch) => total + batch.amountMl, 0);
+
+/** 搾乳ストックの1本を指す日時。「8/23 14:30」の形。 */
+export const formatBatchTime = (batch: PumpedBatch): string =>
+  `${batch.time.getMonth() + 1}/${batch.time.getDate()} ${formatTimeString(batch.time)}`;
+
 /** 種類別の項目が入る前に記録された分か。 */
 export const isLegacyLog = (log: CareLog): boolean => log.legacyAmount !== undefined;
 
@@ -131,7 +151,10 @@ export const getLogBadges = (log: CareLog): LogBadge[] => {
   switch (log.type) {
     case 'milk': {
       if (log.method !== 'breast') {
-        return log.amountMl ? [{ text: `${log.amountMl} ml`, tone: 'milk' }] : [];
+        const badges: LogBadge[] = log.amountMl ? [{ text: `${log.amountMl} ml`, tone: 'milk' }] : [];
+        // 搾乳は何本ぶんを飲ませたかも出す（1本=1回の搾乳）。
+        if (log.pumpedFrom?.length) badges.push({ text: `搾乳${log.pumpedFrom.length}本`, tone: 'pumping' });
+        return badges;
       }
       const badges: LogBadge[] = [];
       if (log.leftMinutes) badges.push({ text: `左 ${log.leftMinutes}分`, tone: 'neutral' });

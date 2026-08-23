@@ -1,13 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Pause, Play, RotateCcw } from 'lucide-react';
-import type { BreastSide, FeedingMethod, MilkLog } from '@/types/app';
+import { Check, Pause, Play, RotateCcw } from 'lucide-react';
+import type { BreastSide, FeedingMethod, MilkLog, PumpedBatch } from '@/types/app';
 import {
   BREAST_MINUTE_OPTIONS,
   MILK_AMOUNT_OPTIONS,
+  formatBatchTime,
   formatStopwatch,
   getSideLabel,
+  pumpedStockMl,
+  selectablePumpedBatches,
+  sumBatchesMl,
 } from '@/lib/careLogUtils';
 import { nursingMinutes, type NursingTimer } from '@/lib/nursingTimer';
 import { parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUtils';
@@ -26,6 +30,8 @@ import {
 export interface MilkLogInput {
   method: FeedingMethod;
   amountMl?: number;
+  /** method: 'pumped' のとき、飲ませた搾乳の記録のid。 */
+  pumpedFrom?: string[];
   leftMinutes?: number;
   rightMinutes?: number;
   lastSide?: BreastSide;
@@ -42,8 +48,8 @@ interface MilkLogModalProps {
   nextSide: BreastSide | null;
   /** 母乳の左右別ストップウォッチ。新規に記録するときだけ使う。 */
   timer: NursingTimer;
-  /** 搾乳ストック（ためてある搾乳母乳の残り, ml）。 */
-  pumpedStockMl: number;
+  /** 搾乳ストックの全量（使用済みも含む）。「搾乳」を選んだときの選択肢に使う。 */
+  pumpedBatches: PumpedBatch[];
   onClose: () => void;
   onSubmit: (input: MilkLogInput) => void;
   onDelete: () => void;
@@ -78,13 +84,15 @@ function MilkLogModalBody({
   baseDate,
   nextSide,
   timer,
-  pumpedStockMl,
+  pumpedBatches,
   onClose,
   onSubmit,
   onDelete,
 }: MilkLogModalProps) {
   const [method, setMethod] = useState<FeedingMethod>(log?.method ?? 'breast');
   const [amountMl, setAmountMl] = useState<number>(log?.amountMl ?? 100);
+  // 「搾乳」で飲ませる搾乳ストック。編集中なら、その記録が使っている本を選んだ状態で開く。
+  const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>(() => log?.pumpedFrom ?? []);
   const [customAmount, setCustomAmount] = useState(() =>
     log?.amountMl && !MILK_AMOUNT_OPTIONS.includes(log.amountMl) ? String(log.amountMl) : '',
   );
@@ -111,6 +119,15 @@ function MilkLogModalBody({
 
   // 過去の記録を編集しているときは、いま計測しているものと混ざらないよう出さない。
   const showTimer = !log && method === 'breast';
+
+  // 選べる搾乳ストック。編集中の記録が使っている本も、選び直せるよう残す。
+  const selectableBatches = selectablePumpedBatches(pumpedBatches, log?.id);
+  const selectedBatches = selectableBatches.filter((batch) => selectedBatchIds.includes(batch.id));
+  // 「搾乳」で記録する量は、選んだ搾乳の合計。
+  const selectedMl = sumBatchesMl(selectedBatches);
+
+  const toggleBatch = (id: string) =>
+    setSelectedBatchIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   // 計測した時間をそのまま記録する。計測中のまま保存されても、その分を含める。
   // 分数を手で選び直した側は、その値を優先する。
@@ -178,7 +195,12 @@ function MilkLogModalBody({
 
   const handleSubmit = () => {
     const base = { method, time: parseDateTimeInput(date, time, log?.time ?? baseDate), note };
-    if (method !== 'breast') {
+    if (method === 'pumped') {
+      if (selectedBatches.length === 0) return;
+      onSubmit({ ...base, amountMl: selectedMl, pumpedFrom: selectedBatches.map((batch) => batch.id) });
+      return;
+    }
+    if (method === 'formula') {
       onSubmit({ ...base, amountMl });
       return;
     }
@@ -237,14 +259,16 @@ function MilkLogModalBody({
             <p className="text-[10px] text-gray-400 mt-1.5">次にどちらから授乳するかの目安になります。</p>
           </div>
         </>
+      ) : method === 'pumped' ? (
+        <PumpedBatchPicker
+          batches={selectableBatches}
+          selectedIds={selectedBatchIds}
+          selectedMl={selectedMl}
+          stockMl={pumpedStockMl(pumpedBatches)}
+          onToggle={toggleBatch}
+        />
       ) : (
         <>
-          {method === 'pumped' && (
-            <HintBanner accent="pumping">
-              搾乳ストックの残りは<span className="font-bold">{pumpedStockMl}ml</span>
-              。ここで記録した分がストックから引かれます。
-            </HintBanner>
-          )}
           <div>
             <FieldLabel>量（ml）</FieldLabel>
             <OptionGrid
@@ -281,11 +305,88 @@ function MilkLogModalBody({
         onChangeTime={setTime}
       />
       <NoteField value={note} onChange={setNote} placeholder="よく飲んだ / 途中で寝た など" />
-      <SubmitButton accent="milk" onClick={handleSubmit}>
+      <SubmitButton
+        accent="milk"
+        onClick={handleSubmit}
+        disabled={method === 'pumped' && selectedBatches.length === 0}
+      >
         保存する
       </SubmitButton>
       {log && <DeleteButton onDelete={onDelete} />}
     </LogModalShell>
+  );
+}
+
+interface PumpedBatchPickerProps {
+  /** 選べる搾乳（まだ使っていない本 + 編集中の記録が使っている本）。古い順。 */
+  batches: PumpedBatch[];
+  selectedIds: string[];
+  /** 選んだ搾乳の合計(ml)。この値がそのまま記録される。 */
+  selectedMl: number;
+  /** ストック全体の残り(ml)。編集中の記録が使っている分は含まない。 */
+  stockMl: number;
+  onToggle: (id: string) => void;
+}
+
+/**
+ * 飲ませる搾乳を搾乳ストックから選ぶ。選んだ本の合計がそのまま記録する量になる。
+ *
+ * 何mlを飲ませたかは、どの搾乳を使ったかで決まる（哺乳瓶1本＝1回の搾乳）ため、
+ * 量を打ち直すのではなく本を選ぶ形にしている。選んだ搾乳はストックから外れ、
+ * この記録を消すとストックに戻る。古いものから使えるよう、並びは搾った順。
+ */
+function PumpedBatchPicker({ batches, selectedIds, selectedMl, stockMl, onToggle }: PumpedBatchPickerProps) {
+  if (batches.length === 0) {
+    return (
+      <HintBanner accent="pumping">
+        搾乳ストックがありません。先に「搾乳」で搾った分を記録してください。
+      </HintBanner>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-end justify-between mb-1.5">
+        <FieldLabel>飲ませる搾乳を選ぶ</FieldLabel>
+        <span className="text-[11px] text-gray-500 tabular-nums mb-1.5">残り {stockMl}ml</span>
+      </div>
+
+      <div className="space-y-1.5 max-h-56 overflow-y-auto">
+        {batches.map((batch) => {
+          const selected = selectedIds.includes(batch.id);
+          return (
+            <button
+              key={batch.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onToggle(batch.id)}
+              className={`w-full flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm transition active:scale-[0.99] ${
+                selected
+                  ? 'bg-rose-50 border-rose-400 text-rose-800'
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <span className="flex items-center min-w-0">
+                <span
+                  aria-hidden
+                  className={`w-4 h-4 mr-2 shrink-0 rounded border flex items-center justify-center ${
+                    selected ? 'bg-rose-600 border-rose-600' : 'border-gray-300'
+                  }`}
+                >
+                  {selected && <Check size={12} className="text-white" />}
+                </span>
+                <span className="tabular-nums truncate">{formatBatchTime(batch)}</span>
+              </span>
+              <span className="font-bold tabular-nums shrink-0 ml-2">{batch.amountMl}ml</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="mt-2 text-xs font-bold text-rose-700 tabular-nums">
+        {selectedIds.length === 0 ? '搾乳を選んでください' : `${selectedIds.length}本・合計 ${selectedMl}ml で記録します`}
+      </p>
+    </div>
   );
 }
 
