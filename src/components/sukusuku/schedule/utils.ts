@@ -129,42 +129,7 @@ export const byDateDesc = (a: DynamicTask, b: DynamicTask) =>
 /** その日の中での位置。0が0時、1が24時。 */
 const dayFraction = (timeMs: number, dayStartMs: number): number => (timeMs - dayStartMs) / MS_PER_DAY;
 
-export interface SleepBand {
-  /** その日の中での開始・終了位置（0〜1）。 */
-  start: number;
-  end: number;
-  /** 起床時刻が未確定のまま伸びている帯。 */
-  inProgress: boolean;
-}
-
-/**
- * その日にかかる睡眠を、0〜1の帯に切り分ける。
- *
- * 睡眠は寝始めの日の記録として持つため、日をまたぐぶんは切り分けないと
- * 夜間の睡眠がまるごと前日に寄ってしまう。前夜から続く睡眠はその日の0時から、
- * 日をまたぐ睡眠は24時までで切る。計測中の睡眠は now までを描く。
- */
-export const getSleepBandsOnDate = (logs: CareLog[], day: Date, now: Date): SleepBand[] => {
-  const dayStart = startOfDay(day).getTime();
-  const dayEnd = dayStart + MS_PER_DAY;
-  const bands: SleepBand[] = [];
-
-  for (const log of logs) {
-    if (log.type !== 'sleep') continue;
-    const from = Math.max(log.startedAt.getTime(), dayStart);
-    const to = Math.min((log.endedAt ?? now).getTime(), dayEnd);
-    if (to <= from) continue;
-    bands.push({
-      start: dayFraction(from, dayStart),
-      end: dayFraction(to, dayStart),
-      inProgress: log.endedAt === null,
-    });
-  }
-
-  return bands.sort((a, b) => a.start - b.start);
-};
-
-/** その日の授乳の位置（0〜1）。帯の上に細い印として重ねる。 */
+/** その日の授乳の位置（0〜1）。24時間の帯に細い印として並べる。 */
 export const getMilkMarksOnDate = (logs: CareLog[], day: Date): number[] => {
   const dayStart = startOfDay(day).getTime();
   return logs

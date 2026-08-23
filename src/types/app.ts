@@ -36,12 +36,18 @@ export interface DynamicTask extends Task {
   targetDate: string;
 }
 
-export type LogType = 'milk' | 'diaper' | 'sleep';
+export type LogType = 'milk' | 'diaper' | 'pumping';
 
 // 記録の種類ごとに必要な項目が違うため、type で判別する共用体として持つ。
 // DBでは種類ごとの項目を care_logs.details (jsonb) に入れ、読み込み時にこの形へ復元する。
 
-export type FeedingMethod = 'breast' | 'formula';
+/**
+ * 授乳のしかた。
+ * - breast:  直接飲ませた母乳（左右の時間で記録する）
+ * - pumped:  搾乳しておいた母乳を飲ませた（量で記録し、搾乳ストックから減る）
+ * - formula: 粉ミルク（量で記録する）
+ */
+export type FeedingMethod = 'breast' | 'pumped' | 'formula';
 export type BreastSide = 'left' | 'right';
 export type DiaperKind = 'pee' | 'poop' | 'both';
 /** うんちの色。white / red / black は受診の目安（母子手帳の便色カードと同じ考え方）。 */
@@ -50,7 +56,7 @@ export type PoopConsistency = 'loose' | 'normal' | 'hard';
 
 interface CareLogBase {
   id: string;
-  /** タイムラインの並び順に使う時刻。睡眠は寝始めの時刻。 */
+  /** タイムラインの並び順に使う時刻。 */
   time: Date;
   note: string;
   createdBy: string | null;
@@ -64,7 +70,7 @@ interface CareLogBase {
 export interface MilkLog extends CareLogBase {
   type: 'milk';
   method: FeedingMethod;
-  /** ミルク(formula)の量。 */
+  /** ミルク(formula)・搾乳した母乳(pumped)の量。 */
   amountMl?: number;
   /** 母乳(breast)の左右それぞれの授乳時間（分, 0〜30の5分刻み）。 */
   leftMinutes?: number;
@@ -81,14 +87,17 @@ export interface DiaperLog extends CareLogBase {
   poopConsistency?: PoopConsistency;
 }
 
-export interface SleepLog extends CareLogBase {
-  type: 'sleep';
-  startedAt: Date;
-  /** 計測中は null。起床時に確定する。 */
-  endedAt: Date | null;
+/**
+ * 搾乳した母乳を「ためた」記録。飲ませた分は method: 'pumped' のミルクの記録として残し、
+ * この2つの差し引きが搾乳ストック（いま残っている量）になる。
+ */
+export interface PumpingLog extends CareLogBase {
+  type: 'pumping';
+  /** 搾乳した量(ml)。自由入力。 */
+  amountMl: number;
 }
 
-export type CareLog = MilkLog | DiaperLog | SleepLog;
+export type CareLog = MilkLog | DiaperLog | PumpingLog;
 
 export type ReturnStatus = '未完了' | '済' | '不要';
 

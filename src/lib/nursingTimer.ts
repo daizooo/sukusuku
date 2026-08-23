@@ -3,14 +3,13 @@
 // 母乳の授乳時間を左右それぞれ計測するストップウォッチ。
 // 授乳中は入力画面を閉じたり他のタブへ移ったりするため、計測中の値は端末内に
 // 控えておき、戻ってきたときに続きから測れるようにする。
-// （ねんね計測と違い記録として保存する前の値なので、DBには持たせない）
+// （記録として保存する前の値なので、DBには持たせない）
 
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import type { BreastSide } from '@/types/app';
 import {
   buildAlarmPattern,
   flushPendingVibration,
-  isVibrationSupported,
   playAlarmPattern,
   requestScreenWakeLock,
   stopVibration,
@@ -165,12 +164,15 @@ const subscribeNothing = (): (() => void) => () => {};
 // 授乳中は手が離せないため、一定間隔で音とバイブを鳴らし、
 // 「鳴り方」だけで経過時間が分かるようにする。
 // （短い「ピッ」1回＝5分、長い「ポーン」1回＝30分。設定はいつ鳴らすかだけを決める）
+//
+// 設定を変える画面は記録画面から外したため、いまは端末に控えてある値
+// （なければ既定値）をそのまま使う。鳴らす仕組み自体はこれまでどおり動く。
 
 // 短音=5分・長音=30分で言い表せる間隔だけを選べるようにしている。
-export const ALARM_INTERVAL_OPTIONS = [5, 10, 15] as const;
-export type AlarmIntervalMinutes = (typeof ALARM_INTERVAL_OPTIONS)[number];
+const ALARM_INTERVAL_OPTIONS = [5, 10, 15] as const;
+type AlarmIntervalMinutes = (typeof ALARM_INTERVAL_OPTIONS)[number];
 
-export interface NursingAlarmSettings {
+interface NursingAlarmSettings {
   intervalMinutes: AlarmIntervalMinutes;
   soundEnabled: boolean;
   vibrationEnabled: boolean;
@@ -204,30 +206,10 @@ const loadAlarm = (): NursingAlarmSettings => {
 };
 
 let alarmCached: NursingAlarmSettings | null = null;
-const alarmListeners = new Set<() => void>();
 
 const getAlarmSnapshot = (): NursingAlarmSettings => {
   if (!alarmCached) alarmCached = loadAlarm();
   return alarmCached;
-};
-
-const getAlarmServerSnapshot = (): NursingAlarmSettings => DEFAULT_ALARM;
-
-const subscribeAlarm = (listener: () => void): (() => void) => {
-  alarmListeners.add(listener);
-  return () => {
-    alarmListeners.delete(listener);
-  };
-};
-
-const storeAlarm = (next: NursingAlarmSettings) => {
-  alarmCached = next;
-  try {
-    window.localStorage.setItem(ALARM_STORAGE_KEY, JSON.stringify(next));
-  } catch (err) {
-    console.error('Failed to save nursing alarm settings:', err);
-  }
-  alarmListeners.forEach((listener) => listener());
 };
 
 const fireAlarm = (pattern: AlarmPattern, settings: NursingAlarmSettings) => {
@@ -235,15 +217,6 @@ const fireAlarm = (pattern: AlarmPattern, settings: NursingAlarmSettings) => {
   // 「操作の直後」という扱いから外れて端末に無視されるのを避けるため。
   if (settings.vibrationEnabled) vibrateAlarmPattern(pattern);
   if (settings.soundEnabled) playAlarmPattern(pattern);
-};
-
-/** 計測中の側について、次のお知らせが鳴る経過分数。計測していなければ最初のお知らせの分数。 */
-const nextAlarmMinutes = (intervalMinutes: number): number => {
-  const active = getSnapshot();
-  const side = active.runningSide;
-  if (!side) return intervalMinutes;
-  const elapsedMinutes = sideElapsed(active, side, Date.now()) / 60000;
-  return (Math.floor(elapsedMinutes / intervalMinutes) + 1) * intervalMinutes;
 };
 
 /** 計測中の側が次の区切りに達していたら鳴らす。 */
@@ -321,50 +294,6 @@ export function useNursingAlarmWatcher(): void {
   }, []);
 }
 
-export interface NursingAlarm {
-  settings: NursingAlarmSettings;
-  /** バイブに対応していない端末（iOSのSafariなど）では音だけになる。 */
-  vibrationSupported: boolean;
-  update: (patch: Partial<NursingAlarmSettings>) => void;
-  /** 次に鳴るお知らせを試聴する。 */
-  test: () => void;
-}
-
-export function useNursingAlarm(): NursingAlarm {
-  const settings = useSyncExternalStore(subscribeAlarm, getAlarmSnapshot, getAlarmServerSnapshot);
-  const vibrationSupported = useSyncExternalStore(
-    subscribeNothing,
-    isVibrationSupported,
-    () => false,
-  );
-
-  const update = useCallback((patch: Partial<NursingAlarmSettings>) => {
-    const next = { ...getAlarmSnapshot(), ...patch };
-    storeAlarm(next);
-    if (patch.intervalMinutes === undefined) return;
-    // 間隔を変えたら通知済み回数を数え直す。
-    // そうしないと、間隔を縮めた直後に過去の分がまとめて鳴ってしまう。
-    const active = getSnapshot();
-    const at = Date.now();
-    const stepOf = (side: BreastSide) =>
-      Math.floor(sideElapsed(active, side, at) / (patch.intervalMinutes! * 60000));
-    store({ ...active, notifiedLeft: stepOf('left'), notifiedRight: stepOf('right') });
-  }, []);
-
-  const test = useCallback(() => {
-    const current = getAlarmSnapshot();
-    // 次に実際に鳴る音をそのまま鳴らす（計測していなければ最初のお知らせの音）。
-    const pattern = buildAlarmPattern(nextAlarmMinutes(current.intervalMinutes));
-    // 振動はタップの処理の中で出さないと端末に無視されるため、音の準備より先に。
-    if (current.vibrationEnabled) vibrateAlarmPattern(pattern);
-    void unlockAudio().then(() => {
-      if (current.soundEnabled) playAlarmPattern(pattern);
-    });
-  }, []);
-
-  return { settings, vibrationSupported, update, test };
-}
-
 export interface NursingTimer {
   /** 左の合計時間(ミリ秒)。計測中の分を含む。 */
   leftMs: number;
@@ -375,8 +304,6 @@ export interface NursingTimer {
   lastSide: BreastSide | null;
   /** 計測中、または止めたあと記録前の時間が残っている。 */
   hasSession: boolean;
-  /** 次のお知らせまでの残り(ミリ秒)。計測していなければ null。 */
-  remainingToAlarmMs: number | null;
   /**
    * 押した側の計測を始める。計測中の側をもう一度押すと停止、
    * 反対側を押すと切り替え（左右を同時には測らない）。
@@ -388,7 +315,6 @@ export interface NursingTimer {
 
 export function useNursingTimer(): NursingTimer {
   const active = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  const alarm = useSyncExternalStore(subscribeAlarm, getAlarmSnapshot, getAlarmServerSnapshot);
   const now = useSyncExternalStore(
     active.runningSide ? subscribeClock : subscribeNothing,
     getClockSnapshot,
@@ -427,16 +353,12 @@ export function useNursingTimer(): NursingTimer {
     store(EMPTY);
   }, []);
 
-  const alarmIntervalMs = alarm.intervalMinutes * 60000;
-  const runningMsTotal = active.runningSide === 'left' ? leftMs : active.runningSide === 'right' ? rightMs : null;
-
   return {
     leftMs,
     rightMs,
     runningSide: active.runningSide,
     lastSide: active.lastSide,
     hasSession: active.runningSide !== null || leftMs > 0 || rightMs > 0,
-    remainingToAlarmMs: runningMsTotal === null ? null : alarmIntervalMs - (runningMsTotal % alarmIntervalMs),
     toggleSide,
     reset,
   };

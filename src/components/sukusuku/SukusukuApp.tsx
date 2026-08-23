@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import dynamic from 'next/dynamic';
 import {
   Home,
@@ -16,7 +16,7 @@ import type {
   CareLog,
   DiaperLog,
   MilkLog,
-  SleepLog,
+  PumpingLog,
   DocumentItem,
   DynamicTask,
   FamilyMember,
@@ -52,21 +52,13 @@ import {
 import type { NewCareLogInput } from '@/lib/api/careLogs';
 import {
   deleteCareLog,
-  findActiveSleepCareLog,
+  getPumpedStockMl,
   insertCareLog,
   listCareLogsByDate,
   listCareLogsInRange,
   updateCareLog as updateCareLogApi,
 } from '@/lib/api/careLogs';
-import { getNextBreastSide, isActiveSleepLog } from '@/lib/careLogUtils';
-import {
-  clearPendingWake,
-  clearSleepNotification,
-  requestSleepNotificationPermission,
-  showSleepNotification,
-  subscribeToWake,
-  takePendingWake,
-} from '@/lib/sleepNotification';
+import { getNextBreastSide } from '@/lib/careLogUtils';
 import { useNursingAlarmWatcher } from '@/lib/nursingTimer';
 import { deleteGift, insertGift, listGifts, updateGift as updateGiftApi } from '@/lib/api/gifts';
 import { ensureChildId } from '@/lib/api/children';
@@ -98,7 +90,7 @@ import type { TaskDraft } from './modals/TaskForm';
 import TaskDetailModal from './modals/TaskDetailModal';
 import type { MilkLogInput } from './modals/MilkLogModal';
 import type { DiaperLogInput } from './modals/DiaperLogModal';
-import type { ManualSleepInput } from './modals/SleepLogModal';
+import type { PumpingLogInput } from './modals/PumpingLogModal';
 import type { GiftDraft } from './modals/GiftFormModal';
 import type { GrowthRecordDraft } from './modals/GrowthRecordFormModal';
 import type { NurseryDraft } from './modals/NurseryFormModal';
@@ -152,9 +144,6 @@ const parseNullableNumber = (value: string): number | null => (value === '' ? nu
 const noopSubscribe = () => () => {};
 const getClientTodayDateString = (): string => toDateString(new Date());
 
-// 週表示・日表示の帯で、範囲の頭にかかる前夜の睡眠を取りこぼさないための遡り幅。
-const SLEEP_LOOKBACK_MS = 12 * 60 * 60 * 1000;
-
 interface SukusukuAppProps {
   familyId: string;
   userId: string;
@@ -184,10 +173,9 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   // 取得済みの日。表示中の日と一致していなければ読み込み中とみなす
   const [loadedLogDate, setLoadedLogDate] = useState<Date | null>(null);
   const isLoadingLogs = loadedLogDate?.getTime() !== logDate.getTime();
-  // 計測中の睡眠。どの日を表示していても出したいので、日別の一覧とは別に持つ。
-  const [activeSleep, setActiveSleep] = useState<SleepLog | null>(null);
-  // 通知からの起床は購読を張り替えずに最新の処理を呼びたいので、ref 経由で参照する
-  const endSleepRef = useRef<(endedAt: Date) => void>(() => {});
+  // 搾乳ストック（ためてある搾乳母乳の残り, ml）。ためた分と飲ませた分の差し引きなので
+  // 表示中の日だけでは求まらず、全期間ぶんをまとめて数えて持つ。
+  const [pumpedStockMl, setPumpedStockMl] = useState(0);
 
   const [gifts, setGifts] = useState<Gift[]>([]);
   const [isLoadingGifts, setIsLoadingGifts] = useState(true);
@@ -283,15 +271,13 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   // 月表示は記録を出さないため、月をめくっても問い合わせは起きない。
   const scheduleLogRange = useMemo(() => {
     if (activeTab !== 'schedule') return null;
-    // 睡眠は寝始めの時刻で絞り込まれるため、範囲の頭を半日ぶん広げないと、
-    // 24時間の帯に出す「前夜から続く睡眠」が抜ける（一覧はその日のぶんに絞って出す）。
     if (scheduleView === 'day') {
       const from = startOfDay(selectedScheduleDate);
-      return { from, queryFrom: new Date(from.getTime() - SLEEP_LOOKBACK_MS), to: addDays(from, 1) };
+      return { from, to: addDays(from, 1) };
     }
     if (scheduleView === 'week') {
       const from = startOfWeek(selectedScheduleDate);
-      return { from, queryFrom: new Date(from.getTime() - SLEEP_LOOKBACK_MS), to: addDays(from, 7) };
+      return { from, to: addDays(from, 7) };
     }
     return null;
   }, [activeTab, scheduleView, selectedScheduleDate]);
@@ -299,22 +285,21 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   // 範囲が変わったときだけ取り直す（週表示で同じ週の中の日を選び直しても再取得しない）。
   // これから来る日には記録が存在しないため、未来だけの範囲は問い合わせない。
   const scheduleLogFrom = scheduleLogRange?.from.getTime() ?? null;
-  const scheduleLogQueryFrom = scheduleLogRange?.queryFrom.getTime() ?? null;
   const scheduleLogTo = scheduleLogRange?.to.getTime() ?? null;
   const needsScheduleLogs = scheduleLogFrom !== null && scheduleLogTo !== null && scheduleLogFrom <= today.getTime();
   // 取得済みの範囲。表示中の範囲と一致していなければ読み込み中とみなす（記録タブと同じ考え方）。
   // 週の初日を日表示で開くと頭の時刻が週表示と同じになるため、終わりも含めて見分ける。
   const scheduleLogRangeKey =
-    scheduleLogQueryFrom === null || scheduleLogTo === null ? null : `${scheduleLogQueryFrom}-${scheduleLogTo}`;
+    scheduleLogFrom === null || scheduleLogTo === null ? null : `${scheduleLogFrom}-${scheduleLogTo}`;
   const isScheduleLogsLoaded = loadedScheduleLogRange === scheduleLogRangeKey;
   const visibleScheduleLogs = needsScheduleLogs && isScheduleLogsLoaded ? scheduleLogs : [];
   const isLoadingScheduleLogs = needsScheduleLogs && !isScheduleLogsLoaded;
 
   useEffect(() => {
-    if (!needsScheduleLogs || scheduleLogQueryFrom === null || scheduleLogTo === null || scheduleLogRangeKey === null)
+    if (!needsScheduleLogs || scheduleLogFrom === null || scheduleLogTo === null || scheduleLogRangeKey === null)
       return;
     let cancelled = false;
-    listCareLogsInRange(supabase, familyId, new Date(scheduleLogQueryFrom), new Date(scheduleLogTo))
+    listCareLogsInRange(supabase, familyId, new Date(scheduleLogFrom), new Date(scheduleLogTo))
       .then((data) => {
         if (!cancelled) setScheduleLogs(data);
       })
@@ -329,50 +314,18 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
     return () => {
       cancelled = true;
     };
-  }, [supabase, familyId, needsScheduleLogs, scheduleLogQueryFrom, scheduleLogTo, scheduleLogRangeKey]);
+  }, [supabase, familyId, needsScheduleLogs, scheduleLogFrom, scheduleLogTo, scheduleLogRangeKey]);
 
-  // 計測中の睡眠を読み込む。アプリを閉じている間に通知の「起きた」が押されていたら、その時刻で確定させる。
-  useEffect(() => {
-    let cancelled = false;
-
-    const restore = async () => {
-      try {
-        const [active, pendingWake] = await Promise.all([
-          findActiveSleepCareLog(supabase, familyId),
-          takePendingWake(),
-        ]);
-        if (cancelled) return;
-
-        const sleep = active && active.type === 'sleep' ? active : null;
-        if (!sleep) {
-          // 記録が残っていないのに通知だけ残っている場合は片付ける。
-          if (pendingWake) void clearSleepNotification();
-          return;
-        }
-
-        // 計測開始より前の古い控えは捨てる。
-        if (pendingWake && pendingWake.getTime() >= sleep.startedAt.getTime()) {
-          const updated: SleepLog = { ...sleep, endedAt: pendingWake };
-          setLogs((prev) => prev.map((log) => (log.id === updated.id ? updated : log)));
-          void clearSleepNotification();
-          await updateCareLogApi(supabase, updated);
-          return;
-        }
-
-        setActiveSleep(sleep);
-      } catch (err) {
-        console.error('Failed to restore active sleep log:', err);
-      }
-    };
-
-    void restore();
-    return () => {
-      cancelled = true;
-    };
+  // 搾乳ストックを読み込む。記録を触るたびに数え直す。
+  const refreshPumpedStock = useCallback(() => {
+    getPumpedStockMl(supabase, familyId)
+      .then(setPumpedStockMl)
+      .catch((err) => console.error('Failed to load pumped milk stock:', err));
   }, [supabase, familyId]);
 
-  // アプリを開いたまま通知の「起きた」が押された場合。
-  useEffect(() => subscribeToWake((endedAt) => void endSleepRef.current(endedAt)), []);
+  useEffect(() => {
+    refreshPumpedStock();
+  }, [refreshPumpedStock]);
 
   // お祝いをSupabaseから取得
   useEffect(() => {
@@ -647,12 +600,13 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
         if (!isSameDay(log.time, logDate)) return others;
         return [log, ...others].sort((a, b) => b.time.getTime() - a.time.getTime());
       });
-      // 計測中の睡眠は日をまたいで表示するため、一覧とは別に持つ。
-      setActiveSleep((prev) => (isActiveSleepLog(log) ? log : prev?.id === log.id ? null : prev));
       // カレンダー側は別途取得しているため、取得済みの印を落として次に開いたときに取り直させる。
       setLoadedScheduleLogRange(null);
+      // 搾乳ストックは全期間の差し引き。編集で「搾乳」から「ミルク」へ変えるなど
+      // ストックに関わるかどうかが入れ替わることもあるため、種類を問わず数え直す。
+      refreshPumpedStock();
     },
-    [logDate],
+    [logDate, refreshPumpedStock],
   );
 
   const saveLog = async (log: CareLog | null, input: NewCareLogInput) => {
@@ -684,79 +638,22 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   const saveDiaperLog = (input: DiaperLogInput, existing: DiaperLog | null) =>
     saveLog(existing, { type: 'diaper', ...input });
 
-  const saveSleepLog = ({ startedAt, endedAt, note }: ManualSleepInput, existing: SleepLog | null) => {
-    // 計測中の記録を時刻指定で終わらせたときも、通知と控えを片付ける（「起きた」と同じ扱い）。
-    if (existing && activeSleep?.id === existing.id) {
-      void clearSleepNotification();
-      void clearPendingWake();
-    }
-    return saveLog(existing, { type: 'sleep', time: startedAt, startedAt, endedAt, note });
-  };
+  const savePumpingLog = (input: PumpingLogInput, existing: PumpingLog | null) =>
+    saveLog(existing, { type: 'pumping', ...input });
 
   const deleteLog = async (id: string) => {
     const previous = logs;
     setLogs((prev) => prev.filter((l) => l.id !== id));
-    setActiveSleep((prev) => (prev?.id === id ? null : prev));
     setLoadedScheduleLogRange(null);
     try {
       await deleteCareLog(supabase, id);
+      refreshPumpedStock();
     } catch (err) {
       console.error('Failed to delete care log:', err);
       setLogs(previous);
       alert('記録の削除に失敗しました。もう一度お試しください。');
     }
   };
-
-  /** ねんね計測の開始。通知欄にも出して、アプリを開かずに終了できるようにする。 */
-  const startSleep = async () => {
-    const startedAt = new Date();
-    try {
-      const created = await insertCareLog(supabase, familyId, userId, {
-        type: 'sleep',
-        time: startedAt,
-        startedAt,
-        endedAt: null,
-        note: '',
-      });
-      upsertLogInState(created);
-    } catch (err) {
-      console.error('Failed to start sleep log:', err);
-      alert('記録の追加に失敗しました。もう一度お試しください。');
-      return;
-    }
-
-    // 通知が使えない・許可されない場合も計測はそのまま続けられる。
-    if (await requestSleepNotificationPermission()) {
-      await showSleepNotification(startedAt);
-    }
-  };
-
-  /** 起床。アプリ内のバー・入力画面・通知のいずれからでもここに来る。 */
-  const endSleep = useCallback(
-    async (endedAt: Date) => {
-      if (!activeSleep) return;
-      const target = activeSleep;
-
-      const updated: SleepLog = { ...target, endedAt };
-      upsertLogInState(updated);
-      void clearSleepNotification();
-      // 通知側に控えが残っていると、次の計測を古い時刻で終わらせてしまうため消しておく。
-      void clearPendingWake();
-
-      try {
-        await updateCareLogApi(supabase, updated);
-      } catch (err) {
-        console.error('Failed to end sleep log:', err);
-        alert('記録の更新に失敗しました。もう一度お試しください。');
-      }
-    },
-    [activeSleep, supabase, upsertLogInState],
-  );
-
-  useEffect(() => {
-    endSleepRef.current = (endedAt: Date) => void endSleep(endedAt);
-  }, [endSleep]);
-
 
   // --- お祝い ---
   const addGift = async (draft: GiftDraft) => {
@@ -991,14 +888,12 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               isLoadingLogs={isLoadingLogs}
               isLoadingGrowth={isLoadingGrowth}
               memberLabel={memberLabel}
-              activeSleep={activeSleep}
               nextBreastSide={nextBreastSide}
+              pumpedStockMl={pumpedStockMl}
               onSaveMilkLog={saveMilkLog}
               onSaveDiaperLog={saveDiaperLog}
-              onSaveSleepLog={saveSleepLog}
+              onSavePumpingLog={savePumpingLog}
               onDeleteLog={deleteLog}
-              onStartSleep={startSleep}
-              onEndSleep={() => void endSleep(new Date())}
               onAddGrowthRecord={addGrowthRecordHandler}
               onUpdateGrowthRecord={updateGrowthRecordHandler}
               onDeleteGrowthRecord={deleteGrowthRecordHandler}

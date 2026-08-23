@@ -8,13 +8,12 @@ import type {
   MilkLog,
   PoopColor,
   PoopConsistency,
-  SleepLog,
 } from '@/types/app';
 import { formatTimeString } from '@/lib/dateUtils';
 
 // --- 選択肢 ---
 
-/** ミルクの量(ml)。20〜200mlを20刻みで。 */
+/** ミルク・搾乳した母乳の量(ml)。20〜200mlを20刻みで。 */
 export const MILK_AMOUNT_OPTIONS = [20, 40, 60, 80, 100, 120, 140, 160, 180, 200];
 
 /** 母乳の授乳時間(分)。0〜30分を5分刻みで。 */
@@ -76,27 +75,10 @@ export const getNextBreastSide = (logs: CareLog[]): BreastSide | null => {
   return latest.lastSide === 'left' ? 'right' : 'left';
 };
 
-/** 計測中（起床時刻が未確定）の睡眠記録。 */
-export const findActiveSleepLog = (logs: CareLog[]): SleepLog | undefined =>
-  logs.find(isActiveSleepLog);
-
-export const isActiveSleepLog = (log: CareLog): log is SleepLog =>
-  log.type === 'sleep' && log.endedAt === null;
-
 /** 種類別の項目が入る前に記録された分か。 */
 export const isLegacyLog = (log: CareLog): boolean => log.legacyAmount !== undefined;
 
 // --- 表示整形 ---
-
-/** ミリ秒を「2時間15分」「45分」の形に。 */
-export const formatDuration = (ms: number): string => {
-  const totalMinutes = Math.max(0, Math.floor(ms / 60000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours === 0) return `${minutes}分`;
-  if (minutes === 0) return `${hours}時間`;
-  return `${hours}時間${minutes}分`;
-};
 
 /** 計測中の経過時間を 01:23:45 の形に。 */
 export const formatStopwatch = (ms: number): string => {
@@ -108,7 +90,7 @@ export const formatStopwatch = (ms: number): string => {
 const LOG_TYPE_LABEL: Record<CareLog['type'], string> = {
   milk: 'ミルク',
   diaper: 'おむつ',
-  sleep: '睡眠',
+  pumping: '搾乳',
 };
 
 /** タイムラインカードの見出し。 */
@@ -118,26 +100,21 @@ export const getLogTitle = (log: CareLog): string => {
 
   switch (log.type) {
     case 'milk':
-      return log.method === 'breast' ? '母乳' : 'ミルク';
+      if (log.method === 'breast') return '母乳';
+      return log.method === 'pumped' ? '搾乳母乳' : 'ミルク';
     case 'diaper':
       if (log.kind === 'pee') return 'おしっこ';
       if (log.kind === 'poop') return 'うんち';
       return 'うんち＋おしっこ';
-    case 'sleep':
-      return '睡眠';
+    case 'pumping':
+      return '搾乳';
   }
 };
 
-/** タイムラインカードの時刻表示。睡眠だけ「開始 → 起床」。 */
-export const getLogTimeText = (log: CareLog): string => {
-  if (log.type === 'sleep' && !isLegacyLog(log)) {
-    if (!log.endedAt) return `${formatTimeString(log.startedAt)} 〜 計測中`;
-    return `${formatTimeString(log.startedAt)} → ${formatTimeString(log.endedAt)}`;
-  }
-  return formatTimeString(log.time);
-};
+/** タイムラインカードの時刻表示。 */
+export const getLogTimeText = (log: CareLog): string => formatTimeString(log.time);
 
-export type BadgeTone = 'milk' | 'diaper' | 'sleep' | 'alert' | 'neutral';
+export type BadgeTone = 'milk' | 'diaper' | 'pumping' | 'alert' | 'neutral';
 
 export interface LogBadge {
   text: string;
@@ -153,7 +130,7 @@ export const getLogBadges = (log: CareLog): LogBadge[] => {
 
   switch (log.type) {
     case 'milk': {
-      if (log.method === 'formula') {
+      if (log.method !== 'breast') {
         return log.amountMl ? [{ text: `${log.amountMl} ml`, tone: 'milk' }] : [];
       }
       const badges: LogBadge[] = [];
@@ -177,10 +154,8 @@ export const getLogBadges = (log: CareLog): LogBadge[] => {
       if (needsMedicalAttention(log.poopColor)) badges.push({ text: '要受診', tone: 'alert' });
       return badges;
     }
-    case 'sleep': {
-      if (!log.endedAt) return [{ text: 'ねんね中', tone: 'sleep' }];
-      return [{ text: formatDuration(log.endedAt.getTime() - log.startedAt.getTime()), tone: 'sleep' }];
-    }
+    case 'pumping':
+      return [{ text: `${log.amountMl} ml`, tone: 'pumping' }];
   }
 };
 
@@ -188,7 +163,7 @@ export const getLogBadges = (log: CareLog): LogBadge[] => {
 export const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
   milk: 'bg-amber-100 text-amber-800 font-bold',
   diaper: 'bg-blue-100 text-blue-700',
-  sleep: 'bg-indigo-100 text-indigo-700 font-bold',
+  pumping: 'bg-rose-100 text-rose-700 font-bold',
   alert: 'bg-red-100 text-red-700 font-bold',
   neutral: 'bg-gray-100 text-gray-600',
 };
@@ -200,7 +175,7 @@ export const isAlertLog = (log: CareLog): boolean =>
 export interface DailySummary {
   milk: { count: number; ml: number; breastMinutes: number };
   diaper: { count: number; poopCount: number };
-  sleep: { count: number; minutes: number };
+  pumping: { count: number; ml: number };
 }
 
 // 種類別の項目を持たない記録の「量・時間など」は自由入力なので、
@@ -212,22 +187,12 @@ const parseLegacyMl = (amount: string): number => {
   return bare ? Number(bare[1]) : 0;
 };
 
-const parseLegacyMinutes = (amount: string): number => {
-  const hours = amount.match(/(\d+(?:\.\d+)?)\s*(?:時間|h)/i);
-  const minutes = amount.match(/(\d+(?:\.\d+)?)\s*(?:分|m(?:in)?\b)/i);
-  if (hours || minutes) {
-    return (hours ? Number(hours[1]) * 60 : 0) + (minutes ? Number(minutes[1]) : 0);
-  }
-  const bare = amount.match(/^\s*(\d+(?:\.\d+)?)\s*$/);
-  return bare ? Number(bare[1]) : 0;
-};
-
-/** その日の合計。計測中の睡眠は確定していないので合計時間には入れない。 */
+/** その日の合計。 */
 export const summarizeLogs = (logs: CareLog[]): DailySummary => {
   const summary: DailySummary = {
     milk: { count: 0, ml: 0, breastMinutes: 0 },
     diaper: { count: 0, poopCount: 0 },
-    sleep: { count: 0, minutes: 0 },
+    pumping: { count: 0, ml: 0 },
   };
 
   for (const log of logs) {
@@ -241,12 +206,8 @@ export const summarizeLogs = (logs: CareLog[]): DailySummary => {
       summary.diaper.count += 1;
       if (legacy === undefined && log.kind !== 'pee') summary.diaper.poopCount += 1;
     } else {
-      summary.sleep.count += 1;
-      if (legacy !== undefined) {
-        summary.sleep.minutes += parseLegacyMinutes(legacy);
-      } else if (log.endedAt) {
-        summary.sleep.minutes += (log.endedAt.getTime() - log.startedAt.getTime()) / 60000;
-      }
+      summary.pumping.count += 1;
+      summary.pumping.ml += legacy !== undefined ? parseLegacyMl(legacy) : log.amountMl;
     }
   }
 

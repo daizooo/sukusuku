@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Pause, Play, RotateCcw, Vibrate, Volume2, VolumeX } from 'lucide-react';
+import { Pause, Play, RotateCcw } from 'lucide-react';
 import type { BreastSide, FeedingMethod, MilkLog } from '@/types/app';
 import {
   BREAST_MINUTE_OPTIONS,
@@ -9,12 +9,7 @@ import {
   formatStopwatch,
   getSideLabel,
 } from '@/lib/careLogUtils';
-import {
-  ALARM_INTERVAL_OPTIONS,
-  nursingMinutes,
-  useNursingAlarm,
-  type NursingTimer,
-} from '@/lib/nursingTimer';
+import { nursingMinutes, type NursingTimer } from '@/lib/nursingTimer';
 import { parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUtils';
 import {
   DateTimeField,
@@ -47,6 +42,8 @@ interface MilkLogModalProps {
   nextSide: BreastSide | null;
   /** 母乳の左右別ストップウォッチ。新規に記録するときだけ使う。 */
   timer: NursingTimer;
+  /** 搾乳ストック（ためてある搾乳母乳の残り, ml）。 */
+  pumpedStockMl: number;
   onClose: () => void;
   onSubmit: (input: MilkLogInput) => void;
   onDelete: () => void;
@@ -54,6 +51,7 @@ interface MilkLogModalProps {
 
 const METHOD_OPTIONS: { value: FeedingMethod; label: string }[] = [
   { value: 'breast', label: '母乳' },
+  { value: 'pumped', label: '搾乳' },
   { value: 'formula', label: 'ミルク' },
 ];
 
@@ -75,7 +73,16 @@ export default function MilkLogModal({ show, ...props }: MilkLogModalProps & { s
   return <MilkLogModalBody {...props} />;
 }
 
-function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, onDelete }: MilkLogModalProps) {
+function MilkLogModalBody({
+  log,
+  baseDate,
+  nextSide,
+  timer,
+  pumpedStockMl,
+  onClose,
+  onSubmit,
+  onDelete,
+}: MilkLogModalProps) {
   const [method, setMethod] = useState<FeedingMethod>(log?.method ?? 'breast');
   const [amountMl, setAmountMl] = useState<number>(log?.amountMl ?? 100);
   const [customAmount, setCustomAmount] = useState(() =>
@@ -171,7 +178,7 @@ function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, o
 
   const handleSubmit = () => {
     const base = { method, time: parseDateTimeInput(date, time, log?.time ?? baseDate), note };
-    if (method === 'formula') {
+    if (method !== 'breast') {
       onSubmit({ ...base, amountMl });
       return;
     }
@@ -204,7 +211,6 @@ function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, o
               rightMs={timer.rightMs}
               runningSide={timer.runningSide}
               hasSession={timer.hasSession}
-              remainingToAlarmMs={timer.remainingToAlarmMs}
               recordedLeft={recordedLeft}
               recordedRight={recordedRight}
               onToggleSide={handleToggleSide}
@@ -233,6 +239,12 @@ function MilkLogModalBody({ log, baseDate, nextSide, timer, onClose, onSubmit, o
         </>
       ) : (
         <>
+          {method === 'pumped' && (
+            <HintBanner accent="pumping">
+              搾乳ストックの残りは<span className="font-bold">{pumpedStockMl}ml</span>
+              。ここで記録した分がストックから引かれます。
+            </HintBanner>
+          )}
           <div>
             <FieldLabel>量（ml）</FieldLabel>
             <OptionGrid
@@ -320,8 +332,6 @@ interface BreastStopwatchProps {
   rightMs: number;
   runningSide: BreastSide | null;
   hasSession: boolean;
-  /** 次のお知らせまでの残り(ミリ秒)。計測していなければ null。 */
-  remainingToAlarmMs: number | null;
   /** この内容で保存したときに記録される分数。 */
   recordedLeft: number;
   recordedRight: number;
@@ -335,7 +345,6 @@ function BreastStopwatch({
   rightMs,
   runningSide,
   hasSession,
-  remainingToAlarmMs,
   recordedLeft,
   recordedRight,
   onToggleSide,
@@ -405,88 +414,6 @@ function BreastStopwatch({
           反対側をタップすると自動で切り替わります。この画面を閉じても計測は続きます。
         </p>
       )}
-
-      <NursingAlarmField remainingToAlarmMs={remainingToAlarmMs} />
-    </div>
-  );
-}
-
-/**
- * 授乳中は手が離せないので、一定間隔で音とバイブで経過時間を知らせる。
- * 画面を見なくても分かるよう、短い「ピッ」1回＝5分・長い「ポーン」1回＝30分の
- * 鳴らす回数で経過時間そのものを表す。「テスト」は次に鳴るお知らせをそのまま鳴らす。
- */
-function NursingAlarmField({ remainingToAlarmMs }: { remainingToAlarmMs: number | null }) {
-  const { settings, vibrationSupported, update, test } = useNursingAlarm();
-  const { intervalMinutes } = settings;
-
-  return (
-    <div className="mt-3 pt-3 border-t border-amber-200">
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[11px] font-bold text-amber-700">経過時間のお知らせ</span>
-        {remainingToAlarmMs !== null && (
-          <span className="text-[11px] text-amber-700 tabular-nums">
-            次まで {formatStopwatch(remainingToAlarmMs)}
-          </span>
-        )}
-      </div>
-
-      <div className="flex gap-1.5">
-        {ALARM_INTERVAL_OPTIONS.map((minutes) => (
-          <button
-            key={minutes}
-            type="button"
-            aria-pressed={intervalMinutes === minutes}
-            onClick={() => update({ intervalMinutes: minutes })}
-            className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition ${
-              intervalMinutes === minutes
-                ? 'bg-amber-600 border-amber-600 text-white'
-                : 'bg-white border-amber-200 text-gray-600 hover:bg-amber-100'
-            }`}
-          >
-            {minutes}分
-          </button>
-        ))}
-      </div>
-
-      <div className="flex gap-1.5 mt-1.5">
-        <button
-          type="button"
-          aria-pressed={settings.soundEnabled}
-          onClick={() => update({ soundEnabled: !settings.soundEnabled })}
-          className={`flex-1 py-1.5 text-xs font-bold rounded-lg border flex items-center justify-center transition ${
-            settings.soundEnabled
-              ? 'bg-white border-amber-300 text-amber-700'
-              : 'bg-white border-gray-200 text-gray-400'
-          }`}
-        >
-          {settings.soundEnabled ? <Volume2 size={13} className="mr-1" /> : <VolumeX size={13} className="mr-1" />}
-          音 {settings.soundEnabled ? 'ON' : 'OFF'}
-        </button>
-        <button
-          type="button"
-          aria-pressed={settings.vibrationEnabled && vibrationSupported}
-          disabled={!vibrationSupported}
-          onClick={() => update({ vibrationEnabled: !settings.vibrationEnabled })}
-          className={`flex-1 py-1.5 text-xs font-bold rounded-lg border flex items-center justify-center transition ${
-            !vibrationSupported
-              ? 'bg-gray-50 border-gray-200 text-gray-300'
-              : settings.vibrationEnabled
-                ? 'bg-white border-amber-300 text-amber-700'
-                : 'bg-white border-gray-200 text-gray-400'
-          }`}
-        >
-          <Vibrate size={13} className="mr-1" />
-          バイブ {!vibrationSupported ? '非対応' : settings.vibrationEnabled ? 'ON' : 'OFF'}
-        </button>
-        <button
-          type="button"
-          onClick={test}
-          className="px-3 py-1.5 text-xs font-bold rounded-lg border border-amber-200 bg-white text-gray-600 hover:bg-amber-100 transition"
-        >
-          テスト
-        </button>
-      </div>
     </div>
   );
 }

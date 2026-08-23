@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   CalendarDays,
   ChevronLeft,
@@ -9,9 +9,8 @@ import {
   Droplet,
   FileText,
   List,
-  Moon,
+  Milk,
   Plus,
-  Sun,
   TrendingUp,
   User,
 } from 'lucide-react';
@@ -23,11 +22,10 @@ import type {
   GrowthRecord,
   LogType,
   MilkLog,
-  SleepLog,
+  PumpingLog,
 } from '@/types/app';
 import {
   BADGE_TONE_CLASS,
-  formatDuration,
   formatStopwatch,
   getLogBadges,
   getLogTimeText,
@@ -40,7 +38,6 @@ import { useNursingTimer } from '@/lib/nursingTimer';
 import {
   addDays,
   formatDateWithWeekday,
-  formatTimeString,
   isSameDay,
   parseDateString,
   toDateString,
@@ -48,7 +45,7 @@ import {
 import SegmentedTabs from '../ui/SegmentedTabs';
 import MilkLogModal, { type MilkLogInput } from '../modals/MilkLogModal';
 import DiaperLogModal, { type DiaperLogInput } from '../modals/DiaperLogModal';
-import SleepLogModal, { type ManualSleepInput } from '../modals/SleepLogModal';
+import PumpingLogModal, { type PumpingLogInput } from '../modals/PumpingLogModal';
 import GrowthRecordFormModal, { type GrowthRecordDraft } from '../modals/GrowthRecordFormModal';
 
 interface LogTabProps {
@@ -60,16 +57,14 @@ interface LogTabProps {
   isLoadingLogs?: boolean;
   isLoadingGrowth?: boolean;
   memberLabel: (id: string | null) => string;
-  /** 計測中の睡眠。なければ null。 */
-  activeSleep: SleepLog | null;
   /** 次に飲ませる乳首。判断材料がなければ null。 */
   nextBreastSide: BreastSide | null;
+  /** 搾乳ストック（ためてある搾乳母乳の残り, ml）。 */
+  pumpedStockMl: number;
   onSaveMilkLog: (input: MilkLogInput, existing: MilkLog | null) => void;
   onSaveDiaperLog: (input: DiaperLogInput, existing: DiaperLog | null) => void;
-  onSaveSleepLog: (input: ManualSleepInput, existing: SleepLog | null) => void;
+  onSavePumpingLog: (input: PumpingLogInput, existing: PumpingLog | null) => void;
   onDeleteLog: (id: string) => void;
-  onStartSleep: () => void;
-  onEndSleep: () => void;
   onAddGrowthRecord: (draft: GrowthRecordDraft) => void;
   onUpdateGrowthRecord: (record: GrowthRecord, draft: GrowthRecordDraft) => void;
   onDeleteGrowthRecord: (id: string) => void;
@@ -81,8 +76,8 @@ const getLogIcon = (type: LogType) => {
       return <Coffee size={16} className="text-amber-600" />;
     case 'diaper':
       return <Droplet size={16} className="text-blue-500" />;
-    case 'sleep':
-      return <Moon size={16} className="text-indigo-500" />;
+    case 'pumping':
+      return <Milk size={16} className="text-rose-500" />;
     default:
       return <FileText size={16} className="text-gray-500" />;
   }
@@ -94,8 +89,8 @@ const getLogColor = (type: LogType) => {
       return 'bg-amber-100';
     case 'diaper':
       return 'bg-blue-100';
-    case 'sleep':
-      return 'bg-indigo-100';
+    case 'pumping':
+      return 'bg-rose-100';
     default:
       return 'bg-gray-100';
   }
@@ -110,14 +105,12 @@ export default function LogTab({
   isLoadingLogs,
   isLoadingGrowth,
   memberLabel,
-  activeSleep,
   nextBreastSide,
+  pumpedStockMl,
   onSaveMilkLog,
   onSaveDiaperLog,
-  onSaveSleepLog,
+  onSavePumpingLog,
   onDeleteLog,
-  onStartSleep,
-  onEndSleep,
   onAddGrowthRecord,
   onUpdateGrowthRecord,
   onDeleteGrowthRecord,
@@ -126,7 +119,6 @@ export default function LogTab({
   // 記録の入力画面。log が null なら新規追加、入っていればその記録の編集。
   const [logModal, setLogModal] = useState<{ type: LogType; log: CareLog | null } | null>(null);
   const [growthModal, setGrowthModal] = useState<{ mode: 'add' | 'edit'; record: GrowthRecord | null } | null>(null);
-  const [elapsed, setElapsed] = useState(0);
   // 母乳の左右別ストップウォッチ。入力画面を閉じても測り続けられるよう、ここで持つ。
   const nursingTimer = useNursingTimer();
 
@@ -139,15 +131,6 @@ export default function LogTab({
       ? formatDateWithWeekday(logDate)
       : `${logDate.getFullYear()}年${formatDateWithWeekday(logDate)}`;
 
-  // 計測中は上部のバーの経過時間を毎秒更新する。
-  useEffect(() => {
-    if (!activeSleep) return;
-    const update = () => setElapsed(Date.now() - activeSleep.startedAt.getTime());
-    update();
-    const timer = setInterval(update, 1000);
-    return () => clearInterval(timer);
-  }, [activeSleep]);
-
   // 種類ごとの記録ボタンに出すその日の合計。回数を主、量・時間を従にして1行に収める。
   const milkSummaryText = [
     `${summary.milk.count}回`,
@@ -158,10 +141,10 @@ export default function LogTab({
     summary.diaper.poopCount > 0
       ? `${summary.diaper.count}回・うんち${summary.diaper.poopCount}`
       : `${summary.diaper.count}回`;
-  const sleepSummaryText =
-    summary.sleep.minutes > 0
-      ? `${summary.sleep.count}回・${formatDuration(summary.sleep.minutes * 60000)}`
-      : `${summary.sleep.count}回`;
+  const pumpingSummaryText =
+    summary.pumping.ml > 0
+      ? `${summary.pumping.count}回・${summary.pumping.ml}ml`
+      : `${summary.pumping.count}回`;
 
   const closeLogModal = () => setLogModal(null);
 
@@ -234,27 +217,7 @@ export default function LogTab({
               </button>
             </div>
 
-            {/* 計測中の睡眠。アプリを開いた人が最初に気づけるよう一番上に出す */}
-            {activeSleep && (
-              <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-indigo-700 flex items-center">
-                    <Moon size={12} className="mr-1" /> ねんね中
-                  </p>
-                  <p className="text-[11px] text-indigo-500 tabular-nums">
-                    {formatTimeString(activeSleep.startedAt)} から {formatStopwatch(elapsed)}
-                  </p>
-                </div>
-                <button
-                  onClick={onEndSleep}
-                  className="bg-indigo-600 text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-indigo-700 transition active:scale-95 flex items-center"
-                >
-                  <Sun size={13} className="mr-1" /> 起きた
-                </button>
-              </div>
-            )}
-
-            {/* 計測中の授乳。ねんね中と同じく、上部で今の状態が分かるようにする */}
+            {/* 計測中の授乳。アプリを開いた人が最初に気づけるよう一番上に出す */}
             {nursingTimer.hasSession && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center justify-between">
                 <div>
@@ -266,9 +229,6 @@ export default function LogTab({
                   </p>
                   <p className="text-[11px] text-amber-600 tabular-nums">
                     左 {formatStopwatch(nursingTimer.leftMs)} / 右 {formatStopwatch(nursingTimer.rightMs)}
-                    {nursingTimer.remainingToAlarmMs !== null && (
-                      <> ・お知らせまで {formatStopwatch(nursingTimer.remainingToAlarmMs)}</>
-                    )}
                   </p>
                 </div>
                 <button
@@ -313,20 +273,28 @@ export default function LogTab({
                   {diaperSummaryText}
                 </span>
               </button>
-              {/* 計測中なら、その記録を開いて時刻を直したり終わらせたりできるようにする。 */}
               <button
-                onClick={() => setLogModal({ type: 'sleep', log: activeSleep })}
-                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-indigo-50 transition active:scale-95"
+                onClick={() => setLogModal({ type: 'pumping', log: null })}
+                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-rose-50 transition active:scale-95"
               >
                 <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
                 <span className="flex items-center gap-1.5">
-                  <Moon size={17} className="text-indigo-500" />
-                  <span className="text-sm font-bold text-gray-800">睡眠</span>
+                  <Milk size={17} className="text-rose-500" />
+                  <span className="text-sm font-bold text-gray-800">搾乳</span>
                 </span>
                 <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
-                  {activeSleep ? '計測中' : sleepSummaryText}
+                  {pumpingSummaryText}
                 </span>
               </button>
+            </div>
+
+            {/* 搾乳ストック。ためた分と、授乳で「搾乳」を選んで飲ませた分の差し引き。
+                表示中の日だけでは求まらないため、日付の送りとは関わらず常に今の残りを出す。 */}
+            <div className="bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 flex items-center justify-between">
+              <span className="text-xs font-bold text-rose-700 flex items-center">
+                <Milk size={13} className="mr-1" /> 搾乳ストック
+              </span>
+              <span className="text-sm font-bold text-rose-700 tabular-nums">{pumpedStockMl}ml</span>
             </div>
             {!isToday && (
               <p className="text-[11px] text-gray-500 leading-relaxed">
@@ -465,6 +433,7 @@ export default function LogTab({
         baseDate={logDate}
         nextSide={nextBreastSide}
         timer={nursingTimer}
+        pumpedStockMl={pumpedStockMl}
         onClose={closeLogModal}
         onSubmit={(input) => {
           const existing = logModal?.log?.type === 'milk' ? logModal.log : null;
@@ -486,19 +455,14 @@ export default function LogTab({
         }}
         onDelete={() => logModal?.log && handleDelete(logModal.log)}
       />
-      <SleepLogModal
-        show={logModal?.type === 'sleep'}
-        log={logModal?.log?.type === 'sleep' ? logModal.log : null}
-        activeSleep={activeSleep}
+      <PumpingLogModal
+        show={logModal?.type === 'pumping'}
+        log={logModal?.log?.type === 'pumping' ? logModal.log : null}
         baseDate={logDate}
+        pumpedStockMl={pumpedStockMl}
         onClose={closeLogModal}
-        onStart={onStartSleep}
-        onEnd={() => {
-          onEndSleep();
-          closeLogModal();
-        }}
-        onSubmitManual={(input) => {
-          onSaveSleepLog(input, logModal?.log?.type === 'sleep' ? logModal.log : null);
+        onSubmit={(input) => {
+          onSavePumpingLog(input, logModal?.log?.type === 'pumping' ? logModal.log : null);
           closeLogModal();
         }}
         onDelete={() => logModal?.log && handleDelete(logModal.log)}

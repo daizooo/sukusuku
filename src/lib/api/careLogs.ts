@@ -18,8 +18,12 @@ type SupabaseDb = SupabaseClient<Database>;
 export const LOG_TYPE_LABEL: Record<LogType, string> = {
   milk: 'ミルク',
   diaper: 'おむつ',
-  sleep: '睡眠',
+  pumping: '搾乳',
 };
+
+// 記録タブから睡眠の記録を取り止めたあとも、すでに保存されている type = 'sleep' の行は
+// DBに残っている。アプリ側では扱わないので、取得の時点で除いておく。
+const ACTIVE_LOG_TYPES: LogType[] = ['milk', 'diaper', 'pumping'];
 
 // 記録の種類ごとの項目は care_logs.details (jsonb) に入れる。
 // 想定外の値が入っていても表示を壊さないよう、読み出しは1項目ずつ検証する。
@@ -33,12 +37,6 @@ const readEnum = <T extends string>(value: unknown, allowed: readonly T[]): T | 
 
 const readNumber = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-
-const readDate = (value: unknown): Date | null => {
-  if (typeof value !== 'string') return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
 
 export const rowToCareLog = (row: CareLogRow): CareLog => {
   const details = toDetails(row.details);
@@ -69,22 +67,18 @@ export const rowToCareLog = (row: CareLogRow): CareLog => {
     };
   }
 
-  if (row.type === 'sleep') {
-    const startedAt = readDate(details.startedAt) ?? new Date(row.logged_at);
+  if (row.type === 'pumping') {
     return {
       ...base,
-      type: 'sleep',
-      startedAt,
-      // endedAt が null なのは計測中のときだけ。details を持たない過去の記録は
-      // 起床時刻が分からないため、計測中と取り違えないよう開始時刻を入れておく。
-      endedAt: isLegacy ? startedAt : readDate(details.endedAt),
+      type: 'pumping',
+      amountMl: readNumber(details.amountMl) ?? 0,
     };
   }
 
   return {
     ...base,
     type: 'milk',
-    method: readEnum<FeedingMethod>(details.method, ['breast', 'formula']) ?? 'formula',
+    method: readEnum<FeedingMethod>(details.method, ['breast', 'pumped', 'formula']) ?? 'formula',
     amountMl: readNumber(details.amountMl),
     leftMinutes: readNumber(details.leftMinutes),
     rightMinutes: readNumber(details.rightMinutes),
@@ -110,9 +104,7 @@ const careLogToDetails = (log: CareLog): Json => {
     set('poopColor', log.poopColor);
     set('poopConsistency', log.poopConsistency);
   } else {
-    set('startedAt', log.startedAt.toISOString());
-    // 計測中であることを表すため、endedAt は null のまま入れる。
-    details.endedAt = log.endedAt ? log.endedAt.toISOString() : null;
+    set('amountMl', log.amountMl);
   }
 
   return details as Json;
@@ -121,7 +113,7 @@ const careLogToDetails = (log: CareLog): Json => {
 /** 一覧に出す短い要約。details を持たない過去の記録との互換のため amount にも残す。 */
 const careLogToAmount = (log: CareLog): string => {
   if (log.type === 'milk') {
-    if (log.method === 'formula') return log.amountMl ? `${log.amountMl}ml` : '';
+    if (log.method !== 'breast') return log.amountMl ? `${log.amountMl}ml` : '';
     const parts = [
       log.leftMinutes ? `左${log.leftMinutes}分` : '',
       log.rightMinutes ? `右${log.rightMinutes}分` : '',
@@ -129,9 +121,7 @@ const careLogToAmount = (log: CareLog): string => {
     return parts.join(' ');
   }
   if (log.type === 'diaper') return '';
-  if (!log.endedAt) return '';
-  const minutes = Math.max(0, Math.round((log.endedAt.getTime() - log.startedAt.getTime()) / 60000));
-  return minutes >= 60 ? `${Math.floor(minutes / 60)}時間${minutes % 60}分` : `${minutes}分`;
+  return log.amountMl ? `${log.amountMl}ml` : '';
 };
 
 // 指定した期間（from 以上 to 未満）の記録を取得する。
@@ -147,6 +137,7 @@ export async function listCareLogsInRange(
     .from('care_logs')
     .select('*')
     .eq('family_id', familyId)
+    .in('type', ACTIVE_LOG_TYPES)
     .gte('logged_at', from.toISOString())
     .lt('logged_at', to.toISOString())
     .order('logged_at', { ascending: false });
@@ -164,24 +155,30 @@ export async function listCareLogsByDate(
   return listCareLogsInRange(supabase, familyId, from, addDays(from, 1));
 }
 
-/** 計測中の睡眠（起床時刻が未確定のもの）を1件だけ取り出す。表示中の日に関わらず探す。 */
-export async function findActiveSleepCareLog(
-  supabase: SupabaseDb,
-  familyId: string,
-): Promise<CareLog | null> {
-  const { data, error } = await supabase
-    .from('care_logs')
-    .select('*')
-    .eq('family_id', familyId)
-    .eq('type', 'sleep')
-    // ->> で取り出すと JSON の null も SQL の NULL として扱われる（-> のままだと一致しない）
-    .is('details->>endedAt', null)
-    .not('details->>startedAt', 'is', null)
-    .order('logged_at', { ascending: false })
-    .limit(1);
-  if (error) throw error;
-  const row = data?.[0];
-  return row ? rowToCareLog(row) : null;
+/**
+ * 搾乳ストック（ためてある搾乳母乳の残り, ml）。
+ *
+ * 「搾乳してためた」記録と「ためた分を飲ませた」記録の差し引きなので、
+ * 表示中の日だけでは求まらず、全期間ぶんを数える。どちらも1日に数件しか増えず
+ * details だけあれば足りるため、必要な行だけを2本の問い合わせで取りに行く。
+ */
+export async function getPumpedStockMl(supabase: SupabaseDb, familyId: string): Promise<number> {
+  const [pumped, fed] = await Promise.all([
+    supabase.from('care_logs').select('details').eq('family_id', familyId).eq('type', 'pumping'),
+    supabase
+      .from('care_logs')
+      .select('details')
+      .eq('family_id', familyId)
+      .eq('type', 'milk')
+      .eq('details->>method', 'pumped'),
+  ]);
+  if (pumped.error) throw pumped.error;
+  if (fed.error) throw fed.error;
+
+  const total = (rows: { details: Json }[]) =>
+    rows.reduce((sum, row) => sum + (readNumber(toDetails(row.details).amountMl) ?? 0), 0);
+
+  return total(pumped.data ?? []) - total(fed.data ?? []);
 }
 
 // 共用体のまま各要素から取り除く（Omit をそのまま使うと種類ごとの項目が消えてしまう）

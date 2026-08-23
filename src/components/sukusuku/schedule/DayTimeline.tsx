@@ -1,26 +1,19 @@
 'use client';
 
 import type { CareLog } from '@/types/app';
-import { getMilkMarksOnDate, getSleepBandsOnDate, type SleepBand } from './utils';
+import { getMilkMarksOnDate } from './utils';
 
 /** 帯の使い方。週表示は7日ぶんを並べるので細く、日表示は1日だけなので太く出す。 */
 type TimelineVariant = 'week' | 'day';
 
 interface DayTimelineProps {
-  /** 表示中の範囲の記録。前夜から続く睡眠を拾うため、日ごとに絞らずそのまま渡す。 */
+  /** 表示中の範囲の記録。日ごとの絞り込みは中で行う。 */
   logs: CareLog[];
   day: Date;
-  /** 計測中の睡眠をどこまで描くか。 */
-  now: Date;
   variant?: TimelineVariant;
 }
 
 const toPercent = (value: number): string => `${(value * 100).toFixed(2)}%`;
-
-// 短い昼寝が消えないよう、帯には最低限の幅を持たせる（約9分ぶん）。
-const MIN_BAND_WIDTH = 0.006;
-
-const bandWidth = (band: SleepBand): string => toPercent(Math.max(band.end - band.start, MIN_BAND_WIDTH));
 
 /** 0時を0、24時を1とした目盛りの位置。 */
 const at = (hour: number): number => hour / 24;
@@ -37,24 +30,23 @@ export function TimelineScale() {
 }
 
 /**
- * 1日を0時から24時までの横1本にした帯。睡眠を面で、授乳を印で出す。
+ * 1日を0時から24時までの横1本にした帯。授乳を印で出す。
  *
- * 週表示では7日ぶんが縦に並ぶため、まとまって寝られているか・昼夜が逆転して
- * いないかを見比べられる。日表示は1日しか出さないぶん帯を太く取れるので、
- * 30分の昼寝のような細い面でも潰れずに読める。細かい時刻は記録の一覧で見る。
+ * 週表示では7日ぶんが縦に並ぶため、授乳の間隔がそろってきたか・夜間にどれだけ
+ * 起こされているかを見比べられる。日表示は1日しか出さないぶん帯を太く取れる。
+ * 細かい時刻は記録の一覧で見る。
  */
-export default function DayTimeline({ logs, day, now, variant = 'week' }: DayTimelineProps) {
-  const bands = getSleepBandsOnDate(logs, day, now);
+export default function DayTimeline({ logs, day, variant = 'week' }: DayTimelineProps) {
   const milkMarks = getMilkMarksOnDate(logs, day);
   const isDay = variant === 'day';
 
   // 何も描くものがない日は、空の枠だけが並ばないよう出さない。
-  if (bands.length === 0 && milkMarks.length === 0) return null;
+  if (milkMarks.length === 0) return null;
 
   const track = (
     <div
       role="img"
-      aria-label={`0時から24時の睡眠${bands.length}本と授乳${milkMarks.length}回`}
+      aria-label={`0時から24時の授乳${milkMarks.length}回`}
       className={`relative overflow-hidden bg-gray-100 ${isDay ? 'h-9 rounded-lg' : 'h-4 rounded'}`}
     >
       {/* 日表示は帯が太く時刻を追いやすいので、3時間ごとの薄い目盛りも足す。 */}
@@ -68,19 +60,11 @@ export default function DayTimeline({ logs, day, now, variant = 'week' }: DayTim
         <span key={hour} className="absolute inset-y-0 w-px bg-gray-200" style={{ left: toPercent(at(hour)) }} />
       ))}
 
-      {bands.map((band, i) => (
-        <span
-          key={`sleep-${i}`}
-          className={`absolute inset-y-0 ${band.inProgress ? 'bg-indigo-300' : 'bg-indigo-400'}`}
-          style={{ left: toPercent(band.start), width: bandWidth(band) }}
-        />
-      ))}
-
-      {/* 授乳の印。帯を貫かせると睡眠が途切れたように見えるため、上から短く下ろす。 */}
+      {/* 授乳の印。 */}
       {milkMarks.map((mark, i) => (
         <span
           key={`milk-${i}`}
-          className={`absolute top-0 w-0.5 bg-amber-500 ${isDay ? 'h-2.5' : 'h-1.5'}`}
+          className="absolute inset-y-0 w-0.5 bg-amber-500"
           style={{ left: toPercent(mark) }}
         />
       ))}
