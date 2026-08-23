@@ -147,7 +147,7 @@ export default function LogTab({
     summary.pumping.ml > 0
       ? `${summary.pumping.count}回・${summary.pumping.ml}ml`
       : `${summary.pumping.count}回`;
-  // 搾乳ストックの残り。まだ飲ませていない本の数と合計。
+  // 搾乳ストックの残り。まだ飲ませていないパックの数と合計。
   const stockBatches = pumpedBatches.filter((batch) => batch.usedBy === null);
   const stockMl = sumBatchesMl(stockBatches);
 
@@ -300,7 +300,7 @@ export default function LogTab({
                 <Milk size={13} className="mr-1" /> 搾乳ストック
               </span>
               <span className="text-sm font-bold text-rose-700 tabular-nums">
-                {stockBatches.length}本・{stockMl}ml
+                {stockBatches.length}パック・{stockMl}ml
               </span>
             </div>
             {!isToday && (

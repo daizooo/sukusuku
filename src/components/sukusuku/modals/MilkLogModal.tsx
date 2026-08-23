@@ -91,7 +91,7 @@ function MilkLogModalBody({
 }: MilkLogModalProps) {
   const [method, setMethod] = useState<FeedingMethod>(log?.method ?? 'breast');
   const [amountMl, setAmountMl] = useState<number>(log?.amountMl ?? 100);
-  // 「搾乳」で飲ませる搾乳ストック。編集中なら、その記録が使っている本を選んだ状態で開く。
+  // 「搾乳」で飲ませる搾乳ストック。編集中なら、その記録が使っているパックを選んだ状態で開く。
   const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>(() => log?.pumpedFrom ?? []);
   const [customAmount, setCustomAmount] = useState(() =>
     log?.amountMl && !MILK_AMOUNT_OPTIONS.includes(log.amountMl) ? String(log.amountMl) : '',
@@ -120,7 +120,7 @@ function MilkLogModalBody({
   // 過去の記録を編集しているときは、いま計測しているものと混ざらないよう出さない。
   const showTimer = !log && method === 'breast';
 
-  // 選べる搾乳ストック。編集中の記録が使っている本も、選び直せるよう残す。
+  // 選べる搾乳ストック。編集中の記録が使っているパックも、選び直せるよう残す。
   const selectableBatches = selectablePumpedBatches(pumpedBatches, log?.id);
   const selectedBatches = selectableBatches.filter((batch) => selectedBatchIds.includes(batch.id));
   // 「搾乳」で記録する量は、選んだ搾乳の合計。
@@ -318,7 +318,7 @@ function MilkLogModalBody({
 }
 
 interface PumpedBatchPickerProps {
-  /** 選べる搾乳（まだ使っていない本 + 編集中の記録が使っている本）。古い順。 */
+  /** 選べる搾乳（まだ使っていないパック + 編集中の記録が使っているパック）。古い順。 */
   batches: PumpedBatch[];
   selectedIds: string[];
   /** 選んだ搾乳の合計(ml)。この値がそのまま記録される。 */
@@ -329,10 +329,10 @@ interface PumpedBatchPickerProps {
 }
 
 /**
- * 飲ませる搾乳を搾乳ストックから選ぶ。選んだ本の合計がそのまま記録する量になる。
+ * 飲ませる搾乳を搾乳ストックから選ぶ。選んだパックの合計がそのまま記録する量になる。
  *
- * 何mlを飲ませたかは、どの搾乳を使ったかで決まる（哺乳瓶1本＝1回の搾乳）ため、
- * 量を打ち直すのではなく本を選ぶ形にしている。選んだ搾乳はストックから外れ、
+ * 何mlを飲ませたかは、どの搾乳を使ったかで決まる（母乳パック1つ＝1回の搾乳）ため、
+ * 量を打ち直すのではなくパックを選ぶ形にしている。選んだ搾乳はストックから外れ、
  * この記録を消すとストックに戻る。古いものから使えるよう、並びは搾った順。
  */
 function PumpedBatchPicker({ batches, selectedIds, selectedMl, stockMl, onToggle }: PumpedBatchPickerProps) {
@@ -384,7 +384,7 @@ function PumpedBatchPicker({ batches, selectedIds, selectedMl, stockMl, onToggle
       </div>
 
       <p className="mt-2 text-xs font-bold text-rose-700 tabular-nums">
-        {selectedIds.length === 0 ? '搾乳を選んでください' : `${selectedIds.length}本・合計 ${selectedMl}ml で記録します`}
+        {selectedIds.length === 0 ? '搾乳を選んでください' : `${selectedIds.length}パック・合計 ${selectedMl}ml で記録します`}
       </p>
     </div>
   );

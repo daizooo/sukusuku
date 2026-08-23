@@ -93,7 +93,7 @@ export interface DiaperLog extends CareLogBase {
 }
 
 /**
- * 搾乳した母乳を「ためた」1回ぶんの記録。搾乳ストックの1本にあたる。
+ * 搾乳した母乳を「ためた」1回ぶんの記録。搾乳ストックの1パックにあたる。
  * 飲ませるときは、ミルクの記録(method: 'pumped')でこの記録を選ぶ。
  */
 export interface PumpingLog extends CareLogBase {
@@ -105,8 +105,8 @@ export interface PumpingLog extends CareLogBase {
 export type CareLog = MilkLog | DiaperLog | PumpingLog;
 
 /**
- * 搾乳ストックの1本。搾乳の記録に「どの授乳で使ったか」を添えたもの。
- * 使い切ったぶんも含めて持ち、まだ使っていない本の合計が「残り」になる。
+ * 搾乳ストックの1パック。搾乳の記録に「どの授乳で使ったか」を添えたもの。
+ * 使い切ったぶんも含めて持ち、まだ使っていないパックの合計が「残り」になる。
  */
 export interface PumpedBatch {
   /** もとになった PumpingLog の id。 */

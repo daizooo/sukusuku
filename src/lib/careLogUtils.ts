@@ -77,13 +77,13 @@ export const getNextBreastSide = (logs: CareLog[]): BreastSide | null => {
 };
 
 /**
- * いま選べる搾乳ストック。まだ使っていない本と、編集中の記録が使っている本を返す。
- * （編集中の記録が使っている本は「使用済み」だが、選び直せるよう外さない）
+ * いま選べる搾乳ストック。まだ使っていないパックと、編集中の記録が使っているパックを返す。
+ * （編集中の記録が使っているパックは「使用済み」だが、選び直せるよう外さない）
  */
 export const selectablePumpedBatches = (batches: PumpedBatch[], editingLogId?: string): PumpedBatch[] =>
   batches.filter((batch) => batch.usedBy === null || batch.usedBy === editingLogId);
 
-/** 搾乳ストックの残り(ml)。まだ使っていない本の合計。 */
+/** 搾乳ストックの残り(ml)。まだ使っていないパックの合計。 */
 export const pumpedStockMl = (batches: PumpedBatch[]): number =>
   sumBatchesMl(batches.filter((batch) => batch.usedBy === null));
 
@@ -91,7 +91,7 @@ export const pumpedStockMl = (batches: PumpedBatch[]): number =>
 export const sumBatchesMl = (batches: PumpedBatch[]): number =>
   batches.reduce((total, batch) => total + batch.amountMl, 0);
 
-/** 搾乳ストックの1本を指す日時。「8/23 14:30」の形。 */
+/** 搾乳ストックの1パックを指す日時。「8/23 14:30」の形。 */
 export const formatBatchTime = (batch: PumpedBatch): string =>
   `${batch.time.getMonth() + 1}/${batch.time.getDate()} ${formatTimeString(batch.time)}`;
 
@@ -152,8 +152,8 @@ export const getLogBadges = (log: CareLog): LogBadge[] => {
     case 'milk': {
       if (log.method !== 'breast') {
         const badges: LogBadge[] = log.amountMl ? [{ text: `${log.amountMl} ml`, tone: 'milk' }] : [];
-        // 搾乳は何本ぶんを飲ませたかも出す（1本=1回の搾乳）。
-        if (log.pumpedFrom?.length) badges.push({ text: `搾乳${log.pumpedFrom.length}本`, tone: 'pumping' });
+        // 搾乳は何パックぶんを飲ませたかも出す（1パック=1回の搾乳）。
+        if (log.pumpedFrom?.length) badges.push({ text: `搾乳${log.pumpedFrom.length}パック`, tone: 'pumping' });
         return badges;
       }
       const badges: LogBadge[] = [];

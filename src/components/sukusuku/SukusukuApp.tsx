@@ -174,7 +174,7 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   // 取得済みの日。表示中の日と一致していなければ読み込み中とみなす
   const [loadedLogDate, setLoadedLogDate] = useState<Date | null>(null);
   const isLoadingLogs = loadedLogDate?.getTime() !== logDate.getTime();
-  // 搾乳ストック。飲ませるときにどの搾乳を使うか選べるよう、残量ではなく1本ずつ持つ。
+  // 搾乳ストック。飲ませるときにどの搾乳を使うか選べるよう、残量ではなく1パックずつ持つ。
   // 表示中の日だけでは求まらないため、全期間ぶんをまとめて持つ。
   const [pumpedBatches, setPumpedBatches] = useState<PumpedBatch[]>([]);
 
