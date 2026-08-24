@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "mcp__Supabase",
+
+      "mcp__github__get_me",
+      "mcp__github__get_file_contents",
+      "mcp__github__list_branches",
+      "mcp__github__list_commits",
+      "mcp__github__get_commit",
+      "mcp__github__list_pull_requests",
+      "mcp__github__pull_request_read",
+      "mcp__github__list_issues",
+      "mcp__github__issue_read",
+      "mcp__github__list_tags",
+      "mcp__github__get_tag",
+      "mcp__github__list_releases",
+      "mcp__github__get_latest_release",
+      "mcp__github__list_repository_collaborators",
+      "mcp__github__search_code",
+      "mcp__github__search_issues",
+      "mcp__github__search_pull_requests",
+      "mcp__github__search_repositories",
+      "mcp__github__search_commits",
+      "mcp__github__actions_list",
+      "mcp__github__actions_get",
+      "mcp__github__get_check_run",
+      "mcp__github__get_job_logs",
+
+      "mcp__Vercel__list_teams",
+      "mcp__Vercel__list_projects",
+      "mcp__Vercel__get_project",
+      "mcp__Vercel__list_deployments",
+      "mcp__Vercel__get_deployment",
+      "mcp__Vercel__get_deployment_build_logs",
+      "mcp__Vercel__get_runtime_logs",
+      "mcp__Vercel__get_runtime_errors",
+      "mcp__Vercel__get_web_analytics",
+      "mcp__Vercel__get_git_deployment_context",
+      "mcp__Vercel__get_project_deployment_protection",
+      "mcp__Vercel__list_toolbar_threads",
+      "mcp__Vercel__get_toolbar_thread",
+      "mcp__Vercel__search_vercel_documentation",
+      "mcp__Vercel__web_fetch_vercel_url"
+    ]
+  }
+}
