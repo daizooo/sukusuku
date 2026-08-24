@@ -30,6 +30,6 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "comment": "supabase/functions は Deno で動く Edge Function で、Denoのグローバル(Deno.*)やURL importを使うためNext.jsの型チェックからは外す。",
-  "exclude": ["node_modules", "supabase/functions"]
+  "comment": "supabase/functions は Deno で動く Edge Function で、Denoのグローバル(Deno.*)やURL importを使うためNext.jsの型チェックからは外す。mobile は React Native の独立したプロジェクトで、自分の tsconfig.json を持つため同様に外す。",
+  "exclude": ["node_modules", "supabase/functions", "mobile"]
 }
