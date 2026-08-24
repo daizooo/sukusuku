@@ -1,13 +1,31 @@
 // 画面の色。Web版(Tailwind)で使っていた値を持ってきて、名前で参照できるようにする。
-// 画面を作り込むのはフェーズ1以降なので、いまは土台の画面が要るぶんだけ。
 export const colors = {
   background: '#f9fafb', // gray-50
   surface: '#ffffff',
   border: '#e5e7eb', // gray-200
+  borderStrong: '#d1d5db', // gray-300
   text: '#111827', // gray-900
+  textSubtle: '#374151', // gray-700
   textMuted: '#6b7280', // gray-500
+  textFaint: '#9ca3af', // gray-400
   primary: '#ec4899', // pink-500
   primaryText: '#ffffff',
   danger: '#ef4444', // red-500
   accentSurface: '#fdf2f8', // pink-50
+
+  // 記録の種類ごとの色。Web版の記録タブと同じ割り当て（ミルク=琥珀・おむつ=青・搾乳=薔薇）。
+  milk: '#d97706', // amber-600
+  milkSurface: '#fffbeb', // amber-50
+  milkBorder: '#fde68a', // amber-200
+  milkText: '#b45309', // amber-700
+  diaper: '#3b82f6', // blue-500
+  diaperSurface: '#eff6ff', // blue-50
+  diaperText: '#1d4ed8', // blue-700
+  pumping: '#f43f5e', // rose-500
+  pumpingSurface: '#fff1f2', // rose-50
+  pumpingBorder: '#fecdd3', // rose-200
+  pumpingText: '#be123c', // rose-700
+  alertSurface: '#fee2e2', // red-100
+  alertText: '#b91c1c', // red-700
+  neutralSurface: '#f3f4f6', // gray-100
 } as const;

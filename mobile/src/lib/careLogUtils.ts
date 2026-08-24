@@ -11,6 +11,7 @@ import type {
   PumpedBatch,
 } from '@/types/app';
 import { formatTimeString } from '@/lib/dateUtils';
+import { colors } from '@/lib/theme';
 
 // --- 選択肢 ---
 
@@ -182,13 +183,16 @@ export const getLogBadges = (log: CareLog): LogBadge[] => {
   }
 };
 
-/** バッジの配色。記録タブとカレンダーの日表示で共通して使う。 */
-export const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
-  milk: 'bg-amber-100 text-amber-800 font-bold',
-  diaper: 'bg-blue-100 text-blue-700',
-  pumping: 'bg-rose-100 text-rose-700 font-bold',
-  alert: 'bg-red-100 text-red-700 font-bold',
-  neutral: 'bg-gray-100 text-gray-600',
+/**
+ * バッジの配色。記録タブとカレンダーの日表示で共通して使う。
+ * Web版はTailwindのクラス名を持っていたが、React Nativeにクラス名は無いので色そのものを持つ。
+ */
+export const BADGE_TONE_COLORS: Record<BadgeTone, { background: string; text: string }> = {
+  milk: { background: colors.milkSurface, text: colors.milkText },
+  diaper: { background: colors.diaperSurface, text: colors.diaperText },
+  pumping: { background: colors.pumpingSurface, text: colors.pumpingText },
+  alert: { background: colors.alertSurface, text: colors.alertText },
+  neutral: { background: colors.neutralSurface, text: colors.textMuted },
 };
 
 /** カード全体を強調するか（白・赤・黒の便）。 */
