@@ -5,7 +5,9 @@ import { Baby, Edit2, ListPlus, Phone, Plus, Save, Trash2, User } from 'lucide-r
 import type { ProfileField, ProfileFieldKey, UserProfile } from '@/types/app';
 import { isPhoneNumberLike, toTelHref } from '@/lib/uiUtils';
 import NotificationSetting from '@/components/sukusuku/NotificationSetting';
+import FeedingIntervalSetting from '@/components/sukusuku/FeedingIntervalSetting';
 import AccountSection from '@/components/sukusuku/AccountSection';
+import type { FeedingSettings } from '@/lib/api/feedingSettings';
 
 // UserProfileのうち、ProfileField[]を値に持つキー（＝設定タブで編集可能なセクション）
 type ProfileSectionKey = {
@@ -21,6 +23,9 @@ interface InfoTabProps {
   onStartEditProfile: () => void;
   onChangeTempProfile: (profile: UserProfile) => void;
   onSaveProfile: () => void;
+  /** 次の授乳の目安の設定。家族で共通なので、変更はアプリ全体へ反映する。 */
+  feedingSettings: FeedingSettings;
+  onChangeFeedingSettings: (settings: FeedingSettings) => void;
 }
 
 export default function InfoTab({
@@ -32,6 +37,8 @@ export default function InfoTab({
   onStartEditProfile,
   onChangeTempProfile,
   onSaveProfile,
+  feedingSettings,
+  onChangeFeedingSettings,
 }: InfoTabProps) {
   const updateField = (section: ProfileSectionKey, id: string, patch: Partial<Pick<ProfileField, 'label' | 'values'>>) => {
     onChangeTempProfile({
@@ -112,6 +119,12 @@ export default function InfoTab({
           />
 
           <NotificationSetting familyId={familyId} userId={userId} />
+
+          <FeedingIntervalSetting
+            familyId={familyId}
+            settings={feedingSettings}
+            onChange={onChangeFeedingSettings}
+          />
 
           <AccountSection familyId={familyId} userId={userId} />
         </div>

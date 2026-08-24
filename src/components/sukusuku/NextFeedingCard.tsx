@@ -1,0 +1,149 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Coffee } from 'lucide-react';
+import { formatTimeString } from '@/lib/dateUtils';
+import {
+  formatMinutesText,
+  nextFeedingSchedule,
+  type FeedingSchedule,
+  type NextFeedingInfo,
+} from '@/lib/feedingSchedule';
+
+// 「次の授乳はいつだっけ」に、画面を見るだけで答えるための表示。
+// ホームには目立つカード、記録タブには1行の帯と、置く場所に合わせて2つ用意する
+// （どちらも中身は同じ。記録タブの左側は日付送り・記録ボタン・搾乳ストックで
+//  すでに詰まっているため、そこで場所を取るとタイムラインが潰れてしまう）。
+
+interface NextFeedingProps {
+  info: NextFeedingInfo;
+  /** タップしたときの動き。渡さなければタップできない表示になる。 */
+  onOpen?: () => void;
+}
+
+/**
+ * 残り時間の表示を進めるための時計。表示は分単位なので30秒ごとで足りる。
+ * 画面を消している間はブラウザがタイマーを間引くため、戻ってきたら読み直す。
+ */
+const useNow = (): number => {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    const timerId = window.setInterval(tick, 30_000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(timerId);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, []);
+  return now;
+};
+
+/** 「あと1時間40分」「そろそろ」「20分すぎ」。 */
+const remainingText = (schedule: FeedingSchedule): string => {
+  if (!schedule.isOverdue) return `あと ${formatMinutesText(schedule.remainingMinutes)}`;
+  return schedule.overdueMinutes === 0 ? 'そろそろ' : `${formatMinutesText(schedule.overdueMinutes)}すぎ`;
+};
+
+/** ホーム用。目安の時刻・残り時間・前回からの進み具合をまとめて出す。 */
+export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
+  const now = useNow();
+  const schedule = nextFeedingSchedule(info.lastFedAt, info.intervalMinutes, now);
+
+  const content = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-bold text-amber-700 flex items-center">
+          <Coffee size={13} className="mr-1" />
+          次の授乳の目安
+        </span>
+        <span className="text-[11px] text-gray-400 font-medium">
+          {formatMinutesText(info.intervalMinutes)}ごと
+        </span>
+      </div>
+
+      {info.isLoading && <p className="mt-1.5 text-sm text-gray-400">読み込み中...</p>}
+
+      {!info.isLoading && !schedule && (
+        <p className="mt-1.5 text-sm text-gray-500">授乳を記録すると、次の目安の時刻が出ます。</p>
+      )}
+
+      {schedule && (
+        <>
+          <div className="mt-0.5 flex items-baseline gap-2 flex-wrap">
+            <span
+              className={`text-2xl font-bold tabular-nums tracking-tight ${
+                schedule.isOverdue ? 'text-rose-600' : 'text-gray-900'
+              }`}
+            >
+              {formatTimeString(schedule.dueAt)}
+            </span>
+            <span className={`text-sm font-bold ${schedule.isOverdue ? 'text-rose-600' : 'text-amber-600'}`}>
+              {remainingText(schedule)}
+            </span>
+          </div>
+
+          {/* 前回からいまへの進み具合。時刻を読まなくても目で分かるように。 */}
+          <div className="mt-1.5 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-[width] duration-500 ${
+                schedule.isOverdue ? 'bg-rose-500' : 'bg-amber-400'
+              }`}
+              style={{ width: `${schedule.progress * 100}%` }}
+            />
+          </div>
+
+          <p className="mt-1.5 text-[11px] text-gray-500">
+            前回 {formatTimeString(schedule.lastFedAt)}
+            {info.lastFedTitle && `（${info.lastFedTitle}）`}
+            {/* 設定した間隔が実際と合っているか確かめられるよう、実績も添える */}
+            {info.averageIntervalMinutes !== null &&
+              ` ・ 最近の平均 ${formatMinutesText(info.averageIntervalMinutes)}`}
+          </p>
+        </>
+      )}
+    </>
+  );
+
+  const className = 'w-full text-left bg-white rounded-2xl shadow-sm border border-gray-100 p-3.5';
+
+  if (!onOpen) return <div className={className}>{content}</div>;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={`${className} hover:bg-amber-50 transition active:scale-[0.99]`}
+    >
+      {content}
+    </button>
+  );
+}
+
+/** 記録タブ用。搾乳ストックと同じ1行の帯に収める。 */
+export function NextFeedingRow({ info }: NextFeedingProps) {
+  const now = useNow();
+  const schedule = nextFeedingSchedule(info.lastFedAt, info.intervalMinutes, now);
+  const overdue = schedule?.isOverdue ?? false;
+
+  return (
+    <div
+      className={`rounded-xl px-3 py-2 flex items-center justify-between gap-2 border ${
+        overdue ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'
+      }`}
+    >
+      <span className={`text-xs font-bold flex items-center ${overdue ? 'text-rose-700' : 'text-amber-700'}`}>
+        <Coffee size={13} className="mr-1" /> 次の授乳
+      </span>
+      {info.isLoading ? (
+        <span className="text-xs text-gray-400">読み込み中...</span>
+      ) : !schedule ? (
+        <span className="text-xs text-gray-500">記録するとここに出ます</span>
+      ) : (
+        <span className={`text-sm font-bold tabular-nums ${overdue ? 'text-rose-700' : 'text-amber-700'}`}>
+          {formatTimeString(schedule.dueAt)} ・ {remainingText(schedule)}
+        </span>
+      )}
+    </div>
+  );
+}

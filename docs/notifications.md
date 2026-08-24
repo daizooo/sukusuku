@@ -186,6 +186,11 @@ select status, return_message, start_time
 | `src/lib/api/nursingAlarms.ts` | `nursing_alarms` の読み書き |
 | `supabase/migrations/0021_nursing_alarms.sql` | テーブル |
 | `supabase/migrations/0022_nursing_alarm_cron.sql` | 定期実行の登録 |
+| `supabase/functions/send-feeding-reminders/index.ts` | 次の授乳の目安の配信（§7） |
+| `src/lib/feedingSchedule.ts` | 次の授乳の目安の計算 |
+| `src/lib/api/feedingSettings.ts` | `feeding_settings` の読み書き |
+| `supabase/migrations/0024_feeding_schedule.sql` | テーブル・ビュー |
+| `supabase/migrations/0025_feeding_reminder_cron.sql` | 定期実行の登録 |
 
 ---
 
@@ -295,3 +300,91 @@ select status, return_message, start_time
 - 行が出てこない → その端末で通知をオンにしていない（購読が無いと預けられない）。
   設定タブの通知トグルを確認する。
 - `notified_step` が進んでいるのに鳴らない → 通知そのものの問題。§4を確認する。
+
+---
+
+## 7. 次の授乳の目安
+
+授乳中の経過時間お知らせ（§6）とは別に、**次の授乳がいつかのお知らせ**も同じWeb Pushの
+仕組みで送る。§6は「いま飲ませている最中」の経過時間、こちらは「次はいつか」で、別物。
+
+### 通知のタイミング
+
+`next_feeding_schedule` ビューが、家族ごとに
+
+- いちばん新しい授乳の記録（`care_logs.type = 'milk'`）の時刻
+- 間隔の設定（`feeding_settings.interval_minutes`、既定180分）
+
+から目安の時刻（`due_at`）を出す。設定の行が無い家族は既定値（3時間・通知する）として扱う。
+
+```
+[ブラウザ] 授乳を記録
+  └ care_logs に1行増える（次の目安の起点が入れ替わる）
+
+                              pg_cron (5分おき)
+                                └ Edge Function: send-feeding-reminders
+                                     ├ next_feeding_schedule から
+                                     │  目安の時刻を過ぎた家族を取る
+                                     ├ 授乳中(nursing_alarms に行がある)の家族は外す
+                                     ├ feeding_reminder_deliveries に記録を作る
+                                     │  (二重送信の防止)
+                                     └ その家族の全端末へ Web Push
+```
+
+- **通知先** — 「次はいつだっけ」は夫婦のどちらにも起きるので、その家族が登録した
+  全端末へ送る（予定のリマインダーと同じ考え方）。
+- **届くまでの時間** — 定期実行が5分おきなので、目安の時刻から最大5分ほど遅れて届く。
+  授乳の間隔は数時間単位なので、§6のような1分おきの細かさは要らない。
+- **打ち切り** — 目安の時刻を2時間（`LOOKBACK_MINUTES`）過ぎたものは送らない。
+  何時間も後に「そろそろ授乳」が来ても困るため。
+- **授乳中は送らない** — 記録は授乳が終わってから保存されるので、飲ませている最中は
+  「前回の授乳」が1つ前のままになり、目安を過ぎた状態になる。母乳のストップウォッチを
+  計測中の端末は `nursing_alarms` に行を持つので、それがある家族は対象から外す。
+
+### 二重送信を防ぐ仕組み
+
+`feeding_reminder_deliveries` の `(care_log_id, subscription_id, scheduled_for)` の
+一意制約で、同じ通知が2度飛ばないようにしている。送信前に `pending` の行を作って
+送信権を取るので、実行が重なっても送るのは片方だけになる。
+
+記録の時刻を直したり間隔の設定を変えたりすると `scheduled_for` が変わるため、
+変更後は改めて通知される（予定のリマインダーと同じ挙動）。
+
+### セットアップ
+
+予定のリマインダー（§2）を済ませていれば、鍵もシークレット（`REMINDER_CRON_SECRET`）も
+同じものを使うので、追加の設定は要らない。必要なのはデプロイと適用だけ。
+
+```bash
+supabase functions deploy send-feeding-reminders
+```
+
+そのうえで `0024_feeding_schedule.sql` / `0025_feeding_reminder_cron.sql` を適用する。
+
+### 動かないときの確認
+
+```sql
+-- 目安の時刻がどう計算されているか
+select family_id, last_fed_at at time zone 'Asia/Tokyo' as last_fed_jst,
+       interval_minutes, due_at at time zone 'Asia/Tokyo' as due_jst
+  from next_feeding_schedule;
+
+-- 間隔の設定（行が無い家族は既定の3時間・通知する）
+select * from feeding_settings;
+
+-- 送信結果
+select status, error, sent_at, scheduled_for
+  from feeding_reminder_deliveries
+ order by sent_at desc limit 20;
+
+-- 定期実行が動いているか
+select status, return_message, start_time
+  from cron.job_run_details
+ where jobid = (select jobid from cron.job where jobname = 'send-feeding-reminders')
+ order by start_time desc limit 10;
+```
+
+- ビューに家族が出てこない → 授乳の記録が1件も無いか、設定で通知をオフにしている。
+- 目安の時刻を過ぎているのに送信記録ができない → 授乳中（`nursing_alarms` に行がある）か、
+  目安から2時間以上たっている。
+- 送信記録はあるのに届かない → 通知そのものの問題。§4を確認する。

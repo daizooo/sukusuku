@@ -180,6 +180,80 @@ export type Database = {
           },
         ]
       }
+      feeding_reminder_deliveries: {
+        Row: {
+          care_log_id: string
+          error: string | null
+          id: string
+          scheduled_for: string
+          sent_at: string
+          status: string
+          subscription_id: string
+        }
+        Insert: {
+          care_log_id: string
+          error?: string | null
+          id?: string
+          scheduled_for: string
+          sent_at?: string
+          status?: string
+          subscription_id: string
+        }
+        Update: {
+          care_log_id?: string
+          error?: string | null
+          id?: string
+          scheduled_for?: string
+          sent_at?: string
+          status?: string
+          subscription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feeding_reminder_deliveries_care_log_id_fkey"
+            columns: ["care_log_id"]
+            isOneToOne: false
+            referencedRelation: "care_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feeding_reminder_deliveries_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "push_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feeding_settings: {
+        Row: {
+          family_id: string
+          interval_minutes: number
+          notify_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          family_id: string
+          interval_minutes?: number
+          notify_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          family_id?: string
+          interval_minutes?: number
+          notify_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feeding_settings_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: true
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gifts: {
         Row: {
           family_id: string
@@ -565,6 +639,24 @@ export type Database = {
       }
     }
     Views: {
+      next_feeding_schedule: {
+        Row: {
+          care_log_id: string | null
+          due_at: string | null
+          family_id: string | null
+          interval_minutes: number | null
+          last_fed_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "care_logs_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_reminder_schedule: {
         Row: {
           category: string | null

@@ -4,6 +4,8 @@ import { AlertTriangle, Baby, Building2, Calendar, ChevronRight, CheckCircle2, C
 import type { DynamicTask, LoginRole, ScheduleView, UserProfile } from '@/types/app';
 import { getLabelColor, getProfileFieldValue } from '@/lib/uiUtils';
 import { formatTimeRange, parseDateString, startOfDay } from '@/lib/dateUtils';
+import type { NextFeedingInfo } from '@/lib/feedingSchedule';
+import NextFeedingCard from '../NextFeedingCard';
 import { formatRelativeDay } from '../schedule/utils';
 
 interface QuickAction {
@@ -21,6 +23,10 @@ interface HomeTabProps {
   dynamicTodos: DynamicTask[];
   isLoadingTodos?: boolean;
   today: Date;
+  /** 次の授乳の目安。 */
+  nextFeeding: NextFeedingInfo;
+  /** 記録タブへ移る（次の授乳のカードから）。 */
+  onOpenLogTab: () => void;
   onToggleTodo: (id: string) => void;
   onOpenTask: (task: DynamicTask) => void;
   /** スケジュールタブへ移る。表示を指定すると、その表示で開く。 */
@@ -35,6 +41,8 @@ export default function HomeTab({
   dynamicTodos,
   isLoadingTodos,
   today,
+  nextFeeding,
+  onOpenLogTab,
   onToggleTodo,
   onOpenTask,
   onViewAllSchedule,
@@ -109,6 +117,12 @@ export default function HomeTab({
             </p>
           </div>
         </div>
+      </div>
+
+      {/* 「次の授乳っていつだっけ」が夫婦のどちらにも起きるので、
+          ホームを開いた時点で目に入る位置に置く。タップで記録タブへ移る。 */}
+      <div className="flex-none">
+        <NextFeedingCard info={nextFeeding} onOpen={onOpenLogTab} />
       </div>
 
       <div className="grid grid-cols-4 gap-3 flex-none">
