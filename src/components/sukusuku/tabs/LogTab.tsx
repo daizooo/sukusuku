@@ -37,6 +37,8 @@ import {
   summarizeLogs,
 } from '@/lib/careLogUtils';
 import { useNursingTimer } from '@/lib/nursingTimer';
+import type { NextFeedingInfo } from '@/lib/feedingSchedule';
+import { NextFeedingRow } from '../NextFeedingCard';
 import {
   addDays,
   formatDateWithWeekday,
@@ -61,6 +63,8 @@ interface LogTabProps {
   memberLabel: (id: string | null) => string;
   /** 次に飲ませる乳首。判断材料がなければ null。 */
   nextBreastSide: BreastSide | null;
+  /** 次の授乳の目安。 */
+  nextFeeding: NextFeedingInfo;
   /** 搾乳ストックの全量（使用済みも含む）。残りの表示と、飲ませる搾乳の選択に使う。 */
   pumpedBatches: PumpedBatch[];
   onSaveMilkLog: (input: MilkLogInput, existing: MilkLog | null) => void;
@@ -108,6 +112,7 @@ export default function LogTab({
   isLoadingGrowth,
   memberLabel,
   nextBreastSide,
+  nextFeeding,
   pumpedBatches,
   onSaveMilkLog,
   onSaveDiaperLog,
@@ -244,6 +249,10 @@ export default function LogTab({
                 </button>
               </div>
             )}
+
+            {/* 次の授乳の目安。日付の送りに関わらず、常に「いまの次」を出す
+                （過去の日を見ているときも、次がいつかは変わらないため）。 */}
+            <NextFeedingRow info={nextFeeding} />
 
             {/* 記録ボタン。その日の合計を同じボタンに載せ、「見る」と「記録する」を1つにまとめている。 */}
             <div className="grid grid-cols-3 gap-2">

@@ -6,6 +6,7 @@ import type {
   DiaperKind,
   FeedingMethod,
   LogType,
+  MilkLog,
   PoopColor,
   PoopConsistency,
   PumpedBatch,
@@ -161,6 +162,28 @@ export async function listCareLogsByDate(
 ): Promise<CareLog[]> {
   const from = startOfDay(date);
   return listCareLogsInRange(supabase, familyId, from, addDays(from, 1));
+}
+
+/**
+ * 直近の授乳(ミルク)の記録を新しい順に取る。「次の授乳の目安」を出すのに使う。
+ *
+ * 夜中の授乳は前の日の記録になるため、記録タブの1日分(listCareLogsByDate)では
+ * 前回の授乳を取りこぼす。最近の間隔の平均も出すので、数件まとめて取る。
+ */
+export async function listRecentMilkLogs(
+  supabase: SupabaseDb,
+  familyId: string,
+  limit = 10,
+): Promise<MilkLog[]> {
+  const { data, error } = await supabase
+    .from('care_logs')
+    .select('*')
+    .eq('family_id', familyId)
+    .eq('type', 'milk')
+    .order('logged_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []).map(rowToCareLog).filter((log): log is MilkLog => log.type === 'milk');
 }
 
 /**

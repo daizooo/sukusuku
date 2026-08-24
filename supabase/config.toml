@@ -8,3 +8,7 @@ verify_jwt = false
 [functions.send-nursing-alarms]
 # 同上。予定のリマインダーと同じ REMINDER_CRON_SECRET を検証する。
 verify_jwt = false
+
+[functions.send-feeding-reminders]
+# 同上。予定のリマインダーと同じ REMINDER_CRON_SECRET を検証する。
+verify_jwt = false

@@ -57,9 +57,16 @@ import {
   listPumpedBatches,
   listCareLogsByDate,
   listCareLogsInRange,
+  listRecentMilkLogs,
   updateCareLog as updateCareLogApi,
 } from '@/lib/api/careLogs';
-import { getNextBreastSide } from '@/lib/careLogUtils';
+import { getNextBreastSide, getLogTitle } from '@/lib/careLogUtils';
+import { averageFeedingIntervalMinutes, type NextFeedingInfo } from '@/lib/feedingSchedule';
+import {
+  DEFAULT_FEEDING_SETTINGS,
+  getFeedingSettings,
+  type FeedingSettings,
+} from '@/lib/api/feedingSettings';
 import { useNursingAlarmWatcher } from '@/lib/nursingTimer';
 import { useNursingAlarmSync } from '@/lib/nursingAlarmSync';
 import { deleteGift, insertGift, listGifts, updateGift as updateGiftApi } from '@/lib/api/gifts';
@@ -181,6 +188,12 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   // 搾乳ストック。飲ませるときにどの搾乳を使うか選べるよう、残量ではなく1パックずつ持つ。
   // 表示中の日だけでは求まらないため、全期間ぶんをまとめて持つ。
   const [pumpedBatches, setPumpedBatches] = useState<PumpedBatch[]>([]);
+  // 「次の授乳の目安」に使う直近の授乳。夜中の授乳は前の日の記録になるため、
+  // 記録タブの1日分(logs)とは別に、日付にとらわれず新しい順で持つ。
+  const [recentMilkLogs, setRecentMilkLogs] = useState<MilkLog[]>([]);
+  const [isLoadingRecentMilk, setIsLoadingRecentMilk] = useState(true);
+  // 授乳の間隔の設定。家族で共通なので、どちらが変えても同じ目安が出る。
+  const [feedingSettings, setFeedingSettings] = useState<FeedingSettings>(DEFAULT_FEEDING_SETTINGS);
 
   const [gifts, setGifts] = useState<Gift[]>([]);
   const [isLoadingGifts, setIsLoadingGifts] = useState(true);
@@ -332,6 +345,41 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
     refreshPumpedStock();
   }, [refreshPumpedStock]);
 
+  // 直近の授乳を読み込む。記録を触るたびに取り直す。
+  const refreshRecentMilkLogs = useCallback(() => {
+    listRecentMilkLogs(supabase, familyId)
+      .then(setRecentMilkLogs)
+      .catch((err: unknown) => console.error('Failed to load recent milk logs:', err))
+      .finally(() => setIsLoadingRecentMilk(false));
+  }, [supabase, familyId]);
+
+  useEffect(() => {
+    refreshRecentMilkLogs();
+  }, [refreshRecentMilkLogs]);
+
+  // パートナーの端末で記録された授乳は、この端末では分からないまま古い目安が出続ける。
+  // アプリに戻ってきたときに取り直して、夫婦のどちらが見ても同じ目安になるようにする。
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshRecentMilkLogs();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [refreshRecentMilkLogs]);
+
+  // 授乳の間隔の設定を読み込む。未設定の家族は既定値(3時間・通知する)のまま。
+  useEffect(() => {
+    let cancelled = false;
+    getFeedingSettings(supabase, familyId)
+      .then((settings) => {
+        if (!cancelled) setFeedingSettings(settings);
+      })
+      .catch((err: unknown) => console.error('Failed to load feeding settings:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, familyId]);
+
   // お祝いをSupabaseから取得
   useEffect(() => {
     let cancelled = false;
@@ -432,6 +480,18 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
 
   // 次にどちらの乳首から授乳するか。表示中の日に読み込んだ記録から判断する。
   const nextBreastSide = useMemo<BreastSide | null>(() => getNextBreastSide(logs), [logs]);
+
+  // 「次の授乳の目安」に出す一式。ホームと記録タブで同じものを見せる。
+  const nextFeeding = useMemo<NextFeedingInfo>(() => {
+    const lastFed = recentMilkLogs[0] ?? null;
+    return {
+      lastFedAt: lastFed?.time ?? null,
+      lastFedTitle: lastFed ? getLogTitle(lastFed) : '',
+      intervalMinutes: feedingSettings.intervalMinutes,
+      averageIntervalMinutes: averageFeedingIntervalMinutes(recentMilkLogs.map((log) => log.time)),
+      isLoading: isLoadingRecentMilk,
+    };
+  }, [recentMilkLogs, feedingSettings.intervalMinutes, isLoadingRecentMilk]);
 
   const memberLabel = (id: string | null): string => {
     if (!id) return '不明';
@@ -610,8 +670,10 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
       // 搾乳ストックは全期間の差し引き。編集で「搾乳」から「ミルク」へ変えるなど
       // ストックに関わるかどうかが入れ替わることもあるため、種類を問わず数え直す。
       refreshPumpedStock();
+      // 「次の授乳の目安」も、記録の時刻を変えたり過去の日に足したりすると変わる。
+      refreshRecentMilkLogs();
     },
-    [logDate, refreshPumpedStock],
+    [logDate, refreshPumpedStock, refreshRecentMilkLogs],
   );
 
   const saveLog = async (log: CareLog | null, input: NewCareLogInput) => {
@@ -621,6 +683,9 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
       upsertLogInState(updated);
       try {
         await updateCareLogApi(supabase, updated);
+        // 「次の授乳の目安」は保存後のDBから取り直す。上の楽観的な反映の時点で
+        // 読みに行くと、書き込み前の時刻を拾ってしまうため。
+        refreshRecentMilkLogs();
       } catch (err) {
         console.error('Failed to update care log:', err);
         alert('記録の更新に失敗しました。もう一度お試しください。');
@@ -653,6 +718,7 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
     try {
       await deleteCareLog(supabase, id);
       refreshPumpedStock();
+      refreshRecentMilkLogs();
     } catch (err) {
       console.error('Failed to delete care log:', err);
       setLogs(previous);
@@ -855,6 +921,8 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               dynamicTodos={dynamicTodos}
               isLoadingTodos={isLoadingTasks}
               today={today}
+              nextFeeding={nextFeeding}
+              onOpenLogTab={() => selectTab('log')}
               onToggleTodo={toggleTodo}
               onOpenTask={openTaskDetail}
               onViewAllSchedule={(view) => {
@@ -894,6 +962,7 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               isLoadingGrowth={isLoadingGrowth}
               memberLabel={memberLabel}
               nextBreastSide={nextBreastSide}
+              nextFeeding={nextFeeding}
               pumpedBatches={pumpedBatches}
               onSaveMilkLog={saveMilkLog}
               onSaveDiaperLog={saveDiaperLog}
@@ -934,6 +1003,8 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               onStartEditProfile={startEditingProfile}
               onChangeTempProfile={setTempProfile}
               onSaveProfile={handleProfileSave}
+              feedingSettings={feedingSettings}
+              onChangeFeedingSettings={setFeedingSettings}
             />
           )}
         </main>
