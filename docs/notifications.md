@@ -180,3 +180,110 @@ select status, return_message, start_time
 | `supabase/migrations/0012_push_notifications.sql` | テーブル・ビュー |
 | `supabase/migrations/0013_reminder_cron.sql` | 定期実行の登録 |
 | `scripts/generate-vapid-keys.mjs` | 鍵の生成 |
+| `supabase/functions/_shared/webpush.ts` | Web Push の暗号化・VAPID署名（2つの配信で共用） |
+| `supabase/functions/send-nursing-alarms/index.ts` | 授乳のお知らせの配信（§6） |
+| `src/lib/nursingAlarmSync.ts` | 授乳のお知らせをサーバーへ預ける橋渡し |
+| `src/lib/api/nursingAlarms.ts` | `nursing_alarms` の読み書き |
+| `supabase/migrations/0021_nursing_alarms.sql` | テーブル |
+| `supabase/migrations/0022_nursing_alarm_cron.sql` | 定期実行の登録 |
+
+---
+
+## 6. 授乳の経過時間お知らせ
+
+予定のリマインダーとは別に、**授乳中の経過時間のお知らせ**も同じWeb Pushの仕組みで送る。
+
+### なぜサーバーから送るのか
+
+授乳の経過時間は端末内のストップウォッチ（`src/lib/nursingTimer.ts`）が数えていて、
+一定間隔で音とバイブを鳴らしている。ただしブラウザは
+
+- 画面が消える／裏に回るとタイマーを間引く（お知らせが遅れる・鳴らない）
+- 画面が消えている間の振動要求を無視する
+- iOS Safari はそもそも振動できない
+
+ため、**いちばん鳴ってほしい「画面を見ていないとき」に鳴らせない**。
+そこで鳴らす基準をサーバーにも預けておき、端末が鳴らせなかった分を通知で鳴らす。
+
+```
+[端末] 計測開始/左右の切り替え
+  └ nursing_alarms に「基準時刻・間隔・何回目まで鳴らしたか」を預ける
+       （通知をオンにしている端末だけ。オフなら従来どおり端末内だけで鳴る）
+
+                              pg_cron (1分おき)
+                                └ Edge Function: send-nursing-alarms
+                                     ├ 区切りに達していて
+                                     ├ まだ鳴らしていない (notified_step) ものを選び
+                                     ├ notified_step を進めて送信権を取り
+                                     └ その端末だけへ Web Push
+
+[端末] 画面を開いている間は自分で鳴らし、notified_step を書き戻す
+       → サーバーからは送られない（二重に鳴らない）
+[端末] 計測を止める → 預けた行を消す
+```
+
+### 二重に鳴らさない仕組み
+
+サーバーは区切りちょうどではなく、**20秒過ぎてから**送る
+（`FOREGROUND_GRACE_SECONDS`）。画面を開いている端末は区切りの時点で自分で鳴らし、
+すぐ `notified_step` を書き戻すので、その間に追い越される。
+
+裏に回っている間にサーバーが鳴らした分は、Service Worker が開いているページへ
+`nursing-alarm-notified` を送って端末側の数えも進める。これをしないと、
+アプリに戻ってきたときに同じ分をもう一度鳴らしてしまう。
+
+### 届くまでの時間
+
+定期実行が1分おき、そこに上記の猶予20秒が乗るので、**区切りから20〜80秒ほど遅れて届く**
+（さらにプッシュサービスの配送時間が乗る）。端末が起きているときは遅れずに鳴るので、
+これは「画面を消しているとき」の話になる。
+
+なお経過時間の基準（`baseline_at`）は端末の時計で作っている。端末の時計が
+大きくずれていると、鳴るタイミングもその分ずれる。
+
+### 鳴り方
+
+通知音はOSの標準音になるため、端末内で合成している「ピッ＝5分 / ポーン＝30分」の
+鳴らし分けはそのままでは伝わらない。代わりに
+
+- **通知の文面**に「授乳 20分」と経過時間を出す
+- **Androidは通知に振動パターンを指定できる**ので、長短のパターン（長い振動＝30分、
+  短い振動＝5分）で今までと同じ数え方を保つ（`public/sw.js` の `buildNursingVibration`）。
+  iOSはこの指定を無視して既定の振動になる
+
+### 鳴り続けないための打ち切り
+
+計測を止めずにアプリを閉じたままだと、預けた行が残って鳴り続けてしまう。
+経過が **90分**（`MAX_ELAPSED_MINUTES`）を超えた行はEdge Functionが削除する。
+通知をタップすればアプリが開くので、そこで計測を止められる。
+
+### セットアップ
+
+予定のリマインダー（§2）を済ませていれば、追加で必要なのは次の2つだけ。
+鍵もシークレット（`REMINDER_CRON_SECRET`）も同じものを使う。
+
+```bash
+supabase functions deploy send-nursing-alarms
+```
+
+そのうえで `supabase/migrations/0021_nursing_alarms.sql` と
+`0022_nursing_alarm_cron.sql` を適用する。
+
+### 動かないときの確認
+
+```sql
+-- いま預かっている計測（授乳中の端末のぶんだけ出る）
+select subscription_id, side, baseline_at at time zone 'Asia/Tokyo' as baseline_jst,
+       interval_minutes, notified_step, updated_at
+  from nursing_alarms;
+
+-- 定期実行が動いているか
+select status, return_message, start_time
+  from cron.job_run_details
+ where jobid = (select jobid from cron.job where jobname = 'send-nursing-alarms')
+ order by start_time desc limit 10;
+```
+
+- 行が出てこない → その端末で通知をオンにしていない（購読が無いと預けられない）。
+  設定タブの通知トグルを確認する。
+- `notified_step` が進んでいるのに鳴らない → 通知そのものの問題。§4を確認する。

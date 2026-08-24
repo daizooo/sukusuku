@@ -202,6 +202,9 @@ export async function sendPushNotification(
   subscription: PushSubscriptionRecord,
   payload: string,
   ttlSeconds = 12 * 60 * 60,
+  // 'high' はプッシュサービスに配送を後回しにさせない。経過時間のお知らせのように
+  // 遅れると意味がなくなるものに使う。
+  urgency: 'very-low' | 'low' | 'normal' | 'high' = 'normal',
 ): Promise<PushResult> {
   try {
     const body = await encryptPayload(
@@ -218,7 +221,7 @@ export async function sendPushNotification(
         'Content-Type': 'application/octet-stream',
         TTL: String(ttlSeconds),
         // 端末がスリープ中でも起こして表示する
-        Urgency: 'normal',
+        Urgency: urgency,
       },
       body,
     });
