@@ -303,6 +303,51 @@ export type Database = {
           },
         ]
       }
+      nursing_alarms: {
+        Row: {
+          baseline_at: string
+          interval_minutes: number
+          notified_step: number
+          side: string
+          subscription_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          baseline_at: string
+          interval_minutes: number
+          notified_step?: number
+          side: string
+          subscription_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          baseline_at?: string
+          interval_minutes?: number
+          notified_step?: number
+          side?: string
+          subscription_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nursing_alarms_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: true
+            referencedRelation: "push_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nursing_alarms_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       push_subscriptions: {
         Row: {
           auth: string

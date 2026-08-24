@@ -108,7 +108,7 @@ const subscribe = (listener: () => void): (() => void) => {
   };
 };
 
-const store = (next: ActiveNursing) => {
+const store = (next: ActiveNursing, notifySink = true) => {
   cached = next;
   try {
     if (next.runningSide === null && next.leftMs === 0 && next.rightMs === 0) {
@@ -121,6 +121,9 @@ const store = (next: ActiveNursing) => {
   }
   emit();
   syncAlarmWatcher();
+  // サーバー側のお知らせに反映する。Service Worker から知らされた分は
+  // サーバーが既に把握しているので、書き戻さない。
+  if (notifySink) sink?.(alarmTarget(next));
 };
 
 /** その側の合計時間(ミリ秒)。計測中ならその分も含む。 */
@@ -210,6 +213,62 @@ let alarmCached: NursingAlarmSettings | null = null;
 const getAlarmSnapshot = (): NursingAlarmSettings => {
   if (!alarmCached) alarmCached = loadAlarm();
   return alarmCached;
+};
+
+// --- サーバー側のお知らせとの連携 ---
+// ブラウザは画面が消える・裏に回るとタイマーを間引くため、端末内の見張りだけでは
+// お知らせが遅れる/鳴らない。そこで「いつ・何分ごとに鳴らすか」をサーバーにも預け、
+// 端末が鳴らせなかった分を Web Push で鳴らしてもらう。
+// 預ける処理そのものは Supabase を触るため、ここでは受け口だけ持つ。
+
+export interface NursingAlarmTarget {
+  side: BreastSide;
+  /** 計測中の側の合計時間が0だった時刻。経過分数 = now - baselineAt。 */
+  baselineAt: number;
+  intervalMinutes: number;
+  /** 何回目のお知らせまで済んでいるか。 */
+  notifiedStep: number;
+}
+
+/** 計測していなければ null（＝サーバー側の予約も消す）。 */
+const alarmTarget = (active: ActiveNursing): NursingAlarmTarget | null => {
+  const side = active.runningSide;
+  if (!side || !active.startedAt) return null;
+  return {
+    side,
+    // 左右を行き来してもその側の経過時間で数えるので、
+    // 累積ぶんさかのぼった時刻を基準にする。
+    baselineAt: active.startedAt - (side === 'left' ? active.leftMs : active.rightMs),
+    intervalMinutes: getAlarmSnapshot().intervalMinutes,
+    notifiedStep: side === 'left' ? active.notifiedLeft : active.notifiedRight,
+  };
+};
+
+type NursingAlarmSink = (target: NursingAlarmTarget | null) => void;
+
+let sink: NursingAlarmSink | null = null;
+
+/** サーバーへ預ける処理を差し込む。渡した時点の状態も一度流す。 */
+export const setNursingAlarmSink = (next: NursingAlarmSink | null): void => {
+  sink = next;
+  next?.(alarmTarget(getSnapshot()));
+};
+
+/**
+ * Service Worker が代わりに鳴らした分を、端末側の「何回目まで鳴らしたか」に反映する。
+ * これをしないと、裏に回っている間に鳴った分をアプリに戻ってきたときに鳴らし直してしまう。
+ */
+export const markNursingAlarmNotified = (side: BreastSide, step: number): void => {
+  if (!Number.isFinite(step)) return;
+  const active = getSnapshot();
+  // 通知が届くまでに左右を切り替えていたら、その数えは今の側のものではない
+  if (active.runningSide !== side) return;
+  if (step <= (side === 'left' ? active.notifiedLeft : active.notifiedRight)) return;
+  // サーバーは自分が送った分を既に把握しているので、書き戻さない。
+  store(
+    side === 'left' ? { ...active, notifiedLeft: step } : { ...active, notifiedRight: step },
+    false,
+  );
 };
 
 const fireAlarm = (pattern: AlarmPattern, settings: NursingAlarmSettings) => {

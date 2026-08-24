@@ -14,7 +14,7 @@ import {
   createVapidContext,
   sendPushNotification,
   type VapidKeys,
-} from './webpush.ts';
+} from '../_shared/webpush.ts';
 
 // 取りこぼしを拾うため、通知時刻を過ぎたものも一定時間ぶんは対象にする。
 // 送信済み記録(reminder_deliveries)があるものは除外されるので二重には飛ばない。

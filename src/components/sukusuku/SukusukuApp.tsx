@@ -61,6 +61,7 @@ import {
 } from '@/lib/api/careLogs';
 import { getNextBreastSide } from '@/lib/careLogUtils';
 import { useNursingAlarmWatcher } from '@/lib/nursingTimer';
+import { useNursingAlarmSync } from '@/lib/nursingAlarmSync';
 import { deleteGift, insertGift, listGifts, updateGift as updateGiftApi } from '@/lib/api/gifts';
 import { ensureChildId } from '@/lib/api/children';
 import {
@@ -160,6 +161,9 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   // 授乳の経過時間のお知らせ（音・バイブ）。記録タブを開いていなくても鳴らせるよう、
   // アプリ全体で1つだけ見張りを動かす。
   useNursingAlarmWatcher();
+  // 画面が消えている・アプリを閉じている間は上の見張りが間引かれて鳴らせないため、
+  // 鳴らす時刻をサーバーにも預けておき、その分を通知で鳴らしてもらう。
+  useNursingAlarmSync(userId);
 
   const supabase = useMemo(() => createClient(), []);
 
