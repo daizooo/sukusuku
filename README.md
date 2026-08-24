@@ -181,8 +181,8 @@ Edge Function `send-nursing-alarms` が Web Push で鳴らす。計測そのも�
 - URL・anonキーはSupabaseダッシュボード（Project Settings > API）から取得し、`.env.local` に設定してください
 - スキーマは `supabase/migrations/` を上から順に適用したものと同一です（`apply_migration` で反映済み）
 - `src/types/supabase.ts` はこのプロジェクトから `generate_typescript_types` で生成した型です。スキーマ変更後は再生成してください
-  - `nursing_alarms` の型だけは、サンドボックスからSupabaseへ接続できないため手で書き足しています。
-    `0021_nursing_alarms.sql` を適用したあとに再生成して、差分が無いことを確認してください
+  - `nursing_alarms` の型は手で書き足したあと、マイグレーション適用後の再生成結果と
+    一致することを確認済みです
 
 ## デプロイ
 

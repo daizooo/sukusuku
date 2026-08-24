@@ -259,15 +259,23 @@ select status, return_message, start_time
 
 ### セットアップ
 
-予定のリマインダー（§2）を済ませていれば、追加で必要なのは次の2つだけ。
-鍵もシークレット（`REMINDER_CRON_SECRET`）も同じものを使う。
+予定のリマインダー（§2）を済ませていれば、鍵もシークレット（`REMINDER_CRON_SECRET`）も
+同じものを使うので、追加の設定は要らない。必要なのはデプロイと適用だけ。
 
 ```bash
 supabase functions deploy send-nursing-alarms
 ```
 
-そのうえで `supabase/migrations/0021_nursing_alarms.sql` と
-`0022_nursing_alarm_cron.sql` を適用する。
+そのうえで `0021_nursing_alarms.sql` / `0022_nursing_alarm_cron.sql` /
+`0023_nursing_alarms_user_index.sql` を適用する。
+
+> **本番プロジェクトには適用済み**（Edge Functionのデプロイ、マイグレーション3本、
+> 1分おきのcron登録まで完了）。上の手順は作り直すときのためのもの。
+>
+> `webpush.ts` を `send-reminders/` から `_shared/` へ移したが、`send-reminders` は
+> 再デプロイしていない。デプロイ済みの内容にはwebpush.tsが同梱されており、
+> 動きも変わらないため（増えたのは既定値ありの `urgency` 引数だけ）。
+> 次に `send-reminders` をデプロイするときは新しい配置のまま通る。
 
 ### 動かないときの確認
 
