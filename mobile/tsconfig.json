@@ -2,6 +2,8 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // process.env(EXPO_PUBLIC_*)の型解決に要る。無いと `process` が未定義扱いになる。
+    "types": ["node"],
     "paths": {
       "@/*": ["./src/*"]
     }
