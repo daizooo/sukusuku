@@ -962,7 +962,6 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               isLoadingGrowth={isLoadingGrowth}
               memberLabel={memberLabel}
               nextBreastSide={nextBreastSide}
-              nextFeeding={nextFeeding}
               pumpedBatches={pumpedBatches}
               onSaveMilkLog={saveMilkLog}
               onSaveDiaperLog={saveDiaperLog}

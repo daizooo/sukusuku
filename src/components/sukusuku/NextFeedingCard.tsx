@@ -10,10 +10,9 @@ import {
   type NextFeedingInfo,
 } from '@/lib/feedingSchedule';
 
-// 「次の授乳はいつだっけ」に、画面を見るだけで答えるための表示。
-// ホームには目立つカード、記録タブには1行の帯と、置く場所に合わせて2つ用意する
-// （どちらも中身は同じ。記録タブの左側は日付送り・記録ボタン・搾乳ストックで
-//  すでに詰まっているため、そこで場所を取るとタイムラインが潰れてしまう）。
+// 「次の授乳はいつだっけ」に、画面を見るだけで答えるためのホームのカード。
+// 記録タブにも1行の帯を出していたが、同じことを2か所で言っていて
+// タイムラインの場所を取るだけだったのでやめた（表示はホームだけ）。
 
 interface NextFeedingProps {
   info: NextFeedingInfo;
@@ -117,33 +116,5 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
     >
       {content}
     </button>
-  );
-}
-
-/** 記録タブ用。搾乳ストックと同じ1行の帯に収める。 */
-export function NextFeedingRow({ info }: NextFeedingProps) {
-  const now = useNow();
-  const schedule = nextFeedingSchedule(info.lastFedAt, info.intervalMinutes, now);
-  const overdue = schedule?.isOverdue ?? false;
-
-  return (
-    <div
-      className={`rounded-xl px-3 py-2 flex items-center justify-between gap-2 border ${
-        overdue ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'
-      }`}
-    >
-      <span className={`text-xs font-bold flex items-center ${overdue ? 'text-rose-700' : 'text-amber-700'}`}>
-        <Coffee size={13} className="mr-1" /> 次の授乳
-      </span>
-      {info.isLoading ? (
-        <span className="text-xs text-gray-400">読み込み中...</span>
-      ) : !schedule ? (
-        <span className="text-xs text-gray-500">記録するとここに出ます</span>
-      ) : (
-        <span className={`text-sm font-bold tabular-nums ${overdue ? 'text-rose-700' : 'text-amber-700'}`}>
-          {formatTimeString(schedule.dueAt)} ・ {remainingText(schedule)}
-        </span>
-      )}
-    </div>
   );
 }
