@@ -242,3 +242,10 @@ Vercel側の実行リージョンが既定の `iad1`（米国バージニア）�
 ## 検討メモ
 
 - ネイティブアプリ化（iPhone/Android）の進め方 → [docs/native-app.md](docs/native-app.md)
+
+## Androidネイティブ版 (`mobile/`)
+
+Expo(React Native)で作り直しているネイティブ版が `mobile/` にある（このNext.jsとは独立した
+プロジェクト。Vercelは今までどおりルートだけを見る）。進め方は
+[docs/native-app-rewrite.md](docs/native-app-rewrite.md)、動かし方は
+[mobile/README.md](mobile/README.md) を参照。

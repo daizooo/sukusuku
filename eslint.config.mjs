@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // mobile は React Native の独立したプロジェクトで、Next.js向けのこの設定は当てはまらない。
+    "mobile/**",
   ]),
 ]);
 
