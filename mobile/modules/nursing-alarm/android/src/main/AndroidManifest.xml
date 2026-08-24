@@ -1,0 +1,27 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!-- 授乳中だけ動く前面サービス。画面が消えていてもアプリを閉じていても鳴らすために要る。 -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <!-- Android 13以降、常駐通知を出すのに実行時の許可が要る。 -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- 経過時間の区切りごとの振動。 -->
+  <uses-permission android:name="android.permission.VIBRATE" />
+  <!-- 画面が消えている間もサービスが数え続けられるように。 -->
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+  <application>
+    <service
+      android:name="com.sukusuku.nursingalarm.NursingAlarmService"
+      android:enabled="true"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <!-- 既存の型（位置情報・再生・通話…）のどれにも当たらないため specialUse を使う。
+           ストアには出さない（.apkを自分たちの端末に直接入れる）ので審査の説明は要らない。 -->
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="授乳の経過時間を数え、区切りごとに音と振動で知らせる" />
+    </service>
+  </application>
+
+</manifest>
