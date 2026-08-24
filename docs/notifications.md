@@ -360,6 +360,11 @@ supabase functions deploy send-feeding-reminders
 ```
 
 そのうえで `0024_feeding_schedule.sql` / `0025_feeding_reminder_cron.sql` を適用する。
+`0025` は配信の定期実行（5分おき）に加えて、送信記録の掃除（週1回・90日より古い分を削除）も
+登録する。予定のリマインダーの掃除（§2の `0013`）と同じ考え方。
+
+> **本番プロジェクトには適用済み**（Edge Functionのデプロイ、マイグレーション2本、
+> 5分おきのcronと掃除のcronの登録まで完了）。上の手順は作り直すときのためのもの。
 
 ### 動かないときの確認
 

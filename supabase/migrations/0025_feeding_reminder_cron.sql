@@ -35,3 +35,19 @@ select cron.schedule(
   );
   $cron$
 );
+
+-- ============================================================
+-- 送信記録の掃除
+-- ============================================================
+-- 送信済み記録は二重送信を防ぐためだけに使うので、目安の時刻を十分過ぎたものは消す。
+-- 予定のリマインダーの掃除(0013)と同じ考え方・同じ保存期間。
+select cron.unschedule('purge-feeding-reminder-deliveries')
+ where exists (select 1 from cron.job where jobname = 'purge-feeding-reminder-deliveries');
+
+select cron.schedule(
+  'purge-feeding-reminder-deliveries',
+  '40 4 * * 0',
+  $cron$
+  delete from public.feeding_reminder_deliveries where sent_at < now() - interval '90 days';
+  $cron$
+);
