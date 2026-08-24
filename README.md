@@ -196,3 +196,7 @@ Vercel側の実行リージョンが既定の `iad1`（米国バージニア）�
   recharts（単体で約350KB）を持ち込むため、静的importに戻すと初期バンドルへ混入する。
 - トップページには `loading.tsx` を置き、サーバー側の認証・プロフィール取得を待つ間も
   白画面にならないようにする。
+
+## 検討メモ
+
+- ネイティブアプリ化（iPhone/Android）の進め方 → [docs/native-app.md](docs/native-app.md)
