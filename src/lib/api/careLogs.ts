@@ -88,6 +88,7 @@ export const rowToCareLog = (row: CareLogRow): CareLog => {
     method: readEnum<FeedingMethod>(details.method, ['breast', 'pumped', 'formula']) ?? 'formula',
     amountMl: readNumber(details.amountMl),
     pumpedFrom: readStringArray(details.pumpedFrom),
+    discardedMl: readNumber(details.discardedMl),
     leftMinutes: readNumber(details.leftMinutes),
     rightMinutes: readNumber(details.rightMinutes),
     lastSide: readEnum<BreastSide>(details.lastSide, ['left', 'right']),
@@ -105,6 +106,7 @@ const careLogToDetails = (log: CareLog): Json => {
     set('method', log.method);
     set('amountMl', log.amountMl);
     set('pumpedFrom', log.pumpedFrom);
+    set('discardedMl', log.discardedMl);
     set('leftMinutes', log.leftMinutes);
     set('rightMinutes', log.rightMinutes);
     set('lastSide', log.lastSide);

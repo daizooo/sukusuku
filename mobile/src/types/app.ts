@@ -70,13 +70,19 @@ interface CareLogBase {
 export interface MilkLog extends CareLogBase {
   type: 'milk';
   method: FeedingMethod;
-  /** ミルク(formula)・搾乳した母乳(pumped)の量。pumped では選んだ搾乳の合計。 */
+  /** ミルク(formula)・搾乳した母乳(pumped)の量。実際に飲んだ量を入れる。 */
   amountMl?: number;
   /**
    * method: 'pumped' のとき、飲ませた搾乳の記録(PumpingLog)のid。
    * ここに挙がっている搾乳は「使用済み」として搾乳ストックから外れる。
    */
   pumpedFrom?: string[];
+  /**
+   * method: 'pumped' で飲みきれず捨てた量(ml)。
+   * 用意した搾乳（pumpedFrom の合計）から amountMl を引いた分。捨てた分がなければ持たない。
+   * 飲み残しは取っておけないため、用意した搾乳は飲みきれなくてもストックから外れる。
+   */
+  discardedMl?: number;
   /** 母乳(breast)の左右それぞれの授乳時間（分, 0〜30の5分刻み）。 */
   leftMinutes?: number;
   rightMinutes?: number;
