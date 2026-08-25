@@ -32,6 +32,8 @@ export interface MilkLogInput {
   amountMl?: number;
   /** method: 'pumped' のとき、飲ませた搾乳の記録のid。 */
   pumpedFrom?: string[];
+  /** method: 'pumped' で飲みきれず捨てた量(ml)。捨てた分がなければ入れない。 */
+  discardedMl?: number;
   leftMinutes?: number;
   rightMinutes?: number;
   lastSide?: BreastSide;
@@ -96,6 +98,12 @@ function MilkLogModalBody({
   const [customAmount, setCustomAmount] = useState(() =>
     log?.amountMl && !MILK_AMOUNT_OPTIONS.includes(log.amountMl) ? String(log.amountMl) : '',
   );
+  // 「搾乳」で実際に飲んだ量。飲みきれず量を打ち直したときだけ、この入力欄の側で持つ。
+  const [drankInput, setDrankInput] = useState(() =>
+    log?.method === 'pumped' && log.discardedMl ? String(log.amountMl ?? 0) : '',
+  );
+  // 打ち直していない間は、選んだ搾乳の合計（＝全部飲んだ）をそのまま使う。
+  const [drankEdited, setDrankEdited] = useState(() => !!(log?.method === 'pumped' && log.discardedMl));
   // 計測した時間があれば、開き直したときもその値から始める。
   const measured = !log && timer.hasSession;
   // 未選択と「0分」を区別するため、初期値は undefined にしておく。
@@ -123,8 +131,21 @@ function MilkLogModalBody({
   // 選べる搾乳ストック。編集中の記録が使っているパックも、選び直せるよう残す。
   const selectableBatches = selectablePumpedBatches(pumpedBatches, log?.id);
   const selectedBatches = selectableBatches.filter((batch) => selectedBatchIds.includes(batch.id));
-  // 「搾乳」で記録する量は、選んだ搾乳の合計。
+  // 「搾乳」で用意した量は、選んだ搾乳の合計。
   const selectedMl = sumBatchesMl(selectedBatches);
+  // 実際に飲んだ量。打ち直していなければ用意した量をそのまま飲んだものとして扱う。
+  // 読めない値を入れている途中は null にして、そのままでは保存できないようにする。
+  const parsedDrank = Number(drankInput);
+  const drankMl = !drankEdited
+    ? selectedMl
+    : drankInput !== '' && Number.isFinite(parsedDrank) && parsedDrank >= 0
+      ? Math.round(parsedDrank)
+      : null;
+  // 用意した搾乳は飲みきれなくても取っておけないため、余った分は捨てる。
+  const discardedMl = drankMl === null ? 0 : Math.max(0, selectedMl - drankMl);
+  // 用意した量より多くは飲めない。パックを選び足すよう促す。
+  const drankTooMuch = drankMl !== null && drankMl > selectedMl;
+  const pumpedInvalid = selectedBatches.length === 0 || drankMl === null || drankTooMuch;
 
   const toggleBatch = (id: string) =>
     setSelectedBatchIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -196,8 +217,13 @@ function MilkLogModalBody({
   const handleSubmit = () => {
     const base = { method, time: parseDateTimeInput(date, time, log?.time ?? baseDate), note };
     if (method === 'pumped') {
-      if (selectedBatches.length === 0) return;
-      onSubmit({ ...base, amountMl: selectedMl, pumpedFrom: selectedBatches.map((batch) => batch.id) });
+      if (pumpedInvalid || drankMl === null) return;
+      onSubmit({
+        ...base,
+        amountMl: drankMl,
+        pumpedFrom: selectedBatches.map((batch) => batch.id),
+        discardedMl: discardedMl > 0 ? discardedMl : undefined,
+      });
       return;
     }
     if (method === 'formula') {
@@ -260,13 +286,32 @@ function MilkLogModalBody({
           </div>
         </>
       ) : method === 'pumped' ? (
-        <PumpedBatchPicker
-          batches={selectableBatches}
-          selectedIds={selectedBatchIds}
-          selectedMl={selectedMl}
-          stockMl={pumpedStockMl(pumpedBatches)}
-          onToggle={toggleBatch}
-        />
+        <>
+          <PumpedBatchPicker
+            batches={selectableBatches}
+            selectedIds={selectedBatchIds}
+            selectedMl={selectedMl}
+            stockMl={pumpedStockMl(pumpedBatches)}
+            onToggle={toggleBatch}
+          />
+          {selectableBatches.length > 0 && (
+            <DrankAmountField
+              value={drankEdited ? drankInput : selectedMl > 0 ? String(selectedMl) : ''}
+              preparedMl={selectedMl}
+              discardedMl={discardedMl}
+              tooMuch={drankTooMuch}
+              edited={drankEdited}
+              onChange={(next) => {
+                setDrankEdited(true);
+                setDrankInput(next);
+              }}
+              onResetToPrepared={() => {
+                setDrankEdited(false);
+                setDrankInput('');
+              }}
+            />
+          )}
+        </>
       ) : (
         <>
           <div>
@@ -308,7 +353,7 @@ function MilkLogModalBody({
       <SubmitButton
         accent="milk"
         onClick={handleSubmit}
-        disabled={method === 'pumped' && selectedBatches.length === 0}
+        disabled={method === 'pumped' && pumpedInvalid}
       >
         保存する
       </SubmitButton>
@@ -321,7 +366,7 @@ interface PumpedBatchPickerProps {
   /** 選べる搾乳（まだ使っていないパック + 編集中の記録が使っているパック）。古い順。 */
   batches: PumpedBatch[];
   selectedIds: string[];
-  /** 選んだ搾乳の合計(ml)。この値がそのまま記録される。 */
+  /** 選んだ搾乳の合計(ml)。これが飲ませるために用意した量になる。 */
   selectedMl: number;
   /** ストック全体の残り(ml)。編集中の記録が使っている分は含まない。 */
   stockMl: number;
@@ -329,11 +374,11 @@ interface PumpedBatchPickerProps {
 }
 
 /**
- * 飲ませる搾乳を搾乳ストックから選ぶ。選んだパックの合計がそのまま記録する量になる。
+ * 飲ませる搾乳を搾乳ストックから選ぶ。選んだパックの合計が、飲ませるために用意した量になる。
  *
- * 何mlを飲ませたかは、どの搾乳を使ったかで決まる（母乳パック1つ＝1回の搾乳）ため、
- * 量を打ち直すのではなくパックを選ぶ形にしている。選んだ搾乳はストックから外れ、
- * この記録を消すとストックに戻る。古いものから使えるよう、並びは搾った順。
+ * どれだけ用意したかは、どの搾乳を使ったかで決まる（母乳パック1つ＝1回の搾乳）ため、
+ * ここはパックを選ぶ形にしている。実際に飲んだ量は下の「飲んだ量」で直す。選んだ搾乳は
+ * ストックから外れ、この記録を消すとストックに戻る。古いものから使えるよう、並びは搾った順。
  */
 function PumpedBatchPicker({ batches, selectedIds, selectedMl, stockMl, onToggle }: PumpedBatchPickerProps) {
   if (batches.length === 0) {
@@ -384,7 +429,75 @@ function PumpedBatchPicker({ batches, selectedIds, selectedMl, stockMl, onToggle
       </div>
 
       <p className="mt-2 text-xs font-bold text-rose-700 tabular-nums">
-        {selectedIds.length === 0 ? '搾乳を選んでください' : `${selectedIds.length}パック・合計 ${selectedMl}ml で記録します`}
+        {selectedIds.length === 0
+          ? '搾乳を選んでください'
+          : `${selectedIds.length}パック・合計 ${selectedMl}ml を用意`}
+      </p>
+    </div>
+  );
+}
+
+interface DrankAmountFieldProps {
+  /** 入力欄に出す値。打ち直していなければ用意した量がそのまま入る。 */
+  value: string;
+  /** 選んだ搾乳の合計(ml)。 */
+  preparedMl: number;
+  /** 飲みきれずに捨てる量(ml)。 */
+  discardedMl: number;
+  /** 用意した量より多い量が入っているか。 */
+  tooMuch: boolean;
+  /** 量を打ち直したあとか。 */
+  edited: boolean;
+  onChange: (value: string) => void;
+  onResetToPrepared: () => void;
+}
+
+/**
+ * 実際に飲んだ量。飲みきれないことがあるので、用意した量から自由に打ち直せるようにしている。
+ *
+ * 記録に残るのはここに入れた量で、用意した搾乳との差は飲み残しとして捨てた扱いになる
+ * （飲み残しは取っておけないため、選んだパックは飲みきれなくてもストックから外れる）。
+ */
+function DrankAmountField({
+  value,
+  preparedMl,
+  discardedMl,
+  tooMuch,
+  edited,
+  onChange,
+  onResetToPrepared,
+}: DrankAmountFieldProps) {
+  return (
+    <div>
+      <div className="flex items-end justify-between">
+        <FieldLabel>飲んだ量（ml）</FieldLabel>
+        {edited && (
+          <button
+            type="button"
+            onClick={onResetToPrepared}
+            className="text-[11px] text-rose-700 font-medium mb-1.5 hover:text-rose-900"
+          >
+            全部飲んだ
+          </button>
+        )}
+      </div>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={preparedMl}
+        aria-label="飲んだ量（ml）"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500 tabular-nums"
+        placeholder="ml を直接入力"
+      />
+      <p className={`mt-1.5 text-[11px] tabular-nums ${tooMuch ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
+        {tooMuch
+          ? `用意した ${preparedMl}ml より多くは飲めません。搾乳を選び足してください。`
+          : discardedMl > 0
+            ? `飲み残し ${discardedMl}ml は捨てた扱いで記録します。`
+            : '飲みきれなかったときは、実際に飲んだ量に直してください。'}
       </p>
     </div>
   );
