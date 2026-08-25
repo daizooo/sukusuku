@@ -23,24 +23,28 @@ class NursingAlarmModule : Module() {
      * @param intervalMinutes 何分ごとに知らせるか。
      */
     AsyncFunction("start") { side: String, baselineAt: Double, intervalMinutes: Int ->
-      val context = appContext.reactContext ?: return@AsyncFunction
-      val intent = Intent(context, NursingAlarmService::class.java).apply {
-        action = NursingAlarmService.ACTION_START
-        putExtra(NursingAlarmService.EXTRA_SIDE, side)
-        putExtra(NursingAlarmService.EXTRA_BASELINE_AT, baselineAt.toLong())
-        putExtra(NursingAlarmService.EXTRA_INTERVAL_MINUTES, intervalMinutes)
-      }
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        context.startForegroundService(intent)
-      } else {
-        context.startService(intent)
+      // 0引数版のAsyncFunctionはブロックの戻り値の型がAny?に固定されるオーバーロードへ
+      // 解決されるため、値を伴わないreturnではなくletで済ませる（型推論を素直に通すため）。
+      appContext.reactContext?.let { context ->
+        val intent = Intent(context, NursingAlarmService::class.java).apply {
+          action = NursingAlarmService.ACTION_START
+          putExtra(NursingAlarmService.EXTRA_SIDE, side)
+          putExtra(NursingAlarmService.EXTRA_BASELINE_AT, baselineAt.toLong())
+          putExtra(NursingAlarmService.EXTRA_INTERVAL_MINUTES, intervalMinutes)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          context.startForegroundService(intent)
+        } else {
+          context.startService(intent)
+        }
       }
     }
 
     /** 計測をやめる。常駐通知も一緒に消える。 */
     AsyncFunction("stop") {
-      val context = appContext.reactContext ?: return@AsyncFunction
-      context.stopService(Intent(context, NursingAlarmService::class.java))
+      appContext.reactContext?.let { context ->
+        context.stopService(Intent(context, NursingAlarmService::class.java))
+      }
     }
   }
 }
