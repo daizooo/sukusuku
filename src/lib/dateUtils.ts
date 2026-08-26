@@ -152,3 +152,16 @@ export const formatDateHeading = (date: Date, today: Date): string => {
   const base = formatDateWithWeekday(date);
   return date.getFullYear() === today.getFullYear() ? base : `${date.getFullYear()}年${base}`;
 };
+
+// 誕生日から対象日までの満月齢（生後ヶ月）。
+// どちらかの日付が不正、または対象日が誕生日より前なら null を返す。
+export const monthsSinceBirth = (birthDateStr: string, targetDateStr: string): number | null => {
+  const birth = parseDateString(birthDateStr);
+  const target = parseDateString(targetDateStr);
+  if (!birth || !target || target < birth) return null;
+  let months =
+    (target.getFullYear() - birth.getFullYear()) * 12 + (target.getMonth() - birth.getMonth());
+  // 応当日を過ぎていなければ1ヶ月引く（例: 4/10生まれの5/9時点は0ヶ月）
+  if (target.getDate() < birth.getDate()) months -= 1;
+  return months < 0 ? 0 : months;
+};

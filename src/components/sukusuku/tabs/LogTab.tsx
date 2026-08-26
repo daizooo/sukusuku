@@ -48,13 +48,16 @@ import SegmentedTabs from '../ui/SegmentedTabs';
 import MilkLogModal, { type MilkLogInput } from '../modals/MilkLogModal';
 import DiaperLogModal, { type DiaperLogInput } from '../modals/DiaperLogModal';
 import PumpingLogModal, { type PumpingLogInput } from '../modals/PumpingLogModal';
-import GrowthRecordFormModal, { type GrowthRecordDraft } from '../modals/GrowthRecordFormModal';
+import GrowthRecordFormModal from '../modals/GrowthRecordFormModal';
+import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 
 interface LogTabProps {
   logs: CareLog[];
   logDate: Date;
   today: Date;
   onChangeLogDate: (date: Date) => void;
+  /** プロフィールに登録された子の誕生日（'YYYY-MM-DD'）。成長記録の生後ヶ月の自動計算に使う。 */
+  birthDate?: string;
   growthData: GrowthRecord[];
   isLoadingLogs?: boolean;
   isLoadingGrowth?: boolean;
@@ -103,6 +106,7 @@ export default function LogTab({
   logDate,
   today,
   onChangeLogDate,
+  birthDate,
   growthData,
   isLoadingLogs,
   isLoadingGrowth,
@@ -121,6 +125,16 @@ export default function LogTab({
   // 記録の入力画面。log が null なら新規追加、入っていればその記録の編集。
   const [logModal, setLogModal] = useState<{ type: LogType; log: CareLog | null } | null>(null);
   const [growthModal, setGrowthModal] = useState<{ mode: 'add' | 'edit'; record: GrowthRecord | null } | null>(null);
+  // グラフの横軸。生後ヶ月が未入力の記録は横軸が空になってしまうため、記録日で代替する。
+  const growthChartData = useMemo(
+    () =>
+      growthData.map((record) => ({
+        ...record,
+        axisLabel:
+          record.month !== null ? `${record.month}ヶ月` : record.recordedDate.slice(5).replace('-', '/'),
+      })),
+    [growthData],
+  );
   // 母乳の左右別ストップウォッチ。入力画面を閉じても測り続けられるよう、ここで持つ。
   const nursingTimer = useNursingTimer();
 
@@ -385,12 +399,12 @@ export default function LogTab({
                 <h3 className="font-bold text-gray-800 text-sm mb-4">身長の推移 (cm)</h3>
                 <div className="h-48 w-full -ml-3">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={growthData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                    <LineChart data={growthChartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="month" tickFormatter={(v) => `${v}ヶ月`} style={{ fontSize: '10px' }} />
+                      <XAxis dataKey="axisLabel" style={{ fontSize: '10px' }} />
                       <YAxis style={{ fontSize: '10px' }} domain={['dataMin - 2', 'dataMax + 2']} />
                       <Tooltip />
-                      <Line type="monotone" dataKey="height" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="身長(cm)" />
+                      <Line type="monotone" dataKey="height" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="身長(cm)" connectNulls />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -400,12 +414,12 @@ export default function LogTab({
                 <h3 className="font-bold text-gray-800 text-sm mb-4">体重の推移 (kg)</h3>
                 <div className="h-48 w-full -ml-3">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={growthData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                    <LineChart data={growthChartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="month" tickFormatter={(v) => `${v}ヶ月`} style={{ fontSize: '10px' }} />
+                      <XAxis dataKey="axisLabel" style={{ fontSize: '10px' }} />
                       <YAxis style={{ fontSize: '10px' }} domain={['dataMin - 1', 'dataMax + 1']} />
                       <Tooltip />
-                      <Line type="monotone" dataKey="weight" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="体重(kg)" />
+                      <Line type="monotone" dataKey="weight" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="体重(kg)" connectNulls />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -478,6 +492,7 @@ export default function LogTab({
         key={growthModal ? `${growthModal.mode}-${growthModal.record?.id ?? 'new'}` : 'none'}
         mode={growthModal?.mode ?? null}
         record={growthModal?.record ?? null}
+        birthDate={birthDate}
         onClose={() => setGrowthModal(null)}
         onSubmit={(draft) => {
           if (growthModal?.mode === 'edit' && growthModal.record) {

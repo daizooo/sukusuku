@@ -101,7 +101,7 @@ import type { MilkLogInput } from './modals/MilkLogModal';
 import type { DiaperLogInput } from './modals/DiaperLogModal';
 import type { PumpingLogInput } from './modals/PumpingLogModal';
 import type { GiftDraft } from './modals/GiftFormModal';
-import type { GrowthRecordDraft } from './modals/GrowthRecordFormModal';
+import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 import type { NurseryDraft } from './modals/NurseryFormModal';
 
 // 起動直後に表示するのはホームタブだけなので、残りのタブは実際に開かれるまで読み込まない。
@@ -141,7 +141,15 @@ const emptyTaskDraft = (date: Date): TaskDraft => ({
   timing: '',
 });
 
-const parseNullableNumber = (value: string): number | null => (value === '' ? null : Number(value));
+// 保存に失敗したとき、Supabaseが返した理由まで画面に出す。
+// 「失敗しました」だけだと、入力のどこが悪いのか利用者にも開発者にも分からないため。
+const describeError = (err: unknown): string => {
+  if (typeof err === 'object' && err !== null && 'message' in err) {
+    const message = (err as { message: unknown }).message;
+    if (typeof message === 'string' && message !== '') return `\n（${message}）`;
+  }
+  return '';
+};
 
 // 「今日」('YYYY-MM-DD')の取得は useSyncExternalStore 経由にする。
 // 時間の経過でしか変わらず、変化を知らせてくれるイベントは存在しないため購読は何もしない。
@@ -766,26 +774,27 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
       const id = childId ?? (await ensureChildId(supabase, familyId));
       if (!childId) setChildId(id);
       const created = await insertGrowthRecord(supabase, id, {
-        monthAge: parseNullableNumber(draft.monthAge),
-        height: parseNullableNumber(draft.height),
-        weight: parseNullableNumber(draft.weight),
+        monthAge: draft.monthAge,
+        height: draft.height,
+        weight: draft.weight,
         recordedDate: draft.recordedDate,
       });
       setGrowthData((prev) => [...prev, created].sort((a, b) => a.recordedDate.localeCompare(b.recordedDate)));
     } catch (err) {
       console.error('Failed to add growth record:', err);
-      alert('成長記録の追加に失敗しました。もう一度お試しください。');
+      alert(`成長記録の追加に失敗しました。もう一度お試しください。${describeError(err)}`);
     }
   };
 
   const updateGrowthRecordHandler = async (record: GrowthRecord, draft: GrowthRecordDraft) => {
     const updated: GrowthRecord = {
       ...record,
-      month: parseNullableNumber(draft.monthAge),
-      height: parseNullableNumber(draft.height),
-      weight: parseNullableNumber(draft.weight),
+      month: draft.monthAge,
+      height: draft.height,
+      weight: draft.weight,
       recordedDate: draft.recordedDate,
     };
+    const previous = growthData;
     setGrowthData((prev) =>
       prev.map((r) => (r.id === record.id ? updated : r)).sort((a, b) => a.recordedDate.localeCompare(b.recordedDate)),
     );
@@ -793,7 +802,9 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
       await updateGrowthRecordApi(supabase, updated);
     } catch (err) {
       console.error('Failed to update growth record:', err);
-      alert('成長記録の更新に失敗しました。もう一度お試しください。');
+      // 失敗したまま新しい値を表示し続けると、保存できたと誤解されるため元に戻す
+      setGrowthData(previous);
+      alert(`成長記録の更新に失敗しました。もう一度お試しください。${describeError(err)}`);
     }
   };
 
@@ -805,7 +816,7 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
     } catch (err) {
       console.error('Failed to delete growth record:', err);
       setGrowthData(previous);
-      alert('成長記録の削除に失敗しました。もう一度お試しください。');
+      alert(`成長記録の削除に失敗しました。もう一度お試しください。${describeError(err)}`);
     }
   };
 
@@ -957,6 +968,7 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               logDate={logDate}
               today={today}
               onChangeLogDate={setLogDate}
+              birthDate={birthDateValue}
               growthData={growthData}
               isLoadingLogs={isLoadingLogs}
               isLoadingGrowth={isLoadingGrowth}
