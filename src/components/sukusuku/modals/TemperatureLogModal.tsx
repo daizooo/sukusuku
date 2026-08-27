@@ -114,7 +114,18 @@ function TemperatureLogModalBody({
     'w-16 shrink-0 rounded-xl border border-orange-200 bg-orange-50 text-2xl font-bold text-orange-700 transition hover:bg-orange-100 active:scale-95';
 
   return (
-    <LogModalShell title={log ? '体温の記録を編集' : '体温を記録'} onClose={onClose}>
+    <LogModalShell
+      title={log ? '体温の記録を編集' : '体温を記録'}
+      onClose={onClose}
+      footer={
+        <>
+          <SubmitButton accent="temperature" onClick={handleSubmit} disabled={problem !== null}>
+            保存する
+          </SubmitButton>
+          {log && <DeleteButton onDelete={onDelete} />}
+        </>
+      }
+    >
       {/* 何度なら高いのかは子どもによって違うので、入力欄より先にものさしを出す。 */}
       <Yardstick baseline={baseline} babyName={babyName} />
 
@@ -156,10 +167,6 @@ function TemperatureLogModalBody({
 
       <DateTimeField label="日時" date={date} time={time} onChangeDate={setDate} onChangeTime={setTime} />
       <NoteField value={note} onChange={setNote} placeholder="ぐったりしている / 厚着していた など" />
-      <SubmitButton accent="temperature" onClick={handleSubmit} disabled={problem !== null}>
-        保存する
-      </SubmitButton>
-      {log && <DeleteButton onDelete={onDelete} />}
     </LogModalShell>
   );
 }

@@ -249,12 +249,29 @@ function MilkLogModalBody({
   };
 
   return (
-    <LogModalShell title={log ? '授乳の記録を編集' : '授乳を記録'} onClose={onClose}>
-      <div>
-        <FieldLabel>飲ませたもの</FieldLabel>
-        <Segmented options={METHOD_OPTIONS} value={method} onChange={setMethod} />
-      </div>
-
+    <LogModalShell
+      title={log ? '授乳の記録を編集' : '授乳を記録'}
+      onClose={onClose}
+      // 母乳/搾乳/ミルクの切り替えは、選び直したときに動かないよう上に固定しておく。
+      subheader={
+        <div>
+          <FieldLabel>飲ませたもの</FieldLabel>
+          <Segmented options={METHOD_OPTIONS} value={method} onChange={setMethod} />
+        </div>
+      }
+      footer={
+        <>
+          <SubmitButton
+            accent="milk"
+            onClick={handleSubmit}
+            disabled={method === 'pumped' && pumpedInvalid}
+          >
+            保存する
+          </SubmitButton>
+          {log && <DeleteButton onDelete={onDelete} />}
+        </>
+      }
+    >
       {method === 'breast' ? (
         <>
           {!log && nextSide && (
@@ -376,14 +393,6 @@ function MilkLogModalBody({
         onChangeTime={setTime}
       />
       <NoteField value={note} onChange={setNote} placeholder="よく飲んだ / 途中で寝た など" />
-      <SubmitButton
-        accent="milk"
-        onClick={handleSubmit}
-        disabled={method === 'pumped' && pumpedInvalid}
-      >
-        保存する
-      </SubmitButton>
-      {log && <DeleteButton onDelete={onDelete} />}
     </LogModalShell>
   );
 }
@@ -422,7 +431,8 @@ function PumpedBatchPicker({ batches, selectedIds, selectedMl, stockMl, onToggle
         <span className="text-[11px] text-gray-500 tabular-nums mb-1.5">残り {stockMl}ml</span>
       </div>
 
-      <div className="space-y-1.5 max-h-56 overflow-y-auto">
+      {/* モーダルの中身ごとスクロールするので、この一覧の中では二重にスクロールさせない。 */}
+      <div className="space-y-1.5">
         {batches.map((batch) => {
           const selected = selectedIds.includes(batch.id);
           return (

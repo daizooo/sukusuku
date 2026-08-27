@@ -81,18 +81,30 @@ function PumpingLogModalBody({
   };
 
   return (
-    <LogModalShell title={log ? '搾乳の記録を編集' : '搾乳を記録'} onClose={onClose}>
-      {/* 授乳の入力画面で「搾乳」を選んだときと同じ切り替え。飲ませた分に戻れるようにしておく。 */}
-      {!log && (
-        <Segmented
-          options={FEEDING_ENTRY_MODE_OPTIONS}
-          value="pump"
-          onChange={(next) => {
-            if (next === 'feed') onSwitchToFeeding();
-          }}
-        />
-      )}
-
+    <LogModalShell
+      title={log ? '搾乳の記録を編集' : '搾乳を記録'}
+      onClose={onClose}
+      // 授乳の入力画面で「搾乳」を選んだときと同じ切り替え。飲ませた分に戻れるようにしておく。
+      subheader={
+        !log && (
+          <Segmented
+            options={FEEDING_ENTRY_MODE_OPTIONS}
+            value="pump"
+            onChange={(next) => {
+              if (next === 'feed') onSwitchToFeeding();
+            }}
+          />
+        )
+      }
+      footer={
+        <>
+          <SubmitButton accent="pumping" onClick={handleSubmit} disabled={amountMl === null}>
+            保存する
+          </SubmitButton>
+          {log && <DeleteButton onDelete={onDelete} />}
+        </>
+      }
+    >
       <HintBanner accent="pumping">
         {isUsed ? (
           <>この搾乳は授乳の記録ですでに飲ませた分です。量を直すと、その記録の量とずれます。</>
@@ -125,10 +137,6 @@ function PumpingLogModalBody({
         onChangeTime={setTime}
       />
       <NoteField value={note} onChange={setNote} placeholder="よく出た / 冷凍した など" />
-      <SubmitButton accent="pumping" onClick={handleSubmit} disabled={amountMl === null}>
-        保存する
-      </SubmitButton>
-      {log && <DeleteButton onDelete={onDelete} />}
     </LogModalShell>
   );
 }

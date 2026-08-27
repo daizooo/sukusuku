@@ -70,12 +70,25 @@ function DiaperLogModalBody({ log, baseDate, onClose, onSubmit, onDelete }: Diap
   };
 
   return (
-    <LogModalShell title={log ? 'おむつの記録を編集' : 'おむつを記録'} onClose={onClose}>
-      <div>
-        <FieldLabel>種類</FieldLabel>
-        <Segmented options={KIND_OPTIONS} value={kind} onChange={setKind} />
-      </div>
-
+    <LogModalShell
+      title={log ? 'おむつの記録を編集' : 'おむつを記録'}
+      onClose={onClose}
+      // おしっこ/うんちの切り替えは、選び直したときに動かないよう上に固定しておく。
+      subheader={
+        <div>
+          <FieldLabel>種類</FieldLabel>
+          <Segmented options={KIND_OPTIONS} value={kind} onChange={setKind} />
+        </div>
+      }
+      footer={
+        <>
+          <SubmitButton accent="diaper" onClick={handleSubmit}>
+            保存する
+          </SubmitButton>
+          {log && <DeleteButton onDelete={onDelete} />}
+        </>
+      }
+    >
       <DateTimeField
         label="日時"
         date={date}
@@ -84,10 +97,6 @@ function DiaperLogModalBody({ log, baseDate, onClose, onSubmit, onDelete }: Diap
         onChangeTime={setTime}
       />
       <NoteField value={note} onChange={setNote} placeholder="色が気になる / ゆるめ など" />
-      <SubmitButton accent="diaper" onClick={handleSubmit}>
-        保存する
-      </SubmitButton>
-      {log && <DeleteButton onDelete={onDelete} />}
     </LogModalShell>
   );
 }
