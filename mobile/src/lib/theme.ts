@@ -14,7 +14,7 @@ export const colors = {
   accentSurface: '#fdf2f8', // pink-50
 
   // 記録の種類ごとの色。Web版の記録タブと同じ割り当て（ミルク=琥珀・おむつ=青・搾乳=薔薇）。
-  // 体温・吐き戻しはWeb版に無い記録なので、ここで割り当てる（体温=橙・吐き戻し=菫）。
+  // 体温の色。Web版(src/)のTailwindの orange 系と同じ値にそろえてある。
   milk: '#d97706', // amber-600
   milkSurface: '#fffbeb', // amber-50
   milkBorder: '#fde68a', // amber-200
@@ -30,10 +30,6 @@ export const colors = {
   temperatureSurface: '#fff7ed', // orange-50
   temperatureBorder: '#fed7aa', // orange-200
   temperatureText: '#c2410c', // orange-700
-  spitup: '#7c3aed', // violet-600
-  spitupSurface: '#f5f3ff', // violet-50
-  spitupBorder: '#ddd6fe', // violet-200
-  spitupText: '#6d28d9', // violet-700
   alertSurface: '#fee2e2', // red-100
   alertText: '#b91c1c', // red-700
   neutralSurface: '#f3f4f6', // gray-100

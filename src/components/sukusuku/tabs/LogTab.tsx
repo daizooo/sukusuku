@@ -11,6 +11,7 @@ import {
   List,
   Milk,
   Plus,
+  Thermometer,
   TrendingUp,
   User,
 } from 'lucide-react';
@@ -24,15 +25,20 @@ import type {
   MilkLog,
   PumpedBatch,
   PumpingLog,
+  TemperatureLog,
 } from '@/types/app';
 import {
   BADGE_TONE_CLASS,
+  formatCelsius,
   formatStopwatch,
+  getLatestTemperature,
+  getTemperatureBaseline,
   getLogBadges,
   getLogTimeText,
   getLogTitle,
   getSideLabel,
   isAlertLog,
+  isFever,
   sumBatchesMl,
   summarizeLogs,
 } from '@/lib/careLogUtils';
@@ -48,6 +54,7 @@ import SegmentedTabs from '../ui/SegmentedTabs';
 import MilkLogModal, { type MilkLogInput } from '../modals/MilkLogModal';
 import DiaperLogModal, { type DiaperLogInput } from '../modals/DiaperLogModal';
 import PumpingLogModal, { type PumpingLogInput } from '../modals/PumpingLogModal';
+import TemperatureLogModal, { type TemperatureLogInput } from '../modals/TemperatureLogModal';
 import GrowthRecordFormModal from '../modals/GrowthRecordFormModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 
@@ -69,6 +76,13 @@ interface LogTabProps {
   onSaveMilkLog: (input: MilkLogInput, existing: MilkLog | null) => void;
   onSaveDiaperLog: (input: DiaperLogInput, existing: DiaperLog | null) => void;
   onSavePumpingLog: (input: PumpingLogInput, existing: PumpingLog | null) => void;
+  onSaveTemperatureLog: (input: TemperatureLogInput, existing: TemperatureLog | null) => void;
+  /**
+   * 平熱に使う直近の体温。表示中の日だけでは求まらないため、日付の送りとは別に受け取る。
+   */
+  recentTemperatureLogs: TemperatureLog[];
+  /** プロフィールに登録された子の名前。平熱を「岳の平熱」の形で出すのに使う。 */
+  babyName?: string;
   onDeleteLog: (id: string) => void;
   onAddGrowthRecord: (draft: GrowthRecordDraft) => void;
   onUpdateGrowthRecord: (record: GrowthRecord, draft: GrowthRecordDraft) => void;
@@ -83,6 +97,8 @@ const getLogIcon = (type: LogType) => {
       return <Droplet size={16} className="text-blue-500" />;
     case 'pumping':
       return <Milk size={16} className="text-rose-500" />;
+    case 'temperature':
+      return <Thermometer size={16} className="text-orange-600" />;
     default:
       return <FileText size={16} className="text-gray-500" />;
   }
@@ -96,6 +112,8 @@ const getLogColor = (type: LogType) => {
       return 'bg-blue-100';
     case 'pumping':
       return 'bg-rose-100';
+    case 'temperature':
+      return 'bg-orange-100';
     default:
       return 'bg-gray-100';
   }
@@ -116,6 +134,9 @@ export default function LogTab({
   onSaveMilkLog,
   onSaveDiaperLog,
   onSavePumpingLog,
+  onSaveTemperatureLog,
+  recentTemperatureLogs,
+  babyName,
   onDeleteLog,
   onAddGrowthRecord,
   onUpdateGrowthRecord,
@@ -161,6 +182,27 @@ export default function LogTab({
     summary.pumping.ml > 0
       ? `${summary.pumping.count}回・${summary.pumping.ml}ml`
       : `${summary.pumping.count}回`;
+  // 平熱。その子自身の記録の平均なので、表示中の日ではなく直近の記録から出す。
+  const temperatureBaseline = useMemo(
+    () => getTemperatureBaseline(recentTemperatureLogs),
+    [recentTemperatureLogs],
+  );
+  // 体温は最新の値を主、回数と最高体温を従にする。
+  // その日にまだ測っていなければ、空けておかずに平熱を出す（測ったときの比べる相手になる）。
+  const latestTemperature = getLatestTemperature(visibleLogs);
+  const temperatureSummaryText = latestTemperature
+    ? [
+        formatCelsius(latestTemperature.celsius),
+        `${summary.temperature.count}回`,
+        // 熱が下がったあとでも、その日いちばん高かったところが分かるようにする。
+        ...(summary.temperature.maxCelsius !== null &&
+        summary.temperature.maxCelsius > latestTemperature.celsius
+          ? [`最高 ${formatCelsius(summary.temperature.maxCelsius)}`]
+          : []),
+      ].join('・')
+    : temperatureBaseline
+      ? `平熱 ${formatCelsius(temperatureBaseline.celsius)}`
+      : 'この日はまだ';
   // 搾乳ストックの残り。まだ飲ませていないパックの数と合計。
   const stockBatches = pumpedBatches.filter((batch) => batch.usedBy === null);
   const stockMl = sumBatchesMl(stockBatches);
@@ -306,6 +348,26 @@ export default function LogTab({
                 </span>
               </button>
             </div>
+
+            {/* 体温は1日に何度も付くとは限らないので、3つのボタンと同じ大きさは要らない。
+                右側にその日のようすを出して、「見る」と「記録する」を1行にまとめている。 */}
+            <button
+              onClick={() => setLogModal({ type: 'temperature', log: null })}
+              className="w-full bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2 hover:bg-orange-100 transition active:scale-[0.99]"
+            >
+              <span className="text-xs font-bold text-orange-700 flex items-center">
+                <Thermometer size={13} className="mr-1" /> 体温を記録
+              </span>
+              <span
+                className={`text-sm font-bold tabular-nums ${
+                  latestTemperature && isFever(latestTemperature.celsius)
+                    ? 'text-red-600'
+                    : 'text-orange-700'
+                }`}
+              >
+                {temperatureSummaryText}
+              </span>
+            </button>
 
             {/* 搾乳ストック。ためた分と、授乳で「搾乳」を選んで飲ませた分の差し引き。
                 表示中の日だけでは求まらないため、日付の送りとは関わらず常に今の残りを出す。 */}
@@ -484,6 +546,20 @@ export default function LogTab({
         onClose={closeLogModal}
         onSubmit={(input) => {
           onSavePumpingLog(input, logModal?.log?.type === 'pumping' ? logModal.log : null);
+          closeLogModal();
+        }}
+        onDelete={() => logModal?.log && handleDelete(logModal.log)}
+      />
+      <TemperatureLogModal
+        show={logModal?.type === 'temperature'}
+        log={logModal?.log?.type === 'temperature' ? logModal.log : null}
+        baseDate={logDate}
+        previous={latestTemperature}
+        baseline={temperatureBaseline}
+        babyName={babyName}
+        onClose={closeLogModal}
+        onSubmit={(input) => {
+          onSaveTemperatureLog(input, logModal?.log?.type === 'temperature' ? logModal.log : null);
           closeLogModal();
         }}
         onDelete={() => logModal?.log && handleDelete(logModal.log)}

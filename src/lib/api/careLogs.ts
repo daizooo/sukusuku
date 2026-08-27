@@ -10,6 +10,7 @@ import type {
   PoopColor,
   PoopConsistency,
   PumpedBatch,
+  TemperatureLog,
 } from '@/types/app';
 import { addDays, startOfDay } from '@/lib/dateUtils';
 
@@ -21,11 +22,12 @@ export const LOG_TYPE_LABEL: Record<LogType, string> = {
   milk: 'ミルク',
   diaper: 'おむつ',
   pumping: '搾乳',
+  temperature: '体温',
 };
 
 // 記録タブから睡眠の記録を取り止めたあとも、すでに保存されている type = 'sleep' の行は
 // DBに残っている。アプリ側では扱わないので、取得の時点で除いておく。
-const ACTIVE_LOG_TYPES: LogType[] = ['milk', 'diaper', 'pumping'];
+const ACTIVE_LOG_TYPES: LogType[] = ['milk', 'diaper', 'pumping', 'temperature'];
 
 // 記録の種類ごとの項目は care_logs.details (jsonb) に入れる。
 // 想定外の値が入っていても表示を壊さないよう、読み出しは1項目ずつ検証する。
@@ -82,6 +84,14 @@ export const rowToCareLog = (row: CareLogRow): CareLog => {
     };
   }
 
+  if (row.type === 'temperature') {
+    return {
+      ...base,
+      type: 'temperature',
+      celsius: readNumber(details.celsius) ?? 0,
+    };
+  }
+
   return {
     ...base,
     type: 'milk',
@@ -114,6 +124,8 @@ const careLogToDetails = (log: CareLog): Json => {
     set('kind', log.kind);
     set('poopColor', log.poopColor);
     set('poopConsistency', log.poopConsistency);
+  } else if (log.type === 'temperature') {
+    set('celsius', log.celsius);
   } else {
     set('amountMl', log.amountMl);
   }
@@ -132,6 +144,7 @@ const careLogToAmount = (log: CareLog): string => {
     return parts.join(' ');
   }
   if (log.type === 'diaper') return '';
+  if (log.type === 'temperature') return `${log.celsius.toFixed(1)}℃`;
   return log.amountMl ? `${log.amountMl}ml` : '';
 };
 
@@ -186,6 +199,31 @@ export async function listRecentMilkLogs(
     .limit(limit);
   if (error) throw error;
   return (data ?? []).map(rowToCareLog).filter((log): log is MilkLog => log.type === 'milk');
+}
+
+/**
+ * 直近の体温の記録を新しい順に取る。平熱を出すのに使う（careLogUtils の getTemperatureBaseline）。
+ *
+ * 平熱はその子自身の記録の平均なので、表示中の日だけでは求まらない。
+ * 記録タブの1日分(listCareLogsByDate)とは別に、日付にとらわれず取る。
+ * 発熱した日の値は平熱から外すため、外れるぶんを見込んで少し多めに取る。
+ */
+export async function listRecentTemperatureLogs(
+  supabase: SupabaseDb,
+  familyId: string,
+  limit = 60,
+): Promise<TemperatureLog[]> {
+  const { data, error } = await supabase
+    .from('care_logs')
+    .select('*')
+    .eq('family_id', familyId)
+    .eq('type', 'temperature')
+    .order('logged_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? [])
+    .map(rowToCareLog)
+    .filter((log): log is TemperatureLog => log.type === 'temperature');
 }
 
 /**
