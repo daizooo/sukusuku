@@ -36,7 +36,7 @@ export interface DynamicTask extends Task {
   targetDate: string;
 }
 
-export type LogType = 'milk' | 'diaper' | 'pumping';
+export type LogType = 'milk' | 'diaper' | 'pumping' | 'temperature';
 
 // 記録の種類ごとに必要な項目が違うため、type で判別する共用体として持つ。
 // DBでは種類ごとの項目を care_logs.details (jsonb) に入れ、読み込み時にこの形へ復元する。
@@ -108,7 +108,17 @@ export interface PumpingLog extends CareLogBase {
   amountMl: number;
 }
 
-export type CareLog = MilkLog | DiaperLog | PumpingLog;
+/**
+ * 体温の記録。受診したときに必ず「いつから・何度か」を聞かれるため、
+ * 記録の中で唯一「時系列に並べて読む」ことに意味がある（docs/what-to-record.md §4-1）。
+ */
+export interface TemperatureLog extends CareLogBase {
+  type: 'temperature';
+  /** 測った体温(℃)。小数第1位まで。 */
+  celsius: number;
+}
+
+export type CareLog = MilkLog | DiaperLog | PumpingLog | TemperatureLog;
 
 /**
  * 搾乳ストックの1パック。搾乳の記録に「どの授乳で使ったか」を添えたもの。

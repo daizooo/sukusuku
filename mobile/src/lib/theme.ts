@@ -14,6 +14,7 @@ export const colors = {
   accentSurface: '#fdf2f8', // pink-50
 
   // 記録の種類ごとの色。Web版の記録タブと同じ割り当て（ミルク=琥珀・おむつ=青・搾乳=薔薇）。
+  // 体温はWeb版に無い記録なので、ここで割り当てる（=橙）。
   milk: '#d97706', // amber-600
   milkSurface: '#fffbeb', // amber-50
   milkBorder: '#fde68a', // amber-200
@@ -25,6 +26,10 @@ export const colors = {
   pumpingSurface: '#fff1f2', // rose-50
   pumpingBorder: '#fecdd3', // rose-200
   pumpingText: '#be123c', // rose-700
+  temperature: '#ea580c', // orange-600
+  temperatureSurface: '#fff7ed', // orange-50
+  temperatureBorder: '#fed7aa', // orange-200
+  temperatureText: '#c2410c', // orange-700
   alertSurface: '#fee2e2', // red-100
   alertText: '#b91c1c', // red-700
   neutralSurface: '#f3f4f6', // gray-100
