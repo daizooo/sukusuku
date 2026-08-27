@@ -5,7 +5,6 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Coffee,
   Droplet,
   FileText,
   List,
@@ -51,6 +50,7 @@ import {
   parseDateString,
   toDateString,
 } from '@/lib/dateUtils';
+import BabyBottleIcon from '../ui/BabyBottleIcon';
 import SegmentedTabs from '../ui/SegmentedTabs';
 import MilkLogModal, { type MilkLogInput } from '../modals/MilkLogModal';
 import DiaperLogModal, { type DiaperLogInput } from '../modals/DiaperLogModal';
@@ -93,7 +93,7 @@ interface LogTabProps {
 const getLogIcon = (type: LogType) => {
   switch (type) {
     case 'milk':
-      return <Coffee size={16} className="text-amber-600" />;
+      return <BabyBottleIcon size={16} className="text-amber-600" />;
     case 'diaper':
       return <Droplet size={16} className="text-blue-500" />;
     case 'pumping':
@@ -277,7 +277,7 @@ export default function LogTab({
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-bold text-amber-700 flex items-center">
-                    <Coffee size={12} className="mr-1" />
+                    <BabyBottleIcon size={12} className="mr-1" />
                     {nursingTimer.runningSide
                       ? `授乳中（${getSideLabel(nursingTimer.runningSide)}）`
                       : '授乳の計測中'}
@@ -308,7 +308,7 @@ export default function LogTab({
               >
                 <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
                 <span className="flex items-center gap-1.5">
-                  <Coffee size={17} className="text-amber-600" />
+                  <BabyBottleIcon size={17} className="text-amber-600" />
                   <span className="text-sm font-bold text-gray-800">授乳</span>
                 </span>
                 {/* その日の回数・量・分数は出さない（判断に使うのは体重とおしっこの回数）。
