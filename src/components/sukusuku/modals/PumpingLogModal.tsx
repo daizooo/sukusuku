@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import type { PumpedBatch, PumpingLog } from '@/types/app';
+import type { FeedingMethod, PumpedBatch, PumpingLog } from '@/types/app';
 import { pumpedStockMl } from '@/lib/careLogUtils';
 import { parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUtils';
 import {
   DateTimeField,
   DeleteButton,
   FEEDING_ENTRY_MODE_OPTIONS,
+  FEEDING_METHOD_OPTIONS,
   FieldLabel,
   HintBanner,
   LogModalShell,
@@ -29,8 +30,11 @@ interface PumpingLogModalProps {
   baseDate: Date;
   /** 搾乳ストックの全量（使用済みも含む）。残りの表示に使う。 */
   pumpedBatches: PumpedBatch[];
-  /** 「飲ませた」に切り替える。授乳の入力画面へ戻る（新規追加のときだけ出す）。 */
-  onSwitchToFeeding: () => void;
+  /**
+   * 授乳の入力画面へ戻る（新規追加のときだけ出す）。「飲ませた」に切り替えたときと、
+   * 種類を母乳・ミルクに変えたときに呼ぶ。戻った先で選んでおく種類を渡す。
+   */
+  onSwitchToFeeding: (method: FeedingMethod) => void;
   onClose: () => void;
   onSubmit: (input: PumpingLogInput) => void;
   onDelete: () => void;
@@ -81,18 +85,47 @@ function PumpingLogModalBody({
   };
 
   return (
-    <LogModalShell title={log ? '搾乳の記録を編集' : '搾乳を記録'} onClose={onClose}>
-      {/* 授乳の入力画面で「搾乳」を選んだときと同じ切り替え。飲ませた分に戻れるようにしておく。 */}
-      {!log && (
-        <Segmented
-          options={FEEDING_ENTRY_MODE_OPTIONS}
-          value="pump"
-          onChange={(next) => {
-            if (next === 'feed') onSwitchToFeeding();
-          }}
-        />
-      )}
-
+    <LogModalShell
+      title={log ? '搾乳の記録を編集' : '搾乳を記録'}
+      onClose={onClose}
+      // 授乳の入力画面で「搾乳」を選んだときと同じ並び・同じ位置に出す。行き来しても
+      // 切り替えが動かないので、そのまま下の欄に入力できる。
+      subheader={
+        !log && (
+          <div className="space-y-3">
+            <div>
+              <FieldLabel>種類</FieldLabel>
+              <Segmented
+                options={FEEDING_METHOD_OPTIONS}
+                value="pumped"
+                onChange={(next) => {
+                  // 母乳・ミルクは飲ませた分の記録なので、その種類で授乳の入力画面へ戻る。
+                  if (next !== 'pumped') onSwitchToFeeding(next);
+                }}
+              />
+            </div>
+            <div>
+              <FieldLabel>搾乳を</FieldLabel>
+              <Segmented
+                options={FEEDING_ENTRY_MODE_OPTIONS}
+                value="pump"
+                onChange={(next) => {
+                  if (next === 'feed') onSwitchToFeeding('pumped');
+                }}
+              />
+            </div>
+          </div>
+        )
+      }
+      footer={
+        <>
+          <SubmitButton accent="pumping" onClick={handleSubmit} disabled={amountMl === null}>
+            保存する
+          </SubmitButton>
+          {log && <DeleteButton onDelete={onDelete} />}
+        </>
+      }
+    >
       <HintBanner accent="pumping">
         {isUsed ? (
           <>この搾乳は授乳の記録ですでに飲ませた分です。量を直すと、その記録の量とずれます。</>
@@ -125,10 +158,6 @@ function PumpingLogModalBody({
         onChangeTime={setTime}
       />
       <NoteField value={note} onChange={setNote} placeholder="よく出た / 冷凍した など" />
-      <SubmitButton accent="pumping" onClick={handleSubmit} disabled={amountMl === null}>
-        保存する
-      </SubmitButton>
-      {log && <DeleteButton onDelete={onDelete} />}
     </LogModalShell>
   );
 }
