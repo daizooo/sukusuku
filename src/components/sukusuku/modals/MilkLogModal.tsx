@@ -53,8 +53,11 @@ interface MilkLogModalProps {
   timer: NursingTimer;
   /** 搾乳ストックの全量（使用済みも含む）。「搾乳」を選んだときの選択肢に使う。 */
   pumpedBatches: PumpedBatch[];
-  /** 「搾った」に切り替える。搾乳の入力画面へ移る（新規追加のときだけ出す）。 */
-  onSwitchToPumping: () => void;
+  /**
+   * 「搾った」に切り替える。搾乳の入力画面へ移る（新規追加のときだけ出す）。
+   * 「飲ませた」で戻ってきたときに同じ種類から続けられるよう、いま選んでいる種類を渡す。
+   */
+  onSwitchToPumping: (from: FeedingMethod) => void;
   /** 新規追加のときに最初から選んでおく種類。搾乳の入力画面から戻ってきたときに使う。 */
   initialMethod?: FeedingMethod;
   onClose: () => void;
@@ -252,11 +255,26 @@ function MilkLogModalBody({
     <LogModalShell
       title={log ? '授乳の記録を編集' : '授乳を記録'}
       onClose={onClose}
-      // 母乳/搾乳/ミルクの切り替えは、選び直したときに動かないよう上に固定しておく。
+      // 記録の切り替えは、選び直したときに動かないよう上に固定しておく。
       subheader={
-        <div>
-          <FieldLabel>飲ませたもの</FieldLabel>
-          <Segmented options={METHOD_OPTIONS} value={method} onChange={setMethod} />
+        <div className="space-y-3">
+          {/* 「飲ませた」「搾った」は記録そのものの切り替え（搾った分は飲ませた分とは別の記録で、
+              搾乳ストックの1パックになる）で、押すと搾乳の入力画面へ移る。移った先でも同じ位置に
+              出したいので、飲ませたものによらず、いちばん上に置いている。
+              編集中は記録の種類を変えられないので出さない。 */}
+          {!log && (
+            <Segmented
+              options={FEEDING_ENTRY_MODE_OPTIONS}
+              value="feed"
+              onChange={(next) => {
+                if (next === 'pump') onSwitchToPumping(method);
+              }}
+            />
+          )}
+          <div>
+            <FieldLabel>飲ませたもの</FieldLabel>
+            <Segmented options={METHOD_OPTIONS} value={method} onChange={setMethod} />
+          </div>
         </div>
       }
       footer={
@@ -314,22 +332,6 @@ function MilkLogModalBody({
         </>
       ) : method === 'pumped' ? (
         <>
-          {/* 搾った分の記録もここから入れる。飲ませた分とは別の記録
-              （搾った分は搾乳ストックの1パックになる）なので、押すと画面ごと移る。
-              搾乳以外では関わらないため、この中だけに置く。
-              編集中は記録の種類を変えられないので出さない。 */}
-          {!log && (
-            <div>
-              <FieldLabel>搾乳を</FieldLabel>
-              <Segmented
-                options={FEEDING_ENTRY_MODE_OPTIONS}
-                value="feed"
-                onChange={(next) => {
-                  if (next === 'pump') onSwitchToPumping();
-                }}
-              />
-            </div>
-          )}
           <PumpedBatchPicker
             batches={selectableBatches}
             selectedIds={selectedBatchIds}
