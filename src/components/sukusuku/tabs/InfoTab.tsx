@@ -6,8 +6,10 @@ import type { ProfileField, ProfileFieldKey, UserProfile } from '@/types/app';
 import { isPhoneNumberLike, toTelHref } from '@/lib/uiUtils';
 import NotificationSetting from '@/components/sukusuku/NotificationSetting';
 import FeedingIntervalSetting from '@/components/sukusuku/FeedingIntervalSetting';
+import TemperatureReminderSetting from '@/components/sukusuku/TemperatureReminderSetting';
 import AccountSection from '@/components/sukusuku/AccountSection';
 import type { FeedingSettings } from '@/lib/api/feedingSettings';
+import type { TemperatureReminderSettings } from '@/lib/api/temperatureReminderSettings';
 
 // UserProfileのうち、ProfileField[]を値に持つキー（＝設定タブで編集可能なセクション）
 type ProfileSectionKey = {
@@ -26,6 +28,9 @@ interface InfoTabProps {
   /** 次の授乳の目安の設定。家族で共通なので、変更はアプリ全体へ反映する。 */
   feedingSettings: FeedingSettings;
   onChangeFeedingSettings: (settings: FeedingSettings) => void;
+  /** 検温のお知らせの設定。こちらも家族で共通。 */
+  temperatureReminderSettings: TemperatureReminderSettings;
+  onChangeTemperatureReminderSettings: (settings: TemperatureReminderSettings) => void;
 }
 
 export default function InfoTab({
@@ -39,6 +44,8 @@ export default function InfoTab({
   onSaveProfile,
   feedingSettings,
   onChangeFeedingSettings,
+  temperatureReminderSettings,
+  onChangeTemperatureReminderSettings,
 }: InfoTabProps) {
   const updateField = (section: ProfileSectionKey, id: string, patch: Partial<Pick<ProfileField, 'label' | 'values'>>) => {
     onChangeTempProfile({
@@ -124,6 +131,12 @@ export default function InfoTab({
             familyId={familyId}
             settings={feedingSettings}
             onChange={onChangeFeedingSettings}
+          />
+
+          <TemperatureReminderSetting
+            familyId={familyId}
+            settings={temperatureReminderSettings}
+            onChange={onChangeTemperatureReminderSettings}
           />
 
           <AccountSection familyId={familyId} userId={userId} />

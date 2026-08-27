@@ -1,12 +1,14 @@
 // すくすく手帳のService Worker
 //
-// 役割は3つ。
+// 役割は4つ。
 // 1. 予定のリマインダー: Edge Function `send-reminders` から送られたWeb Pushを受け取り、通知を出す。
 // 2. 授乳の経過時間お知らせ: Edge Function `send-nursing-alarms` から送られたWeb Pushを受け取る。
 //    画面が消えている・アプリを閉じている間は端末内のタイマーが間引かれて鳴らせないため、
 //    その分をここで鳴らす。
 // 3. 次の授乳の目安: Edge Function `send-feeding-reminders` から送られたWeb Pushを受け取る。
 //    前回の授乳から一定の間隔が経ったことを知らせる（2とは別物）。
+// 4. 検温のお知らせ: Edge Function `send-temperature-reminders` から送られたWeb Pushを受け取る。
+//    設定した朝・夕の時刻に、体温を測って記録するよう知らせる。
 
 // 更新したService Workerを次回の読み込みからすぐ有効にする。
 // 通知の見た目や遷移先を直したときに、古いものが残り続けないようにするため。
@@ -52,6 +54,7 @@ self.addEventListener('push', (event) => {
 
   const isNursing = payload.kind === 'nursing';
   const isFeeding = payload.kind === 'feeding';
+  const isTemperature = payload.kind === 'temperature';
   const title = payload.title || 'すくすく手帳';
   const options = {
     body: payload.body || '',
@@ -63,14 +66,16 @@ self.addEventListener('push', (event) => {
       ? 'nursing-alarm'
       : isFeeding
         ? 'feeding-reminder'
-        : payload.taskId
-          ? `task-${payload.taskId}`
-          : 'sukusuku',
+        : isTemperature
+          ? 'temperature-reminder'
+          : payload.taskId
+            ? `task-${payload.taskId}`
+            : 'sukusuku',
     data: { url: payload.url || '/' },
   };
 
-  if (isFeeding) {
-    // 前の目安の通知が残ったままでも、新しいものに気づけるよう鳴らし直す。
+  if (isFeeding || isTemperature) {
+    // 前の通知が残ったままでも、新しいものに気づけるよう鳴らし直す。
     options.renotify = true;
     // 寝ていても気づけるように振動させる。授乳の経過時間お知らせ(長短のパターン)とは
     // 別物なので、数え方を持たない素直な2回の振動にしておく。
