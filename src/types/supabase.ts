@@ -383,6 +383,7 @@ export type Database = {
           interval_minutes: number
           notified_step: number
           side: string
+          stopped_at: string | null
           subscription_id: string
           updated_at: string
           user_id: string
@@ -392,6 +393,7 @@ export type Database = {
           interval_minutes: number
           notified_step?: number
           side: string
+          stopped_at?: string | null
           subscription_id: string
           updated_at?: string
           user_id: string
@@ -401,6 +403,7 @@ export type Database = {
           interval_minutes?: number
           notified_step?: number
           side?: string
+          stopped_at?: string | null
           subscription_id?: string
           updated_at?: string
           user_id?: string
