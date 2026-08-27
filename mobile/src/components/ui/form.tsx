@@ -6,7 +6,7 @@ import { colors } from '@/lib/theme';
 // 色の当て方だけWeb版(Tailwind)から置き換えてあり、見出し・選択肢・メモ欄の作りは同じ。
 
 /** 記録の種類ごとの差し色。ボタンや選択中の枠に使う。 */
-export type Accent = 'milk' | 'pumping' | 'temperature';
+export type Accent = 'milk' | 'pumping' | 'temperature' | 'spitup';
 
 const ACCENT: Record<Accent, { color: string; surface: string; border: string }> = {
   milk: { color: colors.milk, surface: colors.milkSurface, border: colors.milkBorder },
@@ -16,6 +16,7 @@ const ACCENT: Record<Accent, { color: string; surface: string; border: string }>
     surface: colors.temperatureSurface,
     border: colors.temperatureBorder,
   },
+  spitup: { color: colors.spitup, surface: colors.spitupSurface, border: colors.spitupBorder },
 };
 
 export function FieldLabel({ children }: { children: ReactNode }) {

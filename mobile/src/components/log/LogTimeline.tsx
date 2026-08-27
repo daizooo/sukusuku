@@ -12,7 +12,7 @@ import { colors } from '@/lib/theme';
 
 // その日の記録の一覧。Web版の記録タブのタイムラインにあたる。
 //
-// 入力画面があるのは授乳と体温だけなので、開いて直せるのもその2つ。
+// 入力画面があるのは授乳・体温・吐き戻しなので、開いて直せるのもその3つ。
 // おむつ・搾乳も同じ並びに出すが、タップしても開かない（フェーズ2でそれぞれの入力画面を作る）。
 
 const TYPE_COLOR: Record<CareLog['type'], string> = {
@@ -20,15 +20,18 @@ const TYPE_COLOR: Record<CareLog['type'], string> = {
   diaper: colors.diaper,
   pumping: colors.pumping,
   temperature: colors.temperature,
+  spitup: colors.spitup,
 };
 
 /** 入力画面があり、タップして直せる記録か。 */
-const isEditable = (log: CareLog): boolean => log.type === 'milk' || log.type === 'temperature';
+const EDITABLE_TYPES: CareLog['type'][] = ['milk', 'temperature', 'spitup'];
+
+const isEditable = (log: CareLog): boolean => EDITABLE_TYPES.includes(log.type);
 
 interface LogTimelineProps {
   logs: CareLog[];
   memberLabel: (id: string | null) => string;
-  /** 入力画面のある記録（授乳・体温）をタップしたとき。 */
+  /** 入力画面のある記録（授乳・体温・吐き戻し）をタップしたとき。 */
   onSelect: (log: CareLog) => void;
 }
 
