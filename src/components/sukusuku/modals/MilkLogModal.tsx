@@ -55,6 +55,8 @@ interface MilkLogModalProps {
   pumpedBatches: PumpedBatch[];
   /** 「搾った」に切り替える。搾乳の入力画面へ移る（新規追加のときだけ出す）。 */
   onSwitchToPumping: () => void;
+  /** 新規追加のときに最初から選んでおく種類。搾乳の入力画面から戻ってきたときに使う。 */
+  initialMethod?: FeedingMethod;
   onClose: () => void;
   onSubmit: (input: MilkLogInput) => void;
   onDelete: () => void;
@@ -91,11 +93,12 @@ function MilkLogModalBody({
   timer,
   pumpedBatches,
   onSwitchToPumping,
+  initialMethod,
   onClose,
   onSubmit,
   onDelete,
 }: MilkLogModalProps) {
-  const [method, setMethod] = useState<FeedingMethod>(log?.method ?? 'breast');
+  const [method, setMethod] = useState<FeedingMethod>(log?.method ?? initialMethod ?? 'breast');
   const [amountMl, setAmountMl] = useState<number>(log?.amountMl ?? 100);
   // 「搾乳」で飲ませる搾乳ストック。編集中なら、その記録が使っているパックを選んだ状態で開く。
   const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>(() => log?.pumpedFrom ?? []);
@@ -247,19 +250,6 @@ function MilkLogModalBody({
 
   return (
     <LogModalShell title={log ? '授乳の記録を編集' : '授乳を記録'} onClose={onClose}>
-      {/* 飲ませた分と搾った分は、どちらも授乳の入力画面から入れる。
-          記録としては別物（搾った分は搾乳ストックの1パックになる）なので、
-          ここで切り替えて画面ごと移る。編集中は種類を変えられないため出さない。 */}
-      {!log && (
-        <Segmented
-          options={FEEDING_ENTRY_MODE_OPTIONS}
-          value="feed"
-          onChange={(next) => {
-            if (next === 'pump') onSwitchToPumping();
-          }}
-        />
-      )}
-
       <div>
         <FieldLabel>飲ませたもの</FieldLabel>
         <Segmented options={METHOD_OPTIONS} value={method} onChange={setMethod} />
@@ -307,6 +297,22 @@ function MilkLogModalBody({
         </>
       ) : method === 'pumped' ? (
         <>
+          {/* 搾った分の記録もここから入れる。飲ませた分とは別の記録
+              （搾った分は搾乳ストックの1パックになる）なので、押すと画面ごと移る。
+              搾乳以外では関わらないため、この中だけに置く。
+              編集中は記録の種類を変えられないので出さない。 */}
+          {!log && (
+            <div>
+              <FieldLabel>搾乳を</FieldLabel>
+              <Segmented
+                options={FEEDING_ENTRY_MODE_OPTIONS}
+                value="feed"
+                onChange={(next) => {
+                  if (next === 'pump') onSwitchToPumping();
+                }}
+              />
+            </div>
+          )}
           <PumpedBatchPicker
             batches={selectableBatches}
             selectedIds={selectedBatchIds}

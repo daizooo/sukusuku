@@ -20,6 +20,7 @@ import type {
   BreastSide,
   CareLog,
   DiaperLog,
+  FeedingMethod,
   GrowthRecord,
   LogType,
   MilkLog,
@@ -146,6 +147,8 @@ export default function LogTab({
   // 記録の入力画面。log が null なら新規追加、入っていればその記録の編集。
   const [logModal, setLogModal] = useState<{ type: LogType; log: CareLog | null } | null>(null);
   const [growthModal, setGrowthModal] = useState<{ mode: 'add' | 'edit'; record: GrowthRecord | null } | null>(null);
+  // 搾乳の入力画面から「飲ませた」で戻ったときに、搾乳を選んだ状態で開くための指定。
+  const [milkModalMethod, setMilkModalMethod] = useState<FeedingMethod | undefined>(undefined);
   // グラフの横軸。生後ヶ月が未入力の記録は横軸が空になってしまうため、記録日で代替する。
   const growthChartData = useMemo(
     () =>
@@ -297,7 +300,10 @@ export default function LogTab({
                 ここには出さず、代わりに授乳のボタンにいまの搾乳ストックを出す。 */}
             <div className="grid grid-cols-3 gap-2">
               <button
-                onClick={() => setLogModal({ type: 'milk', log: null })}
+                onClick={() => {
+                  setMilkModalMethod(undefined);
+                  setLogModal({ type: 'milk', log: null });
+                }}
                 className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-amber-50 transition active:scale-95"
               >
                 <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
@@ -306,11 +312,11 @@ export default function LogTab({
                   <span className="text-sm font-bold text-gray-800">授乳</span>
                 </span>
                 {/* その日の回数・量・分数は出さない（判断に使うのは体重とおしっこの回数）。
-                    代わりに、次の授乳で使える搾乳ストックを出す。表示中の日だけでは
-                    求まらないため、日付の送りとは関わらず常に今の残りになる。 */}
-                <span className="mt-0.5 text-[11px] font-medium text-gray-500 leading-tight">ストック</span>
-                <span className="text-[11px] font-bold text-rose-600 tabular-nums leading-tight text-center">
-                  {stockBatches.length}パック・{stockMl}ml
+                    代わりに、次の授乳で使える搾乳ストックの残りを出す。表示中の日だけでは
+                    求まらないため、日付の送りとは関わらず常に今の残りになる。
+                    何パックあるかは飲ませるときに選ぶので、ここは合計だけでよい。 */}
+                <span className="mt-0.5 text-[11px] font-bold text-rose-600 tabular-nums leading-tight text-center">
+                  ストック・{stockMl}ml
                 </span>
                 {nextBreastSide && !nursingTimer.hasSession && (
                   <span className="text-[10px] font-bold text-amber-600 leading-tight">
@@ -498,6 +504,7 @@ export default function LogTab({
         nextSide={nextBreastSide}
         timer={nursingTimer}
         pumpedBatches={pumpedBatches}
+        initialMethod={milkModalMethod}
         onSwitchToPumping={() => setLogModal({ type: 'pumping', log: null })}
         onClose={closeLogModal}
         onSubmit={(input) => {
@@ -525,7 +532,11 @@ export default function LogTab({
         log={logModal?.log?.type === 'pumping' ? logModal.log : null}
         baseDate={logDate}
         pumpedBatches={pumpedBatches}
-        onSwitchToFeeding={() => setLogModal({ type: 'milk', log: null })}
+        onSwitchToFeeding={() => {
+          // 「搾乳」を選んだところから来ているので、戻り先もそこに合わせる。
+          setMilkModalMethod('pumped');
+          setLogModal({ type: 'milk', log: null });
+        }}
         onClose={closeLogModal}
         onSubmit={(input) => {
           onSavePumpingLog(input, logModal?.log?.type === 'pumping' ? logModal.log : null);

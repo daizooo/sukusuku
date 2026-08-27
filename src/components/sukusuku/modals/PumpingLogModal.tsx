@@ -81,8 +81,8 @@ function PumpingLogModalBody({
   };
 
   return (
-    <LogModalShell title={log ? '搾乳の記録を編集' : '授乳を記録'} onClose={onClose}>
-      {/* 授乳の入力画面と同じ切り替え。飲ませた分に戻れるようにしておく。 */}
+    <LogModalShell title={log ? '搾乳の記録を編集' : '搾乳を記録'} onClose={onClose}>
+      {/* 授乳の入力画面で「搾乳」を選んだときと同じ切り替え。飲ませた分に戻れるようにしておく。 */}
       {!log && (
         <Segmented
           options={FEEDING_ENTRY_MODE_OPTIONS}
@@ -99,7 +99,7 @@ function PumpingLogModalBody({
         ) : (
           <>
             搾乳ストックの残りは<span className="font-bold">{pumpedStockMl(pumpedBatches)}ml</span>
-            。飲ませるときは「飲ませた」に切り替えて「搾乳」を選び、ここで記録した分から選びます。
+            。飲ませるときは上の「飲ませた」に切り替えて、ここで記録した分から選びます。
           </>
         )}
       </HintBanner>
