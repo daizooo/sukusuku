@@ -69,6 +69,11 @@ import {
   getFeedingSettings,
   type FeedingSettings,
 } from '@/lib/api/feedingSettings';
+import {
+  DEFAULT_TEMPERATURE_REMINDER_SETTINGS,
+  getTemperatureReminderSettings,
+  type TemperatureReminderSettings,
+} from '@/lib/api/temperatureReminderSettings';
 import { useNursingAlarmWatcher } from '@/lib/nursingTimer';
 import { useNursingAlarmSync } from '@/lib/nursingAlarmSync';
 import { deleteGift, insertGift, listGifts, updateGift as updateGiftApi } from '@/lib/api/gifts';
@@ -207,6 +212,9 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   const [recentTemperatureLogs, setRecentTemperatureLogs] = useState<TemperatureLog[]>([]);
   // 授乳の間隔の設定。家族で共通なので、どちらが変えても同じ目安が出る。
   const [feedingSettings, setFeedingSettings] = useState<FeedingSettings>(DEFAULT_FEEDING_SETTINGS);
+  // 検温のお知らせの設定。こちらも家族で共通なので、どちらが変えても同じ時刻に届く。
+  const [temperatureReminderSettings, setTemperatureReminderSettings] =
+    useState<TemperatureReminderSettings>(DEFAULT_TEMPERATURE_REMINDER_SETTINGS);
 
   const [gifts, setGifts] = useState<Gift[]>([]);
   const [isLoadingGifts, setIsLoadingGifts] = useState(true);
@@ -399,6 +407,21 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
         if (!cancelled) setFeedingSettings(settings);
       })
       .catch((err: unknown) => console.error('Failed to load feeding settings:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, familyId]);
+
+  // 検温のお知らせの設定を読み込む。未設定の家族は既定値(朝6時・夕18時・お知らせする)のまま。
+  useEffect(() => {
+    let cancelled = false;
+    getTemperatureReminderSettings(supabase, familyId)
+      .then((settings) => {
+        if (!cancelled) setTemperatureReminderSettings(settings);
+      })
+      .catch((err: unknown) =>
+        console.error('Failed to load temperature reminder settings:', err),
+      );
     return () => {
       cancelled = true;
     };
@@ -1041,6 +1064,8 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               onSaveProfile={handleProfileSave}
               feedingSettings={feedingSettings}
               onChangeFeedingSettings={setFeedingSettings}
+              temperatureReminderSettings={temperatureReminderSettings}
+              onChangeTemperatureReminderSettings={setTemperatureReminderSettings}
             />
           )}
         </main>

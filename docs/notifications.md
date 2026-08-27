@@ -192,6 +192,11 @@ select status, return_message, start_time
 | `src/lib/api/feedingSettings.ts` | `feeding_settings` の読み書き |
 | `supabase/migrations/0024_feeding_schedule.sql` | テーブル・ビュー |
 | `supabase/migrations/0025_feeding_reminder_cron.sql` | 定期実行の登録 |
+| `supabase/functions/send-temperature-reminders/index.ts` | 検温のお知らせの配信（§8） |
+| `src/lib/api/temperatureReminderSettings.ts` | `temperature_reminder_settings` の読み書き |
+| `src/components/sukusuku/TemperatureReminderSetting.tsx` | 設定タブの時刻の設定 |
+| `supabase/migrations/0030_temperature_reminders.sql` | テーブル・ビュー |
+| `supabase/migrations/0031_temperature_reminder_cron.sql` | 定期実行の登録 |
 
 ---
 
@@ -421,4 +426,96 @@ select status, return_message, start_time
 - ビューに家族が出てこない → 授乳の記録が1件も無いか、設定で通知をオフにしている。
 - 目安の時刻を過ぎているのに送信記録ができない → 授乳中・記録待ち（`nursing_alarms` に
   行がある）か、目安から2時間以上たっている。
+- 送信記録はあるのに届かない → 通知そのものの問題。§4を確認する。
+
+---
+
+## 8. 検温のお知らせ
+
+体温は熱が出てから測るものではなく、**平熱を知るために毎日決まった時刻に測る**もの。
+平熱が分かって初めて「この子にしては高い」が言える（`careLogUtils` の平熱）。
+ところが決まった時刻に測るのは忘れやすいので、**朝と夕の2回、その時刻に通知する**。
+
+### 通知のタイミング
+
+`temperature_reminder_schedule` ビューが、家族ごとに
+
+- 時刻の設定（`temperature_reminder_settings` の `morning_time` / `evening_time`、
+  既定は朝6時・夕18時）
+
+から、その日（と前日）のお知らせの時刻（`scheduled_for`）を出す。
+設定の行が無い家族は既定値（朝6時・夕18時・お知らせする）として扱う。
+
+```
+[ブラウザ] 設定タブで時刻を変える
+  └ temperature_reminder_settings に家族ごとの時刻を保存
+
+                              pg_cron (5分おき)
+                                └ Edge Function: send-temperature-reminders
+                                     ├ temperature_reminder_schedule から
+                                     │  お知らせの時刻を過ぎた家族を取る
+                                     ├ temperature_reminder_deliveries に記録を作る
+                                     │  (二重送信の防止)
+                                     └ その家族の全端末へ Web Push
+```
+
+- **時刻は日本時間**で解釈する（他のビューと同じく家族全員が日本にいる前提）。
+  前日ぶんの時刻もビューに出しているのは、夜遅い時刻に設定していると日付をまたいだ
+  直後の実行で当日ぶんがまだ未来になり、取りこぼしを拾えなくなるため。
+- **通知先** — 測るのは手の空いているほうなので、その家族が登録した全端末へ送る
+  （予定のリマインダー・授乳の目安と同じ考え方）。
+- **届くまでの時間** — 定期実行が5分おきなので、設定した時刻から最大5分ほど遅れて届く。
+- **打ち切り** — 設定した時刻を2時間（`LOOKBACK_MINUTES`）過ぎたものは送らない。
+  朝の検温のお知らせが昼に届いても意味がないため。
+- **もう測っていれば送らない** — お知らせの時刻の**1時間前以降**に体温の記録があれば、
+  その回はビューの時点で外れる。少し早めに測った直後に「測りましょう」と届くのは
+  ただの邪魔になるため。
+
+### 二重送信を防ぐ仕組み
+
+`temperature_reminder_deliveries` の `(family_id, subscription_id, scheduled_for)` の
+一意制約で、同じ通知が2度飛ばないようにしている。送信前に `pending` の行を作って
+送信権を取るので、実行が重なっても送るのは片方だけになる。
+
+時刻の設定を変えると `scheduled_for` が変わるため、変更後は改めて通知される
+（予定のリマインダー・授乳の目安と同じ挙動）。
+
+### セットアップ
+
+予定のリマインダー（§2）を済ませていれば、鍵もシークレット（`REMINDER_CRON_SECRET`）も
+同じものを使うので、追加の設定は要らない。必要なのはデプロイと適用だけ。
+
+```bash
+supabase functions deploy send-temperature-reminders
+```
+
+そのうえで `0030_temperature_reminders.sql` / `0031_temperature_reminder_cron.sql` を適用する。
+`0031` は配信の定期実行（5分おき）に加えて、送信記録の掃除（週1回・90日より古い分を削除）も
+登録する。予定のリマインダーの掃除（§2の `0013`）と同じ考え方。
+
+### 動かないときの確認
+
+```sql
+-- お知らせの時刻がどう計算されているか
+select family_id, slot, scheduled_for at time zone 'Asia/Tokyo' as scheduled_jst
+  from temperature_reminder_schedule
+ order by scheduled_for;
+
+-- 時刻の設定（行が無い家族は既定の朝6時・夕18時・お知らせする）
+select * from temperature_reminder_settings;
+
+-- 送信結果
+select status, error, sent_at, scheduled_for
+  from temperature_reminder_deliveries
+ order by sent_at desc limit 20;
+
+-- 定期実行が動いているか
+select status, return_message, start_time
+  from cron.job_run_details
+ where jobid = (select jobid from cron.job where jobname = 'send-temperature-reminders')
+ order by start_time desc limit 10;
+```
+
+- ビューに家族が出てこない → 設定でお知らせをオフにしているか、
+  お知らせの時刻の1時間前以降にもう体温を記録している。
 - 送信記録はあるのに届かない → 通知そのものの問題。§4を確認する。

@@ -605,6 +605,83 @@ export type Database = {
           },
         ]
       }
+      temperature_reminder_deliveries: {
+        Row: {
+          error: string | null
+          family_id: string
+          id: string
+          scheduled_for: string
+          sent_at: string
+          status: string
+          subscription_id: string
+        }
+        Insert: {
+          error?: string | null
+          family_id: string
+          id?: string
+          scheduled_for: string
+          sent_at?: string
+          status?: string
+          subscription_id: string
+        }
+        Update: {
+          error?: string | null
+          family_id?: string
+          id?: string
+          scheduled_for?: string
+          sent_at?: string
+          status?: string
+          subscription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "temperature_reminder_deliveries_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "temperature_reminder_deliveries_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "push_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      temperature_reminder_settings: {
+        Row: {
+          enabled: boolean
+          evening_time: string
+          family_id: string
+          morning_time: string
+          updated_at: string
+        }
+        Insert: {
+          enabled?: boolean
+          evening_time?: string
+          family_id: string
+          morning_time?: string
+          updated_at?: string
+        }
+        Update: {
+          enabled?: boolean
+          evening_time?: string
+          family_id?: string
+          morning_time?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "temperature_reminder_settings_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: true
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           created_at: string
@@ -678,6 +755,22 @@ export type Database = {
             foreignKeyName: "tasks_family_id_fkey"
             columns: ["family_id"]
             isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      temperature_reminder_schedule: {
+        Row: {
+          family_id: string | null
+          scheduled_for: string | null
+          slot: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "temperature_reminder_settings_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: true
             referencedRelation: "families"
             referencedColumns: ["id"]
           },
