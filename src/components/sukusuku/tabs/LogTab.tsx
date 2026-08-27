@@ -532,9 +532,9 @@ export default function LogTab({
         log={logModal?.log?.type === 'pumping' ? logModal.log : null}
         baseDate={logDate}
         pumpedBatches={pumpedBatches}
-        onSwitchToFeeding={() => {
-          // 「搾乳」を選んだところから来ているので、戻り先もそこに合わせる。
-          setMilkModalMethod('pumped');
+        onSwitchToFeeding={(method) => {
+          // 搾乳の入力画面で選び直した種類のまま、授乳の入力画面へ戻す。
+          setMilkModalMethod(method);
           setLogModal({ type: 'milk', log: null });
         }}
         onClose={closeLogModal}

@@ -5,6 +5,7 @@
 
 import type { ReactNode } from 'react';
 import { Trash2, X } from 'lucide-react';
+import type { FeedingMethod } from '@/types/app';
 
 export type LogAccent = 'milk' | 'diaper' | 'pumping' | 'temperature';
 
@@ -83,6 +84,13 @@ export type FeedingEntryMode = 'feed' | 'pump';
 export const FEEDING_ENTRY_MODE_OPTIONS: { value: FeedingEntryMode; label: string }[] = [
   { value: 'feed', label: '飲ませた' },
   { value: 'pump', label: '搾った' },
+];
+
+/** 授乳の記録の種類。授乳・搾乳どちらの入力画面でも同じ並びで一番上に出す。 */
+export const FEEDING_METHOD_OPTIONS: { value: FeedingMethod; label: string }[] = [
+  { value: 'breast', label: '母乳' },
+  { value: 'pumped', label: '搾乳' },
+  { value: 'formula', label: 'ミルク' },
 ];
 
 interface SegmentedProps<T extends string> {

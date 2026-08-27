@@ -19,6 +19,7 @@ import {
   DateTimeField,
   DeleteButton,
   FEEDING_ENTRY_MODE_OPTIONS,
+  FEEDING_METHOD_OPTIONS,
   FieldLabel,
   HintBanner,
   LogModalShell,
@@ -61,12 +62,6 @@ interface MilkLogModalProps {
   onSubmit: (input: MilkLogInput) => void;
   onDelete: () => void;
 }
-
-const METHOD_OPTIONS: { value: FeedingMethod; label: string }[] = [
-  { value: 'breast', label: '母乳' },
-  { value: 'pumped', label: '搾乳' },
-  { value: 'formula', label: 'ミルク' },
-];
 
 const SIDE_OPTIONS: { value: BreastSide; label: string }[] = [
   { value: 'left', label: '左' },
@@ -256,8 +251,8 @@ function MilkLogModalBody({
       subheader={
         <div className="space-y-3">
           <div>
-            <FieldLabel>飲ませたもの</FieldLabel>
-            <Segmented options={METHOD_OPTIONS} value={method} onChange={setMethod} />
+            <FieldLabel>種類</FieldLabel>
+            <Segmented options={FEEDING_METHOD_OPTIONS} value={method} onChange={setMethod} />
           </div>
           {/* 搾った分は飲ませた分とは別の記録（搾乳ストックの1パック）になるので、押すと
               搾乳の入力画面へ移る。搾乳以外では関わらないため、搾乳を選んだときだけ出す。
