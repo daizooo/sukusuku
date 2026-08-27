@@ -18,6 +18,8 @@ import type {
   MilkLog,
   PumpedBatch,
   PumpingLog,
+  SpitupLog,
+  TemperatureLog,
   DocumentItem,
   DynamicTask,
   FamilyMember,
@@ -100,6 +102,8 @@ import TaskDetailModal from './modals/TaskDetailModal';
 import type { MilkLogInput } from './modals/MilkLogModal';
 import type { DiaperLogInput } from './modals/DiaperLogModal';
 import type { PumpingLogInput } from './modals/PumpingLogModal';
+import type { TemperatureLogInput } from './modals/TemperatureLogModal';
+import type { SpitupLogInput } from './modals/SpitupLogModal';
 import type { GiftDraft } from './modals/GiftFormModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 import type { NurseryDraft } from './modals/NurseryFormModal';
@@ -719,6 +723,12 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   const savePumpingLog = (input: PumpingLogInput, existing: PumpingLog | null) =>
     saveLog(existing, { type: 'pumping', ...input });
 
+  const saveTemperatureLog = (input: TemperatureLogInput, existing: TemperatureLog | null) =>
+    saveLog(existing, { type: 'temperature', ...input });
+
+  const saveSpitupLog = (input: SpitupLogInput, existing: SpitupLog | null) =>
+    saveLog(existing, { type: 'spitup', ...input });
+
   const deleteLog = async (id: string) => {
     const previous = logs;
     setLogs((prev) => prev.filter((l) => l.id !== id));
@@ -978,6 +988,8 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               onSaveMilkLog={saveMilkLog}
               onSaveDiaperLog={saveDiaperLog}
               onSavePumpingLog={savePumpingLog}
+              onSaveTemperatureLog={saveTemperatureLog}
+              onSaveSpitupLog={saveSpitupLog}
               onDeleteLog={deleteLog}
               onAddGrowthRecord={addGrowthRecordHandler}
               onUpdateGrowthRecord={updateGrowthRecordHandler}

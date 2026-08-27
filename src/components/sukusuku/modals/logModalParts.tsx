@@ -6,24 +6,30 @@
 import type { ReactNode } from 'react';
 import { Trash2, X } from 'lucide-react';
 
-export type LogAccent = 'milk' | 'diaper' | 'pumping';
+export type LogAccent = 'milk' | 'diaper' | 'pumping' | 'temperature' | 'spitup';
 
 const ACCENT_SELECTED: Record<LogAccent, string> = {
   milk: 'bg-amber-600 border-amber-600 text-white',
   diaper: 'bg-blue-600 border-blue-600 text-white',
   pumping: 'bg-rose-600 border-rose-600 text-white',
+  temperature: 'bg-orange-600 border-orange-600 text-white',
+  spitup: 'bg-violet-600 border-violet-600 text-white',
 };
 
 const ACCENT_BUTTON: Record<LogAccent, string> = {
   milk: 'bg-amber-600 hover:bg-amber-700',
   diaper: 'bg-blue-600 hover:bg-blue-700',
   pumping: 'bg-rose-600 hover:bg-rose-700',
+  temperature: 'bg-orange-600 hover:bg-orange-700',
+  spitup: 'bg-violet-600 hover:bg-violet-700',
 };
 
 const ACCENT_TEXT: Record<LogAccent, string> = {
   milk: 'text-amber-700',
   diaper: 'text-blue-700',
   pumping: 'text-rose-700',
+  temperature: 'text-orange-700',
+  spitup: 'text-violet-700',
 };
 
 interface LogModalShellProps {
@@ -215,6 +221,8 @@ const ACCENT_BANNER: Record<LogAccent, string> = {
   milk: 'bg-amber-50 border-amber-200',
   diaper: 'bg-blue-50 border-blue-200',
   pumping: 'bg-rose-50 border-rose-200',
+  temperature: 'bg-orange-50 border-orange-200',
+  spitup: 'bg-violet-50 border-violet-200',
 };
 
 export function HintBanner({ accent, children }: { accent: LogAccent; children: ReactNode }) {
@@ -223,5 +231,31 @@ export function HintBanner({ accent, children }: { accent: LogAccent; children: 
     <p className={`border rounded-xl px-3 py-2 text-xs font-medium ${background} ${ACCENT_TEXT[accent]}`}>
       {children}
     </p>
+  );
+}
+
+/**
+ * 保存する前に、その場での判断を出す枠（体温・吐き戻し）。
+ * 受診の目安にあたるときは alert にして、記録の種類の色ではなく赤で出す。
+ */
+export function AdviceBanner({
+  accent,
+  alert,
+  children,
+}: {
+  accent: LogAccent;
+  alert?: boolean;
+  children: ReactNode;
+}) {
+  const tone = alert
+    ? 'bg-red-50 border-red-300 text-red-700'
+    : `${ACCENT_BANNER[accent]} ${ACCENT_TEXT[accent]}`;
+  return <p className={`border rounded-xl px-3 py-2 text-xs leading-relaxed ${tone}`}>{children}</p>;
+}
+
+/** 入力欄の下に出す補足。保存できない理由は problem にして赤で出す。 */
+export function FieldNote({ problem, children }: { problem?: boolean; children: ReactNode }) {
+  return (
+    <p className={`text-[11px] mt-1.5 ${problem ? 'text-red-500' : 'text-gray-400'}`}>{children}</p>
   );
 }

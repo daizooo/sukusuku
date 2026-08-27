@@ -1,10 +1,11 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { ChevronRight, Coffee, Droplet, Milk } from 'lucide-react';
+import { ChevronRight, Coffee, Droplet, Milk, Thermometer, Waves } from 'lucide-react';
 import type { CareLog } from '@/types/app';
 import {
   BADGE_TONE_CLASS,
+  formatCelsius,
   getLogBadges,
   getLogTimeText,
   getLogTitle,
@@ -38,6 +39,22 @@ export function CareLogSummaryLine({ logs }: CareLogSummaryProps) {
         {summary.pumping.count}回
         {summary.pumping.ml > 0 && <span className="ml-1">{summary.pumping.ml}ml</span>}
       </span>
+      {/* 体温と吐き戻しは無い日のほうが多いので、その日にあったときだけ並べる。 */}
+      {summary.temperature.count > 0 && (
+        <span className="flex items-center">
+          <Thermometer size={12} className="text-orange-600 mr-1" />
+          {summary.temperature.count}回
+          {summary.temperature.maxCelsius !== null && (
+            <span className="ml-1">最高 {formatCelsius(summary.temperature.maxCelsius)}</span>
+          )}
+        </span>
+      )}
+      {summary.spitup.count > 0 && (
+        <span className={`flex items-center ${summary.spitup.needsAttention ? 'text-red-600 font-bold' : ''}`}>
+          <Waves size={12} className={`mr-1 ${summary.spitup.needsAttention ? 'text-red-600' : 'text-violet-600'}`} />
+          {summary.spitup.count}回
+        </span>
+      )}
     </div>
   );
 }

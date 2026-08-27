@@ -11,8 +11,10 @@ import {
   List,
   Milk,
   Plus,
+  Thermometer,
   TrendingUp,
   User,
+  Waves,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type {
@@ -24,15 +26,21 @@ import type {
   MilkLog,
   PumpedBatch,
   PumpingLog,
+  SpitupLog,
+  TemperatureLog,
 } from '@/types/app';
 import {
   BADGE_TONE_CLASS,
+  formatCelsius,
   formatStopwatch,
+  getLatestSpitup,
+  getLatestTemperature,
   getLogBadges,
   getLogTimeText,
   getLogTitle,
   getSideLabel,
   isAlertLog,
+  isFever,
   sumBatchesMl,
   summarizeLogs,
 } from '@/lib/careLogUtils';
@@ -40,6 +48,7 @@ import { useNursingTimer } from '@/lib/nursingTimer';
 import {
   addDays,
   formatDateWithWeekday,
+  formatTimeString,
   isSameDay,
   parseDateString,
   toDateString,
@@ -48,6 +57,8 @@ import SegmentedTabs from '../ui/SegmentedTabs';
 import MilkLogModal, { type MilkLogInput } from '../modals/MilkLogModal';
 import DiaperLogModal, { type DiaperLogInput } from '../modals/DiaperLogModal';
 import PumpingLogModal, { type PumpingLogInput } from '../modals/PumpingLogModal';
+import TemperatureLogModal, { type TemperatureLogInput } from '../modals/TemperatureLogModal';
+import SpitupLogModal, { type SpitupLogInput } from '../modals/SpitupLogModal';
 import GrowthRecordFormModal from '../modals/GrowthRecordFormModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 
@@ -69,6 +80,8 @@ interface LogTabProps {
   onSaveMilkLog: (input: MilkLogInput, existing: MilkLog | null) => void;
   onSaveDiaperLog: (input: DiaperLogInput, existing: DiaperLog | null) => void;
   onSavePumpingLog: (input: PumpingLogInput, existing: PumpingLog | null) => void;
+  onSaveTemperatureLog: (input: TemperatureLogInput, existing: TemperatureLog | null) => void;
+  onSaveSpitupLog: (input: SpitupLogInput, existing: SpitupLog | null) => void;
   onDeleteLog: (id: string) => void;
   onAddGrowthRecord: (draft: GrowthRecordDraft) => void;
   onUpdateGrowthRecord: (record: GrowthRecord, draft: GrowthRecordDraft) => void;
@@ -83,6 +96,10 @@ const getLogIcon = (type: LogType) => {
       return <Droplet size={16} className="text-blue-500" />;
     case 'pumping':
       return <Milk size={16} className="text-rose-500" />;
+    case 'temperature':
+      return <Thermometer size={16} className="text-orange-600" />;
+    case 'spitup':
+      return <Waves size={16} className="text-violet-600" />;
     default:
       return <FileText size={16} className="text-gray-500" />;
   }
@@ -96,6 +113,10 @@ const getLogColor = (type: LogType) => {
       return 'bg-blue-100';
     case 'pumping':
       return 'bg-rose-100';
+    case 'temperature':
+      return 'bg-orange-100';
+    case 'spitup':
+      return 'bg-violet-100';
     default:
       return 'bg-gray-100';
   }
@@ -116,6 +137,8 @@ export default function LogTab({
   onSaveMilkLog,
   onSaveDiaperLog,
   onSavePumpingLog,
+  onSaveTemperatureLog,
+  onSaveSpitupLog,
   onDeleteLog,
   onAddGrowthRecord,
   onUpdateGrowthRecord,
@@ -161,6 +184,24 @@ export default function LogTab({
     summary.pumping.ml > 0
       ? `${summary.pumping.count}回・${summary.pumping.ml}ml`
       : `${summary.pumping.count}回`;
+  // 体温は最新の値を主、回数と最高体温を従にする。
+  const latestTemperature = getLatestTemperature(visibleLogs);
+  const temperatureSummaryText = latestTemperature
+    ? [
+        formatCelsius(latestTemperature.celsius),
+        `${summary.temperature.count}回`,
+        // 熱が下がったあとでも、その日いちばん高かったところが分かるようにする。
+        ...(summary.temperature.maxCelsius !== null &&
+        summary.temperature.maxCelsius > latestTemperature.celsius
+          ? [`最高 ${formatCelsius(summary.temperature.maxCelsius)}`]
+          : []),
+      ].join('・')
+    : 'この日はまだ';
+  // 吐き戻しは回数と、直近がいつだったか。
+  const latestSpitup = getLatestSpitup(visibleLogs);
+  const spitupSummaryText = latestSpitup
+    ? `${summary.spitup.count}回・${formatTimeString(latestSpitup.time)}`
+    : 'この日はまだ';
   // 搾乳ストックの残り。まだ飲ませていないパックの数と合計。
   const stockBatches = pumpedBatches.filter((batch) => batch.usedBy === null);
   const stockMl = sumBatchesMl(stockBatches);
@@ -306,6 +347,42 @@ export default function LogTab({
                 </span>
               </button>
             </div>
+
+            {/* 体温・吐き戻しは1日に何度も付くとは限らないので、3つのボタンと同じ大きさは要らない。
+                右側にその日のようすを出して、「見る」と「記録する」を1行にまとめている。 */}
+            <button
+              onClick={() => setLogModal({ type: 'temperature', log: null })}
+              className="w-full bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2 hover:bg-orange-100 transition active:scale-[0.99]"
+            >
+              <span className="text-xs font-bold text-orange-700 flex items-center">
+                <Thermometer size={13} className="mr-1" /> 体温を記録
+              </span>
+              <span
+                className={`text-sm font-bold tabular-nums ${
+                  latestTemperature && isFever(latestTemperature.celsius)
+                    ? 'text-red-600'
+                    : 'text-orange-700'
+                }`}
+              >
+                {temperatureSummaryText}
+              </span>
+            </button>
+            <button
+              onClick={() => setLogModal({ type: 'spitup', log: null })}
+              className="w-full bg-violet-50 border border-violet-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2 hover:bg-violet-100 transition active:scale-[0.99]"
+            >
+              <span className="text-xs font-bold text-violet-700 flex items-center">
+                <Waves size={13} className="mr-1" /> 吐き戻しを記録
+              </span>
+              {/* その日に噴水状の記録があれば赤にする。直近の1件だけで見ると朝の1回を見落とすため。 */}
+              <span
+                className={`text-sm font-bold tabular-nums ${
+                  summary.spitup.needsAttention ? 'text-red-600' : 'text-violet-700'
+                }`}
+              >
+                {spitupSummaryText}
+              </span>
+            </button>
 
             {/* 搾乳ストック。ためた分と、授乳で「搾乳」を選んで飲ませた分の差し引き。
                 表示中の日だけでは求まらないため、日付の送りとは関わらず常に今の残りを出す。 */}
@@ -484,6 +561,30 @@ export default function LogTab({
         onClose={closeLogModal}
         onSubmit={(input) => {
           onSavePumpingLog(input, logModal?.log?.type === 'pumping' ? logModal.log : null);
+          closeLogModal();
+        }}
+        onDelete={() => logModal?.log && handleDelete(logModal.log)}
+      />
+      <TemperatureLogModal
+        show={logModal?.type === 'temperature'}
+        log={logModal?.log?.type === 'temperature' ? logModal.log : null}
+        baseDate={logDate}
+        previous={latestTemperature}
+        onClose={closeLogModal}
+        onSubmit={(input) => {
+          onSaveTemperatureLog(input, logModal?.log?.type === 'temperature' ? logModal.log : null);
+          closeLogModal();
+        }}
+        onDelete={() => logModal?.log && handleDelete(logModal.log)}
+      />
+      <SpitupLogModal
+        show={logModal?.type === 'spitup'}
+        log={logModal?.log?.type === 'spitup' ? logModal.log : null}
+        baseDate={logDate}
+        dayLogs={visibleLogs}
+        onClose={closeLogModal}
+        onSubmit={(input) => {
+          onSaveSpitupLog(input, logModal?.log?.type === 'spitup' ? logModal.log : null);
           closeLogModal();
         }}
         onDelete={() => logModal?.log && handleDelete(logModal.log)}
