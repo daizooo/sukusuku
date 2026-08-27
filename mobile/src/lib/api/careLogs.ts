@@ -21,11 +21,12 @@ export const LOG_TYPE_LABEL: Record<LogType, string> = {
   milk: 'ミルク',
   diaper: 'おむつ',
   pumping: '搾乳',
+  temperature: '体温',
 };
 
 // 記録タブから睡眠の記録を取り止めたあとも、すでに保存されている type = 'sleep' の行は
 // DBに残っている。アプリ側では扱わないので、取得の時点で除いておく。
-const ACTIVE_LOG_TYPES: LogType[] = ['milk', 'diaper', 'pumping'];
+const ACTIVE_LOG_TYPES: LogType[] = ['milk', 'diaper', 'pumping', 'temperature'];
 
 // 記録の種類ごとの項目は care_logs.details (jsonb) に入れる。
 // 想定外の値が入っていても表示を壊さないよう、読み出しは1項目ずつ検証する。
@@ -82,6 +83,14 @@ export const rowToCareLog = (row: CareLogRow): CareLog => {
     };
   }
 
+  if (row.type === 'temperature') {
+    return {
+      ...base,
+      type: 'temperature',
+      celsius: readNumber(details.celsius) ?? 0,
+    };
+  }
+
   return {
     ...base,
     type: 'milk',
@@ -114,6 +123,8 @@ const careLogToDetails = (log: CareLog): Json => {
     set('kind', log.kind);
     set('poopColor', log.poopColor);
     set('poopConsistency', log.poopConsistency);
+  } else if (log.type === 'temperature') {
+    set('celsius', log.celsius);
   } else {
     set('amountMl', log.amountMl);
   }
@@ -132,6 +143,7 @@ const careLogToAmount = (log: CareLog): string => {
     return parts.join(' ');
   }
   if (log.type === 'diaper') return '';
+  if (log.type === 'temperature') return `${log.celsius.toFixed(1)}℃`;
   return log.amountMl ? `${log.amountMl}ml` : '';
 };
 
