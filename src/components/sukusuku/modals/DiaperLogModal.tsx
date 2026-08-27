@@ -36,6 +36,11 @@ interface DiaperLogModalProps {
   log: DiaperLog | null;
   /** 新規追加時に記録する日。 */
   baseDate: Date;
+  /**
+   * 新規追加のときに最初から選んでおく種類。
+   * 記録タブのカウンタから開いたときは、押した種類がそのまま入る。
+   */
+  initialKind?: DiaperKind;
   onClose: () => void;
   onSubmit: (input: DiaperLogInput) => void;
   onDelete: () => void;
@@ -81,8 +86,15 @@ export default function DiaperLogModal({ show, ...props }: DiaperLogModalProps &
   return <DiaperLogModalBody {...props} />;
 }
 
-function DiaperLogModalBody({ log, baseDate, onClose, onSubmit, onDelete }: DiaperLogModalProps) {
-  const [kind, setKind] = useState<DiaperKind>(log?.kind ?? 'pee');
+function DiaperLogModalBody({
+  log,
+  baseDate,
+  initialKind,
+  onClose,
+  onSubmit,
+  onDelete,
+}: DiaperLogModalProps) {
+  const [kind, setKind] = useState<DiaperKind>(log?.kind ?? initialKind ?? 'pee');
   const [poopColor, setPoopColor] = useState<PoopColor | undefined>(log?.poopColor);
   const [poopConsistency, setPoopConsistency] = useState<PoopConsistency | undefined>(
     log?.poopConsistency ?? 'normal',

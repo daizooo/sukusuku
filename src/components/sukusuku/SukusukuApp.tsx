@@ -702,7 +702,11 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
     [logDate, refreshPumpedStock, refreshRecentMilkLogs, refreshRecentTemperatureLogs],
   );
 
-  const saveLog = async (log: CareLog | null, input: NewCareLogInput) => {
+  /**
+   * 記録の追加・更新。追加できたときだけ、その記録を返す
+   * （おむつのカウンタが「取り消す」に使う）。更新と失敗のときは null。
+   */
+  const saveLog = async (log: CareLog | null, input: NewCareLogInput): Promise<CareLog | null> => {
     if (log) {
       // 種類を切り替えた場合に古い項目が残らないよう、入力内容で作り直す。
       const updated = { ...input, id: log.id, createdBy: log.createdBy } as CareLog;
@@ -716,23 +720,27 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
         console.error('Failed to update care log:', err);
         alert('記録の更新に失敗しました。もう一度お試しください。');
       }
-      return;
+      return null;
     }
 
     try {
       const created = await insertCareLog(supabase, familyId, userId, input);
       upsertLogInState(created);
+      return created;
     } catch (err) {
       console.error('Failed to add care log:', err);
       alert('記録の追加に失敗しました。もう一度お試しください。');
+      return null;
     }
   };
 
   const saveMilkLog = (input: MilkLogInput, existing: MilkLog | null) =>
     saveLog(existing, { type: 'milk', ...input });
 
-  const saveDiaperLog = (input: DiaperLogInput, existing: DiaperLog | null) =>
-    saveLog(existing, { type: 'diaper', ...input });
+  const saveDiaperLog = async (input: DiaperLogInput, existing: DiaperLog | null) => {
+    const saved = await saveLog(existing, { type: 'diaper', ...input });
+    return saved?.type === 'diaper' ? saved : null;
+  };
 
   const savePumpingLog = (input: PumpingLogInput, existing: PumpingLog | null) =>
     saveLog(existing, { type: 'pumping', ...input });
