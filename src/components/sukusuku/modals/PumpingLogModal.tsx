@@ -7,10 +7,12 @@ import { parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUt
 import {
   DateTimeField,
   DeleteButton,
+  FEEDING_ENTRY_MODE_OPTIONS,
   FieldLabel,
   HintBanner,
   LogModalShell,
   NoteField,
+  Segmented,
   SubmitButton,
 } from './logModalParts';
 
@@ -27,6 +29,8 @@ interface PumpingLogModalProps {
   baseDate: Date;
   /** 搾乳ストックの全量（使用済みも含む）。残りの表示に使う。 */
   pumpedBatches: PumpedBatch[];
+  /** 「飲ませた」に切り替える。授乳の入力画面へ戻る（新規追加のときだけ出す）。 */
+  onSwitchToFeeding: () => void;
   onClose: () => void;
   onSubmit: (input: PumpingLogInput) => void;
   onDelete: () => void;
@@ -42,13 +46,14 @@ export default function PumpingLogModal({ show, ...props }: PumpingLogModalProps
  * 搾乳してためた母乳の記録。1件が搾乳ストックの1パック（母乳パック1つぶん）にあたる。
  *
  * 搾れる量は毎回まちまちで、決まった刻みのボタンでは当てはまらないため、
- * 量は数値の直接入力だけにしている。飲ませるときは授乳・ミルクの記録で
- * 「搾乳」を選び、ここでためたパックの中から使うものを選ぶ。
+ * 量は数値の直接入力だけにしている。飲ませるときは授乳の記録で「搾乳」を選び、
+ * ここでためたパックの中から使うものを選ぶ（入力画面は「飲ませた／搾った」で行き来する）。
  */
 function PumpingLogModalBody({
   log,
   baseDate,
   pumpedBatches,
+  onSwitchToFeeding,
   onClose,
   onSubmit,
   onDelete,
@@ -77,13 +82,24 @@ function PumpingLogModalBody({
 
   return (
     <LogModalShell title={log ? '搾乳の記録を編集' : '搾乳を記録'} onClose={onClose}>
+      {/* 授乳の入力画面で「搾乳」を選んだときと同じ切り替え。飲ませた分に戻れるようにしておく。 */}
+      {!log && (
+        <Segmented
+          options={FEEDING_ENTRY_MODE_OPTIONS}
+          value="pump"
+          onChange={(next) => {
+            if (next === 'feed') onSwitchToFeeding();
+          }}
+        />
+      )}
+
       <HintBanner accent="pumping">
         {isUsed ? (
           <>この搾乳は授乳の記録ですでに飲ませた分です。量を直すと、その記録の量とずれます。</>
         ) : (
           <>
             搾乳ストックの残りは<span className="font-bold">{pumpedStockMl(pumpedBatches)}ml</span>
-            。飲ませるときは授乳・ミルクの記録で「搾乳」を選び、ここで記録した分から選びます。
+            。飲ませるときは上の「飲ませた」に切り替えて、ここで記録した分から選びます。
           </>
         )}
       </HintBanner>

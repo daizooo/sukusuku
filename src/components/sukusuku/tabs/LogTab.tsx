@@ -20,6 +20,7 @@ import type {
   BreastSide,
   CareLog,
   DiaperLog,
+  FeedingMethod,
   GrowthRecord,
   LogType,
   MilkLog,
@@ -146,6 +147,8 @@ export default function LogTab({
   // 記録の入力画面。log が null なら新規追加、入っていればその記録の編集。
   const [logModal, setLogModal] = useState<{ type: LogType; log: CareLog | null } | null>(null);
   const [growthModal, setGrowthModal] = useState<{ mode: 'add' | 'edit'; record: GrowthRecord | null } | null>(null);
+  // 搾乳の入力画面から「飲ませた」で戻ったときに、搾乳を選んだ状態で開くための指定。
+  const [milkModalMethod, setMilkModalMethod] = useState<FeedingMethod | undefined>(undefined);
   // グラフの横軸。生後ヶ月が未入力の記録は横軸が空になってしまうため、記録日で代替する。
   const growthChartData = useMemo(
     () =>
@@ -168,42 +171,33 @@ export default function LogTab({
       ? formatDateWithWeekday(logDate)
       : `${logDate.getFullYear()}年${formatDateWithWeekday(logDate)}`;
 
-  // 種類ごとの記録ボタンに出すその日の合計。回数を主、量・時間を従にして1行に収める。
-  const milkSummaryText = [
-    `${summary.milk.count}回`,
-    ...(summary.milk.ml > 0 ? [`${summary.milk.ml}ml`] : []),
-    ...(summary.milk.breastMinutes > 0 ? [`${summary.milk.breastMinutes}分`] : []),
-  ].join('・');
+  // おむつのボタンに出すその日の合計。回数を主、うんちの回数を従にして1行に収める。
   const diaperSummaryText =
     summary.diaper.poopCount > 0
       ? `${summary.diaper.count}回・うんち${summary.diaper.poopCount}`
       : `${summary.diaper.count}回`;
-  const pumpingSummaryText =
-    summary.pumping.ml > 0
-      ? `${summary.pumping.count}回・${summary.pumping.ml}ml`
-      : `${summary.pumping.count}回`;
   // 平熱。その子自身の記録の平均なので、表示中の日ではなく直近の記録から出す。
   const temperatureBaseline = useMemo(
     () => getTemperatureBaseline(recentTemperatureLogs),
     [recentTemperatureLogs],
   );
-  // 体温は最新の値を主、回数と最高体温を従にする。
+  // 体温は最新の値だけを出す。何回測ったかは判断に使わないので載せない。
   // その日にまだ測っていなければ、空けておかずに平熱を出す（測ったときの比べる相手になる）。
   const latestTemperature = getLatestTemperature(visibleLogs);
   const temperatureSummaryText = latestTemperature
-    ? [
-        formatCelsius(latestTemperature.celsius),
-        `${summary.temperature.count}回`,
-        // 熱が下がったあとでも、その日いちばん高かったところが分かるようにする。
-        ...(summary.temperature.maxCelsius !== null &&
-        summary.temperature.maxCelsius > latestTemperature.celsius
-          ? [`最高 ${formatCelsius(summary.temperature.maxCelsius)}`]
-          : []),
-      ].join('・')
+    ? formatCelsius(latestTemperature.celsius)
     : temperatureBaseline
       ? `平熱 ${formatCelsius(temperatureBaseline.celsius)}`
       : 'この日はまだ';
+  // 熱が下がったあとに、その日いちばん高かったところを添える。下がっていなければ出さない。
+  const temperatureDayMaxText =
+    latestTemperature &&
+    summary.temperature.maxCelsius !== null &&
+    summary.temperature.maxCelsius > latestTemperature.celsius
+      ? `最高 ${formatCelsius(summary.temperature.maxCelsius)}`
+      : null;
   // 搾乳ストックの残り。まだ飲ませていないパックの数と合計。
+  // 表示中の日だけでは求まらないため、日付の送りとは関わらず常に今の残りを出す。
   const stockBatches = pumpedBatches.filter((batch) => batch.usedBy === null);
   const stockMl = sumBatchesMl(stockBatches);
 
@@ -301,19 +295,28 @@ export default function LogTab({
               </div>
             )}
 
-            {/* 記録ボタン。その日の合計を同じボタンに載せ、「見る」と「記録する」を1つにまとめている。 */}
+            {/* 記録ボタン。その日のようすを同じボタンに載せ、「見る」と「記録する」を1つにまとめている。
+                授乳・おむつ・体温の3つ。搾乳は授乳の中（入力画面の「搾った」）へ寄せたので、
+                ここには出さず、代わりに授乳のボタンにいまの搾乳ストックを出す。 */}
             <div className="grid grid-cols-3 gap-2">
               <button
-                onClick={() => setLogModal({ type: 'milk', log: null })}
+                onClick={() => {
+                  setMilkModalMethod(undefined);
+                  setLogModal({ type: 'milk', log: null });
+                }}
                 className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-amber-50 transition active:scale-95"
               >
                 <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
                 <span className="flex items-center gap-1.5">
                   <Coffee size={17} className="text-amber-600" />
-                  <span className="text-sm font-bold text-gray-800">ミルク</span>
+                  <span className="text-sm font-bold text-gray-800">授乳</span>
                 </span>
-                <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
-                  {nursingTimer.hasSession ? '計測中' : milkSummaryText}
+                {/* その日の回数・量・分数は出さない（判断に使うのは体重とおしっこの回数）。
+                    代わりに、次の授乳で使える搾乳ストックの残りを出す。表示中の日だけでは
+                    求まらないため、日付の送りとは関わらず常に今の残りになる。
+                    何パックあるかは飲ませるときに選ぶので、ここは合計だけでよい。 */}
+                <span className="mt-0.5 text-[11px] font-bold text-rose-600 tabular-nums leading-tight text-center">
+                  ストック・{stockMl}ml
                 </span>
                 {nextBreastSide && !nursingTimer.hasSession && (
                   <span className="text-[10px] font-bold text-amber-600 leading-tight">
@@ -334,51 +337,35 @@ export default function LogTab({
                   {diaperSummaryText}
                 </span>
               </button>
+              {/* 体温は1日に何度も付くとは限らないので、回数は出さずいまの値だけにする。
+                  その日にまだ測っていなければ平熱を出す（測ったときの比べる相手になる）。 */}
               <button
-                onClick={() => setLogModal({ type: 'pumping', log: null })}
-                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-rose-50 transition active:scale-95"
+                onClick={() => setLogModal({ type: 'temperature', log: null })}
+                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-orange-50 transition active:scale-95"
               >
                 <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
                 <span className="flex items-center gap-1.5">
-                  <Milk size={17} className="text-rose-500" />
-                  <span className="text-sm font-bold text-gray-800">搾乳</span>
+                  <Thermometer size={17} className="text-orange-600" />
+                  <span className="text-sm font-bold text-gray-800">体温</span>
                 </span>
-                <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
-                  {pumpingSummaryText}
+                <span
+                  className={`mt-0.5 text-[11px] font-medium tabular-nums leading-tight text-center ${
+                    latestTemperature && isFever(latestTemperature.celsius)
+                      ? 'font-bold text-red-600'
+                      : 'text-gray-500'
+                  }`}
+                >
+                  {temperatureSummaryText}
                 </span>
+                {/* 熱が下がったあとでも、その日いちばん高かったところが分かるようにする。 */}
+                {temperatureDayMaxText && (
+                  <span className="text-[10px] font-bold text-orange-600 tabular-nums leading-tight">
+                    {temperatureDayMaxText}
+                  </span>
+                )}
               </button>
             </div>
 
-            {/* 体温は1日に何度も付くとは限らないので、3つのボタンと同じ大きさは要らない。
-                右側にその日のようすを出して、「見る」と「記録する」を1行にまとめている。 */}
-            <button
-              onClick={() => setLogModal({ type: 'temperature', log: null })}
-              className="w-full bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2 hover:bg-orange-100 transition active:scale-[0.99]"
-            >
-              <span className="text-xs font-bold text-orange-700 flex items-center">
-                <Thermometer size={13} className="mr-1" /> 体温を記録
-              </span>
-              <span
-                className={`text-sm font-bold tabular-nums ${
-                  latestTemperature && isFever(latestTemperature.celsius)
-                    ? 'text-red-600'
-                    : 'text-orange-700'
-                }`}
-              >
-                {temperatureSummaryText}
-              </span>
-            </button>
-
-            {/* 搾乳ストック。ためた分と、授乳で「搾乳」を選んで飲ませた分の差し引き。
-                表示中の日だけでは求まらないため、日付の送りとは関わらず常に今の残りを出す。 */}
-            <div className="bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 flex items-center justify-between">
-              <span className="text-xs font-bold text-rose-700 flex items-center">
-                <Milk size={13} className="mr-1" /> 搾乳ストック
-              </span>
-              <span className="text-sm font-bold text-rose-700 tabular-nums">
-                {stockBatches.length}パック・{stockMl}ml
-              </span>
-            </div>
             {!isToday && (
               <p className="text-[11px] text-gray-500 leading-relaxed">
                 過去の日を表示中です。記録を追加すると{dateLabel}に登録されます。
@@ -517,6 +504,8 @@ export default function LogTab({
         nextSide={nextBreastSide}
         timer={nursingTimer}
         pumpedBatches={pumpedBatches}
+        initialMethod={milkModalMethod}
+        onSwitchToPumping={() => setLogModal({ type: 'pumping', log: null })}
         onClose={closeLogModal}
         onSubmit={(input) => {
           const existing = logModal?.log?.type === 'milk' ? logModal.log : null;
@@ -543,6 +532,11 @@ export default function LogTab({
         log={logModal?.log?.type === 'pumping' ? logModal.log : null}
         baseDate={logDate}
         pumpedBatches={pumpedBatches}
+        onSwitchToFeeding={() => {
+          // 「搾乳」を選んだところから来ているので、戻り先もそこに合わせる。
+          setMilkModalMethod('pumped');
+          setLogModal({ type: 'milk', log: null });
+        }}
         onClose={closeLogModal}
         onSubmit={(input) => {
           onSavePumpingLog(input, logModal?.log?.type === 'pumping' ? logModal.log : null);
