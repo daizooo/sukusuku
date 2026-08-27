@@ -6,14 +6,13 @@
 import type { ReactNode } from 'react';
 import { Trash2, X } from 'lucide-react';
 
-export type LogAccent = 'milk' | 'diaper' | 'pumping' | 'temperature' | 'spitup';
+export type LogAccent = 'milk' | 'diaper' | 'pumping' | 'temperature';
 
 const ACCENT_SELECTED: Record<LogAccent, string> = {
   milk: 'bg-amber-600 border-amber-600 text-white',
   diaper: 'bg-blue-600 border-blue-600 text-white',
   pumping: 'bg-rose-600 border-rose-600 text-white',
   temperature: 'bg-orange-600 border-orange-600 text-white',
-  spitup: 'bg-violet-600 border-violet-600 text-white',
 };
 
 const ACCENT_BUTTON: Record<LogAccent, string> = {
@@ -21,7 +20,6 @@ const ACCENT_BUTTON: Record<LogAccent, string> = {
   diaper: 'bg-blue-600 hover:bg-blue-700',
   pumping: 'bg-rose-600 hover:bg-rose-700',
   temperature: 'bg-orange-600 hover:bg-orange-700',
-  spitup: 'bg-violet-600 hover:bg-violet-700',
 };
 
 const ACCENT_TEXT: Record<LogAccent, string> = {
@@ -29,7 +27,6 @@ const ACCENT_TEXT: Record<LogAccent, string> = {
   diaper: 'text-blue-700',
   pumping: 'text-rose-700',
   temperature: 'text-orange-700',
-  spitup: 'text-violet-700',
 };
 
 interface LogModalShellProps {
@@ -222,7 +219,6 @@ const ACCENT_BANNER: Record<LogAccent, string> = {
   diaper: 'bg-blue-50 border-blue-200',
   pumping: 'bg-rose-50 border-rose-200',
   temperature: 'bg-orange-50 border-orange-200',
-  spitup: 'bg-violet-50 border-violet-200',
 };
 
 export function HintBanner({ accent, children }: { accent: LogAccent; children: ReactNode }) {
@@ -235,7 +231,7 @@ export function HintBanner({ accent, children }: { accent: LogAccent; children: 
 }
 
 /**
- * 保存する前に、その場での判断を出す枠（体温・吐き戻し）。
+ * 保存する前に、その場での判断を出す枠（体温）。
  * 受診の目安にあたるときは alert にして、記録の種類の色ではなく赤で出す。
  */
 export function AdviceBanner({

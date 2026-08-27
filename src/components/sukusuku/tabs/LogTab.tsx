@@ -14,7 +14,6 @@ import {
   Thermometer,
   TrendingUp,
   User,
-  Waves,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type {
@@ -26,15 +25,14 @@ import type {
   MilkLog,
   PumpedBatch,
   PumpingLog,
-  SpitupLog,
   TemperatureLog,
 } from '@/types/app';
 import {
   BADGE_TONE_CLASS,
   formatCelsius,
   formatStopwatch,
-  getLatestSpitup,
   getLatestTemperature,
+  getTemperatureBaseline,
   getLogBadges,
   getLogTimeText,
   getLogTitle,
@@ -48,7 +46,6 @@ import { useNursingTimer } from '@/lib/nursingTimer';
 import {
   addDays,
   formatDateWithWeekday,
-  formatTimeString,
   isSameDay,
   parseDateString,
   toDateString,
@@ -58,7 +55,6 @@ import MilkLogModal, { type MilkLogInput } from '../modals/MilkLogModal';
 import DiaperLogModal, { type DiaperLogInput } from '../modals/DiaperLogModal';
 import PumpingLogModal, { type PumpingLogInput } from '../modals/PumpingLogModal';
 import TemperatureLogModal, { type TemperatureLogInput } from '../modals/TemperatureLogModal';
-import SpitupLogModal, { type SpitupLogInput } from '../modals/SpitupLogModal';
 import GrowthRecordFormModal from '../modals/GrowthRecordFormModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 
@@ -81,7 +77,12 @@ interface LogTabProps {
   onSaveDiaperLog: (input: DiaperLogInput, existing: DiaperLog | null) => void;
   onSavePumpingLog: (input: PumpingLogInput, existing: PumpingLog | null) => void;
   onSaveTemperatureLog: (input: TemperatureLogInput, existing: TemperatureLog | null) => void;
-  onSaveSpitupLog: (input: SpitupLogInput, existing: SpitupLog | null) => void;
+  /**
+   * 平熱に使う直近の体温。表示中の日だけでは求まらないため、日付の送りとは別に受け取る。
+   */
+  recentTemperatureLogs: TemperatureLog[];
+  /** プロフィールに登録された子の名前。平熱を「岳の平熱」の形で出すのに使う。 */
+  babyName?: string;
   onDeleteLog: (id: string) => void;
   onAddGrowthRecord: (draft: GrowthRecordDraft) => void;
   onUpdateGrowthRecord: (record: GrowthRecord, draft: GrowthRecordDraft) => void;
@@ -98,8 +99,6 @@ const getLogIcon = (type: LogType) => {
       return <Milk size={16} className="text-rose-500" />;
     case 'temperature':
       return <Thermometer size={16} className="text-orange-600" />;
-    case 'spitup':
-      return <Waves size={16} className="text-violet-600" />;
     default:
       return <FileText size={16} className="text-gray-500" />;
   }
@@ -115,8 +114,6 @@ const getLogColor = (type: LogType) => {
       return 'bg-rose-100';
     case 'temperature':
       return 'bg-orange-100';
-    case 'spitup':
-      return 'bg-violet-100';
     default:
       return 'bg-gray-100';
   }
@@ -138,7 +135,8 @@ export default function LogTab({
   onSaveDiaperLog,
   onSavePumpingLog,
   onSaveTemperatureLog,
-  onSaveSpitupLog,
+  recentTemperatureLogs,
+  babyName,
   onDeleteLog,
   onAddGrowthRecord,
   onUpdateGrowthRecord,
@@ -184,7 +182,13 @@ export default function LogTab({
     summary.pumping.ml > 0
       ? `${summary.pumping.count}回・${summary.pumping.ml}ml`
       : `${summary.pumping.count}回`;
+  // 平熱。その子自身の記録の平均なので、表示中の日ではなく直近の記録から出す。
+  const temperatureBaseline = useMemo(
+    () => getTemperatureBaseline(recentTemperatureLogs),
+    [recentTemperatureLogs],
+  );
   // 体温は最新の値を主、回数と最高体温を従にする。
+  // その日にまだ測っていなければ、空けておかずに平熱を出す（測ったときの比べる相手になる）。
   const latestTemperature = getLatestTemperature(visibleLogs);
   const temperatureSummaryText = latestTemperature
     ? [
@@ -196,12 +200,9 @@ export default function LogTab({
           ? [`最高 ${formatCelsius(summary.temperature.maxCelsius)}`]
           : []),
       ].join('・')
-    : 'この日はまだ';
-  // 吐き戻しは回数と、直近がいつだったか。
-  const latestSpitup = getLatestSpitup(visibleLogs);
-  const spitupSummaryText = latestSpitup
-    ? `${summary.spitup.count}回・${formatTimeString(latestSpitup.time)}`
-    : 'この日はまだ';
+    : temperatureBaseline
+      ? `平熱 ${formatCelsius(temperatureBaseline.celsius)}`
+      : 'この日はまだ';
   // 搾乳ストックの残り。まだ飲ませていないパックの数と合計。
   const stockBatches = pumpedBatches.filter((batch) => batch.usedBy === null);
   const stockMl = sumBatchesMl(stockBatches);
@@ -348,7 +349,7 @@ export default function LogTab({
               </button>
             </div>
 
-            {/* 体温・吐き戻しは1日に何度も付くとは限らないので、3つのボタンと同じ大きさは要らない。
+            {/* 体温は1日に何度も付くとは限らないので、3つのボタンと同じ大きさは要らない。
                 右側にその日のようすを出して、「見る」と「記録する」を1行にまとめている。 */}
             <button
               onClick={() => setLogModal({ type: 'temperature', log: null })}
@@ -365,22 +366,6 @@ export default function LogTab({
                 }`}
               >
                 {temperatureSummaryText}
-              </span>
-            </button>
-            <button
-              onClick={() => setLogModal({ type: 'spitup', log: null })}
-              className="w-full bg-violet-50 border border-violet-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2 hover:bg-violet-100 transition active:scale-[0.99]"
-            >
-              <span className="text-xs font-bold text-violet-700 flex items-center">
-                <Waves size={13} className="mr-1" /> 吐き戻しを記録
-              </span>
-              {/* その日に噴水状の記録があれば赤にする。直近の1件だけで見ると朝の1回を見落とすため。 */}
-              <span
-                className={`text-sm font-bold tabular-nums ${
-                  summary.spitup.needsAttention ? 'text-red-600' : 'text-violet-700'
-                }`}
-              >
-                {spitupSummaryText}
               </span>
             </button>
 
@@ -570,21 +555,11 @@ export default function LogTab({
         log={logModal?.log?.type === 'temperature' ? logModal.log : null}
         baseDate={logDate}
         previous={latestTemperature}
+        baseline={temperatureBaseline}
+        babyName={babyName}
         onClose={closeLogModal}
         onSubmit={(input) => {
           onSaveTemperatureLog(input, logModal?.log?.type === 'temperature' ? logModal.log : null);
-          closeLogModal();
-        }}
-        onDelete={() => logModal?.log && handleDelete(logModal.log)}
-      />
-      <SpitupLogModal
-        show={logModal?.type === 'spitup'}
-        log={logModal?.log?.type === 'spitup' ? logModal.log : null}
-        baseDate={logDate}
-        dayLogs={visibleLogs}
-        onClose={closeLogModal}
-        onSubmit={(input) => {
-          onSaveSpitupLog(input, logModal?.log?.type === 'spitup' ? logModal.log : null);
           closeLogModal();
         }}
         onDelete={() => logModal?.log && handleDelete(logModal.log)}

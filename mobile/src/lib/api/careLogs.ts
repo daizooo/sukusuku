@@ -10,7 +10,6 @@ import type {
   PoopColor,
   PoopConsistency,
   PumpedBatch,
-  SpitupAmount,
 } from '@/types/app';
 import { addDays, startOfDay } from '@/lib/dateUtils';
 
@@ -23,12 +22,11 @@ export const LOG_TYPE_LABEL: Record<LogType, string> = {
   diaper: 'おむつ',
   pumping: '搾乳',
   temperature: '体温',
-  spitup: '吐き戻し',
 };
 
 // 記録タブから睡眠の記録を取り止めたあとも、すでに保存されている type = 'sleep' の行は
 // DBに残っている。アプリ側では扱わないので、取得の時点で除いておく。
-const ACTIVE_LOG_TYPES: LogType[] = ['milk', 'diaper', 'pumping', 'temperature', 'spitup'];
+const ACTIVE_LOG_TYPES: LogType[] = ['milk', 'diaper', 'pumping', 'temperature'];
 
 // 記録の種類ごとの項目は care_logs.details (jsonb) に入れる。
 // 想定外の値が入っていても表示を壊さないよう、読み出しは1項目ずつ検証する。
@@ -93,15 +91,6 @@ export const rowToCareLog = (row: CareLogRow): CareLog => {
     };
   }
 
-  if (row.type === 'spitup') {
-    return {
-      ...base,
-      type: 'spitup',
-      amount: readEnum<SpitupAmount>(details.amount, ['little', 'lot', 'projectile']) ?? 'little',
-      minutesAfterMilk: readNumber(details.minutesAfterMilk),
-    };
-  }
-
   return {
     ...base,
     type: 'milk',
@@ -136,21 +125,11 @@ const careLogToDetails = (log: CareLog): Json => {
     set('poopConsistency', log.poopConsistency);
   } else if (log.type === 'temperature') {
     set('celsius', log.celsius);
-  } else if (log.type === 'spitup') {
-    set('amount', log.amount);
-    set('minutesAfterMilk', log.minutesAfterMilk);
   } else {
     set('amountMl', log.amountMl);
   }
 
   return details as Json;
-};
-
-// 吐き戻しの量の呼び名。careLogUtils の選択肢と同じ言葉を使う（あちらは画面用の説明も持つ）。
-const SPITUP_AMOUNT_LABEL: Record<SpitupAmount, string> = {
-  little: '少し',
-  lot: 'たくさん',
-  projectile: '噴水のように',
 };
 
 /** 一覧に出す短い要約。details を持たない過去の記録との互換のため amount にも残す。 */
@@ -165,7 +144,6 @@ const careLogToAmount = (log: CareLog): string => {
   }
   if (log.type === 'diaper') return '';
   if (log.type === 'temperature') return `${log.celsius.toFixed(1)}℃`;
-  if (log.type === 'spitup') return SPITUP_AMOUNT_LABEL[log.amount];
   return log.amountMl ? `${log.amountMl}ml` : '';
 };
 

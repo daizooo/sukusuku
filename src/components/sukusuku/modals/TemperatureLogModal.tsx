@@ -3,15 +3,20 @@
 import { useState } from 'react';
 import type { TemperatureLog } from '@/types/app';
 import {
+  BASELINE_NOTABLE_DIFF,
   CELSIUS_STEP,
   DEFAULT_CELSIUS,
   LOW_CELSIUS,
   MAX_CELSIUS,
   MIN_CELSIUS,
   URGENT_FEVER_CELSIUS,
+  celsiusFromBaseline,
   formatCelsius,
+  formatCelsiusDiff,
+  formatNormalRange,
   isFever,
   roundCelsius,
+  type TemperatureBaseline,
 } from '@/lib/careLogUtils';
 import { formatTimeString, parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUtils';
 import {
@@ -44,6 +49,10 @@ interface TemperatureLogModalProps {
   baseDate: Date;
   /** 表示中の日でいちばん新しい体温。新規追加のときの初期値と、比べる相手に使う。 */
   previous: TemperatureLog | null;
+  /** この子の平熱。記録がまだ少なければ null。 */
+  baseline: TemperatureBaseline | null;
+  /** プロフィールに登録された子の名前。平熱を「岳の平熱」の形で出すのに使う。 */
+  babyName?: string;
   onClose: () => void;
   onSubmit: (input: TemperatureLogInput) => void;
   onDelete: () => void;
@@ -62,6 +71,8 @@ function TemperatureLogModalBody({
   log,
   baseDate,
   previous,
+  baseline,
+  babyName,
   onClose,
   onSubmit,
   onDelete,
@@ -104,6 +115,9 @@ function TemperatureLogModalBody({
 
   return (
     <LogModalShell title={log ? '体温の記録を編集' : '体温を記録'} onClose={onClose}>
+      {/* 何度なら高いのかは子どもによって違うので、入力欄より先にものさしを出す。 */}
+      <Yardstick baseline={baseline} babyName={babyName} />
+
       {!log && previous && (
         <HintBanner accent="temperature">
           前回は {formatCelsius(previous.celsius)}（{formatTimeString(previous.time)}）。
@@ -138,7 +152,7 @@ function TemperatureLogModalBody({
         </FieldNote>
       </div>
 
-      {celsius !== null && problem === null && <Advice celsius={celsius} />}
+      {celsius !== null && problem === null && <Advice celsius={celsius} baseline={baseline} />}
 
       <DateTimeField label="日時" date={date} time={time} onChangeDate={setDate} onChangeTime={setTime} />
       <NoteField value={note} onChange={setNote} placeholder="ぐったりしている / 厚着していた など" />
@@ -151,10 +165,53 @@ function TemperatureLogModalBody({
 }
 
 /**
+ * 何度なら高いのかのものさし。正常範囲と、その子自身の平熱を並べる。
+ *
+ * 同じ 37.2℃ でも、平熱 36.6℃ の子には高く、平熱 37.1℃ の子にはいつもどおり。
+ * 一般の正常範囲だけでは足りないので、その子の平熱と2つ並べて置く。
+ */
+function Yardstick({
+  baseline,
+  babyName,
+}: {
+  baseline: TemperatureBaseline | null;
+  babyName?: string;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <div className="border border-gray-200 bg-gray-50 rounded-xl px-3 py-2">
+        <span className="block text-[11px] font-medium text-gray-500">正常範囲</span>
+        <span className="block text-sm font-bold text-gray-700 tabular-nums">
+          {formatNormalRange()}
+        </span>
+      </div>
+      <div className="border border-orange-200 bg-orange-50 rounded-xl px-3 py-2">
+        <span className="block text-[11px] font-medium text-orange-600">
+          {babyName ? `${babyName}の平熱` : '平熱'}
+        </span>
+        {baseline ? (
+          <span className="block text-sm font-bold text-orange-700 tabular-nums">
+            {formatCelsius(baseline.celsius)}
+            <span className="ml-1 font-medium text-[11px] text-orange-600">
+              直近{baseline.count}回
+            </span>
+          </span>
+        ) : (
+          // 平熱が出るまでは、何回ぶん足りないのかではなく「これから分かる」ことを伝える。
+          <span className="block text-[11px] text-orange-600 leading-snug pt-0.5">
+            記録が増えると出ます
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * 測ったその場で「様子見か、連れて行くか」まで出す。
  * 低月齢の発熱は、それ自体が受診の判断につながるため（docs/what-to-record.md §4-1）。
  */
-function Advice({ celsius }: { celsius: number }) {
+function Advice({ celsius, baseline }: { celsius: number; baseline: TemperatureBaseline | null }) {
   if (celsius >= URGENT_FEVER_CELSIUS) {
     return (
       <AdviceBanner accent="temperature" alert>
@@ -177,6 +234,26 @@ function Advice({ celsius }: { celsius: number }) {
         {formatCelsius(celsius)}。厚着や部屋の暑さを取ってから、30分ほどあけてもう一度測ります。
       </AdviceBanner>
     );
+  }
+  // ここから下は正常範囲の内。それでも平熱から離れていれば、そのことだけ伝える。
+  if (baseline) {
+    const diff = celsiusFromBaseline(celsius, baseline.celsius);
+    if (diff >= BASELINE_NOTABLE_DIFF) {
+      return (
+        <AdviceBanner accent="temperature">
+          正常範囲の内ですが、平熱より {formatCelsiusDiff(diff)} 高めです。
+          機嫌と飲みっぷりを見て、気になるようならもう一度測ります。
+        </AdviceBanner>
+      );
+    }
+    if (diff <= -BASELINE_NOTABLE_DIFF) {
+      return (
+        <AdviceBanner accent="temperature">
+          正常範囲の内ですが、平熱より {formatCelsiusDiff(diff)} 低めです。
+          薄着や測り方が浅かったことでも下がるので、気になるようならもう一度測ります。
+        </AdviceBanner>
+      );
+    }
   }
   return null;
 }

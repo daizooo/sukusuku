@@ -18,7 +18,6 @@ import type {
   MilkLog,
   PumpedBatch,
   PumpingLog,
-  SpitupLog,
   TemperatureLog,
   DocumentItem,
   DynamicTask,
@@ -60,6 +59,7 @@ import {
   listCareLogsByDate,
   listCareLogsInRange,
   listRecentMilkLogs,
+  listRecentTemperatureLogs,
   updateCareLog as updateCareLogApi,
 } from '@/lib/api/careLogs';
 import { getNextBreastSide, getLogTitle } from '@/lib/careLogUtils';
@@ -103,7 +103,6 @@ import type { MilkLogInput } from './modals/MilkLogModal';
 import type { DiaperLogInput } from './modals/DiaperLogModal';
 import type { PumpingLogInput } from './modals/PumpingLogModal';
 import type { TemperatureLogInput } from './modals/TemperatureLogModal';
-import type { SpitupLogInput } from './modals/SpitupLogModal';
 import type { GiftDraft } from './modals/GiftFormModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 import type { NurseryDraft } from './modals/NurseryFormModal';
@@ -204,6 +203,8 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   // 記録タブの1日分(logs)とは別に、日付にとらわれず新しい順で持つ。
   const [recentMilkLogs, setRecentMilkLogs] = useState<MilkLog[]>([]);
   const [isLoadingRecentMilk, setIsLoadingRecentMilk] = useState(true);
+  // 平熱に使う直近の体温。その子自身の記録の平均なので、表示中の日だけでは求まらない。
+  const [recentTemperatureLogs, setRecentTemperatureLogs] = useState<TemperatureLog[]>([]);
   // 授乳の間隔の設定。家族で共通なので、どちらが変えても同じ目安が出る。
   const [feedingSettings, setFeedingSettings] = useState<FeedingSettings>(DEFAULT_FEEDING_SETTINGS);
 
@@ -368,6 +369,17 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   useEffect(() => {
     refreshRecentMilkLogs();
   }, [refreshRecentMilkLogs]);
+
+  // 平熱に使う直近の体温を読み込む。体温を足したり直したりするたびに取り直す。
+  const refreshRecentTemperatureLogs = useCallback(() => {
+    listRecentTemperatureLogs(supabase, familyId)
+      .then(setRecentTemperatureLogs)
+      .catch((err: unknown) => console.error('Failed to load recent temperature logs:', err));
+  }, [supabase, familyId]);
+
+  useEffect(() => {
+    refreshRecentTemperatureLogs();
+  }, [refreshRecentTemperatureLogs]);
 
   // パートナーの端末で記録された授乳は、この端末では分からないまま古い目安が出続ける。
   // アプリに戻ってきたときに取り直して、夫婦のどちらが見ても同じ目安になるようにする。
@@ -684,8 +696,10 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
       refreshPumpedStock();
       // 「次の授乳の目安」も、記録の時刻を変えたり過去の日に足したりすると変わる。
       refreshRecentMilkLogs();
+      // 平熱も、体温を足したり直したりすれば動く。
+      refreshRecentTemperatureLogs();
     },
-    [logDate, refreshPumpedStock, refreshRecentMilkLogs],
+    [logDate, refreshPumpedStock, refreshRecentMilkLogs, refreshRecentTemperatureLogs],
   );
 
   const saveLog = async (log: CareLog | null, input: NewCareLogInput) => {
@@ -726,9 +740,6 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   const saveTemperatureLog = (input: TemperatureLogInput, existing: TemperatureLog | null) =>
     saveLog(existing, { type: 'temperature', ...input });
 
-  const saveSpitupLog = (input: SpitupLogInput, existing: SpitupLog | null) =>
-    saveLog(existing, { type: 'spitup', ...input });
-
   const deleteLog = async (id: string) => {
     const previous = logs;
     setLogs((prev) => prev.filter((l) => l.id !== id));
@@ -737,6 +748,7 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
       await deleteCareLog(supabase, id);
       refreshPumpedStock();
       refreshRecentMilkLogs();
+      refreshRecentTemperatureLogs();
     } catch (err) {
       console.error('Failed to delete care log:', err);
       setLogs(previous);
@@ -989,7 +1001,8 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               onSaveDiaperLog={saveDiaperLog}
               onSavePumpingLog={savePumpingLog}
               onSaveTemperatureLog={saveTemperatureLog}
-              onSaveSpitupLog={saveSpitupLog}
+              recentTemperatureLogs={recentTemperatureLogs}
+              babyName={getProfileFieldValue(userProfile, 'babyName')}
               onDeleteLog={deleteLog}
               onAddGrowthRecord={addGrowthRecordHandler}
               onUpdateGrowthRecord={updateGrowthRecordHandler}

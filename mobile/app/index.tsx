@@ -17,7 +17,6 @@ import type {
   FamilyMember,
   MilkLog,
   PumpedBatch,
-  SpitupLog,
   TemperatureLog,
 } from '@/types/app';
 import { supabase } from '@/lib/supabase';
@@ -28,7 +27,6 @@ import { listFamilyMembers } from '@/lib/api/familyMembers';
 import {
   formatCelsius,
   formatStopwatch,
-  getLatestSpitup,
   getLatestTemperature,
   getNextBreastSide,
   getSideLabel,
@@ -62,14 +60,12 @@ import MilkLogModal, { type MilkLogInput } from '@/components/log/MilkLogModal';
 import TemperatureLogModal, {
   type TemperatureLogInput,
 } from '@/components/log/TemperatureLogModal';
-import SpitupLogModal, { type SpitupLogInput } from '@/components/log/SpitupLogModal';
 
-// 記録タブ（フェーズ1）。授乳まわりと体温・吐き戻しをネイティブで回せるようにしたもの。
+// 記録タブ（フェーズ1）。授乳まわりと体温をネイティブで回せるようにしたもの。
 // おむつ・搾乳の入力と他のタブはフェーズ2で作るので、それまでは凍結したPWA版で見る
 // （docs/native-app-rewrite.md §7）。
 //
-// 体温と吐き戻しはPWA版に無い記録なので、ここでしか付けられず、ここでしか読めない
-// （docs/what-to-record.md §4-1・§11-3・§8）。
+// 体温は PWA版（src/）にも同じものが入っている（docs/what-to-record.md §4-1・§8）。
 //
 // 画面の作り方はルートの CLAUDE.md に従い、日付送りと記録ボタンは固定して、
 // スクロールはその日の一覧だけに閉じる。
@@ -94,7 +90,6 @@ export default function LogScreen() {
   const [editingTemperature, setEditingTemperature] = useState<{
     log: TemperatureLog | null;
   } | null>(null);
-  const [editingSpitup, setEditingSpitup] = useState<{ log: SpitupLog | null } | null>(null);
 
   const today = startOfDay(new Date());
   const isToday = isSameDay(logDate, today);
@@ -197,8 +192,6 @@ export default function LogScreen() {
   const nextBreastSide = useMemo<BreastSide | null>(() => getNextBreastSide(logs), [logs]);
   // 表示中の日でいちばん新しい体温。ボタンに出すのと、次に測るときの初期値に使う。
   const latestTemperature = useMemo(() => getLatestTemperature(logs), [logs]);
-  // 表示中の日でいちばん新しい吐き戻し。ボタンに出すのに使う。
-  const latestSpitup = useMemo(() => getLatestSpitup(logs), [logs]);
 
   const handleSave = async (input: MilkLogInput, existing: MilkLog | null) => {
     if (!familyId || !userId) return;
@@ -248,32 +241,10 @@ export default function LogScreen() {
     }
   };
 
-  const handleSaveSpitup = async (input: SpitupLogInput, existing: SpitupLog | null) => {
-    if (!familyId || !userId) return;
-    setEditingSpitup(null);
-    try {
-      if (existing) {
-        await queueUpdateCareLog(familyId, {
-          type: 'spitup',
-          ...input,
-          id: existing.id,
-          createdBy: existing.createdBy,
-        });
-      } else {
-        await queueInsertCareLog(familyId, userId, { type: 'spitup', ...input });
-      }
-      await showCached();
-      await sync();
-    } catch (error) {
-      setErrorMessage(toMessage(error));
-    }
-  };
-
   const handleDelete = async (log: CareLog) => {
     if (!familyId) return;
     setEditing(null);
     setEditingTemperature(null);
-    setEditingSpitup(null);
     try {
       await queueDeleteCareLog(familyId, log.id);
       await showCached();
@@ -412,22 +383,6 @@ export default function LogScreen() {
               </Text>
             </Pressable>
 
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setEditingSpitup({ log: null })}
-              style={styles.spitupRow}
-            >
-              <Text style={styles.spitupLabel}>吐き戻しを記録</Text>
-              <Text
-                style={[
-                  styles.spitupValue,
-                  summary.spitup.needsAttention && styles.spitupAlert,
-                ]}
-              >
-                {spitupSummaryText(latestSpitup, summary)}
-              </Text>
-            </Pressable>
-
             <View style={styles.stockRow}>
               <Text style={styles.stockLabel}>搾乳ストック</Text>
               <Text style={styles.stockValue}>
@@ -466,14 +421,12 @@ export default function LogScreen() {
                 onSelect={(log) => {
                   if (log.type === 'milk') setEditing({ log });
                   else if (log.type === 'temperature') setEditingTemperature({ log });
-                  else if (log.type === 'spitup') setEditingSpitup({ log });
                 }}
               />
             )}
             <Text style={styles.phaseNote}>
-              フェーズ1では授乳まわりと体温・吐き戻しをこちらで扱います。おむつ・搾乳の記録と、
-              ホーム / 予定 / メモ / 情報 の各タブはPWA版で見てください
-              （体温と吐き戻しはPWA版には出ません）。
+              フェーズ1では授乳まわりと体温をこちらで扱います。おむつ・搾乳の記録と、
+              ホーム / 予定 / メモ / 情報 の各タブはPWA版で見てください。
               {!isNursingForegroundServiceAvailable() &&
                 '\nいまは前面サービスの入っていないビルドで動いているため、' +
                   'お知らせはアプリを開いている間の振動だけになります。'}
@@ -505,16 +458,6 @@ export default function LogScreen() {
         }
         onDelete={() => editingTemperature?.log && void handleDelete(editingTemperature.log)}
       />
-
-      <SpitupLogModal
-        show={editingSpitup !== null}
-        log={editingSpitup?.log ?? null}
-        baseDate={logDate}
-        dayLogs={logs}
-        onClose={() => setEditingSpitup(null)}
-        onSubmit={(input) => void handleSaveSpitup(input, editingSpitup?.log ?? null)}
-        onDelete={() => editingSpitup?.log && void handleDelete(editingSpitup.log)}
-      />
     </SafeAreaView>
   );
 }
@@ -541,13 +484,6 @@ const temperatureSummaryText = (
     ...(max !== null && max > latest.celsius ? [`最高 ${formatCelsius(max)}`] : []),
   ].join('・');
 };
-
-/** 吐き戻しの行に出すその日のようす。回数と、直近がいつだったか。 */
-const spitupSummaryText = (
-  latest: SpitupLog | null,
-  summary: ReturnType<typeof summarizeLogs>,
-): string =>
-  latest ? `${summary.spitup.count}回・${formatTimeString(latest.time)}` : 'この日はまだ';
 
 const toMessage = (error: unknown): string =>
   error instanceof Error ? error.message : '読み込みに失敗しました';
@@ -633,20 +569,6 @@ const styles = StyleSheet.create({
   temperatureLabel: { fontSize: 12, fontWeight: '700', color: colors.temperatureText },
   temperatureValue: { fontSize: 13, fontWeight: '700', color: colors.temperatureText },
   temperatureFever: { color: colors.alertText },
-  spitupRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.spitupSurface,
-    borderWidth: 1,
-    borderColor: colors.spitupBorder,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  spitupLabel: { fontSize: 12, fontWeight: '700', color: colors.spitupText },
-  spitupValue: { fontSize: 13, fontWeight: '700', color: colors.spitupText },
-  spitupAlert: { color: colors.alertText },
   stockRow: {
     flexDirection: 'row',
     alignItems: 'center',

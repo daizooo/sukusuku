@@ -9,8 +9,6 @@ import type {
   PoopColor,
   PoopConsistency,
   PumpedBatch,
-  SpitupAmount,
-  SpitupLog,
   TemperatureLog,
 } from '@/types/app';
 import { formatTimeString } from '@/lib/dateUtils';
@@ -61,7 +59,12 @@ export const POOP_CONSISTENCY_OPTIONS: { value: PoopConsistency; label: string }
 // 目安の値。低月齢の発熱はそれ自体が受診の判断につながるので、記録したその場で
 // 「これは様子見か、いま連れて行くか」が分かるところまで出す（docs/what-to-record.md §4-1）。
 
-/** 発熱として扱う体温(℃)。 */
+/**
+ * 平熱として扱う体温(℃)の下の端。乳児の平熱は大人より高く、この幅に収まる。
+ * 上の端は FEVER_CELSIUS（ここから上は発熱）。
+ */
+export const NORMAL_MIN_CELSIUS = 36.5;
+/** 発熱として扱う体温(℃)。正常範囲の上の端でもある。 */
 export const FEVER_CELSIUS = 37.5;
 /** 生後3か月未満では、すぐに受診の目安になる体温(℃)。 */
 export const URGENT_FEVER_CELSIUS = 38.0;
@@ -75,39 +78,16 @@ export const DEFAULT_CELSIUS = 37.0;
 /** ボタンで上げ下げする幅(℃)。 */
 export const CELSIUS_STEP = 0.1;
 
-// --- 吐き戻し ---
-//
-// メモ欄にいちばん多く書かれていた中身を、そのまま形にしたもの
-// （docs/what-to-record.md §11-3）。入れるのは量の3択ひとつだけ。
+// 平熱は子どもによって違う。同じ 37.2℃ でも、平熱 36.6℃ の子には高く、
+// 平熱 37.1℃ の子にはいつもどおり。「この子にしては高い」を出すために、
+// その子自身の記録から平熱を数える。
 
-export interface SpitupAmountOption {
-  value: SpitupAmount;
-  label: string;
-  /** 3つの違いは見た目で決まるので、選ぶときの手がかりを添える。 */
-  description: string;
-  /** 噴水のように吐いたときは受診の目安。 */
-  needsAttention: boolean;
-}
-
-export const SPITUP_AMOUNT_OPTIONS: SpitupAmountOption[] = [
-  { value: 'little', label: '少し', description: '口の端から垂れた程度', needsAttention: false },
-  {
-    value: 'lot',
-    label: 'たくさん',
-    description: '飲んだぶんがだいたい戻った',
-    needsAttention: false,
-  },
-  { value: 'projectile', label: '噴水のように', description: '勢いよく飛んだ', needsAttention: true },
-];
-
-/**
- * 直前の授乳と結び付けて扱う間隔の上限(分)。
- * これより前の授乳は「その授乳のあと」とは言えないので、結び付けない。
- */
-export const SPITUP_AFTER_MILK_LIMIT_MINUTES = 180;
-
-/** その日にこの回数に達したら、水分が足りているかを見るよう促す。 */
-export const SPITUP_REPEAT_COUNT = 3;
+/** 平熱を数えるのに使う記録の数（新しい順）。これより古いぶんは使わない。 */
+export const BASELINE_SAMPLE_LIMIT = 30;
+/** 平熱を出すのに最低限ほしい記録の数。これに満たないうちは平熱を出さない。 */
+export const BASELINE_MIN_SAMPLES = 3;
+/** 平熱からこれだけ離れたら「この子にしては高い」として出す(℃)。 */
+export const BASELINE_NOTABLE_DIFF = 0.5;
 
 // --- 判定 ---
 
@@ -128,46 +108,57 @@ export const needsTemperatureAttention = (celsius: number): boolean =>
 /** 体温は小数第1位まで。0.1刻みの足し引きで誤差が出ないよう、そこで丸める。 */
 export const roundCelsius = (celsius: number): number => Math.round(celsius * 10) / 10;
 
+/** 正常範囲の内か。 */
+export const isNormalCelsius = (celsius: number): boolean =>
+  celsius >= NORMAL_MIN_CELSIUS && celsius < FEVER_CELSIUS;
+
 /** 表示用の体温。「37.2 ℃」の形。 */
 export const formatCelsius = (celsius: number): string => `${celsius.toFixed(1)} ℃`;
 
-export const getSpitupAmountOption = (amount: SpitupAmount): SpitupAmountOption =>
-  SPITUP_AMOUNT_OPTIONS.find((option) => option.value === amount) ?? SPITUP_AMOUNT_OPTIONS[0];
+/** 正常範囲の表示。「36.5 〜 37.5 ℃」の形。 */
+export const formatNormalRange = (): string =>
+  `${NORMAL_MIN_CELSIUS.toFixed(1)} 〜 ${FEVER_CELSIUS.toFixed(1)} ℃`;
 
-/** 受診の目安か（噴水のように吐いた）。 */
-export const needsSpitupAttention = (amount: SpitupAmount): boolean =>
-  getSpitupAmountOption(amount).needsAttention;
+/** その子の平熱。 */
+export interface TemperatureBaseline {
+  /** 平熱(℃)。 */
+  celsius: number;
+  /** 平均に使った記録の数。どれくらい確からしいかの手がかりとして一緒に出す。 */
+  count: number;
+}
+
+/**
+ * その子の平熱。渡された記録のうち**正常範囲に入るものだけ**を新しい順に数えて平均する。
+ *
+ * 発熱したときの値を混ぜると平熱そのものが上がってしまい、
+ * 「この子にしては高い」がかえって見えなくなる。熱が続いた数日で平熱を見失わないよう、
+ * 絞ってから新しい順に取る（先に新しい順で切ると、その数日で埋まってしまう）。
+ *
+ * 記録が BASELINE_MIN_SAMPLES に満たなければ null。
+ */
+export const getTemperatureBaseline = (logs: TemperatureLog[]): TemperatureBaseline | null => {
+  const normal = logs
+    .filter((log) => isNormalCelsius(log.celsius))
+    .sort((a, b) => b.time.getTime() - a.time.getTime())
+    .slice(0, BASELINE_SAMPLE_LIMIT);
+  if (normal.length < BASELINE_MIN_SAMPLES) return null;
+  const total = normal.reduce((sum, log) => sum + log.celsius, 0);
+  return { celsius: roundCelsius(total / normal.length), count: normal.length };
+};
+
+/** 平熱との差(℃)。高ければ正、低ければ負。 */
+export const celsiusFromBaseline = (celsius: number, baseline: number): number =>
+  roundCelsius(celsius - baseline);
+
+/** 平熱との差の表示。「+0.5 ℃」「-0.2 ℃」の形。 */
+export const formatCelsiusDiff = (diff: number): string =>
+  `${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${Math.abs(diff).toFixed(1)} ℃`;
 
 /** いちばん新しい体温の記録。まだ無ければ null。 */
 export const getLatestTemperature = (logs: CareLog[]): TemperatureLog | null =>
   logs
     .filter((log): log is TemperatureLog => log.type === 'temperature')
     .sort((a, b) => b.time.getTime() - a.time.getTime())[0] ?? null;
-
-/** いちばん新しい吐き戻しの記録。まだ無ければ null。 */
-export const getLatestSpitup = (logs: CareLog[]): SpitupLog | null =>
-  logs
-    .filter((log): log is SpitupLog => log.type === 'spitup')
-    .sort((a, b) => b.time.getTime() - a.time.getTime())[0] ?? null;
-
-/**
- * その時刻の直前の授乳と、そこからの間隔(分)。3時間より前の授乳は結び付けない。
- * 渡された記録の中から探すので、表示中の日をまたいだ授乳は見つからない。
- */
-export const findMilkBefore = (
-  logs: CareLog[],
-  time: Date,
-): { log: MilkLog; minutesAfter: number } | null => {
-  const latest = logs
-    .filter((log): log is MilkLog => log.type === 'milk' && log.time.getTime() <= time.getTime())
-    .sort((a, b) => b.time.getTime() - a.time.getTime())[0];
-  if (!latest) return null;
-  const minutesAfter = Math.round((time.getTime() - latest.time.getTime()) / 60000);
-  return minutesAfter <= SPITUP_AFTER_MILK_LIMIT_MINUTES ? { log: latest, minutesAfter } : null;
-};
-
-/** 直前の授乳からの間隔。「授乳の25分後」の形。 */
-export const formatMinutesAfterMilk = (minutes: number): string => `授乳の${minutes}分後`;
 
 export const getSideLabel = (side: BreastSide): string => (side === 'left' ? '左' : '右');
 
@@ -219,7 +210,6 @@ const LOG_TYPE_LABEL: Record<CareLog['type'], string> = {
   diaper: 'おむつ',
   pumping: '搾乳',
   temperature: '体温',
-  spitup: '吐き戻し',
 };
 
 /** タイムラインカードの見出し。 */
@@ -239,22 +229,13 @@ export const getLogTitle = (log: CareLog): string => {
       return '搾乳';
     case 'temperature':
       return '体温';
-    case 'spitup':
-      return '吐き戻し';
   }
 };
 
 /** タイムラインカードの時刻表示。 */
 export const getLogTimeText = (log: CareLog): string => formatTimeString(log.time);
 
-export type BadgeTone =
-  | 'milk'
-  | 'diaper'
-  | 'pumping'
-  | 'temperature'
-  | 'spitup'
-  | 'alert'
-  | 'neutral';
+export type BadgeTone = 'milk' | 'diaper' | 'pumping' | 'temperature' | 'alert' | 'neutral';
 
 export interface LogBadge {
   text: string;
@@ -310,18 +291,6 @@ export const getLogBadges = (log: CareLog): LogBadge[] => {
       else if (log.celsius < LOW_CELSIUS) badges.push({ text: '低体温', tone: 'alert' });
       return badges;
     }
-    case 'spitup': {
-      const amount = getSpitupAmountOption(log.amount);
-      const badges: LogBadge[] = [
-        { text: amount.label, tone: amount.needsAttention ? 'alert' : 'spitup' },
-      ];
-      // 授乳との間隔は、ゲップや抱き方を変えた効きめを見るときの手がかりになる（§11-3）。
-      if (log.minutesAfterMilk !== undefined) {
-        badges.push({ text: formatMinutesAfterMilk(log.minutesAfterMilk), tone: 'neutral' });
-      }
-      if (amount.needsAttention) badges.push({ text: '要受診', tone: 'alert' });
-      return badges;
-    }
   }
 };
 
@@ -331,16 +300,14 @@ export const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
   diaper: 'bg-blue-100 text-blue-700',
   pumping: 'bg-rose-100 text-rose-700 font-bold',
   temperature: 'bg-orange-100 text-orange-700 font-bold',
-  spitup: 'bg-violet-100 text-violet-700 font-bold',
   alert: 'bg-red-100 text-red-700 font-bold',
   neutral: 'bg-gray-100 text-gray-600',
 };
 
-/** カード全体を強調するか（白・赤・黒の便、受診の目安になる体温、噴水のような吐き戻し）。 */
+/** カード全体を強調するか（白・赤・黒の便、受診の目安になる体温）。 */
 export const isAlertLog = (log: CareLog): boolean => {
   if (log.type === 'diaper') return needsMedicalAttention(log.poopColor);
   if (log.type === 'temperature') return needsTemperatureAttention(log.celsius);
-  if (log.type === 'spitup') return needsSpitupAttention(log.amount);
   return false;
 };
 
@@ -350,11 +317,6 @@ export interface DailySummary {
   pumping: { count: number; ml: number };
   /** 体温は合計に意味が無いので、回数とその日いちばん高かった値を持つ。 */
   temperature: { count: number; maxCelsius: number | null };
-  /**
-   * 吐き戻しは回数だけ数える（量は3択なので合計にできない）。
-   * 受診の目安は、直近の1件ではなくその日にあったかどうかで見る。
-   */
-  spitup: { count: number; needsAttention: boolean };
 }
 
 // 種類別の項目を持たない記録の「量・時間など」は自由入力なので、
@@ -373,7 +335,6 @@ export const summarizeLogs = (logs: CareLog[]): DailySummary => {
     diaper: { count: 0, poopCount: 0 },
     pumping: { count: 0, ml: 0 },
     temperature: { count: 0, maxCelsius: null },
-    spitup: { count: 0, needsAttention: false },
   };
 
   for (const log of logs) {
@@ -392,9 +353,6 @@ export const summarizeLogs = (logs: CareLog[]): DailySummary => {
         summary.temperature.maxCelsius ?? log.celsius,
         log.celsius,
       );
-    } else if (log.type === 'spitup') {
-      summary.spitup.count += 1;
-      if (needsSpitupAttention(log.amount)) summary.spitup.needsAttention = true;
     } else {
       summary.pumping.count += 1;
       summary.pumping.ml += legacy !== undefined ? parseLegacyMl(legacy) : log.amountMl;
