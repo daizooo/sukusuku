@@ -55,6 +55,14 @@ export function FieldLabel({ children }: { children: ReactNode }) {
   return <span className="block text-xs font-medium text-gray-700 mb-1.5">{children}</span>;
 }
 
+/** 授乳の記録で「飲ませた」と「搾った」を切り替える。両方の入力画面の一番上に出す。 */
+export type FeedingEntryMode = 'feed' | 'pump';
+
+export const FEEDING_ENTRY_MODE_OPTIONS: { value: FeedingEntryMode; label: string }[] = [
+  { value: 'feed', label: '飲ませた' },
+  { value: 'pump', label: '搾った' },
+];
+
 interface SegmentedProps<T extends string> {
   options: { value: T; label: string }[];
   value: T;

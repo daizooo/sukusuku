@@ -18,6 +18,7 @@ import { parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUt
 import {
   DateTimeField,
   DeleteButton,
+  FEEDING_ENTRY_MODE_OPTIONS,
   FieldLabel,
   HintBanner,
   LogModalShell,
@@ -52,6 +53,8 @@ interface MilkLogModalProps {
   timer: NursingTimer;
   /** 搾乳ストックの全量（使用済みも含む）。「搾乳」を選んだときの選択肢に使う。 */
   pumpedBatches: PumpedBatch[];
+  /** 「搾った」に切り替える。搾乳の入力画面へ移る（新規追加のときだけ出す）。 */
+  onSwitchToPumping: () => void;
   onClose: () => void;
   onSubmit: (input: MilkLogInput) => void;
   onDelete: () => void;
@@ -87,6 +90,7 @@ function MilkLogModalBody({
   nextSide,
   timer,
   pumpedBatches,
+  onSwitchToPumping,
   onClose,
   onSubmit,
   onDelete,
@@ -242,8 +246,24 @@ function MilkLogModalBody({
   };
 
   return (
-    <LogModalShell title={log ? '授乳・ミルクの記録を編集' : '授乳・ミルクを記録'} onClose={onClose}>
-      <Segmented options={METHOD_OPTIONS} value={method} onChange={setMethod} />
+    <LogModalShell title={log ? '授乳の記録を編集' : '授乳を記録'} onClose={onClose}>
+      {/* 飲ませた分と搾った分は、どちらも授乳の入力画面から入れる。
+          記録としては別物（搾った分は搾乳ストックの1パックになる）なので、
+          ここで切り替えて画面ごと移る。編集中は種類を変えられないため出さない。 */}
+      {!log && (
+        <Segmented
+          options={FEEDING_ENTRY_MODE_OPTIONS}
+          value="feed"
+          onChange={(next) => {
+            if (next === 'pump') onSwitchToPumping();
+          }}
+        />
+      )}
+
+      <div>
+        <FieldLabel>飲ませたもの</FieldLabel>
+        <Segmented options={METHOD_OPTIONS} value={method} onChange={setMethod} />
+      </div>
 
       {method === 'breast' ? (
         <>
@@ -384,7 +404,7 @@ function PumpedBatchPicker({ batches, selectedIds, selectedMl, stockMl, onToggle
   if (batches.length === 0) {
     return (
       <HintBanner accent="pumping">
-        搾乳ストックがありません。先に「搾乳」で搾った分を記録してください。
+        搾乳ストックがありません。上の「搾った」に切り替えて、搾った分を先に記録してください。
       </HintBanner>
     );
   }
