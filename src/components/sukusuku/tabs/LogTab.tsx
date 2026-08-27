@@ -505,11 +505,7 @@ export default function LogTab({
         timer={nursingTimer}
         pumpedBatches={pumpedBatches}
         initialMethod={milkModalMethod}
-        onSwitchToPumping={(from) => {
-          // 「飲ませた」で戻ってきたとき、出ていったときの種類のまま続けられるようにする。
-          setMilkModalMethod(from);
-          setLogModal({ type: 'pumping', log: null });
-        }}
+        onSwitchToPumping={() => setLogModal({ type: 'pumping', log: null })}
         onClose={closeLogModal}
         onSubmit={(input) => {
           const existing = logModal?.log?.type === 'milk' ? logModal.log : null;
@@ -537,7 +533,8 @@ export default function LogTab({
         baseDate={logDate}
         pumpedBatches={pumpedBatches}
         onSwitchToFeeding={() => {
-          // 種類は出ていったときのものを覚えてあるので、そのまま授乳の入力画面へ戻す。
+          // 「搾乳」を選んだところから来ているので、戻り先もそこに合わせる。
+          setMilkModalMethod('pumped');
           setLogModal({ type: 'milk', log: null });
         }}
         onClose={closeLogModal}
