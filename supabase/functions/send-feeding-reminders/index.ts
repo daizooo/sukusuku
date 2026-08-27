@@ -101,7 +101,10 @@ Deno.serve(async (request) => {
 
   // いま授乳中の家族には送らない。記録は授乳が終わってから保存されるので、
   // 飲ませている最中に「そろそろ次の授乳」が届いてしまうため。
-  // (計測中の端末だけが nursing_alarms に行を持つ。ほとんどの実行では空になる)
+  // 母乳のストップウォッチを止めてから記録を保存するまでの間も、行は
+  // stopped_at を立てたまま残る（0027）。飲ませ終わったばかりなのに
+  // 家族全員へ通知が飛んでいたのは、この隙間が抜けていたため。
+  // (授乳中・記録待ちの端末だけが nursing_alarms に行を持つ。ほとんどの実行では空になる)
   const { data: nursing, error: nursingError } = await supabase
     .from('nursing_alarms')
     .select('push_subscriptions(family_id)')

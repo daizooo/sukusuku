@@ -29,6 +29,11 @@ interface ActiveNursing {
   /** 計測中の側と、その計測を始めた時刻。停止中は null。 */
   runningSide: BreastSide | null;
   startedAt: number | null;
+  /**
+   * 計測を止めた時刻。まだ記録していない計測が残っている間だけ入る。
+   * 計測中と、記録・リセットしたあとは null。
+   */
+  stoppedAt: number | null;
   /** 最後に計測した側。記録の「最後に飲ませた側」に使う。 */
   lastSide: BreastSide | null;
   /**
@@ -44,6 +49,7 @@ const EMPTY: ActiveNursing = {
   rightMs: 0,
   runningSide: null,
   startedAt: null,
+  stoppedAt: null,
   lastSide: null,
   notifiedLeft: 0,
   notifiedRight: 0,
@@ -67,6 +73,7 @@ const load = (): ActiveNursing => {
       // 開始時刻が失われていると経過時間を復元できないので、計測中とは扱わない。
       runningSide: startedAt ? toSide(parsed.runningSide) : null,
       startedAt,
+      stoppedAt: toMs(parsed.stoppedAt) || null,
       lastSide: toSide(parsed.lastSide),
       notifiedLeft: toMs(parsed.notifiedLeft),
       notifiedRight: toMs(parsed.notifiedRight),
@@ -221,6 +228,12 @@ const getAlarmSnapshot = (): NursingAlarmSettings => {
 // 端末が鳴らせなかった分を Web Push で鳴らしてもらう。
 // 預ける処理そのものは Supabase を触るため、ここでは受け口だけ持つ。
 
+/**
+ * 計測を止めてから記録するまでを「授乳中」として預けておく上限。
+ * サーバー側の打ち切り(send-nursing-alarms の MAX_PENDING_MINUTES)と合わせている。
+ */
+const PENDING_MAX_MS = 60 * 60_000;
+
 export interface NursingAlarmTarget {
   side: BreastSide;
   /** 計測中の側の合計時間が0だった時刻。経過分数 = now - baselineAt。 */
@@ -228,19 +241,46 @@ export interface NursingAlarmTarget {
   intervalMinutes: number;
   /** 何回目のお知らせまで済んでいるか。 */
   notifiedStep: number;
+  /**
+   * 計測を止めた時刻。まだ記録していない間だけ入る（計測中は null）。
+   * この間は経過時間のお知らせは鳴らさないが、「授乳は済んだが記録はまだ」と
+   * 家族に分かるよう預けたままにする（「そろそろ次の授乳」を止めるため）。
+   */
+  stoppedAt: number | null;
 }
 
-/** 計測していなければ null（＝サーバー側の予約も消す）。 */
+/**
+ * サーバーへ預ける内容。計測中も、止めたあと記録するまでの間も預ける。
+ * 記録・リセットして計測が残っていなければ null（＝サーバー側の予約も消す）。
+ */
 const alarmTarget = (active: ActiveNursing): NursingAlarmTarget | null => {
-  const side = active.runningSide;
-  if (!side || !active.startedAt) return null;
+  const intervalMinutes = getAlarmSnapshot().intervalMinutes;
+  const running = active.runningSide;
+  if (running && active.startedAt) {
+    return {
+      side: running,
+      // 左右を行き来してもその側の経過時間で数えるので、
+      // 累積ぶんさかのぼった時刻を基準にする。
+      baselineAt: active.startedAt - (running === 'left' ? active.leftMs : active.rightMs),
+      intervalMinutes,
+      notifiedStep: running === 'left' ? active.notifiedLeft : active.notifiedRight,
+      stoppedAt: null,
+    };
+  }
+
+  // 計測は止まっているが、まだ記録していない。授乳は済んでいるので、
+  // この間に「そろそろ次の授乳」が飛ばないよう、預けたままにしておく。
+  const side = active.lastSide;
+  if (!side || !active.stoppedAt) return null;
+  if (active.leftMs === 0 && active.rightMs === 0) return null;
+  // 記録されないまま置き去りになった分は預けない（サーバー側の打ち切りと同じ長さ）。
+  if (Date.now() - active.stoppedAt > PENDING_MAX_MS) return null;
   return {
     side,
-    // 左右を行き来してもその側の経過時間で数えるので、
-    // 累積ぶんさかのぼった時刻を基準にする。
-    baselineAt: active.startedAt - (side === 'left' ? active.leftMs : active.rightMs),
-    intervalMinutes: getAlarmSnapshot().intervalMinutes,
+    baselineAt: active.stoppedAt - (side === 'left' ? active.leftMs : active.rightMs),
+    intervalMinutes,
     notifiedStep: side === 'left' ? active.notifiedLeft : active.notifiedRight,
+    stoppedAt: active.stoppedAt,
   };
 };
 
@@ -402,6 +442,8 @@ export function useNursingTimer(): NursingTimer {
       ...settled,
       runningSide: stopping ? null : side,
       startedAt: stopping ? null : at,
+      // 止めた時刻は「授乳は済んだが記録はまだ」の印になる。測り直したら消す。
+      stoppedAt: stopping ? at : null,
       lastSide: side,
     });
     return settled;

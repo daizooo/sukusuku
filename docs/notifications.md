@@ -185,6 +185,7 @@ select status, return_message, start_time
 | `src/lib/nursingAlarmSync.ts` | 授乳のお知らせをサーバーへ預ける橋渡し |
 | `src/lib/api/nursingAlarms.ts` | `nursing_alarms` の読み書き |
 | `supabase/migrations/0021_nursing_alarms.sql` | テーブル |
+| `supabase/migrations/0027_nursing_alarms_stopped_at.sql` | 記録待ちの印(`stopped_at`) |
 | `supabase/migrations/0022_nursing_alarm_cron.sql` | 定期実行の登録 |
 | `supabase/functions/send-feeding-reminders/index.ts` | 次の授乳の目安の配信（§7） |
 | `src/lib/feedingSchedule.ts` | 次の授乳の目安の計算 |
@@ -224,7 +225,8 @@ select status, return_message, start_time
 
 [端末] 画面を開いている間は自分で鳴らし、notified_step を書き戻す
        → サーバーからは送られない（二重に鳴らない）
-[端末] 計測を止める → 預けた行を消す
+[端末] 計測を止める → stopped_at を立てる（行は残す＝「記録待ち」）
+[端末] 記録を保存する / リセットする → 預けた行を消す
 ```
 
 ### 二重に鳴らさない仕組み
@@ -256,11 +258,27 @@ select status, return_message, start_time
   短い振動＝5分）で今までと同じ数え方を保つ（`public/sw.js` の `buildNursingVibration`）。
   iOSはこの指定を無視して既定の振動になる
 
+### 計測を止めたあとの「記録待ち」
+
+計測を止めても、記録を保存する（またはリセットする）までは行を消さず、
+`stopped_at` を立てて残す。この間は
+
+- 経過時間のお知らせは**鳴らさない**（もう飲ませていないため）
+- 「次の授乳の目安」(§7)からは**授乳中として外れる**（授乳は済んでいるため）
+
+記録は授乳が終わってから保存されるので、止めてから保存するまでには数十分の
+開きが出ることがある。行を残していないと、その隙間に「そろそろ次の授乳」が
+家族全員の端末へ飛んでしまう（飲ませ終わったばかりなのに鳴る）。
+
 ### 鳴り続けないための打ち切り
 
 計測を止めずにアプリを閉じたままだと、預けた行が残って鳴り続けてしまう。
 経過が **90分**（`MAX_ELAPSED_MINUTES`）を超えた行はEdge Functionが削除する。
 通知をタップすればアプリが開くので、そこで計測を止められる。
+
+記録待ちの行（`stopped_at` あり）は、止めてから **60分**（`MAX_PENDING_MINUTES`）で
+同じく削除する。飲ませ終えて1時間たっても記録が入らないなら記録漏れなので、
+そこからは「そろそろ次の授乳」が届くほうがよいため。
 
 ### セットアップ
 
@@ -272,10 +290,15 @@ supabase functions deploy send-nursing-alarms
 ```
 
 そのうえで `0021_nursing_alarms.sql` / `0022_nursing_alarm_cron.sql` /
-`0023_nursing_alarms_user_index.sql` を適用する。
+`0023_nursing_alarms_user_index.sql` / `0027_nursing_alarms_stopped_at.sql` を適用する。
 
 > **本番プロジェクトには適用済み**（Edge Functionのデプロイ、マイグレーション3本、
 > 1分おきのcron登録まで完了）。上の手順は作り直すときのためのもの。
+>
+> `0027`（記録待ちの `stopped_at`）だけは**まだ**。列を足してから
+> `supabase functions deploy send-nursing-alarms` をやり直す（列が無いままだと
+> 関数が `stopped_at` を読めずに落ちるため、順番はこの通りに）。
+> `send-feeding-reminders` 側は変更なし（コメントのみ）なので再デプロイは不要。
 >
 > `webpush.ts` を `send-reminders/` から `_shared/` へ移したが、`send-reminders` は
 > 再デプロイしていない。デプロイ済みの内容にはwebpush.tsが同梱されており、
@@ -285,9 +308,11 @@ supabase functions deploy send-nursing-alarms
 ### 動かないときの確認
 
 ```sql
--- いま預かっている計測（授乳中の端末のぶんだけ出る）
+-- いま預かっている計測（授乳中・記録待ちの端末のぶんだけ出る）
+-- stopped_at が入っていれば「計測は終わったが、まだ記録していない」状態。
 select subscription_id, side, baseline_at at time zone 'Asia/Tokyo' as baseline_jst,
-       interval_minutes, notified_step, updated_at
+       interval_minutes, notified_step,
+       stopped_at at time zone 'Asia/Tokyo' as stopped_jst, updated_at
   from nursing_alarms;
 
 -- 定期実行が動いているか
@@ -340,6 +365,10 @@ select status, return_message, start_time
 - **授乳中は送らない** — 記録は授乳が終わってから保存されるので、飲ませている最中は
   「前回の授乳」が1つ前のままになり、目安を過ぎた状態になる。母乳のストップウォッチを
   計測中の端末は `nursing_alarms` に行を持つので、それがある家族は対象から外す。
+  計測を止めてから記録を保存するまでの「記録待ち」（§6）も同じ扱いで外れる。
+- **記録が入るまでは分からない** — 判定の材料は保存済みの記録だけなので、ミルクや搾乳の
+  ように計測を伴わない授乳を、飲ませてから何十分も後に記録した場合は、その間に
+  「そろそろ次の授乳」が飛ぶことがある。授乳のたびにその場で記録するのがいちばん確実。
 
 ### 二重送信を防ぐ仕組み
 
@@ -390,6 +419,6 @@ select status, return_message, start_time
 ```
 
 - ビューに家族が出てこない → 授乳の記録が1件も無いか、設定で通知をオフにしている。
-- 目安の時刻を過ぎているのに送信記録ができない → 授乳中（`nursing_alarms` に行がある）か、
-  目安から2時間以上たっている。
+- 目安の時刻を過ぎているのに送信記録ができない → 授乳中・記録待ち（`nursing_alarms` に
+  行がある）か、目安から2時間以上たっている。
 - 送信記録はあるのに届かない → 通知そのものの問題。§4を確認する。

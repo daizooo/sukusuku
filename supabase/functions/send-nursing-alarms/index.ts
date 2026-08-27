@@ -11,6 +11,9 @@
 // 端末が自分で鳴らせたときは、端末側が notified_step を進める。
 // ここでは区切りを少し過ぎてから送るので、画面を開いている間は送られない。
 //
+// stopped_at が入っている行は「計測は終わったが、まだ記録していない」印なので鳴らさない。
+// (残しているのは、その間の「そろそろ次の授乳」を止めるため。0027 を参照)
+//
 // 認証: pg_cron から呼ぶため JWT は使わず、共有シークレットのヘッダーで認可する。
 //       予定のリマインダーと同じ REMINDER_CRON_SECRET を使う。
 //       supabase/config.toml で verify_jwt = false にしている。
@@ -32,12 +35,20 @@ const FOREGROUND_GRACE_SECONDS = 20;
 // (授乳が終わっているのに鳴り続けるのを、ここで打ち切る)
 const MAX_ELAPSED_MINUTES = 90;
 
+// 計測を止めてから記録が保存されるまでの「記録待ち」を、いつまで授乳中として扱うか。
+// この間は「そろそろ次の授乳」(send-feeding-reminders)を止めるので、長く残しすぎると
+// 記録し忘れたときに何も知らせが来なくなる。飲ませ終えて1時間たっても記録が
+// 入らないなら、記録漏れとして通知を戻したほうがよい。
+const MAX_PENDING_MINUTES = 60;
+
 interface AlarmRow {
   subscription_id: string;
   side: 'left' | 'right';
   baseline_at: string;
   interval_minutes: number;
   notified_step: number;
+  /** 計測を止めた時刻。記録を保存するまでの間だけ入る（計測中は null）。 */
+  stopped_at: string | null;
   push_subscriptions: {
     endpoint: string;
     p256dh: string;
@@ -74,7 +85,7 @@ Deno.serve(async (request) => {
   const { data: alarms, error: alarmsError } = await supabase
     .from('nursing_alarms')
     .select(
-      'subscription_id, side, baseline_at, interval_minutes, notified_step, push_subscriptions(endpoint, p256dh, auth)',
+      'subscription_id, side, baseline_at, interval_minutes, notified_step, stopped_at, push_subscriptions(endpoint, p256dh, auth)',
     )
     .returns<AlarmRow[]>();
   if (alarmsError) return json({ error: alarmsError.message }, 500);
@@ -88,12 +99,30 @@ Deno.serve(async (request) => {
   let expired = 0;
 
   for (const alarm of alarms) {
+    const expire = async () => {
+      expired++;
+      await supabase.from('nursing_alarms').delete().eq('subscription_id', alarm.subscription_id);
+    };
+
+    // 計測は止まっていて、記録を保存するのを待っているだけの行。
+    // もう飲ませていないので鳴らさない。「そろそろ次の授乳」(send-feeding-reminders)は
+    // この行があることで止まる（授乳は済んでいるため）。
+    if (alarm.stopped_at) {
+      const pendingMinutes = (now - Date.parse(alarm.stopped_at)) / 60_000;
+      if (!Number.isFinite(pendingMinutes) || pendingMinutes > MAX_PENDING_MINUTES) {
+        // 記録されないまま置き去りになった分。授乳中の扱いをここで終える。
+        await expire();
+      } else {
+        skipped++;
+      }
+      continue;
+    }
+
     const baselineAt = Date.parse(alarm.baseline_at);
     const elapsedMinutes = (now - baselineAt) / 60_000;
 
     if (!Number.isFinite(elapsedMinutes) || elapsedMinutes > MAX_ELAPSED_MINUTES) {
-      expired++;
-      await supabase.from('nursing_alarms').delete().eq('subscription_id', alarm.subscription_id);
+      await expire();
       continue;
     }
 
