@@ -242,6 +242,7 @@ Vercel側の実行リージョンが既定の `iad1`（米国バージニア）�
 ## 検討メモ
 
 - ネイティブアプリ化（iPhone/Android）の進め方 → [docs/native-app.md](docs/native-app.md)
+- 育児記録として何を残すべきか（記録の設計の見直し） → [docs/what-to-record.md](docs/what-to-record.md)
 
 ## Androidネイティブ版 (`mobile/`)
 
