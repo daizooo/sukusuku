@@ -74,6 +74,8 @@ interface LogTabProps {
   nextBreastSide: BreastSide | null;
   /** 搾乳ストックの全量（使用済みも含む）。残りの表示と、飲ませる搾乳の選択に使う。 */
   pumpedBatches: PumpedBatch[];
+  /** 搾乳ストックの1パックを丸ごと捨てる / 捨てたのを取り消す。 */
+  onDiscardPumpedBatch: (id: string, discarded: boolean) => void;
   onSaveMilkLog: (input: MilkLogInput, existing: MilkLog | null) => void;
   onSaveDiaperLog: (input: DiaperLogInput, existing: DiaperLog | null) => void;
   onSavePumpingLog: (input: PumpingLogInput, existing: PumpingLog | null) => void;
@@ -132,6 +134,7 @@ export default function LogTab({
   memberLabel,
   nextBreastSide,
   pumpedBatches,
+  onDiscardPumpedBatch,
   onSaveMilkLog,
   onSaveDiaperLog,
   onSavePumpingLog,
@@ -503,6 +506,7 @@ export default function LogTab({
         nextSide={nextBreastSide}
         timer={nursingTimer}
         pumpedBatches={pumpedBatches}
+        onDiscardBatch={onDiscardPumpedBatch}
         initialMethod={milkModalMethod}
         onSwitchToPumping={() => setLogModal({ type: 'pumping', log: null })}
         onClose={closeLogModal}

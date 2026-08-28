@@ -60,6 +60,7 @@ import {
   listCareLogsInRange,
   listRecentMilkLogs,
   listRecentTemperatureLogs,
+  setPumpedBatchDiscarded,
   updateCareLog as updateCareLogApi,
 } from '@/lib/api/careLogs';
 import { getNextBreastSide, getLogTitle } from '@/lib/careLogUtils';
@@ -763,6 +764,32 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   const saveTemperatureLog = (input: TemperatureLogInput, existing: TemperatureLog | null) =>
     saveLog(existing, { type: 'temperature', ...input });
 
+  /**
+   * 搾乳ストックの1パックを丸ごと捨てる / 捨てたのを取り消す。
+   *
+   * 搾った記録は残したまま印だけを付け外しするので、記録の保存とは別の道を通る。
+   * 一覧に出ていない日の搾乳も捨てられるよう、記録そのものは読み込まずidだけで書き換える。
+   */
+  const discardPumpedBatch = async (id: string, discarded: boolean) => {
+    const discardedAt = discarded ? new Date() : null;
+    try {
+      await setPumpedBatchDiscarded(supabase, id, discardedAt);
+      // 表示中の日にその搾乳があれば、カードの「破棄」も入れ替える。
+      setLogs((prev) =>
+        prev.map((log) =>
+          log.id === id && log.type === 'pumping'
+            ? { ...log, discardedAt: discardedAt ?? undefined }
+            : log,
+        ),
+      );
+      setLoadedScheduleLogRange(null);
+      refreshPumpedStock();
+    } catch (err) {
+      console.error('Failed to update pumped milk stock:', err);
+      alert('搾乳ストックの更新に失敗しました。もう一度お試しください。');
+    }
+  };
+
   const deleteLog = async (id: string) => {
     const previous = logs;
     setLogs((prev) => prev.filter((l) => l.id !== id));
@@ -1020,6 +1047,7 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               memberLabel={memberLabel}
               nextBreastSide={nextBreastSide}
               pumpedBatches={pumpedBatches}
+              onDiscardPumpedBatch={discardPumpedBatch}
               onSaveMilkLog={saveMilkLog}
               onSaveDiaperLog={saveDiaperLog}
               onSavePumpingLog={savePumpingLog}
