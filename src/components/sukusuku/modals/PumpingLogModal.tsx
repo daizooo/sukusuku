@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Ban, Undo2 } from 'lucide-react';
 import type { FeedingMethod, PumpedBatch, PumpingLog } from '@/types/app';
 import { pumpedStockMl } from '@/lib/careLogUtils';
 import { parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUtils';
@@ -21,6 +22,8 @@ export interface PumpingLogInput {
   amountMl: number;
   time: Date;
   note: string;
+  /** 飲ませずに丸ごと捨てたときの日時。捨てていなければ入れない。 */
+  discardedAt?: Date;
 }
 
 interface PumpingLogModalProps {
@@ -68,9 +71,13 @@ function PumpingLogModalBody({
   const [date, setDate] = useState(() => toDateString(log?.time ?? baseDate));
   const [time, setTime] = useState(() => toTimeInputValue(log?.time ?? new Date()));
   const [note, setNote] = useState(log?.note ?? '');
+  // 置きすぎた分などを飲ませずに捨てるとき。保存したときにストックから外れる。
+  const [discarded, setDiscarded] = useState(() => !!log?.discardedAt);
 
   // すでに授乳の記録で使われている搾乳は、量を直すとその記録の量とずれる。
   const isUsed = pumpedBatches.some((batch) => batch.id === log?.id && batch.usedBy !== null);
+  // 保存済みの内容として破棄されているか。切り替えた結果どうなるかの説明に使う。
+  const wasDiscarded = !!log?.discardedAt;
 
   const parsed = Number(amount);
   const amountMl = amount !== '' && Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : null;
@@ -81,6 +88,8 @@ function PumpingLogModalBody({
       amountMl,
       time: parseDateTimeInput(date, time, log?.time ?? baseDate),
       note,
+      // 捨てた日時は最初に捨てたときのまま。取り消したら印ごと外してストックに戻す。
+      discardedAt: discarded ? (log?.discardedAt ?? new Date()) : undefined,
     });
   };
 
@@ -122,6 +131,25 @@ function PumpingLogModalBody({
           <SubmitButton accent="pumping" onClick={handleSubmit} disabled={amountMl === null}>
             保存する
           </SubmitButton>
+          {/* 飲ませずに捨てるとき。搾った記録そのものは残すので、削除とは別に置く。
+              すでに飲ませた分は捨てようがないため、使われていないパックにだけ出す。 */}
+          {log && !isUsed && (
+            <button
+              type="button"
+              onClick={() => setDiscarded((prev) => !prev)}
+              className="w-full flex items-center justify-center text-xs font-medium py-2 text-rose-600 hover:text-rose-800"
+            >
+              {discarded ? (
+                <>
+                  <Undo2 size={14} className="mr-1" /> 破棄をやめる
+                </>
+              ) : (
+                <>
+                  <Ban size={14} className="mr-1" /> このパックを丸ごと破棄する
+                </>
+              )}
+            </button>
+          )}
           {log && <DeleteButton onDelete={onDelete} />}
         </>
       }
@@ -129,6 +157,17 @@ function PumpingLogModalBody({
       <HintBanner accent="pumping">
         {isUsed ? (
           <>この搾乳は授乳の記録ですでに飲ませた分です。量を直すと、その記録の量とずれます。</>
+        ) : discarded ? (
+          wasDiscarded ? (
+            <>
+              このパックは<span className="font-bold">破棄した分</span>
+              です。搾乳ストックには入っていません。
+            </>
+          ) : (
+            <>保存すると、このパックは搾乳ストックから外れます。搾った記録は残ります。</>
+          )
+        ) : wasDiscarded ? (
+          <>保存すると、このパックは搾乳ストックに戻ります。</>
         ) : (
           <>
             搾乳ストックの残りは<span className="font-bold">{pumpedStockMl(pumpedBatches)}ml</span>

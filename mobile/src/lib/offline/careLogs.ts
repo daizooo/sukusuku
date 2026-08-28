@@ -102,17 +102,32 @@ export async function replaceCachedRange(
   });
 }
 
+type CachedPumpedBatch = {
+  id: string;
+  time: string;
+  amountMl: number;
+  usedBy: string | null;
+  /** 丸ごと捨てた日時。捨てていなければ null。控えを作った頃には無かったので、無い場合もある。 */
+  discardedAt?: string | null;
+};
+
 export const readCachedPumpedBatches = async (): Promise<PumpedBatch[]> => {
-  const cached = await readKv<{ id: string; time: string; amountMl: number; usedBy: string | null }[]>(
-    PUMPED_BATCHES_KEY,
-  );
-  return (cached ?? []).map((batch) => ({ ...batch, time: new Date(batch.time) }));
+  const cached = await readKv<CachedPumpedBatch[]>(PUMPED_BATCHES_KEY);
+  return (cached ?? []).map((batch) => ({
+    ...batch,
+    time: new Date(batch.time),
+    discardedAt: batch.discardedAt ? new Date(batch.discardedAt) : null,
+  }));
 };
 
 export const writeCachedPumpedBatches = (batches: PumpedBatch[]): Promise<void> =>
   writeKv(
     PUMPED_BATCHES_KEY,
-    batches.map((batch) => ({ ...batch, time: batch.time.toISOString() })),
+    batches.map((batch) => ({
+      ...batch,
+      time: batch.time.toISOString(),
+      discardedAt: batch.discardedAt?.toISOString() ?? null,
+    })),
   );
 
 // --- 書き込み（控えへ入れて outbox に積む）---

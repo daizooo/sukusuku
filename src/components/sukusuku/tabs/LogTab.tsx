@@ -39,7 +39,7 @@ import {
   getSideLabel,
   isAlertLog,
   isFever,
-  sumBatchesMl,
+  pumpedStockMl,
   summarizeLogs,
 } from '@/lib/careLogUtils';
 import { useNursingTimer } from '@/lib/nursingTimer';
@@ -74,6 +74,8 @@ interface LogTabProps {
   nextBreastSide: BreastSide | null;
   /** 搾乳ストックの全量（使用済みも含む）。残りの表示と、飲ませる搾乳の選択に使う。 */
   pumpedBatches: PumpedBatch[];
+  /** 搾乳ストックの1パックを丸ごと捨てる / 捨てたのを取り消す。 */
+  onDiscardPumpedBatch: (id: string, discarded: boolean) => void;
   onSaveMilkLog: (input: MilkLogInput, existing: MilkLog | null) => void;
   onSaveDiaperLog: (input: DiaperLogInput, existing: DiaperLog | null) => void;
   onSavePumpingLog: (input: PumpingLogInput, existing: PumpingLog | null) => void;
@@ -132,6 +134,7 @@ export default function LogTab({
   memberLabel,
   nextBreastSide,
   pumpedBatches,
+  onDiscardPumpedBatch,
   onSaveMilkLog,
   onSaveDiaperLog,
   onSavePumpingLog,
@@ -196,10 +199,9 @@ export default function LogTab({
     summary.temperature.maxCelsius > latestTemperature.celsius
       ? `最高 ${formatCelsius(summary.temperature.maxCelsius)}`
       : null;
-  // 搾乳ストックの残り。まだ飲ませていないパックの数と合計。
+  // 搾乳ストックの残り。飲ませた分と丸ごと捨てた分を除いたパックの合計。
   // 表示中の日だけでは求まらないため、日付の送りとは関わらず常に今の残りを出す。
-  const stockBatches = pumpedBatches.filter((batch) => batch.usedBy === null);
-  const stockMl = sumBatchesMl(stockBatches);
+  const stockMl = pumpedStockMl(pumpedBatches);
 
   const closeLogModal = () => setLogModal(null);
 
@@ -504,6 +506,7 @@ export default function LogTab({
         nextSide={nextBreastSide}
         timer={nursingTimer}
         pumpedBatches={pumpedBatches}
+        onDiscardBatch={onDiscardPumpedBatch}
         initialMethod={milkModalMethod}
         onSwitchToPumping={() => setLogModal({ type: 'pumping', log: null })}
         onClose={closeLogModal}

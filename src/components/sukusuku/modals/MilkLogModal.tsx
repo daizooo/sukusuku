@@ -54,6 +54,11 @@ interface MilkLogModalProps {
   timer: NursingTimer;
   /** 搾乳ストックの全量（使用済みも含む）。「搾乳」を選んだときの選択肢に使う。 */
   pumpedBatches: PumpedBatch[];
+  /**
+   * 搾乳ストックの1パックを丸ごと捨てる / 捨てたのを取り消す。
+   * この記録の保存とは別に、押したその場で反映される。
+   */
+  onDiscardBatch: (id: string, discarded: boolean) => void;
   /** 「搾った」に切り替える。搾乳の入力画面へ移る（新規追加のときだけ出す）。 */
   onSwitchToPumping: () => void;
   /** 新規追加のときに最初から選んでおく種類。搾乳の入力画面から戻ってきたときに使う。 */
@@ -87,6 +92,7 @@ function MilkLogModalBody({
   nextSide,
   timer,
   pumpedBatches,
+  onDiscardBatch,
   onSwitchToPumping,
   initialMethod,
   onClose,
@@ -151,6 +157,12 @@ function MilkLogModalBody({
 
   const toggleBatch = (id: string) =>
     setSelectedBatchIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  // 捨てたパックは飲ませられないので、選んでいたら外しておく。
+  const handleDiscardBatch = (id: string) => {
+    setSelectedBatchIds((prev) => prev.filter((x) => x !== id));
+    onDiscardBatch(id, true);
+  };
 
   // 計測した時間をそのまま記録する。計測中のまま保存されても、その分を含める。
   // 分数を手で選び直した側は、その値を優先する。
@@ -333,6 +345,8 @@ function MilkLogModalBody({
             selectedMl={selectedMl}
             stockMl={pumpedStockMl(pumpedBatches)}
             onToggle={toggleBatch}
+            onDiscard={handleDiscardBatch}
+            onUndoDiscard={(id) => onDiscardBatch(id, false)}
           />
           {selectableBatches.length > 0 && (
             <DrankAmountField
@@ -403,6 +417,10 @@ interface PumpedBatchPickerProps {
   /** ストック全体の残り(ml)。編集中の記録が使っている分は含まない。 */
   stockMl: number;
   onToggle: (id: string) => void;
+  /** 飲ませずに丸ごと捨てる。押したその場でストックから外れる。 */
+  onDiscard: (id: string) => void;
+  /** 捨てたのを取り消してストックに戻す。 */
+  onUndoDiscard: (id: string) => void;
 }
 
 /**
@@ -411,13 +429,57 @@ interface PumpedBatchPickerProps {
  * どれだけ用意したかは、どの搾乳を使ったかで決まる（母乳パック1つ＝1回の搾乳）ため、
  * ここはパックを選ぶ形にしている。実際に飲んだ量は下の「飲んだ量」で直す。選んだ搾乳は
  * ストックから外れ、この記録を消すとストックに戻る。古いものから使えるよう、並びは搾った順。
+ *
+ * いまのストックが1パックずつ並ぶ場所でもあるので、置きすぎた分をここから
+ * 「破棄」できるようにしている。破棄はこの記録の保存を待たずその場で反映されるため、
+ * 押し間違えてもすぐ戻せるよう、直前に破棄したパックは取り消せる形で残す。
  */
-function PumpedBatchPicker({ batches, selectedIds, selectedMl, stockMl, onToggle }: PumpedBatchPickerProps) {
+function PumpedBatchPicker({
+  batches,
+  selectedIds,
+  selectedMl,
+  stockMl,
+  onToggle,
+  onDiscard,
+  onUndoDiscard,
+}: PumpedBatchPickerProps) {
+  // 直前に破棄したパック。取り消せるよう、一覧から消えたあとも覚えておく。
+  const [discardedBatch, setDiscardedBatch] = useState<PumpedBatch | null>(null);
+
+  const handleDiscard = (batch: PumpedBatch) => {
+    setDiscardedBatch(batch);
+    onDiscard(batch.id);
+  };
+
+  const handleUndo = () => {
+    if (!discardedBatch) return;
+    onUndoDiscard(discardedBatch.id);
+    setDiscardedBatch(null);
+  };
+
+  const discardedNotice = discardedBatch && (
+    <div className="flex items-center justify-between gap-2 rounded-lg bg-gray-100 px-3 py-2">
+      <span className="text-[11px] text-gray-600 tabular-nums min-w-0 truncate">
+        {formatBatchTime(discardedBatch)}（{discardedBatch.amountMl}ml）を破棄しました
+      </span>
+      <button
+        type="button"
+        onClick={handleUndo}
+        className="shrink-0 text-[11px] font-bold text-rose-700 hover:text-rose-900"
+      >
+        取り消す
+      </button>
+    </div>
+  );
+
   if (batches.length === 0) {
     return (
-      <HintBanner accent="pumping">
-        搾乳ストックがありません。上の「搾った」に切り替えて、搾った分を先に記録してください。
-      </HintBanner>
+      <div className="space-y-2">
+        {discardedNotice}
+        <HintBanner accent="pumping">
+          搾乳ストックがありません。上の「搾った」に切り替えて、搾った分を先に記録してください。
+        </HintBanner>
+      </div>
     );
   }
 
@@ -428,35 +490,54 @@ function PumpedBatchPicker({ batches, selectedIds, selectedMl, stockMl, onToggle
         <span className="text-[11px] text-gray-500 tabular-nums mb-1.5">残り {stockMl}ml</span>
       </div>
 
+      {discardedNotice}
+
       {/* モーダルの中身ごとスクロールするので、この一覧の中では二重にスクロールさせない。 */}
-      <div className="space-y-1.5">
+      <div className={`space-y-1.5 ${discardedBatch ? 'mt-2' : ''}`}>
         {batches.map((batch) => {
           const selected = selectedIds.includes(batch.id);
           return (
-            <button
+            <div
               key={batch.id}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onToggle(batch.id)}
-              className={`w-full flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm transition active:scale-[0.99] ${
-                selected
-                  ? 'bg-rose-50 border-rose-400 text-rose-800'
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              className={`flex items-stretch rounded-lg border overflow-hidden ${
+                selected ? 'bg-rose-50 border-rose-400' : 'bg-white border-gray-300'
               }`}
             >
-              <span className="flex items-center min-w-0">
-                <span
-                  aria-hidden
-                  className={`w-4 h-4 mr-2 shrink-0 rounded border flex items-center justify-center ${
-                    selected ? 'bg-rose-600 border-rose-600' : 'border-gray-300'
+              <button
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onToggle(batch.id)}
+                className={`flex-1 min-w-0 flex items-center justify-between px-3 py-2.5 text-sm transition ${
+                  selected ? 'text-rose-800' : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <span className="flex items-center min-w-0">
+                  <span
+                    aria-hidden
+                    className={`w-4 h-4 mr-2 shrink-0 rounded border flex items-center justify-center ${
+                      selected ? 'bg-rose-600 border-rose-600' : 'border-gray-300'
+                    }`}
+                  >
+                    {selected && <Check size={12} className="text-white" />}
+                  </span>
+                  <span className="tabular-nums truncate">{formatBatchTime(batch)}</span>
+                </span>
+                <span className="font-bold tabular-nums shrink-0 ml-2">{batch.amountMl}ml</span>
+              </button>
+              {/* 置きすぎた分をここで捨てる。すでに飲ませたパックは捨てようがないので出さない。 */}
+              {batch.usedBy === null && (
+                <button
+                  type="button"
+                  onClick={() => handleDiscard(batch)}
+                  aria-label={`${formatBatchTime(batch)}の搾乳を破棄する`}
+                  className={`shrink-0 px-3 flex items-center border-l text-[11px] font-medium text-gray-500 transition hover:bg-gray-100 hover:text-rose-700 ${
+                    selected ? 'border-rose-200' : 'border-gray-200'
                   }`}
                 >
-                  {selected && <Check size={12} className="text-white" />}
-                </span>
-                <span className="tabular-nums truncate">{formatBatchTime(batch)}</span>
-              </span>
-              <span className="font-bold tabular-nums shrink-0 ml-2">{batch.amountMl}ml</span>
-            </button>
+                  破棄
+                </button>
+              )}
+            </div>
           );
         })}
       </div>
@@ -465,6 +546,9 @@ function PumpedBatchPicker({ batches, selectedIds, selectedMl, stockMl, onToggle
         {selectedIds.length === 0
           ? '搾乳を選んでください'
           : `${selectedIds.length}パック・合計 ${selectedMl}ml を用意`}
+      </p>
+      <p className="mt-1 text-[10px] text-gray-400">
+        飲ませずに捨てるときは「破棄」。この記録を保存しなくてもストックから外れます。
       </p>
     </div>
   );
