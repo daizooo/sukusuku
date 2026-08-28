@@ -47,6 +47,14 @@ const readStringArray = (value: unknown): string[] | undefined =>
     ? (value as string[])
     : undefined;
 
+// 日時は details にISO文字列で入れる。読めない値が入っていても表示を壊さないよう、
+// 日付として成立するものだけを取る。
+const readDate = (value: unknown): Date | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+};
+
 export const rowToCareLog = (row: CareLogRow): CareLog => {
   const details = toDetails(row.details);
   // details が入る前に記録された分。種類別の項目がないので、表示は amount の文字列で行う。
@@ -81,6 +89,7 @@ export const rowToCareLog = (row: CareLogRow): CareLog => {
       ...base,
       type: 'pumping',
       amountMl: readNumber(details.amountMl) ?? 0,
+      discardedAt: readDate(details.discardedAt),
     };
   }
 
@@ -128,6 +137,8 @@ const careLogToDetails = (log: CareLog): Json => {
     set('celsius', log.celsius);
   } else {
     set('amountMl', log.amountMl);
+    // 丸ごと捨てた搾乳。捨てていなければキー自体を持たせない。
+    set('discardedAt', log.discardedAt?.toISOString());
   }
 
   return details as Json;
@@ -232,6 +243,7 @@ export async function listRecentTemperatureLogs(
  * どの搾乳を飲ませるかは記録するときに選ぶので、残量ではなく1パックずつ持つ必要がある。
  * 使ったかどうかは飲ませた側（method: 'pumped' のミルクの記録）の pumpedFrom が持ち、
  * 搾乳の記録そのものは書き換えない。授乳の記録を消せば、その搾乳はストックに戻る。
+ * 飲ませずに丸ごと捨てた分だけは、飲ませた側の記録が無いので搾乳の記録自身が印を持つ。
  *
  * 表示中の日だけでは求まらないため全期間ぶんを数えるが、どちらも1日に数件しか増えず
  * 必要な列も少ないので、2本の軽い問い合わせで足りる。並びは古い順（先に搾ったものから使う）。
@@ -268,6 +280,7 @@ export async function listPumpedBatches(supabase: SupabaseDb, familyId: string):
     time: new Date(row.logged_at),
     amountMl: readNumber(toDetails(row.details).amountMl) ?? 0,
     usedBy: usedBy.get(row.id) ?? null,
+    discardedAt: readDate(toDetails(row.details).discardedAt) ?? null,
   }));
 }
 

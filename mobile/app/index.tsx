@@ -32,6 +32,7 @@ import {
   getSideLabel,
   isFever,
   pumpedStockMl,
+  stockPumpedBatches,
   summarizeLogs,
 } from '@/lib/careLogUtils';
 import {
@@ -386,7 +387,7 @@ export default function LogScreen() {
             <View style={styles.stockRow}>
               <Text style={styles.stockLabel}>搾乳ストック</Text>
               <Text style={styles.stockValue}>
-                {pumpedBatches.filter((batch) => batch.usedBy === null).length}パック・
+                {stockPumpedBatches(pumpedBatches).length}パック・
                 {pumpedStockMl(pumpedBatches)}ml
               </Text>
             </View>

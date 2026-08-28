@@ -116,16 +116,25 @@ export const getNextBreastSide = (logs: CareLog[]): BreastSide | null => {
   return latest.lastSide === 'left' ? 'right' : 'left';
 };
 
+/** 丸ごと捨てたパックか。捨てた分はもう冷蔵庫に無いので、ストックからは外す。 */
+export const isDiscardedBatch = (batch: PumpedBatch): boolean => batch.discardedAt !== null;
+
+/** いま残っている搾乳ストック。飲ませた分と捨てた分を除いたパック。 */
+export const stockPumpedBatches = (batches: PumpedBatch[]): PumpedBatch[] =>
+  batches.filter((batch) => batch.usedBy === null && !isDiscardedBatch(batch));
+
 /**
- * いま選べる搾乳ストック。まだ使っていないパックと、編集中の記録が使っているパックを返す。
+ * いま選べる搾乳ストック。残っているパックと、編集中の記録が使っているパックを返す。
  * （編集中の記録が使っているパックは「使用済み」だが、選び直せるよう外さない）
  */
 export const selectablePumpedBatches = (batches: PumpedBatch[], editingLogId?: string): PumpedBatch[] =>
-  batches.filter((batch) => batch.usedBy === null || batch.usedBy === editingLogId);
+  batches.filter(
+    (batch) => batch.usedBy === editingLogId || (batch.usedBy === null && !isDiscardedBatch(batch)),
+  );
 
-/** 搾乳ストックの残り(ml)。まだ使っていないパックの合計。 */
+/** 搾乳ストックの残り(ml)。飲ませても捨ててもいないパックの合計。 */
 export const pumpedStockMl = (batches: PumpedBatch[]): number =>
-  sumBatchesMl(batches.filter((batch) => batch.usedBy === null));
+  sumBatchesMl(stockPumpedBatches(batches));
 
 /** 渡された搾乳の合計(ml)。 */
 export const sumBatchesMl = (batches: PumpedBatch[]): number =>
@@ -222,8 +231,12 @@ export const getLogBadges = (log: CareLog): LogBadge[] => {
       if (needsMedicalAttention(log.poopColor)) badges.push({ text: '要受診', tone: 'alert' });
       return badges;
     }
-    case 'pumping':
-      return [{ text: `${log.amountMl} ml`, tone: 'pumping' }];
+    case 'pumping': {
+      const badges: LogBadge[] = [{ text: `${log.amountMl} ml`, tone: 'pumping' }];
+      // 飲ませずに丸ごと捨てた分。搾った量はそのままに、ストックから外れたことを出す。
+      if (log.discardedAt) badges.push({ text: '破棄', tone: 'neutral' });
+      return badges;
+    }
     case 'temperature': {
       // 体温そのものが主役なので、まず値を出す。熱があればそこで色が変わる。
       const badges: LogBadge[] = [

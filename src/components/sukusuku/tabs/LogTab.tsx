@@ -39,7 +39,7 @@ import {
   getSideLabel,
   isAlertLog,
   isFever,
-  sumBatchesMl,
+  pumpedStockMl,
   summarizeLogs,
 } from '@/lib/careLogUtils';
 import { useNursingTimer } from '@/lib/nursingTimer';
@@ -196,10 +196,9 @@ export default function LogTab({
     summary.temperature.maxCelsius > latestTemperature.celsius
       ? `最高 ${formatCelsius(summary.temperature.maxCelsius)}`
       : null;
-  // 搾乳ストックの残り。まだ飲ませていないパックの数と合計。
+  // 搾乳ストックの残り。飲ませた分と丸ごと捨てた分を除いたパックの合計。
   // 表示中の日だけでは求まらないため、日付の送りとは関わらず常に今の残りを出す。
-  const stockBatches = pumpedBatches.filter((batch) => batch.usedBy === null);
-  const stockMl = sumBatchesMl(stockBatches);
+  const stockMl = pumpedStockMl(pumpedBatches);
 
   const closeLogModal = () => setLogModal(null);
 
