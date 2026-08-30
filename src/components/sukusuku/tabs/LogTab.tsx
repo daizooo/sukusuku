@@ -174,17 +174,12 @@ export default function LogTab({
       ? formatDateWithWeekday(logDate)
       : `${logDate.getFullYear()}年${formatDateWithWeekday(logDate)}`;
 
-  // おむつのボタンに出すその日の合計。回数を主、うんちの回数を従にして1行に収める。
-  const diaperSummaryText =
-    summary.diaper.poopCount > 0
-      ? `${summary.diaper.count}回・うんち${summary.diaper.poopCount}`
-      : `${summary.diaper.count}回`;
   // 平熱。その子自身の記録の平均なので、表示中の日ではなく直近の記録から出す。
   const temperatureBaseline = useMemo(
     () => getTemperatureBaseline(recentTemperatureLogs),
     [recentTemperatureLogs],
   );
-  // 体温は最新の値だけを出す。何回測ったかは判断に使わないので載せない。
+  // 体温はまず最新の値を出す（いま熱があるかがいちばん知りたいところ）。
   // その日にまだ測っていなければ、空けておかずに平熱を出す（測ったときの比べる相手になる）。
   const latestTemperature = getLatestTemperature(visibleLogs);
   const temperatureSummaryText = latestTemperature
@@ -192,13 +187,20 @@ export default function LogTab({
     : temperatureBaseline
       ? `平熱 ${formatCelsius(temperatureBaseline.celsius)}`
       : 'この日はまだ';
-  // 熱が下がったあとに、その日いちばん高かったところを添える。下がっていなければ出さない。
-  const temperatureDayMaxText =
-    latestTemperature &&
-    summary.temperature.maxCelsius !== null &&
-    summary.temperature.maxCelsius > latestTemperature.celsius
-      ? `最高 ${formatCelsius(summary.temperature.maxCelsius)}`
-      : null;
+  // その日のようす。何度か測った日は平均を出し、熱が下がったあとはいちばん高かった
+  // ところも添える（いま平熱でも、その日に熱が出ていたことが分かるように）。
+  // 1回しか測っていない日の平均は最新の値と同じなので出さない。
+  const temperatureDayText =
+    [
+      ...(summary.temperature.count >= 2 && summary.temperature.averageCelsius !== null
+        ? [`平均 ${summary.temperature.averageCelsius.toFixed(1)}`]
+        : []),
+      ...(latestTemperature &&
+      summary.temperature.maxCelsius !== null &&
+      summary.temperature.maxCelsius > latestTemperature.celsius
+        ? [`最高 ${summary.temperature.maxCelsius.toFixed(1)}`]
+        : []),
+    ].join('・') || null;
   // 搾乳ストックの残り。飲ませた分と丸ごと捨てた分を除いたパックの合計。
   // 表示中の日だけでは求まらないため、日付の送りとは関わらず常に今の残りを出す。
   const stockMl = pumpedStockMl(pumpedBatches);
@@ -335,11 +337,16 @@ export default function LogTab({
                   <Droplet size={17} className="text-blue-500" />
                   <span className="text-sm font-bold text-gray-800">おむつ</span>
                 </span>
+                {/* おしっことうんちは見たいことが別（水分が足りているか／お通じ）なので、
+                    合わせた回数ではなくそれぞれの回数を出す。「両方」の記録は両方に数える。 */}
                 <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
-                  {diaperSummaryText}
+                  おしっこ {summary.diaper.peeCount}回
+                </span>
+                <span className="text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
+                  うんち {summary.diaper.poopCount}回
                 </span>
               </button>
-              {/* 体温は1日に何度も付くとは限らないので、回数は出さずいまの値だけにする。
+              {/* 体温はいまの値を主に出し、何度か測った日はその日の平均も添える。
                   その日にまだ測っていなければ平熱を出す（測ったときの比べる相手になる）。 */}
               <button
                 onClick={() => setLogModal({ type: 'temperature', log: null })}
@@ -359,10 +366,9 @@ export default function LogTab({
                 >
                   {temperatureSummaryText}
                 </span>
-                {/* 熱が下がったあとでも、その日いちばん高かったところが分かるようにする。 */}
-                {temperatureDayMaxText && (
-                  <span className="text-[10px] font-bold text-orange-600 tabular-nums leading-tight">
-                    {temperatureDayMaxText}
+                {temperatureDayText && (
+                  <span className="text-[10px] font-bold text-orange-600 tabular-nums leading-tight text-center">
+                    {temperatureDayText} ℃
                   </span>
                 )}
               </button>

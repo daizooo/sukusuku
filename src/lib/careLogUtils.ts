@@ -326,10 +326,15 @@ export const isAlertLog = (log: CareLog): boolean => {
 
 export interface DailySummary {
   milk: { count: number; ml: number; breastMinutes: number };
-  diaper: { count: number; poopCount: number };
+  /**
+   * おむつは、おしっことうんちを別々に数える。見たいことが別々（おしっこは水分が
+   * 足りているか、うんちはお通じ）なので、合わせた回数だけでは判断に使えない。
+   * 「両方」の記録はどちらにも数えるため、2つの合計は count と一致しないことがある。
+   */
+  diaper: { count: number; peeCount: number; poopCount: number };
   pumping: { count: number; ml: number };
-  /** 体温は合計に意味が無いので、回数とその日いちばん高かった値を持つ。 */
-  temperature: { count: number; maxCelsius: number | null };
+  /** 体温は合計に意味が無いので、回数とその日の平均・いちばん高かった値を持つ。 */
+  temperature: { count: number; averageCelsius: number | null; maxCelsius: number | null };
 }
 
 // 種類別の項目を持たない記録の「量・時間など」は自由入力なので、
@@ -345,10 +350,12 @@ const parseLegacyMl = (amount: string): number => {
 export const summarizeLogs = (logs: CareLog[]): DailySummary => {
   const summary: DailySummary = {
     milk: { count: 0, ml: 0, breastMinutes: 0 },
-    diaper: { count: 0, poopCount: 0 },
+    diaper: { count: 0, peeCount: 0, poopCount: 0 },
     pumping: { count: 0, ml: 0 },
-    temperature: { count: 0, maxCelsius: null },
+    temperature: { count: 0, averageCelsius: null, maxCelsius: null },
   };
+  // 平均を出すための合計。体温そのものは合計に意味が無いので、外には出さない。
+  let celsiusTotal = 0;
 
   for (const log of logs) {
     const legacy = log.legacyAmount;
@@ -359,9 +366,15 @@ export const summarizeLogs = (logs: CareLog[]): DailySummary => {
       summary.milk.breastMinutes += (log.leftMinutes ?? 0) + (log.rightMinutes ?? 0);
     } else if (log.type === 'diaper') {
       summary.diaper.count += 1;
-      if (legacy === undefined && log.kind !== 'pee') summary.diaper.poopCount += 1;
+      // 「両方」はおしっこ・うんちのどちらにも数える。
+      // 種類別の項目を持たない記録はどちらか分からないので、回数にだけ入れる。
+      if (legacy === undefined) {
+        if (log.kind !== 'poop') summary.diaper.peeCount += 1;
+        if (log.kind !== 'pee') summary.diaper.poopCount += 1;
+      }
     } else if (log.type === 'temperature') {
       summary.temperature.count += 1;
+      celsiusTotal += log.celsius;
       summary.temperature.maxCelsius = Math.max(
         summary.temperature.maxCelsius ?? log.celsius,
         log.celsius,
@@ -370,6 +383,11 @@ export const summarizeLogs = (logs: CareLog[]): DailySummary => {
       summary.pumping.count += 1;
       summary.pumping.ml += legacy !== undefined ? parseLegacyMl(legacy) : log.amountMl;
     }
+  }
+
+  // 平均体温。小数の足し算で出た端数は、体温と同じ小数第1位に丸める。
+  if (summary.temperature.count > 0) {
+    summary.temperature.averageCelsius = roundCelsius(celsiusTotal / summary.temperature.count);
   }
 
   return summary;
