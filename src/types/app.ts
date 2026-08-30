@@ -142,32 +142,12 @@ export interface PumpedBatch {
   discardedAt: Date | null;
 }
 
-export type ReturnStatus = '未完了' | '済' | '不要';
-
-export interface Gift {
-  id: string;
-  from: string;
-  item: string;
-  date: string;
-  returnStatus: ReturnStatus | string;
-  returnItem: string;
-  note: string;
-}
-
 export interface GrowthRecord {
   id: string;
   month: number | null;
   height: number | null;
   weight: number | null;
   recordedDate: string;
-}
-
-export interface DocumentItem {
-  id: string;
-  title: string;
-  date: string;
-  type: 'image';
-  filePath: string;
 }
 
 export type NurseryStatus = '未見学' | '見学予約済' | '見学済';
@@ -237,7 +217,7 @@ export interface UserProfile {
   customFields: ProfileField[];
 }
 
-export type TabId = 'home' | 'schedule' | 'log' | 'memo' | 'info';
+export type TabId = 'home' | 'schedule' | 'log' | 'nursery' | 'info';
 
 // スケジュールタブの表示切り替え。既定は月（カレンダー）。
 export type ScheduleView = 'month' | 'week' | 'day' | 'list';

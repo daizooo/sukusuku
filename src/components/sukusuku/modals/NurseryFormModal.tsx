@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Trash2, X } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 import type { Nursery, NurseryStatus } from '@/types/app';
-import { checkItemNumber, countChecked, NURSERY_CHECK_GROUPS, NURSERY_CHECK_TOTAL } from '@/lib/nurseryChecklist';
 
-// 園の情報と見学チェックリストは1つの画面でまとめて編集・保存する
+// 園の情報（連絡先・見学の日時・メモ）を編集する。
+// 見学チェックリストは保活タブの「チェックリスト」側でその場で編集するため、ここでは触らない
+// （checklistは編集せずそのまま持ち回り、保存時に元の状態を書き戻す）。
 export type NurseryDraft = Omit<Nursery, 'id'>;
 
 const EMPTY_DRAFT: NurseryDraft = {
@@ -53,14 +54,6 @@ export default function NurseryFormModal({ mode, nursery, onClose, onSubmit, onD
   if (!mode) return null;
 
   const set = (patch: Partial<NurseryDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
-
-  const setCheck = (itemId: string, patch: Partial<NurseryDraft['checklist'][string]>) =>
-    setDraft((prev) => {
-      const current = prev.checklist[itemId] ?? { checked: false, memo: '' };
-      return { ...prev, checklist: { ...prev.checklist, [itemId]: { ...current, ...patch } } };
-    });
-
-  const checkedCount = countChecked(draft.checklist);
 
   return (
     <div className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
@@ -140,53 +133,6 @@ export default function NurseryFormModal({ mode, nursery, onClose, onSubmit, onD
               />
             </div>
             <p className="text-[10px] text-gray-400 mt-1.5">日時が決まったら、状況も「見学予約済」に変えておきましょう。</p>
-          </div>
-
-          <div>
-            <SectionTitle>
-              見学チェックリスト（{checkedCount}/{NURSERY_CHECK_TOTAL}）
-            </SectionTitle>
-            <p className="text-[10px] text-gray-400 -mt-1 mb-2">見学当日に確認しやすい順に並べています。</p>
-            <div className="space-y-4">
-              {NURSERY_CHECK_GROUPS.map((group) => (
-                <div key={group.id} className="space-y-2">
-                  <p className="text-[11px] font-bold text-gray-400">{group.title}</p>
-                  {group.items.map((item) => {
-                    const state = draft.checklist[item.id];
-                    const checked = state?.checked ?? false;
-                    return (
-                      <div
-                        key={item.id}
-                        className={`rounded-xl border p-3 transition ${checked ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}
-                      >
-                        <button onClick={() => setCheck(item.id, { checked: !checked })} className="w-full flex items-start text-left">
-                          <span
-                            className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 mr-2 ${
-                              checked ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300 text-transparent'
-                            }`}
-                          >
-                            <Check size={14} strokeWidth={3} />
-                          </span>
-                          <span>
-                            <span className="block text-sm font-bold text-gray-800 leading-tight">
-                              <span className="text-gray-400 mr-1">{checkItemNumber(item.id)}.</span>
-                              {item.title}
-                            </span>
-                            <span className="block text-[11px] text-gray-500 leading-relaxed mt-1">{item.point}</span>
-                          </span>
-                        </button>
-                        <textarea
-                          value={state?.memo ?? ''}
-                          onChange={(e) => setCheck(item.id, { memo: e.target.value })}
-                          placeholder="聞いたこと・気になったこと"
-                          className="w-full mt-2 border border-gray-200 rounded-lg p-2 text-xs outline-none focus:border-blue-500 h-14 resize-none bg-white"
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
           </div>
 
           <div>
