@@ -179,28 +179,26 @@ export default function LogTab({
     () => getTemperatureBaseline(recentTemperatureLogs),
     [recentTemperatureLogs],
   );
-  // 体温はまず最新の値を出す（いま熱があるかがいちばん知りたいところ）。
+  // 体温はその日の平均を出す。1日に何度か測ることがあるので、その日ぜんたいを
+  // 1つの数で言うほうがボタンには合う。
   // その日にまだ測っていなければ、空けておかずに平熱を出す（測ったときの比べる相手になる）。
+  const dayAverageCelsius = summary.temperature.averageCelsius;
+  const temperatureSummaryText =
+    dayAverageCelsius !== null
+      ? `平均 ${formatCelsius(dayAverageCelsius)}`
+      : temperatureBaseline
+        ? `平熱 ${formatCelsius(temperatureBaseline.celsius)}`
+        : 'この日はまだ';
+  // 平均だけでは熱の山がならされてしまうので、その日いちばん高かったところを添える。
+  // 1回しか測っていない日は平均と同じ値なので出さない。
+  const temperatureDayMaxText =
+    dayAverageCelsius !== null &&
+    summary.temperature.maxCelsius !== null &&
+    summary.temperature.maxCelsius > dayAverageCelsius
+      ? `最高 ${formatCelsius(summary.temperature.maxCelsius)}`
+      : null;
+  // 入力画面に出す「前回の体温」。ボタンの平均とは別に、直前の1件が要る。
   const latestTemperature = getLatestTemperature(visibleLogs);
-  const temperatureSummaryText = latestTemperature
-    ? formatCelsius(latestTemperature.celsius)
-    : temperatureBaseline
-      ? `平熱 ${formatCelsius(temperatureBaseline.celsius)}`
-      : 'この日はまだ';
-  // その日のようす。何度か測った日は平均を出し、熱が下がったあとはいちばん高かった
-  // ところも添える（いま平熱でも、その日に熱が出ていたことが分かるように）。
-  // 1回しか測っていない日の平均は最新の値と同じなので出さない。
-  const temperatureDayText =
-    [
-      ...(summary.temperature.count >= 2 && summary.temperature.averageCelsius !== null
-        ? [`平均 ${summary.temperature.averageCelsius.toFixed(1)}`]
-        : []),
-      ...(latestTemperature &&
-      summary.temperature.maxCelsius !== null &&
-      summary.temperature.maxCelsius > latestTemperature.celsius
-        ? [`最高 ${summary.temperature.maxCelsius.toFixed(1)}`]
-        : []),
-    ].join('・') || null;
   // 搾乳ストックの残り。飲ませた分と丸ごと捨てた分を除いたパックの合計。
   // 表示中の日だけでは求まらないため、日付の送りとは関わらず常に今の残りを出す。
   const stockMl = pumpedStockMl(pumpedBatches);
@@ -346,8 +344,8 @@ export default function LogTab({
                   うんち {summary.diaper.poopCount}回
                 </span>
               </button>
-              {/* 体温はいまの値を主に出し、何度か測った日はその日の平均も添える。
-                  その日にまだ測っていなければ平熱を出す（測ったときの比べる相手になる）。 */}
+              {/* 体温はその日の平均を出す（その日にまだ測っていなければ平熱）。
+                  平均でならされてしまう熱の山は、下の「最高」で補う。 */}
               <button
                 onClick={() => setLogModal({ type: 'temperature', log: null })}
                 className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-orange-50 transition active:scale-95"
@@ -359,16 +357,22 @@ export default function LogTab({
                 </span>
                 <span
                   className={`mt-0.5 text-[11px] font-medium tabular-nums leading-tight text-center ${
-                    latestTemperature && isFever(latestTemperature.celsius)
+                    dayAverageCelsius !== null && isFever(dayAverageCelsius)
                       ? 'font-bold text-red-600'
                       : 'text-gray-500'
                   }`}
                 >
                   {temperatureSummaryText}
                 </span>
-                {temperatureDayText && (
-                  <span className="text-[10px] font-bold text-orange-600 tabular-nums leading-tight text-center">
-                    {temperatureDayText} ℃
+                {temperatureDayMaxText && (
+                  <span
+                    className={`text-[10px] font-bold tabular-nums leading-tight text-center ${
+                      summary.temperature.maxCelsius !== null && isFever(summary.temperature.maxCelsius)
+                        ? 'text-red-600'
+                        : 'text-orange-600'
+                    }`}
+                  >
+                    {temperatureDayMaxText}
                   </span>
                 )}
               </button>
