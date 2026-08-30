@@ -172,10 +172,15 @@ export interface DocumentItem {
 
 export type NurseryStatus = '未見学' | '見学予約済' | '見学済';
 
+/** 「見る」項目の3段階評価。A=良い / B=ふつう / C=気になる。 */
+export type NurseryCheckGrade = 'A' | 'B' | 'C';
+
 /** 見学チェックリストの1項目の状態。項目の定義は src/lib/nurseryChecklist.ts にある。 */
 export interface NurseryCheckState {
   checked: boolean;
   memo: string;
+  /** 3段階で評価する項目だけが持つ。評価を選ぶと checked も true になる。 */
+  grade?: NurseryCheckGrade;
 }
 
 /** 見学チェックリストの状態。キーは NurseryCheckItem の id。 */
