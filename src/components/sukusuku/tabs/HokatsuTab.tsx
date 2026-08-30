@@ -181,7 +181,7 @@ export default function HokatsuTab({
   };
 
   const visitDate = selected ? parseDateString(selected.visitDate ?? '') : null;
-  // チェックリストの項目は園ごとに変わる（浸水想定区域か、宗教行事があるか）ので、
+  // チェックリストにはその園にだけ聞く項目（和光の宗教行事など）があるので、
   // 出す項目も分母も選んでいる園から決める。
   const checkGroups = selected ? checkGroupsFor(selected.name) : [];
   const checkedCount = selected ? countChecked(selected.checklist, selected.name) : 0;
