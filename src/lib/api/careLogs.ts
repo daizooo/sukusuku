@@ -10,6 +10,7 @@ import type {
   PoopColor,
   PoopConsistency,
   PumpedBatch,
+  TemperatureLog,
 } from '@/types/app';
 import { addDays, startOfDay } from '@/lib/dateUtils';
 
@@ -21,11 +22,12 @@ export const LOG_TYPE_LABEL: Record<LogType, string> = {
   milk: 'ミルク',
   diaper: 'おむつ',
   pumping: '搾乳',
+  temperature: '体温',
 };
 
 // 記録タブから睡眠の記録を取り止めたあとも、すでに保存されている type = 'sleep' の行は
 // DBに残っている。アプリ側では扱わないので、取得の時点で除いておく。
-const ACTIVE_LOG_TYPES: LogType[] = ['milk', 'diaper', 'pumping'];
+const ACTIVE_LOG_TYPES: LogType[] = ['milk', 'diaper', 'pumping', 'temperature'];
 
 // 記録の種類ごとの項目は care_logs.details (jsonb) に入れる。
 // 想定外の値が入っていても表示を壊さないよう、読み出しは1項目ずつ検証する。
@@ -44,6 +46,14 @@ const readStringArray = (value: unknown): string[] | undefined =>
   Array.isArray(value) && value.every((item) => typeof item === 'string')
     ? (value as string[])
     : undefined;
+
+// 日時は details にISO文字列で入れる。読めない値が入っていても表示を壊さないよう、
+// 日付として成立するものだけを取る。
+const readDate = (value: unknown): Date | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+};
 
 export const rowToCareLog = (row: CareLogRow): CareLog => {
   const details = toDetails(row.details);
@@ -79,6 +89,15 @@ export const rowToCareLog = (row: CareLogRow): CareLog => {
       ...base,
       type: 'pumping',
       amountMl: readNumber(details.amountMl) ?? 0,
+      discardedAt: readDate(details.discardedAt),
+    };
+  }
+
+  if (row.type === 'temperature') {
+    return {
+      ...base,
+      type: 'temperature',
+      celsius: readNumber(details.celsius) ?? 0,
     };
   }
 
@@ -114,8 +133,12 @@ const careLogToDetails = (log: CareLog): Json => {
     set('kind', log.kind);
     set('poopColor', log.poopColor);
     set('poopConsistency', log.poopConsistency);
+  } else if (log.type === 'temperature') {
+    set('celsius', log.celsius);
   } else {
     set('amountMl', log.amountMl);
+    // 丸ごと捨てた搾乳。捨てていなければキー自体を持たせない。
+    set('discardedAt', log.discardedAt?.toISOString());
   }
 
   return details as Json;
@@ -132,6 +155,7 @@ const careLogToAmount = (log: CareLog): string => {
     return parts.join(' ');
   }
   if (log.type === 'diaper') return '';
+  if (log.type === 'temperature') return `${log.celsius.toFixed(1)}℃`;
   return log.amountMl ? `${log.amountMl}ml` : '';
 };
 
@@ -189,11 +213,37 @@ export async function listRecentMilkLogs(
 }
 
 /**
+ * 直近の体温の記録を新しい順に取る。平熱を出すのに使う（careLogUtils の getTemperatureBaseline）。
+ *
+ * 平熱はその子自身の記録の平均なので、表示中の日だけでは求まらない。
+ * 記録タブの1日分(listCareLogsByDate)とは別に、日付にとらわれず取る。
+ * 発熱した日の値は平熱から外すため、外れるぶんを見込んで少し多めに取る。
+ */
+export async function listRecentTemperatureLogs(
+  supabase: SupabaseDb,
+  familyId: string,
+  limit = 60,
+): Promise<TemperatureLog[]> {
+  const { data, error } = await supabase
+    .from('care_logs')
+    .select('*')
+    .eq('family_id', familyId)
+    .eq('type', 'temperature')
+    .order('logged_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? [])
+    .map(rowToCareLog)
+    .filter((log): log is TemperatureLog => log.type === 'temperature');
+}
+
+/**
  * 搾乳ストックの一覧。ためた搾乳1件ずつに「どの授乳で飲ませたか」を添えて返す。
  *
  * どの搾乳を飲ませるかは記録するときに選ぶので、残量ではなく1パックずつ持つ必要がある。
  * 使ったかどうかは飲ませた側（method: 'pumped' のミルクの記録）の pumpedFrom が持ち、
  * 搾乳の記録そのものは書き換えない。授乳の記録を消せば、その搾乳はストックに戻る。
+ * 飲ませずに丸ごと捨てた分だけは、飲ませた側の記録が無いので搾乳の記録自身が印を持つ。
  *
  * 表示中の日だけでは求まらないため全期間ぶんを数えるが、どちらも1日に数件しか増えず
  * 必要な列も少ないので、2本の軽い問い合わせで足りる。並びは古い順（先に搾ったものから使う）。
@@ -230,7 +280,34 @@ export async function listPumpedBatches(supabase: SupabaseDb, familyId: string):
     time: new Date(row.logged_at),
     amountMl: readNumber(toDetails(row.details).amountMl) ?? 0,
     usedBy: usedBy.get(row.id) ?? null,
+    discardedAt: readDate(toDetails(row.details).discardedAt) ?? null,
   }));
+}
+
+/**
+ * 搾乳ストックの1パックを丸ごと捨てる / 捨てたのを取り消す。
+ *
+ * 捨てても搾った記録は残すので、消すのではなく details.discardedAt を付け外しする。
+ * 量やメモはそのままにしたいため、いまの details を読んでからそのキーだけ足し引きする。
+ * 取り消すときはキーごと外し、そのパックはストックに戻る。
+ */
+export async function setPumpedBatchDiscarded(
+  supabase: SupabaseDb,
+  id: string,
+  discardedAt: Date | null,
+): Promise<void> {
+  const { data, error } = await supabase.from('care_logs').select('details').eq('id', id).single();
+  if (error) throw error;
+
+  const details = { ...toDetails(data.details) };
+  if (discardedAt) details.discardedAt = discardedAt.toISOString();
+  else delete details.discardedAt;
+
+  const { error: updateError } = await supabase
+    .from('care_logs')
+    .update({ details: details as Json })
+    .eq('id', id);
+  if (updateError) throw updateError;
 }
 
 // 共用体のまま各要素から取り除く（Omit をそのまま使うと種類ごとの項目が消えてしまう）

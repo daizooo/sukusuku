@@ -41,7 +41,7 @@ src/
     auth/confirm/         # メール確認リンクのコールバック
   components/sukusuku/
     SukusukuApp.tsx        # アプリ本体（状態管理・タブ/モーダルの組み立て）
-    tabs/                  # ホーム/予定/記録/お祝い/設定の各タブ
+    tabs/                  # ホーム/予定/記録/保活/設定の各タブ
     modals/                # タスク追加・詳細の各モーダル
   lib/
     dateUtils.ts / uiUtils.ts / seedData.ts
@@ -73,9 +73,10 @@ supabase/migrations/
 - [x] 搾乳した母乳の記録と搾乳ストック（ためた分を1パックずつ持ち、飲ませるときにその中から選ぶ）
 - [x] 授乳のお知らせを、画面を消している間はサーバー(Web Push)から鳴らす
 - [x] 次の授乳の目安（前回の授乳＋設定した間隔を表示し、その時刻に通知）
+- [x] 検温のお知らせ（朝・夕の決まった時刻に体温の記録を促す。時刻は設定タブで変えられる）→ [docs/notifications.md](docs/notifications.md)
+- [x] 保活タブ（園ごとに基本情報と見学チェックリストを切り替えて見る。お祝い・書類箱は取りやめ）
 - [ ] Google認証などの追加サインイン方法
-- [ ] 育児記録・成長グラフ・お祝い管理・保活メモ・書類箱のSupabase連携
-- [ ] 書類箱の画像アップロード（Supabase Storage）
+- [ ] 育児記録・成長グラフのSupabase連携
 - [ ] Vercelへのデプロイ・GitHub連携
 
 ### 育児記録の種類
@@ -242,6 +243,7 @@ Vercel側の実行リージョンが既定の `iad1`（米国バージニア）�
 ## 検討メモ
 
 - ネイティブアプリ化（iPhone/Android）の進め方 → [docs/native-app.md](docs/native-app.md)
+- 育児記録として何を残すべきか（記録の設計の見直し） → [docs/what-to-record.md](docs/what-to-record.md)
 
 ## Androidネイティブ版 (`mobile/`)
 

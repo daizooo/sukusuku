@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Trash2, X } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import type { GrowthRecord } from '@/types/app';
 import { formatDateString, monthsSinceBirth, parseDateString, toDateString } from '@/lib/dateUtils';
 import {
@@ -14,6 +14,7 @@ import {
   type GrowthRecordDraft,
   type WeightUnit,
 } from '@/lib/growthRecordInput';
+import { LogModalShell } from './logModalParts';
 
 interface FormState {
   recordedDate: string;
@@ -108,103 +109,15 @@ export default function GrowthRecordFormModal({
     }`;
 
   return (
-    <div className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-5 pb-8 sm:pb-5 shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4 border-b pb-2">
-          <h3 className="font-bold text-gray-800">{mode === 'add' ? '身長・体重を記録' : '記録を編集'}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="閉じる">
-            <X size={20} />
-          </button>
-        </div>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">記録日</label>
-            <input
-              type="date"
-              value={form.recordedDate}
-              onChange={(e) => update({ recordedDate: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none"
-            />
-            {form.recordedDate && (
-              <p className="text-[10px] text-gray-400 mt-1">
-                {formatDateString(parseDateString(form.recordedDate))}
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">生後ヶ月</label>
-            <input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              max={MAX_MONTH_AGE}
-              value={monthAgeValue}
-              onChange={(e) => update({ monthAge: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none"
-              placeholder="例: 1"
-            />
-            <p className="text-[10px] text-gray-400 mt-1">
-              {isMonthAgeAuto
-                ? '誕生日と記録日から自動で計算しています。変更もできます。'
-                : 'グラフの横軸に使います。未入力の場合は記録日で並びます。'}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">身長 (cm)</label>
-              <input
-                type="number"
-                inputMode="decimal"
-                step="0.1"
-                min={0}
-                max={MAX_HEIGHT_CM}
-                value={form.height}
-                onChange={(e) => update({ height: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none"
-                placeholder="例: 50.2"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">体重</label>
-              <input
-                type="number"
-                inputMode="decimal"
-                step={form.weightUnit === 'kg' ? '0.01' : '1'}
-                min={0}
-                max={weightMax}
-                value={form.weight}
-                onChange={(e) => update({ weight: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none"
-                placeholder={form.weightUnit === 'kg' ? '例: 3.2' : '例: 3200'}
-              />
-              <div className="flex bg-gray-200 p-0.5 rounded-lg mt-1.5" role="group" aria-label="体重の単位">
-                {(['kg', 'g'] as const).map((unit) => (
-                  <button
-                    key={unit}
-                    type="button"
-                    aria-pressed={form.weightUnit === unit}
-                    onClick={() => changeWeightUnit(unit)}
-                    className={unitButtonClass(unit)}
-                  >
-                    {unit}
-                  </button>
-                ))}
-              </div>
-              {form.weightUnit === 'g' && weightInKg !== null && (
-                <p className="text-[10px] text-gray-400 mt-1">= {weightInKg}kg として保存します</p>
-              )}
-            </div>
-          </div>
-
-          {error && (
-            <p role="alert" className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg p-2">
-              {error}
-            </p>
-          )}
-
+    // 他の記録の入力と同じ枠・同じ大きさで開く。
+    <LogModalShell
+      title={mode === 'add' ? '身長・体重を記録' : '記録を編集'}
+      onClose={onClose}
+      footer={
+        <>
           <button
             onClick={handleSubmit}
-            className="w-full bg-blue-500 text-white font-medium py-3 rounded-xl mt-4 shadow-sm active:bg-blue-600 transition"
+            className="w-full bg-blue-500 text-white font-medium py-3 rounded-xl shadow-sm active:bg-blue-600 transition"
           >
             {mode === 'add' ? '追加する' : '保存する'}
           </button>
@@ -216,8 +129,93 @@ export default function GrowthRecordFormModal({
               <Trash2 size={14} className="mr-1" /> 削除する
             </button>
           )}
+        </>
+      }
+    >
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">記録日</label>
+        <input
+          type="date"
+          value={form.recordedDate}
+          onChange={(e) => update({ recordedDate: e.target.value })}
+          className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none"
+        />
+        {form.recordedDate && (
+          <p className="text-[10px] text-gray-400 mt-1">
+            {formatDateString(parseDateString(form.recordedDate))}
+          </p>
+        )}
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">生後ヶ月</label>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={MAX_MONTH_AGE}
+          value={monthAgeValue}
+          onChange={(e) => update({ monthAge: e.target.value })}
+          className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none"
+          placeholder="例: 1"
+        />
+        <p className="text-[10px] text-gray-400 mt-1">
+          {isMonthAgeAuto
+            ? '誕生日と記録日から自動で計算しています。変更もできます。'
+            : 'グラフの横軸に使います。未入力の場合は記録日で並びます。'}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">身長 (cm)</label>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            min={0}
+            max={MAX_HEIGHT_CM}
+            value={form.height}
+            onChange={(e) => update({ height: e.target.value })}
+            className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none"
+            placeholder="例: 50.2"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">体重</label>
+          <input
+            type="number"
+            inputMode="decimal"
+            step={form.weightUnit === 'kg' ? '0.01' : '1'}
+            min={0}
+            max={weightMax}
+            value={form.weight}
+            onChange={(e) => update({ weight: e.target.value })}
+            className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none"
+            placeholder={form.weightUnit === 'kg' ? '例: 3.2' : '例: 3200'}
+          />
+          <div className="flex bg-gray-200 p-0.5 rounded-lg mt-1.5" role="group" aria-label="体重の単位">
+            {(['kg', 'g'] as const).map((unit) => (
+              <button
+                key={unit}
+                type="button"
+                aria-pressed={form.weightUnit === unit}
+                onClick={() => changeWeightUnit(unit)}
+                className={unitButtonClass(unit)}
+              >
+                {unit}
+              </button>
+            ))}
+          </div>
+          {form.weightUnit === 'g' && weightInKg !== null && (
+            <p className="text-[10px] text-gray-400 mt-1">= {weightInKg}kg として保存します</p>
+          )}
         </div>
       </div>
-    </div>
+
+      {error && (
+        <p role="alert" className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg p-2">
+          {error}
+        </p>
+      )}
+    </LogModalShell>
   );
 }

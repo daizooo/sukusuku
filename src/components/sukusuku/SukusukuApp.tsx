@@ -6,7 +6,7 @@ import {
   Home,
   CalendarDays,
   FileText,
-  StickyNote,
+  ClipboardCheck,
   Folder,
   Plus,
 } from 'lucide-react';
@@ -18,10 +18,9 @@ import type {
   MilkLog,
   PumpedBatch,
   PumpingLog,
-  DocumentItem,
+  TemperatureLog,
   DynamicTask,
   FamilyMember,
-  Gift,
   GrowthRecord,
   LoginRole,
   Nursery,
@@ -58,6 +57,8 @@ import {
   listCareLogsByDate,
   listCareLogsInRange,
   listRecentMilkLogs,
+  listRecentTemperatureLogs,
+  setPumpedBatchDiscarded,
   updateCareLog as updateCareLogApi,
 } from '@/lib/api/careLogs';
 import { getNextBreastSide, getLogTitle } from '@/lib/careLogUtils';
@@ -67,9 +68,13 @@ import {
   getFeedingSettings,
   type FeedingSettings,
 } from '@/lib/api/feedingSettings';
+import {
+  DEFAULT_TEMPERATURE_REMINDER_SETTINGS,
+  getTemperatureReminderSettings,
+  type TemperatureReminderSettings,
+} from '@/lib/api/temperatureReminderSettings';
 import { useNursingAlarmWatcher } from '@/lib/nursingTimer';
 import { useNursingAlarmSync } from '@/lib/nursingAlarmSync';
-import { deleteGift, insertGift, listGifts, updateGift as updateGiftApi } from '@/lib/api/gifts';
 import { ensureChildId } from '@/lib/api/children';
 import {
   deleteGrowthRecord,
@@ -77,12 +82,6 @@ import {
   listGrowthRecords,
   updateGrowthRecord as updateGrowthRecordApi,
 } from '@/lib/api/growthRecords';
-import {
-  deleteDocument,
-  getDocumentSignedUrl,
-  listDocuments,
-  uploadDocument,
-} from '@/lib/api/documents';
 import {
   deleteNursery,
   insertNursery,
@@ -100,7 +99,7 @@ import TaskDetailModal from './modals/TaskDetailModal';
 import type { MilkLogInput } from './modals/MilkLogModal';
 import type { DiaperLogInput } from './modals/DiaperLogModal';
 import type { PumpingLogInput } from './modals/PumpingLogModal';
-import type { GiftDraft } from './modals/GiftFormModal';
+import type { TemperatureLogInput } from './modals/TemperatureLogModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 import type { NurseryDraft } from './modals/NurseryFormModal';
 
@@ -116,14 +115,14 @@ const TabFallback = () => (
 
 const ScheduleTab = dynamic(() => import('./tabs/ScheduleTab'), { loading: TabFallback });
 const LogTab = dynamic(() => import('./tabs/LogTab'), { loading: TabFallback });
-const MemoTab = dynamic(() => import('./tabs/MemoTab'), { loading: TabFallback });
+const HokatsuTab = dynamic(() => import('./tabs/HokatsuTab'), { loading: TabFallback });
 const InfoTab = dynamic(() => import('./tabs/InfoTab'), { loading: TabFallback });
 
 const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
   { id: 'home', icon: Home, label: 'ホーム' },
   { id: 'schedule', icon: CalendarDays, label: '予定' },
   { id: 'log', icon: FileText, label: '記録' },
-  { id: 'memo', icon: StickyNote, label: 'メモ' },
+  { id: 'nursery', icon: ClipboardCheck, label: '保活' },
   { id: 'info', icon: Folder, label: '設定' },
 ];
 
@@ -200,18 +199,19 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   // 記録タブの1日分(logs)とは別に、日付にとらわれず新しい順で持つ。
   const [recentMilkLogs, setRecentMilkLogs] = useState<MilkLog[]>([]);
   const [isLoadingRecentMilk, setIsLoadingRecentMilk] = useState(true);
+  // 平熱に使う直近の体温。その子自身の記録の平均なので、表示中の日だけでは求まらない。
+  const [recentTemperatureLogs, setRecentTemperatureLogs] = useState<TemperatureLog[]>([]);
   // 授乳の間隔の設定。家族で共通なので、どちらが変えても同じ目安が出る。
   const [feedingSettings, setFeedingSettings] = useState<FeedingSettings>(DEFAULT_FEEDING_SETTINGS);
+  // 検温のお知らせの設定。こちらも家族で共通なので、どちらが変えても同じ時刻に届く。
+  const [temperatureReminderSettings, setTemperatureReminderSettings] =
+    useState<TemperatureReminderSettings>(DEFAULT_TEMPERATURE_REMINDER_SETTINGS);
 
-  const [gifts, setGifts] = useState<Gift[]>([]);
-  const [isLoadingGifts, setIsLoadingGifts] = useState(true);
 
   const [growthData, setGrowthData] = useState<GrowthRecord[]>([]);
   const [isLoadingGrowth, setIsLoadingGrowth] = useState(true);
   const [childId, setChildId] = useState<string | null>(null);
 
-  const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
 
   const [nurseries, setNurseries] = useState<Nursery[]>([]);
   const [isLoadingNurseries, setIsLoadingNurseries] = useState(true);
@@ -365,6 +365,17 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
     refreshRecentMilkLogs();
   }, [refreshRecentMilkLogs]);
 
+  // 平熱に使う直近の体温を読み込む。体温を足したり直したりするたびに取り直す。
+  const refreshRecentTemperatureLogs = useCallback(() => {
+    listRecentTemperatureLogs(supabase, familyId)
+      .then(setRecentTemperatureLogs)
+      .catch((err: unknown) => console.error('Failed to load recent temperature logs:', err));
+  }, [supabase, familyId]);
+
+  useEffect(() => {
+    refreshRecentTemperatureLogs();
+  }, [refreshRecentTemperatureLogs]);
+
   // パートナーの端末で記録された授乳は、この端末では分からないまま古い目安が出続ける。
   // アプリに戻ってきたときに取り直して、夫婦のどちらが見ても同じ目安になるようにする。
   useEffect(() => {
@@ -388,17 +399,16 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
     };
   }, [supabase, familyId]);
 
-  // お祝いをSupabaseから取得
+  // 検温のお知らせの設定を読み込む。未設定の家族は既定値(朝6時・夕18時・お知らせする)のまま。
   useEffect(() => {
     let cancelled = false;
-    listGifts(supabase, familyId)
-      .then((data) => {
-        if (!cancelled) setGifts(data);
+    getTemperatureReminderSettings(supabase, familyId)
+      .then((settings) => {
+        if (!cancelled) setTemperatureReminderSettings(settings);
       })
-      .catch((err) => console.error('Failed to load gifts:', err))
-      .finally(() => {
-        if (!cancelled) setIsLoadingGifts(false);
-      });
+      .catch((err: unknown) =>
+        console.error('Failed to load temperature reminder settings:', err),
+      );
     return () => {
       cancelled = true;
     };
@@ -419,22 +429,6 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
       .catch((err) => console.error('Failed to load growth records:', err))
       .finally(() => {
         if (!cancelled) setIsLoadingGrowth(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [supabase, familyId]);
-
-  // 書類箱をSupabaseから取得
-  useEffect(() => {
-    let cancelled = false;
-    listDocuments(supabase, familyId)
-      .then((data) => {
-        if (!cancelled) setDocuments(data);
-      })
-      .catch((err) => console.error('Failed to load documents:', err))
-      .finally(() => {
-        if (!cancelled) setIsLoadingDocuments(false);
       });
     return () => {
       cancelled = true;
@@ -680,8 +674,10 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
       refreshPumpedStock();
       // 「次の授乳の目安」も、記録の時刻を変えたり過去の日に足したりすると変わる。
       refreshRecentMilkLogs();
+      // 平熱も、体温を足したり直したりすれば動く。
+      refreshRecentTemperatureLogs();
     },
-    [logDate, refreshPumpedStock, refreshRecentMilkLogs],
+    [logDate, refreshPumpedStock, refreshRecentMilkLogs, refreshRecentTemperatureLogs],
   );
 
   const saveLog = async (log: CareLog | null, input: NewCareLogInput) => {
@@ -719,6 +715,35 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   const savePumpingLog = (input: PumpingLogInput, existing: PumpingLog | null) =>
     saveLog(existing, { type: 'pumping', ...input });
 
+  const saveTemperatureLog = (input: TemperatureLogInput, existing: TemperatureLog | null) =>
+    saveLog(existing, { type: 'temperature', ...input });
+
+  /**
+   * 搾乳ストックの1パックを丸ごと捨てる / 捨てたのを取り消す。
+   *
+   * 搾った記録は残したまま印だけを付け外しするので、記録の保存とは別の道を通る。
+   * 一覧に出ていない日の搾乳も捨てられるよう、記録そのものは読み込まずidだけで書き換える。
+   */
+  const discardPumpedBatch = async (id: string, discarded: boolean) => {
+    const discardedAt = discarded ? new Date() : null;
+    try {
+      await setPumpedBatchDiscarded(supabase, id, discardedAt);
+      // 表示中の日にその搾乳があれば、カードの「破棄」も入れ替える。
+      setLogs((prev) =>
+        prev.map((log) =>
+          log.id === id && log.type === 'pumping'
+            ? { ...log, discardedAt: discardedAt ?? undefined }
+            : log,
+        ),
+      );
+      setLoadedScheduleLogRange(null);
+      refreshPumpedStock();
+    } catch (err) {
+      console.error('Failed to update pumped milk stock:', err);
+      alert('搾乳ストックの更新に失敗しました。もう一度お試しください。');
+    }
+  };
+
   const deleteLog = async (id: string) => {
     const previous = logs;
     setLogs((prev) => prev.filter((l) => l.id !== id));
@@ -727,44 +752,11 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
       await deleteCareLog(supabase, id);
       refreshPumpedStock();
       refreshRecentMilkLogs();
+      refreshRecentTemperatureLogs();
     } catch (err) {
       console.error('Failed to delete care log:', err);
       setLogs(previous);
       alert('記録の削除に失敗しました。もう一度お試しください。');
-    }
-  };
-
-  // --- お祝い ---
-  const addGift = async (draft: GiftDraft) => {
-    try {
-      const created = await insertGift(supabase, familyId, draft);
-      setGifts((prev) => [created, ...prev]);
-    } catch (err) {
-      console.error('Failed to add gift:', err);
-      alert('お祝いの追加に失敗しました。もう一度お試しください。');
-    }
-  };
-
-  const updateGiftHandler = async (gift: Gift, draft: GiftDraft) => {
-    const updated: Gift = { ...gift, ...draft };
-    setGifts((prev) => prev.map((g) => (g.id === gift.id ? updated : g)));
-    try {
-      await updateGiftApi(supabase, updated);
-    } catch (err) {
-      console.error('Failed to update gift:', err);
-      alert('お祝いの更新に失敗しました。もう一度お試しください。');
-    }
-  };
-
-  const deleteGiftHandler = async (id: string) => {
-    const previous = gifts;
-    setGifts((prev) => prev.filter((g) => g.id !== id));
-    try {
-      await deleteGift(supabase, id);
-    } catch (err) {
-      console.error('Failed to delete gift:', err);
-      setGifts(previous);
-      alert('お祝いの削除に失敗しました。もう一度お試しください。');
     }
   };
 
@@ -819,31 +811,6 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
       alert(`成長記録の削除に失敗しました。もう一度お試しください。${describeError(err)}`);
     }
   };
-
-  // --- 書類箱 ---
-  const addDocument = async (file: File, title: string) => {
-    try {
-      const created = await uploadDocument(supabase, familyId, file, title);
-      setDocuments((prev) => [created, ...prev]);
-    } catch (err) {
-      console.error('Failed to upload document:', err);
-      alert('書類の追加に失敗しました。もう一度お試しください。');
-    }
-  };
-
-  const deleteDocumentHandler = async (doc: DocumentItem) => {
-    const previous = documents;
-    setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
-    try {
-      await deleteDocument(supabase, doc);
-    } catch (err) {
-      console.error('Failed to delete document:', err);
-      setDocuments(previous);
-      alert('書類の削除に失敗しました。もう一度お試しください。');
-    }
-  };
-
-  const getDocumentUrl = (filePath: string) => getDocumentSignedUrl(supabase, filePath);
 
   // --- 保活メモ ---
   const addNurseryHandler = async (draft: NurseryDraft) => {
@@ -975,27 +942,21 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               memberLabel={memberLabel}
               nextBreastSide={nextBreastSide}
               pumpedBatches={pumpedBatches}
+              onDiscardPumpedBatch={discardPumpedBatch}
               onSaveMilkLog={saveMilkLog}
               onSaveDiaperLog={saveDiaperLog}
               onSavePumpingLog={savePumpingLog}
+              onSaveTemperatureLog={saveTemperatureLog}
+              recentTemperatureLogs={recentTemperatureLogs}
+              babyName={getProfileFieldValue(userProfile, 'babyName')}
               onDeleteLog={deleteLog}
               onAddGrowthRecord={addGrowthRecordHandler}
               onUpdateGrowthRecord={updateGrowthRecordHandler}
               onDeleteGrowthRecord={deleteGrowthRecordHandler}
             />
           )}
-          {activeTab === 'memo' && (
-            <MemoTab
-              gifts={gifts}
-              isLoadingGifts={isLoadingGifts}
-              onAddGift={addGift}
-              onUpdateGift={updateGiftHandler}
-              onDeleteGift={deleteGiftHandler}
-              documents={documents}
-              isLoadingDocuments={isLoadingDocuments}
-              onAddDocument={addDocument}
-              onDeleteDocument={deleteDocumentHandler}
-              getDocumentUrl={getDocumentUrl}
+          {activeTab === 'nursery' && (
+            <HokatsuTab
               nurseries={nurseries}
               isLoadingNurseries={isLoadingNurseries}
               onAddNursery={addNurseryHandler}
@@ -1016,6 +977,8 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               onSaveProfile={handleProfileSave}
               feedingSettings={feedingSettings}
               onChangeFeedingSettings={setFeedingSettings}
+              temperatureReminderSettings={temperatureReminderSettings}
+              onChangeTemperatureReminderSettings={setTemperatureReminderSettings}
             />
           )}
         </main>

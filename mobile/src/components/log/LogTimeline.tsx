@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { CareLog, MilkLog } from '@/types/app';
+import type { CareLog } from '@/types/app';
 import {
   BADGE_TONE_COLORS,
   getLogBadges,
@@ -12,32 +12,39 @@ import { colors } from '@/lib/theme';
 
 // その日の記録の一覧。Web版の記録タブのタイムラインにあたる。
 //
-// フェーズ1で作るのは授乳まわりだけなので、開いて直せるのはミルクの記録だけ。
+// 入力画面があるのは授乳・体温なので、開いて直せるのもその2つ。
 // おむつ・搾乳も同じ並びに出すが、タップしても開かない（フェーズ2でそれぞれの入力画面を作る）。
 
 const TYPE_COLOR: Record<CareLog['type'], string> = {
   milk: colors.milk,
   diaper: colors.diaper,
   pumping: colors.pumping,
+  temperature: colors.temperature,
 };
+
+/** 入力画面があり、タップして直せる記録か。 */
+const EDITABLE_TYPES: CareLog['type'][] = ['milk', 'temperature'];
+
+const isEditable = (log: CareLog): boolean => EDITABLE_TYPES.includes(log.type);
 
 interface LogTimelineProps {
   logs: CareLog[];
   memberLabel: (id: string | null) => string;
-  onSelectMilk: (log: MilkLog) => void;
+  /** 入力画面のある記録（授乳・体温）をタップしたとき。 */
+  onSelect: (log: CareLog) => void;
 }
 
-export default function LogTimeline({ logs, memberLabel, onSelectMilk }: LogTimelineProps) {
+export default function LogTimeline({ logs, memberLabel, onSelect }: LogTimelineProps) {
   return (
     <View style={styles.list}>
       {logs.map((log) => {
-        const editable = log.type === 'milk';
+        const editable = isEditable(log);
         return (
           <Pressable
             key={log.id}
             accessibilityRole={editable ? 'button' : undefined}
             disabled={!editable}
-            onPress={() => editable && onSelectMilk(log)}
+            onPress={() => editable && onSelect(log)}
             style={[styles.card, isAlertLog(log) && styles.alertCard]}
           >
             <View style={[styles.dot, { backgroundColor: TYPE_COLOR[log.type] }]} />

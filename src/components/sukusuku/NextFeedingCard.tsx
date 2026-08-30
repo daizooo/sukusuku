@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Coffee } from 'lucide-react';
 import { formatTimeString } from '@/lib/dateUtils';
 import {
   formatMinutesText,
@@ -9,6 +8,7 @@ import {
   type FeedingSchedule,
   type NextFeedingInfo,
 } from '@/lib/feedingSchedule';
+import BabyBottleIcon from './ui/BabyBottleIcon';
 
 // 「次の授乳はいつだっけ」に、画面を見るだけで答えるためのホームのカード。
 // 記録タブにも1行の帯を出していたが、同じことを2か所で言っていて
@@ -53,7 +53,7 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
     <>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-bold text-amber-700 flex items-center">
-          <Coffee size={13} className="mr-1" />
+          <BabyBottleIcon size={13} className="mr-1" />
           次の授乳の目安
         </span>
         <span className="text-[11px] text-gray-400 font-medium">

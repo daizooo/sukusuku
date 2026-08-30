@@ -1,10 +1,12 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { ChevronRight, Coffee, Droplet, Milk } from 'lucide-react';
+import { ChevronRight, Droplet, Milk, Thermometer } from 'lucide-react';
 import type { CareLog } from '@/types/app';
+import BabyBottleIcon from '../ui/BabyBottleIcon';
 import {
   BADGE_TONE_CLASS,
+  formatCelsius,
   getLogBadges,
   getLogTimeText,
   getLogTitle,
@@ -24,7 +26,7 @@ export function CareLogSummaryLine({ logs }: CareLogSummaryProps) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600 tabular-nums">
       <span className="flex items-center">
-        <Coffee size={12} className="text-amber-600 mr-1" />
+        <BabyBottleIcon size={12} className="text-amber-600 mr-1" />
         {summary.milk.count}回
         {summary.milk.ml > 0 && <span className="ml-1">{summary.milk.ml}ml</span>}
       </span>
@@ -38,6 +40,16 @@ export function CareLogSummaryLine({ logs }: CareLogSummaryProps) {
         {summary.pumping.count}回
         {summary.pumping.ml > 0 && <span className="ml-1">{summary.pumping.ml}ml</span>}
       </span>
+      {/* 体温は無い日のほうが多いので、その日にあったときだけ並べる。 */}
+      {summary.temperature.count > 0 && (
+        <span className="flex items-center">
+          <Thermometer size={12} className="text-orange-600 mr-1" />
+          {summary.temperature.count}回
+          {summary.temperature.maxCelsius !== null && (
+            <span className="ml-1">最高 {formatCelsius(summary.temperature.maxCelsius)}</span>
+          )}
+        </span>
+      )}
     </div>
   );
 }

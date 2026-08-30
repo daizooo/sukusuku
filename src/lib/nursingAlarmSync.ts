@@ -8,6 +8,9 @@
 //
 // 通知をオンにしていない端末には購読が無いので、預け先が無い＝これまでどおり
 // 端末内でだけ鳴る（オンにするよう促したりはしない）。
+//
+// 計測を止めたあとも、記録を保存する（またはリセットする）までは預けたままにする。
+// 「授乳は済んだが記録はまだ」の間に「そろそろ次の授乳」が飛ばないようにするため。
 
 import { useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -26,7 +29,7 @@ import {
 
 /** 同じ計測とみなす単位。ここが変わったら預け直す。 */
 const sessionKey = (target: NursingAlarmTarget): string =>
-  `${target.side}|${target.baselineAt}|${target.intervalMinutes}`;
+  `${target.side}|${target.baselineAt}|${target.intervalMinutes}|${target.stoppedAt ?? ''}`;
 
 export function useNursingAlarmSync(userId: string): void {
   useEffect(() => {

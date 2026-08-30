@@ -1,13 +1,12 @@
-// すくすく手帳: 次の授乳の目安の通知
+// すくすく手帳: 検温のお知らせ
 //
-// pg_cron から5分おきに叩かれ、前回の授乳から設定した間隔が経った家族の端末へ
-// 「そろそろ次の授乳」を Web Push で送る。
+// pg_cron から5分おきに叩かれ、設定した朝・夕の時刻になった家族の端末へ
+// 「体温を測って記録しましょう」を Web Push で送る。
 //
-// 目安の時刻は next_feeding_schedule ビューが出す
-// （家族ごとのいちばん新しい授乳の記録 + feeding_settings.interval_minutes）。
-//
-// 授乳中の経過時間お知らせ(send-nursing-alarms)とは別物。あちらは
-// 「いま飲ませている最中」の経過時間を鳴らすもので、こちらは「次はいつか」を知らせる。
+// お知らせの時刻は temperature_reminder_schedule ビューが出す
+// （temperature_reminder_settings の morning_time / evening_time を日本時間で解決したもの）。
+// その時刻の1時間前以降に体温の記録がある家族は、ビューの時点で外れている
+// （少し早めに測った直後に「測りましょう」と届くのを避けるため）。
 //
 // 認証: pg_cron から呼ぶため JWT は使わず、共有シークレットのヘッダーで認可する。
 //       予定のリマインダーと同じ REMINDER_CRON_SECRET を使う。
@@ -20,19 +19,19 @@ import {
   type VapidKeys,
 } from '../_shared/webpush.ts';
 
-// 取りこぼしを拾うため、目安の時刻を過ぎたものも一定時間ぶんは対象にする。
-// 送信済み記録(feeding_reminder_deliveries)があるものは除外されるので二重には飛ばない。
-// 逆にこれを過ぎたら送らない（何時間も後に「そろそろ授乳」が来ても困る）。
+// 取りこぼしを拾うため、時刻を過ぎたものも一定時間ぶんは対象にする。
+// 送信済み記録(temperature_reminder_deliveries)があるものは除外されるので二重には飛ばない。
+// 逆にこれを過ぎたら送らない（朝の検温のお知らせが昼に届いても意味がない）。
 const LOOKBACK_MINUTES = 120;
 // 次の実行までの間に来る通知を少しだけ先取りして送る
 const LOOKAHEAD_MINUTES = 1;
 
+type Slot = 'morning' | 'evening';
+
 interface ScheduleRow {
   family_id: string;
-  care_log_id: string;
-  last_fed_at: string;
-  interval_minutes: number;
-  due_at: string;
+  slot: Slot;
+  scheduled_for: string;
 }
 
 interface SubscriptionRow {
@@ -43,10 +42,6 @@ interface SubscriptionRow {
   auth: string;
 }
 
-interface ActiveNursingRow {
-  push_subscriptions: { family_id: string } | null;
-}
-
 // 家族全員が日本にいる前提。時刻は日本時間で出す。
 const JST_TIME = new Intl.DateTimeFormat('ja-JP', {
   timeZone: 'Asia/Tokyo',
@@ -54,15 +49,6 @@ const JST_TIME = new Intl.DateTimeFormat('ja-JP', {
   minute: '2-digit',
   hour12: false,
 });
-
-/** 180 -> 「3時間」 / 150 -> 「2時間30分」 */
-function formatMinutes(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  if (hours === 0) return `${rest}分`;
-  if (rest === 0) return `${hours}時間`;
-  return `${hours}時間${rest}分`;
-}
 
 Deno.serve(async (request) => {
   const cronSecret = Deno.env.get('REMINDER_CRON_SECRET');
@@ -91,35 +77,15 @@ Deno.serve(async (request) => {
   const to = new Date(now + LOOKAHEAD_MINUTES * 60_000).toISOString();
 
   const { data: due, error: dueError } = await supabase
-    .from('next_feeding_schedule')
+    .from('temperature_reminder_schedule')
     .select('*')
-    .gte('due_at', from)
-    .lte('due_at', to)
+    .gte('scheduled_for', from)
+    .lte('scheduled_for', to)
     .returns<ScheduleRow[]>();
   if (dueError) return json({ error: dueError.message }, 500);
   if (!due || due.length === 0) return json({ due: 0, sent: 0, failed: 0, skipped: 0 });
 
-  // いま授乳中の家族には送らない。記録は授乳が終わってから保存されるので、
-  // 飲ませている最中に「そろそろ次の授乳」が届いてしまうため。
-  // 母乳のストップウォッチを止めてから記録を保存するまでの間も、行は
-  // stopped_at を立てたまま残る（0027）。飲ませ終わったばかりなのに
-  // 家族全員へ通知が飛んでいたのは、この隙間が抜けていたため。
-  // (授乳中・記録待ちの端末だけが nursing_alarms に行を持つ。ほとんどの実行では空になる)
-  const { data: nursing, error: nursingError } = await supabase
-    .from('nursing_alarms')
-    .select('push_subscriptions(family_id)')
-    .returns<ActiveNursingRow[]>();
-  if (nursingError) return json({ error: nursingError.message }, 500);
-  const nursingFamilyIds = new Set(
-    (nursing ?? []).map((row) => row.push_subscriptions?.family_id).filter(Boolean) as string[],
-  );
-
-  const targets = due.filter((row) => !nursingFamilyIds.has(row.family_id));
-  if (targets.length === 0) {
-    return json({ due: due.length, sent: 0, failed: 0, skipped: due.length });
-  }
-
-  const familyIds = [...new Set(targets.map((row) => row.family_id))];
+  const familyIds = [...new Set(due.map((row) => row.family_id))];
   const { data: subscriptions, error: subscriptionError } = await supabase
     .from('push_subscriptions')
     .select('id, family_id, endpoint, p256dh, auth')
@@ -138,19 +104,20 @@ Deno.serve(async (request) => {
 
   let sent = 0;
   let failed = 0;
-  let skipped = due.length - targets.length;
+  let skipped = 0;
 
-  for (const row of targets) {
-    // 「次はいつだっけ」は夫婦のどちらにも起きるので、家族の全端末へ送る。
+  for (const row of due) {
+    // 測るのは手の空いているほうなので、家族の全端末へ送る
+    // （予定のリマインダー・授乳の目安と同じ考え方）。
     for (const subscription of subscriptionsByFamily.get(row.family_id) ?? []) {
-      // 先に記録を作って送信権を取る。(care_log_id, subscription_id, scheduled_for) の
+      // 先に記録を作って送信権を取る。(family_id, subscription_id, scheduled_for) の
       // 一意制約により、実行が重なっても送るのは片方だけになる。
       const { data: claim, error: claimError } = await supabase
-        .from('feeding_reminder_deliveries')
+        .from('temperature_reminder_deliveries')
         .insert({
-          care_log_id: row.care_log_id,
+          family_id: row.family_id,
           subscription_id: subscription.id,
-          scheduled_for: row.due_at,
+          scheduled_for: row.scheduled_for,
           status: 'pending',
         })
         .select('id')
@@ -169,19 +136,19 @@ Deno.serve(async (request) => {
         vapid,
         subscription,
         JSON.stringify({
-          kind: 'feeding',
-          title: 'そろそろ次の授乳',
-          body: `前回 ${JST_TIME.format(new Date(row.last_fed_at))} から${formatMinutes(row.interval_minutes)}たちました`,
+          kind: 'temperature',
+          title: row.slot === 'morning' ? '朝の検温' : '夕方の検温',
+          body: `${JST_TIME.format(new Date(row.scheduled_for))} です。体温を測って記録しましょう`,
           url: '/',
         }),
-        // 目安の時刻を知らせるものなので、何時間も後に届いても意味がない
+        // 決まった時刻のお知らせなので、何時間も後に届いても意味がない
         30 * 60,
       );
 
       if (result.ok) {
         sent++;
         await supabase
-          .from('feeding_reminder_deliveries')
+          .from('temperature_reminder_deliveries')
           .update({ status: 'sent', sent_at: new Date().toISOString() })
           .eq('id', claim!.id);
         await supabase
@@ -192,9 +159,9 @@ Deno.serve(async (request) => {
       }
 
       failed++;
-      console.error('授乳の目安の送信に失敗しました', subscription.endpoint, result.error);
+      console.error('検温のお知らせの送信に失敗しました', subscription.endpoint, result.error);
       await supabase
-        .from('feeding_reminder_deliveries')
+        .from('temperature_reminder_deliveries')
         .update({ status: 'failed', error: result.error })
         .eq('id', claim!.id);
 

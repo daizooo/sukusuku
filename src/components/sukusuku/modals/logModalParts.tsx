@@ -5,44 +5,70 @@
 
 import type { ReactNode } from 'react';
 import { Trash2, X } from 'lucide-react';
+import type { FeedingMethod } from '@/types/app';
 
-export type LogAccent = 'milk' | 'diaper' | 'pumping';
+export type LogAccent = 'milk' | 'diaper' | 'pumping' | 'temperature';
 
 const ACCENT_SELECTED: Record<LogAccent, string> = {
   milk: 'bg-amber-600 border-amber-600 text-white',
   diaper: 'bg-blue-600 border-blue-600 text-white',
   pumping: 'bg-rose-600 border-rose-600 text-white',
+  temperature: 'bg-orange-600 border-orange-600 text-white',
 };
 
 const ACCENT_BUTTON: Record<LogAccent, string> = {
   milk: 'bg-amber-600 hover:bg-amber-700',
   diaper: 'bg-blue-600 hover:bg-blue-700',
   pumping: 'bg-rose-600 hover:bg-rose-700',
+  temperature: 'bg-orange-600 hover:bg-orange-700',
 };
 
 const ACCENT_TEXT: Record<LogAccent, string> = {
   milk: 'text-amber-700',
   diaper: 'text-blue-700',
   pumping: 'text-rose-700',
+  temperature: 'text-orange-700',
 };
+
+/**
+ * 記録の入力モーダルの高さ。どの記録でも同じ大きさで開くよう、ここでまとめて決める。
+ * 画面の高さが足りない端末では、はみ出さないよう枠のほうを縮める（中身はスクロールする）。
+ */
+const LOG_MODAL_HEIGHT = 'h-[640px] max-h-full';
 
 interface LogModalShellProps {
   title: string;
   onClose: () => void;
+  /** 記録の種類の切り替えなど、スクロールさせずに上に固定して出すもの。 */
+  subheader?: ReactNode;
+  /** 保存・削除など、下に固定して出すボタン。 */
+  footer?: ReactNode;
   children: ReactNode;
 }
 
-export function LogModalShell({ title, onClose, children }: LogModalShellProps) {
+/**
+ * 記録の入力モーダルの枠。
+ *
+ * 高さは中身の量にかかわらず一定にする。母乳/搾乳/ミルクのように同じモーダルの中で
+ * 入力項目が入れ替わるとき、枠まで伸び縮みすると画面が落ち着かず、保存ボタンの位置も
+ * 毎回変わって押しづらいため。見出し・切り替え・保存ボタンは固定し、スクロールは
+ * 入力欄の部分だけに閉じ込める。
+ */
+export function LogModalShell({ title, onClose, subheader, footer, children }: LogModalShellProps) {
   return (
     <div className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-5 pb-8 sm:pb-5 shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4 border-b pb-2">
+      <div
+        className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col ${LOG_MODAL_HEIGHT}`}
+      >
+        <div className="shrink-0 flex justify-between items-center border-b px-5 py-3">
           <h3 className="font-bold text-gray-800">{title}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="閉じる">
             <X size={20} />
           </button>
         </div>
-        <div className="space-y-4">{children}</div>
+        {subheader && <div className="shrink-0 px-5 pt-4">{subheader}</div>}
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">{children}</div>
+        {footer && <div className="shrink-0 border-t px-5 pt-3 pb-6 sm:pb-4 space-y-1">{footer}</div>}
       </div>
     </div>
   );
@@ -51,6 +77,21 @@ export function LogModalShell({ title, onClose, children }: LogModalShellProps) 
 export function FieldLabel({ children }: { children: ReactNode }) {
   return <span className="block text-xs font-medium text-gray-700 mb-1.5">{children}</span>;
 }
+
+/** 授乳の記録で「飲ませた」と「搾った」を切り替える。両方の入力画面の一番上に出す。 */
+export type FeedingEntryMode = 'feed' | 'pump';
+
+export const FEEDING_ENTRY_MODE_OPTIONS: { value: FeedingEntryMode; label: string }[] = [
+  { value: 'feed', label: '飲ませた' },
+  { value: 'pump', label: '搾った' },
+];
+
+/** 授乳の記録の種類。授乳・搾乳どちらの入力画面でも同じ並びで一番上に出す。 */
+export const FEEDING_METHOD_OPTIONS: { value: FeedingMethod; label: string }[] = [
+  { value: 'breast', label: '母乳' },
+  { value: 'pumped', label: '搾乳' },
+  { value: 'formula', label: 'ミルク' },
+];
 
 interface SegmentedProps<T extends string> {
   options: { value: T; label: string }[];
@@ -215,6 +256,7 @@ const ACCENT_BANNER: Record<LogAccent, string> = {
   milk: 'bg-amber-50 border-amber-200',
   diaper: 'bg-blue-50 border-blue-200',
   pumping: 'bg-rose-50 border-rose-200',
+  temperature: 'bg-orange-50 border-orange-200',
 };
 
 export function HintBanner({ accent, children }: { accent: LogAccent; children: ReactNode }) {
@@ -223,5 +265,31 @@ export function HintBanner({ accent, children }: { accent: LogAccent; children: 
     <p className={`border rounded-xl px-3 py-2 text-xs font-medium ${background} ${ACCENT_TEXT[accent]}`}>
       {children}
     </p>
+  );
+}
+
+/**
+ * 保存する前に、その場での判断を出す枠（体温）。
+ * 受診の目安にあたるときは alert にして、記録の種類の色ではなく赤で出す。
+ */
+export function AdviceBanner({
+  accent,
+  alert,
+  children,
+}: {
+  accent: LogAccent;
+  alert?: boolean;
+  children: ReactNode;
+}) {
+  const tone = alert
+    ? 'bg-red-50 border-red-300 text-red-700'
+    : `${ACCENT_BANNER[accent]} ${ACCENT_TEXT[accent]}`;
+  return <p className={`border rounded-xl px-3 py-2 text-xs leading-relaxed ${tone}`}>{children}</p>;
+}
+
+/** 入力欄の下に出す補足。保存できない理由は problem にして赤で出す。 */
+export function FieldNote({ problem, children }: { problem?: boolean; children: ReactNode }) {
+  return (
+    <p className={`text-[11px] mt-1.5 ${problem ? 'text-red-500' : 'text-gray-400'}`}>{children}</p>
   );
 }

@@ -5,12 +5,12 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Coffee,
   Droplet,
   FileText,
   List,
   Milk,
   Plus,
+  Thermometer,
   TrendingUp,
   User,
 } from 'lucide-react';
@@ -19,21 +19,27 @@ import type {
   BreastSide,
   CareLog,
   DiaperLog,
+  FeedingMethod,
   GrowthRecord,
   LogType,
   MilkLog,
   PumpedBatch,
   PumpingLog,
+  TemperatureLog,
 } from '@/types/app';
 import {
   BADGE_TONE_CLASS,
+  formatCelsius,
   formatStopwatch,
+  getLatestTemperature,
+  getTemperatureBaseline,
   getLogBadges,
   getLogTimeText,
   getLogTitle,
   getSideLabel,
   isAlertLog,
-  sumBatchesMl,
+  isFever,
+  pumpedStockMl,
   summarizeLogs,
 } from '@/lib/careLogUtils';
 import { useNursingTimer } from '@/lib/nursingTimer';
@@ -44,10 +50,12 @@ import {
   parseDateString,
   toDateString,
 } from '@/lib/dateUtils';
+import BabyBottleIcon from '../ui/BabyBottleIcon';
 import SegmentedTabs from '../ui/SegmentedTabs';
 import MilkLogModal, { type MilkLogInput } from '../modals/MilkLogModal';
 import DiaperLogModal, { type DiaperLogInput } from '../modals/DiaperLogModal';
 import PumpingLogModal, { type PumpingLogInput } from '../modals/PumpingLogModal';
+import TemperatureLogModal, { type TemperatureLogInput } from '../modals/TemperatureLogModal';
 import GrowthRecordFormModal from '../modals/GrowthRecordFormModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 
@@ -66,9 +74,18 @@ interface LogTabProps {
   nextBreastSide: BreastSide | null;
   /** 搾乳ストックの全量（使用済みも含む）。残りの表示と、飲ませる搾乳の選択に使う。 */
   pumpedBatches: PumpedBatch[];
+  /** 搾乳ストックの1パックを丸ごと捨てる / 捨てたのを取り消す。 */
+  onDiscardPumpedBatch: (id: string, discarded: boolean) => void;
   onSaveMilkLog: (input: MilkLogInput, existing: MilkLog | null) => void;
   onSaveDiaperLog: (input: DiaperLogInput, existing: DiaperLog | null) => void;
   onSavePumpingLog: (input: PumpingLogInput, existing: PumpingLog | null) => void;
+  onSaveTemperatureLog: (input: TemperatureLogInput, existing: TemperatureLog | null) => void;
+  /**
+   * 平熱に使う直近の体温。表示中の日だけでは求まらないため、日付の送りとは別に受け取る。
+   */
+  recentTemperatureLogs: TemperatureLog[];
+  /** プロフィールに登録された子の名前。平熱を「岳の平熱」の形で出すのに使う。 */
+  babyName?: string;
   onDeleteLog: (id: string) => void;
   onAddGrowthRecord: (draft: GrowthRecordDraft) => void;
   onUpdateGrowthRecord: (record: GrowthRecord, draft: GrowthRecordDraft) => void;
@@ -78,11 +95,13 @@ interface LogTabProps {
 const getLogIcon = (type: LogType) => {
   switch (type) {
     case 'milk':
-      return <Coffee size={16} className="text-amber-600" />;
+      return <BabyBottleIcon size={16} className="text-amber-600" />;
     case 'diaper':
       return <Droplet size={16} className="text-blue-500" />;
     case 'pumping':
       return <Milk size={16} className="text-rose-500" />;
+    case 'temperature':
+      return <Thermometer size={16} className="text-orange-600" />;
     default:
       return <FileText size={16} className="text-gray-500" />;
   }
@@ -96,6 +115,8 @@ const getLogColor = (type: LogType) => {
       return 'bg-blue-100';
     case 'pumping':
       return 'bg-rose-100';
+    case 'temperature':
+      return 'bg-orange-100';
     default:
       return 'bg-gray-100';
   }
@@ -113,9 +134,13 @@ export default function LogTab({
   memberLabel,
   nextBreastSide,
   pumpedBatches,
+  onDiscardPumpedBatch,
   onSaveMilkLog,
   onSaveDiaperLog,
   onSavePumpingLog,
+  onSaveTemperatureLog,
+  recentTemperatureLogs,
+  babyName,
   onDeleteLog,
   onAddGrowthRecord,
   onUpdateGrowthRecord,
@@ -125,6 +150,8 @@ export default function LogTab({
   // 記録の入力画面。log が null なら新規追加、入っていればその記録の編集。
   const [logModal, setLogModal] = useState<{ type: LogType; log: CareLog | null } | null>(null);
   const [growthModal, setGrowthModal] = useState<{ mode: 'add' | 'edit'; record: GrowthRecord | null } | null>(null);
+  // 搾乳の入力画面から「飲ませた」で戻ったときに、搾乳を選んだ状態で開くための指定。
+  const [milkModalMethod, setMilkModalMethod] = useState<FeedingMethod | undefined>(undefined);
   // グラフの横軸。生後ヶ月が未入力の記録は横軸が空になってしまうため、記録日で代替する。
   const growthChartData = useMemo(
     () =>
@@ -147,23 +174,34 @@ export default function LogTab({
       ? formatDateWithWeekday(logDate)
       : `${logDate.getFullYear()}年${formatDateWithWeekday(logDate)}`;
 
-  // 種類ごとの記録ボタンに出すその日の合計。回数を主、量・時間を従にして1行に収める。
-  const milkSummaryText = [
-    `${summary.milk.count}回`,
-    ...(summary.milk.ml > 0 ? [`${summary.milk.ml}ml`] : []),
-    ...(summary.milk.breastMinutes > 0 ? [`${summary.milk.breastMinutes}分`] : []),
-  ].join('・');
-  const diaperSummaryText =
-    summary.diaper.poopCount > 0
-      ? `${summary.diaper.count}回・うんち${summary.diaper.poopCount}`
-      : `${summary.diaper.count}回`;
-  const pumpingSummaryText =
-    summary.pumping.ml > 0
-      ? `${summary.pumping.count}回・${summary.pumping.ml}ml`
-      : `${summary.pumping.count}回`;
-  // 搾乳ストックの残り。まだ飲ませていないパックの数と合計。
-  const stockBatches = pumpedBatches.filter((batch) => batch.usedBy === null);
-  const stockMl = sumBatchesMl(stockBatches);
+  // 平熱。その子自身の記録の平均なので、表示中の日ではなく直近の記録から出す。
+  const temperatureBaseline = useMemo(
+    () => getTemperatureBaseline(recentTemperatureLogs),
+    [recentTemperatureLogs],
+  );
+  // 体温はその日の平均を出す。1日に何度か測ることがあるので、その日ぜんたいを
+  // 1つの数で言うほうがボタンには合う。
+  // その日にまだ測っていなければ、空けておかずに平熱を出す（測ったときの比べる相手になる）。
+  const dayAverageCelsius = summary.temperature.averageCelsius;
+  const temperatureSummaryText =
+    dayAverageCelsius !== null
+      ? `平均 ${formatCelsius(dayAverageCelsius)}`
+      : temperatureBaseline
+        ? `平熱 ${formatCelsius(temperatureBaseline.celsius)}`
+        : 'この日はまだ';
+  // 平均だけでは熱の山がならされてしまうので、その日いちばん高かったところを添える。
+  // 1回しか測っていない日は平均と同じ値なので出さない。
+  const temperatureDayMaxText =
+    dayAverageCelsius !== null &&
+    summary.temperature.maxCelsius !== null &&
+    summary.temperature.maxCelsius > dayAverageCelsius
+      ? `最高 ${formatCelsius(summary.temperature.maxCelsius)}`
+      : null;
+  // 入力画面に出す「前回の体温」。ボタンの平均とは別に、直前の1件が要る。
+  const latestTemperature = getLatestTemperature(visibleLogs);
+  // 搾乳ストックの残り。飲ませた分と丸ごと捨てた分を除いたパックの合計。
+  // 表示中の日だけでは求まらないため、日付の送りとは関わらず常に今の残りを出す。
+  const stockMl = pumpedStockMl(pumpedBatches);
 
   const closeLogModal = () => setLogModal(null);
 
@@ -241,7 +279,7 @@ export default function LogTab({
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-bold text-amber-700 flex items-center">
-                    <Coffee size={12} className="mr-1" />
+                    <BabyBottleIcon size={12} className="mr-1" />
                     {nursingTimer.runningSide
                       ? `授乳中（${getSideLabel(nursingTimer.runningSide)}）`
                       : '授乳の計測中'}
@@ -259,19 +297,28 @@ export default function LogTab({
               </div>
             )}
 
-            {/* 記録ボタン。その日の合計を同じボタンに載せ、「見る」と「記録する」を1つにまとめている。 */}
+            {/* 記録ボタン。その日のようすを同じボタンに載せ、「見る」と「記録する」を1つにまとめている。
+                授乳・おむつ・体温の3つ。搾乳は授乳の中（入力画面の「搾った」）へ寄せたので、
+                ここには出さず、代わりに授乳のボタンにいまの搾乳ストックを出す。 */}
             <div className="grid grid-cols-3 gap-2">
               <button
-                onClick={() => setLogModal({ type: 'milk', log: null })}
+                onClick={() => {
+                  setMilkModalMethod(undefined);
+                  setLogModal({ type: 'milk', log: null });
+                }}
                 className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-amber-50 transition active:scale-95"
               >
                 <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
                 <span className="flex items-center gap-1.5">
-                  <Coffee size={17} className="text-amber-600" />
-                  <span className="text-sm font-bold text-gray-800">ミルク</span>
+                  <BabyBottleIcon size={17} className="text-amber-600" />
+                  <span className="text-sm font-bold text-gray-800">授乳</span>
                 </span>
-                <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
-                  {nursingTimer.hasSession ? '計測中' : milkSummaryText}
+                {/* その日の回数・量・分数は出さない（判断に使うのは体重とおしっこの回数）。
+                    代わりに、次の授乳で使える搾乳ストックの残りを出す。表示中の日だけでは
+                    求まらないため、日付の送りとは関わらず常に今の残りになる。
+                    何パックあるかは飲ませるときに選ぶので、ここは合計だけでよい。 */}
+                <span className="mt-0.5 text-[11px] font-bold text-rose-600 tabular-nums leading-tight text-center">
+                  ストック・{stockMl}ml
                 </span>
                 {nextBreastSide && !nursingTimer.hasSession && (
                   <span className="text-[10px] font-bold text-amber-600 leading-tight">
@@ -288,35 +335,49 @@ export default function LogTab({
                   <Droplet size={17} className="text-blue-500" />
                   <span className="text-sm font-bold text-gray-800">おむつ</span>
                 </span>
+                {/* おしっことうんちは見たいことが別（水分が足りているか／お通じ）なので、
+                    合わせた回数ではなくそれぞれの回数を出す。「両方」の記録は両方に数える。 */}
                 <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
-                  {diaperSummaryText}
+                  おしっこ {summary.diaper.peeCount}回
+                </span>
+                <span className="text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
+                  うんち {summary.diaper.poopCount}回
                 </span>
               </button>
+              {/* 体温はその日の平均を出す（その日にまだ測っていなければ平熱）。
+                  平均でならされてしまう熱の山は、下の「最高」で補う。 */}
               <button
-                onClick={() => setLogModal({ type: 'pumping', log: null })}
-                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-rose-50 transition active:scale-95"
+                onClick={() => setLogModal({ type: 'temperature', log: null })}
+                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-orange-50 transition active:scale-95"
               >
                 <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
                 <span className="flex items-center gap-1.5">
-                  <Milk size={17} className="text-rose-500" />
-                  <span className="text-sm font-bold text-gray-800">搾乳</span>
+                  <Thermometer size={17} className="text-orange-600" />
+                  <span className="text-sm font-bold text-gray-800">体温</span>
                 </span>
-                <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
-                  {pumpingSummaryText}
+                <span
+                  className={`mt-0.5 text-[11px] font-medium tabular-nums leading-tight text-center ${
+                    dayAverageCelsius !== null && isFever(dayAverageCelsius)
+                      ? 'font-bold text-red-600'
+                      : 'text-gray-500'
+                  }`}
+                >
+                  {temperatureSummaryText}
                 </span>
+                {temperatureDayMaxText && (
+                  <span
+                    className={`text-[10px] font-bold tabular-nums leading-tight text-center ${
+                      summary.temperature.maxCelsius !== null && isFever(summary.temperature.maxCelsius)
+                        ? 'text-red-600'
+                        : 'text-orange-600'
+                    }`}
+                  >
+                    {temperatureDayMaxText}
+                  </span>
+                )}
               </button>
             </div>
 
-            {/* 搾乳ストック。ためた分と、授乳で「搾乳」を選んで飲ませた分の差し引き。
-                表示中の日だけでは求まらないため、日付の送りとは関わらず常に今の残りを出す。 */}
-            <div className="bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 flex items-center justify-between">
-              <span className="text-xs font-bold text-rose-700 flex items-center">
-                <Milk size={13} className="mr-1" /> 搾乳ストック
-              </span>
-              <span className="text-sm font-bold text-rose-700 tabular-nums">
-                {stockBatches.length}パック・{stockMl}ml
-              </span>
-            </div>
             {!isToday && (
               <p className="text-[11px] text-gray-500 leading-relaxed">
                 過去の日を表示中です。記録を追加すると{dateLabel}に登録されます。
@@ -455,6 +516,9 @@ export default function LogTab({
         nextSide={nextBreastSide}
         timer={nursingTimer}
         pumpedBatches={pumpedBatches}
+        onDiscardBatch={onDiscardPumpedBatch}
+        initialMethod={milkModalMethod}
+        onSwitchToPumping={() => setLogModal({ type: 'pumping', log: null })}
         onClose={closeLogModal}
         onSubmit={(input) => {
           const existing = logModal?.log?.type === 'milk' ? logModal.log : null;
@@ -481,9 +545,28 @@ export default function LogTab({
         log={logModal?.log?.type === 'pumping' ? logModal.log : null}
         baseDate={logDate}
         pumpedBatches={pumpedBatches}
+        onSwitchToFeeding={(method) => {
+          // 搾乳の入力画面で選び直した種類のまま、授乳の入力画面へ戻す。
+          setMilkModalMethod(method);
+          setLogModal({ type: 'milk', log: null });
+        }}
         onClose={closeLogModal}
         onSubmit={(input) => {
           onSavePumpingLog(input, logModal?.log?.type === 'pumping' ? logModal.log : null);
+          closeLogModal();
+        }}
+        onDelete={() => logModal?.log && handleDelete(logModal.log)}
+      />
+      <TemperatureLogModal
+        show={logModal?.type === 'temperature'}
+        log={logModal?.log?.type === 'temperature' ? logModal.log : null}
+        baseDate={logDate}
+        previous={latestTemperature}
+        baseline={temperatureBaseline}
+        babyName={babyName}
+        onClose={closeLogModal}
+        onSubmit={(input) => {
+          onSaveTemperatureLog(input, logModal?.log?.type === 'temperature' ? logModal.log : null);
           closeLogModal();
         }}
         onDelete={() => logModal?.log && handleDelete(logModal.log)}

@@ -36,7 +36,7 @@ export interface DynamicTask extends Task {
   targetDate: string;
 }
 
-export type LogType = 'milk' | 'diaper' | 'pumping';
+export type LogType = 'milk' | 'diaper' | 'pumping' | 'temperature';
 
 // 記録の種類ごとに必要な項目が違うため、type で判別する共用体として持つ。
 // DBでは種類ごとの項目を care_logs.details (jsonb) に入れ、読み込み時にこの形へ復元する。
@@ -106,13 +106,29 @@ export interface PumpingLog extends CareLogBase {
   type: 'pumping';
   /** 搾乳した量(ml)。自由入力。 */
   amountMl: number;
+  /**
+   * 飲ませずに丸ごと捨てたときの日時。捨てていなければ持たない。
+   * 置きすぎた分を処分したときのためのもので、この印が付いた搾乳はストックから外れる。
+   * 搾った事実そのものは残るので、その日の搾乳量には今までどおり入る。
+   */
+  discardedAt?: Date;
 }
 
-export type CareLog = MilkLog | DiaperLog | PumpingLog;
+/**
+ * 体温の記録。受診したときに必ず「いつから・何度か」を聞かれるため、
+ * 記録の中で唯一「時系列に並べて読む」ことに意味がある（docs/what-to-record.md §4-1）。
+ */
+export interface TemperatureLog extends CareLogBase {
+  type: 'temperature';
+  /** 測った体温(℃)。小数第1位まで。 */
+  celsius: number;
+}
+
+export type CareLog = MilkLog | DiaperLog | PumpingLog | TemperatureLog;
 
 /**
  * 搾乳ストックの1パック。搾乳の記録に「どの授乳で使ったか」を添えたもの。
- * 使い切ったぶんも含めて持ち、まだ使っていないパックの合計が「残り」になる。
+ * 使い切ったぶんも含めて持ち、飲ませても捨ててもいないパックの合計が「残り」になる。
  */
 export interface PumpedBatch {
   /** もとになった PumpingLog の id。 */
@@ -122,18 +138,8 @@ export interface PumpedBatch {
   amountMl: number;
   /** この搾乳を飲ませた MilkLog の id。まだ使っていなければ null。 */
   usedBy: string | null;
-}
-
-export type ReturnStatus = '未完了' | '済' | '不要';
-
-export interface Gift {
-  id: string;
-  from: string;
-  item: string;
-  date: string;
-  returnStatus: ReturnStatus | string;
-  returnItem: string;
-  note: string;
+  /** 飲ませずに丸ごと捨てた日時。捨てていなければ null。 */
+  discardedAt: Date | null;
 }
 
 export interface GrowthRecord {
@@ -142,14 +148,6 @@ export interface GrowthRecord {
   height: number | null;
   weight: number | null;
   recordedDate: string;
-}
-
-export interface DocumentItem {
-  id: string;
-  title: string;
-  date: string;
-  type: 'image';
-  filePath: string;
 }
 
 export type NurseryStatus = '未見学' | '見学予約済' | '見学済';
@@ -219,7 +217,7 @@ export interface UserProfile {
   customFields: ProfileField[];
 }
 
-export type TabId = 'home' | 'schedule' | 'log' | 'memo' | 'info';
+export type TabId = 'home' | 'schedule' | 'log' | 'nursery' | 'info';
 
 // スケジュールタブの表示切り替え。既定は月（カレンダー）。
 export type ScheduleView = 'month' | 'week' | 'day' | 'list';

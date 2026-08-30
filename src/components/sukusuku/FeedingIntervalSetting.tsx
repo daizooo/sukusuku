@@ -1,10 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Coffee } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { saveFeedingSettings, type FeedingSettings } from '@/lib/api/feedingSettings';
 import { FEEDING_INTERVAL_OPTIONS, formatMinutesText } from '@/lib/feedingSchedule';
+import BabyBottleIcon from './ui/BabyBottleIcon';
 
 interface FeedingIntervalSettingProps {
   familyId: string;
@@ -41,7 +41,7 @@ export default function FeedingIntervalSetting({
   return (
     <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
       <h3 className="font-bold text-gray-800 mb-4 flex items-center border-b pb-2">
-        <Coffee size={18} className="mr-2 text-amber-600" /> 次の授乳の目安
+        <BabyBottleIcon size={18} className="mr-2 text-amber-600" /> 次の授乳の目安
       </h3>
 
       <p className="text-sm font-medium text-gray-800">授乳の間隔</p>

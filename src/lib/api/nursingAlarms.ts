@@ -10,6 +10,10 @@ type SupabaseDb = SupabaseClient<Database>;
 //
 // 端末ごとに1行（キーは push_subscriptions.id）。通知をオフにしている端末は
 // 購読が無いので、そもそも預けられない＝これまでどおり端末内でだけ鳴る。
+//
+// 計測を止めたあとも、記録を保存するまでは stopped_at を立てた行を残す。
+// 授乳は済んでいるのに記録がまだ入っていない間に「そろそろ次の授乳」が
+// 飛んでしまうのを防ぐため（この間はお知らせ自体は鳴らさない）。
 
 export interface NursingAlarmRegistration {
   side: BreastSide;
@@ -18,6 +22,11 @@ export interface NursingAlarmRegistration {
   intervalMinutes: number;
   /** 何回目のお知らせまで済んでいるか。 */
   notifiedStep: number;
+  /**
+   * 計測を止めた時刻(epoch ms)。まだ記録していない間だけ入る（計測中は null）。
+   * この間はお知らせを鳴らさず、「授乳中(＝そろそろ次の授乳は送らない)」の印として残す。
+   */
+  stoppedAt: number | null;
 }
 
 /** この端末の購読ID。通知をオンにしていなければ null。 */
@@ -48,6 +57,7 @@ export async function upsertNursingAlarm(
       baseline_at: new Date(registration.baselineAt).toISOString(),
       interval_minutes: registration.intervalMinutes,
       notified_step: registration.notifiedStep,
+      stopped_at: registration.stoppedAt ? new Date(registration.stoppedAt).toISOString() : null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'subscription_id' },
