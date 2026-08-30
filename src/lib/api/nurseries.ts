@@ -14,10 +14,12 @@ const toChecklist = (value: Json): NurseryChecklist => {
   const result: NurseryChecklist = {};
   for (const [key, entry] of Object.entries(value)) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
-    const { checked, memo } = entry as Record<string, unknown>;
+    const { checked, memo, grade } = entry as Record<string, unknown>;
     result[key] = {
       checked: checked === true,
       memo: typeof memo === 'string' ? memo : '',
+      // 3段階評価はA/B/Cのみ。それ以外の値が入っていたら評価なしとして扱う。
+      ...(grade === 'A' || grade === 'B' || grade === 'C' ? { grade } : {}),
     };
   }
   return result;

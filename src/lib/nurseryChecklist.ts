@@ -5,7 +5,7 @@
 // 「資料をもらう」の1項目にまとめる。
 // 園ごとの状態(チェック・メモ)は nurseries.checklist (jsonb) に項目IDをキーとして保存する。
 
-import type { NurseryChecklist } from '@/types/app';
+import type { NurseryChecklist, NurseryCheckGrade } from '@/types/app';
 
 /** 一部の園にだけ出す項目の対象条件。園名にkeywordsのどれかを含む園が対象。 */
 export interface NurseryCheckTarget {
@@ -22,6 +22,8 @@ export interface NurseryCheckItem {
   point: string;
   /** 対象を絞る項目だけが持つ。未指定なら全園共通。 */
   target?: NurseryCheckTarget;
+  /** その場の印象をA/B/Cで残す項目。評価を選ぶとチェック済みになる。 */
+  graded?: boolean;
 }
 
 export interface NurseryCheckGroup {
@@ -40,19 +42,23 @@ export const NURSERY_CHECK_GROUPS: NurseryCheckGroup[] = [
   {
     id: 'see',
     title: '見る（園内を回りながら）',
+    note: 'A（良い）・B（ふつう）・C（気になる）から選ぶ。選ぶとチェック済みになる。',
     items: [
       {
         id: 'ratio',
+        graded: true,
         title: '0歳児クラスの保育士の人数と部屋の様子',
         point: '国基準はおおむね0歳児3人に保育士1人。実際の教室で人数を目視する。',
       },
       {
         id: 'staff',
+        graded: true,
         title: '先生同士のやり取りと表情',
         point: '笑顔よりも、やり取りにトゲやピリピリ感がないかを見る。余裕のなさは安全性に直結する。',
       },
       {
         id: 'hygiene',
+        graded: true,
         title: '衛生と整理整頓',
         point: 'おむつ用ゴミ箱まわりのにおい、0歳児がハイハイする床の清潔さ。掲示物が破れたままなら人手不足のサイン。',
       },
@@ -107,6 +113,13 @@ export const NURSERY_CHECK_GROUPS: NurseryCheckGroup[] = [
       },
     ],
   },
+];
+
+/** A/B/Cの表示順と意味。ボタンの並びもこの順にする。 */
+export const NURSERY_CHECK_GRADES: { id: NurseryCheckGrade; label: string }[] = [
+  { id: 'A', label: '良い' },
+  { id: 'B', label: 'ふつう' },
+  { id: 'C', label: '気になる' },
 ];
 
 const ALL_CHECK_ITEMS: NurseryCheckItem[] = NURSERY_CHECK_GROUPS.flatMap((g) => g.items);

@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { CalendarDays, Check, MapPin, Pencil, Phone, Plus } from 'lucide-react';
-import type { Nursery, NurseryChecklist } from '@/types/app';
-import { checkGroupsFor, checkItemNumber, checkTotalFor, countChecked } from '@/lib/nurseryChecklist';
+import type { Nursery, NurseryChecklist, NurseryCheckGrade } from '@/types/app';
+import { checkGroupsFor, checkItemNumber, checkTotalFor, countChecked, NURSERY_CHECK_GRADES } from '@/lib/nurseryChecklist';
 import { formatDateWithWeekday, parseDateString } from '@/lib/dateUtils';
 import SegmentedTabs from '../ui/SegmentedTabs';
 import NurseryFormModal, { type NurseryDraft } from '../modals/NurseryFormModal';
@@ -100,51 +100,102 @@ function InfoRow({ icon, label, children, empty }: { icon: React.ReactNode; labe
  * 入力を終えた（フォーカスが外れた）ときにだけ保存する。
  * 園を切り替えたときに前の園のメモが残らないよう、呼び出し側で key に園のidを含める。
  */
+// 選んだ評価の色。A(良い)は緑、B(ふつう)は青、C(気になる)は橙にして、
+// あとから一覧を見たときに気になった園がすぐ分かるようにする。
+const GRADE_SELECTED_CLASS: Record<NurseryCheckGrade, string> = {
+  A: 'bg-green-500 border-green-500 text-white',
+  B: 'bg-blue-500 border-blue-500 text-white',
+  C: 'bg-orange-500 border-orange-500 text-white',
+};
+
 function CheckItemCard({
   number,
   title,
   point,
   targetLabel,
+  graded,
+  grade,
   checked,
   memo,
   onToggle,
+  onSelectGrade,
   onCommitMemo,
 }: {
   number: number;
   title: string;
   point: string;
-  /** この園だけで確認する項目のときの園名（例: 'くすのき・和光'） */
+  /** この園だけで確認する項目のときの園名（例: '和光のみ'） */
   targetLabel?: string;
+  /** チェックの代わりにA/B/Cで評価する項目か */
+  graded?: boolean;
+  grade?: NurseryCheckGrade;
   checked: boolean;
   memo: string;
   onToggle: () => void;
+  /** 同じ評価をもう一度押したら選び直せるよう、undefinedも渡ってくる */
+  onSelectGrade: (grade: NurseryCheckGrade | undefined) => void;
   onCommitMemo: (memo: string) => void;
 }) {
   const [draftMemo, setDraftMemo] = useState(memo);
 
   return (
-    <div className={`rounded-xl border p-3 transition ${checked ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
-      <button onClick={onToggle} className="w-full flex items-start text-left">
-        <span
-          className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 mr-2 ${
-            checked ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300 text-transparent'
-          }`}
-        >
-          <Check size={14} strokeWidth={3} />
-        </span>
-        <span>
-          <span className="block text-sm font-bold text-gray-800 leading-tight">
+    <div
+      className={`rounded-xl border p-3 transition ${
+        // 評価する項目は選んだボタンの色で済んでいるので、カードは塗り分けない。
+        // A(良い)もC(気になる)も同じ緑になると、評価の中身が読み取れなくなるため。
+        !graded && checked ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
+      }`}
+    >
+      {graded ? (
+        // 評価する項目はチェックボックスを出さず、A/B/Cのボタン自体をチェックとして扱う。
+        <div>
+          <p className="text-sm font-bold text-gray-800 leading-tight">
             <span className="text-gray-400 mr-1">{number}.</span>
             {title}
+          </p>
+          <p className="text-[11px] text-gray-500 leading-relaxed mt-1">{point}</p>
+          <div className="flex gap-1.5 mt-2">
+            {NURSERY_CHECK_GRADES.map(({ id, label }) => {
+              const selected = grade === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => onSelectGrade(selected ? undefined : id)}
+                  aria-pressed={selected}
+                  className={`flex-1 rounded-lg border py-1.5 text-xs font-bold transition ${
+                    selected ? GRADE_SELECTED_CLASS[id] : 'bg-white border-gray-200 text-gray-500'
+                  }`}
+                >
+                  {id}
+                  <span className="font-medium ml-1">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <button onClick={onToggle} className="w-full flex items-start text-left">
+          <span
+            className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 mr-2 ${
+              checked ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300 text-transparent'
+            }`}
+          >
+            <Check size={14} strokeWidth={3} />
           </span>
-          {targetLabel && (
-            <span className="inline-block text-[10px] font-bold text-orange-600 bg-orange-50 rounded px-1.5 py-0.5 mt-1">
-              {targetLabel}
+          <span>
+            <span className="block text-sm font-bold text-gray-800 leading-tight">
+              <span className="text-gray-400 mr-1">{number}.</span>
+              {title}
             </span>
-          )}
-          <span className="block text-[11px] text-gray-500 leading-relaxed mt-1">{point}</span>
-        </span>
-      </button>
+            {targetLabel && (
+              <span className="inline-block text-[10px] font-bold text-orange-600 bg-orange-50 rounded px-1.5 py-0.5 mt-1">
+                {targetLabel}
+              </span>
+            )}
+            <span className="block text-[11px] text-gray-500 leading-relaxed mt-1">{point}</span>
+          </span>
+        </button>
+      )}
       <textarea
         value={draftMemo}
         onChange={(e) => setDraftMemo(e.target.value)}
@@ -311,9 +362,12 @@ export default function HokatsuTab({
                       title={item.title}
                       point={item.point}
                       targetLabel={item.target?.label}
+                      graded={item.graded}
+                      grade={state?.grade}
                       checked={checked}
                       memo={state?.memo ?? ''}
                       onToggle={() => setCheck(selected, item.id, { checked: !checked })}
+                      onSelectGrade={(grade) => setCheck(selected, item.id, { checked: grade !== undefined, grade })}
                       onCommitMemo={(memo) => setCheck(selected, item.id, { memo })}
                     />
                   );
