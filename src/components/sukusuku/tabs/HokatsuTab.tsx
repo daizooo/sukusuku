@@ -35,6 +35,55 @@ const toDraft = (nursery: Nursery): NurseryDraft => ({
 const statusClass = (status: Nursery['status']) =>
   status === '見学済' ? 'bg-green-100 text-green-700' : status === '未見学' ? 'bg-gray-100 text-gray-600' : 'bg-blue-100 text-blue-700';
 
+/**
+ * 中身の切り替えに使う下線タブ。園の切り替え(SegmentedTabs)と重ねても、
+ * どちらが上位の切り替えなのかが見た目で分かるように、こちらは帯を持たせない。
+ */
+function UnderlineTabs({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  options: { id: HokatsuView; label: string; badge?: string; badgeDone?: boolean }[];
+  value: HokatsuView;
+  onChange: (id: HokatsuView) => void;
+  ariaLabel?: string;
+}) {
+  return (
+    <div role="tablist" aria-label={ariaLabel} className="flex border-b border-gray-200">
+      {options.map((option) => {
+        const selected = option.id === value;
+        return (
+          <button
+            key={option.id}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => onChange(option.id)}
+            className={`relative flex items-center min-h-9 pb-2 mr-6 text-sm font-bold transition ${
+              selected ? 'text-blue-600' : 'text-gray-500'
+            }`}
+          >
+            {option.label}
+            {option.badge && (
+              <span
+                className={`ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  option.badgeDone ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                }`}
+              >
+                {option.badge}
+              </span>
+            )}
+            {/* 下線は選んでいるタブの幅ぶんだけ引く。枠線(border-b)に重ねて太らせない。 */}
+            <span className={`absolute left-0 right-0 -bottom-px h-0.5 rounded-full ${selected ? 'bg-blue-500' : 'bg-transparent'}`} />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** 基本情報の1行。値が空のときは「未登録」と分かるよう薄く出す。 */
 function InfoRow({ icon, label, children, empty }: { icon: React.ReactNode; label: string; children: React.ReactNode; empty?: boolean }) {
   return (
@@ -129,7 +178,9 @@ export default function HokatsuTab({
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       {/* 上段は園の切り替え、下段は基本情報とチェックリストの切り替え。どちらも固定し、
-          スクロールするのは中身だけにする。 */}
+          スクロールするのは中身だけにする。
+          2つの切り替えは見た目を変える（上はピル、下は下線タブ）。同じ形の帯が2段並ぶと
+          どちらが園でどちらが中身の切り替えなのか読み取れないため。 */}
       {nurseries.length > 0 && (
         <div className="shrink-0 space-y-2 mb-3">
           <div className="flex items-center gap-2">
@@ -148,13 +199,19 @@ export default function HokatsuTab({
               <Plus size={20} />
             </button>
           </div>
-          <SegmentedTabs
+          <UnderlineTabs
             ariaLabel="保活の表示"
             value={view}
             onChange={setView}
             options={[
               { id: 'basic', label: '基本情報' },
-              { id: 'checklist', label: `チェックリスト ${checkedCount}/${NURSERY_CHECK_TOTAL}` },
+              {
+                id: 'checklist',
+                label: '見学チェックリスト',
+                // 進み具合はラベルに続けず、小さなバッジに逃がす（狭い画面で文字が詰まらないように）。
+                badge: `${checkedCount}/${NURSERY_CHECK_TOTAL}`,
+                badgeDone: checkedCount === NURSERY_CHECK_TOTAL,
+              },
             ]}
           />
         </div>
