@@ -17,7 +17,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { DocumentItem, Gift, Nursery } from '@/types/app';
-import { countChecked, NURSERY_CHECK_TOTAL } from '@/lib/nurseryChecklist';
+import { checkTotalFor, countChecked } from '@/lib/nurseryChecklist';
 import { formatDateWithWeekday, parseDateString } from '@/lib/dateUtils';
 import SegmentedTabs from '../ui/SegmentedTabs';
 import GiftFormModal, { type GiftDraft } from '../modals/GiftFormModal';
@@ -297,7 +297,8 @@ export default function MemoTab({
               </div>
             )}
             {nurseries.map((nursery) => {
-              const checkedCount = countChecked(nursery.checklist);
+              const checkedCount = countChecked(nursery.checklist, nursery.name);
+              const checkTotal = checkTotalFor(nursery.name);
               const visitDate = parseDateString(nursery.visitDate ?? '');
               return (
                 <button
@@ -347,11 +348,11 @@ export default function MemoTab({
                       <span className="w-16 h-1.5 bg-gray-100 rounded-full mr-2 overflow-hidden">
                         <span
                           className="block h-full bg-blue-400 rounded-full"
-                          style={{ width: `${(checkedCount / NURSERY_CHECK_TOTAL) * 100}%` }}
+                          style={{ width: `${(checkedCount / checkTotal) * 100}%` }}
                         />
                       </span>
                       <span className="text-[10px] font-bold text-gray-500">
-                        {checkedCount}/{NURSERY_CHECK_TOTAL}
+                        {checkedCount}/{checkTotal}
                       </span>
                     </span>
                   </div>
