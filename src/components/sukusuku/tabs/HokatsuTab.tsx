@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { CalendarDays, Check, MapPin, Pencil, Phone, Plus } from 'lucide-react';
 import type { Nursery, NurseryChecklist } from '@/types/app';
-import { checkItemNumber, countChecked, NURSERY_CHECK_GROUPS, NURSERY_CHECK_TOTAL } from '@/lib/nurseryChecklist';
+import { checkGroupsFor, checkItemNumber, checkTotalFor, countChecked } from '@/lib/nurseryChecklist';
 import { formatDateWithWeekday, parseDateString } from '@/lib/dateUtils';
 import SegmentedTabs from '../ui/SegmentedTabs';
 import NurseryFormModal, { type NurseryDraft } from '../modals/NurseryFormModal';
@@ -104,6 +104,7 @@ function CheckItemCard({
   number,
   title,
   point,
+  targetLabel,
   checked,
   memo,
   onToggle,
@@ -112,6 +113,8 @@ function CheckItemCard({
   number: number;
   title: string;
   point: string;
+  /** この園だけで確認する項目のときの園名（例: 'くすのき・和光'） */
+  targetLabel?: string;
   checked: boolean;
   memo: string;
   onToggle: () => void;
@@ -134,6 +137,11 @@ function CheckItemCard({
             <span className="text-gray-400 mr-1">{number}.</span>
             {title}
           </span>
+          {targetLabel && (
+            <span className="inline-block text-[10px] font-bold text-orange-600 bg-orange-50 rounded px-1.5 py-0.5 mt-1">
+              {targetLabel}
+            </span>
+          )}
           <span className="block text-[11px] text-gray-500 leading-relaxed mt-1">{point}</span>
         </span>
       </button>
@@ -173,7 +181,11 @@ export default function HokatsuTab({
   };
 
   const visitDate = selected ? parseDateString(selected.visitDate ?? '') : null;
-  const checkedCount = selected ? countChecked(selected.checklist) : 0;
+  // チェックリストの項目は園ごとに変わる（浸水想定区域か、宗教行事があるか）ので、
+  // 出す項目も分母も選んでいる園から決める。
+  const checkGroups = selected ? checkGroupsFor(selected.name) : [];
+  const checkedCount = selected ? countChecked(selected.checklist, selected.name) : 0;
+  const checkTotal = selected ? checkTotalFor(selected.name) : 0;
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
@@ -209,8 +221,8 @@ export default function HokatsuTab({
                 id: 'checklist',
                 label: '見学チェックリスト',
                 // 進み具合はラベルに続けず、小さなバッジに逃がす（狭い画面で文字が詰まらないように）。
-                badge: `${checkedCount}/${NURSERY_CHECK_TOTAL}`,
-                badgeDone: checkedCount === NURSERY_CHECK_TOTAL,
+                badge: `${checkedCount}/${checkTotal}`,
+                badgeDone: checkedCount === checkTotal,
               },
             ]}
           />
@@ -283,20 +295,22 @@ export default function HokatsuTab({
         {selected && view === 'checklist' && (
           <div className="space-y-4 pb-6">
             <div className="bg-orange-50 border border-orange-100 p-3 rounded-xl text-xs text-orange-800 leading-relaxed">
-              見学当日に確認しやすい順に並べています。チェックとメモはその場で保存されます。
+              見学当日の流れ順に並べています。園によって確認する項目が変わります。チェックとメモはその場で保存されます。
             </div>
-            {NURSERY_CHECK_GROUPS.map((group) => (
+            {checkGroups.map((group) => (
               <div key={group.id} className="space-y-2">
                 <p className="text-[11px] font-bold text-gray-400">{group.title}</p>
+                {group.note && <p className="text-[10px] text-gray-400 -mt-1">{group.note}</p>}
                 {group.items.map((item) => {
                   const state = selected.checklist[item.id];
                   const checked = state?.checked ?? false;
                   return (
                     <CheckItemCard
                       key={`${selected.id}-${item.id}`}
-                      number={checkItemNumber(item.id)}
+                      number={checkItemNumber(item.id, selected.name)}
                       title={item.title}
                       point={item.point}
+                      targetLabel={item.target?.label}
                       checked={checked}
                       memo={state?.memo ?? ''}
                       onToggle={() => setCheck(selected, item.id, { checked: !checked })}
