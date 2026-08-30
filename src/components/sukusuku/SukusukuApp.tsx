@@ -6,7 +6,7 @@ import {
   Home,
   CalendarDays,
   FileText,
-  StickyNote,
+  ClipboardCheck,
   Folder,
   Plus,
 } from 'lucide-react';
@@ -19,10 +19,8 @@ import type {
   PumpedBatch,
   PumpingLog,
   TemperatureLog,
-  DocumentItem,
   DynamicTask,
   FamilyMember,
-  Gift,
   GrowthRecord,
   LoginRole,
   Nursery,
@@ -77,7 +75,6 @@ import {
 } from '@/lib/api/temperatureReminderSettings';
 import { useNursingAlarmWatcher } from '@/lib/nursingTimer';
 import { useNursingAlarmSync } from '@/lib/nursingAlarmSync';
-import { deleteGift, insertGift, listGifts, updateGift as updateGiftApi } from '@/lib/api/gifts';
 import { ensureChildId } from '@/lib/api/children';
 import {
   deleteGrowthRecord,
@@ -85,12 +82,6 @@ import {
   listGrowthRecords,
   updateGrowthRecord as updateGrowthRecordApi,
 } from '@/lib/api/growthRecords';
-import {
-  deleteDocument,
-  getDocumentSignedUrl,
-  listDocuments,
-  uploadDocument,
-} from '@/lib/api/documents';
 import {
   deleteNursery,
   insertNursery,
@@ -109,7 +100,6 @@ import type { MilkLogInput } from './modals/MilkLogModal';
 import type { DiaperLogInput } from './modals/DiaperLogModal';
 import type { PumpingLogInput } from './modals/PumpingLogModal';
 import type { TemperatureLogInput } from './modals/TemperatureLogModal';
-import type { GiftDraft } from './modals/GiftFormModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 import type { NurseryDraft } from './modals/NurseryFormModal';
 
@@ -125,14 +115,14 @@ const TabFallback = () => (
 
 const ScheduleTab = dynamic(() => import('./tabs/ScheduleTab'), { loading: TabFallback });
 const LogTab = dynamic(() => import('./tabs/LogTab'), { loading: TabFallback });
-const MemoTab = dynamic(() => import('./tabs/MemoTab'), { loading: TabFallback });
+const HokatsuTab = dynamic(() => import('./tabs/HokatsuTab'), { loading: TabFallback });
 const InfoTab = dynamic(() => import('./tabs/InfoTab'), { loading: TabFallback });
 
 const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
   { id: 'home', icon: Home, label: 'ホーム' },
   { id: 'schedule', icon: CalendarDays, label: '予定' },
   { id: 'log', icon: FileText, label: '記録' },
-  { id: 'memo', icon: StickyNote, label: 'メモ' },
+  { id: 'nursery', icon: ClipboardCheck, label: '保活' },
   { id: 'info', icon: Folder, label: '設定' },
 ];
 
@@ -217,15 +207,11 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
   const [temperatureReminderSettings, setTemperatureReminderSettings] =
     useState<TemperatureReminderSettings>(DEFAULT_TEMPERATURE_REMINDER_SETTINGS);
 
-  const [gifts, setGifts] = useState<Gift[]>([]);
-  const [isLoadingGifts, setIsLoadingGifts] = useState(true);
 
   const [growthData, setGrowthData] = useState<GrowthRecord[]>([]);
   const [isLoadingGrowth, setIsLoadingGrowth] = useState(true);
   const [childId, setChildId] = useState<string | null>(null);
 
-  const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
 
   const [nurseries, setNurseries] = useState<Nursery[]>([]);
   const [isLoadingNurseries, setIsLoadingNurseries] = useState(true);
@@ -428,22 +414,6 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
     };
   }, [supabase, familyId]);
 
-  // お祝いをSupabaseから取得
-  useEffect(() => {
-    let cancelled = false;
-    listGifts(supabase, familyId)
-      .then((data) => {
-        if (!cancelled) setGifts(data);
-      })
-      .catch((err) => console.error('Failed to load gifts:', err))
-      .finally(() => {
-        if (!cancelled) setIsLoadingGifts(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [supabase, familyId]);
-
   // 成長記録をSupabaseから取得(childレコードを確保してから取得する)
   useEffect(() => {
     let cancelled = false;
@@ -459,22 +429,6 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
       .catch((err) => console.error('Failed to load growth records:', err))
       .finally(() => {
         if (!cancelled) setIsLoadingGrowth(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [supabase, familyId]);
-
-  // 書類箱をSupabaseから取得
-  useEffect(() => {
-    let cancelled = false;
-    listDocuments(supabase, familyId)
-      .then((data) => {
-        if (!cancelled) setDocuments(data);
-      })
-      .catch((err) => console.error('Failed to load documents:', err))
-      .finally(() => {
-        if (!cancelled) setIsLoadingDocuments(false);
       });
     return () => {
       cancelled = true;
@@ -806,40 +760,6 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
     }
   };
 
-  // --- お祝い ---
-  const addGift = async (draft: GiftDraft) => {
-    try {
-      const created = await insertGift(supabase, familyId, draft);
-      setGifts((prev) => [created, ...prev]);
-    } catch (err) {
-      console.error('Failed to add gift:', err);
-      alert('お祝いの追加に失敗しました。もう一度お試しください。');
-    }
-  };
-
-  const updateGiftHandler = async (gift: Gift, draft: GiftDraft) => {
-    const updated: Gift = { ...gift, ...draft };
-    setGifts((prev) => prev.map((g) => (g.id === gift.id ? updated : g)));
-    try {
-      await updateGiftApi(supabase, updated);
-    } catch (err) {
-      console.error('Failed to update gift:', err);
-      alert('お祝いの更新に失敗しました。もう一度お試しください。');
-    }
-  };
-
-  const deleteGiftHandler = async (id: string) => {
-    const previous = gifts;
-    setGifts((prev) => prev.filter((g) => g.id !== id));
-    try {
-      await deleteGift(supabase, id);
-    } catch (err) {
-      console.error('Failed to delete gift:', err);
-      setGifts(previous);
-      alert('お祝いの削除に失敗しました。もう一度お試しください。');
-    }
-  };
-
   // --- 成長記録 ---
   const addGrowthRecordHandler = async (draft: GrowthRecordDraft) => {
     try {
@@ -891,31 +811,6 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
       alert(`成長記録の削除に失敗しました。もう一度お試しください。${describeError(err)}`);
     }
   };
-
-  // --- 書類箱 ---
-  const addDocument = async (file: File, title: string) => {
-    try {
-      const created = await uploadDocument(supabase, familyId, file, title);
-      setDocuments((prev) => [created, ...prev]);
-    } catch (err) {
-      console.error('Failed to upload document:', err);
-      alert('書類の追加に失敗しました。もう一度お試しください。');
-    }
-  };
-
-  const deleteDocumentHandler = async (doc: DocumentItem) => {
-    const previous = documents;
-    setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
-    try {
-      await deleteDocument(supabase, doc);
-    } catch (err) {
-      console.error('Failed to delete document:', err);
-      setDocuments(previous);
-      alert('書類の削除に失敗しました。もう一度お試しください。');
-    }
-  };
-
-  const getDocumentUrl = (filePath: string) => getDocumentSignedUrl(supabase, filePath);
 
   // --- 保活メモ ---
   const addNurseryHandler = async (draft: NurseryDraft) => {
@@ -1060,18 +955,8 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
               onDeleteGrowthRecord={deleteGrowthRecordHandler}
             />
           )}
-          {activeTab === 'memo' && (
-            <MemoTab
-              gifts={gifts}
-              isLoadingGifts={isLoadingGifts}
-              onAddGift={addGift}
-              onUpdateGift={updateGiftHandler}
-              onDeleteGift={deleteGiftHandler}
-              documents={documents}
-              isLoadingDocuments={isLoadingDocuments}
-              onAddDocument={addDocument}
-              onDeleteDocument={deleteDocumentHandler}
-              getDocumentUrl={getDocumentUrl}
+          {activeTab === 'nursery' && (
+            <HokatsuTab
               nurseries={nurseries}
               isLoadingNurseries={isLoadingNurseries}
               onAddNursery={addNurseryHandler}
