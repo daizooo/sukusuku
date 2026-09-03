@@ -23,6 +23,7 @@ import {
 } from '@/lib/api/nursingAlarms';
 import {
   markNursingAlarmNotified,
+  NURSING_PHASES,
   setNursingAlarmSink,
   type NursingAlarmTarget,
 } from '@/lib/nursingTimer';
@@ -90,8 +91,9 @@ export function useNursingAlarmSync(userId: string): void {
     const handleMessage = (event: MessageEvent) => {
       const data = event.data as { type?: string; step?: number; side?: string } | null;
       if (data?.type !== 'nursing-alarm-notified' || typeof data.step !== 'number') return;
-      if (data.side !== 'left' && data.side !== 'right') return;
-      markNursingAlarmNotified(data.side, data.step);
+      const phase = NURSING_PHASES.find((candidate) => candidate === data.side);
+      if (!phase) return;
+      markNursingAlarmNotified(phase, data.step);
     };
     navigator.serviceWorker?.addEventListener('message', handleMessage);
 

@@ -186,6 +186,7 @@ select status, return_message, start_time
 | `src/lib/api/nursingAlarms.ts` | `nursing_alarms` の読み書き |
 | `supabase/migrations/0021_nursing_alarms.sql` | テーブル |
 | `supabase/migrations/0027_nursing_alarms_stopped_at.sql` | 記録待ちの印(`stopped_at`) |
+| `supabase/migrations/0033_nursing_alarms_burp.sql` | ゲップの区切り(`side = 'burp'`)を許可 |
 | `supabase/migrations/0022_nursing_alarm_cron.sql` | 定期実行の登録 |
 | `supabase/functions/send-feeding-reminders/index.ts` | 次の授乳の目安の配信（§7） |
 | `src/lib/feedingSchedule.ts` | 次の授乳の目安の計算 |
@@ -204,10 +205,17 @@ select status, return_message, start_time
 
 予定のリマインダーとは別に、**授乳中の経過時間のお知らせ**も同じWeb Pushの仕組みで送る。
 
+授乳は **左5分 → 右5分 → ゲップ5分で1セット**として測る。区切りが5分に達すると
+お知らせが**1回だけ**鳴るので、画面を見ていなくても次の区切りへ移るタイミングが分かる
+（鳴り続けると休めないため、同じ区切りでは二度と鳴らさない）。ゲップの5分まで終わると
+1セット完了として計測も止まる。いま測っている区切りは `nursing_alarms.side`
+（`left` / `right` / `burp`）に入り、鳴らし終えると `notified_step` が1になる。
+ゲップは飲ませた時間ではないため、計測とお知らせにだけ使い、記録には残さない。
+
 ### なぜサーバーから送るのか
 
 授乳の経過時間は端末内のストップウォッチ（`src/lib/nursingTimer.ts`）が数えていて、
-一定間隔で音とバイブを鳴らしている。ただしブラウザは
+区切りが5分に達したときに音とバイブを鳴らしている。ただしブラウザは
 
 - 画面が消える／裏に回るとタイマーを間引く（お知らせが遅れる・鳴らない）
 - 画面が消えている間の振動要求を無視する
@@ -255,17 +263,18 @@ select status, return_message, start_time
 
 ### 鳴り方
 
-通知音はOSの標準音になるため、端末内で合成している「ピッ＝5分 / ポーン＝30分」の
-鳴らし分けはそのままでは伝わらない。代わりに
+区切りは5分なので、端末内で合成する音は「ピッ（短音＝5分）」1回になる
+（`src/lib/alarm.ts` は長音＝30分・短音＝5分で経過時間を組み立てる仕組みのままで、
+5分ぶんだけを鳴らしている）。通知音はOSの標準音になりこの鳴らし分けは伝わらないため、
 
-- **通知の文面**に「授乳 20分」と経過時間を出す
-- **Androidは通知に振動パターンを指定できる**ので、長短のパターン（長い振動＝30分、
-  短い振動＝5分）で今までと同じ数え方を保つ（`public/sw.js` の `buildNursingVibration`）。
-  iOSはこの指定を無視して既定の振動になる
+- **通知の文面**に「授乳 5分」「ゲップ 5分」と、どの区切りが終わったかを出す
+- **Androidは通知に振動パターンを指定できる**ので、同じ数え方の振動を出す
+  （`public/sw.js` の `buildNursingVibration`）。iOSはこの指定を無視して既定の振動になる
 
 ### 計測を止めたあとの「記録待ち」
 
-計測を止めても、記録を保存する（またはリセットする）までは行を消さず、
+計測を止めると（ゲップの5分まで終わって自動で止まった場合も含む）、
+記録を保存する（またはリセットする）までは行を消さず、
 `stopped_at` を立てて残す。この間は
 
 - 経過時間のお知らせは**鳴らさない**（もう飲ませていないため）
@@ -295,7 +304,8 @@ supabase functions deploy send-nursing-alarms
 ```
 
 そのうえで `0021_nursing_alarms.sql` / `0022_nursing_alarm_cron.sql` /
-`0023_nursing_alarms_user_index.sql` / `0027_nursing_alarms_stopped_at.sql` を適用する。
+`0023_nursing_alarms_user_index.sql` / `0027_nursing_alarms_stopped_at.sql` /
+`0033_nursing_alarms_burp.sql` を適用する。
 
 > **本番プロジェクトには適用済み**（Edge Functionのデプロイ、マイグレーション3本、
 > 1分おきのcron登録まで完了）。上の手順は作り直すときのためのもの。

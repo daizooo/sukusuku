@@ -1,5 +1,9 @@
 // すくすく手帳: 授乳の経過時間お知らせ（端末が鳴らせなかった分の肩代わり）
 //
+// 授乳は「左5分 → 右5分 → ゲップ5分」で1セット。どの区切りを計測中かは side に入る。
+// お知らせは区切りごとに1回（5分に達したとき）だけ。鳴らし続けると休めないため、
+// 5分を過ぎてもその区切りでは二度と鳴らさない。
+//
 // pg_cron から1分おきに叩かれ、計測中の端末(nursing_alarms)のうち
 // 次の区切りに達したものへ Web Push を送る。
 //
@@ -43,9 +47,11 @@ const MAX_PENDING_MINUTES = 60;
 
 interface AlarmRow {
   subscription_id: string;
-  side: 'left' | 'right';
+  /** 計測中の区切り。左右のほか、ゲップの時間(burp)もここに入る。 */
+  side: 'left' | 'right' | 'burp';
   baseline_at: string;
   interval_minutes: number;
+  /** お知らせを鳴らし終えていれば1。区切りごとに1回しか鳴らさない。 */
   notified_step: number;
   /** 計測を止めた時刻。記録を保存するまでの間だけ入る（計測中は null）。 */
   stopped_at: string | null;
@@ -56,7 +62,7 @@ interface AlarmRow {
   } | null;
 }
 
-const SIDE_LABEL: Record<AlarmRow['side'], string> = { left: '左', right: '右' };
+const PHASE_LABEL: Record<AlarmRow['side'], string> = { left: '左', right: '右', burp: 'ゲップ' };
 
 Deno.serve(async (request) => {
   const cronSecret = Deno.env.get('REMINDER_CRON_SECRET');
@@ -126,14 +132,14 @@ Deno.serve(async (request) => {
       continue;
     }
 
-    const step = Math.floor(elapsedMinutes / alarm.interval_minutes);
-    if (step < 1 || step <= alarm.notified_step) {
+    // 鳴らすのは区切りごとに1回だけ。端末が自分で鳴らせていれば notified_step が1になる。
+    if (alarm.notified_step >= 1) {
       skipped++;
       continue;
     }
 
     // 区切りちょうどではなく、少し過ぎてから送る（端末が自分で鳴らす猶予）
-    const boundaryAt = baselineAt + step * alarm.interval_minutes * 60_000;
+    const boundaryAt = baselineAt + alarm.interval_minutes * 60_000;
     if (now - boundaryAt < FOREGROUND_GRACE_SECONDS * 1000) {
       skipped++;
       continue;
@@ -149,9 +155,9 @@ Deno.serve(async (request) => {
     // 送るのは片方だけになる（更新できた側だけが送る）。
     const { data: claimed, error: claimError } = await supabase
       .from('nursing_alarms')
-      .update({ notified_step: step, updated_at: new Date().toISOString() })
+      .update({ notified_step: 1, updated_at: new Date().toISOString() })
       .eq('subscription_id', alarm.subscription_id)
-      .lt('notified_step', step)
+      .lt('notified_step', 1)
       .select('subscription_id')
       .maybeSingle();
     if (claimError) {
@@ -169,7 +175,7 @@ Deno.serve(async (request) => {
       vapid = await createVapidContext(JSON.parse(vapidKeysRaw) as VapidKeys, vapidSubject);
     }
 
-    const minutes = step * alarm.interval_minutes;
+    const minutes = alarm.interval_minutes;
     const result = await sendPushNotification(
       vapid,
       subscription,
@@ -177,10 +183,11 @@ Deno.serve(async (request) => {
         kind: 'nursing',
         // 鳴らし方(長音=30分・短音=5分)を組み立てるのに使う
         minutes,
-        step,
+        step: 1,
         side: alarm.side,
-        title: `授乳 ${minutes}分`,
-        body: `${SIDE_LABEL[alarm.side]}を計測中`,
+        // ゲップは飲ませている時間ではないので、見出しでも授乳と分けて出す
+        title: alarm.side === 'burp' ? `ゲップ ${minutes}分` : `授乳 ${minutes}分`,
+        body: `${PHASE_LABEL[alarm.side]}を計測中`,
         url: '/',
       }),
       // 経過時間のお知らせは鮮度がすべて。届かなかった分を後から出しても意味がない。
