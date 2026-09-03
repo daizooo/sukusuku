@@ -1,12 +1,16 @@
 'use client';
 
-// 母乳の授乳時間を左右それぞれ計測するストップウォッチ。
+// 授乳を「左5分 → 右5分 → ゲップ5分」の1セットとして計測するストップウォッチ。
 // 授乳中は入力画面を閉じたり他のタブへ移ったりするため、計測中の値は端末内に
 // 控えておき、戻ってきたときに続きから測れるようにする。
 // （記録として保存する前の値なので、DBには持たせない）
+//
+// 5分たつごとにお知らせ（音・バイブ）が鳴るので、画面を見ていなくても
+// 次の区切りへ移るタイミングが分かる。ゲップは飲ませた時間ではないため、
+// 計測とお知らせにだけ使い、記録には残さない。
 
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
-import type { BreastSide } from '@/types/app';
+import type { BreastSide, NursingPhase } from '@/types/app';
 import {
   buildAlarmPattern,
   flushPendingVibration,
@@ -22,37 +26,55 @@ import {
 const STORAGE_KEY = 'sukusuku:activeNursing';
 const ALARM_STORAGE_KEY = 'sukusuku:nursingAlarm';
 
+/** 1セットに含まれる区切り。並べる順番は画面側で決める（前回の続きから始めるため）。 */
+export const NURSING_PHASES: NursingPhase[] = ['left', 'right', 'burp'];
+
+/** 1区切りの目安時間（分）。ここに達するとお知らせが鳴る。 */
+export const NURSING_PHASE_MINUTES = 5;
+
+/** 区切りごとの時間(ミリ秒)や「何回目まで鳴らしたか」を持つ入れ物。 */
+export type NursingPhaseValues = Record<NursingPhase, number>;
+
+const ZERO: NursingPhaseValues = { left: 0, right: 0, burp: 0 };
+
+/** 1つの区切りだけを差し替えた入れ物を作る。 */
+const withPhase = (
+  values: NursingPhaseValues,
+  phase: NursingPhase,
+  value: number,
+): NursingPhaseValues => ({
+  left: phase === 'left' ? value : values.left,
+  right: phase === 'right' ? value : values.right,
+  burp: phase === 'burp' ? value : values.burp,
+});
+
 interface ActiveNursing {
   /** 停止済みの累積時間(ミリ秒)。 */
-  leftMs: number;
-  rightMs: number;
-  /** 計測中の側と、その計測を始めた時刻。停止中は null。 */
-  runningSide: BreastSide | null;
+  elapsed: NursingPhaseValues;
+  /** 計測中の区切りと、その計測を始めた時刻。停止中は null。 */
+  runningPhase: NursingPhase | null;
   startedAt: number | null;
   /**
    * 計測を止めた時刻。まだ記録していない計測が残っている間だけ入る。
    * 計測中と、記録・リセットしたあとは null。
    */
   stoppedAt: number | null;
-  /** 最後に計測した側。記録の「最後に飲ませた側」に使う。 */
+  /** 最後に計測した側。記録の「最後に飲ませた側」に使う（ゲップでは変わらない）。 */
   lastSide: BreastSide | null;
   /**
-   * 側ごとに「何回目のお知らせまで鳴らしたか」。
-   * 画面を開き直したり左右を行き来したりしても鳴り直さないよう控えておく。
+   * 区切りごとに「何回目のお知らせまで鳴らしたか」。
+   * 画面を開き直したり区切りを行き来したりしても鳴り直さないよう控えておく。
    */
-  notifiedLeft: number;
-  notifiedRight: number;
+  notified: NursingPhaseValues;
 }
 
 const EMPTY: ActiveNursing = {
-  leftMs: 0,
-  rightMs: 0,
-  runningSide: null,
+  elapsed: ZERO,
+  runningPhase: null,
   startedAt: null,
   stoppedAt: null,
   lastSide: null,
-  notifiedLeft: 0,
-  notifiedRight: 0,
+  notified: ZERO,
 };
 
 const toMs = (value: unknown): number =>
@@ -61,28 +83,58 @@ const toMs = (value: unknown): number =>
 const toSide = (value: unknown): BreastSide | null =>
   value === 'left' || value === 'right' ? value : null;
 
+const toPhase = (value: unknown): NursingPhase | null =>
+  NURSING_PHASES.includes(value as NursingPhase) ? (value as NursingPhase) : null;
+
+/** 控えから読み出す。ゲップを含む形にする前の控え(legacy)からも拾えるようにする。 */
+const toPhaseValues = (
+  value: unknown,
+  legacy: { left: unknown; right: unknown },
+): NursingPhaseValues => {
+  const record = (value ?? {}) as Partial<Record<NursingPhase, unknown>>;
+  return {
+    left: toMs(record.left ?? legacy.left),
+    right: toMs(record.right ?? legacy.right),
+    burp: toMs(record.burp),
+  };
+};
+
+/** ゲップを含む形にする前の控え。計測の途中で更新されても続きから測れるようにする。 */
+interface StoredNursing extends Partial<ActiveNursing> {
+  leftMs?: unknown;
+  rightMs?: unknown;
+  notifiedLeft?: unknown;
+  notifiedRight?: unknown;
+  runningSide?: unknown;
+}
+
 const load = (): ActiveNursing => {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return EMPTY;
-    const parsed = JSON.parse(raw) as Partial<ActiveNursing>;
+    const parsed = JSON.parse(raw) as StoredNursing;
     const startedAt = toMs(parsed.startedAt) || null;
     return {
-      leftMs: toMs(parsed.leftMs),
-      rightMs: toMs(parsed.rightMs),
+      elapsed: toPhaseValues(parsed.elapsed, { left: parsed.leftMs, right: parsed.rightMs }),
       // 開始時刻が失われていると経過時間を復元できないので、計測中とは扱わない。
-      runningSide: startedAt ? toSide(parsed.runningSide) : null,
+      runningPhase: startedAt ? toPhase(parsed.runningPhase ?? parsed.runningSide) : null,
       startedAt,
       stoppedAt: toMs(parsed.stoppedAt) || null,
       lastSide: toSide(parsed.lastSide),
-      notifiedLeft: toMs(parsed.notifiedLeft),
-      notifiedRight: toMs(parsed.notifiedRight),
+      notified: toPhaseValues(parsed.notified, {
+        left: parsed.notifiedLeft,
+        right: parsed.notifiedRight,
+      }),
     };
   } catch (err) {
     console.error('Failed to read active nursing:', err);
     return EMPTY;
   }
 };
+
+/** どこかの区切りに計測した時間があるか（あれば「記録前の計測が残っている」）。 */
+const hasElapsed = (values: NursingPhaseValues): boolean =>
+  NURSING_PHASES.some((phase) => values[phase] > 0);
 
 // --- 計測中の値を持つ外部ストア ---
 // サーバー側の描画では常に空、画面に出たあとに端末の控えを読む形にして、
@@ -118,7 +170,7 @@ const subscribe = (listener: () => void): (() => void) => {
 const store = (next: ActiveNursing, notifySink = true) => {
   cached = next;
   try {
-    if (next.runningSide === null && next.leftMs === 0 && next.rightMs === 0) {
+    if (next.runningPhase === null && !hasElapsed(next.elapsed)) {
       window.localStorage.removeItem(STORAGE_KEY);
     } else {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -133,10 +185,10 @@ const store = (next: ActiveNursing, notifySink = true) => {
   if (notifySink) sink?.(alarmTarget(next));
 };
 
-/** その側の合計時間(ミリ秒)。計測中ならその分も含む。 */
-const sideElapsed = (active: ActiveNursing, side: BreastSide, at: number): number =>
-  (side === 'left' ? active.leftMs : active.rightMs) +
-  (active.runningSide === side && active.startedAt ? Math.max(0, at - active.startedAt) : 0);
+/** その区切りの合計時間(ミリ秒)。計測中ならその分も含む。 */
+const phaseElapsed = (active: ActiveNursing, phase: NursingPhase, at: number): number =>
+  active.elapsed[phase] +
+  (active.runningPhase === phase && active.startedAt ? Math.max(0, at - active.startedAt) : 0);
 
 // --- 経過時間の表示を進めるための時計 ---
 // 描画のたびに現在時刻を読まずに済むよう、時計も外部ストアとして扱う。
@@ -171,12 +223,12 @@ const subscribeClock = (listener: () => void): (() => void) => {
 const subscribeNothing = (): (() => void) => () => {};
 
 // --- お知らせ（音・バイブ）の設定 ---
-// 授乳中は手が離せないため、一定間隔で音とバイブを鳴らし、
+// 授乳中は手が離せないため、区切りの目安である5分ごとに音とバイブを鳴らし、
 // 「鳴り方」だけで経過時間が分かるようにする。
 // （短い「ピッ」1回＝5分、長い「ポーン」1回＝30分。設定はいつ鳴らすかだけを決める）
 //
 // 設定を変える画面は記録画面から外したため、いまは端末に控えてある値
-// （なければ既定値）をそのまま使う。鳴らす仕組み自体はこれまでどおり動く。
+// （なければ既定値＝区切りと同じ5分）をそのまま使う。鳴らす仕組み自体はこれまでどおり動く。
 
 // 短音=5分・長音=30分で言い表せる間隔だけを選べるようにしている。
 const ALARM_INTERVAL_OPTIONS = [5, 10, 15] as const;
@@ -189,7 +241,7 @@ interface NursingAlarmSettings {
 }
 
 const DEFAULT_ALARM: NursingAlarmSettings = {
-  intervalMinutes: 5,
+  intervalMinutes: NURSING_PHASE_MINUTES,
   soundEnabled: true,
   vibrationEnabled: true,
 };
@@ -235,8 +287,9 @@ const getAlarmSnapshot = (): NursingAlarmSettings => {
 const PENDING_MAX_MS = 60 * 60_000;
 
 export interface NursingAlarmTarget {
-  side: BreastSide;
-  /** 計測中の側の合計時間が0だった時刻。経過分数 = now - baselineAt。 */
+  /** 計測中の区切り。ゲップも含む（nursing_alarms.side に入る）。 */
+  side: NursingPhase;
+  /** 計測中の区切りの合計時間が0だった時刻。経過分数 = now - baselineAt。 */
   baselineAt: number;
   intervalMinutes: number;
   /** 何回目のお知らせまで済んでいるか。 */
@@ -255,15 +308,15 @@ export interface NursingAlarmTarget {
  */
 const alarmTarget = (active: ActiveNursing): NursingAlarmTarget | null => {
   const intervalMinutes = getAlarmSnapshot().intervalMinutes;
-  const running = active.runningSide;
+  const running = active.runningPhase;
   if (running && active.startedAt) {
     return {
       side: running,
-      // 左右を行き来してもその側の経過時間で数えるので、
+      // 区切りを行き来してもその区切りの経過時間で数えるので、
       // 累積ぶんさかのぼった時刻を基準にする。
-      baselineAt: active.startedAt - (running === 'left' ? active.leftMs : active.rightMs),
+      baselineAt: active.startedAt - active.elapsed[running],
       intervalMinutes,
-      notifiedStep: running === 'left' ? active.notifiedLeft : active.notifiedRight,
+      notifiedStep: active.notified[running],
       stoppedAt: null,
     };
   }
@@ -272,14 +325,14 @@ const alarmTarget = (active: ActiveNursing): NursingAlarmTarget | null => {
   // この間に「そろそろ次の授乳」が飛ばないよう、預けたままにしておく。
   const side = active.lastSide;
   if (!side || !active.stoppedAt) return null;
-  if (active.leftMs === 0 && active.rightMs === 0) return null;
+  if (!hasElapsed(active.elapsed)) return null;
   // 記録されないまま置き去りになった分は預けない（サーバー側の打ち切りと同じ長さ）。
   if (Date.now() - active.stoppedAt > PENDING_MAX_MS) return null;
   return {
     side,
-    baselineAt: active.stoppedAt - (side === 'left' ? active.leftMs : active.rightMs),
+    baselineAt: active.stoppedAt - active.elapsed[side],
     intervalMinutes,
-    notifiedStep: side === 'left' ? active.notifiedLeft : active.notifiedRight,
+    notifiedStep: active.notified[side],
     stoppedAt: active.stoppedAt,
   };
 };
@@ -298,17 +351,14 @@ export const setNursingAlarmSink = (next: NursingAlarmSink | null): void => {
  * Service Worker が代わりに鳴らした分を、端末側の「何回目まで鳴らしたか」に反映する。
  * これをしないと、裏に回っている間に鳴った分をアプリに戻ってきたときに鳴らし直してしまう。
  */
-export const markNursingAlarmNotified = (side: BreastSide, step: number): void => {
+export const markNursingAlarmNotified = (phase: NursingPhase, step: number): void => {
   if (!Number.isFinite(step)) return;
   const active = getSnapshot();
-  // 通知が届くまでに左右を切り替えていたら、その数えは今の側のものではない
-  if (active.runningSide !== side) return;
-  if (step <= (side === 'left' ? active.notifiedLeft : active.notifiedRight)) return;
+  // 通知が届くまでに区切りを切り替えていたら、その数えは今の区切りのものではない
+  if (active.runningPhase !== phase) return;
+  if (step <= active.notified[phase]) return;
   // サーバーは自分が送った分を既に把握しているので、書き戻さない。
-  store(
-    side === 'left' ? { ...active, notifiedLeft: step } : { ...active, notifiedRight: step },
-    false,
-  );
+  store({ ...active, notified: withPhase(active.notified, phase, step) }, false);
 };
 
 const fireAlarm = (pattern: AlarmPattern, settings: NursingAlarmSettings) => {
@@ -318,18 +368,19 @@ const fireAlarm = (pattern: AlarmPattern, settings: NursingAlarmSettings) => {
   if (settings.soundEnabled) playAlarmPattern(pattern);
 };
 
-/** 計測中の側が次の区切りに達していたら鳴らす。 */
+/** 計測中の区切りが次の区切り時間に達していたら鳴らす。 */
 const checkAlarm = () => {
   const active = getSnapshot();
-  const side = active.runningSide;
-  if (!side || !active.startedAt) return;
+  const phase = active.runningPhase;
+  if (!phase || !active.startedAt) return;
   const settings = getAlarmSnapshot();
-  const step = Math.floor(sideElapsed(active, side, Date.now()) / (settings.intervalMinutes * 60000));
-  const notified = side === 'left' ? active.notifiedLeft : active.notifiedRight;
-  if (step < 1 || step <= notified) return;
+  const step = Math.floor(
+    phaseElapsed(active, phase, Date.now()) / (settings.intervalMinutes * 60000),
+  );
+  if (step < 1 || step <= active.notified[phase]) return;
 
   fireAlarm(buildAlarmPattern(step * settings.intervalMinutes), settings);
-  store(side === 'left' ? { ...active, notifiedLeft: step } : { ...active, notifiedRight: step });
+  store({ ...active, notified: withPhase(active.notified, phase, step) });
 };
 
 // --- 計測中の見張り ---
@@ -349,7 +400,7 @@ const acquireWakeLock = async () => {
   if (wakeLock && !wakeLock.released) return;
   const sentinel = await requestScreenWakeLock();
   // 取得を待つ間に計測が終わっていたら、すぐ返す
-  if (getSnapshot().runningSide === null) {
+  if (getSnapshot().runningPhase === null) {
     void sentinel?.release();
     return;
   }
@@ -370,7 +421,7 @@ const handleVisibilityChange = () => {
 
 const syncAlarmWatcher = () => {
   if (typeof window === 'undefined') return;
-  const running = getSnapshot().runningSide !== null;
+  const running = getSnapshot().runningPhase !== null;
   if (running && watcherId === null) {
     watcherId = window.setInterval(checkAlarm, 1000);
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -394,57 +445,60 @@ export function useNursingAlarmWatcher(): void {
 }
 
 export interface NursingTimer {
-  /** 左の合計時間(ミリ秒)。計測中の分を含む。 */
-  leftMs: number;
-  /** 右の合計時間(ミリ秒)。計測中の分を含む。 */
-  rightMs: number;
-  runningSide: BreastSide | null;
-  /** 最後に計測した側。まだ一度も測っていなければ null。 */
+  /** 区切りごとの合計時間(ミリ秒)。計測中の分を含む。 */
+  elapsed: NursingPhaseValues;
+  runningPhase: NursingPhase | null;
+  /** 最後に計測した側。まだ一度も測っていなければ null（ゲップでは変わらない）。 */
   lastSide: BreastSide | null;
   /** 計測中、または止めたあと記録前の時間が残っている。 */
   hasSession: boolean;
   /**
-   * 押した側の計測を始める。計測中の側をもう一度押すと停止、
-   * 反対側を押すと切り替え（左右を同時には測らない）。
+   * 押した区切りの計測を始める。計測中の区切りをもう一度押すと停止、
+   * 別の区切りを押すと切り替え（同時には測らない）。
    * 停止済みの累積時間を返すので、そのまま分数の入力欄へ反映できる。
    */
-  toggleSide: (side: BreastSide) => { leftMs: number; rightMs: number };
+  togglePhase: (phase: NursingPhase) => NursingPhaseValues;
   reset: () => void;
 }
 
 export function useNursingTimer(): NursingTimer {
   const active = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const now = useSyncExternalStore(
-    active.runningSide ? subscribeClock : subscribeNothing,
+    active.runningPhase ? subscribeClock : subscribeNothing,
     getClockSnapshot,
     getClockServerSnapshot,
   );
 
-  const runningMs = active.runningSide && active.startedAt ? Math.max(0, now - active.startedAt) : 0;
-  const leftMs = active.leftMs + (active.runningSide === 'left' ? runningMs : 0);
-  const rightMs = active.rightMs + (active.runningSide === 'right' ? runningMs : 0);
+  const runningMs =
+    active.runningPhase && active.startedAt ? Math.max(0, now - active.startedAt) : 0;
+  const elapsed = {
+    left: active.elapsed.left + (active.runningPhase === 'left' ? runningMs : 0),
+    right: active.elapsed.right + (active.runningPhase === 'right' ? runningMs : 0),
+    burp: active.elapsed.burp + (active.runningPhase === 'burp' ? runningMs : 0),
+  };
 
-  const toggleSide = useCallback((side: BreastSide) => {
+  const togglePhase = useCallback((phase: NursingPhase) => {
     // iOS/Chromeは「タップの処理の中」でしか音の再生を許可しないため、ここで解除しておく。
     void unlockAudio();
     stopVibration();
     const at = Date.now();
     clockNow = at;
     const prev = getSnapshot();
-    const elapsed = prev.runningSide && prev.startedAt ? Math.max(0, at - prev.startedAt) : 0;
-    const settled = {
-      leftMs: prev.leftMs + (prev.runningSide === 'left' ? elapsed : 0),
-      rightMs: prev.rightMs + (prev.runningSide === 'right' ? elapsed : 0),
-    };
-    const stopping = prev.runningSide === side;
+    const running = prev.runningPhase;
+    const runningElapsed = running && prev.startedAt ? Math.max(0, at - prev.startedAt) : 0;
+    const settled: NursingPhaseValues = running
+      ? withPhase(prev.elapsed, running, prev.elapsed[running] + runningElapsed)
+      : prev.elapsed;
+    const stopping = running === phase;
     store({
       ...prev,
-      ...settled,
-      runningSide: stopping ? null : side,
+      elapsed: settled,
+      runningPhase: stopping ? null : phase,
       startedAt: stopping ? null : at,
       // 止めた時刻は「授乳は済んだが記録はまだ」の印になる。測り直したら消す。
       stoppedAt: stopping ? at : null,
-      lastSide: side,
+      // ゲップは飲ませていないので「最後に飲ませた側」は変えない。
+      lastSide: phase === 'burp' ? prev.lastSide : phase,
     });
     return settled;
   }, []);
@@ -455,12 +509,11 @@ export function useNursingTimer(): NursingTimer {
   }, []);
 
   return {
-    leftMs,
-    rightMs,
-    runningSide: active.runningSide,
+    elapsed,
+    runningPhase: active.runningPhase,
     lastSide: active.lastSide,
-    hasSession: active.runningSide !== null || leftMs > 0 || rightMs > 0,
-    toggleSide,
+    hasSession: active.runningPhase !== null || hasElapsed(elapsed),
+    togglePhase,
     reset,
   };
 }

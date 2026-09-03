@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
-import type { BreastSide } from '@/types/app';
+import type { NursingPhase } from '@/types/app';
 
 type SupabaseDb = SupabaseClient<Database>;
 
@@ -16,8 +16,9 @@ type SupabaseDb = SupabaseClient<Database>;
 // 飛んでしまうのを防ぐため（この間はお知らせ自体は鳴らさない）。
 
 export interface NursingAlarmRegistration {
-  side: BreastSide;
-  /** 計測中の側の合計時間が0だった時刻(epoch ms)。経過分数 = now - baselineAt。 */
+  /** 計測中の区切り。左右のほか、ゲップの時間もここに入る。 */
+  side: NursingPhase;
+  /** 計測中の区切りの合計時間が0だった時刻(epoch ms)。経過分数 = now - baselineAt。 */
   baselineAt: number;
   intervalMinutes: number;
   /** 何回目のお知らせまで済んでいるか。 */

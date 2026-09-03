@@ -280,12 +280,18 @@ export default function LogTab({
                 <div>
                   <p className="text-xs font-bold text-amber-700 flex items-center">
                     <BabyBottleIcon size={12} className="mr-1" />
-                    {nursingTimer.runningSide
-                      ? `授乳中（${getSideLabel(nursingTimer.runningSide)}）`
-                      : '授乳の計測中'}
+                    {nursingTimer.runningPhase === 'burp'
+                      ? 'ゲップの時間を計測中'
+                      : nursingTimer.runningPhase
+                        ? `授乳中（${getSideLabel(nursingTimer.runningPhase)}）`
+                        : '授乳の計測中'}
                   </p>
                   <p className="text-[11px] text-amber-600 tabular-nums">
-                    左 {formatStopwatch(nursingTimer.leftMs)} / 右 {formatStopwatch(nursingTimer.rightMs)}
+                    左 {formatStopwatch(nursingTimer.elapsed.left)} / 右{' '}
+                    {formatStopwatch(nursingTimer.elapsed.right)}
+                    {/* ゲップはまだ測っていないことも多いので、時間があるときだけ足す */}
+                    {nursingTimer.elapsed.burp > 0 &&
+                      ` / ゲップ ${formatStopwatch(nursingTimer.elapsed.burp)}`}
                   </p>
                 </div>
                 <button

@@ -186,6 +186,7 @@ select status, return_message, start_time
 | `src/lib/api/nursingAlarms.ts` | `nursing_alarms` の読み書き |
 | `supabase/migrations/0021_nursing_alarms.sql` | テーブル |
 | `supabase/migrations/0027_nursing_alarms_stopped_at.sql` | 記録待ちの印(`stopped_at`) |
+| `supabase/migrations/0033_nursing_alarms_burp.sql` | ゲップの区切り(`side = 'burp'`)を許可 |
 | `supabase/migrations/0022_nursing_alarm_cron.sql` | 定期実行の登録 |
 | `supabase/functions/send-feeding-reminders/index.ts` | 次の授乳の目安の配信（§7） |
 | `src/lib/feedingSchedule.ts` | 次の授乳の目安の計算 |
@@ -203,6 +204,11 @@ select status, return_message, start_time
 ## 6. 授乳の経過時間お知らせ
 
 予定のリマインダーとは別に、**授乳中の経過時間のお知らせ**も同じWeb Pushの仕組みで送る。
+
+授乳は **左5分 → 右5分 → ゲップ5分で1セット**として測る。区切りごとに5分たつと
+お知らせが鳴るので、画面を見ていなくても次の区切りへ移るタイミングが分かる。
+いま測っている区切りは `nursing_alarms.side`（`left` / `right` / `burp`）に入る。
+ゲップは飲ませた時間ではないため、計測とお知らせにだけ使い、記録には残さない。
 
 ### なぜサーバーから送るのか
 
@@ -295,7 +301,8 @@ supabase functions deploy send-nursing-alarms
 ```
 
 そのうえで `0021_nursing_alarms.sql` / `0022_nursing_alarm_cron.sql` /
-`0023_nursing_alarms_user_index.sql` / `0027_nursing_alarms_stopped_at.sql` を適用する。
+`0023_nursing_alarms_user_index.sql` / `0027_nursing_alarms_stopped_at.sql` /
+`0033_nursing_alarms_burp.sql` を適用する。
 
 > **本番プロジェクトには適用済み**（Edge Functionのデプロイ、マイグレーション3本、
 > 1分おきのcron登録まで完了）。上の手順は作り直すときのためのもの。
