@@ -859,12 +859,14 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
 
   // スマホ・タブレット・PCのいずれでもビューポート全体を使う（PCで中央の細長いカードにしない）。
   // ただし単に画面幅いっぱいに引き伸ばすと一覧やグリッドの間延びで読みにくくなるため、
-  // md(768px)以上ではボトムタブバーの代わりに左サイドナビを常時表示し、各タブ側でも
-  // 本文の幅を読みやすい範囲に収めている（記録タブの2カラム表示など、幅を必要とする
-  // 画面はタブ側で個別に対応する）。
+  // 各タブ側で本文の幅を読みやすい範囲に収めている（記録タブの2カラム表示など、幅を
+  // 必要とする画面はタブ側で個別に対応する）。
+  // ナビゲーションは desktop（幅1024px以上 かつ マウス操作）のときだけ左サイドナビにし、
+  // スマホとタブレットは同じボトムタブバーで揃える。タブレットは幅だけ見ると md/lg に
+  // 該当してしまうため、幅ではなくポインタ種別を含む desktop 変種で切り替えている。
   return (
     <div className="w-full h-svh relative bg-gray-50 flex font-sans overflow-hidden">
-      <nav className="hidden md:flex md:flex-col md:w-56 lg:w-64 flex-none bg-white border-r border-gray-200 px-3 py-6">
+      <nav className="hidden desktop:flex desktop:flex-col desktop:w-64 flex-none bg-white border-r border-gray-200 px-3 py-6">
         <h1 className="font-bold text-gray-800 tracking-wide text-lg px-3 mb-8">すくすく手帳</h1>
         <div className="flex flex-col space-y-1">
           {NAV_ITEMS.map((item) => (
@@ -986,13 +988,13 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
         {activeTab === 'schedule' && (
           <button
             onClick={() => openAddTaskModal(selectedScheduleDate)}
-            className="absolute bottom-[calc(4rem+env(safe-area-inset-bottom)+1rem)] right-4 md:bottom-8 md:right-8 w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-all active:scale-95 z-20"
+            className="absolute bottom-[calc(4rem+env(safe-area-inset-bottom)+1rem)] right-4 desktop:bottom-8 desktop:right-8 w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-all active:scale-95 z-20"
           >
             <Plus size={28} />
           </button>
         )}
 
-        <nav className="flex-none bg-white border-t border-gray-200 w-full z-30 pb-[env(safe-area-inset-bottom)] md:hidden">
+        <nav className="flex-none bg-white border-t border-gray-200 w-full z-30 pb-[env(safe-area-inset-bottom)] desktop:hidden">
           <div className="flex justify-around items-center h-16 px-1">
             {NAV_ITEMS.map((item) => (
               <button
