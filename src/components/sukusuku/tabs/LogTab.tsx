@@ -38,7 +38,6 @@ import {
   getLogTitle,
   getSideLabel,
   isAlertLog,
-  isFever,
   pumpedStockMl,
   summarizeLogs,
 } from '@/lib/careLogUtils';
@@ -179,24 +178,11 @@ export default function LogTab({
     () => getTemperatureBaseline(recentTemperatureLogs),
     [recentTemperatureLogs],
   );
-  // 体温はその日の平均を出す。1日に何度か測ることがあるので、その日ぜんたいを
-  // 1つの数で言うほうがボタンには合う。
-  // その日にまだ測っていなければ、空けておかずに平熱を出す（測ったときの比べる相手になる）。
-  const dayAverageCelsius = summary.temperature.averageCelsius;
-  const temperatureSummaryText =
-    dayAverageCelsius !== null
-      ? `平均 ${formatCelsius(dayAverageCelsius)}`
-      : temperatureBaseline
-        ? `平熱 ${formatCelsius(temperatureBaseline.celsius)}`
-        : 'この日はまだ';
-  // 平均だけでは熱の山がならされてしまうので、その日いちばん高かったところを添える。
-  // 1回しか測っていない日は平均と同じ値なので出さない。
-  const temperatureDayMaxText =
-    dayAverageCelsius !== null &&
-    summary.temperature.maxCelsius !== null &&
-    summary.temperature.maxCelsius > dayAverageCelsius
-      ? `最高 ${formatCelsius(summary.temperature.maxCelsius)}`
-      : null;
+  // 体温のボタンにはその子の平熱だけを出す。日ごとの平均や最高は出さず、
+  // 測ったときに比べる相手になる基準の1つの数に絞る。
+  const temperatureSummaryText = temperatureBaseline
+    ? `平熱 ${formatCelsius(temperatureBaseline.celsius)}`
+    : 'まだ記録なし';
   // 入力画面に出す「前回の体温」。ボタンの平均とは別に、直前の1件が要る。
   const latestTemperature = getLatestTemperature(visibleLogs);
   // 搾乳ストックの残り。飲ませた分と丸ごと捨てた分を除いたパックの合計。
@@ -348,8 +334,7 @@ export default function LogTab({
                   うんち {summary.diaper.poopCount}回
                 </span>
               </button>
-              {/* 体温はその日の平均を出す（その日にまだ測っていなければ平熱）。
-                  平均でならされてしまう熱の山は、下の「最高」で補う。 */}
+              {/* 体温はその子の平熱だけを出す。日ごとの平均や最高は出さない。 */}
               <button
                 onClick={() => setLogModal({ type: 'temperature', log: null })}
                 className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-orange-50 transition active:scale-95"
@@ -359,26 +344,9 @@ export default function LogTab({
                   <Thermometer size={17} className="text-orange-600" />
                   <span className="text-sm font-bold text-gray-800">体温</span>
                 </span>
-                <span
-                  className={`mt-0.5 text-[11px] font-medium tabular-nums leading-tight text-center ${
-                    dayAverageCelsius !== null && isFever(dayAverageCelsius)
-                      ? 'font-bold text-red-600'
-                      : 'text-gray-500'
-                  }`}
-                >
+                <span className="mt-0.5 text-[11px] font-medium tabular-nums leading-tight text-center text-gray-500">
                   {temperatureSummaryText}
                 </span>
-                {temperatureDayMaxText && (
-                  <span
-                    className={`text-[10px] font-bold tabular-nums leading-tight text-center ${
-                      summary.temperature.maxCelsius !== null && isFever(summary.temperature.maxCelsius)
-                        ? 'text-red-600'
-                        : 'text-orange-600'
-                    }`}
-                  >
-                    {temperatureDayMaxText}
-                  </span>
-                )}
               </button>
             </div>
 
