@@ -5,9 +5,10 @@
 // 控えておき、戻ってきたときに続きから測れるようにする。
 // （記録として保存する前の値なので、DBには持たせない）
 //
-// 5分たつごとにお知らせ（音・バイブ）が鳴るので、画面を見ていなくても
-// 次の区切りへ移るタイミングが分かる。ゲップは飲ませた時間ではないため、
-// 計測とお知らせにだけ使い、記録には残さない。
+// 区切りが5分に達するとお知らせ（音・バイブ）が1回鳴るので、画面を見ていなくても
+// 次の区切りへ移るタイミングが分かる。ゲップの5分まで終われば1セット完了として
+// 計測も止まる。ゲップは飲ませた時間ではないため、計測とお知らせにだけ使い、
+// 記録には残さない（記録に入るのはこれまでどおり左右の分数だけ）。
 
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import type { BreastSide, NursingPhase } from '@/types/app';
@@ -29,8 +30,11 @@ const ALARM_STORAGE_KEY = 'sukusuku:nursingAlarm';
 /** 1セットに含まれる区切り。並べる順番は画面側で決める（前回の続きから始めるため）。 */
 export const NURSING_PHASES: NursingPhase[] = ['left', 'right', 'burp'];
 
-/** 1区切りの目安時間（分）。ここに達するとお知らせが鳴る。 */
+/** 1区切りの長さ（分）。ここに達するとお知らせが鳴る。 */
 export const NURSING_PHASE_MINUTES = 5;
+
+/** 1区切りの長さ(ミリ秒)。 */
+export const NURSING_PHASE_MS = NURSING_PHASE_MINUTES * 60_000;
 
 /** 区切りごとの時間(ミリ秒)や「何回目まで鳴らしたか」を持つ入れ物。 */
 export type NursingPhaseValues = Record<NursingPhase, number>;
@@ -223,33 +227,22 @@ const subscribeClock = (listener: () => void): (() => void) => {
 const subscribeNothing = (): (() => void) => () => {};
 
 // --- お知らせ（音・バイブ）の設定 ---
-// 授乳中は手が離せないため、区切りの目安である5分ごとに音とバイブを鳴らし、
-// 「鳴り方」だけで経過時間が分かるようにする。
-// （短い「ピッ」1回＝5分、長い「ポーン」1回＝30分。設定はいつ鳴らすかだけを決める）
+// 授乳中は手が離せないため、区切りが5分に達したら音とバイブで知らせる。
+// 鳴るのは区切りごとに1回だけ。「次へ移る合図」がほしいだけなので、
+// 鳴らし続けると赤ちゃんも親も休めない。
 //
-// 設定を変える画面は記録画面から外したため、いまは端末に控えてある値
-// （なければ既定値＝区切りと同じ5分）をそのまま使う。鳴らす仕組み自体はこれまでどおり動く。
-
-// 短音=5分・長音=30分で言い表せる間隔だけを選べるようにしている。
-const ALARM_INTERVAL_OPTIONS = [5, 10, 15] as const;
-type AlarmIntervalMinutes = (typeof ALARM_INTERVAL_OPTIONS)[number];
+// 鳴らす時刻は区切りの長さそのもの(NURSING_PHASE_MINUTES)で決まるため、
+// 端末に控えるのは音とバイブを鳴らすかどうかだけにしている。
 
 interface NursingAlarmSettings {
-  intervalMinutes: AlarmIntervalMinutes;
   soundEnabled: boolean;
   vibrationEnabled: boolean;
 }
 
 const DEFAULT_ALARM: NursingAlarmSettings = {
-  intervalMinutes: NURSING_PHASE_MINUTES,
   soundEnabled: true,
   vibrationEnabled: true,
 };
-
-const toInterval = (value: unknown): AlarmIntervalMinutes =>
-  ALARM_INTERVAL_OPTIONS.includes(value as AlarmIntervalMinutes)
-    ? (value as AlarmIntervalMinutes)
-    : DEFAULT_ALARM.intervalMinutes;
 
 const loadAlarm = (): NursingAlarmSettings => {
   try {
@@ -257,7 +250,6 @@ const loadAlarm = (): NursingAlarmSettings => {
     if (!raw) return DEFAULT_ALARM;
     const parsed = JSON.parse(raw) as Partial<NursingAlarmSettings>;
     return {
-      intervalMinutes: toInterval(parsed.intervalMinutes),
       soundEnabled: parsed.soundEnabled ?? DEFAULT_ALARM.soundEnabled,
       vibrationEnabled: parsed.vibrationEnabled ?? DEFAULT_ALARM.vibrationEnabled,
     };
@@ -291,8 +283,9 @@ export interface NursingAlarmTarget {
   side: NursingPhase;
   /** 計測中の区切りの合計時間が0だった時刻。経過分数 = now - baselineAt。 */
   baselineAt: number;
+  /** 何分でお知らせを鳴らすか。区切りの長さそのもの。 */
   intervalMinutes: number;
-  /** 何回目のお知らせまで済んでいるか。 */
+  /** お知らせを鳴らし終えていれば1。区切りごとに1回しか鳴らさない。 */
   notifiedStep: number;
   /**
    * 計測を止めた時刻。まだ記録していない間だけ入る（計測中は null）。
@@ -307,7 +300,6 @@ export interface NursingAlarmTarget {
  * 記録・リセットして計測が残っていなければ null（＝サーバー側の予約も消す）。
  */
 const alarmTarget = (active: ActiveNursing): NursingAlarmTarget | null => {
-  const intervalMinutes = getAlarmSnapshot().intervalMinutes;
   const running = active.runningPhase;
   if (running && active.startedAt) {
     return {
@@ -315,7 +307,7 @@ const alarmTarget = (active: ActiveNursing): NursingAlarmTarget | null => {
       // 区切りを行き来してもその区切りの経過時間で数えるので、
       // 累積ぶんさかのぼった時刻を基準にする。
       baselineAt: active.startedAt - active.elapsed[running],
-      intervalMinutes,
+      intervalMinutes: NURSING_PHASE_MINUTES,
       notifiedStep: active.notified[running],
       stoppedAt: null,
     };
@@ -331,7 +323,7 @@ const alarmTarget = (active: ActiveNursing): NursingAlarmTarget | null => {
   return {
     side,
     baselineAt: active.stoppedAt - active.elapsed[side],
-    intervalMinutes,
+    intervalMinutes: NURSING_PHASE_MINUTES,
     notifiedStep: active.notified[side],
     stoppedAt: active.stoppedAt,
   };
@@ -368,19 +360,40 @@ const fireAlarm = (pattern: AlarmPattern, settings: NursingAlarmSettings) => {
   if (settings.soundEnabled) playAlarmPattern(pattern);
 };
 
-/** 計測中の区切りが次の区切り時間に達していたら鳴らす。 */
+/**
+ * 計測中の区切りが5分に達していたら鳴らす。鳴らすのは区切りごとに1回だけ。
+ *
+ * 1セットの最後（ゲップ）まで終わったら、そのまま計測も止める。授乳が終わったあと
+ * 止め忘れて数えっぱなしになると、記録の時間も画面の点けっぱなしも無駄になるため。
+ */
 const checkAlarm = () => {
   const active = getSnapshot();
   const phase = active.runningPhase;
   if (!phase || !active.startedAt) return;
-  const settings = getAlarmSnapshot();
-  const step = Math.floor(
-    phaseElapsed(active, phase, Date.now()) / (settings.intervalMinutes * 60000),
-  );
-  if (step < 1 || step <= active.notified[phase]) return;
+  const at = Date.now();
+  const elapsed = phaseElapsed(active, phase, at);
+  if (elapsed < NURSING_PHASE_MS) return;
 
-  fireAlarm(buildAlarmPattern(step * settings.intervalMinutes), settings);
-  store({ ...active, notified: withPhase(active.notified, phase, step) });
+  // 裏に回っている間にサーバーが鳴らしてくれた分は、鳴らし直さない。
+  // ただしゲップの締めはここでしか行えないので、鳴らし済みでも下へ進む。
+  const notifiedAlready = active.notified[phase] >= 1;
+  if (notifiedAlready && phase !== 'burp') return;
+  if (!notifiedAlready) fireAlarm(buildAlarmPattern(NURSING_PHASE_MINUTES), getAlarmSnapshot());
+
+  const notified = withPhase(active.notified, phase, 1);
+  if (phase !== 'burp') {
+    store({ ...active, notified });
+    return;
+  }
+  // ゲップまで終われば1セット完了。止めた時刻は「授乳は済んだが記録はまだ」の印になる。
+  store({
+    ...active,
+    elapsed: withPhase(active.elapsed, 'burp', elapsed),
+    notified,
+    runningPhase: null,
+    startedAt: null,
+    stoppedAt: at,
+  });
 };
 
 // --- 計測中の見張り ---

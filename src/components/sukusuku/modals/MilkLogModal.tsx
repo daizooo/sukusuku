@@ -16,6 +16,7 @@ import {
 } from '@/lib/careLogUtils';
 import {
   NURSING_PHASE_MINUTES,
+  NURSING_PHASE_MS,
   nursingMinutes,
   type NursingPhaseValues,
   type NursingTimer,
@@ -78,9 +79,6 @@ const SIDE_OPTIONS: { value: BreastSide; label: string }[] = [
   { value: 'left', label: '左' },
   { value: 'right', label: '右' },
 ];
-
-/** 1区切りの目安時間(ミリ秒)。ここに達するとお知らせが鳴る。 */
-const PHASE_TARGET_MS = NURSING_PHASE_MINUTES * 60_000;
 
 /**
  * 1セットで測る順番。前回の続き（おすすめの側）から始めて、反対側、最後にゲップ。
@@ -698,9 +696,10 @@ const formatRemaining = (ms: number): string => {
 /**
  * 授乳1セット（左5分 → 右5分 → ゲップ5分）を測るストップウォッチ。
  *
- * いま行っている区切りをタップして使い、5分たつとお知らせ（音・バイブ）が鳴る。
+ * いま行っている区切りをタップして使い、5分たつとお知らせ（音・バイブ）が1回鳴る。
  * 授乳中は画面を見られないので、次へ移る合図は鳴り方で受け取り、この画面は
  * 「いまどこまで進んだか」を後から確かめるためのものとして作っている。
+ * ゲップの5分まで終わると1セット完了として計測が止まる（止め忘れても数え続けない）。
  *
  * 順番はあくまで目安で、どの区切りからでも測れる（片側しか飲まない回もあるため）。
  * ゲップは飲ませた時間ではないので、記録には残さず計測とお知らせにだけ使う。
@@ -715,14 +714,14 @@ function NursingSetTimer({
   onTogglePhase,
   onReset,
 }: NursingSetTimerProps) {
-  const isDone = (phase: NursingPhase) => elapsed[phase] >= PHASE_TARGET_MS;
+  const isDone = (phase: NursingPhase) => elapsed[phase] >= NURSING_PHASE_MS;
   // 次に測る区切り。まだ5分に届いていないものを順番に拾う。
   const nextPhase = order.find((phase) => phase !== runningPhase && !isDone(phase)) ?? null;
   const setDone = order.every(isDone);
 
   const guide = runningPhase
-    ? elapsed[runningPhase] < PHASE_TARGET_MS
-      ? `${getNursingPhaseLabel(runningPhase)}を計測中 — あと ${formatRemaining(PHASE_TARGET_MS - elapsed[runningPhase])}`
+    ? elapsed[runningPhase] < NURSING_PHASE_MS
+      ? `${getNursingPhaseLabel(runningPhase)}を計測中 — あと ${formatRemaining(NURSING_PHASE_MS - elapsed[runningPhase])}`
       : nextPhase
         ? `${getNursingPhaseLabel(runningPhase)}は${NURSING_PHASE_MINUTES}分経過 — 次は「${getNursingPhaseLabel(nextPhase)}」へ`
         : `${getNursingPhaseLabel(runningPhase)}は${NURSING_PHASE_MINUTES}分経過 — 1セット完了`
@@ -748,7 +747,7 @@ function NursingSetTimer({
       </div>
       <p className="text-[10px] text-gray-500 mb-2">
         {order.map((phase) => `${getNursingPhaseLabel(phase)}${NURSING_PHASE_MINUTES}分`).join(' → ')}
-        で1セット。{NURSING_PHASE_MINUTES}分たつとお知らせが鳴ります。
+        で1セット。{NURSING_PHASE_MINUTES}分でお知らせが1回鳴り、ゲップまで終わると計測が止まります。
       </p>
       <div className="grid grid-cols-3 gap-2">
         {order.map((phase) => {
@@ -785,7 +784,7 @@ function NursingSetTimer({
               >
                 <span
                   className={`block h-full rounded-full ${isRunning ? 'bg-white' : 'bg-amber-500'}`}
-                  style={{ width: `${Math.min(100, (elapsed[phase] / PHASE_TARGET_MS) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (elapsed[phase] / NURSING_PHASE_MS) * 100)}%` }}
                 />
               </span>
               <span
@@ -819,6 +818,7 @@ function NursingSetTimer({
       ) : (
         <p className="text-[10px] text-gray-500 mt-1">
           別の区切りをタップすると自動で切り替わります。この画面を閉じても計測は続きます。
+          記録に残るのは左右の分数だけです。
         </p>
       )}
     </div>
