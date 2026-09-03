@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* 左サイドナビを出すのは「PCのブラウザ」だけに限定するための変種。
+   タブレットは画面幅だけ見ると md/lg に該当してしまうが、UIとしてはスマホと
+   同じボトムタブバーで使いたい。幅（lg以上）に加えてポインタが fine
+   （マウス/トラックパッド）であることを条件にすることで、iPad等のタッチ端末や
+   ネイティブアプリのWebViewを除外する。 */
+@custom-variant desktop (@media (min-width: 1024px) and (pointer: fine));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
