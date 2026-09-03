@@ -52,9 +52,25 @@ const withPhase = (
   burp: phase === 'burp' ? value : values.burp,
 });
 
+/** 測っていないセット1つを、記録では左右それぞれ何分とみなすか。 */
+const UNTRACKED_SET_MS = NURSING_PHASE_MS;
+
+/** 測っていないセットとして数えられる上限。押し間違いで極端な値にならないようにする。 */
+const MAX_UNTRACKED_SETS = 20;
+
 interface ActiveNursing {
-  /** 停止済みの累積時間(ミリ秒)。 */
+  /** いま測っているセットの、区切りごとの停止済み時間(ミリ秒)。 */
   elapsed: NursingPhaseValues;
+  /** 前のセットまでに測った時間の合計(ミリ秒)。 */
+  carried: NursingPhaseValues;
+  /** 測り終えたセットの数。 */
+  measuredSets: number;
+  /**
+   * 測る前に済ませてしまったセットの数。
+   * 急いで飲ませ始めて途中から記録するときに、その分を記録へ足すためのもの
+   * （1セット＝左右それぞれ5分の目安として扱う）。
+   */
+  untrackedSets: number;
   /** 計測中の区切りと、その計測を始めた時刻。停止中は null。 */
   runningPhase: NursingPhase | null;
   startedAt: number | null;
@@ -66,20 +82,48 @@ interface ActiveNursing {
   /** 最後に計測した側。記録の「最後に飲ませた側」に使う（ゲップでは変わらない）。 */
   lastSide: BreastSide | null;
   /**
-   * 区切りごとに「何回目のお知らせまで鳴らしたか」。
+   * いま測っているセットで「区切りごとに鳴らし終えたか」。
    * 画面を開き直したり区切りを行き来したりしても鳴り直さないよう控えておく。
+   * セットが変わるとまた鳴るよう、次のセットへ移るときに0へ戻す。
    */
   notified: NursingPhaseValues;
 }
 
 const EMPTY: ActiveNursing = {
   elapsed: ZERO,
+  carried: ZERO,
+  measuredSets: 0,
+  untrackedSets: 0,
   runningPhase: null,
   startedAt: null,
   stoppedAt: null,
   lastSide: null,
   notified: ZERO,
 };
+
+/** 記録に入る合計。前のセット・いまのセット・測っていないセットぶんを足す。 */
+const totalValues = (
+  active: ActiveNursing,
+  elapsed: NursingPhaseValues,
+): NursingPhaseValues => ({
+  left: active.carried.left + elapsed.left + active.untrackedSets * UNTRACKED_SET_MS,
+  right: active.carried.right + elapsed.right + active.untrackedSets * UNTRACKED_SET_MS,
+  // ゲップは記録に残さないので、測っていないセットぶんは足さない。
+  burp: active.carried.burp + elapsed.burp,
+});
+
+/** いまのセットを締めて次のセットへ。測った分は合計へ送り、お知らせも鳴り直せるようにする。 */
+const rollOverSet = (active: ActiveNursing, settled: NursingPhaseValues): ActiveNursing => ({
+  ...active,
+  carried: {
+    left: active.carried.left + settled.left,
+    right: active.carried.right + settled.right,
+    burp: active.carried.burp + settled.burp,
+  },
+  elapsed: ZERO,
+  notified: ZERO,
+  measuredSets: active.measuredSets + 1,
+});
 
 const toMs = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
@@ -89,6 +133,11 @@ const toSide = (value: unknown): BreastSide | null =>
 
 const toPhase = (value: unknown): NursingPhase | null =>
   NURSING_PHASES.includes(value as NursingPhase) ? (value as NursingPhase) : null;
+
+const toCount = (value: unknown, max: number): number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.min(max, Math.floor(value))
+    : 0;
 
 /** 控えから読み出す。ゲップを含む形にする前の控え(legacy)からも拾えるようにする。 */
 const toPhaseValues = (
@@ -120,6 +169,9 @@ const load = (): ActiveNursing => {
     const startedAt = toMs(parsed.startedAt) || null;
     return {
       elapsed: toPhaseValues(parsed.elapsed, { left: parsed.leftMs, right: parsed.rightMs }),
+      carried: toPhaseValues(parsed.carried, { left: 0, right: 0 }),
+      measuredSets: toCount(parsed.measuredSets, Number.MAX_SAFE_INTEGER),
+      untrackedSets: toCount(parsed.untrackedSets, MAX_UNTRACKED_SETS),
       // 開始時刻が失われていると経過時間を復元できないので、計測中とは扱わない。
       runningPhase: startedAt ? toPhase(parsed.runningPhase ?? parsed.runningSide) : null,
       startedAt,
@@ -136,9 +188,16 @@ const load = (): ActiveNursing => {
   }
 };
 
-/** どこかの区切りに計測した時間があるか（あれば「記録前の計測が残っている」）。 */
+/** どこかの区切りに時間が入っているか。 */
 const hasElapsed = (values: NursingPhaseValues): boolean =>
   NURSING_PHASES.some((phase) => values[phase] > 0);
+
+/** 記録前の内容が残っているか（計測中・測った時間・測っていないセットのいずれか）。 */
+const hasSession = (active: ActiveNursing): boolean =>
+  active.runningPhase !== null ||
+  hasElapsed(active.elapsed) ||
+  hasElapsed(active.carried) ||
+  active.untrackedSets > 0;
 
 // --- 計測中の値を持つ外部ストア ---
 // サーバー側の描画では常に空、画面に出たあとに端末の控えを読む形にして、
@@ -174,7 +233,7 @@ const subscribe = (listener: () => void): (() => void) => {
 const store = (next: ActiveNursing, notifySink = true) => {
   cached = next;
   try {
-    if (next.runningPhase === null && !hasElapsed(next.elapsed)) {
+    if (!hasSession(next)) {
       window.localStorage.removeItem(STORAGE_KEY);
     } else {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -458,19 +517,35 @@ export function useNursingAlarmWatcher(): void {
 }
 
 export interface NursingTimer {
-  /** 区切りごとの合計時間(ミリ秒)。計測中の分を含む。 */
+  /** いま測っているセットの、区切りごとの時間(ミリ秒)。計測中の分を含む。 */
   elapsed: NursingPhaseValues;
+  /**
+   * 記録に入る合計(ミリ秒)。前のセットで測った分と、
+   * 「測る前に済ませたセット」ぶんの目安も含む。
+   */
+  total: NursingPhaseValues;
+  /** いま何セット目か（1始まり）。測っていないセットも数に入れる。 */
+  setNumber: number;
+  /** 測る前に済ませたセットの数。 */
+  untrackedSets: number;
   runningPhase: NursingPhase | null;
   /** 最後に計測した側。まだ一度も測っていなければ null（ゲップでは変わらない）。 */
   lastSide: BreastSide | null;
-  /** 計測中、または止めたあと記録前の時間が残っている。 */
+  /** 計測中、または止めたあと記録前の内容が残っている。 */
   hasSession: boolean;
   /**
    * 押した区切りの計測を始める。計測中の区切りをもう一度押すと停止、
    * 別の区切りを押すと切り替え（同時には測らない）。
-   * 停止済みの累積時間を返すので、そのまま分数の入力欄へ反映できる。
+   * 止まっているときに5分まで測り終えた区切りを押すと、次のセットとして測り直す。
+   * 記録に入る合計を返すので、そのまま分数の入力欄へ反映できる。
    */
   togglePhase: (phase: NursingPhase) => NursingPhaseValues;
+  /**
+   * 測る前に済ませたセットの数を決める。急いで飲ませ始めて2セット目から
+   * 記録したときなど、測れなかった分を記録へ足すために使う。
+   * 記録に入る合計を返す。
+   */
+  setUntrackedSets: (count: number) => NursingPhaseValues;
   reset: () => void;
 }
 
@@ -503,17 +578,41 @@ export function useNursingTimer(): NursingTimer {
       ? withPhase(prev.elapsed, running, prev.elapsed[running] + runningElapsed)
       : prev.elapsed;
     const stopping = running === phase;
-    store({
-      ...prev,
-      elapsed: settled,
+    // 5分まで測り終えた区切りをもう一度押したのは、次のセットに入ったということ。
+    // いまのセットを締めてから測り直す（表示は0から、お知らせもまた鳴る）。
+    const startsNextSet = !stopping && settled[phase] >= NURSING_PHASE_MS;
+    const base = startsNextSet
+      ? rollOverSet(prev, settled)
+      : { ...prev, elapsed: settled };
+    const next: ActiveNursing = {
+      ...base,
       runningPhase: stopping ? null : phase,
       startedAt: stopping ? null : at,
       // 止めた時刻は「授乳は済んだが記録はまだ」の印になる。測り直したら消す。
       stoppedAt: stopping ? at : null,
       // ゲップは飲ませていないので「最後に飲ませた側」は変えない。
       lastSide: phase === 'burp' ? prev.lastSide : phase,
-    });
-    return settled;
+    };
+    store(next);
+    return totalValues(next, next.elapsed);
+  }, []);
+
+  const setUntrackedSets = useCallback((count: number) => {
+    const prev = getSnapshot();
+    const next: ActiveNursing = {
+      ...prev,
+      untrackedSets: Math.max(0, Math.min(MAX_UNTRACKED_SETS, Math.floor(count))),
+    };
+    store(next);
+    // 計測中なら、その分も足した合計を返す（入力欄に出す値と合わせる）。
+    const running =
+      next.runningPhase && next.startedAt ? Math.max(0, Date.now() - next.startedAt) : 0;
+    return totalValues(
+      next,
+      next.runningPhase
+        ? withPhase(next.elapsed, next.runningPhase, next.elapsed[next.runningPhase] + running)
+        : next.elapsed,
+    );
   }, []);
 
   const reset = useCallback(() => {
@@ -523,10 +622,14 @@ export function useNursingTimer(): NursingTimer {
 
   return {
     elapsed,
+    total: totalValues(active, elapsed),
+    setNumber: active.untrackedSets + active.measuredSets + 1,
+    untrackedSets: active.untrackedSets,
     runningPhase: active.runningPhase,
     lastSide: active.lastSide,
-    hasSession: active.runningPhase !== null || hasElapsed(elapsed),
+    hasSession: hasSession(active) || hasElapsed(elapsed),
     togglePhase,
+    setUntrackedSets,
     reset,
   };
 }

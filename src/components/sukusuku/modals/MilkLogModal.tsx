@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Pause, Play, RotateCcw } from 'lucide-react';
+import { Check, Minus, Pause, Play, Plus, RotateCcw } from 'lucide-react';
 import type { BreastSide, FeedingMethod, MilkLog, NursingPhase, PumpedBatch } from '@/types/app';
 import {
   BREAST_MINUTE_OPTIONS,
@@ -129,8 +129,8 @@ function MilkLogModalBody({
   // 計測した時間があれば、開き直したときもその値から始める。
   const measured = !log && timer.hasSession;
   // 未選択と「0分」を区別するため、初期値は undefined にしておく。
-  const initialLeft = log?.leftMinutes ?? (measured ? nursingMinutes(timer.elapsed.left) : undefined);
-  const initialRight = log?.rightMinutes ?? (measured ? nursingMinutes(timer.elapsed.right) : undefined);
+  const initialLeft = log?.leftMinutes ?? (measured ? nursingMinutes(timer.total.left) : undefined);
+  const initialRight = log?.rightMinutes ?? (measured ? nursingMinutes(timer.total.right) : undefined);
   const [leftMinutes, setLeftMinutes] = useState<number | undefined>(initialLeft);
   const [rightMinutes, setRightMinutes] = useState<number | undefined>(initialRight);
   // ボタンに無い分数は直接入力欄の側で持つ。
@@ -181,8 +181,8 @@ function MilkLogModalBody({
   // 計測した時間をそのまま記録する。計測中のまま保存されても、その分を含める。
   // 分数を手で選び直した側は、その値を優先する。
   const measuring = showTimer && timer.hasSession;
-  const recordedLeft = measuring && !editedLeft ? nursingMinutes(timer.elapsed.left) : (leftMinutes ?? 0);
-  const recordedRight = measuring && !editedRight ? nursingMinutes(timer.elapsed.right) : (rightMinutes ?? 0);
+  const recordedLeft = measuring && !editedLeft ? nursingMinutes(timer.total.left) : (leftMinutes ?? 0);
+  const recordedRight = measuring && !editedRight ? nursingMinutes(timer.total.right) : (rightMinutes ?? 0);
 
   const handleCustomAmount = (value: string) => {
     setCustomAmount(value);
@@ -215,21 +215,33 @@ function MilkLogModalBody({
     applyMinutes(side, minutes, value);
   };
 
-  // 計測を始める・止める・切り替えるたびに、その時点の合計を分数の入力欄へ入れる。
-  // 押した側が「最後に飲ませた側」になる（ゲップは飲ませていないので変えない）。
-  const handleTogglePhase = (phase: NursingPhase) => {
-    const settled = timer.togglePhase(phase);
-    const left = nursingMinutes(settled.left);
-    const right = nursingMinutes(settled.right);
+  // 計測の合計（測っていないセットぶんを含む）を分数の入力欄へ入れる。
+  const applyTotal = (total: NursingPhaseValues) => {
+    const left = nursingMinutes(total.left);
+    const right = nursingMinutes(total.right);
     setLeftMinutes(left);
     setRightMinutes(right);
     setCustomLeft(toCustomMinutes(left));
     setCustomRight(toCustomMinutes(right));
+  };
+
+  // 計測を始める・止める・切り替えるたびに、その時点の合計を分数の入力欄へ入れる。
+  // 押した側が「最後に飲ませた側」になる（ゲップは飲ませていないので変えない）。
+  const handleTogglePhase = (phase: NursingPhase) => {
+    applyTotal(timer.togglePhase(phase));
     if (phase === 'burp') return;
     setLastSide(phase);
     // 測り直した側は計測の値に戻す。
     if (phase === 'left') setEditedLeft(false);
     else setEditedRight(false);
+  };
+
+  // 「測る前に済ませたセット」を増減する。左右どちらも計測の値に戻して、
+  // 足した分がそのまま記録の分数に出るようにする。
+  const handleChangeUntrackedSets = (count: number) => {
+    applyTotal(timer.setUntrackedSets(count));
+    setEditedLeft(false);
+    setEditedRight(false);
   };
 
   const handleResetTimer = () => {
@@ -323,6 +335,9 @@ function MilkLogModalBody({
           {showTimer && (
             <NursingSetTimer
               elapsed={timer.elapsed}
+              setNumber={timer.setNumber}
+              untrackedSets={timer.untrackedSets}
+              onChangeUntrackedSets={handleChangeUntrackedSets}
               runningPhase={timer.runningPhase}
               hasSession={timer.hasSession}
               order={setOrder(nextSide ?? 'left')}
@@ -674,8 +689,13 @@ function MinuteField({ label, value, custom, onSelect, onCustomChange }: MinuteF
 }
 
 interface NursingSetTimerProps {
-  /** 区切りごとの合計時間(ミリ秒)。計測中の分を含む。 */
+  /** いま測っているセットの、区切りごとの時間(ミリ秒)。計測中の分を含む。 */
   elapsed: NursingPhaseValues;
+  /** いま何セット目か。 */
+  setNumber: number;
+  /** 測る前に済ませたセットの数。 */
+  untrackedSets: number;
+  onChangeUntrackedSets: (count: number) => void;
   runningPhase: NursingPhase | null;
   hasSession: boolean;
   /** 測る順番。前回の続き（おすすめの側）から並べる。 */
@@ -703,9 +723,17 @@ const formatRemaining = (ms: number): string => {
  *
  * 順番はあくまで目安で、どの区切りからでも測れる（片側しか飲まない回もあるため）。
  * ゲップは飲ませた時間ではないので、記録には残さず計測とお知らせにだけ使う。
+ *
+ * 表示している時間は「いまのセット」のもので、記録に入るのは全セットの合計。
+ * 1セット終えたあとに区切りをもう一度タップすれば、次のセットとして0から測り直す
+ * （お知らせもまた鳴る）。急いで飲ませ始めて途中から記録したときのために、
+ * 測れなかったセットを数で足せるようにしている。
  */
 function NursingSetTimer({
   elapsed,
+  setNumber,
+  untrackedSets,
+  onChangeUntrackedSets,
   runningPhase,
   hasSession,
   order,
@@ -724,9 +752,9 @@ function NursingSetTimer({
       ? `${getNursingPhaseLabel(runningPhase)}を計測中 — あと ${formatRemaining(NURSING_PHASE_MS - elapsed[runningPhase])}`
       : nextPhase
         ? `${getNursingPhaseLabel(runningPhase)}は${NURSING_PHASE_MINUTES}分経過 — 次は「${getNursingPhaseLabel(nextPhase)}」へ`
-        : `${getNursingPhaseLabel(runningPhase)}は${NURSING_PHASE_MINUTES}分経過 — 1セット完了`
+        : `${getNursingPhaseLabel(runningPhase)}は${NURSING_PHASE_MINUTES}分経過 — ${setNumber}セット目が完了`
     : setDone
-      ? '1セット完了。このまま保存できます'
+      ? `${setNumber}セット目が完了。続けるなら「${getNursingPhaseLabel(order[0])}」をタップ`
       : nextPhase
         ? `${hasSession ? '次は' : 'まずは'}「${getNursingPhaseLabel(nextPhase)}」をタップ`
         : '';
@@ -734,7 +762,10 @@ function NursingSetTimer({
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3">
       <div className="flex justify-between items-center mb-1">
-        <span className="text-xs font-bold text-amber-700">授乳1セットを計測</span>
+        <span className="text-xs font-bold text-amber-700">
+          授乳を計測
+          <span className="ml-1.5 font-bold text-amber-800">{setNumber}セット目</span>
+        </span>
         {hasSession && (
           <button
             type="button"
@@ -748,6 +779,7 @@ function NursingSetTimer({
       <p className="text-[10px] text-gray-500 mb-2">
         {order.map((phase) => `${getNursingPhaseLabel(phase)}${NURSING_PHASE_MINUTES}分`).join(' → ')}
         で1セット。{NURSING_PHASE_MINUTES}分でお知らせが1回鳴り、ゲップまで終わると計測が止まります。
+        時間はこのセットのぶんで、記録に入るのは全セットの合計です。
       </p>
       <div className="grid grid-cols-3 gap-2">
         {order.map((phase) => {
@@ -821,6 +853,39 @@ function NursingSetTimer({
           記録に残るのは左右の分数だけです。
         </p>
       )}
+
+      {/* 急いで飲ませ始めて、2セット目から記録することがある。測れなかった分を
+          ここで数えて記録に足す（実際の時間と違えば、下の分数で直せる）。 */}
+      <div className="mt-2 pt-2 border-t border-amber-200 flex items-center justify-between gap-2">
+        <span className="text-[10px] text-gray-500 leading-tight min-w-0">
+          測る前に済ませたセット
+          <span className="block text-gray-400">
+            1セットにつき左右{NURSING_PHASE_MINUTES}分の目安で記録に足します
+          </span>
+        </span>
+        <div className="shrink-0 flex items-center">
+          <button
+            type="button"
+            aria-label="測る前に済ませたセットを1つ減らす"
+            disabled={untrackedSets === 0}
+            onClick={() => onChangeUntrackedSets(untrackedSets - 1)}
+            className="w-7 h-7 rounded-lg border border-amber-300 bg-white flex items-center justify-center text-amber-700 transition hover:bg-amber-100 active:scale-95 disabled:opacity-30 disabled:hover:bg-white"
+          >
+            <Minus size={13} />
+          </button>
+          <span className="w-7 text-center text-sm font-bold tabular-nums text-amber-800">
+            {untrackedSets}
+          </span>
+          <button
+            type="button"
+            aria-label="測る前に済ませたセットを1つ増やす"
+            onClick={() => onChangeUntrackedSets(untrackedSets + 1)}
+            className="w-7 h-7 rounded-lg border border-amber-300 bg-white flex items-center justify-center text-amber-700 transition hover:bg-amber-100 active:scale-95"
+          >
+            <Plus size={13} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
