@@ -286,12 +286,10 @@ export default function LogTab({
                         ? `授乳中（${getSideLabel(nursingTimer.runningPhase)}）`
                         : '授乳の計測中'}
                   </p>
+                  {/* 出すのは記録に入る合計。何セット目かは、続きから測るときの目印になる。 */}
                   <p className="text-[11px] text-amber-600 tabular-nums">
-                    左 {formatStopwatch(nursingTimer.elapsed.left)} / 右{' '}
-                    {formatStopwatch(nursingTimer.elapsed.right)}
-                    {/* ゲップはまだ測っていないことも多いので、時間があるときだけ足す */}
-                    {nursingTimer.elapsed.burp > 0 &&
-                      ` / ゲップ ${formatStopwatch(nursingTimer.elapsed.burp)}`}
+                    {nursingTimer.setNumber}セット目・左 {formatStopwatch(nursingTimer.total.left)} / 右{' '}
+                    {formatStopwatch(nursingTimer.total.right)}
                   </p>
                 </div>
                 <button
