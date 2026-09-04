@@ -198,6 +198,7 @@ select status, return_message, start_time
 | `src/components/sukusuku/TemperatureReminderSetting.tsx` | 設定タブの時刻の設定 |
 | `supabase/migrations/0030_temperature_reminders.sql` | テーブル・ビュー |
 | `supabase/migrations/0031_temperature_reminder_cron.sql` | 定期実行の登録 |
+| `src/lib/appLinks.ts` | 開く画面をURLで表す決まりごと（§9） |
 
 ---
 
@@ -534,3 +535,30 @@ select status, return_message, start_time
 - ビューに家族が出てこない → 設定でお知らせをオフにしているか、
   お知らせの時刻の1時間前以降にもう体温を記録している。
 - 送信記録はあるのに届かない → 通知そのものの問題。§4を確認する。
+
+---
+
+## 9. 通知をタップしたときの飛び先
+
+通知をタップしたら、その用件の画面をそのまま開く。開いてから自分でタブと
+入力画面を選び直さずに済ませるため。
+
+| お知らせ | 飛び先 |
+| --- | --- |
+| 授乳の経過時間（§6） | 記録タブ・授乳の入力画面 |
+| 次の授乳の目安（§7） | 記録タブ・授乳の入力画面 |
+| 検温（§8） | 記録タブ・体温の入力画面 |
+| 予定のリマインダー（§2） | ホーム |
+
+飛び先はURLで表す。`/?tab=log&open=temperature` のように、`tab` が開くタブ、
+`open` が記録タブで開く入力画面を指す（値の一覧は `src/lib/appLinks.ts`）。
+どのURLへ飛ばすかは `public/sw.js` がお知らせの種類（`kind`）から決めるので、
+Edge Function 側は今までどおりの本文のままでよい。
+
+URLで表しているのは、**画面を更新してもタブが戻らないようにする**ためでもある。
+タブの切り替えは `history.replaceState` でURLへ書き戻しているので、
+読み込み直しても見ていたタブのまま戻ってくる（ホームは既定なのでURLに載せない）。
+`open` は入力画面を開いた時点で消すため、そのあと更新しても開き直さない。
+
+既に同じ画面を開いている端末では、タップしても読み込み直さずに前面に出すだけ。
+計測中の授乳の入力途中を、通知のタップで消してしまわないようにするため。

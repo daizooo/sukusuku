@@ -43,6 +43,18 @@ function buildNursingVibration(minutes) {
   return sequence;
 }
 
+// お知らせの種類ごとの飛び先。タップしたら、その用件の画面をそのまま開く。
+// （URLの決まりごとは src/lib/appLinks.ts。sw.jsはビルドを通さない静的ファイルなので
+//  import できず、ここに同じ形を書いている。Edge Function側のurlは飛び先を持たない
+//  従来のものが届き続けることもあるため、飛び先の判断はこちらの種類を見て行う。）
+const URL_BY_KIND = {
+  // 授乳の経過時間・次の授乳の目安は、どちらも授乳の入力画面へ
+  nursing: '/?tab=log&open=milk',
+  feeding: '/?tab=log&open=milk',
+  // 検温のお知らせは体温の入力画面へ
+  temperature: '/?tab=log&open=temperature',
+};
+
 self.addEventListener('push', (event) => {
   let payload = {};
   try {
@@ -71,7 +83,7 @@ self.addEventListener('push', (event) => {
           : payload.taskId
             ? `task-${payload.taskId}`
             : 'sukusuku',
-    data: { url: payload.url || '/' },
+    data: { url: URL_BY_KIND[payload.kind] || payload.url || '/' },
   };
 
   if (isFeeding || isTemperature) {
@@ -126,8 +138,12 @@ self.addEventListener('notificationclick', (event) => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
 
       for (const client of windows) {
-        if (new URL(client.url).origin !== self.location.origin) continue;
+        const clientUrl = new URL(client.url);
+        if (clientUrl.origin !== self.location.origin) continue;
         await client.focus();
+        // 既に同じ画面を開いているなら読み込み直さない
+        // （計測中の授乳の入力途中などを、通知のタップで消さないため）。
+        if (clientUrl.pathname + clientUrl.search === targetUrl.pathname + targetUrl.search) return;
         if ('navigate' in client) await client.navigate(targetUrl.href);
         return;
       }

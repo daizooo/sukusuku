@@ -22,6 +22,7 @@ import type {
   DynamicTask,
   FamilyMember,
   GrowthRecord,
+  LogType,
   LoginRole,
   Nursery,
   ScheduleView,
@@ -42,6 +43,7 @@ import {
   toDateString,
 } from '@/lib/dateUtils';
 import { createClient } from '@/lib/supabase/client';
+import { OPEN_LOG_PARAM, TAB_PARAM } from '@/lib/appLinks';
 import {
   deleteTask as deleteTaskApi,
   insertTask,
@@ -169,9 +171,21 @@ interface SukusukuAppProps {
   initialTasks: Task[] | null;
   // サーバー側(page.tsx)で確定させた「今日」('YYYY-MM-DD')。todayステートの初期値に使う。
   todayDateString: string;
+  // URLから決めた、最初に開くタブ。画面を更新しても見ていたタブのまま戻ってこられるようにする。
+  initialTab: TabId;
+  // URLから決めた、最初に開く記録の入力画面。通知のタップから直接開くのに使う。
+  initialLogType: LogType | null;
 }
 
-export default function SukusukuApp({ familyId, userId, role, initialTasks, todayDateString }: SukusukuAppProps) {
+export default function SukusukuApp({
+  familyId,
+  userId,
+  role,
+  initialTasks,
+  todayDateString,
+  initialTab,
+  initialLogType,
+}: SukusukuAppProps) {
   // 授乳の経過時間のお知らせ（音・バイブ）。記録タブを開いていなくても鳴らせるよう、
   // アプリ全体で1つだけ見張りを動かす。
   useNursingAlarmWatcher();
@@ -181,7 +195,11 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
 
   const supabase = useMemo(() => createClient(), []);
 
-  const [activeTab, setActiveTab] = useState<TabId>('home');
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
+  // 通知から開いたときに1度だけ開く入力画面。開いたら空にして、
+  // タブを行き来するたびに開き直さないようにする。
+  const [pendingLogType, setPendingLogType] = useState<LogType | null>(initialLogType);
+  const clearPendingLogType = useCallback(() => setPendingLogType(null), []);
   const [todos, setTodos] = useState<Task[]>(initialTasks ?? []);
   const [isLoadingTasks, setIsLoadingTasks] = useState(initialTasks === null);
   const [taskError, setTaskError] = useState('');
@@ -657,6 +675,20 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
     setActiveTab(tab);
   };
 
+  // 開いているタブをURLに書き戻す。画面を更新したときに、見ていたタブのまま
+  // 戻ってこられるようにするため（URLに残っていないと毎回ホームに戻ってしまう）。
+  // ページの読み込みは伴わせたくないので、Nextのルーターではなく履歴の置き換えを使う
+  // （replaceStateはNextのルーターと同期する。pushStateにすると戻るボタンが
+  // タブの履歴を辿ることになり、アプリを閉じる操作ではなくなるので使わない）。
+  // 通知から開くための open は、入力画面を開いたら消す（更新のたびに開き直さないため）。
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (activeTab === 'home') url.searchParams.delete(TAB_PARAM);
+    else url.searchParams.set(TAB_PARAM, activeTab);
+    if (!pendingLogType) url.searchParams.delete(OPEN_LOG_PARAM);
+    if (url.href !== window.location.href) window.history.replaceState(null, '', url);
+  }, [activeTab, pendingLogType]);
+
   // --- 育児記録 ---
 
   // 記録の追加・更新を画面の状態へ反映する。表示中の日以外の記録は一覧から外す。
@@ -935,6 +967,8 @@ export default function SukusukuApp({ familyId, userId, role, initialTasks, toda
             <LogTab
               logs={logs}
               logDate={logDate}
+              initialLogType={pendingLogType}
+              onOpenInitialLogType={clearPendingLogType}
               today={today}
               onChangeLogDate={setLogDate}
               birthDate={birthDateValue}

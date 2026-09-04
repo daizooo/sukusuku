@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   CalendarDays,
   ChevronLeft,
@@ -63,6 +63,13 @@ interface LogTabProps {
   logDate: Date;
   today: Date;
   onChangeLogDate: (date: Date) => void;
+  /**
+   * 開いた直後に出す入力画面の種類。通知（検温のお知らせ・授乳のお知らせ）から
+   * 開いたときに、その用件の入力画面へそのまま入れるようにするためのもの。
+   */
+  initialLogType?: LogType | null;
+  /** 上の入力画面を開いたことを親へ返す。開き直しを防ぐため、親側で指定を空にする。 */
+  onOpenInitialLogType?: () => void;
   /** プロフィールに登録された子の誕生日（'YYYY-MM-DD'）。成長記録の生後ヶ月の自動計算に使う。 */
   birthDate?: string;
   growthData: GrowthRecord[];
@@ -126,6 +133,8 @@ export default function LogTab({
   logDate,
   today,
   onChangeLogDate,
+  initialLogType,
+  onOpenInitialLogType,
   birthDate,
   growthData,
   isLoadingLogs,
@@ -147,7 +156,14 @@ export default function LogTab({
 }: LogTabProps) {
   const [logView, setLogView] = useState<'timeline' | 'growth'>('timeline');
   // 記録の入力画面。log が null なら新規追加、入っていればその記録の編集。
-  const [logModal, setLogModal] = useState<{ type: LogType; log: CareLog | null } | null>(null);
+  // 通知から開いたときは、その用件の入力画面を出した状態で始める。
+  const [logModal, setLogModal] = useState<{ type: LogType; log: CareLog | null } | null>(
+    initialLogType ? { type: initialLogType, log: null } : null,
+  );
+  // 開いたことを親へ返して指定を空にしてもらう（タブを行き来しても開き直さないため）。
+  useEffect(() => {
+    if (initialLogType) onOpenInitialLogType?.();
+  }, [initialLogType, onOpenInitialLogType]);
   const [growthModal, setGrowthModal] = useState<{ mode: 'add' | 'edit'; record: GrowthRecord | null } | null>(null);
   // 搾乳の入力画面から「飲ませた」で戻ったときに、搾乳を選んだ状態で開くための指定。
   const [milkModalMethod, setMilkModalMethod] = useState<FeedingMethod | undefined>(undefined);
