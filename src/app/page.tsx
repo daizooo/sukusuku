@@ -2,9 +2,14 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { listTasks } from '@/lib/api/tasks';
 import { toDateString } from '@/lib/dateUtils';
+import { OPEN_LOG_PARAM, TAB_PARAM, parseLogType, parseTabId } from '@/lib/appLinks';
 import SukusukuApp from '@/components/sukusuku/SukusukuApp';
 
-export default async function Home() {
+interface HomeProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function Home({ searchParams }: HomeProps) {
   const supabase = await createClient();
 
   // middlewareでも未ログインは/loginへ流しているが、念のためここでも保険をかける。
@@ -36,6 +41,11 @@ export default async function Home() {
   // 「今日」がずれてhydration mismatchになるため（SukusukuApp側で詳細をコメント）。
   const todayDateString = toDateString(new Date());
 
+  // 開く場所をURLから決める。画面を更新したときに見ていたタブへ戻すのと、
+  // 通知のタップからその用件の画面へ直接開くのを、同じ仕組みでまかなう。
+  // クライアント側で読むとホームを描いたあとに切り替わってちらつくため、ここで確定させる。
+  const params = await searchParams;
+
   return (
     <div className="flex flex-col flex-1 bg-gray-50">
       <SukusukuApp
@@ -44,6 +54,8 @@ export default async function Home() {
         role={profile.role === 'papa' || profile.role === 'mama' ? profile.role : null}
         initialTasks={initialTasks}
         todayDateString={todayDateString}
+        initialTab={parseTabId(params[TAB_PARAM]) ?? 'home'}
+        initialLogType={parseLogType(params[OPEN_LOG_PARAM])}
       />
     </div>
   );
