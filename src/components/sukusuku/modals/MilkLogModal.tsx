@@ -15,6 +15,7 @@ import {
   sumBatchesMl,
 } from '@/lib/careLogUtils';
 import {
+  NURSING_PHASES,
   NURSING_PHASE_MINUTES,
   NURSING_PHASE_MS,
   nursingMinutes,
@@ -698,7 +699,7 @@ interface NursingSetTimerProps {
   onChangeUntrackedSets: (count: number) => void;
   runningPhase: NursingPhase | null;
   hasSession: boolean;
-  /** 測る順番。前回の続き（おすすめの側）から並べる。 */
+  /** 測る順番。前回の続き（おすすめの側）から数える。ボタンの並びは変えない。 */
   order: NursingPhase[];
   /** この内容で保存したときに記録される分数。 */
   recordedLeft: number;
@@ -781,8 +782,11 @@ function NursingSetTimer({
         で1セット。{NURSING_PHASE_MINUTES}分でお知らせが1回鳴り、ゲップまで終わると計測が止まります。
         時間はこのセットのぶんで、記録に入るのは全セットの合計です。
       </p>
+      {/* ボタンの並びは「左・右・ゲップ」で固定する。おすすめの開始側で並べ替えると
+          押すたびに左右の位置が入れ替わり、どちらを押しているのか分かりにくいため。
+          どこから始めるかは、上の案内文とハイライトで示す。 */}
       <div className="grid grid-cols-3 gap-2">
-        {order.map((phase) => {
+        {NURSING_PHASES.map((phase) => {
           const isRunning = runningPhase === phase;
           const done = isDone(phase);
           const isNext = !isRunning && phase === nextPhase;
