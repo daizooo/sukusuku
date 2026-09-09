@@ -64,7 +64,11 @@ import {
   updateCareLog as updateCareLogApi,
 } from '@/lib/api/careLogs';
 import { getNextBreastSide, getLogTitle } from '@/lib/careLogUtils';
-import { averageFeedingIntervalMinutes, type NextFeedingInfo } from '@/lib/feedingSchedule';
+import {
+  averageFeedingIntervalMinutes,
+  nextFeedingSchedule,
+  type NextFeedingInfo,
+} from '@/lib/feedingSchedule';
 import {
   DEFAULT_FEEDING_SETTINGS,
   getFeedingSettings,
@@ -75,8 +79,9 @@ import {
   getTemperatureReminderSettings,
   type TemperatureReminderSettings,
 } from '@/lib/api/temperatureReminderSettings';
-import { useNursingAlarmWatcher } from '@/lib/nursingTimer';
+import { useHasNursingSession, useNursingAlarmWatcher } from '@/lib/nursingTimer';
 import { useNursingAlarmSync } from '@/lib/nursingAlarmSync';
+import { closeSettledNotifications } from '@/lib/notificationCleanup';
 import { ensureChildId } from '@/lib/api/children';
 import {
   deleteGrowthRecord,
@@ -192,6 +197,8 @@ export default function SukusukuApp({
   // 画面が消えている・アプリを閉じている間は上の見張りが間引かれて鳴らせないため、
   // 鳴らす時刻をサーバーにも預けておき、その分を通知で鳴らしてもらう。
   useNursingAlarmSync(userId);
+  // 記録前の授乳が残っているか。授乳のお知らせを消してよいかの判断に使う。
+  const hasNursingSession = useHasNursingSession();
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -289,6 +296,16 @@ export default function SukusukuApp({
     };
     // initialTasksはマウント時点の値のみ見る（マウント後に変わることはない）
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, familyId]);
+
+  // 予定を取り直す。パートナーが済ませた分を拾うため、アプリに戻ったときに呼ぶ。
+  const refreshTasks = useCallback(() => {
+    listTasks(supabase, familyId)
+      .then((data) => {
+        setTodos(data);
+        setTaskError('');
+      })
+      .catch((err: unknown) => console.error('Failed to load tasks:', err));
   }, [supabase, familyId]);
 
   // 育児記録をSupabaseから取得（表示中の1日分のみ。日を切り替えるたびに取り直す）
@@ -396,13 +413,17 @@ export default function SukusukuApp({
 
   // パートナーの端末で記録された授乳は、この端末では分からないまま古い目安が出続ける。
   // アプリに戻ってきたときに取り直して、夫婦のどちらが見ても同じ目安になるようにする。
+  // 体温と予定も、済んだお知らせを消す(closeSettledNotifications)ために合わせて取り直す。
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') refreshRecentMilkLogs();
+      if (document.visibilityState !== 'visible') return;
+      refreshRecentMilkLogs();
+      refreshRecentTemperatureLogs();
+      refreshTasks();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [refreshRecentMilkLogs]);
+  }, [refreshRecentMilkLogs, refreshRecentTemperatureLogs, refreshTasks]);
 
   // 授乳の間隔の設定を読み込む。未設定の家族は既定値(3時間・通知する)のまま。
   useEffect(() => {
@@ -512,6 +533,41 @@ export default function SukusukuApp({
       isLoading: isLoadingRecentMilk,
     };
   }, [recentMilkLogs, feedingSettings.intervalMinutes, isLoadingRecentMilk]);
+
+  // 済んだ予定のid。お知らせを消してよいかの判断に使う。
+  const doneTaskIds = useMemo(
+    () => todos.filter((task) => task.done).map((task) => task.id),
+    [todos],
+  );
+
+  // 用が済んだお知らせを端末から消す。
+  // 通知は誰かが払うまで残るため、パートナーが記録した分や、アプリを開いたあとも
+  // 「そろそろ次の授乳」「検温のお知らせ」だけが残り続けてしまう。
+  // 読み込み直した記録から用が済んだものを見つけて、こちらから閉じる。
+  useEffect(() => {
+    const now = Date.now();
+    const schedule = nextFeedingSchedule(
+      nextFeeding.lastFedAt,
+      feedingSettings.intervalMinutes,
+      now,
+    );
+    void closeSettledNotifications({
+      // まだ一度も記録が無ければ目安の出しようがないので、消さずに残す。
+      isFeedingDue: schedule?.isOverdue ?? true,
+      hasNursingSession,
+      lastTemperatureAt: recentTemperatureLogs[0]?.time ?? null,
+      temperatureTimes: temperatureReminderSettings,
+      doneTaskIds,
+      now,
+    });
+  }, [
+    nextFeeding.lastFedAt,
+    feedingSettings.intervalMinutes,
+    hasNursingSession,
+    recentTemperatureLogs,
+    temperatureReminderSettings,
+    doneTaskIds,
+  ]);
 
   const memberLabel = (id: string | null): string => {
     if (!id) return '不明';
