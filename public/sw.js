@@ -73,7 +73,9 @@ self.addEventListener('push', (event) => {
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     lang: 'ja',
-    // 同じ予定の通知が重なったら新しいものへ差し替える
+    // 同じ予定の通知が重なったら新しいものへ差し替える。
+    // このタグは、用が済んだ通知を消すときの目印にもする
+    // （src/lib/notificationCleanup.ts。値を変えるときは両方揃えること）。
     tag: isNursing
       ? 'nursing-alarm'
       : isFeeding

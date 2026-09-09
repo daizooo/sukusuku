@@ -516,6 +516,18 @@ export function useNursingAlarmWatcher(): void {
   }, []);
 }
 
+/**
+ * 記録前の授乳が残っているか（計測中・計測後の記録待ちを含む）。
+ * 授乳のお知らせを消してよいかの判断に使う（notificationCleanup.ts）。
+ */
+export function useHasNursingSession(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => hasSession(getSnapshot()),
+    () => false,
+  );
+}
+
 export interface NursingTimer {
   /** いま測っているセットの、区切りごとの時間(ミリ秒)。計測中の分を含む。 */
   elapsed: NursingPhaseValues;
