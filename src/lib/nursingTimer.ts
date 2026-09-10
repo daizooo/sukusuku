@@ -112,6 +112,19 @@ const totalValues = (
   burp: active.carried.burp + elapsed.burp,
 });
 
+/**
+ * 5分まで測り終えた区切りをもう一度押したとき、それが「次のセット」かどうか。
+ *
+ * そのセットで他の区切りをまだ一度も測っていなければ、次のセットではなく
+ * 同じ区切りの続き。5分たったところで一旦やめて、また飲み始めたときに
+ * 2セット目にされてしまうと（続く右も2セット目になり）セット数が合わなくなる。
+ * 他の区切りを測ったあとで戻ってきたのなら、ひと回りしたということなので
+ * 次のセットとして0から測り直す。
+ */
+const isNextSetTap = (settled: NursingPhaseValues, phase: NursingPhase): boolean =>
+  settled[phase] >= NURSING_PHASE_MS &&
+  NURSING_PHASES.some((other) => other !== phase && settled[other] > 0);
+
 /** いまのセットを締めて次のセットへ。測った分は合計へ送り、お知らせも鳴り直せるようにする。 */
 const rollOverSet = (active: ActiveNursing, settled: NursingPhaseValues): ActiveNursing => ({
   ...active,
@@ -590,9 +603,7 @@ export function useNursingTimer(): NursingTimer {
       ? withPhase(prev.elapsed, running, prev.elapsed[running] + runningElapsed)
       : prev.elapsed;
     const stopping = running === phase;
-    // 5分まで測り終えた区切りをもう一度押したのは、次のセットに入ったということ。
-    // いまのセットを締めてから測り直す（表示は0から、お知らせもまた鳴る）。
-    const startsNextSet = !stopping && settled[phase] >= NURSING_PHASE_MS;
+    const startsNextSet = !stopping && isNextSetTap(settled, phase);
     const base = startsNextSet
       ? rollOverSet(prev, settled)
       : { ...prev, elapsed: settled };
