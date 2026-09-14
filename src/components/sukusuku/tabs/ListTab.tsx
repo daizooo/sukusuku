@@ -9,9 +9,9 @@ import ListItemDetailModal, { type ListItemDraft } from '../modals/ListItemDetai
 /**
  * 買い出し・やりたいこと・やることなどのリスト（docs/lists.md）。
  *
- * Google Keepと同じく、**枠（カード）が操作の単位**になる。お店ごとに枠があり、
- * 枠は一覧の中で足せる・消せる。項目もその枠の中で足せる・消せる。
- * どのお店に足すかは「そのお店の枠で打つ」ことで決まるので、追加先を選ぶ手順はない。
+ * Google Keepと同じく、**枠（カード）が操作の単位**になる。グループ（お店など）ごとに
+ * 枠があり、枠は一覧の中で足せる・消せる。項目もその枠の中で足せる・消せる。
+ * どのグループに足すかは「その枠で打つ」ことで決まるので、追加先を選ぶ手順はない。
  *
  * スクロールするのは枠の一覧だけで、リストの切り替えは上に固定する。
  */
@@ -196,7 +196,6 @@ export default function ListTab({
   const undoneItems = listItems.filter((item) => !item.done);
   const doneItems = listItems.filter((item) => item.done);
   const ungroupedItems = undoneItems.filter((item) => item.groupId === null);
-  const groupLabel = selected?.groupLabel ?? 'グループ';
 
   const deleteGroupWithConfirm = (group: ListGroup) => {
     const count = listItems.filter((item) => item.groupId === group.id).length;
@@ -314,17 +313,15 @@ export default function ListTab({
               const groupItems = undoneItems.filter((item) => item.groupId === group.id);
               return (
                 <section key={group.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  {/* 名前は枠の中の一番上に小さく置くだけにする。帯で強く見出しにすると、
-                      枠がいくつも並んだときに名前のほうが目立って中身が読みにくい。 */}
-                  <div className="flex items-center justify-between pl-3 pr-1 pt-2 pb-1">
-                    <span className="text-xs font-bold text-gray-500">
+                  <div className="flex items-center justify-between pl-3 pr-1.5 py-2 bg-gray-50 border-b border-gray-200">
+                    <h3 className="text-xs font-bold text-gray-700">
                       {group.name}
-                      {groupItems.length > 0 && <span className="ml-1.5 font-normal text-gray-400">{groupItems.length}</span>}
-                    </span>
+                      {groupItems.length > 0 && <span className="ml-1.5 text-gray-400">{groupItems.length}</span>}
+                    </h3>
                     <button
                       onClick={() => deleteGroupWithConfirm(group)}
                       aria-label={`${group.name}を削除`}
-                      className="text-gray-300 hover:text-red-500 p-1.5"
+                      className="text-gray-400 hover:text-red-500 p-1.5"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -350,9 +347,7 @@ export default function ListTab({
             {/* どの枠にも入れていない項目があるときだけ出す。 */}
             {ungroupedItems.length > 0 && (
               <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="pl-3 pt-2 pb-1">
-                  <span className="text-xs font-bold text-gray-400">未分類</span>
-                </div>
+                <h3 className="text-xs font-bold text-gray-500 px-3 py-2 bg-gray-50 border-b border-gray-200">未分類</h3>
                 {ungroupedItems.map((item) => (
                   <ItemRow
                     key={item.id}
@@ -376,8 +371,8 @@ export default function ListTab({
         {selected && (
           <AddRow
             tone="outlined"
-            label={`${groupLabel}を追加`}
-            placeholder={`${groupLabel}の名前（例: イオン）`}
+            label="グループを追加"
+            placeholder="グループの名前（例: イオン）"
             onSubmit={(name) => onAddGroup(selected.id, name)}
           />
         )}
@@ -441,7 +436,6 @@ export default function ListTab({
         key={detailItem?.id ?? 'none'}
         item={detailItem}
         groups={listGroups}
-        groupLabel={groupLabel}
         onClose={() => setDetailItem(null)}
         onSubmit={(item, draft) => {
           onUpdateItem(item, draft);

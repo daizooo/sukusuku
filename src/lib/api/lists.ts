@@ -205,14 +205,13 @@ export async function deleteDoneItems(supabase: SupabaseDb, listId: string): Pro
 
 /**
  * リストが1つも無いときに、いつも使う3つをまとめて作る。
- * 買い出しだけ区切りの呼び名を「お店」にしておく（グループはまだ作らない。
- * 使いながら必要なお店だけを足すほうが、要らない区切りが残らない）。
+ * グループはまだ作らない（使いながら必要なぶんだけ足すほうが、要らない区切りが残らない）。
  */
 export async function seedDefaultLists(supabase: SupabaseDb, familyId: string): Promise<ListBoard[]> {
   const rows: TablesInsert<'lists'>[] = [
-    { family_id: familyId, name: '買い出し', group_label: 'お店', position: 0 },
-    { family_id: familyId, name: 'やりたいこと', group_label: 'ジャンル', position: 1 },
-    { family_id: familyId, name: 'やること', group_label: 'グループ', position: 2 },
+    { family_id: familyId, name: '買い出し', position: 0 },
+    { family_id: familyId, name: 'やりたいこと', position: 1 },
+    { family_id: familyId, name: 'やること', position: 2 },
   ];
   const { data, error } = await supabase.from('lists').insert(rows).select('*');
   if (error) throw error;

@@ -5,17 +5,17 @@ import { Trash2, X } from 'lucide-react';
 import type { ListBoard, ListGroup } from '@/types/app';
 
 // リストそのものの追加・編集。
-// 「グループの呼び名」を持つのがこの画面の肝で、買い出しなら「お店」、
-// やりたいことなら「ジャンル」と、リストごとに束ね方の言葉を変えられる（docs/lists.md §3）。
+//
+// 束ねる区切りの呼び名はリストごとに変えられるようにしていたが、リストによって
+// 「お店を追加」「ジャンルを追加」と文言が変わるのが読みにくかったため、
+// 画面では「グループ」で統一する。groupLabel は保存済みの値をそのまま持ち回るだけで、
+// 画面には出さない（docs/lists.md §3 からの変更点）。
 export interface ListDraft {
   name: string;
   groupLabel: string;
 }
 
 export const DEFAULT_GROUP_LABEL = 'グループ';
-
-// 呼び名の入力を空欄のまま悩ませないための言い換え候補。選ばずに自分で打ってもよい。
-const GROUP_LABEL_SAMPLES = ['お店', '場所', 'ジャンル', '担当'];
 
 // リスト名に添える絵文字の候補。名前は自由入力なので絵文字を打ち込めば入るが、
 // PCのブラウザからは打ちにくいため、よく使うものをタップで足せるようにする。
@@ -143,44 +143,10 @@ export default function ListFormModal({
             </p>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">グループの呼び名</label>
-            <input
-              type="text"
-              value={draft.groupLabel}
-              onChange={(e) => set({ groupLabel: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500"
-              placeholder={DEFAULT_GROUP_LABEL}
-            />
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {GROUP_LABEL_SAMPLES.map((sample) => (
-                <button
-                  key={sample}
-                  type="button"
-                  onClick={() => set({ groupLabel: sample })}
-                  className={`text-xs font-bold px-2.5 py-1 rounded-full border transition ${
-                    draft.groupLabel === sample
-                      ? 'bg-blue-50 border-blue-300 text-blue-600'
-                      : 'bg-white border-gray-200 text-gray-500'
-                  }`}
-                >
-                  {sample}
-                </button>
-              ))}
-            </div>
-            <p className="text-[10px] text-gray-400 mt-2">
-              項目を束ねる区切りの呼び名です。買い出しなら「お店」。
-              区切りを作らなければ、ただのチェックリストとして使えます。
-            </p>
-          </div>
-
-          {/* 一覧の見出しからも消せるが、絞り込み中は見出しが出ないため、
-              いつでも触れるここにも置く。 */}
+          {/* 枠のゴミ箱からも消せるが、名前を直せるのはここだけなので一覧を置く。 */}
           {mode === 'edit' && groups.length > 0 && onRenameGroup && onDeleteGroup && (
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                {(draft.groupLabel.trim() || DEFAULT_GROUP_LABEL)}の一覧
-              </label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">グループの一覧</label>
               <div className="space-y-2">
                 {groups.map((group) => (
                   <GroupRow key={group.id} group={group} onRename={onRenameGroup} onDelete={onDeleteGroup} />

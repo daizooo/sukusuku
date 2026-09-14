@@ -16,8 +16,6 @@ interface ListItemDetailModalProps {
   item: ListItem | null;
   /** 表示中のリストのグループ。0件なら移動先の選択は出さない。 */
   groups: ListGroup[];
-  /** リストごとの「グループ」の呼び名（「お店」など）。 */
-  groupLabel: string;
   onClose: () => void;
   onSubmit: (item: ListItem, draft: ListItemDraft) => void;
   onDelete: (id: string) => void;
@@ -27,7 +25,6 @@ interface ListItemDetailModalProps {
 export default function ListItemDetailModal({
   item,
   groups,
-  groupLabel,
   onClose,
   onSubmit,
   onDelete,
@@ -69,7 +66,7 @@ export default function ListItemDetailModal({
 
           {groups.length > 0 && (
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">{groupLabel}</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">グループ</label>
               <div className="flex flex-wrap gap-1.5">
                 <button
                   type="button"
