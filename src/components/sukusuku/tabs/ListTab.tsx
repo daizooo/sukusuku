@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Plus, Settings2, Trash2, X } from 'lucide-react';
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
-import SegmentedTabs from '../ui/SegmentedTabs';
 import ListFormModal, { type ListDraft } from '../modals/ListFormModal';
 import ListItemDetailModal, { type ListItemDraft } from '../modals/ListItemDetailModal';
 
@@ -193,14 +192,28 @@ export default function ListTab({
           スクロールするのは項目の一覧だけにする。 */}
       <div className="shrink-0 space-y-2 pb-3 mb-3 border-b border-gray-200">
         <div className="flex items-center gap-2">
-          <div className="flex-1 min-w-0 overflow-x-auto">
-            <SegmentedTabs
-              ariaLabel="リストの切り替え"
-              value={selected?.id ?? ''}
-              onChange={selectList}
-              fill={false}
-              options={lists.map((list) => ({ id: list.id, label: list.name }))}
-            />
+          {/* リストは1つずつ枠を持たせて切れ目を出す。下のグループのチップとは濃さで段を分ける
+              （上＝選んでいるものを塗りつぶし、下＝枠だけ）。 */}
+          <div role="tablist" aria-label="リストの切り替え" className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto">
+            {lists.map((list) => {
+              const current = list.id === selected?.id;
+              return (
+                <button
+                  key={list.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={current}
+                  onClick={() => selectList(list.id)}
+                  className={`flex-none min-h-9 px-3.5 rounded-xl text-sm font-bold border transition ${
+                    current
+                      ? 'bg-blue-500 border-blue-500 text-white shadow-sm'
+                      : 'bg-white border-gray-200 text-gray-600'
+                  }`}
+                >
+                  {list.name}
+                </button>
+              );
+            })}
           </div>
           <button
             onClick={() => setListModal({ mode: 'add', list: null })}
