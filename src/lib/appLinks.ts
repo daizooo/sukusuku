@@ -17,7 +17,7 @@ export const TAB_PARAM = 'tab';
 /** 記録タブで開く入力画面の種類。開いたら消す（更新のたびに開き直さないため）。 */
 export const OPEN_LOG_PARAM = 'open';
 
-const TAB_IDS: TabId[] = ['home', 'schedule', 'log', 'nursery', 'info'];
+const TAB_IDS: TabId[] = ['home', 'schedule', 'log', 'list', 'nursery', 'info'];
 const LOG_TYPES: LogType[] = ['milk', 'diaper', 'pumping', 'temperature'];
 
 const firstValue = (value: string | string[] | undefined): string | undefined =>

@@ -8,6 +8,7 @@ import {
   FileText,
   ClipboardCheck,
   Folder,
+  ListTodo,
   Plus,
 } from 'lucide-react';
 
@@ -22,6 +23,9 @@ import type {
   DynamicTask,
   FamilyMember,
   GrowthRecord,
+  ListBoard,
+  ListGroup,
+  ListItem,
   LogType,
   LoginRole,
   Nursery,
@@ -98,6 +102,20 @@ import {
 } from '@/lib/api/nurseries';
 import { listFamilyMembers } from '@/lib/api/familyMembers';
 import { getProfile, saveProfile } from '@/lib/api/profile';
+import {
+  deleteDoneItems,
+  deleteGroup as deleteGroupApi,
+  deleteItem as deleteItemApi,
+  deleteList as deleteListApi,
+  insertGroup,
+  insertItem,
+  insertList,
+  loadLists,
+  seedDefaultLists,
+  updateItem as updateItemApi,
+  updateItemDone,
+  updateList as updateListApi,
+} from '@/lib/api/lists';
 
 import HomeTab from './tabs/HomeTab';
 import AddTaskModal from './modals/AddTaskModal';
@@ -109,6 +127,8 @@ import type { PumpingLogInput } from './modals/PumpingLogModal';
 import type { TemperatureLogInput } from './modals/TemperatureLogModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 import type { NurseryDraft } from './modals/NurseryFormModal';
+import type { ListDraft } from './modals/ListFormModal';
+import type { ListItemDraft } from './modals/ListItemDetailModal';
 
 // 起動直後に表示するのはホームタブだけなので、残りのタブは実際に開かれるまで読み込まない。
 // 特にLogTabは成長グラフのためにrecharts(単体で約350KB)を持ち込むため、静的importのままだと
@@ -122,6 +142,7 @@ const TabFallback = () => (
 
 const ScheduleTab = dynamic(() => import('./tabs/ScheduleTab'), { loading: TabFallback });
 const LogTab = dynamic(() => import('./tabs/LogTab'), { loading: TabFallback });
+const ListTab = dynamic(() => import('./tabs/ListTab'), { loading: TabFallback });
 const HokatsuTab = dynamic(() => import('./tabs/HokatsuTab'), { loading: TabFallback });
 const InfoTab = dynamic(() => import('./tabs/InfoTab'), { loading: TabFallback });
 
@@ -129,6 +150,7 @@ const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
   { id: 'home', icon: Home, label: 'ホーム' },
   { id: 'schedule', icon: CalendarDays, label: '予定' },
   { id: 'log', icon: FileText, label: '記録' },
+  { id: 'list', icon: ListTodo, label: 'リスト' },
   { id: 'nursery', icon: ClipboardCheck, label: '保活' },
   { id: 'info', icon: Folder, label: '設定' },
 ];
@@ -240,6 +262,13 @@ export default function SukusukuApp({
 
   const [nurseries, setNurseries] = useState<Nursery[]>([]);
   const [isLoadingNurseries, setIsLoadingNurseries] = useState(true);
+
+  // リスト(買い出し・やりたいこと・やること)。リストもグループも項目も多くないため、
+  // リストを切り替えるたびに取り直さず、まとめて持って画面側で絞る。
+  const [lists, setLists] = useState<ListBoard[]>([]);
+  const [listGroups, setListGroups] = useState<ListGroup[]>([]);
+  const [listItems, setListItems] = useState<ListItem[]>([]);
+  const [isLoadingLists, setIsLoadingLists] = useState(true);
 
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
 
@@ -484,6 +513,25 @@ export default function SukusukuApp({
       .catch((err) => console.error('Failed to load nurseries:', err))
       .finally(() => {
         if (!cancelled) setIsLoadingNurseries(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, familyId]);
+
+  // リストをSupabaseから取得
+  useEffect(() => {
+    let cancelled = false;
+    loadLists(supabase, familyId)
+      .then((snapshot) => {
+        if (cancelled) return;
+        setLists(snapshot.lists);
+        setListGroups(snapshot.groups);
+        setListItems(snapshot.items);
+      })
+      .catch((err) => console.error('Failed to load lists:', err))
+      .finally(() => {
+        if (!cancelled) setIsLoadingLists(false);
       });
     return () => {
       cancelled = true;
@@ -945,6 +993,147 @@ export default function SukusukuApp({
     }
   };
 
+  // --- リスト ---
+  // 打ち込んだ直後に画面へ出し、保存に失敗したら元へ戻す（買い出し中に入力が引っかからないように）。
+  const addListHandler = async (draft: ListDraft) => {
+    try {
+      const created = await insertList(supabase, familyId, { ...draft, position: lists.length });
+      setLists((prev) => [...prev, created]);
+    } catch (err) {
+      console.error('Failed to add list:', err);
+      alert('リストの追加に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const updateListHandler = async (list: ListBoard, draft: ListDraft) => {
+    const previous = lists;
+    const updated: ListBoard = { ...list, ...draft };
+    setLists((prev) => prev.map((l) => (l.id === list.id ? updated : l)));
+    try {
+      await updateListApi(supabase, updated);
+    } catch (err) {
+      console.error('Failed to update list:', err);
+      setLists(previous);
+      alert('リストの更新に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const deleteListHandler = async (id: string) => {
+    const previous = { lists, groups: listGroups, items: listItems };
+    // DB側は外部キーの連鎖削除で消えるが、画面はすぐ消したいので手元でも外す。
+    setLists((prev) => prev.filter((l) => l.id !== id));
+    setListGroups((prev) => prev.filter((g) => g.listId !== id));
+    setListItems((prev) => prev.filter((i) => i.listId !== id));
+    try {
+      await deleteListApi(supabase, id);
+    } catch (err) {
+      console.error('Failed to delete list:', err);
+      setLists(previous.lists);
+      setListGroups(previous.groups);
+      setListItems(previous.items);
+      alert('リストの削除に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const addGroupHandler = async (listId: string, name: string) => {
+    const position = listGroups.filter((g) => g.listId === listId).length;
+    try {
+      const created = await insertGroup(supabase, { listId, name, position });
+      setListGroups((prev) => [...prev, created]);
+    } catch (err) {
+      console.error('Failed to add list group:', err);
+      alert('追加に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  // グループを消しても中の項目は消さず、未分類へ落とす（買い忘れを生まないため）。
+  const deleteGroupHandler = async (id: string) => {
+    const previous = { groups: listGroups, items: listItems };
+    setListGroups((prev) => prev.filter((g) => g.id !== id));
+    setListItems((prev) => prev.map((i) => (i.groupId === id ? { ...i, groupId: null } : i)));
+    try {
+      await deleteGroupApi(supabase, id);
+    } catch (err) {
+      console.error('Failed to delete list group:', err);
+      setListGroups(previous.groups);
+      setListItems(previous.items);
+      alert('削除に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const addItemHandler = async (listId: string, groupId: string | null, title: string) => {
+    const position = listItems.filter((i) => i.listId === listId).length;
+    try {
+      const created = await insertItem(supabase, { listId, groupId, title, position });
+      setListItems((prev) => [...prev, created]);
+    } catch (err) {
+      console.error('Failed to add list item:', err);
+      alert('項目の追加に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const toggleItemHandler = async (id: string) => {
+    const target = listItems.find((i) => i.id === id);
+    if (!target) return;
+    const done = !target.done;
+    // 完了した時刻も持つ。完了した項目は消さずに残すため（docs/lists.md §2）。
+    const doneAt = done ? new Date() : null;
+    setListItems((prev) => prev.map((i) => (i.id === id ? { ...i, done, doneAt } : i)));
+    try {
+      await updateItemDone(supabase, id, done, doneAt);
+    } catch (err) {
+      console.error('Failed to toggle list item:', err);
+      setListItems((prev) => prev.map((i) => (i.id === id ? target : i)));
+    }
+  };
+
+  const updateItemHandler = async (item: ListItem, draft: ListItemDraft) => {
+    const updated: ListItem = { ...item, ...draft };
+    setListItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
+    try {
+      await updateItemApi(supabase, updated);
+    } catch (err) {
+      console.error('Failed to update list item:', err);
+      setListItems((prev) => prev.map((i) => (i.id === item.id ? item : i)));
+      alert('項目の更新に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const deleteItemHandler = async (id: string) => {
+    const previous = listItems;
+    setListItems((prev) => prev.filter((i) => i.id !== id));
+    try {
+      await deleteItemApi(supabase, id);
+    } catch (err) {
+      console.error('Failed to delete list item:', err);
+      setListItems(previous);
+      alert('項目の削除に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const clearDoneItemsHandler = async (listId: string) => {
+    const previous = listItems;
+    setListItems((prev) => prev.filter((i) => !(i.listId === listId && i.done)));
+    try {
+      await deleteDoneItems(supabase, listId);
+    } catch (err) {
+      console.error('Failed to clear done list items:', err);
+      setListItems(previous);
+      alert('削除に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  // リストが空のときに、いつも使う3つ(買い出し・やりたいこと・やること)をまとめて作る
+  const addDefaultListsHandler = async () => {
+    try {
+      const created = await seedDefaultLists(supabase, familyId);
+      setLists((prev) => [...prev, ...created]);
+    } catch (err) {
+      console.error('Failed to add default lists:', err);
+      alert('リストの追加に失敗しました。もう一度お試しください。');
+    }
+  };
+
   // スマホ・タブレット・PCのいずれでもビューポート全体を使う（PCで中央の細長いカードにしない）。
   // ただし単に画面幅いっぱいに引き伸ばすと一覧やグリッドの間延びで読みにくくなるため、
   // 各タブ側で本文の幅を読みやすい範囲に収めている（記録タブの2カラム表示など、幅を
@@ -1045,6 +1234,25 @@ export default function SukusukuApp({
               onAddGrowthRecord={addGrowthRecordHandler}
               onUpdateGrowthRecord={updateGrowthRecordHandler}
               onDeleteGrowthRecord={deleteGrowthRecordHandler}
+            />
+          )}
+          {activeTab === 'list' && (
+            <ListTab
+              lists={lists}
+              groups={listGroups}
+              items={listItems}
+              isLoading={isLoadingLists}
+              onAddList={addListHandler}
+              onUpdateList={updateListHandler}
+              onDeleteList={deleteListHandler}
+              onAddGroup={addGroupHandler}
+              onDeleteGroup={deleteGroupHandler}
+              onAddItem={addItemHandler}
+              onToggleItem={toggleItemHandler}
+              onUpdateItem={updateItemHandler}
+              onDeleteItem={deleteItemHandler}
+              onClearDone={clearDoneItemsHandler}
+              onAddDefaultLists={addDefaultListsHandler}
             />
           )}
           {activeTab === 'nursery' && (
