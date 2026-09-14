@@ -227,7 +227,50 @@ export interface UserProfile {
   customFields: ProfileField[];
 }
 
-export type TabId = 'home' | 'schedule' | 'log' | 'nursery' | 'info';
+/**
+ * リスト（買い出し・やりたいこと・やること）。
+ * 予定(Task)との違いは「日付を持たないこと」。日付のある用件は予定に置く。
+ */
+export interface ListBoard {
+  id: string;
+  name: string;
+  /**
+   * 項目を束ねる軸の呼び名。「お店」「ジャンル」「担当」など自由入力。
+   * 見出しと絞り込みの文言に使う。
+   */
+  groupLabel: string;
+  position: number;
+}
+
+/**
+ * リストの中の区切り。買い出しなら「イオン」「ドラッグストア」。
+ * 1件も作らなければ、そのリストはただのチェックリストとして振る舞う。
+ */
+export interface ListGroup {
+  id: string;
+  listId: string;
+  name: string;
+  position: number;
+}
+
+/**
+ * リストの項目。数量はタイトルに書く（「牛乳2本」）。
+ * 場所は項目ではなくグループで表すため、項目そのものは場所を持たない。
+ */
+export interface ListItem {
+  id: string;
+  listId: string;
+  /** どのグループに入っているか。null は未分類。 */
+  groupId: string | null;
+  title: string;
+  note: string;
+  done: boolean;
+  /** 完了した時刻。完了した項目は消さずに残す。 */
+  doneAt: Date | null;
+  position: number;
+}
+
+export type TabId = 'home' | 'schedule' | 'log' | 'list' | 'nursery' | 'info';
 
 // スケジュールタブの表示切り替え。既定は月（カレンダー）。
 export type ScheduleView = 'month' | 'week' | 'day' | 'list';
