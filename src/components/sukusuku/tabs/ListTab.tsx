@@ -191,7 +191,7 @@ export default function ListTab({
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       {/* 上段（固定）: リストの切り替え・打ち込む欄・グループの絞り込み。
           スクロールするのは項目の一覧だけにする。 */}
-      <div className="shrink-0 space-y-2 mb-3">
+      <div className="shrink-0 space-y-2 pb-3 mb-3 border-b border-gray-200">
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0 overflow-x-auto">
             <SegmentedTabs
@@ -321,8 +321,8 @@ export default function ListTab({
             {listGroups.map((group) => {
               const groupItems = undoneItems.filter((item) => item.groupId === group.id);
               return (
-                <section key={group.id}>
-                  <div className="flex items-center justify-between px-1 mb-1">
+                <section key={group.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="flex items-center justify-between pl-3 pr-1.5 py-2 bg-gray-50 border-b border-gray-200">
                     <h3 className="text-xs font-bold text-gray-700">
                       {group.name}
                       {groupItems.length > 0 && <span className="ml-1.5 text-gray-400">{groupItems.length}</span>}
@@ -330,24 +330,22 @@ export default function ListTab({
                     <button
                       onClick={() => deleteGroupWithConfirm(group)}
                       aria-label={`${group.name}を削除`}
-                      className="text-gray-300 hover:text-red-400 p-1"
+                      className="text-gray-300 hover:text-red-400 p-1.5"
                     >
                       <Trash2 size={14} />
                     </button>
                   </div>
                   {groupItems.length === 0 ? (
-                    <p className="text-[11px] text-gray-300 px-3 py-2">なし</p>
+                    <p className="text-[11px] text-gray-300 px-3 py-2.5">なし</p>
                   ) : (
-                    <div className="bg-white rounded-xl border border-gray-100">
-                      {groupItems.map((item) => (
-                        <ItemRow
-                          key={item.id}
-                          item={item}
-                          onToggle={() => onToggleItem(item.id)}
-                          onOpen={() => setDetailItem(item)}
-                        />
-                      ))}
-                    </div>
+                    groupItems.map((item) => (
+                      <ItemRow
+                        key={item.id}
+                        item={item}
+                        onToggle={() => onToggleItem(item.id)}
+                        onOpen={() => setDetailItem(item)}
+                      />
+                    ))
                   )}
                 </section>
               );
@@ -355,26 +353,24 @@ export default function ListTab({
 
             {/* 未分類はグループが1つでもあるときだけ見出しを出す（分けていないリストでは不要）。 */}
             {undoneItems.some((item) => item.groupId === null) && (
-              <section>
-                <h3 className="text-xs font-bold text-gray-500 px-1 mb-1">未分類</h3>
-                <div className="bg-white rounded-xl border border-gray-100">
-                  {undoneItems
-                    .filter((item) => item.groupId === null)
-                    .map((item) => (
-                      <ItemRow
-                        key={item.id}
-                        item={item}
-                        onToggle={() => onToggleItem(item.id)}
-                        onOpen={() => setDetailItem(item)}
-                      />
-                    ))}
-                </div>
+              <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <h3 className="text-xs font-bold text-gray-500 px-3 py-2 bg-gray-50 border-b border-gray-200">未分類</h3>
+                {undoneItems
+                  .filter((item) => item.groupId === null)
+                  .map((item) => (
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      onToggle={() => onToggleItem(item.id)}
+                      onOpen={() => setDetailItem(item)}
+                    />
+                  ))}
               </section>
             )}
           </div>
         ) : (
           undoneItems.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-100">
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               {undoneItems.map((item) => (
                 <ItemRow
                   key={item.id}
@@ -388,11 +384,11 @@ export default function ListTab({
         )}
 
         {doneItems.length > 0 && (
-          <section className="mt-4">
-            <div className="flex items-center justify-between px-1 mb-1">
+          <section className="mt-3 bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className={`flex items-center justify-between px-2 py-1.5 bg-gray-50 ${showDone ? 'border-b border-gray-200' : ''}`}>
               <button
                 onClick={() => setShowDone((prev) => !prev)}
-                className="flex items-center text-xs font-bold text-gray-500"
+                className="flex items-center text-xs font-bold text-gray-500 py-1"
               >
                 {showDone ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 <span className="ml-1">完了 {doneItems.length}</span>
@@ -410,18 +406,15 @@ export default function ListTab({
                 </button>
               )}
             </div>
-            {showDone && (
-              <div className="bg-white rounded-xl border border-gray-100">
-                {doneItems.map((item) => (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    onToggle={() => onToggleItem(item.id)}
-                    onOpen={() => setDetailItem(item)}
-                  />
-                ))}
-              </div>
-            )}
+            {showDone &&
+              doneItems.map((item) => (
+                <ItemRow
+                  key={item.id}
+                  item={item}
+                  onToggle={() => onToggleItem(item.id)}
+                  onOpen={() => setDetailItem(item)}
+                />
+              ))}
           </section>
         )}
       </div>
