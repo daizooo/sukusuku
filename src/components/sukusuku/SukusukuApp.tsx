@@ -149,8 +149,8 @@ const InfoTab = dynamic(() => import('./tabs/InfoTab'), { loading: TabFallback }
 const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
   { id: 'home', icon: Home, label: 'ホーム' },
   { id: 'schedule', icon: CalendarDays, label: '予定' },
-  { id: 'log', icon: FileText, label: '記録' },
   { id: 'list', icon: ListTodo, label: 'リスト' },
+  { id: 'log', icon: FileText, label: '記録' },
   { id: 'nursery', icon: ClipboardCheck, label: '保活' },
   { id: 'info', icon: Folder, label: '設定' },
 ];
@@ -1208,6 +1208,25 @@ export default function SukusukuApp({
               onOpenLogTab={openLogTabForDate}
             />
           )}
+          {activeTab === 'list' && (
+            <ListTab
+              lists={lists}
+              groups={listGroups}
+              items={listItems}
+              isLoading={isLoadingLists}
+              onAddList={addListHandler}
+              onUpdateList={updateListHandler}
+              onDeleteList={deleteListHandler}
+              onAddGroup={addGroupHandler}
+              onDeleteGroup={deleteGroupHandler}
+              onAddItem={addItemHandler}
+              onToggleItem={toggleItemHandler}
+              onUpdateItem={updateItemHandler}
+              onDeleteItem={deleteItemHandler}
+              onClearDone={clearDoneItemsHandler}
+              onAddDefaultLists={addDefaultListsHandler}
+            />
+          )}
           {activeTab === 'log' && (
             <LogTab
               logs={logs}
@@ -1234,25 +1253,6 @@ export default function SukusukuApp({
               onAddGrowthRecord={addGrowthRecordHandler}
               onUpdateGrowthRecord={updateGrowthRecordHandler}
               onDeleteGrowthRecord={deleteGrowthRecordHandler}
-            />
-          )}
-          {activeTab === 'list' && (
-            <ListTab
-              lists={lists}
-              groups={listGroups}
-              items={listItems}
-              isLoading={isLoadingLists}
-              onAddList={addListHandler}
-              onUpdateList={updateListHandler}
-              onDeleteList={deleteListHandler}
-              onAddGroup={addGroupHandler}
-              onDeleteGroup={deleteGroupHandler}
-              onAddItem={addItemHandler}
-              onToggleItem={toggleItemHandler}
-              onUpdateItem={updateItemHandler}
-              onDeleteItem={deleteItemHandler}
-              onClearDone={clearDoneItemsHandler}
-              onAddDefaultLists={addDefaultListsHandler}
             />
           )}
           {activeTab === 'nursery' && (

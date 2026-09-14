@@ -17,6 +17,10 @@ export const DEFAULT_GROUP_LABEL = 'グループ';
 // 呼び名の入力を空欄のまま悩ませないための言い換え候補。選ばずに自分で打ってもよい。
 const GROUP_LABEL_SAMPLES = ['お店', '場所', 'ジャンル', '担当'];
 
+// リスト名に添える絵文字の候補。名前は自由入力なので絵文字を打ち込めば入るが、
+// PCのブラウザからは打ちにくいため、よく使うものをタップで足せるようにする。
+const NAME_EMOJIS = ['🛒', '🧺', '📝', '✅', '🎁', '🏥', '🍼', '👶', '🧴', '💡'];
+
 interface ListFormModalProps {
   mode: 'add' | 'edit' | null;
   list: ListBoard | null;
@@ -57,8 +61,24 @@ export default function ListFormModal({ mode, list, onClose, onSubmit, onDelete 
               value={draft.name}
               onChange={(e) => set({ name: e.target.value })}
               className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500"
-              placeholder="例: 買い出し / やりたいこと / やること"
+              placeholder="例: 買い出し🛒 / やりたいこと / やること"
             />
+            <div className="flex flex-wrap gap-1 mt-2">
+              {NAME_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => set({ name: draft.name + emoji })}
+                  aria-label={`${emoji}を名前に足す`}
+                  className="text-base leading-none w-9 h-9 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1.5">
+              絵文字は名前の末尾に足されます。自分で打ち込んでも構いません。
+            </p>
           </div>
 
           <div>
