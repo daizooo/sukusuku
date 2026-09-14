@@ -9,10 +9,11 @@ import ListItemDetailModal, { type ListItemDraft } from '../modals/ListItemDetai
 /**
  * 買い出し・やりたいこと・やることなどのリスト（docs/lists.md）。
  *
- * 打ち込む欄はGoogle Keepと同じく、それぞれのリスト（カード）の中の末尾に置く。
- * どのお店に足すかは「そのお店のカードで打つ」ことで決まるので、
- * 追加先を選んでから打つ手順がいらない。
- * スクロールするのは項目の一覧だけにする。
+ * Google Keepと同じく、**枠（カード）が操作の単位**になる。お店ごとに枠があり、
+ * 枠は一覧の中で足せる・消せる。項目もその枠の中で足せる・消せる。
+ * どのお店に足すかは「そのお店の枠で打つ」ことで決まるので、追加先を選ぶ手順はない。
+ *
+ * スクロールするのは枠の一覧だけで、リストの切り替えは上に固定する。
  */
 interface ListTabProps {
   lists: ListBoard[];
@@ -32,9 +33,6 @@ interface ListTabProps {
   onClearDone: (listId: string) => void;
   onAddDefaultLists: () => void;
 }
-
-/** 絞り込みと「追加先」を兼ねる選択。'all' はどのグループにも寄せない状態。 */
-type GroupFilter = string | 'all';
 
 /** チェックの丸。押した先が分かるよう、未完了でも枠は出しておく。 */
 function ItemCheck({ done, onToggle, label }: { done: boolean; onToggle: () => void; label: string }) {
@@ -88,11 +86,22 @@ function ItemRow({
 }
 
 /**
- * リストの末尾に置く打ち込み欄。押すまではただの「+ 追加」の行で、
- * 押すと入力欄になる。改行で確定して欄は開いたままにするので、
- * 思いついたものを続けて打てる（Google Keepと同じ動き）。
+ * 押すまではただの「+ ○○」の行で、押すと入力欄になる。
+ * 改行で確定しても欄は開いたままにするので、思いついたものを続けて打てる
+ * （Google Keepと同じ動き）。項目の追加にも枠の追加にも使う。
  */
-function AddItemRow({ placeholder, onSubmit }: { placeholder: string; onSubmit: (title: string) => void }) {
+function AddRow({
+  label,
+  placeholder,
+  onSubmit,
+  tone = 'plain',
+}: {
+  label: string;
+  placeholder: string;
+  onSubmit: (value: string) => void;
+  /** 枠そのものを足す行は、項目の追加と見分けられるよう破線にする。 */
+  tone?: 'plain' | 'outlined';
+}) {
   const [draft, setDraft] = useState<string | null>(null);
 
   if (draft === null) {
@@ -100,23 +109,29 @@ function AddItemRow({ placeholder, onSubmit }: { placeholder: string; onSubmit: 
       <button
         type="button"
         onClick={() => setDraft('')}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-400 hover:bg-gray-50 transition"
+        className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-400 hover:bg-gray-50 transition ${
+          tone === 'outlined' ? 'border border-dashed border-gray-300 rounded-xl justify-center' : ''
+        }`}
       >
         <Plus size={16} className="flex-none" />
-        追加
+        {label}
       </button>
     );
   }
 
   const submit = () => {
-    const title = draft.trim();
-    if (!title) return;
-    onSubmit(title);
+    const value = draft.trim();
+    if (!value) return;
+    onSubmit(value);
     setDraft('');
   };
 
   return (
-    <div className="flex items-center gap-2 pl-3 pr-1 py-1.5">
+    <div
+      className={`flex items-center gap-2 pl-3 pr-1 py-1.5 ${
+        tone === 'outlined' ? 'border border-dashed border-gray-300 rounded-xl' : ''
+      }`}
+    >
       <input
         type="text"
         value={draft}
@@ -163,9 +178,7 @@ export default function ListTab({
   onAddDefaultLists,
 }: ListTabProps) {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
-  const [groupFilter, setGroupFilter] = useState<GroupFilter>('all');
   const [showDone, setShowDone] = useState(false);
-  const [newGroupName, setNewGroupName] = useState<string | null>(null);
   const [listModal, setListModal] = useState<{ mode: 'add' | 'edit'; list: ListBoard | null } | null>(null);
   const [detailItem, setDetailItem] = useState<ListItem | null>(null);
 
@@ -180,25 +193,10 @@ export default function ListTab({
     [items, selected],
   );
 
-  // 消えたグループで絞り込んだままにならないようにする。
-  const activeFilter: GroupFilter =
-    groupFilter !== 'all' && !listGroups.some((group) => group.id === groupFilter) ? 'all' : groupFilter;
-  const visibleItems = activeFilter === 'all' ? listItems : listItems.filter((item) => item.groupId === activeFilter);
-  const undoneItems = visibleItems.filter((item) => !item.done);
-  const doneItems = visibleItems.filter((item) => item.done);
-
-  const selectList = (id: string) => {
-    setSelectedListId(id);
-    setGroupFilter('all');
-    setNewGroupName(null);
-  };
-
-  const submitGroup = () => {
-    const name = (newGroupName ?? '').trim();
-    if (!selected || !name) return;
-    onAddGroup(selected.id, name);
-    setNewGroupName(null);
-  };
+  const undoneItems = listItems.filter((item) => !item.done);
+  const doneItems = listItems.filter((item) => item.done);
+  const ungroupedItems = undoneItems.filter((item) => item.groupId === null);
+  const groupLabel = selected?.groupLabel ?? 'グループ';
 
   const deleteGroupWithConfirm = (group: ListGroup) => {
     const count = listItems.filter((item) => item.groupId === group.id).length;
@@ -246,142 +244,87 @@ export default function ListTab({
     );
   }
 
-  // 絞り込んでいるグループが「追加先」になる。どれも選んでいなければ未分類へ入る。
-  const addTargetName = activeFilter === 'all' ? null : listGroups.find((g) => g.id === activeFilter)?.name ?? null;
-
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
-      {/* 上段（固定）: リストの切り替え・打ち込む欄・グループの絞り込み。
-          スクロールするのは項目の一覧だけにする。 */}
-      <div className="shrink-0 space-y-2 pb-3 mb-3 border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          {/* リストは1つずつ枠を持たせて切れ目を出す。下のグループのチップとは濃さで段を分ける
-              （上＝選んでいるものを塗りつぶし、下＝枠だけ）。 */}
-          <div role="tablist" aria-label="リストの切り替え" className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto">
-            {lists.map((list) => {
-              const current = list.id === selected?.id;
-              return (
-                <button
-                  key={list.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={current}
-                  onClick={() => selectList(list.id)}
-                  className={`flex-none min-h-9 px-3.5 rounded-xl text-sm font-bold border transition ${
-                    current
-                      ? 'bg-blue-500 border-blue-500 text-white shadow-sm'
-                      : 'bg-white border-gray-200 text-gray-600'
-                  }`}
-                >
-                  {list.name}
-                </button>
-              );
-            })}
-          </div>
-          <button
-            onClick={() => setListModal({ mode: 'add', list: null })}
-            aria-label="リストを追加"
-            className="flex-none text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition"
-          >
-            <Plus size={20} />
-          </button>
-          {selected && (
-            <button
-              onClick={() => setListModal({ mode: 'edit', list: selected })}
-              aria-label="リストの設定"
-              className="flex-none text-gray-400 p-2 rounded-full hover:bg-gray-100 transition"
-            >
-              <Settings2 size={20} />
-            </button>
-          )}
+      {/* 上段（固定）: リストの切り替えだけ。お店の出し入れは枠の側で行う。 */}
+      <div className="shrink-0 flex items-center gap-2 pb-3 mb-3 border-b border-gray-200">
+        {/* リストは1つずつ枠を持たせて切れ目を出す。 */}
+        <div role="tablist" aria-label="リストの切り替え" className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto">
+          {lists.map((list) => {
+            const current = list.id === selected?.id;
+            return (
+              <button
+                key={list.id}
+                type="button"
+                role="tab"
+                aria-selected={current}
+                onClick={() => setSelectedListId(list.id)}
+                className={`flex-none min-h-9 px-3.5 rounded-xl text-sm font-bold border transition ${
+                  current
+                    ? 'bg-blue-500 border-blue-500 text-white shadow-sm'
+                    : 'bg-white border-gray-200 text-gray-600'
+                }`}
+              >
+                {list.name}
+              </button>
+            );
+          })}
         </div>
-
-        {/* グループのチップ。絞り込みと追加先を兼ねる（お店にいる間はそこだけを見る）。 */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+        <button
+          onClick={() => setListModal({ mode: 'add', list: null })}
+          aria-label="リストを追加"
+          className="flex-none text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition"
+        >
+          <Plus size={20} />
+        </button>
+        {selected && (
           <button
-            type="button"
-            onClick={() => setGroupFilter('all')}
-            className={`flex-none text-xs font-bold px-3 py-1.5 rounded-full border transition ${
-              activeFilter === 'all'
-                ? 'bg-blue-50 border-blue-300 text-blue-600'
-                : 'bg-white border-gray-200 text-gray-500'
-            }`}
+            onClick={() => setListModal({ mode: 'edit', list: selected })}
+            aria-label="リストの設定"
+            className="flex-none text-gray-400 p-2 rounded-full hover:bg-gray-100 transition"
           >
-            すべて
+            <Settings2 size={20} />
           </button>
-          {listGroups.map((group) => (
-            <button
-              key={group.id}
-              type="button"
-              onClick={() => setGroupFilter(group.id)}
-              className={`flex-none text-xs font-bold px-3 py-1.5 rounded-full border transition ${
-                activeFilter === group.id
-                  ? 'bg-blue-50 border-blue-300 text-blue-600'
-                  : 'bg-white border-gray-200 text-gray-500'
-              }`}
-            >
-              {group.name}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setNewGroupName('')}
-            aria-label={`${selected?.groupLabel ?? 'グループ'}を追加`}
-            className="flex-none text-gray-400 border border-dashed border-gray-300 rounded-full px-3 py-1.5 hover:bg-gray-50 transition"
-          >
-            <Plus size={14} />
-          </button>
-        </div>
-
-        {newGroupName !== null && (
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') submitGroup();
-                if (e.key === 'Escape') setNewGroupName(null);
-              }}
-              autoFocus
-              placeholder={`${selected?.groupLabel ?? 'グループ'}の名前（例: イオン）`}
-              className="flex-1 min-w-0 border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500"
-            />
-            <button
-              onClick={submitGroup}
-              disabled={!newGroupName.trim()}
-              className="flex-none text-sm font-bold text-blue-600 px-2 py-2 disabled:text-gray-300"
-            >
-              追加
-            </button>
-            <button
-              onClick={() => setNewGroupName(null)}
-              aria-label="やめる"
-              className="flex-none text-gray-400 p-2"
-            >
-              <X size={18} />
-            </button>
-          </div>
         )}
       </div>
 
-      {/* 下段（スクロール）: 項目の一覧 */}
-      <div className="flex-1 overflow-y-auto">
-        {activeFilter === 'all' && listGroups.length > 0 ? (
-          <div className="space-y-3">
+      {/* 下段（スクロール）: 枠の一覧 */}
+      <div className="flex-1 overflow-y-auto space-y-3">
+        {/* グループを作っていないリストは、枠1つのただのチェックリストになる。 */}
+        {listGroups.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {undoneItems.map((item) => (
+              <ItemRow
+                key={item.id}
+                item={item}
+                onToggle={() => onToggleItem(item.id)}
+                onOpen={() => setDetailItem(item)}
+                onDelete={() => onDeleteItem(item.id)}
+              />
+            ))}
+            <AddRow
+              label="追加"
+              placeholder="追加する項目"
+              onSubmit={(title) => selected && onAddItem(selected.id, null, title)}
+            />
+          </div>
+        ) : (
+          <>
             {listGroups.map((group) => {
               const groupItems = undoneItems.filter((item) => item.groupId === group.id);
               return (
                 <section key={group.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="flex items-center justify-between pl-3 pr-1.5 py-2 bg-gray-50 border-b border-gray-200">
-                    <h3 className="text-xs font-bold text-gray-700">
+                  {/* 名前は枠の中の一番上に小さく置くだけにする。帯で強く見出しにすると、
+                      枠がいくつも並んだときに名前のほうが目立って中身が読みにくい。 */}
+                  <div className="flex items-center justify-between pl-3 pr-1 pt-2 pb-1">
+                    <span className="text-xs font-bold text-gray-500">
                       {group.name}
-                      {groupItems.length > 0 && <span className="ml-1.5 text-gray-400">{groupItems.length}</span>}
-                    </h3>
+                      {groupItems.length > 0 && <span className="ml-1.5 font-normal text-gray-400">{groupItems.length}</span>}
+                    </span>
                     <button
                       onClick={() => deleteGroupWithConfirm(group)}
                       aria-label={`${group.name}を削除`}
-                      className="text-gray-400 hover:text-red-500 p-1.5"
+                      className="text-gray-300 hover:text-red-500 p-1.5"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -395,7 +338,8 @@ export default function ListTab({
                       onDelete={() => onDeleteItem(item.id)}
                     />
                   ))}
-                  <AddItemRow
+                  <AddRow
+                    label="追加"
                     placeholder={`${group.name}に追加`}
                     onSubmit={(title) => selected && onAddItem(selected.id, group.id, title)}
                   />
@@ -403,52 +347,43 @@ export default function ListTab({
               );
             })}
 
-            {/* 未分類はグループに入れていない項目があるときだけ出す（分けていないリストでは不要）。 */}
-            {undoneItems.some((item) => item.groupId === null) && (
+            {/* どの枠にも入れていない項目があるときだけ出す。 */}
+            {ungroupedItems.length > 0 && (
               <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <h3 className="text-xs font-bold text-gray-500 px-3 py-2 bg-gray-50 border-b border-gray-200">未分類</h3>
-                {undoneItems
-                  .filter((item) => item.groupId === null)
-                  .map((item) => (
-                    <ItemRow
-                      key={item.id}
-                      item={item}
-                      onToggle={() => onToggleItem(item.id)}
-                      onOpen={() => setDetailItem(item)}
-                      onDelete={() => onDeleteItem(item.id)}
-                    />
-                  ))}
-                <AddItemRow
+                <div className="pl-3 pt-2 pb-1">
+                  <span className="text-xs font-bold text-gray-400">未分類</span>
+                </div>
+                {ungroupedItems.map((item) => (
+                  <ItemRow
+                    key={item.id}
+                    item={item}
+                    onToggle={() => onToggleItem(item.id)}
+                    onOpen={() => setDetailItem(item)}
+                    onDelete={() => onDeleteItem(item.id)}
+                  />
+                ))}
+                <AddRow
+                  label="追加"
                   placeholder="追加する項目"
                   onSubmit={(title) => selected && onAddItem(selected.id, null, title)}
                 />
               </section>
             )}
-          </div>
-        ) : (
-          // グループで分けていないリストと、お店で絞り込んでいるとき。
-          // 項目が無くても打ち込む欄は出す（Keepと同じく、空のリストにもすぐ足せるように）。
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            {undoneItems.map((item) => (
-              <ItemRow
-                key={item.id}
-                item={item}
-                onToggle={() => onToggleItem(item.id)}
-                onOpen={() => setDetailItem(item)}
-                onDelete={() => onDeleteItem(item.id)}
-              />
-            ))}
-            <AddItemRow
-              placeholder={addTargetName ? `${addTargetName}に追加` : '追加する項目'}
-              onSubmit={(title) =>
-                selected && onAddItem(selected.id, activeFilter === 'all' ? null : activeFilter, title)
-              }
-            />
-          </div>
+          </>
+        )}
+
+        {/* 枠そのものを足す。お店が増えたらここから作る。 */}
+        {selected && (
+          <AddRow
+            tone="outlined"
+            label={`${groupLabel}を追加`}
+            placeholder={`${groupLabel}の名前（例: イオン）`}
+            onSubmit={(name) => onAddGroup(selected.id, name)}
+          />
         )}
 
         {doneItems.length > 0 && (
-          <section className="mt-3 bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className={`flex items-center justify-between px-2 py-1.5 bg-gray-50 ${showDone ? 'border-b border-gray-200' : ''}`}>
               <button
                 onClick={() => setShowDone((prev) => !prev)}
@@ -460,7 +395,6 @@ export default function ListTab({
               {selected && (
                 <button
                   onClick={() => {
-                    // 絞り込んでいてもリスト全体の完了分が対象になるため、リスト名を出して確かめる。
                     if (!window.confirm(`「${selected.name}」の完了した項目をすべて削除しますか？`)) return;
                     onClearDone(selected.id);
                   }}
@@ -507,7 +441,7 @@ export default function ListTab({
         key={detailItem?.id ?? 'none'}
         item={detailItem}
         groups={listGroups}
-        groupLabel={selected?.groupLabel ?? 'グループ'}
+        groupLabel={groupLabel}
         onClose={() => setDetailItem(null)}
         onSubmit={(item, draft) => {
           onUpdateItem(item, draft);
