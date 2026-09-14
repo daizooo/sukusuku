@@ -109,6 +109,7 @@ import {
   deleteList as deleteListApi,
   insertGroup,
   insertItem,
+  updateGroupName,
   insertList,
   loadLists,
   seedDefaultLists,
@@ -1046,6 +1047,18 @@ export default function SukusukuApp({
     }
   };
 
+  const renameGroupHandler = async (id: string, name: string) => {
+    const previous = listGroups;
+    setListGroups((prev) => prev.map((g) => (g.id === id ? { ...g, name } : g)));
+    try {
+      await updateGroupName(supabase, id, name);
+    } catch (err) {
+      console.error('Failed to rename list group:', err);
+      setListGroups(previous);
+      alert('名前の変更に失敗しました。もう一度お試しください。');
+    }
+  };
+
   // グループを消しても中の項目は消さず、未分類へ落とす（買い忘れを生まないため）。
   const deleteGroupHandler = async (id: string) => {
     const previous = { groups: listGroups, items: listItems };
@@ -1218,6 +1231,7 @@ export default function SukusukuApp({
               onUpdateList={updateListHandler}
               onDeleteList={deleteListHandler}
               onAddGroup={addGroupHandler}
+              onRenameGroup={renameGroupHandler}
               onDeleteGroup={deleteGroupHandler}
               onAddItem={addItemHandler}
               onToggleItem={toggleItemHandler}

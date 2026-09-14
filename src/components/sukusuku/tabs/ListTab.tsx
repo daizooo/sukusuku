@@ -22,6 +22,7 @@ interface ListTabProps {
   onUpdateList: (list: ListBoard, draft: ListDraft) => void;
   onDeleteList: (id: string) => void;
   onAddGroup: (listId: string, name: string) => void;
+  onRenameGroup: (id: string, name: string) => void;
   onDeleteGroup: (id: string) => void;
   onAddItem: (listId: string, groupId: string | null, title: string) => void;
   onToggleItem: (id: string) => void;
@@ -82,6 +83,7 @@ export default function ListTab({
   onUpdateList,
   onDeleteList,
   onAddGroup,
+  onRenameGroup,
   onDeleteGroup,
   onAddItem,
   onToggleItem,
@@ -233,26 +235,6 @@ export default function ListTab({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={draftTitle}
-            onChange={(e) => setDraftTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') submitItem();
-            }}
-            placeholder={addTargetName ? `${addTargetName}に追加` : '追加する項目'}
-            className="flex-1 min-w-0 border border-gray-300 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-          />
-          <button
-            onClick={submitItem}
-            disabled={!draftTitle.trim()}
-            className="flex-none bg-blue-500 text-white rounded-xl px-4 py-2.5 text-sm font-bold active:bg-blue-600 transition disabled:bg-gray-300"
-          >
-            追加
-          </button>
-        </div>
-
         {/* グループのチップ。絞り込みと追加先を兼ねる（お店にいる間はそこだけを見る）。 */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
           <button
@@ -320,6 +302,26 @@ export default function ListTab({
             </button>
           </div>
         )}
+
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={draftTitle}
+            onChange={(e) => setDraftTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submitItem();
+            }}
+            placeholder={addTargetName ? `${addTargetName}に追加` : '追加する項目'}
+            className="flex-1 min-w-0 border border-gray-300 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+          />
+          <button
+            onClick={submitItem}
+            disabled={!draftTitle.trim()}
+            className="flex-none bg-blue-500 text-white rounded-xl px-4 py-2.5 text-sm font-bold active:bg-blue-600 transition disabled:bg-gray-300"
+          >
+            追加
+          </button>
+        </div>
       </div>
 
       {/* 下段（スクロール）: 項目の一覧 */}
@@ -343,9 +345,9 @@ export default function ListTab({
                     <button
                       onClick={() => deleteGroupWithConfirm(group)}
                       aria-label={`${group.name}を削除`}
-                      className="text-gray-300 hover:text-red-400 p-1.5"
+                      className="text-gray-400 hover:text-red-500 p-1.5"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={16} />
                     </button>
                   </div>
                   {groupItems.length === 0 ? (
@@ -436,6 +438,9 @@ export default function ListTab({
         key={`${listModal?.mode}-${listModal?.list?.id ?? 'new'}`}
         mode={listModal?.mode ?? null}
         list={listModal?.list ?? null}
+        groups={listGroups}
+        onRenameGroup={onRenameGroup}
+        onDeleteGroup={deleteGroupWithConfirm}
         onClose={() => setListModal(null)}
         onSubmit={(draft) => {
           if (listModal?.mode === 'edit' && listModal.list) onUpdateList(listModal.list, draft);

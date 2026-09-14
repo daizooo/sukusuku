@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Trash2, X } from 'lucide-react';
-import type { ListBoard } from '@/types/app';
+import type { ListBoard, ListGroup } from '@/types/app';
 
 // リストそのものの追加・編集。
 // 「グループの呼び名」を持つのがこの画面の肝で、買い出しなら「お店」、
@@ -24,13 +24,75 @@ const NAME_EMOJIS = ['🛒', '🧺', '📝', '✅', '🎁', '🏥', '🍼', '�
 interface ListFormModalProps {
   mode: 'add' | 'edit' | null;
   list: ListBoard | null;
+  /** 編集中のリストのグループ。ここで名前を直したり消したりできる。 */
+  groups?: ListGroup[];
   onClose: () => void;
   onSubmit: (draft: ListDraft) => void;
   onDelete?: (id: string) => void;
+  onRenameGroup?: (id: string, name: string) => void;
+  onDeleteGroup?: (group: ListGroup) => void;
+}
+
+/**
+ * グループ1件の行。名前は打つたびに保存すると重いので、入力中は手元で持ち、
+ * 入力を終えた（フォーカスが外れた）ときにだけ保存する。
+ */
+function GroupRow({
+  group,
+  onRename,
+  onDelete,
+}: {
+  group: ListGroup;
+  onRename: (id: string, name: string) => void;
+  onDelete: (group: ListGroup) => void;
+}) {
+  const [name, setName] = useState(group.name);
+
+  const commit = () => {
+    const next = name.trim();
+    // 空のまま確定させると、どのお店だったのか分からなくなるため元に戻す。
+    if (!next) {
+      setName(group.name);
+      return;
+    }
+    if (next !== group.name) onRename(group.id, next);
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+        }}
+        className="flex-1 min-w-0 border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500"
+      />
+      <button
+        type="button"
+        onClick={() => onDelete(group)}
+        aria-label={`${group.name}を削除`}
+        className="flex-none text-gray-400 hover:text-red-500 p-2"
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+  );
 }
 
 // 呼び出し側で key={mode + list?.id} を指定し、対象が変わるたびに再マウントして初期値を計算し直す前提
-export default function ListFormModal({ mode, list, onClose, onSubmit, onDelete }: ListFormModalProps) {
+export default function ListFormModal({
+  mode,
+  list,
+  groups = [],
+  onClose,
+  onSubmit,
+  onDelete,
+  onRenameGroup,
+  onDeleteGroup,
+}: ListFormModalProps) {
   const [draft, setDraft] = useState<ListDraft>(() =>
     mode === 'edit' && list
       ? { name: list.name, groupLabel: list.groupLabel }
@@ -111,6 +173,24 @@ export default function ListFormModal({ mode, list, onClose, onSubmit, onDelete 
               区切りを作らなければ、ただのチェックリストとして使えます。
             </p>
           </div>
+
+          {/* 一覧の見出しからも消せるが、絞り込み中は見出しが出ないため、
+              いつでも触れるここにも置く。 */}
+          {mode === 'edit' && groups.length > 0 && onRenameGroup && onDeleteGroup && (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                {(draft.groupLabel.trim() || DEFAULT_GROUP_LABEL)}の一覧
+              </label>
+              <div className="space-y-2">
+                {groups.map((group) => (
+                  <GroupRow key={group.id} group={group} onRename={onRenameGroup} onDelete={onDeleteGroup} />
+                ))}
+              </div>
+              <p className="text-[10px] text-gray-400 mt-1.5">
+                名前は入力を終えると保存されます。消しても中の項目は「未分類」に残ります。
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="px-5 py-3 pb-8 sm:pb-3 border-t shrink-0">
