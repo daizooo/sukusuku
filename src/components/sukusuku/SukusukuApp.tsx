@@ -116,6 +116,10 @@ import {
   updateItem as updateItemApi,
   updateItemDone,
   updateList as updateListApi,
+  updateGroupPositions,
+  updateItemPositions,
+  updateListPinned,
+  updateListPositions,
 } from '@/lib/api/lists';
 
 import HomeTab from './tabs/HomeTab';
@@ -1036,6 +1040,64 @@ export default function SukusukuApp({
     }
   };
 
+  // 一覧の先頭に固定するかを切り替える（Google Keepのピン止め）。
+  const toggleListPinHandler = async (list: ListBoard) => {
+    const pinned = !list.pinned;
+    setLists((prev) => prev.map((l) => (l.id === list.id ? { ...l, pinned } : l)));
+    try {
+      await updateListPinned(supabase, list.id, pinned);
+    } catch (err) {
+      console.error('Failed to update list pin:', err);
+      setLists((prev) => prev.map((l) => (l.id === list.id ? list : l)));
+      alert('固定の切り替えに失敗しました。もう一度お試しください。');
+    }
+  };
+
+  /** 並べ替えの反映。渡された順を position として手元にも当てる。 */
+  function applyPositions<T extends { id: string; position: number }>(rows: T[], orderedIds: string[]): T[] {
+    const positions = new Map(orderedIds.map((id, index) => [id, index]));
+    return rows.map((row) => {
+      const position = positions.get(row.id);
+      return position === undefined ? row : { ...row, position };
+    });
+  }
+
+  const reorderListsHandler = async (orderedIds: string[]) => {
+    const previous = lists;
+    setLists((prev) => applyPositions(prev, orderedIds));
+    try {
+      await updateListPositions(supabase, orderedIds);
+    } catch (err) {
+      console.error('Failed to reorder lists:', err);
+      setLists(previous);
+      alert('並べ替えの保存に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const reorderGroupsHandler = async (orderedIds: string[]) => {
+    const previous = listGroups;
+    setListGroups((prev) => applyPositions(prev, orderedIds));
+    try {
+      await updateGroupPositions(supabase, orderedIds);
+    } catch (err) {
+      console.error('Failed to reorder list groups:', err);
+      setListGroups(previous);
+      alert('並べ替えの保存に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const reorderItemsHandler = async (orderedIds: string[]) => {
+    const previous = listItems;
+    setListItems((prev) => applyPositions(prev, orderedIds));
+    try {
+      await updateItemPositions(supabase, orderedIds);
+    } catch (err) {
+      console.error('Failed to reorder list items:', err);
+      setListItems(previous);
+      alert('並べ替えの保存に失敗しました。もう一度お試しください。');
+    }
+  };
+
   const addGroupHandler = async (listId: string, name: string) => {
     const position = listGroups.filter((g) => g.listId === listId).length;
     try {
@@ -1239,6 +1301,10 @@ export default function SukusukuApp({
               onDeleteItem={deleteItemHandler}
               onClearDone={clearDoneItemsHandler}
               onAddDefaultLists={addDefaultListsHandler}
+              onToggleListPin={toggleListPinHandler}
+              onReorderLists={reorderListsHandler}
+              onReorderGroups={reorderGroupsHandler}
+              onReorderItems={reorderItemsHandler}
             />
           )}
           {activeTab === 'log' && (

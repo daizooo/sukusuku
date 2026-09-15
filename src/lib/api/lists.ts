@@ -12,6 +12,7 @@ const rowToList = (row: ListRow): ListBoard => ({
   id: row.id,
   name: row.name,
   groupLabel: row.group_label,
+  pinned: row.is_pinned,
   position: row.position,
 });
 
@@ -49,6 +50,8 @@ export async function loadLists(supabase: SupabaseDb, familyId: string): Promise
     .from('lists')
     .select('*')
     .eq('family_id', familyId)
+    // 固定したリストが先。中は position の順（画面側の並びと同じ）。
+    .order('is_pinned', { ascending: false })
     .order('position', { ascending: true })
     .order('created_at', { ascending: true });
   if (listError) throw listError;
@@ -107,6 +110,43 @@ export async function updateList(supabase: SupabaseDb, list: ListBoard): Promise
     .update({ name: list.name, group_label: list.groupLabel, position: list.position })
     .eq('id', list.id);
   if (error) throw error;
+}
+
+/** 一覧の先頭に固定するかを切り替える。並び順（position）はそのまま残す。 */
+export async function updateListPinned(supabase: SupabaseDb, id: string, pinned: boolean): Promise<void> {
+  const { error } = await supabase.from('lists').update({ is_pinned: pinned }).eq('id', id);
+  if (error) throw error;
+}
+
+/**
+ * 並べ替えの保存。渡された順に position を 0,1,2... と振り直す。
+ *
+ * 件数はリストで数個・項目でも数十件なので、1件ずつ更新しても十分に速い。
+ * まとめて upsert すると他の列まで送ることになり、同時に触った相手の
+ * 変更を戻してしまうため採らない。
+ */
+async function updatePositions(
+  supabase: SupabaseDb,
+  table: 'lists' | 'list_groups' | 'list_items',
+  orderedIds: string[],
+): Promise<void> {
+  const results = await Promise.all(
+    orderedIds.map((id, position) => supabase.from(table).update({ position }).eq('id', id)),
+  );
+  const failed = results.find((result) => result.error);
+  if (failed?.error) throw failed.error;
+}
+
+export function updateListPositions(supabase: SupabaseDb, orderedIds: string[]): Promise<void> {
+  return updatePositions(supabase, 'lists', orderedIds);
+}
+
+export function updateGroupPositions(supabase: SupabaseDb, orderedIds: string[]): Promise<void> {
+  return updatePositions(supabase, 'list_groups', orderedIds);
+}
+
+export function updateItemPositions(supabase: SupabaseDb, orderedIds: string[]): Promise<void> {
+  return updatePositions(supabase, 'list_items', orderedIds);
 }
 
 /** リストを消すとグループ・項目も消える（外部キーの on delete cascade）。 */

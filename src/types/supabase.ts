@@ -419,6 +419,7 @@ export type Database = {
           family_id: string
           group_label: string
           id: string
+          is_pinned: boolean
           name: string
           position: number
         }
@@ -427,6 +428,7 @@ export type Database = {
           family_id: string
           group_label?: string
           id?: string
+          is_pinned?: boolean
           name: string
           position?: number
         }
@@ -435,6 +437,7 @@ export type Database = {
           family_id?: string
           group_label?: string
           id?: string
+          is_pinned?: boolean
           name?: string
           position?: number
         }
