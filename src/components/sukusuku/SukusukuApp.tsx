@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import dynamic from 'next/dynamic';
 import {
   Home,
@@ -185,13 +185,44 @@ const describeError = (err: unknown): string => {
 };
 
 // 「今日」('YYYY-MM-DD')の取得は useSyncExternalStore 経由にする。
-// 時間の経過でしか変わらず、変化を知らせてくれるイベントは存在しないため購読は何もしない。
 // これにより、SSR/初回hydrationはサーバーが確定させた値（getServerSnapshot）で揃い、
 // hydration後はクライアントのローカル日時（getSnapshot）に切り替わる。
 // new Date() を直接 useState/useMemo の初期値にすると、SSR時点とhydration時点で
 // 「今日」の評価タイミング・タイムゾーンがずれ得て、描画結果が食い違いhydration
 // mismatchになるため、この仕組みで回避する。
-const noopSubscribe = () => () => {};
+//
+// 「今日」は時間の経過でしか変わらず、変化を知らせてくれるイベントは存在しない。
+// そのため次の0:00にタイマーを張り、自分で日付の変わり目を知らせる。
+// （夜中の授乳で使うアプリなので、開いたまま日付をまたぐことがふつうにある。
+//  知らせずにいると前の日を「今日」として出し続け、その日付で記録してしまう。）
+const subscribeTodayDateString = (onStoreChange: () => void) => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleNextMidnight = () => {
+    const now = new Date();
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    // 0:00ちょうどだとまだ前の日と判定されることがあるため、少し過ぎてから見る。
+    timer = setTimeout(() => {
+      onStoreChange();
+      scheduleNextMidnight();
+    }, nextMidnight.getTime() - now.getTime() + 1000);
+  };
+  scheduleNextMidnight();
+  // 画面が消えている・アプリを閉じている間はタイマーが間引かれて動かないため、
+  // 戻ってきたときにも確かめる。
+  const handleWakeUp = () => {
+    if (document.visibilityState !== 'visible') return;
+    onStoreChange();
+    if (timer !== undefined) clearTimeout(timer);
+    scheduleNextMidnight();
+  };
+  document.addEventListener('visibilitychange', handleWakeUp);
+  window.addEventListener('focus', handleWakeUp);
+  return () => {
+    if (timer !== undefined) clearTimeout(timer);
+    document.removeEventListener('visibilitychange', handleWakeUp);
+    window.removeEventListener('focus', handleWakeUp);
+  };
+};
 const getClientTodayDateString = (): string => toDateString(new Date());
 
 interface SukusukuAppProps {
@@ -240,7 +271,9 @@ export default function SukusukuApp({
 
   const [logs, setLogs] = useState<CareLog[]>([]);
   // 記録タブで表示中の日（1日区切りで過去に遡れる）
-  const [logDate, setLogDate] = useState(() => startOfDay(new Date()));
+  // SSRとhydrationで食い違わないよう、サーバーが確定させた「今日」から始める。
+  // 端末のローカル日時とずれていた場合や日付が変わった場合は、下の useEffect で追従する。
+  const [logDate, setLogDate] = useState(() => parseDateString(todayDateString) ?? startOfDay(new Date()));
   // 取得済みの日。表示中の日と一致していなければ読み込み中とみなす
   const [loadedLogDate, setLoadedLogDate] = useState<Date | null>(null);
   const isLoadingLogs = loadedLogDate?.getTime() !== logDate.getTime();
@@ -285,12 +318,27 @@ export default function SukusukuApp({
 
   // 「今日」は日付が変わらない限り同じ参照を使う（useMemo の依存に安全に渡せるようにするため）。
   // SSR/初回hydrationはサーバーが確定させた todayDateString、hydration後はクライアントの
-  // ローカル日時に切り替わる（詳細は noopSubscribe 付近のコメントを参照）。
-  const todayDateStringSynced = useSyncExternalStore(noopSubscribe, getClientTodayDateString, () => todayDateString);
+  // ローカル日時に切り替わる（詳細は subscribeTodayDateString 付近のコメントを参照）。
+  const todayDateStringSynced = useSyncExternalStore(
+    subscribeTodayDateString,
+    getClientTodayDateString,
+    () => todayDateString,
+  );
   const today = useMemo(
     () => parseDateString(todayDateStringSynced) ?? startOfDay(new Date()),
     [todayDateStringSynced],
   );
+
+  // 日付が変わったら、今日を見ていた記録タブも新しい今日へ送る。
+  // （前の日のまま置いていくと、夜中の記録が前の日に付いてしまう。
+  //  遡って過去の日を見ているときは、そのまま見ていられるよう動かさない。）
+  const previousTodayRef = useRef(today);
+  useEffect(() => {
+    const previousToday = previousTodayRef.current;
+    if (previousToday.getTime() === today.getTime()) return;
+    previousTodayRef.current = today;
+    setLogDate((current) => (isSameDay(current, previousToday) ? today : current));
+  }, [today]);
 
   const [newTask, setNewTask] = useState<TaskDraft>(() => emptyTaskDraft(today));
 
