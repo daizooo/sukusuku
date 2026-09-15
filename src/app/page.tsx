@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { listTasks } from '@/lib/api/tasks';
-import { toDateString } from '@/lib/dateUtils';
+import { toDateStringInTimeZone } from '@/lib/dateUtils';
 import { OPEN_LOG_PARAM, TAB_PARAM, parseLogType, parseTabId } from '@/lib/appLinks';
 import SukusukuApp from '@/components/sukusuku/SukusukuApp';
 
@@ -39,7 +39,9 @@ export default async function Home({ searchParams }: HomeProps) {
   // 「今日」をサーバー側で確定させてクライアントへ渡す。
   // クライアント側で new Date() を独自に評価すると、サーバーとクライアントで
   // 「今日」がずれてhydration mismatchになるため（SukusukuApp側で詳細をコメント）。
-  const todayDateString = toDateString(new Date());
+  // サーバーのローカルタイムはUTCなので、日本時間基準で日付を出す
+  // （そのままだと日本の 0:00〜9:00 の間は前の日が「今日」になってしまう）。
+  const todayDateString = toDateStringInTimeZone(new Date());
 
   // 開く場所をURLから決める。画面を更新したときに見ていたタブへ戻すのと、
   // 通知のタップからその用件の画面へ直接開くのを、同じ仕組みでまかなう。

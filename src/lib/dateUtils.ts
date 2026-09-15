@@ -22,6 +22,27 @@ export const parseDateString = (dateStr: string): Date | null => {
   return isNaN(date.getTime()) ? null : date;
 };
 
+/**
+ * 「今日」を決めるときの基準のタイムゾーン。
+ *
+ * サーバー(Vercel)のNodeランタイムのローカルタイムはUTCなので、サーバー側で
+ * new Date() から日付を取ると、日本の 0:00〜9:00 の間は前の日になってしまう
+ * （例: 日本時間 9/15 の朝5時 → UTCでは 9/14 20:00 → 「今日は9月14日」）。
+ * サーバー側で日付を出すときは必ずこのタイムゾーンを基準にする。
+ */
+export const APP_TIME_ZONE = 'Asia/Tokyo';
+
+// Date を指定したタイムゾーン基準の 'YYYY-MM-DD' へ。
+// ブラウザ側はその端末のローカルタイムでよいので toDateString を使い、
+// 端末の時計を持たないサーバー側だけこちらを使う。
+export const toDateStringInTimeZone = (date: Date, timeZone: string = APP_TIME_ZONE): string =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+
 // Date を 'YYYY-MM-DD' へ（ローカルタイム基準）
 export const toDateString = (date: Date): string => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
