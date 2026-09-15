@@ -239,6 +239,8 @@ export interface ListBoard {
    * 見出しと絞り込みの文言に使う。
    */
   groupLabel: string;
+  /** 一覧の先頭に固定するか（Google Keepのピン止めと同じ）。 */
+  pinned: boolean;
   position: number;
 }
 

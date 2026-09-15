@@ -1,8 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ArrowLeft, Check, ChevronDown, ChevronRight, Plus, Settings2, Trash2, X } from 'lucide-react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Pin, PinOff, Plus, Settings2, Trash2, X } from 'lucide-react';
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
+import { useDragReorder } from '../ui/useDragReorder';
 import ListFormModal, { type ListDraft } from '../modals/ListFormModal';
 import ListItemDetailModal, { type ListItemDraft } from '../modals/ListItemDetailModal';
 
@@ -17,6 +19,10 @@ import ListItemDetailModal, { type ListItemDraft } from '../modals/ListItemDetai
  * カードを押すとそのリストだけの画面になり、そこで項目やグループを足す。
  *
  * スクロールするのはカード/枠の一覧だけで、見出しや戻るは上に固定する。
+ *
+ * 並べ替えとピン止めもKeepに合わせる。よく開くリストは一覧の先頭へ固定でき、
+ * 並び順は**長押ししてそのまま動かす**（モードにも矢印にも入らない）。
+ * 仕組みは ui/useDragReorder.ts。動かせるのは同じ枠の中だけ。
  */
 interface ListTabProps {
   lists: ListBoard[];
@@ -35,6 +41,11 @@ interface ListTabProps {
   onDeleteItem: (id: string) => void;
   onClearDone: (listId: string) => void;
   onAddDefaultLists: () => void;
+  onToggleListPin: (list: ListBoard) => void;
+  /** 並べ替えの保存。渡した順に position を振り直す。 */
+  onReorderLists: (orderedIds: string[]) => void;
+  onReorderGroups: (orderedIds: string[]) => void;
+  onReorderItems: (orderedIds: string[]) => void;
 }
 
 /** チェックの丸。押した先が分かるよう、未完了でも枠は出しておく。 */
@@ -59,14 +70,27 @@ function ItemRow({
   onToggle,
   onOpen,
   onDelete,
+  attachRef,
+  onGrab,
+  dragging,
 }: {
   item: ListItem;
   onToggle: () => void;
   onOpen: () => void;
   onDelete: () => void;
+  /** 長押しで動かすための持ち手。完了した項目には渡さない（並びを持たない）。 */
+  attachRef?: (el: HTMLElement | null) => void;
+  onGrab?: (event: ReactPointerEvent<HTMLElement>) => void;
+  dragging?: boolean;
 }) {
   return (
-    <div className="flex items-start gap-2 pl-3 pr-1 py-2.5 border-b border-gray-100 last:border-b-0">
+    <div
+      ref={attachRef}
+      onPointerDown={onGrab}
+      className={`flex items-start gap-2 pl-3 pr-1 py-2.5 border-b border-gray-100 last:border-b-0 ${
+        dragging ? 'relative z-20 bg-white rounded-lg shadow-lg' : ''
+      }`}
+    >
       <ItemCheck done={item.done} onToggle={onToggle} label={`${item.title}を${item.done ? '戻す' : '完了にする'}`} />
       <button type="button" onClick={onOpen} className="flex-1 min-w-0 text-left">
         <span className={`block text-sm break-words ${item.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
@@ -169,6 +193,12 @@ function AddRow({
 /** 一覧のカードに出す行数。多すぎるとカードが伸びて1画面に収まらない。 */
 const OVERVIEW_ROWS = 6;
 
+/** 長押しで動かせる枠（セクション）。動かせるのは同じ枠の中だけ。 */
+const LISTS_PINNED = 'lists:pinned';
+const LISTS_OTHER = 'lists:other';
+const GROUPS = 'groups';
+const itemsSection = (groupId: string | null) => `items:${groupId ?? 'none'}`;
+
 type OverviewRow =
   | { type: 'group'; key: string; name: string }
   | { type: 'item'; key: string; item: ListItem };
@@ -182,11 +212,20 @@ function ListOverviewCard({
   groups,
   items,
   onOpen,
+  onTogglePin,
+  attachRef,
+  onGrab,
+  dragging,
 }: {
   list: ListBoard;
   groups: ListGroup[];
   items: ListItem[];
   onOpen: () => void;
+  onTogglePin: () => void;
+  /** 長押しで動かすための持ち手。カード全体をつかめるようにする。 */
+  attachRef: (el: HTMLElement | null) => void;
+  onGrab: (event: ReactPointerEvent<HTMLElement>) => void;
+  dragging: boolean;
 }) {
   const undone = items.filter((item) => !item.done);
   const rows: OverviewRow[] = [];
@@ -213,13 +252,18 @@ function ListOverviewCard({
   const rest = rows.length - shown.length;
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="w-full text-left bg-white rounded-xl border border-gray-200 overflow-hidden hover:border-gray-300 transition"
+    /* ピンは「開く」の中に入れられない（ボタンの入れ子になる）ため、
+       カードを枠にして、開く部分と並べて置く。長押しはこの枠でつかむ。 */
+    <div
+      ref={attachRef}
+      onPointerDown={onGrab}
+      className={`relative bg-white rounded-xl border border-gray-200 overflow-hidden select-none ${
+        dragging ? 'z-20 shadow-xl border-blue-300' : ''
+      }`}
     >
+      <button type="button" onClick={onOpen} className="w-full text-left block hover:border-gray-300 transition">
       {/* 見出し（リスト名）は帯にして、中身と一目で分かれるようにする。 */}
-      <h3 className="px-3 py-2 bg-gray-50 border-b border-gray-200 text-[13px] font-bold text-gray-900 break-words">
+      <h3 className="px-3 py-2 pr-9 bg-gray-50 border-b border-gray-200 text-[13px] font-bold text-gray-900 break-words">
         {list.name}
       </h3>
       <div className="px-3 py-2">
@@ -243,7 +287,20 @@ function ListOverviewCard({
         {rows.length === 0 && <p className="text-xs text-gray-300 py-1">項目なし</p>}
         {rest > 0 && <p className="text-[11px] text-gray-400 pt-1.5">+{rest}件</p>}
       </div>
-    </button>
+      </button>
+      {/* よく開くリストを上に固定する（Keepのピン止め）。 */}
+      <button
+        type="button"
+        onClick={onTogglePin}
+        aria-label={`${list.name}の固定を${list.pinned ? '外す' : 'する'}`}
+        aria-pressed={list.pinned}
+        className={`absolute top-1 right-1 p-1.5 rounded-full transition ${
+          list.pinned ? 'text-blue-600' : 'text-gray-300 hover:text-gray-500'
+        }`}
+      >
+        {list.pinned ? <Pin size={15} fill="currentColor" /> : <PinOff size={15} />}
+      </button>
+    </div>
   );
 }
 
@@ -264,6 +321,10 @@ export default function ListTab({
   onDeleteItem,
   onClearDone,
   onAddDefaultLists,
+  onToggleListPin,
+  onReorderLists,
+  onReorderGroups,
+  onReorderItems,
 }: ListTabProps) {
   // nullのあいだはリストを並べた一覧を出す。カードを押すとそのリストを開く。
   const [openListId, setOpenListId] = useState<string | null>(null);
@@ -271,20 +332,83 @@ export default function ListTab({
   const [listModal, setListModal] = useState<{ mode: 'add' | 'edit'; list: ListBoard | null } | null>(null);
   const [detailItem, setDetailItem] = useState<ListItem | null>(null);
 
+  // 固定したリストが先。中は並び順（position）で、同じなら読み込んだ順のまま。
+  const sortedLists = useMemo(
+    () => [...lists].sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.position - b.position),
+    [lists],
+  );
+  const pinnedLists = useMemo(() => sortedLists.filter((list) => list.pinned), [sortedLists]);
+  const otherLists = useMemo(() => sortedLists.filter((list) => !list.pinned), [sortedLists]);
+
   // 開いていたリストが消えたときは一覧へ戻す。
   const selected = lists.find((list) => list.id === openListId) ?? null;
   const listGroups = useMemo(
-    () => (selected ? groups.filter((group) => group.listId === selected.id) : []),
+    () =>
+      selected
+        ? groups.filter((group) => group.listId === selected.id).sort((a, b) => a.position - b.position)
+        : [],
     [groups, selected],
   );
   const listItems = useMemo(
-    () => (selected ? items.filter((item) => item.listId === selected.id) : []),
+    () =>
+      selected
+        ? items.filter((item) => item.listId === selected.id).sort((a, b) => a.position - b.position)
+        : [],
     [items, selected],
   );
 
   const undoneItems = listItems.filter((item) => !item.done);
   const doneItems = listItems.filter((item) => item.done);
   const ungroupedItems = undoneItems.filter((item) => item.groupId === null);
+
+  /**
+   * 長押しで動かしたあとの保存。枠（セクション）ごとに宛先を分ける。
+   * リストは固定とその他をつないだ「画面の並び」で振り直す。
+   */
+  const drag = useDragReorder((sectionKey, orderedIds) => {
+    if (sectionKey === LISTS_PINNED) onReorderLists([...orderedIds, ...otherLists.map((list) => list.id)]);
+    else if (sectionKey === LISTS_OTHER) onReorderLists([...pinnedLists.map((list) => list.id), ...orderedIds]);
+    else if (sectionKey === GROUPS) onReorderGroups(orderedIds);
+    else onReorderItems(orderedIds);
+  });
+
+  const overviewCards = (sectionKey: string, section: ListBoard[]) => {
+    const arranged = drag.arrange(sectionKey, section);
+    return arranged.map((list) => (
+      <ListOverviewCard
+        key={list.id}
+        list={list}
+        /* 並べ替えたあとも一覧の中身が同じ順で出るよう、ここでも position で並べる。 */
+        groups={groups.filter((group) => group.listId === list.id).sort((a, b) => a.position - b.position)}
+        items={items.filter((item) => item.listId === list.id).sort((a, b) => a.position - b.position)}
+        onOpen={() => setOpenListId(list.id)}
+        onTogglePin={() => onToggleListPin(list)}
+        attachRef={drag.dragRef(list.id)}
+        onGrab={drag.handleProps(sectionKey, arranged, list.id).onPointerDown}
+        dragging={drag.isDragging(list.id)}
+      />
+    ));
+  };
+
+  /** 項目の行。長押しで動かせるよう、行そのものを持ち手にする。 */
+  const itemRows = (sectionKey: string, rows: ListItem[]) => {
+    const arranged = drag.arrange(sectionKey, rows);
+    return arranged.map((item) => (
+      <ItemRow
+        key={item.id}
+        item={item}
+        onToggle={() => onToggleItem(item.id)}
+        onOpen={() => setDetailItem(item)}
+        onDelete={() => onDeleteItem(item.id)}
+        attachRef={drag.dragRef(item.id)}
+        onGrab={drag.handleProps(sectionKey, arranged, item.id).onPointerDown}
+        dragging={drag.isDragging(item.id)}
+      />
+    ));
+  };
+
+  /** 持ち上げた項目が枠からはみ出して切れないよう、そのあいだだけ枠を開ける。 */
+  const lifting = (rows: ListItem[]) => rows.some((item) => drag.isDragging(item.id));
 
   const deleteGroupWithConfirm = (group: ListGroup) => {
     const count = listItems.filter((item) => item.groupId === group.id).length;
@@ -335,25 +459,36 @@ export default function ListTab({
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       {!selected ? (
-        /* 一覧（スクロール）: Keepと同じく全部のリストをカードで並べる。2列にして1画面に4〜5つ入れる。 */
-        <div className="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-3 items-start gap-3 content-start">
-          {lists.map((list) => (
-            <ListOverviewCard
-              key={list.id}
-              list={list}
-              groups={groups.filter((group) => group.listId === list.id)}
-              items={items.filter((item) => item.listId === list.id)}
-              onOpen={() => setOpenListId(list.id)}
-            />
-          ))}
-          <button
-            type="button"
-            onClick={() => setListModal({ mode: 'add', list: null })}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-5 text-sm text-gray-400 border border-dashed border-gray-300 rounded-xl hover:bg-gray-50 transition"
-          >
-            <Plus size={16} className="flex-none" />
-            リストを追加
-          </button>
+        /* 一覧: Keepと同じく全部のリストをカードで並べる。2列にして1画面に4〜5つ入れる。
+           固定したものは上にまとめ、並べ替えは切り替えてから上下ボタンで動かす。 */
+        <div className="flex-1 overflow-y-auto">
+          {pinnedLists.length > 0 && (
+            <>
+              <h3 className="flex items-center gap-1 text-[11px] font-bold text-gray-400 pb-1.5">
+                <Pin size={11} fill="currentColor" />
+                固定
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 items-start gap-3 content-start">
+                {overviewCards(LISTS_PINNED, pinnedLists)}
+              </div>
+              {otherLists.length > 0 && <h3 className="text-[11px] font-bold text-gray-400 pt-4 pb-1.5">その他</h3>}
+            </>
+          )}
+          <div className="grid grid-cols-2 md:grid-cols-3 items-start gap-3 content-start">
+            {overviewCards(LISTS_OTHER, otherLists)}
+            <button
+              type="button"
+              onClick={() => setListModal({ mode: 'add', list: null })}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-5 text-sm text-gray-400 border border-dashed border-gray-300 rounded-xl hover:bg-gray-50 transition"
+            >
+              <Plus size={16} className="flex-none" />
+              リストを追加
+            </button>
+          </div>
+          {/* 長押しで動かせることは見ただけでは分からないので、小さく添える。 */}
+          {sortedLists.length > 1 && (
+            <p className="text-[10px] text-gray-300 text-center pt-3">長押しで並べ替え</p>
+          )}
         </div>
       ) : (
       <>
@@ -383,16 +518,10 @@ export default function ListTab({
       <div className="flex-1 overflow-y-auto space-y-3">
         {/* グループを作っていないリストは、枠1つのただのチェックリストになる。 */}
         {listGroups.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            {undoneItems.map((item) => (
-              <ItemRow
-                key={item.id}
-                item={item}
-                onToggle={() => onToggleItem(item.id)}
-                onOpen={() => setDetailItem(item)}
-                onDelete={() => onDeleteItem(item.id)}
-              />
-            ))}
+          <div
+            className={`bg-white rounded-xl border border-gray-200 ${lifting(undoneItems) ? '' : 'overflow-hidden'}`}
+          >
+            {itemRows(itemsSection(null), undoneItems)}
             <AddRow
               divided={undoneItems.length > 0}
               label="追加"
@@ -402,11 +531,21 @@ export default function ListTab({
           </div>
         ) : (
           <>
-            {listGroups.map((group) => {
+            {drag.arrange(GROUPS, listGroups).map((group) => {
               const groupItems = undoneItems.filter((item) => item.groupId === group.id);
               return (
-                <section key={group.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="flex items-center justify-between pl-3 pr-1.5 py-2 bg-gray-100 border-b border-gray-200">
+                <section
+                  key={group.id}
+                  ref={drag.dragRef(group.id)}
+                  className={`bg-white rounded-xl border border-gray-200 ${
+                    lifting(groupItems) ? '' : 'overflow-hidden'
+                  } ${drag.isDragging(group.id) ? 'relative z-20 shadow-xl border-blue-300' : ''}`}
+                >
+                  {/* 枠そのものは見出しを長押しして動かす（中の項目と取り合いにならない）。 */}
+                  <div
+                    {...drag.handleProps(GROUPS, drag.arrange(GROUPS, listGroups), group.id)}
+                    className="flex items-center justify-between pl-3 pr-1.5 py-2 bg-gray-100 border-b border-gray-200 select-none"
+                  >
                     <h3 className="text-[13px] font-bold text-gray-900">
                       {group.name}
                       {groupItems.length > 0 && <span className="ml-1.5 text-gray-400">{groupItems.length}</span>}
@@ -419,15 +558,7 @@ export default function ListTab({
                       <Trash2 size={16} />
                     </button>
                   </div>
-                  {groupItems.map((item) => (
-                    <ItemRow
-                      key={item.id}
-                      item={item}
-                      onToggle={() => onToggleItem(item.id)}
-                      onOpen={() => setDetailItem(item)}
-                      onDelete={() => onDeleteItem(item.id)}
-                    />
-                  ))}
+                  {itemRows(itemsSection(group.id), groupItems)}
                   <AddRow
                     divided={groupItems.length > 0}
                     label="追加"
@@ -440,17 +571,13 @@ export default function ListTab({
 
             {/* どの枠にも入れていない項目があるときだけ出す。 */}
             {ungroupedItems.length > 0 && (
-              <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <section
+                className={`bg-white rounded-xl border border-gray-200 ${
+                  lifting(ungroupedItems) ? '' : 'overflow-hidden'
+                }`}
+              >
                 <h3 className="text-[13px] font-bold text-gray-500 px-3 py-2 bg-gray-100 border-b border-gray-200">未分類</h3>
-                {ungroupedItems.map((item) => (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    onToggle={() => onToggleItem(item.id)}
-                    onOpen={() => setDetailItem(item)}
-                    onDelete={() => onDeleteItem(item.id)}
-                  />
-                ))}
+                {itemRows(itemsSection(null), ungroupedItems)}
                 <AddRow
                   divided
                   label="追加"
@@ -505,6 +632,11 @@ export default function ListTab({
                 />
               ))}
           </section>
+        )}
+
+        {/* 長押しで動かせることは見ただけでは分からないので、小さく添える。 */}
+        {(undoneItems.length > 1 || listGroups.length > 1) && (
+          <p className="text-[10px] text-gray-300 text-center pt-1">長押しで並べ替え</p>
         )}
       </div>
       </>
