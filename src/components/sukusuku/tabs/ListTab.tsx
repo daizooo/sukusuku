@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Plus, Settings2, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Plus, Settings2, Trash2, X } from 'lucide-react';
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
 import ListFormModal, { type ListDraft } from '../modals/ListFormModal';
 import ListItemDetailModal, { type ListItemDraft } from '../modals/ListItemDetailModal';
@@ -13,7 +13,10 @@ import ListItemDetailModal, { type ListItemDraft } from '../modals/ListItemDetai
  * 枠があり、枠は一覧の中で足せる・消せる。項目もその枠の中で足せる・消せる。
  * どのグループに足すかは「その枠で打つ」ことで決まるので、追加先を選ぶ手順はない。
  *
- * スクロールするのは枠の一覧だけで、リストの切り替えは上に固定する。
+ * 開いたときはKeepと同じく**全部のリストがカードで並ぶ**（1画面に4〜5つ見える）。
+ * カードを押すとそのリストだけの画面になり、そこで項目やグループを足す。
+ *
+ * スクロールするのはカード/枠の一覧だけで、見出しや戻るは上に固定する。
  */
 interface ListTabProps {
   lists: ListBoard[];
@@ -159,6 +162,79 @@ function AddRow({
   );
 }
 
+/** 一覧のカードに出す行数。多すぎるとカードが伸びて1画面に収まらない。 */
+const OVERVIEW_ROWS = 6;
+
+type OverviewRow =
+  | { type: 'group'; key: string; name: string }
+  | { type: 'item'; key: string; item: ListItem };
+
+/**
+ * 一覧（Keepのメモ一覧に当たる面）に出す1リストのカード。
+ * 中身は読むだけにして、チェックや追加は開いた先で行う（押し間違いを避ける）。
+ */
+function ListOverviewCard({
+  list,
+  groups,
+  items,
+  onOpen,
+}: {
+  list: ListBoard;
+  groups: ListGroup[];
+  items: ListItem[];
+  onOpen: () => void;
+}) {
+  const undone = items.filter((item) => !item.done);
+  const rows: OverviewRow[] = [];
+  const pushItems = (target: ListItem[]) => {
+    target.forEach((item) => rows.push({ type: 'item', key: item.id, item }));
+  };
+
+  if (groups.length === 0) {
+    pushItems(undone);
+  } else {
+    groups.forEach((group) => {
+      // 中身が無いグループも、どの枠を作ったか分かるよう名前だけ出す。
+      rows.push({ type: 'group', key: group.id, name: group.name });
+      pushItems(undone.filter((item) => item.groupId === group.id));
+    });
+    const ungrouped = undone.filter((item) => item.groupId === null);
+    if (ungrouped.length > 0) {
+      rows.push({ type: 'group', key: `${list.id}-none`, name: '未分類' });
+      pushItems(ungrouped);
+    }
+  }
+
+  const shown = rows.slice(0, OVERVIEW_ROWS);
+  const rest = rows.length - shown.length;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full text-left bg-white rounded-xl border border-gray-200 p-3 hover:border-gray-300 transition"
+    >
+      <h3 className="text-sm font-bold text-gray-800 break-words">{list.name}</h3>
+      <div className="mt-2 space-y-1">
+        {shown.map((row) =>
+          row.type === 'group' ? (
+            <p key={row.key} className="text-[11px] font-bold text-gray-500 break-words pt-0.5">
+              {row.name}
+            </p>
+          ) : (
+            <div key={row.key} className="flex items-start gap-1.5">
+              <span className="flex-none mt-[3px] w-3.5 h-3.5 rounded border border-gray-300" />
+              <span className="flex-1 min-w-0 text-xs text-gray-700 break-words line-clamp-2">{row.item.title}</span>
+            </div>
+          ),
+        )}
+        {rows.length === 0 && <p className="text-xs text-gray-300">項目なし</p>}
+        {rest > 0 && <p className="text-[11px] text-gray-400 pt-0.5">+{rest}件</p>}
+      </div>
+    </button>
+  );
+}
+
 export default function ListTab({
   lists,
   groups,
@@ -177,13 +253,14 @@ export default function ListTab({
   onClearDone,
   onAddDefaultLists,
 }: ListTabProps) {
-  const [selectedListId, setSelectedListId] = useState<string | null>(null);
+  // nullのあいだはリストを並べた一覧を出す。カードを押すとそのリストを開く。
+  const [openListId, setOpenListId] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
   const [listModal, setListModal] = useState<{ mode: 'add' | 'edit'; list: ListBoard | null } | null>(null);
   const [detailItem, setDetailItem] = useState<ListItem | null>(null);
 
-  // 選んでいたリストが消えたときは先頭のリストへ戻す。
-  const selected = lists.find((list) => list.id === selectedListId) ?? lists[0] ?? null;
+  // 開いていたリストが消えたときは一覧へ戻す。
+  const selected = lists.find((list) => list.id === openListId) ?? null;
   const listGroups = useMemo(
     () => (selected ? groups.filter((group) => group.listId === selected.id) : []),
     [groups, selected],
@@ -245,37 +322,40 @@ export default function ListTab({
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
-      {/* 上段（固定）: リストの切り替えだけ。お店の出し入れは枠の側で行う。 */}
-      <div className="shrink-0 flex items-center gap-2 pb-3 mb-3 border-b border-gray-200">
-        {/* リストは1つずつ枠を持たせて切れ目を出す。 */}
-        <div role="tablist" aria-label="リストの切り替え" className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto">
-          {lists.map((list) => {
-            const current = list.id === selected?.id;
-            return (
-              <button
-                key={list.id}
-                type="button"
-                role="tab"
-                aria-selected={current}
-                onClick={() => setSelectedListId(list.id)}
-                className={`flex-none min-h-9 px-3.5 rounded-xl text-sm font-bold border transition ${
-                  current
-                    ? 'bg-blue-500 border-blue-500 text-white shadow-sm'
-                    : 'bg-white border-gray-200 text-gray-600'
-                }`}
-              >
-                {list.name}
-              </button>
-            );
-          })}
+      {!selected ? (
+        /* 一覧（スクロール）: Keepと同じく全部のリストをカードで並べる。2列にして1画面に4〜5つ入れる。 */
+        <div className="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-3 items-start gap-3 content-start">
+          {lists.map((list) => (
+            <ListOverviewCard
+              key={list.id}
+              list={list}
+              groups={groups.filter((group) => group.listId === list.id)}
+              items={items.filter((item) => item.listId === list.id)}
+              onOpen={() => setOpenListId(list.id)}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() => setListModal({ mode: 'add', list: null })}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-5 text-sm text-gray-400 border border-dashed border-gray-300 rounded-xl hover:bg-gray-50 transition"
+          >
+            <Plus size={16} className="flex-none" />
+            リストを追加
+          </button>
         </div>
+      ) : (
+      <>
+      {/* 上段（固定）: 開いているリストの名前と戻る。一覧のときは何も置かず高さを使わない。 */}
+      <div className="shrink-0 flex items-center gap-1 pb-3 mb-3 border-b border-gray-200">
         <button
-          onClick={() => setListModal({ mode: 'add', list: null })}
-          aria-label="リストを追加"
-          className="flex-none text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition"
+          type="button"
+          onClick={() => setOpenListId(null)}
+          aria-label="リストの一覧へ戻る"
+          className="flex-none text-gray-500 p-2 -ml-2 rounded-full hover:bg-gray-100 transition"
         >
-          <Plus size={20} />
+          <ArrowLeft size={20} />
         </button>
+        <h2 className="flex-1 min-w-0 px-1 text-base font-bold text-gray-800 truncate">{selected?.name}</h2>
         {selected && (
           <button
             onClick={() => setListModal({ mode: 'edit', list: selected })}
@@ -412,6 +492,8 @@ export default function ListTab({
           </section>
         )}
       </div>
+      </>
+      )}
 
       <ListFormModal
         key={`${listModal?.mode}-${listModal?.list?.id ?? 'new'}`}
@@ -429,6 +511,7 @@ export default function ListTab({
         onDelete={(id) => {
           if (!window.confirm('このリストを削除しますか？\n中の項目もすべて消えます。')) return;
           onDeleteList(id);
+          setOpenListId(null);
           setListModal(null);
         }}
       />
