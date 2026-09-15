@@ -98,14 +98,18 @@ function AddRow({
   placeholder,
   onSubmit,
   tone = 'plain',
+  divided = false,
 }: {
   label: string;
   placeholder: string;
   onSubmit: (value: string) => void;
   /** 枠そのものを足す行は、項目の追加と見分けられるよう破線にする。 */
   tone?: 'plain' | 'outlined';
+  /** 上に項目が並んでいるときは、線を引いて区切る。 */
+  divided?: boolean;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const divider = divided ? 'border-t border-gray-200' : '';
 
   if (draft === null) {
     return (
@@ -113,7 +117,7 @@ function AddRow({
         type="button"
         onClick={() => setDraft('')}
         className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-400 hover:bg-gray-50 transition ${
-          tone === 'outlined' ? 'border border-dashed border-gray-300 rounded-xl justify-center' : ''
+          tone === 'outlined' ? 'border border-dashed border-gray-300 rounded-xl justify-center' : divider
         }`}
       >
         <Plus size={16} className="flex-none" />
@@ -132,7 +136,7 @@ function AddRow({
   return (
     <div
       className={`flex items-center gap-2 pl-3 pr-1 py-1.5 ${
-        tone === 'outlined' ? 'border border-dashed border-gray-300 rounded-xl' : ''
+        tone === 'outlined' ? 'border border-dashed border-gray-300 rounded-xl' : divider
       }`}
     >
       <input
@@ -212,24 +216,36 @@ function ListOverviewCard({
     <button
       type="button"
       onClick={onOpen}
-      className="w-full text-left bg-white rounded-xl border border-gray-200 p-3 hover:border-gray-300 transition"
+      className="w-full text-left bg-white rounded-xl border border-gray-200 overflow-hidden hover:border-gray-300 transition"
     >
-      <h3 className="text-sm font-bold text-gray-800 break-words">{list.name}</h3>
-      <div className="mt-2 space-y-1">
-        {shown.map((row) =>
+      {/* 見出し（リスト名）は帯にして、中身と一目で分かれるようにする。 */}
+      <h3 className="px-3 py-2 bg-gray-50 border-b border-gray-200 text-[13px] font-bold text-gray-900 break-words">
+        {list.name}
+      </h3>
+      <div className="px-3 py-2">
+        {shown.map((row, index) =>
           row.type === 'group' ? (
-            <p key={row.key} className="text-[11px] font-bold text-gray-500 break-words pt-0.5">
-              {row.name}
-            </p>
+            /* グループ名は文字の大きさではなく形で分ける（項目と読み違えないように）。 */
+            <div key={row.key} className={index === 0 ? '' : 'pt-2'}>
+              <span className="inline-block max-w-full truncate text-[10px] font-bold text-gray-600 bg-gray-100 rounded px-1.5 py-0.5">
+                {row.name}
+              </span>
+            </div>
           ) : (
-            <div key={row.key} className="flex items-start gap-1.5">
+            <div
+              key={row.key}
+              // 項目どうしは細い線で区切る。グループ名のすぐ下と先頭には線を引かない。
+              className={`flex items-start gap-1.5 py-1 ${
+                shown[index - 1]?.type === 'item' ? 'border-t border-gray-100' : ''
+              }`}
+            >
               <span className="flex-none mt-[3px] w-3.5 h-3.5 rounded border border-gray-300" />
               <span className="flex-1 min-w-0 text-xs text-gray-700 break-words line-clamp-2">{row.item.title}</span>
             </div>
           ),
         )}
-        {rows.length === 0 && <p className="text-xs text-gray-300">項目なし</p>}
-        {rest > 0 && <p className="text-[11px] text-gray-400 pt-0.5">+{rest}件</p>}
+        {rows.length === 0 && <p className="text-xs text-gray-300 py-1">項目なし</p>}
+        {rest > 0 && <p className="text-[11px] text-gray-400 pt-1.5">+{rest}件</p>}
       </div>
     </button>
   );
@@ -382,6 +398,7 @@ export default function ListTab({
               />
             ))}
             <AddRow
+              divided={undoneItems.length > 0}
               label="追加"
               placeholder="追加する項目"
               onSubmit={(title) => selected && onAddItem(selected.id, null, title)}
@@ -393,8 +410,8 @@ export default function ListTab({
               const groupItems = undoneItems.filter((item) => item.groupId === group.id);
               return (
                 <section key={group.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="flex items-center justify-between pl-3 pr-1.5 py-2 bg-gray-50 border-b border-gray-200">
-                    <h3 className="text-xs font-bold text-gray-700">
+                  <div className="flex items-center justify-between pl-3 pr-1.5 py-2 bg-gray-100 border-b border-gray-200">
+                    <h3 className="text-[13px] font-bold text-gray-900">
                       {group.name}
                       {groupItems.length > 0 && <span className="ml-1.5 text-gray-400">{groupItems.length}</span>}
                     </h3>
@@ -416,6 +433,7 @@ export default function ListTab({
                     />
                   ))}
                   <AddRow
+                    divided={groupItems.length > 0}
                     label="追加"
                     placeholder={`${group.name}に追加`}
                     onSubmit={(title) => selected && onAddItem(selected.id, group.id, title)}
@@ -427,7 +445,7 @@ export default function ListTab({
             {/* どの枠にも入れていない項目があるときだけ出す。 */}
             {ungroupedItems.length > 0 && (
               <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <h3 className="text-xs font-bold text-gray-500 px-3 py-2 bg-gray-50 border-b border-gray-200">未分類</h3>
+                <h3 className="text-[13px] font-bold text-gray-500 px-3 py-2 bg-gray-100 border-b border-gray-200">未分類</h3>
                 {ungroupedItems.map((item) => (
                   <ItemRow
                     key={item.id}
@@ -438,6 +456,7 @@ export default function ListTab({
                   />
                 ))}
                 <AddRow
+                  divided
                   label="追加"
                   placeholder="追加する項目"
                   onSubmit={(title) => selected && onAddItem(selected.id, null, title)}
