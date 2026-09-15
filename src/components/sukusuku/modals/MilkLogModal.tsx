@@ -5,7 +5,6 @@ import { Check, Minus, Pause, Play, Plus, RotateCcw } from 'lucide-react';
 import type { BreastSide, FeedingMethod, MilkLog, NursingPhase, PumpedBatch } from '@/types/app';
 import {
   BREAST_MINUTE_OPTIONS,
-  MILK_AMOUNT_OPTIONS,
   formatBatchTime,
   formatStopwatch,
   getNursingPhaseLabel,
@@ -88,7 +87,6 @@ const SIDE_OPTIONS: { value: BreastSide; label: string }[] = [
 const setOrder = (startSide: BreastSide): NursingPhase[] =>
   startSide === 'right' ? ['right', 'left', 'burp'] : ['left', 'right', 'burp'];
 
-const AMOUNT_OPTIONS = MILK_AMOUNT_OPTIONS.map((ml) => ({ value: ml, label: String(ml) }));
 const MINUTE_OPTIONS = BREAST_MINUTE_OPTIONS.map((min) => ({ value: min, label: String(min) }));
 
 /** ボタンに無い分数（計測した端数や、止め忘れを直した値）だけ直接入力欄に出す。 */
@@ -115,12 +113,10 @@ function MilkLogModalBody({
   onDelete,
 }: MilkLogModalProps) {
   const [method, setMethod] = useState<FeedingMethod>(log?.method ?? initialMethod ?? 'breast');
-  const [amountMl, setAmountMl] = useState<number>(log?.amountMl ?? 100);
   // 「搾乳」で飲ませる搾乳ストック。編集中なら、その記録が使っているパックを選んだ状態で開く。
   const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>(() => log?.pumpedFrom ?? []);
-  const [customAmount, setCustomAmount] = useState(() =>
-    log?.amountMl && !MILK_AMOUNT_OPTIONS.includes(log.amountMl) ? String(log.amountMl) : '',
-  );
+  // 「ミルク」の量は自由記入のみ。読めない値のままでは保存できないようにする。
+  const [amountInput, setAmountInput] = useState(() => (log?.amountMl ? String(log.amountMl) : ''));
   // 「搾乳」で実際に飲んだ量。飲みきれず量を打ち直したときだけ、この入力欄の側で持つ。
   const [drankInput, setDrankInput] = useState(() =>
     log?.method === 'pumped' && log.discardedMl ? String(log.amountMl ?? 0) : '',
@@ -170,6 +166,12 @@ function MilkLogModalBody({
   const drankTooMuch = drankMl !== null && drankMl > selectedMl;
   const pumpedInvalid = selectedBatches.length === 0 || drankMl === null || drankTooMuch;
 
+  // 自由記入の量(ml)。読めない値を入れている途中は null にして、そのままでは保存できないようにする。
+  const parsedAmount = Number(amountInput);
+  const amountMl =
+    amountInput !== '' && Number.isFinite(parsedAmount) && parsedAmount > 0 ? Math.round(parsedAmount) : null;
+  const formulaInvalid = amountMl === null;
+
   const toggleBatch = (id: string) =>
     setSelectedBatchIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
@@ -184,12 +186,6 @@ function MilkLogModalBody({
   const measuring = showTimer && timer.hasSession;
   const recordedLeft = measuring && !editedLeft ? nursingMinutes(timer.total.left) : (leftMinutes ?? 0);
   const recordedRight = measuring && !editedRight ? nursingMinutes(timer.total.right) : (rightMinutes ?? 0);
-
-  const handleCustomAmount = (value: string) => {
-    setCustomAmount(value);
-    const parsed = Number(value);
-    if (value !== '' && Number.isFinite(parsed) && parsed > 0) setAmountMl(parsed);
-  };
 
   // 分数を手で決め直したときの反映。ボタン・直接入力のどちらからでもここを通る。
   const applyMinutes = (side: BreastSide, minutes: number | undefined, custom: string) => {
@@ -269,6 +265,7 @@ function MilkLogModalBody({
       return;
     }
     if (method === 'formula') {
+      if (amountMl === null) return;
       onSubmit({ ...base, amountMl });
       return;
     }
@@ -317,7 +314,7 @@ function MilkLogModalBody({
           <SubmitButton
             accent="milk"
             onClick={handleSubmit}
-            disabled={method === 'pumped' && pumpedInvalid}
+            disabled={(method === 'pumped' && pumpedInvalid) || (method === 'formula' && formulaInvalid)}
           >
             保存する
           </SubmitButton>
@@ -398,33 +395,18 @@ function MilkLogModalBody({
           )}
         </>
       ) : (
-        <>
-          <div>
-            <FieldLabel>量（ml）</FieldLabel>
-            <OptionGrid
-              options={AMOUNT_OPTIONS}
-              value={customAmount === '' ? amountMl : undefined}
-              onChange={(value) => {
-                setAmountMl(value);
-                setCustomAmount('');
-              }}
-              columns={5}
-              accent="milk"
-            />
-          </div>
-          <label className="block">
-            <FieldLabel>上記以外の量</FieldLabel>
-            <input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              value={customAmount}
-              onChange={(e) => handleCustomAmount(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500"
-              placeholder="ml を直接入力"
-            />
-          </label>
-        </>
+        <label className="block">
+          <FieldLabel>量（ml）</FieldLabel>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            value={amountInput}
+            onChange={(e) => setAmountInput(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500"
+            placeholder="ml を直接入力"
+          />
+        </label>
       )}
 
       <DateTimeField

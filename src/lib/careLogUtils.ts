@@ -16,9 +16,6 @@ import { formatTimeString } from '@/lib/dateUtils';
 
 // --- 選択肢 ---
 
-/** ミルクの量(ml)。20〜200mlを20刻みで。 */
-export const MILK_AMOUNT_OPTIONS = [20, 40, 60, 80, 100, 120, 140, 160, 180, 200];
-
 /** 母乳の授乳時間(分)。0〜30分を5分刻みで。 */
 export const BREAST_MINUTE_OPTIONS = [0, 5, 10, 15, 20, 25, 30];
 
