@@ -225,20 +225,16 @@ function ListOverviewCard({
       <div className="px-3 py-2">
         {shown.map((row, index) =>
           row.type === 'group' ? (
-            /* グループ名は文字の大きさではなく形で分ける（項目と読み違えないように）。 */
-            <div key={row.key} className={index === 0 ? '' : 'pt-2'}>
-              <span className="inline-block max-w-full truncate text-[10px] font-bold text-gray-600 bg-gray-100 rounded px-1.5 py-0.5">
-                {row.name}
-              </span>
-            </div>
-          ) : (
+            /* グループ名は下線で区切る。どこからどこまでが同じ枠かが線で分かる。 */
             <div
               key={row.key}
-              // 項目どうしは細い線で区切る。グループ名のすぐ下と先頭には線を引かない。
-              className={`flex items-start gap-1.5 py-1 ${
-                shown[index - 1]?.type === 'item' ? 'border-t border-gray-100' : ''
-              }`}
+              className={`border-b border-gray-200 pb-1 mb-1.5 ${index === 0 ? '' : 'mt-2.5'}`}
             >
+              <span className="block truncate text-[11px] font-bold text-gray-600">{row.name}</span>
+            </div>
+          ) : (
+            /* 項目どうしは線で区切らない（線が多いと詰まって見える）。 */
+            <div key={row.key} className="flex items-start gap-1.5 py-[3px]">
               <span className="flex-none mt-[3px] w-3.5 h-3.5 rounded border border-gray-300" />
               <span className="flex-1 min-w-0 text-xs text-gray-700 break-words line-clamp-2">{row.item.title}</span>
             </div>
