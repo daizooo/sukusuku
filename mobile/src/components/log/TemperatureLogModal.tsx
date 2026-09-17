@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { TemperatureLog } from '@/types/app';
 import {
   BASELINE_NOTABLE_DIFF,
@@ -22,6 +21,7 @@ import { formatTimeString } from '@/lib/dateUtils';
 import { colors } from '@/lib/theme';
 import { DeleteButton, FieldLabel, HintBanner, NoteField, SubmitButton } from '@/components/ui/form';
 import DateTimeField from '@/components/ui/DateTimeField';
+import LogModalShell from '@/components/log/LogModalShell';
 
 // 体温の記録。Web版には無い、ネイティブから足した記録（docs/what-to-record.md §4-1）。
 //
@@ -111,63 +111,59 @@ function TemperatureLogModalBody({
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{log ? '体温の記録を編集' : '体温を記録'}</Text>
-        <Pressable accessibilityRole="button" onPress={onClose} hitSlop={12}>
-          <Text style={styles.close}>閉じる</Text>
-        </Pressable>
+    <LogModalShell
+      title={log ? '体温の記録を編集' : '体温を記録'}
+      onClose={onClose}
+      footer={
+        <>
+          <SubmitButton accent="temperature" onPress={handleSubmit} disabled={problem !== null}>
+            保存する
+          </SubmitButton>
+          {log && <DeleteButton onPress={onDelete} />}
+        </>
+      }
+    >
+      {/* 何度なら高いのかは子どもによって違うので、入力欄より先にものさしを出す。 */}
+      <Yardstick baseline={baseline} babyName={babyName} />
+
+      {!log && previous && (
+        <HintBanner accent="temperature">
+          前回は {formatCelsius(previous.celsius)}（{formatTimeString(previous.time)}）。
+          その値から始めています。
+        </HintBanner>
+      )}
+
+      <View>
+        <FieldLabel>体温（℃）</FieldLabel>
+        <View style={styles.stepper}>
+          <StepButton label="−" accessibilityLabel="0.1℃下げる" onPress={() => step(-CELSIUS_STEP)} />
+          <View style={styles.valueBox}>
+            <TextInput
+              style={styles.valueInput}
+              value={input}
+              // 端末によっては小数点がカンマで入るので、読める形に直しておく。
+              onChangeText={(value) => setInput(value.replace(',', '.'))}
+              keyboardType="decimal-pad"
+              inputMode="decimal"
+              selectTextOnFocus
+              accessibilityLabel="体温"
+            />
+            <Text style={styles.unit}>℃</Text>
+          </View>
+          <StepButton label="＋" accessibilityLabel="0.1℃上げる" onPress={() => step(CELSIUS_STEP)} />
+        </View>
+        {problem ? (
+          <Text style={styles.errorNote}>{problem}</Text>
+        ) : (
+          <Text style={styles.note}>体温計に出た数字をそのまま入れます。</Text>
+        )}
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {/* 何度なら高いのかは子どもによって違うので、入力欄より先にものさしを出す。 */}
-        <Yardstick baseline={baseline} babyName={babyName} />
+      {celsius !== null && problem === null && <Advice celsius={celsius} baseline={baseline} />}
 
-        {!log && previous && (
-          <HintBanner accent="temperature">
-            前回は {formatCelsius(previous.celsius)}（{formatTimeString(previous.time)}）。
-            その値から始めています。
-          </HintBanner>
-        )}
-
-        <View>
-          <FieldLabel>体温（℃）</FieldLabel>
-          <View style={styles.stepper}>
-            <StepButton label="−" accessibilityLabel="0.1℃下げる" onPress={() => step(-CELSIUS_STEP)} />
-            <View style={styles.valueBox}>
-              <TextInput
-                style={styles.valueInput}
-                value={input}
-                // 端末によっては小数点がカンマで入るので、読める形に直しておく。
-                onChangeText={(value) => setInput(value.replace(',', '.'))}
-                keyboardType="decimal-pad"
-                inputMode="decimal"
-                selectTextOnFocus
-                accessibilityLabel="体温"
-              />
-              <Text style={styles.unit}>℃</Text>
-            </View>
-            <StepButton label="＋" accessibilityLabel="0.1℃上げる" onPress={() => step(CELSIUS_STEP)} />
-          </View>
-          {problem ? (
-            <Text style={styles.errorNote}>{problem}</Text>
-          ) : (
-            <Text style={styles.note}>体温計に出た数字をそのまま入れます。</Text>
-          )}
-        </View>
-
-        {celsius !== null && problem === null && (
-          <Advice celsius={celsius} baseline={baseline} />
-        )}
-
-        <DateTimeField label="日時" value={time} onChange={setTime} maximumDate={new Date()} />
-        <NoteField value={note} onChange={setNote} placeholder="ぐったりしている / 厚着していた など" />
-        <SubmitButton accent="temperature" onPress={handleSubmit} disabled={problem !== null}>
-          保存する
-        </SubmitButton>
-        {log && <DeleteButton onPress={onDelete} />}
-      </ScrollView>
-    </SafeAreaView>
+      <DateTimeField label="日時" value={time} onChange={setTime} maximumDate={new Date()} />
+      <NoteField value={note} onChange={setNote} placeholder="ぐったりしている / 厚着していた など" />
+    </LogModalShell>
   );
 }
 
@@ -295,20 +291,6 @@ function AdviceBanner({ alert, children }: { alert?: boolean; children: ReactNod
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  title: { fontSize: 16, fontWeight: '700', color: colors.text },
-  close: { fontSize: 13, color: colors.textMuted },
-  content: { padding: 16, gap: 16, paddingBottom: 48 },
 
   // 何度なら高いのかのものさし。正常範囲とその子の平熱を横に並べる。
   yardstick: { flexDirection: 'row', gap: 8 },
