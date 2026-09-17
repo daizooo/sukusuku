@@ -1,4 +1,5 @@
 import type { ProfileFieldKey, UserProfile } from '@/types/app';
+import { colors } from '@/lib/theme';
 
 // Web版(`../../../src/lib/uiUtils.ts`)から、ネイティブ側で要るものだけを持ってきたもの。
 // 色やリンクの組み立てはWeb固有なので持ってきていない。
@@ -12,4 +13,40 @@ export const getProfileFieldValue = (profile: UserProfile, key: ProfileFieldKey)
   );
   // keyを持つ項目は内容を1つだけ持つ想定だが、念のため最初の入力済みの内容を返す。
   return field?.values.find((value) => value.trim() !== '') ?? '';
+};
+
+/**
+ * 予定のラベルの色。Web版の `getLabelColor` と同じ割り当て
+ * （パパ=青 / ママ=桃 / 家族=翠 / それ以外=灰）。
+ * Web版はTailwindのクラス名を返すが、こちらは色そのものを返す。
+ */
+export const getLabelColors = (
+  label: string,
+): { background: string; text: string; border: string } => {
+  switch (label) {
+    case 'パパ':
+      return {
+        background: colors.labelPapaSurface,
+        text: colors.labelPapaText,
+        border: colors.labelPapaBorder,
+      };
+    case 'ママ':
+      return {
+        background: colors.labelMamaSurface,
+        text: colors.labelMamaText,
+        border: colors.labelMamaBorder,
+      };
+    case '家族':
+      return {
+        background: colors.labelFamilySurface,
+        text: colors.labelFamilyText,
+        border: colors.labelFamilyBorder,
+      };
+    default:
+      return {
+        background: colors.neutralSurface,
+        text: colors.labelDefaultText,
+        border: colors.border,
+      };
+  }
 };

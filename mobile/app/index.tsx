@@ -1,9 +1,7 @@
 import { Redirect } from 'expo-router';
 
-// アプリを開いたときの入口。
-//
-// PWA版はホームから始まる（src/app/page.tsx の initialTab）。こちらはホームタブを
-// まだ作っていないため、当面は中身のある記録タブへ送る。ホームを作ったらそちらへ変える。
+// アプリを開いたときの入口。PWA版と同じくホームタブから始める
+// （src/app/page.tsx の initialTab）。
 export default function Index() {
-  return <Redirect href="/log" />;
+  return <Redirect href="/home" />;
 }
