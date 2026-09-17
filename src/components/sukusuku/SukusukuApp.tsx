@@ -133,7 +133,7 @@ import type { TemperatureLogInput } from './modals/TemperatureLogModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 import type { NurseryDraft } from './modals/NurseryFormModal';
 import type { ListDraft } from './modals/ListFormModal';
-import type { ListItemDraft } from './modals/ListItemDetailModal';
+import type { ListItemDraft } from './tabs/ListTab';
 
 // 起動直後に表示するのはホームタブだけなので、残りのタブは実際に開かれるまで読み込まない。
 // 特にLogTabは成長グラフのためにrecharts(単体で約350KB)を持ち込むため、静的importのままだと
