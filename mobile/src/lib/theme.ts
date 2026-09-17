@@ -28,6 +28,8 @@ export const colors = {
   // 下のタブバー。Web版の下部ナビと同じ（選択中=blue-500 / それ以外=gray-500）。
   navActive: '#3b82f6', // blue-500
   navInactive: '#6b7280', // gray-500
+  navActiveText: '#2563eb', // blue-600（切り替えで選んでいる方の文字）
+  borderStrongSoft: '#e5e7ebcc', // gray-200/80（切り替えの下地）
 
   // 記録の種類ごとの色。Web版の記録タブと同じ割り当て（ミルク=琥珀・おむつ=青・搾乳=薔薇）。
   // 体温の色。Web版(src/)のTailwindの orange 系と同じ値にそろえてある。
@@ -36,6 +38,7 @@ export const colors = {
   milkBorder: '#fde68a', // amber-200
   milkText: '#b45309', // amber-700
   milkProgress: '#fbbf24', // amber-400（次の授乳までの進み具合）
+  milkMark: '#f59e0b', // amber-500（24時間の帯に出す授乳の印）
   diaper: '#3b82f6', // blue-500
   diaperSurface: '#eff6ff', // blue-50
   diaperBorder: '#bfdbfe', // blue-200
@@ -48,7 +51,18 @@ export const colors = {
   temperatureSurface: '#fff7ed', // orange-50
   temperatureBorder: '#fed7aa', // orange-200
   temperatureText: '#c2410c', // orange-700
+  sunday: '#ef4444', // red-500（カレンダーの日曜）
+  milestone: '#d97706', // amber-600（節目の日の小さな文字）
+  milestoneSurface: '#fffbeb', // amber-50（節目の札）
+  milestoneBorder: '#fde68a', // amber-200
+  milestoneText: '#b45309', // amber-700
+  doneSurface: '#dcfce7', // green-100（完了済の札）
+  doneText: '#15803d', // green-700
+  noteSurface: '#eff6ff80', // blue-50/50（予定の詳細のメモ）
+  noteText: '#1e40af', // blue-800
+  noteBody: '#1e3a8a', // blue-900
   alertSurface: '#fee2e2', // red-100
   alertText: '#b91c1c', // red-700
   neutralSurface: '#f3f4f6', // gray-100
+  borderFaint: '#e5e7ebb3', // gray-200/70（帯の細かい目盛り）
 } as const;
