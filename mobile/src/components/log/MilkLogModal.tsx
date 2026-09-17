@@ -1,13 +1,5 @@
 import { useState } from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type {
   BreastSide,
   FeedingMethod,
@@ -46,6 +38,7 @@ import {
   SubmitButton,
 } from '@/components/ui/form';
 import DateTimeField from '@/components/ui/DateTimeField';
+import LogModalShell from '@/components/log/LogModalShell';
 
 // 授乳・ミルクの記録。Web版の `src/components/sukusuku/modals/MilkLogModal.tsx` を
 // React Nativeに置き換えたもの。入力の順序・既定値・保存する中身は同じにしてある。
@@ -300,17 +293,29 @@ function MilkLogModalBody({
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{log ? '授乳・ミルクの記録を編集' : '授乳・ミルクを記録'}</Text>
-        <Pressable accessibilityRole="button" onPress={onClose} hitSlop={12}>
-          <Text style={styles.close}>閉じる</Text>
-        </Pressable>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Segmented options={METHOD_OPTIONS} value={method} onChange={setMethod} />
-
+    <LogModalShell
+      title={log ? '授乳の記録を編集' : '授乳を記録'}
+      onClose={onClose}
+      // 母乳/搾乳/ミルクの切り替えは、選び直したときに動かないよう一番上に固定しておく。
+      subheader={
+        <>
+          <FieldLabel>種類</FieldLabel>
+          <Segmented options={METHOD_OPTIONS} value={method} onChange={setMethod} />
+        </>
+      }
+      footer={
+        <>
+          <SubmitButton
+            accent="milk"
+            onPress={handleSubmit}
+            disabled={method === 'pumped' && pumpedInvalid}
+          >
+            保存する
+          </SubmitButton>
+          {log && <DeleteButton onPress={onDelete} />}
+        </>
+      }
+    >
         {method === 'breast' ? (
           <>
             {!log && nextSide && (
@@ -414,18 +419,9 @@ function MilkLogModalBody({
           </>
         )}
 
-        <DateTimeField label="日時" value={time} onChange={setTime} maximumDate={new Date()} />
-        <NoteField value={note} onChange={setNote} placeholder="よく飲んだ / 途中で寝た など" />
-        <SubmitButton
-          accent="milk"
-          onPress={handleSubmit}
-          disabled={method === 'pumped' && pumpedInvalid}
-        >
-          保存する
-        </SubmitButton>
-        {log && <DeleteButton onPress={onDelete} />}
-      </ScrollView>
-    </SafeAreaView>
+      <DateTimeField label="日時" value={time} onChange={setTime} maximumDate={new Date()} />
+      <NoteField value={note} onChange={setNote} placeholder="よく飲んだ / 途中で寝た など" />
+    </LogModalShell>
   );
 }
 
@@ -783,20 +779,6 @@ function NursingSetTimer({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  title: { fontSize: 16, fontWeight: '700', color: colors.text },
-  close: { fontSize: 14, color: colors.textMuted },
-  content: { padding: 16, gap: 16, paddingBottom: 40 },
   note: { fontSize: 11, color: colors.textFaint, marginTop: 6, lineHeight: 16 },
   customMinutes: { marginTop: 6 },
 

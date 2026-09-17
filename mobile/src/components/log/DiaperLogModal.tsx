@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Modal } from 'react-native';
 import type { DiaperKind, DiaperLog, PoopColor, PoopConsistency } from '@/types/app';
 import { DIAPER_KIND_OPTIONS } from '@/lib/careLogUtils';
-import { colors } from '@/lib/theme';
 import { DeleteButton, FieldLabel, NoteField, Segmented, SubmitButton } from '@/components/ui/form';
 import DateTimeField from '@/components/ui/DateTimeField';
+import LogModalShell from '@/components/log/LogModalShell';
 
 // おむつの記録。PWA版の `src/components/sukusuku/modals/DiaperLogModal.tsx` を
 // React Nativeに置き換えたもの。入力の順序・既定値・保存する中身は同じにしてある。
@@ -81,51 +80,27 @@ function DiaperLogModalBody({
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{log ? 'おむつの記録を編集' : 'おむつを記録'}</Text>
-        <Pressable accessibilityRole="button" onPress={onClose} hitSlop={12}>
-          <Text style={styles.close}>閉じる</Text>
-        </Pressable>
-      </View>
-
-      {/* おしっこ/うんちの切り替えは、選び直したときに動かないよう上に固定しておく。 */}
-      <View style={styles.subheader}>
-        <FieldLabel>種類</FieldLabel>
-        <Segmented options={KIND_OPTIONS} value={kind} onChange={setKind} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <DateTimeField label="日時" value={time} onChange={setTime} maximumDate={new Date()} />
-        <NoteField value={note} onChange={setNote} placeholder="色が気になる / ゆるめ など" />
-        <SubmitButton accent="diaper" onPress={handleSubmit}>
-          保存する
-        </SubmitButton>
-        {log && <DeleteButton onPress={onDelete} />}
-      </ScrollView>
-    </SafeAreaView>
+    <LogModalShell
+      title={log ? 'おむつの記録を編集' : 'おむつを記録'}
+      onClose={onClose}
+      // おしっこ/うんちの切り替えは、選び直したときに動かないよう上に固定しておく。
+      subheader={
+        <>
+          <FieldLabel>種類</FieldLabel>
+          <Segmented options={KIND_OPTIONS} value={kind} onChange={setKind} />
+        </>
+      }
+      footer={
+        <>
+          <SubmitButton accent="diaper" onPress={handleSubmit}>
+            保存する
+          </SubmitButton>
+          {log && <DeleteButton onPress={onDelete} />}
+        </>
+      }
+    >
+      <DateTimeField label="日時" value={time} onChange={setTime} maximumDate={new Date()} />
+      <NoteField value={note} onChange={setNote} placeholder="色が気になる / ゆるめ など" />
+    </LogModalShell>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  title: { fontSize: 16, fontWeight: '700', color: colors.text },
-  close: { fontSize: 14, color: colors.textMuted },
-  subheader: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 4,
-    backgroundColor: colors.background,
-  },
-  content: { padding: 16, gap: 16, paddingBottom: 40 },
-});
