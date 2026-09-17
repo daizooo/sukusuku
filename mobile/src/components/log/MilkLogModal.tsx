@@ -8,18 +8,32 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { BreastSide, FeedingMethod, MilkLog, PumpedBatch } from '@/types/app';
+import type {
+  BreastSide,
+  FeedingMethod,
+  MilkLog,
+  NursingPhase,
+  PumpedBatch,
+} from '@/types/app';
 import {
   BREAST_MINUTE_OPTIONS,
   MILK_AMOUNT_OPTIONS,
   formatBatchTime,
   formatStopwatch,
+  getNursingPhaseLabel,
   getSideLabel,
   pumpedStockMl,
   selectablePumpedBatches,
   sumBatchesMl,
 } from '@/lib/careLogUtils';
-import { nursingMinutes, type NursingTimer } from '@/lib/nursingTimer';
+import {
+  NURSING_PHASE_MINUTES,
+  NURSING_PHASE_MS,
+  NURSING_PHASES,
+  nursingMinutes,
+  type NursingPhaseValues,
+  type NursingTimer,
+} from '@/lib/nursingTimer';
 import { colors } from '@/lib/theme';
 import {
   DeleteButton,
@@ -77,6 +91,13 @@ const SIDE_OPTIONS: { value: BreastSide; label: string }[] = [
   { value: 'right', label: '右' },
 ];
 
+/**
+ * 1セットで測る順番。前回の続き（おすすめの側）から始めて、反対側、最後にゲップ。
+ * 順番はあくまで目安なので、どの区切りからでもタップして測れる。
+ */
+const setOrder = (startSide: BreastSide): NursingPhase[] =>
+  startSide === 'right' ? ['right', 'left', 'burp'] : ['left', 'right', 'burp'];
+
 const AMOUNT_OPTIONS = MILK_AMOUNT_OPTIONS.map((ml) => ({ value: ml, label: String(ml) }));
 const MINUTE_OPTIONS = BREAST_MINUTE_OPTIONS.map((min) => ({ value: min, label: String(min) }));
 
@@ -121,8 +142,9 @@ function MilkLogModalBody({
   // 計測した時間があれば、開き直したときもその値から始める。
   const measured = !log && timer.hasSession;
   // 未選択と「0分」を区別するため、初期値は undefined にしておく。
-  const initialLeft = log?.leftMinutes ?? (measured ? nursingMinutes(timer.leftMs) : undefined);
-  const initialRight = log?.rightMinutes ?? (measured ? nursingMinutes(timer.rightMs) : undefined);
+  const initialLeft = log?.leftMinutes ?? (measured ? nursingMinutes(timer.total.left) : undefined);
+  const initialRight =
+    log?.rightMinutes ?? (measured ? nursingMinutes(timer.total.right) : undefined);
   const [leftMinutes, setLeftMinutes] = useState<number | undefined>(initialLeft);
   const [rightMinutes, setRightMinutes] = useState<number | undefined>(initialRight);
   // ボタンに無い分数は直接入力欄の側で持つ。
@@ -174,9 +196,10 @@ function MilkLogModalBody({
   // 計測した時間をそのまま記録する。計測中のまま保存されても、その分を含める。
   // 分数を手で選び直した側は、その値を優先する。
   const measuring = showTimer && timer.hasSession;
-  const recordedLeft = measuring && !editedLeft ? nursingMinutes(timer.leftMs) : (leftMinutes ?? 0);
+  const recordedLeft =
+    measuring && !editedLeft ? nursingMinutes(timer.total.left) : (leftMinutes ?? 0);
   const recordedRight =
-    measuring && !editedRight ? nursingMinutes(timer.rightMs) : (rightMinutes ?? 0);
+    measuring && !editedRight ? nursingMinutes(timer.total.right) : (rightMinutes ?? 0);
 
   const handleCustomAmount = (value: string) => {
     setCustomAmount(value);
@@ -209,20 +232,33 @@ function MilkLogModalBody({
     applyMinutes(side, minutes, value);
   };
 
-  // 計測を始める・止める・切り替えるたびに、その時点の合計を分数の入力欄へ入れる。
-  // 押した側が「最後に飲ませた側」になる。
-  const handleToggleSide = (side: BreastSide) => {
-    const settled = timer.toggleSide(side);
-    const left = nursingMinutes(settled.leftMs);
-    const right = nursingMinutes(settled.rightMs);
+  // 計測の合計（測っていないセットぶんを含む）を分数の入力欄へ入れる。
+  const applyTotal = (total: NursingPhaseValues) => {
+    const left = nursingMinutes(total.left);
+    const right = nursingMinutes(total.right);
     setLeftMinutes(left);
     setRightMinutes(right);
     setCustomLeft(toCustomMinutes(left));
     setCustomRight(toCustomMinutes(right));
-    setLastSide(side);
+  };
+
+  // 計測を始める・止める・切り替えるたびに、その時点の合計を分数の入力欄へ入れる。
+  // 押した区切りが「最後に飲ませた側」になる（ゲップは飲ませていないので変えない）。
+  const handleTogglePhase = (phase: NursingPhase) => {
+    applyTotal(timer.togglePhase(phase));
+    if (phase === 'burp') return;
+    setLastSide(phase);
     // 測り直した側は計測の値に戻す。
-    if (side === 'left') setEditedLeft(false);
+    if (phase === 'left') setEditedLeft(false);
     else setEditedRight(false);
+  };
+
+  // 「測る前に済ませたセット」を増減する。左右どちらも計測の値に戻して、
+  // 足した分がそのまま記録の分数に出るようにする。
+  const handleChangeUntrackedSets = (count: number) => {
+    applyTotal(timer.setUntrackedSets(count));
+    setEditedLeft(false);
+    setEditedRight(false);
   };
 
   const handleResetTimer = () => {
@@ -284,14 +320,17 @@ function MilkLogModalBody({
               </HintBanner>
             )}
             {showTimer && (
-              <BreastStopwatch
-                leftMs={timer.leftMs}
-                rightMs={timer.rightMs}
-                runningSide={timer.runningSide}
+              <NursingSetTimer
+                elapsed={timer.elapsed}
+                setNumber={timer.setNumber}
+                untrackedSets={timer.untrackedSets}
+                onChangeUntrackedSets={handleChangeUntrackedSets}
+                runningPhase={timer.runningPhase}
                 hasSession={timer.hasSession}
+                order={setOrder(nextSide ?? 'left')}
                 recordedLeft={recordedLeft}
                 recordedRight={recordedRight}
-                onToggleSide={handleToggleSide}
+                onTogglePhase={handleTogglePhase}
                 onReset={handleResetTimer}
               />
             )}
@@ -555,63 +594,143 @@ function MinuteField({ label, value, custom, onSelect, onCustomChange }: MinuteF
   );
 }
 
-interface BreastStopwatchProps {
-  leftMs: number;
-  rightMs: number;
-  runningSide: BreastSide | null;
+interface NursingSetTimerProps {
+  /** いま測っているセットの、区切りごとの時間(ミリ秒)。計測中の分を含む。 */
+  elapsed: NursingPhaseValues;
+  /** いま何セット目か。 */
+  setNumber: number;
+  /** 測る前に済ませたセットの数。 */
+  untrackedSets: number;
+  onChangeUntrackedSets: (count: number) => void;
+  runningPhase: NursingPhase | null;
   hasSession: boolean;
+  /** 測る順番。前回の続き（おすすめの側）から数える。ボタンの並びは変えない。 */
+  order: NursingPhase[];
   /** この内容で保存したときに記録される分数。 */
   recordedLeft: number;
   recordedRight: number;
-  onToggleSide: (side: BreastSide) => void;
+  onTogglePhase: (phase: NursingPhase) => void;
   onReset: () => void;
 }
 
-/** 左右それぞれの授乳時間を測るストップウォッチ。飲ませている側をタップして使う。 */
-function BreastStopwatch({
-  leftMs,
-  rightMs,
-  runningSide,
+/** 残り時間を「M:SS」で。区切りの目安(5分)までどれくらいかを見るためのもの。 */
+const formatRemaining = (ms: number): string => {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
+};
+
+/**
+ * 授乳1セット（左5分 → 右5分 → ゲップ5分）を測るストップウォッチ。
+ *
+ * いま行っている区切りをタップして使い、5分たつとお知らせが1回鳴る。
+ * 授乳中は画面を見られないので、次へ移る合図は鳴り方で受け取り、この画面は
+ * 「いまどこまで進んだか」を後から確かめるためのものとして作っている。
+ * ゲップの5分まで終わると1セット完了として計測が止まる（止め忘れても数え続けない）。
+ *
+ * 順番はあくまで目安で、どの区切りからでも測れる（片側しか飲まない回もあるため）。
+ * ゲップは飲ませた時間ではないので、記録には残さず計測とお知らせにだけ使う。
+ *
+ * 表示している時間は「いまのセット」のもので、記録に入るのは全セットの合計。
+ */
+function NursingSetTimer({
+  elapsed,
+  setNumber,
+  untrackedSets,
+  onChangeUntrackedSets,
+  runningPhase,
   hasSession,
+  order,
   recordedLeft,
   recordedRight,
-  onToggleSide,
+  onTogglePhase,
   onReset,
-}: BreastStopwatchProps) {
+}: NursingSetTimerProps) {
+  const isDone = (phase: NursingPhase) => elapsed[phase] >= NURSING_PHASE_MS;
+  // 次に測る区切り。まだ5分に届いていないものを順番に拾う。
+  const nextPhase = order.find((phase) => phase !== runningPhase && !isDone(phase)) ?? null;
+  const setDone = order.every(isDone);
+
+  const guide = runningPhase
+    ? elapsed[runningPhase] < NURSING_PHASE_MS
+      ? `${getNursingPhaseLabel(runningPhase)}を計測中 — あと ${formatRemaining(NURSING_PHASE_MS - elapsed[runningPhase])}`
+      : nextPhase
+        ? `${getNursingPhaseLabel(runningPhase)}は${NURSING_PHASE_MINUTES}分経過 — 次は「${getNursingPhaseLabel(nextPhase)}」へ`
+        : `${getNursingPhaseLabel(runningPhase)}は${NURSING_PHASE_MINUTES}分経過 — ${setNumber}セット目が完了`
+    : setDone
+      ? `${setNumber}セット目が完了。続けるなら「${getNursingPhaseLabel(order[0])}」をタップ`
+      : nextPhase
+        ? `${hasSession ? '次は' : 'まずは'}「${getNursingPhaseLabel(nextPhase)}」をタップ`
+        : '';
+
   return (
     <View style={styles.stopwatch}>
       <View style={styles.stopwatchHeader}>
-        <Text style={styles.stopwatchTitle}>授乳時間を計測</Text>
+        <Text style={styles.stopwatchTitle}>
+          授乳を計測 <Text style={styles.setNumber}>{setNumber}セット目</Text>
+        </Text>
         {hasSession && (
           <Pressable accessibilityRole="button" onPress={onReset} hitSlop={8}>
             <Text style={styles.reset}>リセット</Text>
           </Pressable>
         )}
       </View>
-      <View style={styles.sides}>
-        {SIDE_OPTIONS.map((side) => {
-          const isRunning = runningSide === side.value;
+
+      <Text style={styles.note}>
+        {order.map((phase) => `${getNursingPhaseLabel(phase)}${NURSING_PHASE_MINUTES}分`).join(' → ')}
+        で1セット。{NURSING_PHASE_MINUTES}分でお知らせが1回鳴り、ゲップまで終わると計測が止まります。
+        時間はこのセットのぶんで、記録に入るのは全セットの合計です。
+      </Text>
+
+      {/* ボタンの並びは「左・右・ゲップ」で固定する。おすすめの開始側で並べ替えると
+          押すたびに左右の位置が入れ替わり、どちらを押しているのか分かりにくいため。
+          どこから始めるかは、下の案内文と枠のハイライトで示す。 */}
+      <View style={styles.phases}>
+        {NURSING_PHASES.map((phase) => {
+          const isRunning = runningPhase === phase;
+          const done = isDone(phase);
+          const isNext = !isRunning && phase === nextPhase;
+          const ratio = Math.min(1, elapsed[phase] / NURSING_PHASE_MS);
           return (
             <Pressable
-              key={side.value}
+              key={phase}
               accessibilityRole="button"
               accessibilityState={{ selected: isRunning }}
-              onPress={() => onToggleSide(side.value)}
-              style={[styles.side, isRunning && styles.sideRunning]}
+              onPress={() => onTogglePhase(phase)}
+              style={[styles.phase, isRunning && styles.phaseRunning, isNext && styles.phaseNext]}
             >
-              <Text style={[styles.sideLabel, isRunning && styles.sideTextRunning]}>
-                {side.label}
+              <Text
+                style={[
+                  styles.phaseLabel,
+                  done && styles.phaseLabelDone,
+                  isRunning && styles.phaseTextRunning,
+                ]}
+              >
+                {done ? '✓ ' : ''}
+                {getNursingPhaseLabel(phase)}
               </Text>
-              <Text style={[styles.sideTime, isRunning && styles.sideTextRunning]}>
-                {formatStopwatch(side.value === 'left' ? leftMs : rightMs)}
+              <Text style={[styles.phaseTime, isRunning && styles.phaseTextRunning]}>
+                {formatStopwatch(elapsed[phase])}
               </Text>
-              <Text style={[styles.sideHint, isRunning && styles.sideTextRunning]}>
-                {isRunning ? '計測中 / タップで停止' : 'タップで開始'}
+              {/* 5分までの進み具合。数字を読まなくても、あとどれくらいかが分かる。 */}
+              <View style={[styles.track, isRunning && styles.trackRunning]}>
+                <View
+                  style={[
+                    styles.trackFill,
+                    isRunning && styles.trackFillRunning,
+                    { width: `${ratio * 100}%` },
+                  ]}
+                />
+              </View>
+              <Text style={[styles.phaseHint, isRunning && styles.phaseTextRunning]}>
+                {isRunning ? '停止' : '開始'}
               </Text>
             </Pressable>
           );
         })}
       </View>
+
+      {guide !== '' && <Text style={styles.guide}>{guide}</Text>}
+
       {hasSession ? (
         <>
           <Text style={styles.stopwatchSummary}>
@@ -619,13 +738,46 @@ function BreastStopwatch({
           </Text>
           <Text style={styles.note}>
             止めるのを忘れたときは、下の「左（分）」「右（分）」で実際の時間に直せます。
+            ゲップの時間は記録には残りません。
           </Text>
         </>
       ) : (
         <Text style={styles.note}>
-          反対側をタップすると自動で切り替わります。この画面を閉じても計測は続きます。
+          別の区切りをタップすると自動で切り替わります。この画面を閉じても計測は続きます。
+          記録に残るのは左右の分数だけです。
         </Text>
       )}
+
+      {/* 急いで飲ませ始めて、2セット目から記録することがある。測れなかった分を
+          ここで数えて記録に足す（実際の時間と違えば、下の分数で直せる）。 */}
+      <View style={styles.untracked}>
+        <View style={styles.flex}>
+          <Text style={styles.untrackedLabel}>測る前に済ませたセット</Text>
+          <Text style={styles.untrackedNote}>
+            1セットにつき左右{NURSING_PHASE_MINUTES}分の目安で記録に足します
+          </Text>
+        </View>
+        <View style={styles.stepper}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="測る前に済ませたセットを1つ減らす"
+            disabled={untrackedSets === 0}
+            onPress={() => onChangeUntrackedSets(untrackedSets - 1)}
+            style={[styles.stepperButton, untrackedSets === 0 && styles.stepperButtonDisabled]}
+          >
+            <Text style={styles.stepperText}>−</Text>
+          </Pressable>
+          <Text style={styles.stepperValue}>{untrackedSets}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="測る前に済ませたセットを1つ増やす"
+            onPress={() => onChangeUntrackedSets(untrackedSets + 1)}
+            style={styles.stepperButton}
+          >
+            <Text style={styles.stepperText}>＋</Text>
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
@@ -684,21 +836,77 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   stopwatchTitle: { fontSize: 12, fontWeight: '700', color: colors.milkText },
+  setNumber: { fontSize: 12, fontWeight: '700', color: colors.milk },
   reset: { fontSize: 11, color: colors.milkText },
-  sides: { flexDirection: 'row', gap: 8 },
-  side: {
+
+  // 1セットの3つの区切り。並びは「左・右・ゲップ」で固定する。
+  phases: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  phase: {
     flex: 1,
     borderWidth: 1,
     borderColor: colors.milkBorder,
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
     alignItems: 'center',
     backgroundColor: colors.surface,
   },
-  sideRunning: { backgroundColor: colors.milk, borderColor: colors.milk },
-  sideLabel: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  sideTime: { fontSize: 24, fontWeight: '700', color: colors.text, marginVertical: 2 },
-  sideHint: { fontSize: 10, fontWeight: '500', color: colors.milkText },
-  sideTextRunning: { color: colors.primaryText },
-  stopwatchSummary: { fontSize: 12, fontWeight: '700', color: colors.milkText, marginTop: 8 },
+  phaseRunning: { backgroundColor: colors.milk, borderColor: colors.milk },
+  // 次に測る区切りは枠だけ濃くして示す（押している区切りと見間違えないように）。
+  phaseNext: { borderColor: colors.milk },
+  phaseLabel: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  phaseLabelDone: { color: colors.milkText },
+  phaseTime: { fontSize: 20, fontWeight: '700', color: colors.text, marginVertical: 2 },
+  phaseHint: { fontSize: 10, fontWeight: '500', color: colors.milkText },
+  phaseTextRunning: { color: colors.primaryText },
+
+  // 5分までの進み具合。
+  track: {
+    width: '100%',
+    height: 3,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: colors.milkBorder,
+    marginTop: 4,
+  },
+  trackRunning: { backgroundColor: colors.milkBorder },
+  trackFill: { height: '100%', borderRadius: 999, backgroundColor: colors.milk },
+  trackFillRunning: { backgroundColor: colors.primaryText },
+
+  guide: { fontSize: 11, fontWeight: '700', color: colors.milkText, marginTop: 8 },
+  stopwatchSummary: { fontSize: 12, fontWeight: '700', color: colors.milkText, marginTop: 6 },
+
+  // 測る前に済ませたセット。
+  untracked: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.milkBorder,
+  },
+  flex: { flex: 1 },
+  untrackedLabel: { fontSize: 11, color: colors.textMuted },
+  untrackedNote: { fontSize: 10, color: colors.textFaint, marginTop: 1 },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  stepperButton: {
+    width: 30,
+    height: 30,
+    borderWidth: 1,
+    borderColor: colors.milkBorder,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  stepperButtonDisabled: { opacity: 0.3 },
+  stepperText: { fontSize: 15, fontWeight: '700', color: colors.milkText },
+  stepperValue: {
+    width: 28,
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.milkText,
+  },
 });

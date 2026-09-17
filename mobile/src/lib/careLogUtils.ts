@@ -6,6 +6,7 @@ import type {
   CareLog,
   DiaperKind,
   MilkLog,
+  NursingPhase,
   PoopColor,
   PoopConsistency,
   PumpedBatch,
@@ -103,6 +104,10 @@ export const getLatestTemperature = (logs: CareLog[]): TemperatureLog | null =>
     .sort((a, b) => b.time.getTime() - a.time.getTime())[0] ?? null;
 
 export const getSideLabel = (side: BreastSide): string => (side === 'left' ? '左' : '右');
+
+/** 授乳1セットの区切りの呼び名。 */
+export const getNursingPhaseLabel = (phase: NursingPhase): string =>
+  phase === 'burp' ? 'ゲップ' : getSideLabel(phase);
 
 /**
  * 次にどちらの乳首から授乳すればよいか。
