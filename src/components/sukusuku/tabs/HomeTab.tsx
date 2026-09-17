@@ -91,24 +91,32 @@ export default function HomeTab({
           </h2>
           <div className="flex flex-col mt-2">
             <div className="flex items-baseline space-x-1">
-              {ageInDays >= 0 ? (
-                <>
-                  <span className="text-sm font-medium">生後</span>
-                  <span className="text-6xl font-bold tracking-tight">{ageInDays}</span>
-                  <span className="text-xl font-medium">日目</span>
-                </>
-              ) : (
+              {ageInDays < 0 ? (
                 <>
                   <span className="text-sm font-medium">誕生まで あと</span>
                   <span className="text-6xl font-bold tracking-tight">{Math.abs(ageInDays)}</span>
                   <span className="text-xl font-medium">日</span>
                 </>
+              ) : ageInMonths.months > 0 ? (
+                // 1ヶ月を過ぎたら「◯ヶ月◯日」のほうが月齢の目安として通じるため、
+                // こちらを主表示にして、通算の日数は補足に回す。
+                <>
+                  <span className="text-sm font-medium">生後</span>
+                  <span className="text-5xl font-bold tracking-tight">{ageInMonths.months}</span>
+                  <span className="text-xl font-medium">ヶ月</span>
+                  <span className="text-5xl font-bold tracking-tight">{ageInMonths.days}</span>
+                  <span className="text-xl font-medium">日</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm font-medium">生後</span>
+                  <span className="text-6xl font-bold tracking-tight">{ageInDays}</span>
+                  <span className="text-xl font-medium">日目</span>
+                </>
               )}
             </div>
-            {ageInMonths.months > 0 && (
-              <span className="text-sm font-medium opacity-90 mt-1">
-                ( {ageInMonths.months}ヶ月 と {ageInMonths.days}日 )
-              </span>
+            {ageInDays >= 0 && ageInMonths.months > 0 && (
+              <span className="text-sm font-medium opacity-90 mt-1">( 生後 {ageInDays}日目 )</span>
             )}
           </div>
           <div className="mt-4 flex items-center justify-between">
