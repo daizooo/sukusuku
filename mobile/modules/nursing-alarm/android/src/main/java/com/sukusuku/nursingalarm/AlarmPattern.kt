@@ -10,6 +10,9 @@ import kotlin.math.roundToInt
  * PWA版の `src/lib/alarm.ts` の規則をそのまま持ってきたもの。
  * 鳴り方の意味は体で覚えている部分なので、実装が変わっても変えない
  * （docs/native-app-rewrite.md §4）。
+ *
+ * いまの授乳のお知らせは区切り（5分）ごとに1回なので、実際に鳴るのは短音1回だけ。
+ * 規則そのものはPWA版と同じ形で残してある。
  */
 data class AlarmPattern(val long: Int, val short: Int) {
   val isEmpty: Boolean get() = long == 0 && short == 0

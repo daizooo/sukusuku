@@ -49,6 +49,11 @@ export type LogType = 'milk' | 'diaper' | 'pumping' | 'temperature';
  */
 export type FeedingMethod = 'breast' | 'pumped' | 'formula';
 export type BreastSide = 'left' | 'right';
+/**
+ * 授乳1セットの区切り。左5分 → 右5分 → ゲップ5分で1セット。
+ * ゲップは飲ませた時間ではないので記録には残さず、計測とお知らせにだけ使う。
+ */
+export type NursingPhase = BreastSide | 'burp';
 export type DiaperKind = 'pee' | 'poop' | 'both';
 /** うんちの色。white / red / black は受診の目安（母子手帳の便色カードと同じ考え方）。 */
 export type PoopColor = 'yellow' | 'green' | 'brown' | 'white' | 'red' | 'black';

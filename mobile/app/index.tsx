@@ -29,6 +29,7 @@ import {
   formatStopwatch,
   getLatestTemperature,
   getNextBreastSide,
+  getNursingPhaseLabel,
   getSideLabel,
   isFever,
   pumpedStockMl,
@@ -42,7 +43,7 @@ import {
   isSameDay,
   startOfDay,
 } from '@/lib/dateUtils';
-import { useNursingTimer } from '@/lib/nursingTimer';
+import { nursingMinutes, useNursingTimer } from '@/lib/nursingTimer';
 import {
   isNursingForegroundServiceAvailable,
   requestNursingNotificationPermission,
@@ -339,13 +340,23 @@ export default function LogScreen() {
                 style={styles.nursingBanner}
               >
                 <View style={styles.flex}>
+                  {/* 止まっているときは、測り終えて記録がまだなのか、途中で止めたのかを
+                      区別しない。どちらも「開いて記録する」ことに変わりがないため。 */}
                   <Text style={styles.nursingTitle}>
-                    {timer.runningSide
-                      ? `授乳中（${getSideLabel(timer.runningSide)}）`
-                      : '授乳の計測中'}
+                    {timer.runningPhase
+                      ? `授乳中（${getNursingPhaseLabel(timer.runningPhase)}）・${timer.setNumber}セット目`
+                      : '授乳の記録がまだです'}
                   </Text>
-                  <Text style={styles.nursingTime}>
-                    左 {formatStopwatch(timer.leftMs)} / 右 {formatStopwatch(timer.rightMs)}
+                  {timer.runningPhase && (
+                    <Text style={styles.nursingTime}>
+                      {getNursingPhaseLabel(timer.runningPhase)}{' '}
+                      {formatStopwatch(timer.elapsed[timer.runningPhase])}
+                    </Text>
+                  )}
+                  {/* 一覧に並ぶ記録と同じ単位（分）で、いま保存したらどうなるかを出す。 */}
+                  <Text style={styles.nursingTotal}>
+                    記録は 左{nursingMinutes(timer.total.left)}分・右
+                    {nursingMinutes(timer.total.right)}分
                   </Text>
                 </View>
                 <Text style={styles.nursingOpen}>開く</Text>
@@ -535,6 +546,7 @@ const styles = StyleSheet.create({
   },
   nursingTitle: { fontSize: 12, fontWeight: '700', color: colors.milkText },
   nursingTime: { fontSize: 12, color: colors.milk, marginTop: 2 },
+  nursingTotal: { fontSize: 11, color: colors.milkText, marginTop: 1 },
   nursingOpen: {
     fontSize: 12,
     fontWeight: '700',

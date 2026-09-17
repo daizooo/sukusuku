@@ -10,16 +10,16 @@ import { buildAlarmPattern, toVibrationSequence } from '@/lib/alarmPattern';
 // 授乳中のお知らせを、どこで鳴らすかを決める層。
 //
 // 本命は前面サービス（modules/nursing-alarm）。授乳中だけ常駐通知を出しながら経過時間を数え、
-// 区切りごとに長短を組み立てて鳴らす。画面が消えていてもアプリを閉じていても圏外でも鳴り、
+// 区切りが5分に達したところで1回だけ鳴らす。画面が消えていてもアプリを閉じていても圏外でも鳴り、
 // マナーモードでも鳴る（docs/native-app-android.md §3の案②）。
 //
+// 鳴らすのは区切りごとに1回だけで、鳴らし続けない。ほしいのは「次へ移る合図」であって、
+// 鳴り続けると赤ちゃんも親も休めないため（PWA版 src/lib/nursingTimer.ts と同じ考え方）。
+//
 // 前面サービスは開発ビルドにしか入らないので、Expo Goでは代わりにJSのタイマーで振動だけさせる。
-// アプリを開いている間しか効かない控えめなもので、フェーズ1の確認用。
+// アプリを開いている間しか効かない控えめなもので、画面の確認用。
 
 export type { NursingAlarmTarget };
-
-/** 何分ごとに知らせるか。設定画面はフェーズ2の設定タブで作るので、いまは既定値のまま使う。 */
-export const NURSING_ALARM_INTERVAL_MINUTES = 5;
 
 export const isNursingForegroundServiceAvailable = isNursingAlarmAvailable;
 
@@ -39,16 +39,18 @@ export async function requestNursingNotificationPermission(): Promise<boolean> {
 
 let fallbackTimerId: ReturnType<typeof setInterval> | null = null;
 let fallbackTarget: NursingAlarmTarget | null = null;
-/** 何回目のお知らせまで鳴らしたか。アプリを開いている間だけの数えなので控えない。 */
-let fallbackNotifiedStep = 0;
+/** いまの区切りで鳴らし終えたか。アプリを開いている間だけの数えなので控えない。 */
+let fallbackNotified = false;
+
+/** その区切りが何分たったか。 */
+const elapsedMinutes = (target: NursingAlarmTarget): number =>
+  Math.floor(Math.max(0, Date.now() - target.baselineAt) / 60000);
 
 const fallbackTick = () => {
-  if (!fallbackTarget) return;
-  const elapsedMinutes = Math.floor(Math.max(0, Date.now() - fallbackTarget.baselineAt) / 60000);
-  const step = Math.floor(elapsedMinutes / fallbackTarget.intervalMinutes);
-  if (step < 1 || step <= fallbackNotifiedStep) return;
-  fallbackNotifiedStep = step;
-  const sequence = toVibrationSequence(buildAlarmPattern(step * fallbackTarget.intervalMinutes));
+  if (!fallbackTarget || fallbackNotified) return;
+  if (elapsedMinutes(fallbackTarget) < fallbackTarget.phaseMinutes) return;
+  fallbackNotified = true;
+  const sequence = toVibrationSequence(buildAlarmPattern(fallbackTarget.phaseMinutes));
   if (sequence.length > 0) Vibration.vibrate(sequence);
 };
 
@@ -60,18 +62,16 @@ const applyFallback = (target: NursingAlarmTarget | null) => {
     Vibration.cancel();
     return;
   }
-  // 切り替え前の側で鳴らした分をもう一度鳴らさないよう、いまの経過ぶんまで進めておく。
-  fallbackNotifiedStep = Math.floor(
-    Math.max(0, Date.now() - target.baselineAt) / 60000 / target.intervalMinutes,
-  );
+  // 預け直しで鳴り直さないよう、もう5分を過ぎている区切りは鳴らし済みとして始める。
+  fallbackNotified = elapsedMinutes(target) >= target.phaseMinutes;
   if (fallbackTimerId === null) fallbackTimerId = setInterval(fallbackTick, 1000);
 };
 
 /**
- * いま測っている側と、その側の合計時間が0だった時刻を、鳴らす側へ預ける。
+ * いま測っている区切りと、その区切りの合計時間が0だった時刻を、鳴らす側へ預ける。
  * 測っていなければ null を渡す（＝前面サービスを止め、常駐通知も消える）。
  *
- * 左右の切り替えも「新しい baselineAt での預け直し」として同じ入口を通る。
+ * 区切りの切り替えも「新しい baselineAt での預け直し」として同じ入口を通る。
  */
 export function applyNursingAlarm(target: NursingAlarmTarget | null): void {
   if (!isNursingAlarmAvailable()) {
