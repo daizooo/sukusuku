@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Redirect, useLocalSearchParams } from 'expo-router';
+import { List, Plus, TrendingUp } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import type {
@@ -19,6 +20,7 @@ import type {
   FeedingMethod,
   MilkLog,
   PumpedBatch,
+  GrowthRecord,
   PumpingLog,
   TemperatureLog,
 } from '@/types/app';
@@ -29,6 +31,14 @@ import { getMyMembership } from '@/lib/api/me';
 import { listFamilyMembers } from '@/lib/api/familyMembers';
 import { listRecentTemperatureLogs, setPumpedBatchDiscarded } from '@/lib/api/careLogs';
 import { getProfile } from '@/lib/api/profile';
+import { ensureChildId } from '@/lib/api/children';
+import {
+  deleteGrowthRecord,
+  insertGrowthRecord,
+  listGrowthRecords,
+  updateGrowthRecord,
+} from '@/lib/api/growthRecords';
+import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 import { getProfileFieldValue } from '@/lib/uiUtils';
 import {
   formatCelsius,
@@ -62,7 +72,10 @@ import {
   readCachedPumpedBatches,
   syncCareLogsInRange,
 } from '@/lib/offline/careLogs';
+import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import LogTimeline from '@/components/log/LogTimeline';
+import GrowthChart from '@/components/log/GrowthChart';
+import GrowthRecordFormModal from '@/components/log/GrowthRecordFormModal';
 import DiaperLogModal, { type DiaperLogInput } from '@/components/log/DiaperLogModal';
 import MilkLogModal, { type MilkLogInput } from '@/components/log/MilkLogModal';
 import PumpingLogModal, { type PumpingLogInput } from '@/components/log/PumpingLogModal';
@@ -108,12 +121,35 @@ export default function LogScreen() {
   // 開いている入力画面。log が null なら新規追加、入っていればその記録の編集。
   const [editing, setEditing] = useState<{ log: MilkLog | null } | null>(null);
   const [editingPumping, setEditingPumping] = useState<{ log: PumpingLog | null } | null>(null);
+  // タイムラインと成長曲線の切り替え。開いたときはタイムライン。
+  const [logView, setLogView] = useState<'timeline' | 'growth'>('timeline');
+  const [childId, setChildId] = useState<string | null>(null);
+  const [growthData, setGrowthData] = useState<GrowthRecord[]>([]);
+  const [isLoadingGrowth, setIsLoadingGrowth] = useState(true);
+  const [birthDate, setBirthDate] = useState('');
+  const [growthModal, setGrowthModal] = useState<{
+    mode: 'add' | 'edit';
+    record: GrowthRecord | null;
+  } | null>(null);
   // 搾乳の入力画面から「飲ませた」に戻したとき、授乳の入力画面で選んでおく種類。
   const [milkModalMethod, setMilkModalMethod] = useState<FeedingMethod | undefined>(undefined);
   const [editingDiaper, setEditingDiaper] = useState<{ log: DiaperLog | null } | null>(null);
   const [editingTemperature, setEditingTemperature] = useState<{
     log: TemperatureLog | null;
   } | null>(null);
+
+  // グラフの横軸。生後ヶ月が未入力の記録は横軸が空になってしまうため、記録日で代替する。
+  const growthChartData = useMemo(
+    () =>
+      growthData.map((record) => ({
+        ...record,
+        axisLabel:
+          record.month !== null
+            ? `${record.month}ヶ月`
+            : record.recordedDate.slice(5).replace('-', '/'),
+      })),
+    [growthData],
+  );
 
   const today = startOfDay(new Date());
   const isToday = isSameDay(logDate, today);
@@ -133,10 +169,22 @@ export default function LogScreen() {
         const familyMembers = await listFamilyMembers(supabase, membership.familyId);
         if (isMounted) setMembers(familyMembers);
         const profile = await getProfile(supabase, membership.familyId);
-        if (isMounted && profile) setBabyName(getProfileFieldValue(profile, 'babyName'));
+        if (isMounted && profile) {
+          setBabyName(getProfileFieldValue(profile, 'babyName'));
+          // 成長曲線の生後ヶ月を自動で埋めるのに使う。
+          setBirthDate(getProfileFieldValue(profile, 'birthDate'));
+        }
+        // 成長記録は日付の送りとは関わらないので、ここで1回だけ読む。
+        const id = await ensureChildId(supabase, membership.familyId);
+        if (!isMounted) return;
+        setChildId(id);
+        const records = await listGrowthRecords(supabase, id);
+        if (isMounted) setGrowthData(records);
       } catch (error) {
         // 圏外でも端末の控えは出せるようにしたいので、ここでは止めない。
         if (isMounted) setErrorMessage(toMessage(error));
+      } finally {
+        if (isMounted) setIsLoadingGrowth(false);
       }
     })();
     return () => {
@@ -266,6 +314,61 @@ export default function LogScreen() {
     }
   };
 
+  // --- 成長記録 ---
+
+  const addGrowthRecord = async (draft: GrowthRecordDraft) => {
+    if (!familyId) return;
+    try {
+      const id = childId ?? (await ensureChildId(supabase, familyId));
+      if (!childId) setChildId(id);
+      const created = await insertGrowthRecord(supabase, id, {
+        monthAge: draft.monthAge,
+        height: draft.height,
+        weight: draft.weight,
+        recordedDate: draft.recordedDate,
+      });
+      setGrowthData((prev) =>
+        [...prev, created].sort((a, b) => a.recordedDate.localeCompare(b.recordedDate)),
+      );
+    } catch (error) {
+      setErrorMessage(`成長記録を追加できませんでした（${toMessage(error)}）。`);
+    }
+  };
+
+  const saveGrowthRecord = async (record: GrowthRecord, draft: GrowthRecordDraft) => {
+    const updated: GrowthRecord = {
+      ...record,
+      month: draft.monthAge,
+      height: draft.height,
+      weight: draft.weight,
+      recordedDate: draft.recordedDate,
+    };
+    const previous = growthData;
+    setGrowthData((prev) =>
+      prev
+        .map((r) => (r.id === record.id ? updated : r))
+        .sort((a, b) => a.recordedDate.localeCompare(b.recordedDate)),
+    );
+    try {
+      await updateGrowthRecord(supabase, updated);
+    } catch (error) {
+      // 失敗したまま新しい値を出し続けると、保存できたと誤解されるため元に戻す。
+      setGrowthData(previous);
+      setErrorMessage(`成長記録を保存できませんでした（${toMessage(error)}）。`);
+    }
+  };
+
+  const removeGrowthRecord = async (id: string) => {
+    const previous = growthData;
+    setGrowthData((prev) => prev.filter((r) => r.id !== id));
+    try {
+      await deleteGrowthRecord(supabase, id);
+    } catch (error) {
+      setGrowthData(previous);
+      setErrorMessage(`成長記録を削除できませんでした（${toMessage(error)}）。`);
+    }
+  };
+
   const handleSavePumping = async (input: PumpingLogInput, existing: PumpingLog | null) => {
     if (!familyId || !userId) return;
     setEditingPumping(null);
@@ -382,6 +485,74 @@ export default function LogScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <View style={styles.viewSwitcher}>
+        <SegmentedTabs
+          accessibilityLabel="育児記録の表示"
+          value={logView}
+          onChange={setLogView}
+          options={[
+            { id: 'timeline', label: 'タイムライン', icon: <List size={15} color={logView === 'timeline' ? colors.navActiveText : colors.textSubtle} /> },
+            { id: 'growth', label: '成長曲線', icon: <TrendingUp size={15} color={logView === 'growth' ? colors.navActiveText : colors.textSubtle} /> },
+          ]}
+        />
+      </View>
+
+      {logView === 'growth' ? (
+        <ScrollView contentContainerStyle={styles.growth}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setGrowthModal({ mode: 'add', record: null })}
+            style={styles.addGrowth}
+          >
+            <Plus size={18} color={colors.navActiveText} />
+            <Text style={styles.addGrowthText}>身長・体重を記録する</Text>
+          </Pressable>
+
+          {isLoadingGrowth && <Text style={styles.growthMessage}>読み込み中...</Text>}
+
+          {!isLoadingGrowth && growthData.length > 0 && (
+            <>
+              <GrowthChart
+                title="身長の推移 (cm)"
+                points={growthChartData.map((r) => ({ axisLabel: r.axisLabel, value: r.height }))}
+                color={colors.navActive}
+                padding={2}
+              />
+              <GrowthChart
+                title="体重の推移 (kg)"
+                points={growthChartData.map((r) => ({ axisLabel: r.axisLabel, value: r.weight }))}
+                color={colors.pumping}
+                padding={1}
+              />
+
+              <View style={styles.growthList}>
+                {growthData.map((record, index) => (
+                  <Pressable
+                    key={record.id}
+                    accessibilityRole="button"
+                    onPress={() => setGrowthModal({ mode: 'edit', record })}
+                    style={[styles.growthRow, index > 0 && styles.growthRowDivided]}
+                  >
+                    <Text style={styles.growthDate}>
+                      {record.recordedDate}
+                      {record.month !== null ? ` (生後${record.month}ヶ月)` : ''}
+                    </Text>
+                    <Text style={styles.growthValue}>
+                      {record.height !== null ? `${record.height}cm` : '-'} /{' '}
+                      {record.weight !== null ? `${record.weight}kg` : '-'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
+
+          {!isLoadingGrowth && growthData.length === 0 && (
+            <Text style={styles.growthMessage}>記録はまだありません</Text>
+          )}
+        </ScrollView>
+      ) : (
+      <>
       {/* 日付送り。タブを開いた時点では常に今日なので、「今日」は今日以外を見ているときだけ出す。 */}
       <View style={styles.header}>
         <Pressable
@@ -550,15 +721,16 @@ export default function LogScreen() {
                 }}
               />
             )}
-            <Text style={styles.phaseNote}>
-              いまは授乳・おむつ・体温をこちらで扱います。搾乳ストックを足すのと、
-              ホーム / 予定 / メモ / 情報 の各タブはPWA版で見てください。
-              {!isNursingForegroundServiceAvailable() &&
-                '\nいまは前面サービスの入っていないビルドで動いているため、' +
-                  'お知らせはアプリを開いている間の振動だけになります。'}
-            </Text>
+            {!isNursingForegroundServiceAvailable() && (
+              <Text style={styles.phaseNote}>
+                いまは前面サービスの入っていないビルドで動いているため、
+                お知らせはアプリを開いている間の振動だけになります。
+              </Text>
+            )}
           </ScrollView>
         </>
+      )}
+      </>
       )}
 
       <MilkLogModal
@@ -604,6 +776,27 @@ export default function LogScreen() {
         onDelete={() => editingDiaper?.log && void handleDelete(editingDiaper.log)}
       />
 
+      <GrowthRecordFormModal
+        // 対象が変わるたびに作り直して、初期値を計算し直す。
+        key={`growth-${growthModal ? `${growthModal.mode}-${growthModal.record?.id ?? 'new'}` : 'none'}`}
+        mode={growthModal?.mode ?? null}
+        record={growthModal?.record ?? null}
+        birthDate={birthDate}
+        onClose={() => setGrowthModal(null)}
+        onSubmit={(draft) => {
+          if (growthModal?.mode === 'edit' && growthModal.record) {
+            void saveGrowthRecord(growthModal.record, draft);
+          } else {
+            void addGrowthRecord(draft);
+          }
+          setGrowthModal(null);
+        }}
+        onDelete={(id) => {
+          void removeGrowthRecord(id);
+          setGrowthModal(null);
+        }}
+      />
+
       <TemperatureLogModal
         show={editingTemperature !== null}
         log={editingTemperature?.log ?? null}
@@ -629,6 +822,39 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   centeredText: { fontSize: 13, color: colors.textMuted, textAlign: 'center' },
+
+  viewSwitcher: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4 },
+  growth: { padding: 16, gap: 24, paddingBottom: 32 },
+  addGrowth: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: colors.diaperSurface,
+    borderWidth: 1,
+    borderColor: colors.diaperBorder,
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  addGrowthText: { fontSize: 15, fontWeight: '500', color: colors.navActiveText },
+  growthMessage: { fontSize: 14, color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
+  growthList: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  growthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    padding: 12,
+  },
+  growthRowDivided: { borderTopWidth: 1, borderTopColor: colors.background },
+  growthDate: { fontSize: 12, color: colors.textMuted },
+  growthValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
 
   header: {
     flexDirection: 'row',
