@@ -8,11 +8,13 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioAttributes
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -153,13 +155,35 @@ class NursingAlarmService : Service() {
     tonePlayer.play(pattern)
   }
 
+  /**
+   * 区切りのお知らせを振動で伝える。
+   *
+   * **アラームとしての振動だと伝えないと、マナーモードでは振動しない。** 属性を付けずに
+   * 呼ぶと用途が「不明」のまま扱われ、端末の設定（消音時の振動・通知の振動）に従って
+   * 落とされてしまう。音を [AudioAttributes.USAGE_ALARM] で出しているのと同じ理由で、
+   * 振動にもアラームの用途を付ける。
+   */
   private fun vibrate(pattern: AlarmPattern) {
     val timings = pattern.toVibrationSequence()
     if (timings.isEmpty()) return
+    val device = vibrator() ?: return
     // createWaveform の先頭は「鳴らすまでの待ち時間」なので、0を足してから並べる。
     val waveform = LongArray(timings.size + 1)
     System.arraycopy(timings, 0, waveform, 1, timings.size)
-    vibrator()?.vibrate(VibrationEffect.createWaveform(waveform, -1))
+    val effect = VibrationEffect.createWaveform(waveform, -1)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      device.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
+    } else {
+      // Android 12以前は VibrationAttributes が無いので、音と同じ AudioAttributes で伝える。
+      @Suppress("DEPRECATION")
+      device.vibrate(
+        effect,
+        AudioAttributes.Builder()
+          .setUsage(AudioAttributes.USAGE_ALARM)
+          .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+          .build(),
+      )
+    }
   }
 
   private fun vibrator(): Vibrator? =
