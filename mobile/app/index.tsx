@@ -14,6 +14,7 @@ import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import type {
   BreastSide,
   CareLog,
+  DiaperLog,
   FamilyMember,
   MilkLog,
   PumpedBatch,
@@ -58,6 +59,7 @@ import {
   syncCareLogsInRange,
 } from '@/lib/offline/careLogs';
 import LogTimeline from '@/components/log/LogTimeline';
+import DiaperLogModal, { type DiaperLogInput } from '@/components/log/DiaperLogModal';
 import MilkLogModal, { type MilkLogInput } from '@/components/log/MilkLogModal';
 import TemperatureLogModal, {
   type TemperatureLogInput,
@@ -89,6 +91,7 @@ export default function LogScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   // 開いている入力画面。log が null なら新規追加、入っていればその記録の編集。
   const [editing, setEditing] = useState<{ log: MilkLog | null } | null>(null);
+  const [editingDiaper, setEditingDiaper] = useState<{ log: DiaperLog | null } | null>(null);
   const [editingTemperature, setEditingTemperature] = useState<{
     log: TemperatureLog | null;
   } | null>(null);
@@ -219,6 +222,27 @@ export default function LogScreen() {
     }
   };
 
+  const handleSaveDiaper = async (input: DiaperLogInput, existing: DiaperLog | null) => {
+    if (!familyId || !userId) return;
+    setEditingDiaper(null);
+    try {
+      if (existing) {
+        await queueUpdateCareLog(familyId, {
+          type: 'diaper',
+          ...input,
+          id: existing.id,
+          createdBy: existing.createdBy,
+        });
+      } else {
+        await queueInsertCareLog(familyId, userId, { type: 'diaper', ...input });
+      }
+      await showCached();
+      await sync();
+    } catch (error) {
+      setErrorMessage(toMessage(error));
+    }
+  };
+
   const handleSaveTemperature = async (
     input: TemperatureLogInput,
     existing: TemperatureLog | null,
@@ -246,6 +270,7 @@ export default function LogScreen() {
   const handleDelete = async (log: CareLog) => {
     if (!familyId) return;
     setEditing(null);
+    setEditingDiaper(null);
     setEditingTemperature(null);
     try {
       await queueDeleteCareLog(familyId, log.id);
@@ -379,21 +404,40 @@ export default function LogScreen() {
               )}
             </Pressable>
 
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setEditingTemperature({ log: null })}
-              style={styles.temperatureRow}
-            >
-              <Text style={styles.temperatureLabel}>体温を記録</Text>
-              <Text
-                style={[
-                  styles.temperatureValue,
-                  latestTemperature && isFever(latestTemperature.celsius) && styles.temperatureFever,
-                ]}
+            {/* おむつと体温は「押して記録する」と「その日のようす」が同じものなので、
+                2つ並べて1行に収める。固定する部分を高くしすぎると一覧が短くなる。 */}
+            <View style={styles.quickRow}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setEditingDiaper({ log: null })}
+                style={[styles.quickButton, styles.diaperButton]}
               >
-                {temperatureSummaryText(latestTemperature, summary)}
-              </Text>
-            </Pressable>
+                <Text style={styles.diaperLabel}>おむつを記録</Text>
+                {/* おしっことうんちは見たいことが別（水分が足りているか／お通じ）なので、
+                    合わせた回数ではなくそれぞれの回数を出す。「両方」は両方に数える。 */}
+                <Text style={styles.diaperValue}>
+                  おしっこ {summary.diaper.peeCount}回・うんち {summary.diaper.poopCount}回
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setEditingTemperature({ log: null })}
+                style={[styles.quickButton, styles.temperatureButton]}
+              >
+                <Text style={styles.temperatureLabel}>体温を記録</Text>
+                <Text
+                  style={[
+                    styles.temperatureValue,
+                    latestTemperature &&
+                      isFever(latestTemperature.celsius) &&
+                      styles.temperatureFever,
+                  ]}
+                >
+                  {temperatureSummaryText(latestTemperature, summary)}
+                </Text>
+              </Pressable>
+            </View>
 
             <View style={styles.stockRow}>
               <Text style={styles.stockLabel}>搾乳ストック</Text>
@@ -432,12 +476,13 @@ export default function LogScreen() {
                 memberLabel={memberLabel}
                 onSelect={(log) => {
                   if (log.type === 'milk') setEditing({ log });
+                  else if (log.type === 'diaper') setEditingDiaper({ log });
                   else if (log.type === 'temperature') setEditingTemperature({ log });
                 }}
               />
             )}
             <Text style={styles.phaseNote}>
-              フェーズ1では授乳まわりと体温をこちらで扱います。おむつ・搾乳の記録と、
+              いまは授乳・おむつ・体温をこちらで扱います。搾乳ストックを足すのと、
               ホーム / 予定 / メモ / 情報 の各タブはPWA版で見てください。
               {!isNursingForegroundServiceAvailable() &&
                 '\nいまは前面サービスの入っていないビルドで動いているため、' +
@@ -457,6 +502,15 @@ export default function LogScreen() {
         onClose={() => setEditing(null)}
         onSubmit={(input) => void handleSave(input, editing?.log ?? null)}
         onDelete={() => editing?.log && void handleDelete(editing.log)}
+      />
+
+      <DiaperLogModal
+        show={editingDiaper !== null}
+        log={editingDiaper?.log ?? null}
+        baseDate={logDate}
+        onClose={() => setEditingDiaper(null)}
+        onSubmit={(input) => void handleSaveDiaper(input, editingDiaper?.log ?? null)}
+        onDelete={() => editingDiaper?.log && void handleDelete(editingDiaper.log)}
       />
 
       <TemperatureLogModal
@@ -568,19 +622,31 @@ const styles = StyleSheet.create({
   recordButtonTitle: { fontSize: 15, fontWeight: '700', color: colors.milk },
   recordButtonSummary: { fontSize: 12, color: colors.textMuted, marginTop: 3 },
   recordButtonHint: { fontSize: 11, fontWeight: '700', color: colors.milkText, marginTop: 2 },
-  temperatureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.temperatureSurface,
+  quickRow: { flexDirection: 'row', gap: 8 },
+  quickButton: {
+    flex: 1,
     borderWidth: 1,
-    borderColor: colors.temperatureBorder,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 9,
   },
+  diaperButton: {
+    backgroundColor: colors.diaperSurface,
+    borderColor: colors.diaperBorder,
+  },
+  diaperLabel: { fontSize: 12, fontWeight: '700', color: colors.diaperText },
+  diaperValue: { fontSize: 12, fontWeight: '700', color: colors.diaperText, marginTop: 2 },
+  temperatureButton: {
+    backgroundColor: colors.temperatureSurface,
+    borderColor: colors.temperatureBorder,
+  },
   temperatureLabel: { fontSize: 12, fontWeight: '700', color: colors.temperatureText },
-  temperatureValue: { fontSize: 13, fontWeight: '700', color: colors.temperatureText },
+  temperatureValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.temperatureText,
+    marginTop: 2,
+  },
   temperatureFever: { color: colors.alertText },
   stockRow: {
     flexDirection: 'row',

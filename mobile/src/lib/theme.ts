@@ -21,6 +21,7 @@ export const colors = {
   milkText: '#b45309', // amber-700
   diaper: '#3b82f6', // blue-500
   diaperSurface: '#eff6ff', // blue-50
+  diaperBorder: '#bfdbfe', // blue-200
   diaperText: '#1d4ed8', // blue-700
   pumping: '#f43f5e', // rose-500
   pumpingSurface: '#fff1f2', // rose-50
