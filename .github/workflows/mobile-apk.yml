@@ -48,9 +48,11 @@ jobs:
           java-version: 17
           cache: gradle
 
-      # ランナーにAndroid SDKは入っているが、必要なplatform/build-toolsの取得と
-      # ライセンス同意をこれに任せる。
+      # ランナーにAndroid SDKは入っているので、ここではライセンス同意だけさせる。
+      # packages を空にしないと、既に無くなった `tools` を入れようとして失敗する。
       - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
 
       - run: npm ci
 
