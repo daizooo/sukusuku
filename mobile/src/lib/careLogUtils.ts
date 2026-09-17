@@ -148,6 +148,14 @@ export const getTemperatureBaseline = (logs: TemperatureLog[]): TemperatureBasel
   return { celsius: roundCelsius(total / normal.length), count: normal.length };
 };
 
+/** 平熱からどれだけ離れているか(℃)。高ければ正、低ければ負。 */
+export const celsiusFromBaseline = (celsius: number, baseline: number): number =>
+  roundCelsius(celsius - baseline);
+
+/** 平熱との差の表示。「+0.5 ℃」「-0.2 ℃」の形。 */
+export const formatCelsiusDiff = (diff: number): string =>
+  `${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${Math.abs(diff).toFixed(1)} ℃`;
+
 /** いちばん新しい体温の記録。まだ無ければ null。 */
 export const getLatestTemperature = (logs: CareLog[]): TemperatureLog | null =>
   logs
