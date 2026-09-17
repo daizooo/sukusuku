@@ -160,6 +160,8 @@ npm run android    # USB接続した端末へインストールする
 
 ## 気をつけること
 
+- **画面構成・仕様はPWA版（`src/`）に準拠する。** 並べ方・出す項目・文言・その値の
+  出し方まで揃える。詳しくは `CLAUDE.md`
 - ルートの `package.json` / `tsconfig.json` / `eslint.config.mjs` は触らない
 - 画面の作り方（タブ全体をスクロールさせない等）はルートの `CLAUDE.md` に従う
 - Expoは変わりが速い。書く前に `AGENTS.md` の指すバージョン付きのドキュメントを読む
