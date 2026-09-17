@@ -3,15 +3,20 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { TemperatureLog } from '@/types/app';
 import {
+  BASELINE_NOTABLE_DIFF,
   CELSIUS_STEP,
   DEFAULT_CELSIUS,
   LOW_CELSIUS,
   MAX_CELSIUS,
   MIN_CELSIUS,
   URGENT_FEVER_CELSIUS,
+  celsiusFromBaseline,
   formatCelsius,
+  formatCelsiusDiff,
+  formatNormalRange,
   isFever,
   roundCelsius,
+  type TemperatureBaseline,
 } from '@/lib/careLogUtils';
 import { formatTimeString } from '@/lib/dateUtils';
 import { colors } from '@/lib/theme';
@@ -36,6 +41,10 @@ interface TemperatureLogModalProps {
   baseDate: Date;
   /** 表示中の日でいちばん新しい体温。新規追加のときの初期値と、比べる相手に使う。 */
   previous: TemperatureLog | null;
+  /** この子の平熱。記録がまだ少なければ null。 */
+  baseline: TemperatureBaseline | null;
+  /** プロフィールに登録された子の名前。平熱を「岳の平熱」の形で出すのに使う。 */
+  babyName?: string;
   onClose: () => void;
   onSubmit: (input: TemperatureLogInput) => void;
   onDelete: () => void;
@@ -57,6 +66,8 @@ function TemperatureLogModalBody({
   log,
   baseDate,
   previous,
+  baseline,
+  babyName,
   onClose,
   onSubmit,
   onDelete,
@@ -109,6 +120,9 @@ function TemperatureLogModalBody({
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {/* 何度なら高いのかは子どもによって違うので、入力欄より先にものさしを出す。 */}
+        <Yardstick baseline={baseline} babyName={babyName} />
+
         {!log && previous && (
           <HintBanner accent="temperature">
             前回は {formatCelsius(previous.celsius)}（{formatTimeString(previous.time)}）。
@@ -142,7 +156,9 @@ function TemperatureLogModalBody({
           )}
         </View>
 
-        {celsius !== null && problem === null && <Advice celsius={celsius} />}
+        {celsius !== null && problem === null && (
+          <Advice celsius={celsius} baseline={baseline} />
+        )}
 
         <DateTimeField label="日時" value={time} onChange={setTime} maximumDate={new Date()} />
         <NoteField value={note} onChange={setNote} placeholder="ぐったりしている / 厚着していた など" />
@@ -177,14 +193,57 @@ function StepButton({
 }
 
 /**
+ * 何度なら高いのかのものさし。正常範囲と、その子自身の平熱を並べる。
+ *
+ * 同じ 37.2℃ でも、平熱 36.6℃ の子には高く、平熱 37.1℃ の子にはいつもどおり。
+ * 一般の正常範囲だけでは足りないので、その子の平熱と2つ並べて置く。
+ */
+function Yardstick({
+  baseline,
+  babyName,
+}: {
+  baseline: TemperatureBaseline | null;
+  babyName?: string;
+}) {
+  return (
+    <View style={styles.yardstick}>
+      <View style={[styles.yardstickBox, styles.normalBox]}>
+        <Text style={styles.normalLabel}>正常範囲</Text>
+        <Text style={styles.normalValue}>{formatNormalRange()}</Text>
+      </View>
+      <View style={[styles.yardstickBox, styles.baselineBox]}>
+        <Text style={styles.baselineLabel}>{babyName ? `${babyName}の平熱` : '平熱'}</Text>
+        {baseline ? (
+          <Text style={styles.baselineValue}>
+            {formatCelsius(baseline.celsius)}
+            <Text style={styles.baselineCount}> 直近{baseline.count}回</Text>
+          </Text>
+        ) : (
+          // 平熱が出るまでは、何回ぶん足りないのかではなく「これから分かる」ことを伝える。
+          <Text style={styles.baselineEmpty}>記録が増えると出ます</Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+/**
  * 測ったその場で「様子見か、連れて行くか」まで出す。
  * 低月齢の発熱は、それ自体が受診の判断につながるため（docs/what-to-record.md §4-1）。
  */
-function Advice({ celsius }: { celsius: number }) {
+function Advice({
+  celsius,
+  baseline,
+}: {
+  celsius: number;
+  baseline: TemperatureBaseline | null;
+}) {
   if (celsius >= URGENT_FEVER_CELSIUS) {
     return (
       <AdviceBanner alert>
         {formatCelsius(celsius)}。生後3か月未満の 38.0℃ 以上は、それだけで受診の目安です。
+        {/* PWA版は「情報タブにあります」。こちらにはまだ情報タブが無いので、
+            実際に見に行ける場所を指している。情報タブを作ったら同じ文言に戻す。 */}
         小児科の連絡先はPWA版の情報タブにあります。
       </AdviceBanner>
     );
@@ -203,6 +262,26 @@ function Advice({ celsius }: { celsius: number }) {
         {formatCelsius(celsius)}。厚着や部屋の暑さを取ってから、30分ほどあけてもう一度測ります。
       </AdviceBanner>
     );
+  }
+  // ここから下は正常範囲の内。それでも平熱から離れていれば、そのことだけ伝える。
+  if (baseline) {
+    const diff = celsiusFromBaseline(celsius, baseline.celsius);
+    if (diff >= BASELINE_NOTABLE_DIFF) {
+      return (
+        <AdviceBanner>
+          正常範囲の内ですが、平熱より {formatCelsiusDiff(diff)} 高めです。
+          機嫌と飲みっぷりを見て、気になるようならもう一度測ります。
+        </AdviceBanner>
+      );
+    }
+    if (diff <= -BASELINE_NOTABLE_DIFF) {
+      return (
+        <AdviceBanner>
+          正常範囲の内ですが、平熱より {formatCelsiusDiff(diff)} 低めです。
+          薄着や測り方が浅かったことでも下がるので、気になるようならもう一度測ります。
+        </AdviceBanner>
+      );
+    }
   }
   return null;
 }
@@ -230,6 +309,18 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '700', color: colors.text },
   close: { fontSize: 13, color: colors.textMuted },
   content: { padding: 16, gap: 16, paddingBottom: 48 },
+
+  // 何度なら高いのかのものさし。正常範囲とその子の平熱を横に並べる。
+  yardstick: { flexDirection: 'row', gap: 8 },
+  yardstickBox: { flex: 1, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  normalBox: { borderColor: colors.border, backgroundColor: colors.neutralSurface },
+  normalLabel: { fontSize: 11, fontWeight: '500', color: colors.textMuted },
+  normalValue: { fontSize: 13, fontWeight: '700', color: colors.textSubtle, marginTop: 1 },
+  baselineBox: { borderColor: colors.temperatureBorder, backgroundColor: colors.temperatureSurface },
+  baselineLabel: { fontSize: 11, fontWeight: '500', color: colors.temperature },
+  baselineValue: { fontSize: 13, fontWeight: '700', color: colors.temperatureText, marginTop: 1 },
+  baselineCount: { fontSize: 11, fontWeight: '500', color: colors.temperature },
+  baselineEmpty: { fontSize: 11, color: colors.temperature, lineHeight: 16, marginTop: 2 },
 
   stepper: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
   stepButton: {

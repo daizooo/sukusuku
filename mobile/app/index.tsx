@@ -26,6 +26,8 @@ import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
 import { listFamilyMembers } from '@/lib/api/familyMembers';
 import { listRecentTemperatureLogs } from '@/lib/api/careLogs';
+import { getProfile } from '@/lib/api/profile';
+import { getProfileFieldValue } from '@/lib/uiUtils';
 import {
   formatCelsius,
   formatStopwatch,
@@ -87,6 +89,8 @@ export default function LogScreen() {
   const [unsentCount, setUnsentCount] = useState(0);
   // 平熱に使う直近の体温。その子自身の記録の平均なので、表示中の日だけでは求まらない。
   const [recentTemperatureLogs, setRecentTemperatureLogs] = useState<TemperatureLog[]>([]);
+  // プロフィールに登録された子の名前。体温の入力画面で「◯の平熱」と出すのに使う。
+  const [babyName, setBabyName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -114,6 +118,8 @@ export default function LogScreen() {
         if (!membership.familyId) return;
         const familyMembers = await listFamilyMembers(supabase, membership.familyId);
         if (isMounted) setMembers(familyMembers);
+        const profile = await getProfile(supabase, membership.familyId);
+        if (isMounted && profile) setBabyName(getProfileFieldValue(profile, 'babyName'));
       } catch (error) {
         // 圏外でも端末の控えは出せるようにしたいので、ここでは止めない。
         if (isMounted) setErrorMessage(toMessage(error));
@@ -527,6 +533,8 @@ export default function LogScreen() {
         log={editingTemperature?.log ?? null}
         baseDate={logDate}
         previous={latestTemperature}
+        baseline={temperatureBaseline}
+        babyName={babyName || undefined}
         onClose={() => setEditingTemperature(null)}
         onSubmit={(input) =>
           void handleSaveTemperature(input, editingTemperature?.log ?? null)
