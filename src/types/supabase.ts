@@ -370,7 +370,6 @@ export type Database = {
           id: string
           is_done: boolean
           list_id: string
-          note: string | null
           position: number
           title: string
         }
@@ -381,7 +380,6 @@ export type Database = {
           id?: string
           is_done?: boolean
           list_id: string
-          note?: string | null
           position?: number
           title: string
         }
@@ -392,7 +390,6 @@ export type Database = {
           id?: string
           is_done?: boolean
           list_id?: string
-          note?: string | null
           position?: number
           title?: string
         }
