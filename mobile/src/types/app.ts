@@ -247,6 +247,9 @@ export interface UserProfile {
   customFields: ProfileField[];
 }
 
+/** 授乳の入力画面で「搾乳」を選んだときの、飲ませた分か搾った分かの切り替え。 */
+export type FeedingEntryMode = 'feed' | 'pump';
+
 export type TabId = 'home' | 'schedule' | 'log' | 'list' | 'nursery' | 'info';
 
 // スケジュールタブの表示切り替え。既定は月（カレンダー）。

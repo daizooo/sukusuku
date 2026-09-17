@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type {
   BreastSide,
+  FeedingEntryMode,
   FeedingMethod,
   MilkLog,
   NursingPhase,
@@ -9,6 +10,8 @@ import type {
 } from '@/types/app';
 import {
   BREAST_MINUTE_OPTIONS,
+  FEEDING_ENTRY_MODE_OPTIONS,
+  FEEDING_METHOD_OPTIONS,
   MILK_AMOUNT_OPTIONS,
   formatBatchTime,
   formatStopwatch,
@@ -68,16 +71,16 @@ interface MilkLogModalProps {
   timer: NursingTimer;
   /** 搾乳ストックの全量（使用済みも含む）。「搾乳」を選んだときの選択肢に使う。 */
   pumpedBatches: PumpedBatch[];
+  /** パックを破棄する / 取り消す。ストックから外す・戻す。 */
+  onDiscardBatch: (id: string, discarded: boolean) => void;
+  /** 搾乳の入力画面へ移る（「搾った」に切り替えたとき）。 */
+  onSwitchToPumping: () => void;
+  /** 搾乳の入力画面から戻ってきたときに選んでおく種類。 */
+  initialMethod?: FeedingMethod;
   onClose: () => void;
   onSubmit: (input: MilkLogInput) => void;
   onDelete: () => void;
 }
-
-const METHOD_OPTIONS: { value: FeedingMethod; label: string }[] = [
-  { value: 'breast', label: '母乳' },
-  { value: 'pumped', label: '搾乳' },
-  { value: 'formula', label: 'ミルク' },
-];
 
 const SIDE_OPTIONS: { value: BreastSide; label: string }[] = [
   { value: 'left', label: '左' },
@@ -113,11 +116,14 @@ function MilkLogModalBody({
   nextSide,
   timer,
   pumpedBatches,
+  onDiscardBatch,
+  onSwitchToPumping,
+  initialMethod,
   onClose,
   onSubmit,
   onDelete,
 }: MilkLogModalProps) {
-  const [method, setMethod] = useState<FeedingMethod>(log?.method ?? 'breast');
+  const [method, setMethod] = useState<FeedingMethod>(log?.method ?? initialMethod ?? 'breast');
   const [amountMl, setAmountMl] = useState<number>(log?.amountMl ?? 100);
   // 「搾乳」で飲ませる搾乳ストック。編集中なら、その記録が使っているパックを選んだ状態で開く。
   const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>(() => log?.pumpedFrom ?? []);
@@ -180,6 +186,12 @@ function MilkLogModalBody({
   // 用意した量より多くは飲めない。パックを選び足すよう促す。
   const drankTooMuch = drankMl !== null && drankMl > selectedMl;
   const pumpedInvalid = selectedBatches.length === 0 || drankMl === null || drankTooMuch;
+
+  // 捨てたパックは飲ませられないので、選んでいたら外しておく。
+  const handleDiscardBatch = (id: string) => {
+    setSelectedBatchIds((prev) => prev.filter((x) => x !== id));
+    onDiscardBatch(id, true);
+  };
 
   const toggleBatch = (id: string) =>
     setSelectedBatchIds((prev) =>
@@ -298,10 +310,28 @@ function MilkLogModalBody({
       onClose={onClose}
       // 母乳/搾乳/ミルクの切り替えは、選び直したときに動かないよう一番上に固定しておく。
       subheader={
-        <>
-          <FieldLabel>種類</FieldLabel>
-          <Segmented options={METHOD_OPTIONS} value={method} onChange={setMethod} />
-        </>
+        <View style={styles.switchers}>
+          <View>
+            <FieldLabel>種類</FieldLabel>
+            <Segmented options={FEEDING_METHOD_OPTIONS} value={method} onChange={setMethod} />
+          </View>
+          {/* 搾った分は飲ませた分とは別の記録（搾乳ストックの1パック）になるので、押すと
+              搾乳の入力画面へ移る。搾乳以外では関わらないため、搾乳を選んだときだけ出す。
+              入力欄と一緒にスクロールして流れていかないよう、種類のすぐ下に固定して置く。
+              編集中は記録の種類を変えられないので出さない。 */}
+          {!log && method === 'pumped' && (
+            <View>
+              <FieldLabel>搾乳を</FieldLabel>
+              <Segmented
+                options={FEEDING_ENTRY_MODE_OPTIONS}
+                value={'feed' as FeedingEntryMode}
+                onChange={(next) => {
+                  if (next === 'pump') onSwitchToPumping();
+                }}
+              />
+            </View>
+          )}
+        </View>
       }
       footer={
         <>
@@ -373,6 +403,8 @@ function MilkLogModalBody({
               selectedMl={selectedMl}
               stockMl={pumpedStockMl(pumpedBatches)}
               onToggle={toggleBatch}
+              onDiscard={handleDiscardBatch}
+              onUndoDiscard={(id) => onDiscardBatch(id, false)}
             />
             {selectableBatches.length > 0 && (
               <DrankAmountField
@@ -434,6 +466,9 @@ interface PumpedBatchPickerProps {
   /** ストック全体の残り(ml)。編集中の記録が使っている分は含まない。 */
   stockMl: number;
   onToggle: (id: string) => void;
+  /** 置きすぎた分などをここで捨てる。 */
+  onDiscard: (id: string) => void;
+  onUndoDiscard: (id: string) => void;
 }
 
 /**
@@ -449,12 +484,42 @@ function PumpedBatchPicker({
   selectedMl,
   stockMl,
   onToggle,
+  onDiscard,
+  onUndoDiscard,
 }: PumpedBatchPickerProps) {
+  // 直前に破棄したパック。取り消せるよう、一覧から消えたあとも覚えておく。
+  const [discardedBatch, setDiscardedBatch] = useState<PumpedBatch | null>(null);
+
+  const handleDiscard = (batch: PumpedBatch) => {
+    setDiscardedBatch(batch);
+    onDiscard(batch.id);
+  };
+
+  const handleUndo = () => {
+    if (!discardedBatch) return;
+    onUndoDiscard(discardedBatch.id);
+    setDiscardedBatch(null);
+  };
+
+  const discardedNotice = discardedBatch ? (
+    <View style={styles.discardedNotice}>
+      <Text style={styles.discardedText} numberOfLines={1}>
+        {formatBatchTime(discardedBatch)}（{discardedBatch.amountMl}ml）を破棄しました
+      </Text>
+      <Pressable accessibilityRole="button" onPress={handleUndo} hitSlop={6}>
+        <Text style={styles.undoText}>取り消す</Text>
+      </Pressable>
+    </View>
+  ) : null;
+
   if (batches.length === 0) {
     return (
-      <HintBanner accent="pumping">
-        搾乳ストックがありません。搾乳の記録はフェーズ2で作るまでPWA版で付けてください。
-      </HintBanner>
+      <View style={styles.pickerEmpty}>
+        {discardedNotice}
+        <HintBanner accent="pumping">
+          搾乳ストックがありません。上の「搾った」に切り替えて、搾った分を先に記録してください。
+        </HintBanner>
+      </View>
     );
   }
 
@@ -465,25 +530,39 @@ function PumpedBatchPicker({
         <Text style={styles.stock}>残り {stockMl}ml</Text>
       </View>
 
-      <View style={styles.batchList}>
+      {discardedNotice}
+
+      <View style={[styles.batchList, discardedBatch && styles.batchListSpaced]}>
         {batches.map((batch) => {
           const selected = selectedIds.includes(batch.id);
           return (
-            <Pressable
-              key={batch.id}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              onPress={() => onToggle(batch.id)}
-              style={[styles.batch, selected && styles.batchSelected]}
-            >
-              <Text style={[styles.batchTime, selected && styles.batchTextSelected]}>
-                {selected ? '✓ ' : ''}
-                {formatBatchTime(batch)}
-              </Text>
-              <Text style={[styles.batchAmount, selected && styles.batchTextSelected]}>
-                {batch.amountMl}ml
-              </Text>
-            </Pressable>
+            <View key={batch.id} style={[styles.batchRow, selected && styles.batchSelected]}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => onToggle(batch.id)}
+                style={styles.batch}
+              >
+                <Text style={[styles.batchTime, selected && styles.batchTextSelected]}>
+                  {selected ? '✓ ' : ''}
+                  {formatBatchTime(batch)}
+                </Text>
+                <Text style={[styles.batchAmount, selected && styles.batchTextSelected]}>
+                  {batch.amountMl}ml
+                </Text>
+              </Pressable>
+              {/* 置きすぎた分をここで捨てる。すでに飲ませたパックは捨てようがないので出さない。 */}
+              {batch.usedBy === null && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${formatBatchTime(batch)}の搾乳を破棄する`}
+                  onPress={() => handleDiscard(batch)}
+                  style={[styles.batchDiscard, selected && styles.batchDiscardSelected]}
+                >
+                  <Text style={styles.batchDiscardText}>破棄</Text>
+                </Pressable>
+              )}
+            </View>
           );
         })}
       </View>
@@ -779,24 +858,53 @@ function NursingSetTimer({
 }
 
 const styles = StyleSheet.create({
+  switchers: { gap: 12 },
   note: { fontSize: 11, color: colors.textFaint, marginTop: 6, lineHeight: 16 },
   customMinutes: { marginTop: 6 },
 
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   stock: { fontSize: 11, color: colors.textMuted, marginBottom: 6 },
   batchList: { gap: 6 },
-  batch: {
+  batchListSpaced: { marginTop: 8 },
+  batchRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'stretch',
     borderWidth: 1,
     borderColor: colors.borderStrong,
     borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    overflow: 'hidden',
     backgroundColor: colors.surface,
   },
+  batch: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  batchDiscard: {
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.border,
+  },
+  batchDiscardSelected: { borderLeftColor: colors.pumpingBorder },
+  batchDiscardText: { fontSize: 11, fontWeight: '500', color: colors.textMuted },
   batchSelected: { backgroundColor: colors.pumpingSurface, borderColor: colors.pumping },
+  pickerEmpty: { gap: 8 },
+  discardedNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    backgroundColor: colors.neutralSurface,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  discardedText: { flex: 1, fontSize: 11, color: colors.textSubtle },
+  undoText: { fontSize: 11, fontWeight: '700', color: colors.pumpingText },
   batchTime: { fontSize: 14, color: colors.textSubtle },
   batchAmount: { fontSize: 14, fontWeight: '700', color: colors.textSubtle },
   batchTextSelected: { color: colors.pumpingText },

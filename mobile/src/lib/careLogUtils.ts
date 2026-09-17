@@ -5,6 +5,8 @@ import type {
   BreastSide,
   CareLog,
   DiaperKind,
+  FeedingEntryMode,
+  FeedingMethod,
   MilkLog,
   NursingPhase,
   PoopColor,
@@ -22,6 +24,19 @@ export const MILK_AMOUNT_OPTIONS = [20, 40, 60, 80, 100, 120, 140, 160, 180, 200
 
 /** 母乳の授乳時間(分)。0〜30分を5分刻みで。 */
 export const BREAST_MINUTE_OPTIONS = [0, 5, 10, 15, 20, 25, 30];
+
+/** 授乳の入力画面で「搾乳」を選んだときの、飲ませた分か搾った分かの切り替え。 */
+export const FEEDING_ENTRY_MODE_OPTIONS: { value: FeedingEntryMode; label: string }[] = [
+  { value: 'feed', label: '飲ませた' },
+  { value: 'pump', label: '搾った' },
+];
+
+/** 授乳の記録の種類。授乳・搾乳どちらの入力画面でも同じ並びで一番上に出す。 */
+export const FEEDING_METHOD_OPTIONS: { value: FeedingMethod; label: string }[] = [
+  { value: 'breast', label: '母乳' },
+  { value: 'pumped', label: '搾乳' },
+  { value: 'formula', label: 'ミルク' },
+];
 
 export const DIAPER_KIND_OPTIONS: { value: DiaperKind; label: string; hasPoop: boolean }[] = [
   { value: 'pee', label: 'おしっこ', hasPoop: false },

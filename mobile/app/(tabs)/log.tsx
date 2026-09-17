@@ -16,8 +16,10 @@ import type {
   CareLog,
   DiaperLog,
   FamilyMember,
+  FeedingMethod,
   MilkLog,
   PumpedBatch,
+  PumpingLog,
   TemperatureLog,
 } from '@/types/app';
 import { supabase } from '@/lib/supabase';
@@ -25,7 +27,7 @@ import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
 import { listFamilyMembers } from '@/lib/api/familyMembers';
-import { listRecentTemperatureLogs } from '@/lib/api/careLogs';
+import { listRecentTemperatureLogs, setPumpedBatchDiscarded } from '@/lib/api/careLogs';
 import { getProfile } from '@/lib/api/profile';
 import { getProfileFieldValue } from '@/lib/uiUtils';
 import {
@@ -63,6 +65,7 @@ import {
 import LogTimeline from '@/components/log/LogTimeline';
 import DiaperLogModal, { type DiaperLogInput } from '@/components/log/DiaperLogModal';
 import MilkLogModal, { type MilkLogInput } from '@/components/log/MilkLogModal';
+import PumpingLogModal, { type PumpingLogInput } from '@/components/log/PumpingLogModal';
 import TemperatureLogModal, {
   type TemperatureLogInput,
 } from '@/components/log/TemperatureLogModal';
@@ -104,6 +107,9 @@ export default function LogScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   // 開いている入力画面。log が null なら新規追加、入っていればその記録の編集。
   const [editing, setEditing] = useState<{ log: MilkLog | null } | null>(null);
+  const [editingPumping, setEditingPumping] = useState<{ log: PumpingLog | null } | null>(null);
+  // 搾乳の入力画面から「飲ませた」に戻したとき、授乳の入力画面で選んでおく種類。
+  const [milkModalMethod, setMilkModalMethod] = useState<FeedingMethod | undefined>(undefined);
   const [editingDiaper, setEditingDiaper] = useState<{ log: DiaperLog | null } | null>(null);
   const [editingTemperature, setEditingTemperature] = useState<{
     log: TemperatureLog | null;
@@ -260,6 +266,50 @@ export default function LogScreen() {
     }
   };
 
+  const handleSavePumping = async (input: PumpingLogInput, existing: PumpingLog | null) => {
+    if (!familyId || !userId) return;
+    setEditingPumping(null);
+    try {
+      if (existing) {
+        await queueUpdateCareLog(familyId, {
+          type: 'pumping',
+          ...input,
+          id: existing.id,
+          createdBy: existing.createdBy,
+        });
+      } else {
+        await queueInsertCareLog(familyId, userId, { type: 'pumping', ...input });
+      }
+      await showCached();
+      await sync();
+    } catch (error) {
+      setErrorMessage(toMessage(error));
+    }
+  };
+
+  /**
+   * 授乳の入力画面から、パックを丸ごと捨てる / 取り消す。
+   *
+   * 相手は表示中の日の記録とは限らない（ストックは日をまたいでたまる）ので、
+   * 手元の一覧からは探さず、idを指してその場で書き換える。
+   * Web版と同じく、ここだけは端末に控えず直接送る。
+   */
+  const handleDiscardBatch = async (id: string, discarded: boolean) => {
+    // 画面には先に反映し、失敗したら取り直して元に戻す。
+    const discardedAt = discarded ? new Date() : null;
+    setPumpedBatches((prev) =>
+      prev.map((batch) => (batch.id === id ? { ...batch, discardedAt } : batch)),
+    );
+    try {
+      await setPumpedBatchDiscarded(supabase, id, discardedAt);
+      await showCached();
+      await sync();
+    } catch (error) {
+      setErrorMessage(toMessage(error));
+      await sync();
+    }
+  };
+
   const handleSaveDiaper = async (input: DiaperLogInput, existing: DiaperLog | null) => {
     if (!familyId || !userId) return;
     setEditingDiaper(null);
@@ -309,6 +359,7 @@ export default function LogScreen() {
   const handleDelete = async (log: CareLog) => {
     if (!familyId) return;
     setEditing(null);
+    setEditingPumping(null);
     setEditingDiaper(null);
     setEditingTemperature(null);
     try {
@@ -493,6 +544,7 @@ export default function LogScreen() {
                 memberLabel={memberLabel}
                 onSelect={(log) => {
                   if (log.type === 'milk') setEditing({ log });
+                  else if (log.type === 'pumping') setEditingPumping({ log });
                   else if (log.type === 'diaper') setEditingDiaper({ log });
                   else if (log.type === 'temperature') setEditingTemperature({ log });
                 }}
@@ -516,9 +568,31 @@ export default function LogScreen() {
         nextSide={nextBreastSide}
         timer={timer}
         pumpedBatches={pumpedBatches}
+        onDiscardBatch={(id, discarded) => void handleDiscardBatch(id, discarded)}
+        initialMethod={milkModalMethod}
+        onSwitchToPumping={() => {
+          setEditing(null);
+          setEditingPumping({ log: null });
+        }}
         onClose={() => setEditing(null)}
         onSubmit={(input) => void handleSave(input, editing?.log ?? null)}
         onDelete={() => editing?.log && void handleDelete(editing.log)}
+      />
+
+      <PumpingLogModal
+        show={editingPumping !== null}
+        log={editingPumping?.log ?? null}
+        baseDate={logDate}
+        pumpedBatches={pumpedBatches}
+        onSwitchToFeeding={(method) => {
+          // 搾乳の入力画面で選び直した種類のまま、授乳の入力画面へ戻す。
+          setMilkModalMethod(method);
+          setEditingPumping(null);
+          setEditing({ log: null });
+        }}
+        onClose={() => setEditingPumping(null)}
+        onSubmit={(input) => void handleSavePumping(input, editingPumping?.log ?? null)}
+        onDelete={() => editingPumping?.log && void handleDelete(editingPumping.log)}
       />
 
       <DiaperLogModal

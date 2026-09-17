@@ -290,6 +290,32 @@ type OmitFromUnion<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : 
 /** 保存する記録。id はDB側で採番するため持たない。 */
 export type NewCareLogInput = OmitFromUnion<CareLog, 'id' | 'createdBy' | 'legacyAmount'>;
 
+/**
+ * 搾乳ストックの1パックを丸ごと捨てる / 捨てたのを取り消す。
+ *
+ * 捨てても搾った記録は残すので、消すのではなく details.discardedAt を付け外しする。
+ * 量やメモはそのままにしたいため、いまの details を読んでからそのキーだけ足し引きする。
+ * 取り消すときはキーごと外し、そのパックはストックに戻る。
+ */
+export async function setPumpedBatchDiscarded(
+  supabase: SupabaseDb,
+  id: string,
+  discardedAt: Date | null,
+): Promise<void> {
+  const { data, error } = await supabase.from('care_logs').select('details').eq('id', id).single();
+  if (error) throw error;
+
+  const details = { ...toDetails(data.details) };
+  if (discardedAt) details.discardedAt = discardedAt.toISOString();
+  else delete details.discardedAt;
+
+  const { error: updateError } = await supabase
+    .from('care_logs')
+    .update({ details: details as Json })
+    .eq('id', id);
+  if (updateError) throw updateError;
+}
+
 export async function insertCareLog(
   supabase: SupabaseDb,
   familyId: string,
