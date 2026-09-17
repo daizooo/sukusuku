@@ -20,6 +20,7 @@ import { getMyMembership } from '@/lib/api/me';
 import { getProfile } from '@/lib/api/profile';
 import { deleteTask, insertTask, listTasks, updateTask, updateTaskDone } from '@/lib/api/tasks';
 import { listCareLogsInRange } from '@/lib/api/careLogs';
+import { readCachedLogsInRange } from '@/lib/offline/careLogs';
 import {
   addDays,
   addMonths,
@@ -184,17 +185,30 @@ export default function ScheduleScreen() {
   useEffect(() => {
     if (!familyId || !needsLogs || logFrom === null || logTo === null || logRangeKey === null) return;
     let cancelled = false;
-    listCareLogsInRange(supabase, familyId, new Date(logFrom), new Date(logTo))
-      .then((data) => {
+    const from = new Date(logFrom);
+    const to = new Date(logTo);
+    void (async () => {
+      // 圏外でも出せるよう、記録タブと同じく端末の控えを先に出してから、
+      // サーバーの返事で置き換える（控えを書くのは記録タブの役目なのでここでは読むだけ）。
+      try {
+        const cached = await readCachedLogsInRange(familyId, from, to);
+        if (!cancelled && cached.length > 0) {
+          setCareLogs(cached);
+          setLoadedLogRange(logRangeKey);
+        }
+      } catch {
+        // 控えが読めなくても、このあとサーバーから取り直せばよい。
+      }
+      try {
+        const data = await listCareLogsInRange(supabase, familyId, from, to);
         if (!cancelled) setCareLogs(data);
-      })
-      .catch(() => {
-        if (!cancelled) setCareLogs([]);
-      })
-      .finally(() => {
+      } catch {
+        // 取れなければ控えのまま。控えも無ければ「記録なし」になる。
+      } finally {
         // 成功・失敗どちらでも「この範囲は取得済み」にして読み込み表示を終わらせる
         if (!cancelled) setLoadedLogRange(logRangeKey);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
