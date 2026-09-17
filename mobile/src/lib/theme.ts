@@ -13,6 +13,10 @@ export const colors = {
   danger: '#ef4444', // red-500
   accentSurface: '#fdf2f8', // pink-50
 
+  // 下のタブバー。Web版の下部ナビと同じ（選択中=blue-500 / それ以外=gray-500）。
+  navActive: '#3b82f6', // blue-500
+  navInactive: '#6b7280', // gray-500
+
   // 記録の種類ごとの色。Web版の記録タブと同じ割り当て（ミルク=琥珀・おむつ=青・搾乳=薔薇）。
   // 体温の色。Web版(src/)のTailwindの orange 系と同じ値にそろえてある。
   milk: '#d97706', // amber-600
