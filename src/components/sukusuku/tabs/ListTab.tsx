@@ -8,16 +8,6 @@ import { useDragReorder } from '../ui/useDragReorder';
 import ListFormModal, { type ListDraft } from '../modals/ListFormModal';
 
 /**
- * 項目の中身。枠の中でそのまま書き換えるので、専用の画面は持たない。
- * 名前だけ直すことが大半なので、メモとグループは書き換え中だけ出す。
- */
-export interface ListItemDraft {
-  title: string;
-  note: string;
-  groupId: string | null;
-}
-
-/**
  * 買い出し・やりたいこと・やることなどのリスト（docs/lists.md）。
  *
  * Google Keepと同じく、**枠（カード）が操作の単位**になる。グループ（お店など）ごとに
@@ -30,8 +20,8 @@ export interface ListItemDraft {
  * スクロールするのはカード/枠の一覧だけで、見出しや戻るは上に固定する。
  *
  * 追加・書き換え・削除はすべて**その枠の中で終える**（Keepと同じ）。項目を押せば
- * その行が入力欄になり、別の画面（項目の詳細）は出さない。グループの名前も同じく
- * 見出しを押してその場で直す。
+ * その行が入力欄になり、直せるのは**内容だけ**（メモも入れ先の選び直しも持たない）。
+ * グループの名前も同じく見出しを押してその場で直す。
  *
  * 並べ替えとピン止めもKeepに合わせる。よく開くリストは一覧の先頭へ固定でき、
  * 並び順は**長押ししてそのまま動かす**（モードにも矢印にも入らない）。
@@ -50,7 +40,8 @@ interface ListTabProps {
   onDeleteGroup: (id: string) => void;
   onAddItem: (listId: string, groupId: string | null, title: string) => void;
   onToggleItem: (id: string) => void;
-  onUpdateItem: (item: ListItem, draft: ListItemDraft) => void;
+  /** 項目の内容を書き換える。持てるのは内容だけなので、渡すのも内容だけ。 */
+  onRenameItem: (item: ListItem, title: string) => void;
   onDeleteItem: (id: string) => void;
   onClearDone: (listId: string) => void;
   onAddDefaultLists: () => void;
@@ -80,64 +71,22 @@ function ItemCheck({ done, onToggle, label }: { done: boolean; onToggle: () => v
   );
 }
 
-/** 書き換え中に出すグループの選び直し。押しても入力欄から焦点が外れないようにする。 */
-function GroupChips({
-  groups,
-  value,
-  onSelect,
-}: {
-  groups: ListGroup[];
-  value: string | null;
-  onSelect: (groupId: string | null) => void;
-}) {
-  const chip = (selected: boolean) =>
-    `text-[11px] font-bold px-2 py-1 rounded-full border transition ${
-      selected ? 'bg-blue-50 border-blue-300 text-blue-600' : 'bg-white border-gray-200 text-gray-500'
-    }`;
-  return (
-    <div className="flex flex-wrap gap-1 pt-0.5">
-      <button
-        type="button"
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => onSelect(null)}
-        className={chip(value === null)}
-      >
-        未分類
-      </button>
-      {groups.map((group) => (
-        <button
-          key={group.id}
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => onSelect(group.id)}
-          className={chip(value === group.id)}
-        >
-          {group.name}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /**
- * 項目の行。押すとその場で入力欄になり、書き換えたら枠の中で保存する
- * （Keepと同じで、項目のためだけの画面は出さない）。
+ * 項目の行。押すとその場で入力欄になり、枠の中で書き換える
+ * （Keepと同じで、項目のためだけの画面は出さない）。持っているのは内容だけ。
  */
 function ItemRow({
   item,
-  groups,
   onToggle,
-  onUpdate,
+  onRename,
   onDelete,
   attachRef,
   onGrab,
   dragging,
 }: {
   item: ListItem;
-  /** 同じリストのグループ。0件なら入れ先の選び直しは出さない。 */
-  groups: ListGroup[];
   onToggle: () => void;
-  onUpdate: (draft: ListItemDraft) => void;
+  onRename: (title: string) => void;
   onDelete: () => void;
   /** 長押しで動かすための持ち手。完了した項目には渡さない（並びを持たない）。 */
   attachRef?: (el: HTMLElement | null) => void;
@@ -145,101 +94,56 @@ function ItemRow({
   dragging?: boolean;
 }) {
   // null のあいだは読むだけの行。押すと書きかけを持って入力欄になる。
-  const [draft, setDraft] = useState<ListItemDraft | null>(null);
-  const check = (
-    <ItemCheck done={item.done} onToggle={onToggle} label={`${item.title}を${item.done ? '戻す' : '完了にする'}`} />
-  );
-  const deleteButton = (
-    <button
-      type="button"
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onDelete}
-      aria-label={`${item.title}を削除`}
-      className="flex-none text-gray-300 hover:text-red-500 p-1.5"
-    >
-      <X size={16} />
-    </button>
-  );
+  const [draft, setDraft] = useState<string | null>(null);
 
-  if (draft) {
-    const set = (patch: Partial<ListItemDraft>) => setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
-    const close = (next: ListItemDraft) => {
-      const title = next.title.trim();
-      // 空のまま離れたのが消したいのか打ち間違いかは分からないので、元に戻す（消すのは×）。
-      if (title && (title !== item.title || next.note !== item.note || next.groupId !== item.groupId)) {
-        onUpdate({ ...next, title });
-      }
-      setDraft(null);
-    };
-
-    return (
-      <div
-        className="pl-3 pr-1 py-2 border-b border-gray-100 last:border-b-0 bg-blue-50/40"
-        // 枠の外へ触れたら書き換えは終わり。中のチップや×を押したときは続ける。
-        onBlur={(e) => {
-          if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-          close(draft);
-        }}
-      >
-        <div className="flex items-start gap-2">
-          {check}
-          <div className="flex-1 min-w-0 space-y-1.5">
-            <input
-              type="text"
-              value={draft.title}
-              onChange={(e) => set({ title: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') close(draft);
-                if (e.key === 'Escape') setDraft(null);
-              }}
-              autoFocus
-              aria-label="項目の内容"
-              className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-blue-500"
-            />
-            <input
-              type="text"
-              value={draft.note}
-              onChange={(e) => set({ note: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') close(draft);
-                if (e.key === 'Escape') setDraft(null);
-              }}
-              placeholder="メモ（銘柄、売り場など）"
-              aria-label="項目のメモ"
-              className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] outline-none focus:border-blue-500"
-            />
-            {groups.length > 0 && (
-              <GroupChips groups={groups} value={draft.groupId} onSelect={(groupId) => set({ groupId })} />
-            )}
-          </div>
-          {deleteButton}
-        </div>
-      </div>
-    );
-  }
+  const close = (value: string) => {
+    const title = value.trim();
+    // 空のまま離れたのが消したいのか打ち間違いかは分からないので、元に戻す（消すのは×）。
+    if (title && title !== item.title) onRename(title);
+    setDraft(null);
+  };
 
   return (
     <div
-      ref={attachRef}
-      onPointerDown={onGrab}
-      className={`flex items-start gap-2 pl-3 pr-1 py-2.5 border-b border-gray-100 last:border-b-0 ${
+      ref={draft === null ? attachRef : undefined}
+      onPointerDown={draft === null ? onGrab : undefined}
+      className={`flex items-center gap-2 pl-3 pr-1 py-2.5 border-b border-gray-100 last:border-b-0 ${
         dragging ? 'relative z-20 bg-white rounded-lg shadow-lg' : ''
       }`}
     >
-      {check}
-      <button
-        type="button"
-        onClick={() => setDraft({ title: item.title, note: item.note, groupId: item.groupId })}
-        className="flex-1 min-w-0 text-left"
-      >
-        <span className={`block text-sm break-words ${item.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
-          {item.title}
-        </span>
-        {item.note && <span className="block text-[11px] text-gray-400 break-words mt-0.5">{item.note}</span>}
-      </button>
+      <ItemCheck done={item.done} onToggle={onToggle} label={`${item.title}を${item.done ? '戻す' : '完了にする'}`} />
+      {draft === null ? (
+        <button type="button" onClick={() => setDraft(item.title)} className="flex-1 min-w-0 text-left">
+          <span className={`block text-sm break-words ${item.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+            {item.title}
+          </span>
+        </button>
+      ) : (
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') close(draft);
+            if (e.key === 'Escape') setDraft(null);
+          }}
+          onBlur={() => close(draft)}
+          autoFocus
+          aria-label="項目の内容"
+          className="flex-1 min-w-0 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-blue-500"
+        />
+      )}
       {/* その場で消せるようにする。打ち間違いをすぐ取り消せるほうが、
           いちいち書き換えに入るより手数が少ない。 */}
-      {deleteButton}
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onDelete}
+        aria-label={`${item.title}を削除`}
+        className="flex-none text-gray-300 hover:text-red-500 p-1.5"
+      >
+        <X size={16} />
+      </button>
     </div>
   );
 }
@@ -518,7 +422,7 @@ export default function ListTab({
   onDeleteGroup,
   onAddItem,
   onToggleItem,
-  onUpdateItem,
+  onRenameItem,
   onDeleteItem,
   onClearDone,
   onAddDefaultLists,
@@ -597,9 +501,8 @@ export default function ListTab({
       <ItemRow
         key={item.id}
         item={item}
-        groups={listGroups}
         onToggle={() => onToggleItem(item.id)}
-        onUpdate={(draft) => onUpdateItem(item, draft)}
+        onRename={(title) => onRenameItem(item, title)}
         onDelete={() => onDeleteItem(item.id)}
         attachRef={drag.dragRef(item.id)}
         onGrab={drag.handleProps(sectionKey, arranged, item.id).onPointerDown}
@@ -817,9 +720,8 @@ export default function ListTab({
                 <ItemRow
                   key={item.id}
                   item={item}
-                  groups={listGroups}
                   onToggle={() => onToggleItem(item.id)}
-                  onUpdate={(draft) => onUpdateItem(item, draft)}
+                  onRename={(title) => onRenameItem(item, title)}
                   onDelete={() => onDeleteItem(item.id)}
                 />
               ))}

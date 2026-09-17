@@ -258,6 +258,7 @@ export interface ListGroup {
 /**
  * リストの項目。数量はタイトルに書く（「牛乳2本」）。
  * 場所は項目ではなくグループで表すため、項目そのものは場所を持たない。
+ * メモも持たない（Keepと同じく、行にあるのは内容だけ）。
  */
 export interface ListItem {
   id: string;
@@ -265,7 +266,6 @@ export interface ListItem {
   /** どのグループに入っているか。null は未分類。 */
   groupId: string | null;
   title: string;
-  note: string;
   done: boolean;
   /** 完了した時刻。完了した項目は消さずに残す。 */
   doneAt: Date | null;
