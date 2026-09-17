@@ -1,10 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { CareLog } from '@/types/app';
-import { colors } from '@/lib/theme';
 import { getMilkMarksOnDate } from '@/lib/scheduleUtils';
+import { colors } from '@/lib/theme';
 
-// 1日を0時から24時までの横1本にした帯。授乳を印で出す。
-// Web版の `src/components/sukusuku/schedule/DayTimeline.tsx` と同じ。
+// 1日を0時から24時までの横1本にした帯。Web版の
+// `src/components/sukusuku/schedule/DayTimeline.tsx` を置き換えたもの。授乳を印で出す。
 //
 // 週表示では7日ぶんが縦に並ぶため、授乳の間隔がそろってきたか・夜間にどれだけ
 // 起こされているかを見比べられる。日表示は1日しか出さないぶん帯を太く取れる。
@@ -21,9 +21,7 @@ interface DayTimelineProps {
 }
 
 /** 0時を0、24時を1とした目盛りの位置。 */
-const at = (hour: number): number => hour / 24;
-
-const toPercent = (value: number): `${number}%` => `${Number((value * 100).toFixed(2))}%`;
+const at = (hour: number): `${number}%` => `${(hour / 24) * 100}%`;
 
 /** 目盛りの数字。帯の下（週表示では7本の帯の上）に1本だけ置く。 */
 export function TimelineScale() {
@@ -54,17 +52,17 @@ export default function DayTimeline({ logs, day, variant = 'week' }: DayTimeline
       {/* 日表示は帯が太く時刻を追いやすいので、3時間ごとの薄い目盛りも足す。 */}
       {isDay &&
         [3, 9, 15, 21].map((hour) => (
-          <View key={hour} style={[styles.tick, styles.tickFaint, { left: toPercent(at(hour)) }]} />
+          <View key={hour} style={[styles.tickFaint, { left: at(hour) }]} />
         ))}
 
       {/* 6時・12時・18時の目盛り */}
       {[6, 12, 18].map((hour) => (
-        <View key={hour} style={[styles.tick, { left: toPercent(at(hour)) }]} />
+        <View key={hour} style={[styles.tick, { left: at(hour) }]} />
       ))}
 
       {/* 授乳の印。 */}
       {milkMarks.map((mark, i) => (
-        <View key={`milk-${i}`} style={[styles.mark, { left: toPercent(mark) }]} />
+        <View key={`milk-${i}`} style={[styles.mark, { left: `${mark * 100}%` }]} />
       ))}
     </View>
   );
@@ -87,7 +85,7 @@ const styles = StyleSheet.create({
   trackWeek: { height: 16, borderRadius: 4 },
   trackDay: { height: 36, borderRadius: 8 },
   tick: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: colors.border },
-  tickFaint: { opacity: 0.6 },
-  mark: { position: 'absolute', top: 0, bottom: 0, width: 2, backgroundColor: colors.timelineMark },
+  tickFaint: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: colors.borderFaint },
+  mark: { position: 'absolute', top: 0, bottom: 0, width: 2, backgroundColor: colors.milkMark },
   dayGroup: { gap: 4 },
 });

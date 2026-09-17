@@ -85,6 +85,13 @@ export default function LogScreen() {
   const [familyId, setFamilyId] = useState<string | null>(null);
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [logDate, setLogDate] = useState(() => startOfDay(new Date()));
+  // 予定タブの日表示から「記録タブで開く」で来たときは、その日を開く
+  // （Web版が記録タブの日付を差し替えるのと同じ動き）。
+  const { date: requestedDate } = useLocalSearchParams<{ date?: string }>();
+  useEffect(() => {
+    const picked = requestedDate ? parseDateString(requestedDate) : null;
+    if (picked) setLogDate(startOfDay(picked));
+  }, [requestedDate]);
   const [logs, setLogs] = useState<CareLog[]>([]);
   const [pumpedBatches, setPumpedBatches] = useState<PumpedBatch[]>([]);
   const [unsentCount, setUnsentCount] = useState(0);
@@ -101,13 +108,6 @@ export default function LogScreen() {
   const [editingTemperature, setEditingTemperature] = useState<{
     log: TemperatureLog | null;
   } | null>(null);
-
-  // 予定タブの日表示から「記録タブで開く」で来たときは、その日を出す。
-  const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
-  useEffect(() => {
-    const picked = typeof dateParam === 'string' ? parseDateString(dateParam) : null;
-    if (picked) setLogDate(startOfDay(picked));
-  }, [dateParam]);
 
   const today = startOfDay(new Date());
   const isToday = isSameDay(logDate, today);

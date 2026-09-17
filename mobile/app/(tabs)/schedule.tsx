@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import {
   CalendarDays,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CornerDownRight,
   Filter,
+  Plus,
 } from 'lucide-react-native';
 import type { CareLog, DynamicTask, Label, ScheduleView, Task, UserProfile } from '@/types/app';
 import { LABELS } from '@/types/app';
@@ -18,15 +18,8 @@ import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
 import { getProfile } from '@/lib/api/profile';
-import {
-  deleteTask as deleteTaskApi,
-  insertTask,
-  listTasks,
-  updateTask as updateTaskApi,
-  updateTaskDone,
-} from '@/lib/api/tasks';
+import { deleteTask, insertTask, listTasks, updateTask, updateTaskDone } from '@/lib/api/tasks';
 import { listCareLogsInRange } from '@/lib/api/careLogs';
-import { readCachedLogsInRange } from '@/lib/offline/careLogs';
 import {
   addDays,
   addMonths,
@@ -43,19 +36,22 @@ import {
 import { byDateThenTime, tasksOnDate } from '@/lib/scheduleUtils';
 import { getLabelColors, getProfileFieldValue } from '@/lib/uiUtils';
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
+import SelectField from '@/components/ui/SelectField';
 import MonthView from '@/components/schedule/MonthView';
 import WeekView from '@/components/schedule/WeekView';
 import DayView from '@/components/schedule/DayView';
 import ListView from '@/components/schedule/ListView';
-import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 import AddTaskModal, { type TaskDraft } from '@/components/schedule/AddTaskModal';
+import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 
 // 予定タブ。Web版の `src/components/sukusuku/tabs/ScheduleTab.tsx` を
-// React Nativeに置き換えたもの。表示の切り替え・絞り込み・日付の送り・
-// 月/週/日/リストの中身は同じにしてある。
+// React Nativeに置き換えたもの。出す項目・並び・文言は同じにしてある。
 //
-// Web版はアプリ全体で1つ持っている状態を受け取るが、こちらはタブごとの画面なので
-// この画面で読む（プロフィール・予定・表示中の範囲の育児記録）。
+// Web版はアプリ全体で持っている状態を受け取るが、こちらはタブごとの画面なので
+// 予定・プロフィール・表示中の範囲の記録をこの画面で読む。
+//
+// 画面の作り方はルートの CLAUDE.md に従い、表示の切り替えと日付送りは固定して、
+// スクロールは予定の一覧だけに閉じる。
 
 const LABEL_FILTERS: (Label | 'すべて')[] = ['すべて', ...LABELS];
 
@@ -87,27 +83,28 @@ export default function ScheduleScreen() {
   const userId = session?.user.id ?? null;
   const router = useRouter();
 
+  const today = useMemo(() => new Date(), []);
+
   const [familyId, setFamilyId] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [todos, setTodos] = useState<Task[]>([]);
   const [isLoadingTodos, setIsLoadingTodos] = useState(true);
 
   const [view, setView] = useState<ScheduleView>('month');
+  const [selectedDate, setSelectedDate] = useState(() => startOfDay(today));
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(
+    () => new Date(today.getFullYear(), today.getMonth(), 1),
+  );
   const [labelFilter, setLabelFilter] = useState<Label | 'すべて'>('すべて');
-  const [isPickingFilter, setIsPickingFilter] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
-  const [calendarDate, setCalendarDate] = useState(() => startOfDay(new Date()));
 
   const [careLogs, setCareLogs] = useState<CareLog[]>([]);
   const [loadedLogRange, setLoadedLogRange] = useState<string | null>(null);
 
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newTask, setNewTask] = useState<TaskDraft>(() => emptyTaskDraft(today));
   const [selectedTask, setSelectedTask] = useState<DynamicTask | null>(null);
   const [isEditingTask, setIsEditingTask] = useState(false);
   const [tempEditingTask, setTempEditingTask] = useState<DynamicTask | null>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newTask, setNewTask] = useState<TaskDraft>(() => emptyTaskDraft(new Date()));
-
-  const today = useMemo(() => startOfDay(new Date()), []);
 
   useEffect(() => {
     if (!userId) return;
@@ -151,13 +148,12 @@ export default function ScheduleScreen() {
     [todos, birthDate],
   );
 
-  const filteredTodos = useMemo(
-    () => dynamicTodos.filter((t) => labelFilter === 'すべて' || t.label === labelFilter),
-    [dynamicTodos, labelFilter],
+  const filteredTodos = dynamicTodos.filter(
+    (t) => labelFilter === 'すべて' || t.label === labelFilter,
   );
 
   const weekStart = startOfWeek(selectedDate);
-  const monthStart = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1);
+  const monthStart = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth(), 1);
 
   // 週表示・日表示に出す育児記録。表示中の範囲だけを取りに行く。
   // 月表示は記録を出さないため、月をめくっても問い合わせは起きない。
@@ -178,6 +174,8 @@ export default function ScheduleScreen() {
   const logFrom = logRange?.from.getTime() ?? null;
   const logTo = logRange?.to.getTime() ?? null;
   const needsLogs = logFrom !== null && logTo !== null && logFrom <= today.getTime();
+  // 取得済みの範囲。表示中の範囲と一致していなければ読み込み中とみなす。
+  // 週の初日を日表示で開くと頭の時刻が週表示と同じになるため、終わりも含めて見分ける。
   const logRangeKey = logFrom === null || logTo === null ? null : `${logFrom}-${logTo}`;
   const isLogsLoaded = loadedLogRange === logRangeKey;
   const visibleLogs = needsLogs && isLogsLoaded ? careLogs : [];
@@ -186,29 +184,17 @@ export default function ScheduleScreen() {
   useEffect(() => {
     if (!familyId || !needsLogs || logFrom === null || logTo === null || logRangeKey === null) return;
     let cancelled = false;
-    const from = new Date(logFrom);
-    const to = new Date(logTo);
-    void (async () => {
-      // 圏外でも出せるよう、端末の控えを先に出してからサーバーの返事で置き換える。
-      try {
-        const cached = await readCachedLogsInRange(familyId, from, to);
-        if (!cancelled && cached.length > 0) {
-          setCareLogs(cached);
-          setLoadedLogRange(logRangeKey);
-        }
-      } catch {
-        // 控えが読めなくてもサーバーから取り直せばよい。
-      }
-      try {
-        const data = await listCareLogsInRange(supabase, familyId, from, to);
+    listCareLogsInRange(supabase, familyId, new Date(logFrom), new Date(logTo))
+      .then((data) => {
         if (!cancelled) setCareLogs(data);
-      } catch {
-        // 取れなければ控えのまま（控えも無ければ「記録なし」になる）。
-      } finally {
-        // 成功・失敗どちらでも「この範囲は取得済み」にして読み込み表示を終わらせる。
+      })
+      .catch(() => {
+        if (!cancelled) setCareLogs([]);
+      })
+      .finally(() => {
+        // 成功・失敗どちらでも「この範囲は取得済み」にして読み込み表示を終わらせる
         if (!cancelled) setLoadedLogRange(logRangeKey);
-      }
-    })();
+      });
     return () => {
       cancelled = true;
     };
@@ -218,108 +204,37 @@ export default function ScheduleScreen() {
   const selectDate = (date: Date, openDayView = true) => {
     const day = startOfDay(date);
     setSelectedDate(day);
-    if (!isSameMonth(day, calendarDate)) {
-      setCalendarDate(new Date(day.getFullYear(), day.getMonth(), 1));
+    if (!isSameMonth(day, currentCalendarDate)) {
+      setCurrentCalendarDate(new Date(day.getFullYear(), day.getMonth(), 1));
     }
     if (openDayView) setView('day');
   };
 
   const step = (delta: number) => {
     if (view === 'month') {
-      setCalendarDate(addMonths(monthStart, delta));
+      setCurrentCalendarDate(addMonths(monthStart, delta));
       return;
     }
     selectDate(addDays(selectedDate, view === 'week' ? delta * 7 : delta), false);
   };
 
   const goToday = () => {
-    setCalendarDate(new Date(today.getFullYear(), today.getMonth(), 1));
-    setSelectedDate(today);
+    setCurrentCalendarDate(new Date(today.getFullYear(), today.getMonth(), 1));
+    setSelectedDate(startOfDay(today));
   };
 
-  const openPicker = () =>
+  // 任意の月・日へ直接ジャンプする。Web版は <input type="month"> / <input type="date"> だが、
+  // Androidに月のピッカーは無いので、月表示でも日付のピッカーから年と月だけを受け取る。
+  const openJumpPicker = () =>
     DateTimePickerAndroid.open({
       value: view === 'month' ? monthStart : selectedDate,
       mode: 'date',
       onChange: (_event, picked) => {
         if (!picked) return;
-        // 月表示は月だけを見るので、選んだ日の月へ移る。
-        if (view === 'month') setCalendarDate(new Date(picked.getFullYear(), picked.getMonth(), 1));
+        if (view === 'month') setCurrentCalendarDate(new Date(picked.getFullYear(), picked.getMonth(), 1));
         else selectDate(picked, false);
       },
     });
-
-  const toggleTodo = useCallback(
-    async (task: DynamicTask) => {
-      const nextDone = !task.done;
-      // 楽観的更新
-      setTodos((prev) => prev.map((t) => (t.id === task.id ? { ...t, done: nextDone } : t)));
-      setSelectedTask((prev) => (prev && prev.id === task.id ? { ...prev, done: nextDone } : prev));
-      try {
-        await updateTaskDone(supabase, task.id, nextDone);
-      } catch {
-        // 送れなければ元に戻す。圏外での予定の書き込みはまだ控えていない。
-        setTodos((prev) => prev.map((t) => (t.id === task.id ? { ...t, done: !nextDone } : t)));
-        setSelectedTask((prev) =>
-          prev && prev.id === task.id ? { ...prev, done: !nextDone } : prev,
-        );
-      }
-    },
-    [],
-  );
-
-  const openTaskDetail = (task: DynamicTask) => {
-    setSelectedTask(task);
-    setIsEditingTask(false);
-    setTempEditingTask(task);
-  };
-
-  const saveTaskEdit = async () => {
-    if (!tempEditingTask) return;
-    const updated = tempEditingTask;
-    setTodos((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)));
-    setSelectedTask(updated);
-    setIsEditingTask(false);
-    try {
-      await updateTaskApi(supabase, updated);
-    } catch {
-      Alert.alert('保存に失敗しました', 'もう一度お試しください。');
-    }
-  };
-
-  const handleDeleteTask = async (id: string) => {
-    const previous = todos;
-    setTodos((prev) => prev.filter((t) => t.id !== id));
-    setSelectedTask(null);
-    try {
-      await deleteTaskApi(supabase, id);
-    } catch {
-      setTodos(previous);
-      Alert.alert('削除に失敗しました', 'もう一度お試しください。');
-    }
-  };
-
-  const handleAddTask = async () => {
-    if (!familyId || newTask.title === '') return;
-    const input = { ...newTask };
-    setShowAddModal(false);
-    setNewTask(emptyTaskDraft(selectedDate));
-    try {
-      const created = await insertTask(supabase, familyId, input);
-      setTodos((prev) => [...prev, created]);
-    } catch {
-      Alert.alert('予定の追加に失敗しました', 'もう一度お試しください。');
-    }
-  };
-
-  // カレンダーで選んでいる日を初期値にして予定を追加する。
-  const openAddTaskModal = (date: Date) => {
-    setNewTask(emptyTaskDraft(date));
-    setShowAddModal(true);
-  };
-
-  if (isSessionLoading) return null;
-  if (!session) return <Redirect href="/login" />;
 
   const title =
     view === 'month'
@@ -344,117 +259,186 @@ export default function ScheduleScreen() {
     .filter((t) => t.targetDateObj && t.targetDateObj >= addMonths(monthStart, 1))
     .sort(byDateThenTime)[0]?.targetDateObj;
 
+  const toggleTodo = useCallback(
+    async (id: string) => {
+      const target = todos.find((t) => t.id === id);
+      if (!target) return;
+      const nextDone = !target.done;
+
+      // 楽観的更新
+      setTodos((prev) => prev.map((todo) => (todo.id === id ? { ...todo, done: nextDone } : todo)));
+      setSelectedTask((prev) => (prev && prev.id === id ? { ...prev, done: nextDone } : prev));
+
+      try {
+        await updateTaskDone(supabase, id, nextDone);
+      } catch {
+        // 失敗時はロールバック
+        setTodos((prev) =>
+          prev.map((todo) => (todo.id === id ? { ...todo, done: !nextDone } : todo)),
+        );
+        setSelectedTask((prev) => (prev && prev.id === id ? { ...prev, done: !nextDone } : prev));
+      }
+    },
+    [todos],
+  );
+
+  const openTaskDetail = (task: DynamicTask) => {
+    setSelectedTask(task);
+    setIsEditingTask(false);
+    setTempEditingTask(task);
+  };
+
+  const saveTaskEdit = async () => {
+    if (!tempEditingTask) return;
+    const updated = tempEditingTask;
+
+    setTodos((prev) => prev.map((todo) => (todo.id === updated.id ? { ...todo, ...updated } : todo)));
+    setSelectedTask(updated);
+    setIsEditingTask(false);
+
+    try {
+      await updateTask(supabase, updated);
+    } catch {
+      Alert.alert('保存できませんでした', 'もう一度お試しください。');
+    }
+  };
+
+  const handleDeleteTask = async (id: string) => {
+    const previousTodos = todos;
+    setTodos((prev) => prev.filter((todo) => todo.id !== id));
+    setSelectedTask(null);
+
+    try {
+      await deleteTask(supabase, id);
+    } catch {
+      setTodos(previousTodos);
+      Alert.alert('削除できませんでした', 'もう一度お試しください。');
+    }
+  };
+
+  const handleAddTask = async () => {
+    if (!newTask.title || !familyId) return;
+    const input = { ...newTask };
+
+    setShowAddModal(false);
+    setNewTask(emptyTaskDraft(today));
+
+    try {
+      const created = await insertTask(supabase, familyId, input);
+      setTodos((prev) => [...prev, created]);
+    } catch {
+      Alert.alert('予定を追加できませんでした', 'もう一度お試しください。');
+    }
+  };
+
+  // カレンダーで選んでいる日を初期値にして予定を追加する。
+  const openAddTaskModal = (date: Date) => {
+    setNewTask(emptyTaskDraft(date));
+    setShowAddModal(true);
+  };
+
+  // 日表示から、その日の記録タブへ移る。
+  const openLogTabForDate = (date: Date) =>
+    router.push({ pathname: '/log', params: { date: toDateString(date) } });
+
+  if (isSessionLoading) {
+    return (
+      <SafeAreaView style={[styles.screen, styles.centered]}>
+        <ActivityIndicator color={colors.navActive} />
+      </SafeAreaView>
+    );
+  }
+  if (!session) return <Redirect href="/login" />;
+
   const filterTone = labelFilter === 'すべて' ? null : getLabelColors(labelFilter);
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
-      {/* 表示の切り替えと担当の絞り込みは同じ1段に置く（スマホで縦の高さを予定表に回すため）。 */}
-      <View style={styles.toolbar}>
-        <SegmentedTabs
-          accessibilityLabel="スケジュールの表示"
-          value={view}
-          onChange={setView}
-          options={VIEW_TABS}
-          fill={false}
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="担当で絞り込む"
-          onPress={() => setIsPickingFilter(true)}
-          style={[
-            styles.filter,
-            filterTone !== null && {
-              backgroundColor: filterTone.background,
-              borderColor: filterTone.border,
-            },
-          ]}
-        >
-          <Filter size={14} color={filterTone?.text ?? colors.textSubtle} />
-          <Text style={[styles.filterText, filterTone !== null && { color: filterTone.text }]}>
-            {labelFilter}
-          </Text>
-          <ChevronDown size={14} color={filterTone?.text ?? colors.textSubtle} />
-        </Pressable>
-      </View>
+    <SafeAreaView style={styles.screen}>
+      <View style={styles.page}>
+        {/* 表示の切り替えと担当の絞り込みは同じ1段に置く（縦の高さを予定表に回すため）。
+            絞り込みは選択肢が増えても幅が変わらないよう、横並びのボタンではなく選択にしている。 */}
+        <View style={styles.toolbar}>
+          <SegmentedTabs
+            accessibilityLabel="スケジュールの表示"
+            value={view}
+            onChange={setView}
+            options={VIEW_TABS}
+            fill={false}
+          />
+          <SelectField
+            accessibilityLabel="担当で絞り込む"
+            options={LABEL_FILTERS.map((a) => ({ value: a, label: a }))}
+            value={labelFilter}
+            onChange={setLabelFilter}
+            icon={<Filter size={14} color={filterTone?.text ?? colors.textSubtle} />}
+            style={filterTone ? { backgroundColor: filterTone.background, borderColor: filterTone.border } : undefined}
+            textStyle={filterTone ? { color: filterTone.text } : undefined}
+            chevronColor={filterTone?.text}
+          />
+        </View>
 
-      {view !== 'list' && (
-        <View style={styles.dateBar}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="前へ"
-            onPress={() => step(-1)}
-            hitSlop={8}
-            style={styles.arrow}
-          >
-            <ChevronLeft size={20} color={colors.textSubtle} />
-          </Pressable>
-
-          <View style={styles.dateTitleRow}>
-            <Text style={styles.dateTitle}>{title}</Text>
-            {/* 端末のピッカーで任意の月・日へ直接ジャンプする */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={view === 'month' ? '月を選ぶ' : '日付を選ぶ'}
-              onPress={openPicker}
-              hitSlop={8}
-            >
-              <CalendarDays size={16} color={colors.textFaint} />
+        {view !== 'list' && (
+          <View style={styles.nav}>
+            <Pressable accessibilityRole="button" accessibilityLabel="前へ" onPress={() => step(-1)} style={styles.navArrow}>
+              <ChevronLeft size={20} color={colors.textSubtle} />
             </Pressable>
-            {!isShowingToday && (
-              <Pressable accessibilityRole="button" onPress={goToday} style={styles.todayButton}>
-                <Text style={styles.todayButtonText}>今日</Text>
+
+            <View style={styles.navTitleRow}>
+              <Text style={styles.navTitle}>{title}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={view === 'month' ? '月を選ぶ' : '日付を選ぶ'}
+                onPress={openJumpPicker}
+                hitSlop={8}
+              >
+                <CalendarDays size={16} color={colors.textFaint} />
+              </Pressable>
+              {!isShowingToday && (
+                <Pressable accessibilityRole="button" onPress={goToday} style={styles.todayButton}>
+                  <Text style={styles.todayText}>今日</Text>
+                </Pressable>
+              )}
+            </View>
+
+            <Pressable accessibilityRole="button" accessibilityLabel="次へ" onPress={() => step(1)} style={styles.navArrow}>
+              <ChevronRight size={20} color={colors.textSubtle} />
+            </Pressable>
+          </View>
+        )}
+
+        {view === 'month' && (
+          <View style={styles.body}>
+            <MonthView
+              month={monthStart}
+              today={today}
+              selectedDate={selectedDate}
+              tasks={filteredTodos}
+              birthDate={birthDate}
+              onSelectDate={(date) => selectDate(date)}
+              onOpenTask={openTaskDetail}
+            />
+            {!isLoadingTodos && tasksInMonth.length === 0 && nextMonthWithTask && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() =>
+                  setCurrentCalendarDate(
+                    new Date(nextMonthWithTask.getFullYear(), nextMonthWithTask.getMonth(), 1),
+                  )
+                }
+                style={styles.jump}
+              >
+                <CornerDownRight size={14} color={colors.navActive} />
+                <Text style={styles.jumpText}>
+                  次に予定がある月へ ({nextMonthWithTask.getFullYear()}年
+                  {nextMonthWithTask.getMonth() + 1}月)
+                </Text>
               </Pressable>
             )}
           </View>
+        )}
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="次へ"
-            onPress={() => step(1)}
-            hitSlop={8}
-            style={styles.arrow}
-          >
-            <ChevronRight size={20} color={colors.textSubtle} />
-          </Pressable>
-        </View>
-      )}
-
-      {/* タブ全体はスクロールさせない。月表示は与えられた高さに収め、
-          週・日・リストは中身だけをスクロールさせる（ルートの CLAUDE.md）。 */}
-      {view === 'month' && (
-        <View style={styles.month}>
-          <MonthView
-            month={monthStart}
-            today={today}
-            selectedDate={selectedDate}
-            tasks={filteredTodos}
-            birthDate={birthDate}
-            onSelectDate={(date) => selectDate(date)}
-            onOpenTask={openTaskDetail}
-          />
-          {!isLoadingTodos && tasksInMonth.length === 0 && nextMonthWithTask && (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() =>
-                setCalendarDate(
-                  new Date(nextMonthWithTask.getFullYear(), nextMonthWithTask.getMonth(), 1),
-                )
-              }
-              style={styles.nextMonth}
-            >
-              <CornerDownRight size={14} color={colors.accentBlue} />
-              <Text style={styles.nextMonthText}>
-                次に予定がある月へ ({nextMonthWithTask.getFullYear()}年
-                {nextMonthWithTask.getMonth() + 1}月)
-              </Text>
-            </Pressable>
-          )}
-        </View>
-      )}
-
-      {view !== 'month' && (
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-          {view === 'week' && (
+        {view === 'week' && (
+          <ScrollView style={styles.body} contentContainerStyle={styles.scrollContent}>
             <WeekView
               date={selectedDate}
               today={today}
@@ -466,9 +450,11 @@ export default function ScheduleScreen() {
               onToggleTodo={toggleTodo}
               onOpenTask={openTaskDetail}
             />
-          )}
+          </ScrollView>
+        )}
 
-          {view === 'day' && (
+        {view === 'day' && (
+          <ScrollView style={styles.body} contentContainerStyle={styles.scrollContent}>
             <DayView
               date={selectedDate}
               today={today}
@@ -479,13 +465,13 @@ export default function ScheduleScreen() {
               onToggleTodo={toggleTodo}
               onOpenTask={openTaskDetail}
               onAddTask={openAddTaskModal}
-              onOpenLogTab={(date) =>
-                router.push({ pathname: '/log', params: { date: toDateString(date) } })
-              }
+              onOpenLogTab={openLogTabForDate}
             />
-          )}
+          </ScrollView>
+        )}
 
-          {view === 'list' && (
+        {view === 'list' && (
+          <View style={styles.body}>
             <ListView
               tasks={filteredTodos}
               isLoading={isLoadingTodos}
@@ -494,46 +480,23 @@ export default function ScheduleScreen() {
               onToggleTodo={toggleTodo}
               onOpenTask={openTaskDetail}
             />
-          )}
-        </ScrollView>
-      )}
-
-      {/* 絞り込みの選択。Web版は選択（select）だが、React Nativeには同じものが無いので
-          選択肢を出して選ぶ形にする。出る中身・並びは同じ。 */}
-      <Modal
-        visible={isPickingFilter}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsPickingFilter(false)}
-      >
-        <Pressable style={styles.pickerBackdrop} onPress={() => setIsPickingFilter(false)}>
-          <View style={styles.picker}>
-            {LABEL_FILTERS.map((option) => {
-              const selected = option === labelFilter;
-              return (
-                <Pressable
-                  key={option}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  onPress={() => {
-                    setLabelFilter(option);
-                    setIsPickingFilter(false);
-                  }}
-                  style={[styles.pickerOption, selected && styles.pickerOptionSelected]}
-                >
-                  <Text style={[styles.pickerText, selected && styles.pickerTextSelected]}>
-                    {option}
-                  </Text>
-                </Pressable>
-              );
-            })}
           </View>
-        </Pressable>
-      </Modal>
+        )}
+      </View>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="予定を追加"
+        onPress={() => openAddTaskModal(selectedDate)}
+        style={styles.fab}
+      >
+        <Plus size={28} color={colors.primaryText} />
+      </Pressable>
 
       <AddTaskModal
         show={showAddModal}
         newTask={newTask}
+        // 誕生日が未登録のときだけ「生後日数で指定」を選べるようにする。
         allowBirthRelative={birthDate === ''}
         onChange={setNewTask}
         onClose={() => setShowAddModal(false)}
@@ -549,7 +512,7 @@ export default function ScheduleScreen() {
         onChangeTempEditingTask={setTempEditingTask}
         onSaveEdit={saveTaskEdit}
         onClose={() => setSelectedTask(null)}
-        onToggleDone={() => selectedTask && void toggleTodo(selectedTask)}
+        onToggleDone={() => selectedTask && void toggleTodo(selectedTask.id)}
         onDelete={() => selectedTask && void handleDeleteTask(selectedTask.id)}
       />
     </SafeAreaView>
@@ -557,22 +520,12 @@ export default function ScheduleScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 16, paddingTop: 12 },
-  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  filter: {
-    marginLeft: 'auto',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    height: 44,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-  },
-  filterText: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },
-  dateBar: {
+  screen: { flex: 1, backgroundColor: colors.background },
+  centered: { alignItems: 'center', justifyContent: 'center' },
+  page: { flex: 1, padding: 16, gap: 12 },
+  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+
+  nav: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -580,21 +533,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 12,
-    padding: 8,
-    marginBottom: 12,
+    padding: 4,
   },
-  arrow: { padding: 8 },
-  dateTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dateTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  navArrow: { padding: 8 },
+  navTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  navTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
   todayButton: {
-    backgroundColor: colors.accentBlueSurface,
+    backgroundColor: colors.diaperSurface,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  todayButtonText: { fontSize: 11, fontWeight: '700', color: colors.accentBlueStrong },
-  month: { flex: 1, paddingBottom: 12 },
-  nextMonth: {
+  todayText: { fontSize: 12, fontWeight: '700', color: colors.navActiveText },
+
+  body: { flex: 1, minHeight: 0 },
+  scrollContent: { paddingBottom: 96 },
+  jump: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -606,24 +560,18 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 12,
   },
-  nextMonthText: { fontSize: 13, fontWeight: '500', color: colors.accentBlue },
-  scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 24 },
-  pickerBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+  jumpText: { fontSize: 13, fontWeight: '500', color: colors.navActive },
+
+  fab: {
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 999,
+    backgroundColor: colors.navActive,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
+    elevation: 4,
   },
-  picker: {
-    width: '100%',
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    paddingVertical: 8,
-  },
-  pickerOption: { paddingHorizontal: 16, paddingVertical: 12 },
-  pickerOptionSelected: { backgroundColor: colors.accentBlueSurface },
-  pickerText: { fontSize: 14, color: colors.text },
-  pickerTextSelected: { fontWeight: '700', color: colors.accentBlueText },
 });

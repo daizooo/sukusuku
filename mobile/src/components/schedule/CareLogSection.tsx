@@ -14,9 +14,8 @@ import {
 import { colors } from '@/lib/theme';
 import BabyBottleIcon from '@/components/ui/BabyBottleIcon';
 
-// 予定タブに出す育児記録。Web版の `src/components/sukusuku/schedule/CareLogSection.tsx` と同じ。
-//
-// ここでは見るだけで、追加・編集は記録タブに任せる（同じ入力導線を2か所に置かないため）。
+// 予定タブに出す育児記録。Web版の
+// `src/components/sukusuku/schedule/CareLogSection.tsx` を置き換えたもの。
 
 interface CareLogSummaryProps {
   logs: CareLog[];
@@ -31,33 +30,31 @@ export function CareLogSummaryLine({ logs }: CareLogSummaryProps) {
     <View style={styles.summary}>
       <View style={styles.summaryItem}>
         <BabyBottleIcon size={12} color={colors.milk} />
-        <Text style={styles.summaryText}>
-          {summary.milk.count}回{summary.milk.ml > 0 ? ` ${summary.milk.ml}ml` : ''}
-        </Text>
+        <Text style={styles.summaryText}>{summary.milk.count}回</Text>
+        {summary.milk.ml > 0 && <Text style={styles.summaryText}>{summary.milk.ml}ml</Text>}
       </View>
       <View style={styles.summaryItem}>
         <Droplet size={12} color={colors.diaper} />
-        <Text style={styles.summaryText}>
-          {summary.diaper.count}回
-          {summary.diaper.poopCount > 0 ? ` (💩${summary.diaper.poopCount})` : ''}
-        </Text>
+        <Text style={styles.summaryText}>{summary.diaper.count}回</Text>
+        {summary.diaper.poopCount > 0 && (
+          <Text style={styles.summaryText}>(💩{summary.diaper.poopCount})</Text>
+        )}
       </View>
       <View style={styles.summaryItem}>
         <Milk size={12} color={colors.pumping} />
-        <Text style={styles.summaryText}>
-          {summary.pumping.count}回{summary.pumping.ml > 0 ? ` ${summary.pumping.ml}ml` : ''}
-        </Text>
+        <Text style={styles.summaryText}>{summary.pumping.count}回</Text>
+        {summary.pumping.ml > 0 && <Text style={styles.summaryText}>{summary.pumping.ml}ml</Text>}
       </View>
       {/* 体温は無い日のほうが多いので、その日にあったときだけ並べる。 */}
       {summary.temperature.count > 0 && (
         <View style={styles.summaryItem}>
           <Thermometer size={12} color={colors.temperature} />
-          <Text style={styles.summaryText}>
-            {summary.temperature.count}回
-            {summary.temperature.maxCelsius !== null
-              ? ` 最高 ${formatCelsius(summary.temperature.maxCelsius)}`
-              : ''}
-          </Text>
+          <Text style={styles.summaryText}>{summary.temperature.count}回</Text>
+          {summary.temperature.maxCelsius !== null && (
+            <Text style={styles.summaryText}>
+              最高 {formatCelsius(summary.temperature.maxCelsius)}
+            </Text>
+          )}
         </View>
       )}
     </View>
@@ -72,6 +69,10 @@ interface CareLogSectionProps {
   onOpenLogTab: () => void;
 }
 
+/**
+ * 日表示に出す育児記録。ここでは閲覧だけを行い、追加・編集は記録タブに任せる
+ * （同じ入力導線を2か所に置かないため）。
+ */
 export default function CareLogSection({
   logs,
   isLoading,
@@ -83,11 +84,13 @@ export default function CareLogSection({
 
   return (
     <View>
-      <View style={styles.header}>
-        <Text style={styles.heading}>育児記録 {logs.length > 0 ? `(${logs.length}件)` : ''}</Text>
-        <Pressable accessibilityRole="button" onPress={onOpenLogTab} style={styles.headerAction}>
-          <Text style={styles.headerActionText}>記録タブで開く</Text>
-          <ChevronRight size={14} color={colors.accentBlue} />
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>
+          育児記録 {logs.length > 0 ? `(${logs.length}件)` : ''}
+        </Text>
+        <Pressable accessibilityRole="button" onPress={onOpenLogTab} style={styles.link}>
+          <Text style={styles.linkText}>記録タブで開く</Text>
+          <ChevronRight size={14} color={colors.navActive} />
         </Pressable>
       </View>
 
@@ -103,7 +106,7 @@ export default function CareLogSection({
               {ordered.map((log) => (
                 <View key={log.id} style={styles.logRow}>
                   <Text style={styles.logTime}>{getLogTimeText(log)}</Text>
-                  <Text style={[styles.logTitle, isAlertLog(log) && styles.logAlert]}>
+                  <Text style={[styles.logTitle, isAlertLog(log) && styles.logTitleAlert]}>
                     {getLogTitle(log)}
                   </Text>
                   <View style={styles.badges}>
@@ -130,17 +133,23 @@ export default function CareLogSection({
 }
 
 const styles = StyleSheet.create({
-  header: {
+  empty: { fontSize: 11, color: colors.textFaint },
+  summary: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
+  summaryItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  summaryText: { fontSize: 11, color: colors.textSubtle },
+
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     marginBottom: 8,
     paddingHorizontal: 4,
   },
-  heading: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  headerAction: { flexDirection: 'row', alignItems: 'center' },
-  headerActionText: { fontSize: 12, fontWeight: '500', color: colors.accentBlue },
-  loading: { fontSize: 13, color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  link: { flexDirection: 'row', alignItems: 'center' },
+  linkText: { fontSize: 12, fontWeight: '500', color: colors.navActive },
+  loading: { fontSize: 14, color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
+
   card: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -149,21 +158,11 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
   },
-  empty: { fontSize: 11, color: colors.textFaint },
-  summary: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
-  summaryItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  summaryText: { fontSize: 11, color: colors.textSubtle },
-  list: { borderTopWidth: 1, borderTopColor: colors.neutralSurface, paddingTop: 4 },
-  logRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.neutralSurface,
-  },
-  logTime: { width: 64, fontSize: 12, color: colors.textMuted },
+  list: { borderTopWidth: 1, borderTopColor: colors.background, paddingTop: 4 },
+  logRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 6 },
+  logTime: { width: 52, fontSize: 12, color: colors.textMuted },
   logTitle: { fontSize: 12, fontWeight: '500', color: colors.textSubtle },
-  logAlert: { color: colors.overdueText },
+  logTitleAlert: { color: colors.danger },
   badges: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginLeft: 8 },
   badge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   badgeText: { fontSize: 10 },

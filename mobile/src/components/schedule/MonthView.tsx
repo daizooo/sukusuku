@@ -10,19 +10,15 @@ import {
 } from '@/lib/dateUtils';
 import { getMilestoneLabel } from '@/lib/milestones';
 import { tasksOnDate } from '@/lib/scheduleUtils';
-import { colors } from '@/lib/theme';
 import { getLabelColors } from '@/lib/uiUtils';
+import { colors } from '@/lib/theme';
 
-// 月グリッド。Web版の `src/components/sukusuku/schedule/MonthView.tsx` と同じ。
-//
+// 月グリッド。Web版の `src/components/sukusuku/schedule/MonthView.tsx` を置き換えたもの。
 // 予定はタイトル入りのチップで積み、育児記録はここには出さない
 // （月表示は予定を見渡すための面。記録は日をタップした先で見る）。
 //
 // 高さは親から与えられたぶんを週の数で等分する。画面全体をスクロールさせないため、
 // マスに入りきらない予定は「+n件」に寄せる。
-
-// 1マスに出す予定の数。スマホ幅しか無いので、Web版の狭い画面と同じ2件までにする。
-const CHIPS = 2;
 
 interface MonthViewProps {
   /** 表示する月（日は問わない）。 */
@@ -35,6 +31,10 @@ interface MonthViewProps {
   onSelectDate: (date: Date) => void;
   onOpenTask: (task: DynamicTask) => void;
 }
+
+// 1マスに出す予定の数。Web版は画面の広さで2件と3件を切り替えるが、
+// こちらは携帯だけなので、Web版の狭いほうと同じ2件にする。
+const CHIPS = 2;
 
 export default function MonthView({
   month,
@@ -60,25 +60,24 @@ export default function MonthView({
   return (
     <View style={styles.card}>
       <View style={styles.weekdayRow}>
-        {WEEKDAY_LABELS.map((day, i) => (
-          <View key={day} style={styles.weekdayCell}>
-            <Text
-              style={[
-                styles.weekday,
-                i === 0 && styles.sunday,
-                i === 6 && styles.saturday,
-              ]}
-            >
-              {day}
-            </Text>
-          </View>
+        {WEEKDAY_LABELS.map((d, i) => (
+          <Text
+            key={d}
+            style={[
+              styles.weekday,
+              i === 0 && styles.sunday,
+              i === 6 && styles.saturday,
+            ]}
+          >
+            {d}
+          </Text>
         ))}
       </View>
 
       <View style={styles.grid}>
-        {weeks.map((week) => (
-          <View key={week[0].toISOString()} style={styles.week}>
-            {week.map((date) => {
+        {weeks.map((week, w) => (
+          <View key={w} style={styles.week}>
+            {week.map((date, columnIndex) => {
               const dayTasks = tasksOnDate(tasks, date);
               const isToday = isSameDay(date, today);
               const isSelected = isSameDay(date, selectedDate);
@@ -93,6 +92,8 @@ export default function MonthView({
                   onPress={() => onSelectDate(date)}
                   style={[
                     styles.cell,
+                    // 最終列の右の線はカードの縁と重なるので引かない。
+                    columnIndex === 6 && styles.cellLastColumn,
                     isOtherMonth && styles.cellOtherMonth,
                     isSelected && styles.cellSelected,
                   ]}
@@ -101,11 +102,11 @@ export default function MonthView({
                     <View style={[styles.dateBubble, isToday && styles.dateBubbleToday]}>
                       <Text
                         style={[
-                          styles.date,
+                          styles.dateText,
                           isToday
-                            ? styles.dateToday
+                            ? styles.dateTextToday
                             : isOtherMonth
-                              ? styles.dateOtherMonth
+                              ? styles.dateTextOtherMonth
                               : date.getDay() === 0
                                 ? styles.sunday
                                 : date.getDay() === 6
@@ -118,8 +119,8 @@ export default function MonthView({
                     </View>
                   </View>
 
-                  {milestone !== null && !isOtherMonth && (
-                    <Text style={styles.milestone} numberOfLines={1}>
+                  {milestone && !isOtherMonth && (
+                    <Text numberOfLines={1} style={styles.milestone}>
                       {milestone}
                     </Text>
                   )}
@@ -176,10 +177,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   weekdayRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border },
-  weekdayCell: { flex: 1, paddingVertical: 6 },
-  weekday: { fontSize: 10, fontWeight: '500', color: colors.textMuted, textAlign: 'center' },
-  sunday: { color: colors.danger },
-  saturday: { color: colors.accentBlue },
+  weekday: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 10,
+    fontWeight: '500',
+    color: colors.textMuted,
+    paddingVertical: 6,
+  },
+  sunday: { color: colors.sunday },
+  saturday: { color: colors.navActive },
+
   grid: { flex: 1 },
   week: { flex: 1, flexDirection: 'row' },
   cell: {
@@ -192,21 +200,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     paddingVertical: 2,
   },
+  cellLastColumn: { borderRightWidth: 0 },
   cellOtherMonth: { backgroundColor: colors.background },
-  cellSelected: { backgroundColor: colors.accentBlueSurface, borderColor: colors.accentBlue },
+  cellSelected: { backgroundColor: colors.diaperSurface, borderColor: colors.navActive },
   dateRow: { alignItems: 'center' },
   dateBubble: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dateBubbleToday: { backgroundColor: colors.accentBlue },
-  date: { fontSize: 11, color: colors.textSubtle },
-  dateToday: { color: colors.primaryText, fontWeight: '700' },
-  dateOtherMonth: { color: colors.border },
-  milestone: { fontSize: 8, color: colors.milestoneText, textAlign: 'center' },
+  dateBubbleToday: { backgroundColor: colors.navActive },
+  dateText: { fontSize: 11, color: colors.textSubtle },
+  dateTextToday: { color: colors.primaryText, fontWeight: '700' },
+  dateTextOtherMonth: { color: colors.borderStrong },
+  milestone: { fontSize: 8, textAlign: 'center', color: colors.milestone },
   chips: { marginTop: 2, gap: 2 },
   chip: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1 },
   chipDone: { backgroundColor: colors.neutralSurface, borderColor: colors.border },

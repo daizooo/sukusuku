@@ -1,41 +1,39 @@
-import type { ReactNode } from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { BellRing, Clock, MapPin, Tag, Text as TextIcon, X } from 'lucide-react-native';
+import { BellRing, Clock, MapPin, Tag, Text as TextIcon } from 'lucide-react-native';
 import type { AnchorType, Label, Task } from '@/types/app';
 import { LABELS } from '@/types/app';
 import {
   REMINDER_OPTIONS,
   formatDateWithWeekday,
-  formatTimeString,
   parseDateString,
   parseTimeInput,
   toDateString,
 } from '@/lib/dateUtils';
-import { colors } from '@/lib/theme';
 import { getLabelColors } from '@/lib/uiUtils';
+import { colors } from '@/lib/theme';
+import SelectField from '@/components/ui/SelectField';
 
-// 予定の入力欄（追加・編集で共通）。
-// Web版の `src/components/sukusuku/modals/TaskForm.tsx` と同じ項目・同じ並び。
-// 日付・時刻だけは <input type="date"/"time"> が無いので端末のピッカーを開く形にする。
+// 予定の入力欄（追加・編集で共通）。Web版の
+// `src/components/sukusuku/modals/TaskForm.tsx` を置き換えたもの。
+// 項目の並び・既定値・保存する中身は同じにしてある。
+//
+// 日付・時刻・リマインダーはWeb版では <input>/<select> だが、React Nativeには無いので
+// 端末のピッカーと選択欄で置き換えている（出す中身と並びは同じ）。
 
 export type TaskDraft = Omit<Task, 'id' | 'done'>;
 
 interface TaskFormProps {
   value: TaskDraft;
   onChange: (draft: TaskDraft) => void;
-  /** 誕生日が未登録のときだけ「生後日数で指定」を選べるようにする。 */
+  /** 誕生日が未登録のときだけ「生後日数で指定」を選べるようにする */
   allowBirthRelative: boolean;
 }
+
+const REMINDER_SELECT_OPTIONS = REMINDER_OPTIONS.map((option) => ({
+  value: option.value === null ? '' : String(option.value),
+  label: option.label,
+}));
 
 export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFormProps) {
   const set = (patch: Partial<TaskDraft>) => onChange({ ...value, ...patch });
@@ -43,7 +41,9 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
   const isAllDay = value.startTime === null;
   const showAnchorChoice = allowBirthRelative || value.anchorType === 'birth_relative';
 
-  const setAnchorType = (anchorType: AnchorType) => set({ anchorType });
+  const setAnchorType = (anchorType: AnchorType) => {
+    set({ anchorType });
+  };
 
   const toggleAllDay = () => {
     // 終日 <-> 時刻あり。時刻ありに切り替えたときは 09:00 を初期値にする。
@@ -54,20 +54,24 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
     DateTimePickerAndroid.open({
       value: parseDateString(value.startDate ?? '') ?? new Date(),
       mode: 'date',
-      onChange: (_event, picked) => picked && set({ startDate: toDateString(picked) }),
+      onChange: (_event, picked) => {
+        if (picked) set({ startDate: toDateString(picked) });
+      },
     });
 
-  const openTimePicker = (key: 'startTime' | 'endTime') =>
+  const openTimePicker = (field: 'startTime' | 'endTime') =>
     DateTimePickerAndroid.open({
-      value: parseTimeInput(value[key] ?? '09:00'),
+      value: parseTimeInput(value[field] ?? '09:00'),
       mode: 'time',
       is24Hour: true,
       onChange: (_event, picked) => {
         if (!picked) return;
-        const time = formatTimeString(picked);
-        set(key === 'startTime' ? { startTime: time } : { endTime: time });
+        const time = `${String(picked.getHours()).padStart(2, '0')}:${String(picked.getMinutes()).padStart(2, '0')}`;
+        set({ [field]: time } as Partial<TaskDraft>);
       },
     });
+
+  const startDate = parseDateString(value.startDate ?? '');
 
   return (
     <View style={styles.form}>
@@ -77,78 +81,82 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
         onChangeText={(title) => set({ title })}
         placeholder="タイトルを入力"
         placeholderTextColor={colors.border}
-        accessibilityLabel="タイトル"
       />
 
       {/* 日付 */}
-      <View style={styles.group}>
+      <View style={styles.block}>
         {showAnchorChoice && (
-          <View style={styles.anchorTabs}>
-            {(
-              [
-                { value: 'absolute', label: '日付を指定' },
-                { value: 'birth_relative', label: '生後日数で指定' },
-              ] as { value: AnchorType; label: string }[]
-            ).map((option) => {
-              const selected = value.anchorType === option.value;
-              return (
-                <Pressable
-                  key={option.value}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  onPress={() => setAnchorType(option.value)}
-                  style={[styles.anchorTab, selected && styles.anchorTabSelected]}
-                >
-                  <Text style={[styles.anchorTabText, selected && styles.anchorTabTextSelected]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+          <View style={styles.switcher}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: value.anchorType === 'absolute' }}
+              onPress={() => setAnchorType('absolute')}
+              style={[styles.switcherTab, value.anchorType === 'absolute' && styles.switcherTabOn]}
+            >
+              <Text
+                style={[
+                  styles.switcherText,
+                  value.anchorType === 'absolute' && styles.switcherTextOn,
+                ]}
+              >
+                日付を指定
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: value.anchorType === 'birth_relative' }}
+              onPress={() => setAnchorType('birth_relative')}
+              style={[
+                styles.switcherTab,
+                value.anchorType === 'birth_relative' && styles.switcherTabOn,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.switcherText,
+                  value.anchorType === 'birth_relative' && styles.switcherTextOn,
+                ]}
+              >
+                生後日数で指定
+              </Text>
+            </Pressable>
           </View>
         )}
 
         {value.anchorType === 'absolute' ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="日付を選ぶ"
-            onPress={openDatePicker}
-            style={styles.field}
-          >
-            <Text style={value.startDate !== null ? styles.fieldText : styles.fieldPlaceholder}>
-              {value.startDate !== null
-                ? formatDateWithWeekday(parseDateString(value.startDate))
-                : '日付を選ぶ'}
+          <Pressable accessibilityRole="button" onPress={openDatePicker} style={styles.field}>
+            <Text style={startDate ? styles.fieldText : styles.fieldPlaceholder}>
+              {startDate ? formatDateWithWeekday(startDate) : '日付を選ぶ'}
             </Text>
           </Pressable>
         ) : (
-          <View style={[styles.field, styles.daysRow]}>
-            <Text style={styles.fieldUnit}>生後</Text>
+          <View style={[styles.field, styles.inlineField]}>
+            <Text style={styles.inlineLabel}>生後</Text>
             <TextInput
-              style={styles.daysInput}
+              style={styles.inlineInput}
               value={String(value.daysAfterBirth)}
-              onChangeText={(text) => set({ daysAfterBirth: Number(text.replace(/\D/g, '')) || 0 })}
+              onChangeText={(text) => set({ daysAfterBirth: Number(text) || 0 })}
               keyboardType="number-pad"
               inputMode="numeric"
               accessibilityLabel="生後日数"
             />
-            <Text style={styles.fieldUnit}>日</Text>
+            <Text style={styles.inlineLabel}>日</Text>
           </View>
         )}
       </View>
 
       {/* 時刻 */}
-      <View style={styles.group}>
-        <View style={styles.allDayRow}>
-          <View style={styles.labelRow}>
+      <View style={styles.block}>
+        <View style={styles.row}>
+          <View style={styles.iconLabel}>
             <Clock size={14} color={colors.textFaint} />
-            <Text style={styles.fieldLabel}>終日</Text>
+            <Text style={styles.iconLabelText}>終日</Text>
           </View>
           <Switch
             accessibilityLabel="終日の切り替え"
             value={isAllDay}
             onValueChange={toggleAllDay}
-            trackColor={{ true: colors.accentBlue, false: colors.borderStrong }}
+            trackColor={{ true: colors.navActive, false: colors.borderStrong }}
             thumbColor={colors.surface}
           />
         </View>
@@ -156,21 +164,21 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
           <View style={styles.timeRow}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="開始の時刻"
+              accessibilityLabel="始まりの時刻"
               onPress={() => openTimePicker('startTime')}
-              style={[styles.field, styles.timeField]}
+              style={[styles.field, styles.flex]}
             >
-              <Text style={styles.fieldText}>{value.startTime ?? '--:--'}</Text>
+              <Text style={styles.fieldText}>{value.startTime ?? ''}</Text>
             </Pressable>
-            <Text style={styles.timeSeparator}>-</Text>
+            <Text style={styles.dash}>-</Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="終わりの時刻"
               onPress={() => openTimePicker('endTime')}
-              style={[styles.field, styles.timeField]}
+              style={[styles.field, styles.flex]}
             >
-              <Text style={value.endTime !== null ? styles.fieldText : styles.fieldPlaceholder}>
-                {value.endTime ?? '--:--'}
+              <Text style={value.endTime ? styles.fieldText : styles.fieldPlaceholder}>
+                {value.endTime ?? '未設定'}
               </Text>
             </Pressable>
           </View>
@@ -179,11 +187,11 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
 
       {/* ラベル */}
       <View>
-        <View style={styles.labelRow}>
+        <View style={styles.iconLabel}>
           <Tag size={14} color={colors.textFaint} />
-          <Text style={styles.fieldLabel}>ラベル</Text>
+          <Text style={styles.iconLabelText}>ラベル</Text>
         </View>
-        <View style={styles.labelButtons}>
+        <View style={styles.labelRow}>
           {LABELS.map((label: Label) => {
             const selected = value.label === label;
             const tone = getLabelColors(label);
@@ -195,19 +203,10 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
                 onPress={() => set({ label })}
                 style={[
                   styles.labelButton,
-                  selected
-                    ? { backgroundColor: tone.background, borderColor: tone.border }
-                    : styles.labelButtonPlain,
+                  selected && { backgroundColor: tone.background, borderColor: tone.border },
                 ]}
               >
-                <Text
-                  style={[
-                    styles.labelButtonText,
-                    selected ? { color: tone.text } : styles.labelButtonTextPlain,
-                  ]}
-                >
-                  {label}
-                </Text>
+                <Text style={[styles.labelText, selected && { color: tone.text }]}>{label}</Text>
               </Pressable>
             );
           })}
@@ -216,9 +215,9 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
 
       {/* 場所 */}
       <View>
-        <View style={styles.labelRow}>
+        <View style={styles.iconLabel}>
           <MapPin size={14} color={colors.textFaint} />
-          <Text style={styles.fieldLabel}>場所</Text>
+          <Text style={styles.iconLabelText}>場所</Text>
         </View>
         <TextInput
           style={[styles.field, styles.fieldText]}
@@ -226,15 +225,14 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
           onChangeText={(place) => set({ place })}
           placeholder="例: 城南まちづくりセンター"
           placeholderTextColor={colors.textFaint}
-          accessibilityLabel="場所"
         />
       </View>
 
       {/* 詳細（持ち物もここにまとめて書く） */}
       <View>
-        <View style={styles.labelRow}>
+        <View style={styles.iconLabel}>
           <TextIcon size={14} color={colors.textFaint} />
-          <Text style={styles.fieldLabel}>詳細</Text>
+          <Text style={styles.iconLabelText}>詳細</Text>
         </View>
         <TextInput
           style={[styles.field, styles.fieldText, styles.noteInput]}
@@ -243,106 +241,54 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
           placeholder="メモ・持ち物（母子手帳、印鑑など）を入力"
           placeholderTextColor={colors.textFaint}
           multiline
-          accessibilityLabel="詳細"
         />
       </View>
 
       {/* リマインダー */}
       <View>
-        <View style={styles.labelRow}>
+        <View style={styles.iconLabel}>
           <BellRing size={14} color={colors.textFaint} />
-          <Text style={styles.fieldLabel}>リマインダー</Text>
+          <Text style={styles.iconLabelText}>リマインダー</Text>
         </View>
-        {/* Web版は選択（select）だが、React Nativeには同じものが無いので
-            選択肢をそのまま並べる。数が少ないので1画面に収まる。 */}
-        <View style={styles.reminderOptions}>
-          {REMINDER_OPTIONS.map((option) => {
-            const selected = value.remindMinutesBefore === option.value;
-            return (
-              <Pressable
-                key={option.label}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                onPress={() => set({ remindMinutesBefore: option.value })}
-                style={[styles.reminderOption, selected && styles.reminderOptionSelected]}
-              >
-                <Text
-                  style={[styles.reminderText, selected && styles.reminderTextSelected]}
-                >
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <SelectField
+          accessibilityLabel="リマインダー"
+          options={REMINDER_SELECT_OPTIONS}
+          value={value.remindMinutesBefore === null ? '' : String(value.remindMinutesBefore)}
+          onChange={(picked) =>
+            set({ remindMinutesBefore: picked === '' ? null : Number(picked) })
+          }
+          style={styles.select}
+          textStyle={styles.selectText}
+        />
       </View>
     </View>
   );
 }
 
-interface ModalShellProps {
-  title: string;
-  onClose: () => void;
-  children: ReactNode;
-  footer: ReactNode;
-}
-
-/**
- * 追加・編集・詳細の外枠。Web版の `TaskForm.tsx` の `ModalShell` にあたる。
- * 見出しと「閉じる」を上に、操作を下に固定し、スクロールするのは中身だけ。
- */
-export function ModalShell({ title, onClose, children, footer }: ModalShellProps) {
-  return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.sheet}>
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>{title}</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="閉じる"
-              onPress={onClose}
-              hitSlop={8}
-            >
-              <X size={20} color={colors.textFaint} />
-            </Pressable>
-          </View>
-          <ScrollView
-            style={styles.sheetBody}
-            contentContainerStyle={styles.sheetContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            {children}
-          </ScrollView>
-          <View style={styles.sheetFooter}>{footer}</View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 const styles = StyleSheet.create({
   form: { gap: 16 },
+  flex: { flex: 1 },
+  block: { gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   titleInput: {
     borderBottomWidth: 2,
     borderBottomColor: colors.border,
     paddingBottom: 8,
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '500',
-    color: colors.text,
+    color: colors.textSubtle,
   },
-  group: { gap: 8 },
-  anchorTabs: {
+  switcher: {
     flexDirection: 'row',
     backgroundColor: colors.neutralSurface,
     borderRadius: 8,
     padding: 4,
     gap: 4,
   },
-  anchorTab: { flex: 1, borderRadius: 6, paddingVertical: 7, alignItems: 'center' },
-  anchorTabSelected: { backgroundColor: colors.surface },
-  anchorTabText: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
-  anchorTabTextSelected: { color: colors.accentBlueStrong },
+  switcherTab: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 6 },
+  switcherTabOn: { backgroundColor: colors.surface },
+  switcherText: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
+  switcherTextOn: { color: colors.navActiveText },
   field: {
     borderWidth: 1,
     borderColor: colors.borderStrong,
@@ -351,62 +297,27 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: colors.surface,
   },
-  fieldText: { fontSize: 13, color: colors.text },
-  fieldPlaceholder: { fontSize: 13, color: colors.textFaint },
-  fieldLabel: { fontSize: 12, fontWeight: '500', color: colors.textSubtle },
-  fieldUnit: { fontSize: 13, color: colors.textMuted },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  daysRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  daysInput: { flex: 1, fontSize: 13, color: colors.text, padding: 0 },
-  allDayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  fieldText: { fontSize: 14, color: colors.textSubtle },
+  fieldPlaceholder: { fontSize: 14, color: colors.textFaint },
+  inlineField: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  inlineLabel: { fontSize: 14, color: colors.textMuted },
+  inlineInput: { flex: 1, fontSize: 14, color: colors.textSubtle, paddingVertical: 0 },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  timeField: { flex: 1 },
-  timeSeparator: { fontSize: 13, color: colors.textFaint },
-  labelButtons: { flexDirection: 'row', gap: 8 },
-  labelButton: { flex: 1, borderWidth: 1, borderRadius: 8, paddingVertical: 9, alignItems: 'center' },
-  labelButtonPlain: { backgroundColor: colors.surface, borderColor: colors.border },
-  labelButtonText: { fontSize: 12, fontWeight: '700' },
-  labelButtonTextPlain: { color: colors.textMuted },
-  noteInput: { minHeight: 90, textAlignVertical: 'top' },
-  reminderOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  reminderOption: {
+  dash: { fontSize: 14, color: colors.textFaint },
+  iconLabel: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  iconLabelText: { fontSize: 12, fontWeight: '500', color: colors.textSubtle },
+  labelRow: { flexDirection: 'row', gap: 8 },
+  labelButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
     backgroundColor: colors.surface,
   },
-  reminderOptionSelected: {
-    backgroundColor: colors.accentBlueSurface,
-    borderColor: colors.accentBlue,
-  },
-  reminderText: { fontSize: 12, color: colors.textMuted },
-  reminderTextSelected: { color: colors.accentBlueText, fontWeight: '700' },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    maxHeight: '90%',
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  sheetTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
-  sheetBody: { flexGrow: 0 },
-  sheetContent: { paddingHorizontal: 20, paddingVertical: 16 },
-  sheetFooter: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 24,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
+  labelText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  noteInput: { minHeight: 96, textAlignVertical: 'top' },
+  select: { borderColor: colors.borderStrong, borderRadius: 8, minHeight: 42 },
+  selectText: { flex: 1, fontWeight: '400', fontSize: 14 },
 });

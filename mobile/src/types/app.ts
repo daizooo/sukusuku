@@ -250,6 +250,51 @@ export interface UserProfile {
 export type TabId = 'home' | 'schedule' | 'log' | 'memo' | 'info';
 
 // スケジュールタブの表示切り替え。既定は月（カレンダー）。
+/**
+ * リスト（買い出し・やりたいこと・やること）。
+ * 予定(Task)との違いは「日付を持たないこと」。日付のある用件は予定に置く。
+ */
+export interface ListBoard {
+  id: string;
+  name: string;
+  /**
+   * 項目を束ねる軸の呼び名。「お店」「ジャンル」「担当」など自由入力。
+   * 見出しと絞り込みの文言に使う。
+   */
+  groupLabel: string;
+  /** 一覧の先頭に固定するか（Google Keepのピン止めと同じ）。 */
+  pinned: boolean;
+  position: number;
+}
+
+/**
+ * リストの中の区切り。買い出しなら「イオン」「ドラッグストア」。
+ * 1件も作らなければ、そのリストはただのチェックリストとして振る舞う。
+ */
+export interface ListGroup {
+  id: string;
+  listId: string;
+  name: string;
+  position: number;
+}
+
+/**
+ * リストの項目。数量はタイトルに書く（「牛乳2本」）。
+ * 場所は項目ではなくグループで表すため、項目そのものは場所を持たない。
+ * メモも持たない（Keepと同じく、行にあるのは内容だけ）。
+ */
+export interface ListItem {
+  id: string;
+  listId: string;
+  /** どのグループに入っているか。null は未分類。 */
+  groupId: string | null;
+  title: string;
+  done: boolean;
+  /** 完了した時刻。完了した項目は消さずに残す。 */
+  doneAt: Date | null;
+  position: number;
+}
+
 export type ScheduleView = 'month' | 'week' | 'day' | 'list';
 
 // ログイン中のユーザーの役割。users.role (Supabase) に対応。未設定の場合はnull。

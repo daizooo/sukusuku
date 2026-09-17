@@ -28,6 +28,9 @@ export const colors = {
   // 下のタブバー。Web版の下部ナビと同じ（選択中=blue-500 / それ以外=gray-500）。
   navActive: '#3b82f6', // blue-500
   navInactive: '#6b7280', // gray-500
+  navActiveText: '#2563eb', // blue-600（切り替えで選んでいる方の文字）
+  dragBorder: '#93c5fd', // blue-300（長押しで持ち上げている枠）
+  borderStrongSoft: '#e5e7ebcc', // gray-200/80（切り替えの下地）
 
   // 記録の種類ごとの色。Web版の記録タブと同じ割り当て（ミルク=琥珀・おむつ=青・搾乳=薔薇）。
   // 体温の色。Web版(src/)のTailwindの orange 系と同じ値にそろえてある。
@@ -36,6 +39,7 @@ export const colors = {
   milkBorder: '#fde68a', // amber-200
   milkText: '#b45309', // amber-700
   milkProgress: '#fbbf24', // amber-400（次の授乳までの進み具合）
+  milkMark: '#f59e0b', // amber-500（24時間の帯に出す授乳の印）
   diaper: '#3b82f6', // blue-500
   diaperSurface: '#eff6ff', // blue-50
   diaperBorder: '#bfdbfe', // blue-200
@@ -48,25 +52,22 @@ export const colors = {
   temperatureSurface: '#fff7ed', // orange-50
   temperatureBorder: '#fed7aa', // orange-200
   temperatureText: '#c2410c', // orange-700
+  sunday: '#ef4444', // red-500（カレンダーの日曜）
+  milestone: '#d97706', // amber-600（節目の日の小さな文字）
+  milestoneSurface: '#fffbeb', // amber-50（節目の札）
+  milestoneBorder: '#fde68a', // amber-200
+  milestoneText: '#b45309', // amber-700
+  gradeGood: '#22c55e', // green-500（見学チェックの「良い」・済んだ項目）
+  gradeGoodSurface: '#f0fdf4', // green-50
+  gradeGoodBorder: '#bbf7d0', // green-200
+  gradeWatch: '#f97316', // orange-500（見学チェックの「気になる」）
+  doneSurface: '#dcfce7', // green-100（完了済の札）
+  doneText: '#15803d', // green-700
+  noteSurface: '#eff6ff80', // blue-50/50（予定の詳細のメモ）
+  noteText: '#1e40af', // blue-800
+  noteBody: '#1e3a8a', // blue-900
   alertSurface: '#fee2e2', // red-100
   alertText: '#b91c1c', // red-700
   neutralSurface: '#f3f4f6', // gray-100
-
-  // 予定タブ。Web版の予定タブで使っているTailwindの値と同じ。
-  accentBlue: '#3b82f6', // blue-500（今日・選択中・操作の文字）
-  accentBlueStrong: '#2563eb', // blue-600
-  accentBlueSurface: '#eff6ff', // blue-50
-  accentBlueBorder: '#bfdbfe', // blue-200
-  accentBlueText: '#1d4ed8', // blue-700
-  overdueText: '#dc2626', // red-600（期限切れの見出し）
-  // 節目（1ヶ月健診など）。月グリッドは文字だけ、週・日表示は枠付きで出す。
-  milestoneText: '#d97706', // amber-600
-  milestoneBadgeText: '#b45309', // amber-700
-  milestoneSurface: '#fffbeb', // amber-50
-  milestoneBorder: '#fde68a', // amber-200
-  // 24時間の帯に並べる授乳の印。
-  timelineMark: '#f59e0b', // amber-500
-  // 予定の詳細に出す「完了済」。
-  doneSurface: '#dcfce7', // green-100
-  doneText: '#15803d', // green-700
+  borderFaint: '#e5e7ebb3', // gray-200/70（帯の細かい目盛り）
 } as const;

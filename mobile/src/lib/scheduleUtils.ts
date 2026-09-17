@@ -1,8 +1,8 @@
 import type { CareLog, DynamicTask } from '@/types/app';
 import { addDays, isSameDay, startOfDay, startOfWeek } from '@/lib/dateUtils';
 
-// 予定の並べ方・まとめ方。Web版の `src/components/sukusuku/schedule/utils.ts` を
-// そのまま持ってきたもの（予定タブの月・週・日・リストで同じ並びにするため）。
+// 予定まわりの数え方・並べ方。Web版の `src/components/sukusuku/schedule/utils.ts` を
+// そのまま持ってきたもの（同じ並び・同じ区切りで出すため、中身は変えない）。
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -18,6 +18,8 @@ export const formatRelativeDay = (date: Date, today: Date): string => {
   if (days === -1) return '昨日';
   return days > 0 ? `あと${days}日` : `${-days}日前`;
 };
+
+// --- 並び替えと絞り込み ---
 
 /** 時刻の早い順。終日は先頭に置く。 */
 export const byTime = (a: DynamicTask, b: DynamicTask) => {
@@ -82,10 +84,7 @@ const formatMonthTitle = (date: Date, today: Date): string =>
  * 中身が空のセクションは返さない。
  * 完了済みと日付未定はセクションの流れから外して扱うため、ここには含めない。
  */
-export const buildScheduleSections = (
-  tasks: DynamicTask[],
-  today: Date,
-): ScheduleListSection[] => {
+export const buildScheduleSections = (tasks: DynamicTask[], today: Date): ScheduleListSection[] => {
   const start = startOfDay(today);
   const tomorrow = addDays(start, 1);
   const afterTomorrow = addDays(start, 2);
@@ -96,12 +95,7 @@ export const buildScheduleSections = (
   const dayOf = (task: DynamicTask) => startOfDay(task.targetDateObj as Date).getTime();
 
   const sections: ScheduleListSection[] = [];
-  const add = (
-    key: string,
-    title: string,
-    tone: ScheduleListSection['tone'],
-    items: DynamicTask[],
-  ) => {
+  const add = (key: string, title: string, tone: ScheduleListSection['tone'], items: DynamicTask[]) => {
     if (items.length === 0) return;
     sections.push({ key, title, tone, groups: groupByDay(items), count: items.length });
   };
@@ -135,11 +129,10 @@ export const buildScheduleSections = (
   return sections;
 };
 
-// --- 24時間の帯 ---
+// --- 週表示・日表示の24時間の帯 ---
 
 /** その日の中での位置。0が0時、1が24時。 */
-const dayFraction = (timeMs: number, dayStartMs: number): number =>
-  (timeMs - dayStartMs) / MS_PER_DAY;
+const dayFraction = (timeMs: number, dayStartMs: number): number => (timeMs - dayStartMs) / MS_PER_DAY;
 
 /** その日の授乳の位置（0〜1）。24時間の帯に細い印として並べる。 */
 export const getMilkMarksOnDate = (logs: CareLog[], day: Date): number[] => {

@@ -4,19 +4,21 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
+  Edit2,
   MapPin,
-  Pencil,
   Save,
   Text as TextIcon,
 } from 'lucide-react-native';
 import type { DynamicTask } from '@/types/app';
 import { formatReminder, formatTimeRange } from '@/lib/dateUtils';
-import { colors } from '@/lib/theme';
 import { getLabelColors } from '@/lib/uiUtils';
-import TaskForm, { ModalShell } from './TaskForm';
+import { colors } from '@/lib/theme';
+import TaskForm from './TaskForm';
+import TaskModalShell from './TaskModalShell';
 
-// 予定の詳細と編集。Web版の `src/components/sukusuku/modals/TaskDetailModal.tsx` と同じで、
-// 同じ外枠の中を「詳細」と「編集」で入れ替える。
+// 予定の詳細と編集。Web版の
+// `src/components/sukusuku/modals/TaskDetailModal.tsx` を置き換えたもの。
+// 出す項目・並び・文言は同じにしてある。
 
 interface TaskDetailModalProps {
   selectedTask: DynamicTask | null;
@@ -29,6 +31,30 @@ interface TaskDetailModalProps {
   onClose: () => void;
   onToggleDone: () => void;
   onDelete: () => void;
+}
+
+/** 詳細の1項目（日付・時刻・場所・リマインダー）。 */
+function DetailRow({
+  icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <View>
+      <View style={styles.detailLabel}>
+        {icon}
+        <Text style={styles.detailLabelText}>{label}</Text>
+      </View>
+      <Text style={styles.detailValue}>{value}</Text>
+      {sub && <Text style={styles.detailSub}>{sub}</Text>}
+    </View>
+  );
 }
 
 export default function TaskDetailModal({
@@ -47,13 +73,14 @@ export default function TaskDetailModal({
 
   if (isEditingTask && tempEditingTask) {
     return (
-      <ModalShell
+      <TaskModalShell
+        show
         title="予定を編集"
         onClose={onClose}
         footer={
-          <Pressable accessibilityRole="button" onPress={onSaveEdit} style={styles.primaryButton}>
+          <Pressable accessibilityRole="button" onPress={onSaveEdit} style={styles.primary}>
             <Save size={16} color={colors.primaryText} />
-            <Text style={styles.primaryButtonText}>保存する</Text>
+            <Text style={styles.primaryText}>保存する</Text>
           </Pressable>
         }
       >
@@ -62,14 +89,15 @@ export default function TaskDetailModal({
           onChange={(draft) => onChangeTempEditingTask({ ...tempEditingTask, ...draft })}
           allowBirthRelative={allowBirthRelative}
         />
-      </ModalShell>
+      </TaskModalShell>
     );
   }
 
   const label = getLabelColors(selectedTask.label);
 
   return (
-    <ModalShell
+    <TaskModalShell
+      show
       title="予定の詳細"
       onClose={onClose}
       footer={
@@ -77,19 +105,19 @@ export default function TaskDetailModal({
           <Pressable
             accessibilityRole="button"
             onPress={onToggleDone}
-            style={[styles.primaryButton, selectedTask.done && styles.undoneButton]}
+            style={[styles.primary, selectedTask.done && styles.undo]}
           >
             {!selectedTask.done ? (
               <>
                 <CheckCircle2 size={18} color={colors.primaryText} />
-                <Text style={styles.primaryButtonText}>完了にする</Text>
+                <Text style={styles.primaryText}>完了にする</Text>
               </>
             ) : (
-              <Text style={styles.undoneButtonText}>未完了に戻す</Text>
+              <Text style={styles.undoText}>未完了に戻す</Text>
             )}
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={onDelete} style={styles.deleteButton}>
-            <Text style={styles.deleteButtonText}>この予定を削除</Text>
+          <Pressable accessibilityRole="button" onPress={onDelete} style={styles.delete}>
+            <Text style={styles.deleteText}>この予定を削除</Text>
           </Pressable>
         </View>
       }
@@ -98,7 +126,7 @@ export default function TaskDetailModal({
         <Text style={styles.title}>{selectedTask.title}</Text>
         <View style={styles.titleActions}>
           <View
-            style={[styles.labelChip, { backgroundColor: label.background, borderColor: label.border }]}
+            style={[styles.label, { backgroundColor: label.background, borderColor: label.border }]}
           >
             <Text style={[styles.labelText, { color: label.text }]}>{selectedTask.label}</Text>
           </View>
@@ -108,77 +136,67 @@ export default function TaskDetailModal({
             onPress={onStartEdit}
             hitSlop={8}
           >
-            <Pencil size={18} color={colors.accentBlue} />
+            <Edit2 size={18} color={colors.navActive} />
           </Pressable>
         </View>
       </View>
 
       {selectedTask.done && (
-        <View style={styles.doneChip}>
+        <View style={styles.doneBadge}>
           <CheckCircle2 size={12} color={colors.doneText} />
-          <Text style={styles.doneChipText}>完了済</Text>
+          <Text style={styles.doneBadgeText}>完了済</Text>
         </View>
       )}
 
       <View style={styles.detailCard}>
-        <View>
-          <View style={styles.detailLabel}>
-            <Calendar size={14} color={colors.textMuted} />
-            <Text style={styles.detailLabelText}>日付</Text>
-          </View>
-          <Text style={styles.detailValue}>{selectedTask.targetDate}</Text>
-          {selectedTask.anchorType === 'birth_relative' && (
-            <Text style={styles.detailNote}>
-              生後{selectedTask.daysAfterBirth}日
-              {selectedTask.timing !== '' ? `（${selectedTask.timing}）` : ''}
-            </Text>
-          )}
-        </View>
-        <View>
-          <View style={styles.detailLabel}>
-            <Clock size={14} color={colors.textMuted} />
-            <Text style={styles.detailLabelText}>時刻</Text>
-          </View>
-          <Text style={styles.detailValue}>
-            {formatTimeRange(selectedTask.startTime, selectedTask.endTime)}
-          </Text>
-        </View>
-        <View>
-          <View style={styles.detailLabel}>
-            <MapPin size={14} color={colors.textMuted} />
-            <Text style={styles.detailLabelText}>場所</Text>
-          </View>
-          <Text style={styles.detailValue}>{selectedTask.place || '未設定'}</Text>
-        </View>
-        <View>
-          <View style={styles.detailLabel}>
-            <BellRing size={14} color={colors.textMuted} />
-            <Text style={styles.detailLabelText}>リマインダー</Text>
-          </View>
-          <Text style={styles.detailValue}>{formatReminder(selectedTask.remindMinutesBefore)}</Text>
-        </View>
+        <DetailRow
+          icon={<Calendar size={14} color={colors.textMuted} />}
+          label="日付"
+          value={selectedTask.targetDate}
+          sub={
+            selectedTask.anchorType === 'birth_relative'
+              ? `生後${selectedTask.daysAfterBirth}日${selectedTask.timing ? `（${selectedTask.timing}）` : ''}`
+              : undefined
+          }
+        />
+        <DetailRow
+          icon={<Clock size={14} color={colors.textMuted} />}
+          label="時刻"
+          value={formatTimeRange(selectedTask.startTime, selectedTask.endTime)}
+        />
+        <DetailRow
+          icon={<MapPin size={14} color={colors.textMuted} />}
+          label="場所"
+          value={selectedTask.place || '未設定'}
+        />
+        <DetailRow
+          icon={<BellRing size={14} color={colors.textMuted} />}
+          label="リマインダー"
+          value={formatReminder(selectedTask.remindMinutesBefore)}
+        />
       </View>
 
       {selectedTask.note !== '' && (
         <View style={styles.noteCard}>
           <View style={styles.detailLabel}>
-            <TextIcon size={14} color={colors.accentBlueText} />
-            <Text style={styles.noteLabelText}>詳細</Text>
+            <TextIcon size={14} color={colors.noteText} />
+            <Text style={styles.noteLabel}>詳細</Text>
           </View>
           <Text style={styles.noteText}>{selectedTask.note}</Text>
         </View>
       )}
-    </ModalShell>
+    </TaskModalShell>
   );
 }
 
 const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 16 },
-  title: { flex: 1, fontSize: 19, fontWeight: '700', color: colors.text, lineHeight: 26 },
-  titleActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  labelChip: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4 },
+  title: { flex: 1, fontSize: 20, fontWeight: '700', color: colors.textSubtle, lineHeight: 26 },
+  titleActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  label: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
   labelText: { fontSize: 10, fontWeight: '700' },
-  doneChip: {
+
+  doneBadge: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
@@ -189,42 +207,45 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     marginBottom: 16,
   },
-  doneChipText: { fontSize: 12, fontWeight: '500', color: colors.doneText },
+  doneBadgeText: { fontSize: 12, fontWeight: '500', color: colors.doneText },
+
   detailCard: {
+    gap: 16,
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 12,
     padding: 16,
-    gap: 16,
   },
   detailLabel: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
   detailLabelText: { fontSize: 12, color: colors.textMuted },
-  detailValue: { fontSize: 13, fontWeight: '500', color: colors.text },
-  detailNote: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  detailValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
+  detailSub: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+
   noteCard: {
     marginTop: 16,
-    backgroundColor: colors.accentBlueSurface,
+    backgroundColor: colors.noteSurface,
     borderWidth: 1,
-    borderColor: colors.accentBlueBorder,
+    borderColor: colors.diaperBorder,
     borderRadius: 12,
     padding: 12,
   },
-  noteLabelText: { fontSize: 12, fontWeight: '700', color: colors.accentBlueText },
-  noteText: { fontSize: 13, color: colors.accentBlueText, lineHeight: 20 },
+  noteLabel: { fontSize: 12, fontWeight: '700', color: colors.noteText },
+  noteText: { fontSize: 14, color: colors.noteBody, lineHeight: 21 },
+
   footer: { gap: 8 },
-  primaryButton: {
+  primary: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: colors.accentBlue,
+    backgroundColor: colors.navActive,
     borderRadius: 12,
     paddingVertical: 14,
   },
-  primaryButtonText: { fontSize: 15, fontWeight: '500', color: colors.primaryText },
-  undoneButton: { backgroundColor: colors.border },
-  undoneButtonText: { fontSize: 15, fontWeight: '500', color: colors.textSubtle },
-  deleteButton: { alignItems: 'center', paddingVertical: 8 },
-  deleteButtonText: { fontSize: 12, fontWeight: '500', color: colors.danger },
+  primaryText: { fontSize: 15, fontWeight: '500', color: colors.primaryText },
+  undo: { backgroundColor: colors.border },
+  undoText: { fontSize: 15, fontWeight: '500', color: colors.textSubtle },
+  delete: { alignItems: 'center', paddingVertical: 8 },
+  deleteText: { fontSize: 12, fontWeight: '500', color: colors.danger },
 });

@@ -8,8 +8,8 @@ import TaskRow from './TaskRow';
 import CareLogSection from './CareLogSection';
 import DayTimeline from './DayTimeline';
 
-// 1日の面。Web版の `src/components/sukusuku/schedule/DayView.tsx` と同じで、
-// 予定と育児記録をここで合わせて見る。
+// 1日の面。予定と育児記録をここで合わせて見る。
+// Web版の `src/components/sukusuku/schedule/DayView.tsx` を置き換えたもの。
 
 interface DayViewProps {
   date: Date;
@@ -20,7 +20,7 @@ interface DayViewProps {
   /** 表示中の範囲の記録。その日のぶんへの絞り込みはこの中で行う。 */
   careLogs: CareLog[];
   isLoadingCareLogs?: boolean;
-  onToggleTodo: (task: DynamicTask) => void;
+  onToggleTodo: (id: string) => void;
   onOpenTask: (task: DynamicTask) => void;
   onAddTask: (date: Date) => void;
   onOpenLogTab: (date: Date) => void;
@@ -46,11 +46,11 @@ export default function DayView({
   const dayLogs = careLogs.filter((log) => isSameDay(log.time, date));
 
   return (
-    <View style={styles.body}>
-      {(babyAge !== null || milestone !== null) && (
-        <View style={styles.headRow}>
-          {babyAge !== null && <Text style={styles.babyAge}>{babyAge}</Text>}
-          {milestone !== null && (
+    <View style={styles.page}>
+      {(babyAge || milestone) && (
+        <View style={styles.ageRow}>
+          {babyAge && <Text style={styles.age}>{babyAge}</Text>}
+          {milestone && (
             <View style={styles.milestone}>
               <Text style={styles.milestoneText}>{milestone}</Text>
             </View>
@@ -60,17 +60,14 @@ export default function DayView({
 
       <View>
         <View style={styles.sectionHeader}>
-          <Text style={styles.heading}>予定 {tasks.length > 0 ? `(${tasks.length}件)` : ''}</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => onAddTask(date)}
-            style={styles.headerAction}
-          >
-            <Plus size={14} color={colors.accentBlue} />
-            <Text style={styles.headerActionText}>この日に追加</Text>
+          <Text style={styles.sectionTitle}>
+            予定 {tasks.length > 0 ? `(${tasks.length}件)` : ''}
+          </Text>
+          <Pressable accessibilityRole="button" onPress={() => onAddTask(date)} style={styles.link}>
+            <Plus size={14} color={colors.navActive} />
+            <Text style={styles.linkText}>この日に追加</Text>
           </Pressable>
         </View>
-
         {tasks.length === 0 ? (
           <Text style={styles.empty}>予定はありません</Text>
         ) : (
@@ -95,9 +92,9 @@ export default function DayView({
 }
 
 const styles = StyleSheet.create({
-  body: { gap: 20 },
-  headRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
-  babyAge: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
+  page: { gap: 20 },
+  ageRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
+  age: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
   milestone: {
     backgroundColor: colors.milestoneSurface,
     borderWidth: 1,
@@ -106,7 +103,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  milestoneText: { fontSize: 10, fontWeight: '700', color: colors.milestoneBadgeText },
+  milestoneText: { fontSize: 10, fontWeight: '700', color: colors.milestoneText },
+
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -114,11 +112,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 4,
   },
-  heading: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  headerAction: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  headerActionText: { fontSize: 12, fontWeight: '500', color: colors.accentBlue },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  link: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  linkText: { fontSize: 12, fontWeight: '500', color: colors.navActive },
   empty: {
-    fontSize: 13,
+    fontSize: 14,
     color: colors.textFaint,
     textAlign: 'center',
     paddingVertical: 20,

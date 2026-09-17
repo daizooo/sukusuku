@@ -8,8 +8,8 @@ import TaskRow from './TaskRow';
 import { CareLogSummaryLine } from './CareLogSection';
 import DayTimeline, { TimelineScale } from './DayTimeline';
 
-// 7日分を縦に並べた週の面。Web版の `src/components/sukusuku/schedule/WeekView.tsx` と同じ。
-//
+// 7日分を縦に並べた週の面。Web版の
+// `src/components/sukusuku/schedule/WeekView.tsx` を置き換えたもの。
 // 月表示と日表示の中間として、「この1週間に何があるか」と
 // 「記録がどれくらいあったか」を1画面で見る。
 
@@ -23,7 +23,7 @@ interface WeekViewProps {
   careLogs: CareLog[];
   isLoadingCareLogs?: boolean;
   onSelectDate: (date: Date) => void;
-  onToggleTodo: (task: DynamicTask) => void;
+  onToggleTodo: (id: string) => void;
   onOpenTask: (task: DynamicTask) => void;
 }
 
@@ -66,7 +66,9 @@ export default function WeekView({
               style={styles.dayHeader}
             >
               <View style={[styles.dateBubble, isToday && styles.dateBubbleToday]}>
-                <Text style={[styles.date, isToday && styles.dateToday]}>{day.getDate()}</Text>
+                <Text style={[styles.dateText, isToday && styles.dateTextToday]}>
+                  {day.getDate()}
+                </Text>
               </View>
               <Text
                 style={[
@@ -77,7 +79,7 @@ export default function WeekView({
               >
                 {WEEKDAY_LABELS[day.getDay()]}
               </Text>
-              {milestone !== null && (
+              {milestone && (
                 <View style={styles.milestone}>
                   <Text style={styles.milestoneText}>{milestone}</Text>
                 </View>
@@ -87,12 +89,7 @@ export default function WeekView({
             {dayTasks.length > 0 ? (
               <View style={styles.tasks}>
                 {dayTasks.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    onToggle={onToggleTodo}
-                    onOpen={onOpenTask}
-                  />
+                  <TaskRow key={task.id} task={task} onToggle={onToggleTodo} onOpen={onOpenTask} />
                 ))}
               </View>
             ) : (
@@ -125,16 +122,16 @@ const styles = StyleSheet.create({
   dateBubble: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dateBubbleToday: { backgroundColor: colors.accentBlue },
-  date: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
-  dateToday: { color: colors.primaryText },
+  dateBubbleToday: { backgroundColor: colors.navActive },
+  dateText: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
+  dateTextToday: { color: colors.primaryText },
   weekday: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
-  sunday: { color: colors.danger },
-  saturday: { color: colors.accentBlue },
+  sunday: { color: colors.sunday },
+  saturday: { color: colors.navActive },
   milestone: {
     backgroundColor: colors.milestoneSurface,
     borderWidth: 1,
@@ -143,7 +140,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  milestoneText: { fontSize: 10, fontWeight: '700', color: colors.milestoneBadgeText },
+  milestoneText: { fontSize: 10, fontWeight: '700', color: colors.milestoneText },
   tasks: { gap: 8 },
   noTask: { fontSize: 12, color: colors.textFaint, paddingHorizontal: 4, paddingVertical: 4 },
   logs: { marginTop: 6, paddingHorizontal: 4, gap: 4 },

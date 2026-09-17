@@ -1,11 +1,11 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { colors } from '@/lib/theme';
-import TaskForm, { ModalShell, type TaskDraft } from './TaskForm';
+import TaskForm, { type TaskDraft } from './TaskForm';
+import TaskModalShell from './TaskModalShell';
 
 export type { TaskDraft };
 
-// 予定の追加。Web版の `src/components/sukusuku/modals/AddTaskModal.tsx` と同じで、
-// 入力欄は編集と共通（TaskForm）。
+// 予定の追加。Web版の `src/components/sukusuku/modals/AddTaskModal.tsx` を置き換えたもの。
 
 interface AddTaskModalProps {
   show: boolean;
@@ -24,14 +24,13 @@ export default function AddTaskModal({
   onClose,
   onSubmit,
 }: AddTaskModalProps) {
-  if (!show) return null;
-
   const canSubmit =
     newTask.title.trim() !== '' &&
     (newTask.anchorType === 'birth_relative' || newTask.startDate !== null);
 
   return (
-    <ModalShell
+    <TaskModalShell
+      show={show}
       title="予定を追加"
       onClose={onClose}
       footer={
@@ -45,14 +44,16 @@ export default function AddTaskModal({
         </Pressable>
       }
     >
-      <TaskForm value={newTask} onChange={onChange} allowBirthRelative={allowBirthRelative} />
-    </ModalShell>
+      {show ? (
+        <TaskForm value={newTask} onChange={onChange} allowBirthRelative={allowBirthRelative} />
+      ) : null}
+    </TaskModalShell>
   );
 }
 
 const styles = StyleSheet.create({
   submit: {
-    backgroundColor: colors.accentBlue,
+    backgroundColor: colors.navActive,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
