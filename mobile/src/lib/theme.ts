@@ -51,4 +51,22 @@ export const colors = {
   alertSurface: '#fee2e2', // red-100
   alertText: '#b91c1c', // red-700
   neutralSurface: '#f3f4f6', // gray-100
+
+  // 予定タブ。Web版の予定タブで使っているTailwindの値と同じ。
+  accentBlue: '#3b82f6', // blue-500（今日・選択中・操作の文字）
+  accentBlueStrong: '#2563eb', // blue-600
+  accentBlueSurface: '#eff6ff', // blue-50
+  accentBlueBorder: '#bfdbfe', // blue-200
+  accentBlueText: '#1d4ed8', // blue-700
+  overdueText: '#dc2626', // red-600（期限切れの見出し）
+  // 節目（1ヶ月健診など）。月グリッドは文字だけ、週・日表示は枠付きで出す。
+  milestoneText: '#d97706', // amber-600
+  milestoneBadgeText: '#b45309', // amber-700
+  milestoneSurface: '#fffbeb', // amber-50
+  milestoneBorder: '#fde68a', // amber-200
+  // 24時間の帯に並べる授乳の印。
+  timelineMark: '#f59e0b', // amber-500
+  // 予定の詳細に出す「完了済」。
+  doneSurface: '#dcfce7', // green-100
+  doneText: '#15803d', // green-700
 } as const;
