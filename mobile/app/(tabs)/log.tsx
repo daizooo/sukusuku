@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Redirect } from 'expo-router';
+import { Redirect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import type {
@@ -43,6 +43,7 @@ import {
   formatDateWithWeekday,
   formatTimeString,
   isSameDay,
+  parseDateString,
   startOfDay,
 } from '@/lib/dateUtils';
 import { useNursingTimer } from '@/lib/nursingTimer';
@@ -100,6 +101,13 @@ export default function LogScreen() {
   const [editingTemperature, setEditingTemperature] = useState<{
     log: TemperatureLog | null;
   } | null>(null);
+
+  // 予定タブの日表示から「記録タブで開く」で来たときは、その日を出す。
+  const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
+  useEffect(() => {
+    const picked = typeof dateParam === 'string' ? parseDateString(dateParam) : null;
+    if (picked) setLogDate(startOfDay(picked));
+  }, [dateParam]);
 
   const today = startOfDay(new Date());
   const isToday = isSameDay(logDate, today);
