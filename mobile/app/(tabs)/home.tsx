@@ -33,7 +33,7 @@ import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
 import { getProfile } from '@/lib/api/profile';
-import { listTasks, updateTaskDone } from '@/lib/api/tasks';
+import { deleteTask, listTasks, updateTask, updateTaskDone } from '@/lib/api/tasks';
 import { listRecentMilkLogs } from '@/lib/api/careLogs';
 import { getFeedingSettings } from '@/lib/api/feedingSettings';
 import { getLogTitle } from '@/lib/careLogUtils';
@@ -52,6 +52,7 @@ import {
 import { formatRelativeDay } from '@/lib/scheduleUtils';
 import { getLabelColors, getProfileFieldValue } from '@/lib/uiUtils';
 import NextFeedingCard from '@/components/NextFeedingCard';
+import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 
 // ホームタブ。Web版の `src/components/sukusuku/tabs/HomeTab.tsx` を
 // React Nativeに置き換えたもの。出す項目・並び・文言は同じにしてある。
@@ -71,6 +72,9 @@ export default function HomeScreen() {
   const [recentMilkLogs, setRecentMilkLogs] = useState<MilkLog[]>([]);
   const [isLoadingRecentMilk, setIsLoadingRecentMilk] = useState(true);
   const [intervalMinutes, setIntervalMinutes] = useState(DEFAULT_FEEDING_INTERVAL_MINUTES);
+  const [selectedTask, setSelectedTask] = useState<DynamicTask | null>(null);
+  const [isEditingTask, setIsEditingTask] = useState(false);
+  const [tempEditingTask, setTempEditingTask] = useState<DynamicTask | null>(null);
 
   const today = useMemo(() => new Date(), []);
 
@@ -175,15 +179,51 @@ export default function HomeScreen() {
   const toggleTodo = useCallback(
     async (id: string, done: boolean) => {
       setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, done: !done } : t)));
+      setSelectedTask((prev) => (prev && prev.id === id ? { ...prev, done: !done } : prev));
       try {
         await updateTaskDone(supabase, id, !done);
       } catch {
         // 送れなければ元に戻す。圏外での予定の書き込みはまだ控えていない。
         setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, done } : t)));
+        setSelectedTask((prev) => (prev && prev.id === id ? { ...prev, done } : prev));
       }
     },
     [],
   );
+
+  const openTaskDetail = (task: DynamicTask) => {
+    setSelectedTask(task);
+    setIsEditingTask(false);
+    setTempEditingTask(task);
+  };
+
+  const saveTaskEdit = async () => {
+    if (!tempEditingTask) return;
+    const updated = tempEditingTask;
+
+    setTodos((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)));
+    setSelectedTask(updated);
+    setIsEditingTask(false);
+
+    try {
+      await updateTask(supabase, updated);
+    } catch {
+      Alert.alert('保存できませんでした', 'もう一度お試しください。');
+    }
+  };
+
+  const handleDeleteTask = async (id: string) => {
+    const previousTodos = todos;
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+    setSelectedTask(null);
+
+    try {
+      await deleteTask(supabase, id);
+    } catch {
+      setTodos(previousTodos);
+      Alert.alert('削除できませんでした', 'もう一度お試しください。');
+    }
+  };
 
   // ママがログイン中(または役割未設定)はパパの連絡先を、パパがログイン中はママの連絡先を出す。
   // 役割はまだこちらで持っていないので、Web版の既定と同じくパパの連絡先を出す。
@@ -337,8 +377,7 @@ export default function HomeScreen() {
               <Pressable
                 key={task.id}
                 accessibilityRole="button"
-                // 予定の詳細はまだこちらに無いので、予定タブへ送る。
-                onPress={() => router.push('/schedule')}
+                onPress={() => openTaskDetail(task)}
                 style={[styles.taskRow, index > 0 && styles.taskRowDivided]}
               >
                 <Pressable
@@ -411,6 +450,20 @@ export default function HomeScreen() {
           </Text>
         )}
       </ScrollView>
+
+      <TaskDetailModal
+        selectedTask={selectedTask}
+        isEditingTask={isEditingTask}
+        tempEditingTask={tempEditingTask}
+        // 誕生日が未登録のときだけ「生後日数で指定」を選べるようにする。
+        allowBirthRelative={birthDateValue === ''}
+        onStartEdit={() => setIsEditingTask(true)}
+        onChangeTempEditingTask={setTempEditingTask}
+        onSaveEdit={saveTaskEdit}
+        onClose={() => setSelectedTask(null)}
+        onToggleDone={() => selectedTask && void toggleTodo(selectedTask.id, selectedTask.done)}
+        onDelete={() => selectedTask && void handleDeleteTask(selectedTask.id)}
+      />
     </SafeAreaView>
   );
 }
