@@ -1,11 +1,17 @@
 # すくすく（Androidネイティブ版）
 
 [docs/native-app-rewrite.md](../docs/native-app-rewrite.md) の案Dにもとづく、Expo(React Native)の
-プロジェクト。ルートのNext.js（凍結中のPWA）とは**独立したプロジェクト**で、依存もここで
+プロジェクト。ルートのNext.js（PWA）とは**独立したプロジェクト**で、依存もここで
 完結している（npm workspacesにはしていない）。バックエンドは `supabase/` を両方から共有する。
 
 いまは**フェーズ1（授乳）**。到達点は「授乳だけネイティブで回せる」こと。
 おむつ・搾乳の記録と、ホーム / 予定 / メモ / 情報 の各タブはPWA版で見る。
+
+> **2026-08-27〜09-17は止めていた（凍結）。** その間にPWA側の授乳が
+> **セット制**（左5分 → 右5分 → ゲップ5分、区切りごとにお知らせ1回、ゲップまで
+> 終われば計測も止まる）へ作り直されたので、**ここの授乳はまだ作り直す前の仕組み**
+> （左右の累積＋経過分数を長短で鳴らし分ける形）のまま。追いつかせるのが再始動の
+> 最初の作業になる（docs/native-app-rewrite.md の【現況】）。
 
 ## いま入っているもの
 
@@ -76,14 +82,25 @@ Web版と同じメールアドレス・パスワードでログインできる�
 
 ### `.apk` を作る
 
-前面サービス（Kotlin）はExpo Goに入っていないので、**アラームを実機で試すには開発ビルドが要る**。
+前面サービス（Kotlin）はExpo Goに入っていないので、**アラームを実機で試すには
+`.apk` を作って入れる必要がある**。
+
+**いつもはCIが作る。** `mobile/` を触ったPRでGitHub Actionsが走り
+（`.github/workflows/mobile-apk.yml`）、実行ページの Artifacts から `.apk` を落として
+端末に入れられる。`src/` をVercelのプレビューで確かめるのと同じ形。
+
+- 初回だけ、リポジトリの Settings > Secrets and variables > Actions に
+  `EXPO_PUBLIC_SUPABASE_URL` と `EXPO_PUBLIC_SUPABASE_ANON_KEY` を登録する
+  （Web版の `.env.local` と同じ値）。未登録だとCIが止まる
+- 端末側は「提供元不明のアプリ」の許可が要る（初回のみ）
+
+手元のPCで作ることもできる。**Android SDKが要る**（Claude Code側の環境では通せない）。
 
 ```bash
 npm run prebuild   # android/ を生成する（modules/nursing-alarm も自動で組み込まれる）
 npm run android    # USB接続した端末へインストールする
 ```
 
-**Android SDKが要るので、これは手元のPCで行う**（Claude Code側の環境では通せない）。
 ストアには出さず `.apk` を自分たちの端末に直接入れる方針（docs/native-app-rewrite.md §8）。
 署名鍵(keystore)はリポジトリにコミットしない。
 
@@ -97,8 +114,9 @@ npm run android    # USB接続した端末へインストールする
 
 ## この先
 
-| フェーズ | やること |
+| | やること |
 | --- | --- |
+| **再始動1** | 授乳をPWA版と同じ**セット制**へ作り直す（`src/lib/nursingTimer.ts` と `modules/nursing-alarm`） |
 | 2 | おむつ・搾乳の記録と、ホーム / 予定 / メモ / 情報 の各タブ |
 | 3 | 通知をWeb PushからFCMへ |
 | 4 | PWAを畳む |
