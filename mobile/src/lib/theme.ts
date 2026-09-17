@@ -29,6 +29,7 @@ export const colors = {
   navActive: '#3b82f6', // blue-500
   navInactive: '#6b7280', // gray-500
   navActiveText: '#2563eb', // blue-600（切り替えで選んでいる方の文字）
+  dragBorder: '#93c5fd', // blue-300（長押しで持ち上げている枠）
   borderStrongSoft: '#e5e7ebcc', // gray-200/80（切り替えの下地）
 
   // 記録の種類ごとの色。Web版の記録タブと同じ割り当て（ミルク=琥珀・おむつ=青・搾乳=薔薇）。

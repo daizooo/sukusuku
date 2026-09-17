@@ -330,6 +330,124 @@ export type Database = {
           },
         ]
       }
+      list_groups: {
+        Row: {
+          created_at: string
+          id: string
+          list_id: string
+          name: string
+          position: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          list_id: string
+          name: string
+          position?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          list_id?: string
+          name?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "list_groups_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      list_items: {
+        Row: {
+          created_at: string
+          done_at: string | null
+          group_id: string | null
+          id: string
+          is_done: boolean
+          list_id: string
+          position: number
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          done_at?: string | null
+          group_id?: string | null
+          id?: string
+          is_done?: boolean
+          list_id: string
+          position?: number
+          title: string
+        }
+        Update: {
+          created_at?: string
+          done_at?: string | null
+          group_id?: string | null
+          id?: string
+          is_done?: boolean
+          list_id?: string
+          position?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "list_items_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "list_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "list_items_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lists: {
+        Row: {
+          created_at: string
+          family_id: string
+          group_label: string
+          id: string
+          is_pinned: boolean
+          name: string
+          position: number
+        }
+        Insert: {
+          created_at?: string
+          family_id: string
+          group_label?: string
+          id?: string
+          is_pinned?: boolean
+          name: string
+          position?: number
+        }
+        Update: {
+          created_at?: string
+          family_id?: string
+          group_label?: string
+          id?: string
+          is_pinned?: boolean
+          name?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lists_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nurseries: {
         Row: {
           address: string | null
@@ -383,6 +501,7 @@ export type Database = {
           interval_minutes: number
           notified_step: number
           side: string
+          stopped_at: string | null
           subscription_id: string
           updated_at: string
           user_id: string
@@ -392,6 +511,7 @@ export type Database = {
           interval_minutes: number
           notified_step?: number
           side: string
+          stopped_at?: string | null
           subscription_id: string
           updated_at?: string
           user_id: string
@@ -401,6 +521,7 @@ export type Database = {
           interval_minutes?: number
           notified_step?: number
           side?: string
+          stopped_at?: string | null
           subscription_id?: string
           updated_at?: string
           user_id?: string
@@ -602,6 +723,83 @@ export type Database = {
           },
         ]
       }
+      temperature_reminder_deliveries: {
+        Row: {
+          error: string | null
+          family_id: string
+          id: string
+          scheduled_for: string
+          sent_at: string
+          status: string
+          subscription_id: string
+        }
+        Insert: {
+          error?: string | null
+          family_id: string
+          id?: string
+          scheduled_for: string
+          sent_at?: string
+          status?: string
+          subscription_id: string
+        }
+        Update: {
+          error?: string | null
+          family_id?: string
+          id?: string
+          scheduled_for?: string
+          sent_at?: string
+          status?: string
+          subscription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "temperature_reminder_deliveries_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "temperature_reminder_deliveries_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "push_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      temperature_reminder_settings: {
+        Row: {
+          enabled: boolean
+          evening_time: string
+          family_id: string
+          morning_time: string
+          updated_at: string
+        }
+        Insert: {
+          enabled?: boolean
+          evening_time?: string
+          family_id: string
+          morning_time?: string
+          updated_at?: string
+        }
+        Update: {
+          enabled?: boolean
+          evening_time?: string
+          family_id?: string
+          morning_time?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "temperature_reminder_settings_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: true
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           created_at: string
@@ -675,6 +873,22 @@ export type Database = {
             foreignKeyName: "tasks_family_id_fkey"
             columns: ["family_id"]
             isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      temperature_reminder_schedule: {
+        Row: {
+          family_id: string | null
+          scheduled_for: string | null
+          slot: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "temperature_reminder_settings_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: true
             referencedRelation: "families"
             referencedColumns: ["id"]
           },
