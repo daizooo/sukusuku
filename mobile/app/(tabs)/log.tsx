@@ -343,27 +343,29 @@ export default function LogScreen() {
           <Text style={styles.arrowText}>‹</Text>
         </Pressable>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="日付を選ぶ"
-          onPress={() =>
-            DateTimePickerAndroid.open({
-              value: logDate,
-              mode: 'date',
-              maximumDate: today,
-              onChange: (_event, picked) => picked && setLogDate(startOfDay(picked)),
-            })
-          }
-          style={styles.dateButton}
-        >
-          <Text style={styles.date}>{formatDateWithWeekday(logDate)}</Text>
-        </Pressable>
-
-        {!isToday && (
-          <Pressable accessibilityRole="button" onPress={() => setLogDate(today)} hitSlop={8}>
-            <Text style={styles.todayButton}>今日</Text>
+        <View style={styles.dateGroup}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="日付を選ぶ"
+            onPress={() =>
+              DateTimePickerAndroid.open({
+                value: logDate,
+                mode: 'date',
+                maximumDate: today,
+                onChange: (_event, picked) => picked && setLogDate(startOfDay(picked)),
+              })
+            }
+            style={styles.dateButton}
+          >
+            <Text style={styles.date}>{formatDateWithWeekday(logDate)}</Text>
           </Pressable>
-        )}
+
+          {!isToday && (
+            <Pressable accessibilityRole="button" onPress={() => setLogDate(today)} hitSlop={8}>
+              <Text style={styles.todayButton}>今日</Text>
+            </Pressable>
+          )}
+        </View>
 
         <Pressable
           accessibilityRole="button"
@@ -374,14 +376,6 @@ export default function LogScreen() {
           style={[styles.arrow, isToday && styles.arrowDisabled]}
         >
           <Text style={styles.arrowText}>›</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => void supabase.auth.signOut()}
-          hitSlop={8}
-        >
-          <Text style={styles.signOut}>ログアウト</Text>
         </Pressable>
       </View>
 
@@ -565,6 +559,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -575,6 +570,7 @@ const styles = StyleSheet.create({
   arrow: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   arrowDisabled: { opacity: 0.3 },
   arrowText: { fontSize: 24, color: colors.textMuted, lineHeight: 26 },
+  dateGroup: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   dateButton: { paddingVertical: 4 },
   date: { fontSize: 15, fontWeight: '700', color: colors.text },
   todayButton: {
@@ -586,7 +582,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  signOut: { marginLeft: 'auto', fontSize: 12, color: colors.textMuted },
 
   fixed: { padding: 12, gap: 8 },
   nursingBanner: {
