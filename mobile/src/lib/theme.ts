@@ -57,6 +57,10 @@ export const colors = {
   milestoneSurface: '#fffbeb', // amber-50（節目の札）
   milestoneBorder: '#fde68a', // amber-200
   milestoneText: '#b45309', // amber-700
+  gradeGood: '#22c55e', // green-500（見学チェックの「良い」・済んだ項目）
+  gradeGoodSurface: '#f0fdf4', // green-50
+  gradeGoodBorder: '#bbf7d0', // green-200
+  gradeWatch: '#f97316', // orange-500（見学チェックの「気になる」）
   doneSurface: '#dcfce7', // green-100（完了済の札）
   doneText: '#15803d', // green-700
   noteSurface: '#eff6ff80', // blue-50/50（予定の詳細のメモ）
