@@ -14,6 +14,7 @@ import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import type {
   BreastSide,
   CareLog,
+  DiaperLog,
   FamilyMember,
   MilkLog,
   PumpedBatch,
@@ -24,16 +25,15 @@ import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
 import { listFamilyMembers } from '@/lib/api/familyMembers';
+import { listRecentTemperatureLogs } from '@/lib/api/careLogs';
 import {
   formatCelsius,
   formatStopwatch,
   getLatestTemperature,
   getNextBreastSide,
-  getNursingPhaseLabel,
   getSideLabel,
-  isFever,
+  getTemperatureBaseline,
   pumpedStockMl,
-  stockPumpedBatches,
   summarizeLogs,
 } from '@/lib/careLogUtils';
 import {
@@ -43,7 +43,7 @@ import {
   isSameDay,
   startOfDay,
 } from '@/lib/dateUtils';
-import { nursingMinutes, useNursingTimer } from '@/lib/nursingTimer';
+import { useNursingTimer } from '@/lib/nursingTimer';
 import {
   isNursingForegroundServiceAvailable,
   requestNursingNotificationPermission,
@@ -58,6 +58,7 @@ import {
   syncCareLogsInRange,
 } from '@/lib/offline/careLogs';
 import LogTimeline from '@/components/log/LogTimeline';
+import DiaperLogModal, { type DiaperLogInput } from '@/components/log/DiaperLogModal';
 import MilkLogModal, { type MilkLogInput } from '@/components/log/MilkLogModal';
 import TemperatureLogModal, {
   type TemperatureLogInput,
@@ -84,11 +85,14 @@ export default function LogScreen() {
   const [logs, setLogs] = useState<CareLog[]>([]);
   const [pumpedBatches, setPumpedBatches] = useState<PumpedBatch[]>([]);
   const [unsentCount, setUnsentCount] = useState(0);
+  // 平熱に使う直近の体温。その子自身の記録の平均なので、表示中の日だけでは求まらない。
+  const [recentTemperatureLogs, setRecentTemperatureLogs] = useState<TemperatureLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   // 開いている入力画面。log が null なら新規追加、入っていればその記録の編集。
   const [editing, setEditing] = useState<{ log: MilkLog | null } | null>(null);
+  const [editingDiaper, setEditingDiaper] = useState<{ log: DiaperLog | null } | null>(null);
   const [editingTemperature, setEditingTemperature] = useState<{
     log: TemperatureLog | null;
   } | null>(null);
@@ -175,6 +179,20 @@ export default function LogScreen() {
     void requestNursingNotificationPermission();
   }, []);
 
+  /** 平熱に使う直近の体温を読み直す。体温を足したり直したりするたびに呼ぶ。 */
+  const refreshRecentTemperatureLogs = useCallback(async () => {
+    if (!familyId) return;
+    try {
+      setRecentTemperatureLogs(await listRecentTemperatureLogs(supabase, familyId));
+    } catch {
+      // 圏外でも他は出せるので、平熱が出ないだけにとどめる。
+    }
+  }, [familyId]);
+
+  useEffect(() => {
+    void refreshRecentTemperatureLogs();
+  }, [refreshRecentTemperatureLogs]);
+
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     void sync().finally(() => setIsRefreshing(false));
@@ -192,7 +210,16 @@ export default function LogScreen() {
 
   const summary = useMemo(() => summarizeLogs(logs), [logs]);
   const nextBreastSide = useMemo<BreastSide | null>(() => getNextBreastSide(logs), [logs]);
-  // 表示中の日でいちばん新しい体温。ボタンに出すのと、次に測るときの初期値に使う。
+  // 体温のボタンにはその子の平熱だけを出す。日ごとの平均や最高は出さず、
+  // 測ったときに比べる相手になる基準の1つの数に絞る。
+  const temperatureBaseline = useMemo(
+    () => getTemperatureBaseline(recentTemperatureLogs),
+    [recentTemperatureLogs],
+  );
+  const temperatureSummaryText = temperatureBaseline
+    ? `平熱 ${formatCelsius(temperatureBaseline.celsius)}`
+    : 'まだ記録なし';
+  // 入力画面に出す「前回の体温」。ボタンの平熱とは別に、直前の1件が要る。
   const latestTemperature = useMemo(() => getLatestTemperature(logs), [logs]);
 
   const handleSave = async (input: MilkLogInput, existing: MilkLog | null) => {
@@ -211,6 +238,27 @@ export default function LogScreen() {
         await queueInsertCareLog(familyId, userId, { type: 'milk', ...input });
         // 記録できた分の計測はもう不要なので片付ける（前面サービスもここで止まる）。
         timer.reset();
+      }
+      await showCached();
+      await sync();
+    } catch (error) {
+      setErrorMessage(toMessage(error));
+    }
+  };
+
+  const handleSaveDiaper = async (input: DiaperLogInput, existing: DiaperLog | null) => {
+    if (!familyId || !userId) return;
+    setEditingDiaper(null);
+    try {
+      if (existing) {
+        await queueUpdateCareLog(familyId, {
+          type: 'diaper',
+          ...input,
+          id: existing.id,
+          createdBy: existing.createdBy,
+        });
+      } else {
+        await queueInsertCareLog(familyId, userId, { type: 'diaper', ...input });
       }
       await showCached();
       await sync();
@@ -238,6 +286,7 @@ export default function LogScreen() {
       }
       await showCached();
       await sync();
+      await refreshRecentTemperatureLogs();
     } catch (error) {
       setErrorMessage(toMessage(error));
     }
@@ -246,6 +295,7 @@ export default function LogScreen() {
   const handleDelete = async (log: CareLog) => {
     if (!familyId) return;
     setEditing(null);
+    setEditingDiaper(null);
     setEditingTemperature(null);
     try {
       await queueDeleteCareLog(familyId, log.id);
@@ -332,7 +382,7 @@ export default function LogScreen() {
       ) : (
         <>
           <View style={styles.fixed}>
-            {/* 計測中の授乳。開いた人が最初に気づけるよう一番上に出す。 */}
+            {/* 計測中の授乳。アプリを開いた人が最初に気づけるよう一番上に出す。 */}
             {timer.hasSession && (
               <Pressable
                 accessibilityRole="button"
@@ -340,68 +390,71 @@ export default function LogScreen() {
                 style={styles.nursingBanner}
               >
                 <View style={styles.flex}>
-                  {/* 止まっているときは、測り終えて記録がまだなのか、途中で止めたのかを
-                      区別しない。どちらも「開いて記録する」ことに変わりがないため。 */}
                   <Text style={styles.nursingTitle}>
-                    {timer.runningPhase
-                      ? `授乳中（${getNursingPhaseLabel(timer.runningPhase)}）・${timer.setNumber}セット目`
-                      : '授乳の記録がまだです'}
+                    {timer.runningPhase === 'burp'
+                      ? 'ゲップの時間を計測中'
+                      : timer.runningPhase
+                        ? `授乳中（${getSideLabel(timer.runningPhase)}）`
+                        : '授乳の計測中'}
                   </Text>
-                  {timer.runningPhase && (
-                    <Text style={styles.nursingTime}>
-                      {getNursingPhaseLabel(timer.runningPhase)}{' '}
-                      {formatStopwatch(timer.elapsed[timer.runningPhase])}
-                    </Text>
-                  )}
-                  {/* 一覧に並ぶ記録と同じ単位（分）で、いま保存したらどうなるかを出す。 */}
-                  <Text style={styles.nursingTotal}>
-                    記録は 左{nursingMinutes(timer.total.left)}分・右
-                    {nursingMinutes(timer.total.right)}分
+                  {/* 出すのは記録に入る合計。何セット目かは、続きから測るときの目印になる。 */}
+                  <Text style={styles.nursingTime}>
+                    {timer.setNumber}セット目・左 {formatStopwatch(timer.total.left)} / 右{' '}
+                    {formatStopwatch(timer.total.right)}
                   </Text>
                 </View>
                 <Text style={styles.nursingOpen}>開く</Text>
               </Pressable>
             )}
 
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setEditing({ log: null })}
-              style={styles.recordButton}
-            >
-              <Text style={styles.recordButtonTitle}>授乳・ミルクを記録</Text>
-              <Text style={styles.recordButtonSummary}>
-                {timer.hasSession ? '計測中' : milkSummaryText(summary)}
-              </Text>
-              {nextBreastSide && !timer.hasSession && (
-                <Text style={styles.recordButtonHint}>
-                  次は{getSideLabel(nextBreastSide)}から
-                </Text>
-              )}
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setEditingTemperature({ log: null })}
-              style={styles.temperatureRow}
-            >
-              <Text style={styles.temperatureLabel}>体温を記録</Text>
-              <Text
-                style={[
-                  styles.temperatureValue,
-                  latestTemperature && isFever(latestTemperature.celsius) && styles.temperatureFever,
-                ]}
+            {/* 記録ボタン。その日のようすを同じボタンに載せ、「見る」と「記録する」を1つに
+                まとめている。授乳・おむつ・体温の3つ。搾乳は授乳の中（入力画面の「搾った」）へ
+                寄せたので、ここには出さず、代わりに授乳のボタンにいまの搾乳ストックを出す。 */}
+            <View style={styles.recordRow}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setEditing({ log: null })}
+                style={styles.recordButton}
               >
-                {temperatureSummaryText(latestTemperature, summary)}
-              </Text>
-            </Pressable>
+                <Text style={styles.recordTitle}>授乳</Text>
+                {/* その日の回数・量・分数は出さない（判断に使うのは体重とおしっこの回数）。
+                    代わりに、次の授乳で使える搾乳ストックの残りを出す。表示中の日だけでは
+                    求まらないため、日付の送りとは関わらず常に今の残りになる。 */}
+                <Text style={styles.stockValue}>ストック・{pumpedStockMl(pumpedBatches)}ml</Text>
+                {nextBreastSide && !timer.hasSession && (
+                  <Text style={styles.recordHint}>次は{getSideLabel(nextBreastSide)}から</Text>
+                )}
+              </Pressable>
 
-            <View style={styles.stockRow}>
-              <Text style={styles.stockLabel}>搾乳ストック</Text>
-              <Text style={styles.stockValue}>
-                {stockPumpedBatches(pumpedBatches).length}パック・
-                {pumpedStockMl(pumpedBatches)}ml
-              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setEditingDiaper({ log: null })}
+                style={styles.recordButton}
+              >
+                <Text style={styles.recordTitle}>おむつ</Text>
+                {/* おしっことうんちは見たいことが別（水分が足りているか／お通じ）なので、
+                    合わせた回数ではなくそれぞれの回数を出す。「両方」の記録は両方に数える。 */}
+                <Text style={styles.recordValue}>おしっこ {summary.diaper.peeCount}回</Text>
+                <Text style={styles.recordValue}>うんち {summary.diaper.poopCount}回</Text>
+              </Pressable>
+
+              {/* 体温はその子の平熱だけを出す。日ごとの平均や最高は出さない。 */}
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setEditingTemperature({ log: null })}
+                style={styles.recordButton}
+              >
+                <Text style={styles.recordTitle}>体温</Text>
+                <Text style={styles.recordValue}>{temperatureSummaryText}</Text>
+              </Pressable>
             </View>
+
+            {!isToday && (
+              <Text style={styles.pastDayNote}>
+                過去の日を表示中です。記録を追加すると{formatDateWithWeekday(logDate)}に
+                登録されます。
+              </Text>
+            )}
 
             {unsentCount > 0 && (
               <Text style={styles.unsent}>
@@ -432,12 +485,13 @@ export default function LogScreen() {
                 memberLabel={memberLabel}
                 onSelect={(log) => {
                   if (log.type === 'milk') setEditing({ log });
+                  else if (log.type === 'diaper') setEditingDiaper({ log });
                   else if (log.type === 'temperature') setEditingTemperature({ log });
                 }}
               />
             )}
             <Text style={styles.phaseNote}>
-              フェーズ1では授乳まわりと体温をこちらで扱います。おむつ・搾乳の記録と、
+              いまは授乳・おむつ・体温をこちらで扱います。搾乳ストックを足すのと、
               ホーム / 予定 / メモ / 情報 の各タブはPWA版で見てください。
               {!isNursingForegroundServiceAvailable() &&
                 '\nいまは前面サービスの入っていないビルドで動いているため、' +
@@ -459,6 +513,15 @@ export default function LogScreen() {
         onDelete={() => editing?.log && void handleDelete(editing.log)}
       />
 
+      <DiaperLogModal
+        show={editingDiaper !== null}
+        log={editingDiaper?.log ?? null}
+        baseDate={logDate}
+        onClose={() => setEditingDiaper(null)}
+        onSubmit={(input) => void handleSaveDiaper(input, editingDiaper?.log ?? null)}
+        onDelete={() => editingDiaper?.log && void handleDelete(editingDiaper.log)}
+      />
+
       <TemperatureLogModal
         show={editingTemperature !== null}
         log={editingTemperature?.log ?? null}
@@ -473,29 +536,6 @@ export default function LogScreen() {
     </SafeAreaView>
   );
 }
-
-/** 記録ボタンに出すその日の合計。回数を主、量・時間を従にして1行に収める。 */
-const milkSummaryText = (summary: ReturnType<typeof summarizeLogs>): string =>
-  [
-    `${summary.milk.count}回`,
-    ...(summary.milk.ml > 0 ? [`${summary.milk.ml}ml`] : []),
-    ...(summary.milk.breastMinutes > 0 ? [`${summary.milk.breastMinutes}分`] : []),
-  ].join('・');
-
-/** 体温の行に出すその日のようす。最新の値を主、回数と最高体温を従にする。 */
-const temperatureSummaryText = (
-  latest: TemperatureLog | null,
-  summary: ReturnType<typeof summarizeLogs>,
-): string => {
-  if (!latest) return 'この日はまだ';
-  const max = summary.temperature.maxCelsius;
-  return [
-    formatCelsius(latest.celsius),
-    `${summary.temperature.count}回`,
-    // 熱が下がったあとでも、その日いちばん高かったところが分かるようにする。
-    ...(max !== null && max > latest.celsius ? [`最高 ${formatCelsius(max)}`] : []),
-  ].join('・');
-};
 
 const toMessage = (error: unknown): string =>
   error instanceof Error ? error.message : '読み込みに失敗しました';
@@ -545,8 +585,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   nursingTitle: { fontSize: 12, fontWeight: '700', color: colors.milkText },
-  nursingTime: { fontSize: 12, color: colors.milk, marginTop: 2 },
-  nursingTotal: { fontSize: 11, color: colors.milkText, marginTop: 1 },
+  nursingTime: { fontSize: 11, color: colors.milk, marginTop: 2 },
   nursingOpen: {
     fontSize: 12,
     fontWeight: '700',
@@ -557,44 +596,37 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     overflow: 'hidden',
   },
+
+  // 記録ボタン。授乳・おむつ・体温を横に3つ並べる（PWA版と同じ並び）。
+  recordRow: { flexDirection: 'row', gap: 8 },
   recordButton: {
+    flex: 1,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 14,
-    paddingVertical: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
     alignItems: 'center',
   },
-  recordButtonTitle: { fontSize: 15, fontWeight: '700', color: colors.milk },
-  recordButtonSummary: { fontSize: 12, color: colors.textMuted, marginTop: 3 },
-  recordButtonHint: { fontSize: 11, fontWeight: '700', color: colors.milkText, marginTop: 2 },
-  temperatureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.temperatureSurface,
-    borderWidth: 1,
-    borderColor: colors.temperatureBorder,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+  recordTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+  recordValue: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: colors.textMuted,
+    marginTop: 2,
+    textAlign: 'center',
   },
-  temperatureLabel: { fontSize: 12, fontWeight: '700', color: colors.temperatureText },
-  temperatureValue: { fontSize: 13, fontWeight: '700', color: colors.temperatureText },
-  temperatureFever: { color: colors.alertText },
-  stockRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.pumpingSurface,
-    borderWidth: 1,
-    borderColor: colors.pumpingBorder,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+  recordHint: { fontSize: 10, fontWeight: '700', color: colors.milkText, marginTop: 1 },
+  stockValue: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.pumpingText,
+    marginTop: 2,
+    textAlign: 'center',
   },
-  stockLabel: { fontSize: 12, fontWeight: '700', color: colors.pumpingText },
-  stockValue: { fontSize: 13, fontWeight: '700', color: colors.pumpingText },
+
+  pastDayNote: { fontSize: 11, color: colors.textMuted, lineHeight: 17 },
   unsent: { fontSize: 11, color: colors.milkText },
   error: { fontSize: 11, color: colors.danger },
 

@@ -10,6 +10,7 @@ import type {
   PoopColor,
   PoopConsistency,
   PumpedBatch,
+  TemperatureLog,
 } from '@/types/app';
 import { addDays, startOfDay } from '@/lib/dateUtils';
 
@@ -222,6 +223,31 @@ export async function listRecentMilkLogs(
  * 表示中の日だけでは求まらないため全期間ぶんを数えるが、どちらも1日に数件しか増えず
  * 必要な列も少ないので、2本の軽い問い合わせで足りる。並びは古い順（先に搾ったものから使う）。
  */
+/**
+ * 直近の体温の記録を新しい順に取る。平熱を出すのに使う（careLogUtils の getTemperatureBaseline）。
+ *
+ * 平熱はその子自身の記録の平均なので、表示中の日だけでは求まらない。
+ * 記録タブの1日分(listCareLogsByDate)とは別に、日付にとらわれず取る。
+ * 発熱した日の値は平熱から外すため、外れるぶんを見込んで少し多めに取る。
+ */
+export async function listRecentTemperatureLogs(
+  supabase: SupabaseDb,
+  familyId: string,
+  limit = 60,
+): Promise<TemperatureLog[]> {
+  const { data, error } = await supabase
+    .from('care_logs')
+    .select('*')
+    .eq('family_id', familyId)
+    .eq('type', 'temperature')
+    .order('logged_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? [])
+    .map(rowToCareLog)
+    .filter((log): log is TemperatureLog => log.type === 'temperature');
+}
+
 export async function listPumpedBatches(supabase: SupabaseDb, familyId: string): Promise<PumpedBatch[]> {
   const [pumped, fed] = await Promise.all([
     supabase

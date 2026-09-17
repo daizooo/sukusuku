@@ -61,7 +61,12 @@ export const POOP_CONSISTENCY_OPTIONS: { value: PoopConsistency; label: string }
 // 目安の値。低月齢の発熱はそれ自体が受診の判断につながるので、記録したその場で
 // 「これは様子見か、いま連れて行くか」が分かるところまで出す（docs/what-to-record.md §4-1）。
 
-/** 発熱として扱う体温(℃)。 */
+/**
+ * 平熱として扱う体温(℃)の下の端。乳児の平熱は大人より高く、この幅に収まる。
+ * 上の端は FEVER_CELSIUS（ここから上は発熱）。
+ */
+export const NORMAL_MIN_CELSIUS = 36.5;
+/** 発熱として扱う体温(℃)。正常範囲の上の端でもある。 */
 export const FEVER_CELSIUS = 37.5;
 /** 生後3か月未満では、すぐに受診の目安になる体温(℃)。 */
 export const URGENT_FEVER_CELSIUS = 38.0;
@@ -74,6 +79,17 @@ export const MAX_CELSIUS = 43.0;
 export const DEFAULT_CELSIUS = 37.0;
 /** ボタンで上げ下げする幅(℃)。 */
 export const CELSIUS_STEP = 0.1;
+
+// 平熱は子どもによって違う。同じ 37.2℃ でも、平熱 36.6℃ の子には高く、
+// 平熱 37.1℃ の子にはいつもどおり。「この子にしては高い」を出すために、
+// その子自身の記録から平熱を数える。
+
+/** 平熱を数えるのに使う記録の数（新しい順）。これより古いぶんは使わない。 */
+export const BASELINE_SAMPLE_LIMIT = 30;
+/** 平熱を出すのに最低限ほしい記録の数。これに満たないうちは平熱を出さない。 */
+export const BASELINE_MIN_SAMPLES = 3;
+/** 平熱からこれだけ離れたら「この子にしては高い」として出す(℃)。 */
+export const BASELINE_NOTABLE_DIFF = 0.5;
 
 // --- 判定 ---
 
@@ -94,8 +110,43 @@ export const needsTemperatureAttention = (celsius: number): boolean =>
 /** 体温は小数第1位まで。0.1刻みの足し引きで誤差が出ないよう、そこで丸める。 */
 export const roundCelsius = (celsius: number): number => Math.round(celsius * 10) / 10;
 
+/** 正常範囲の内か。 */
+export const isNormalCelsius = (celsius: number): boolean =>
+  celsius >= NORMAL_MIN_CELSIUS && celsius < FEVER_CELSIUS;
+
 /** 表示用の体温。「37.2 ℃」の形。 */
 export const formatCelsius = (celsius: number): string => `${celsius.toFixed(1)} ℃`;
+
+/** 正常範囲の表示。「36.5 〜 37.5 ℃」の形。 */
+export const formatNormalRange = (): string =>
+  `${NORMAL_MIN_CELSIUS.toFixed(1)} 〜 ${FEVER_CELSIUS.toFixed(1)} ℃`;
+
+/** その子の平熱。 */
+export interface TemperatureBaseline {
+  /** 平熱(℃)。 */
+  celsius: number;
+  /** 平均に使った記録の数。どれくらい確からしいかの手がかりとして一緒に出す。 */
+  count: number;
+}
+
+/**
+ * その子の平熱。渡された記録のうち**正常範囲に入るものだけ**を新しい順に数えて平均する。
+ *
+ * 発熱したときの値を混ぜると平熱そのものが上がってしまい、
+ * 「この子にしては高い」がかえって見えなくなる。熱が続いた数日で平熱を見失わないよう、
+ * 絞ってから新しい順に取る（先に新しい順で切ると、その数日で埋まってしまう）。
+ *
+ * 記録が BASELINE_MIN_SAMPLES に満たなければ null。
+ */
+export const getTemperatureBaseline = (logs: TemperatureLog[]): TemperatureBaseline | null => {
+  const normal = logs
+    .filter((log) => isNormalCelsius(log.celsius))
+    .sort((a, b) => b.time.getTime() - a.time.getTime())
+    .slice(0, BASELINE_SAMPLE_LIMIT);
+  if (normal.length < BASELINE_MIN_SAMPLES) return null;
+  const total = normal.reduce((sum, log) => sum + log.celsius, 0);
+  return { celsius: roundCelsius(total / normal.length), count: normal.length };
+};
 
 /** いちばん新しい体温の記録。まだ無ければ null。 */
 export const getLatestTemperature = (logs: CareLog[]): TemperatureLog | null =>
@@ -276,7 +327,12 @@ export const isAlertLog = (log: CareLog): boolean => {
 
 export interface DailySummary {
   milk: { count: number; ml: number; breastMinutes: number };
-  diaper: { count: number; poopCount: number };
+  /**
+   * おむつは、おしっことうんちを別々に数える。見たいことが別々（おしっこは水分が
+   * 足りているか、うんちはお通じ）なので、合わせた回数だけでは判断に使えない。
+   * 「両方」の記録はどちらにも数えるため、2つの合計は count と一致しないことがある。
+   */
+  diaper: { count: number; peeCount: number; poopCount: number };
   pumping: { count: number; ml: number };
   /** 体温は合計に意味が無いので、回数とその日いちばん高かった値を持つ。 */
   temperature: { count: number; maxCelsius: number | null };
@@ -295,7 +351,7 @@ const parseLegacyMl = (amount: string): number => {
 export const summarizeLogs = (logs: CareLog[]): DailySummary => {
   const summary: DailySummary = {
     milk: { count: 0, ml: 0, breastMinutes: 0 },
-    diaper: { count: 0, poopCount: 0 },
+    diaper: { count: 0, peeCount: 0, poopCount: 0 },
     pumping: { count: 0, ml: 0 },
     temperature: { count: 0, maxCelsius: null },
   };
@@ -309,7 +365,12 @@ export const summarizeLogs = (logs: CareLog[]): DailySummary => {
       summary.milk.breastMinutes += (log.leftMinutes ?? 0) + (log.rightMinutes ?? 0);
     } else if (log.type === 'diaper') {
       summary.diaper.count += 1;
-      if (legacy === undefined && log.kind !== 'pee') summary.diaper.poopCount += 1;
+      // 「両方」はおしっこ・うんちのどちらにも数える。
+      // 種類別の項目を持たない記録はどちらか分からないので、回数にだけ入れる。
+      if (legacy === undefined) {
+        if (log.kind !== 'poop') summary.diaper.peeCount += 1;
+        if (log.kind !== 'pee') summary.diaper.poopCount += 1;
+      }
     } else if (log.type === 'temperature') {
       summary.temperature.count += 1;
       summary.temperature.maxCelsius = Math.max(

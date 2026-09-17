@@ -6,10 +6,11 @@ import { colors } from '@/lib/theme';
 // 色の当て方だけWeb版(Tailwind)から置き換えてあり、見出し・選択肢・メモ欄の作りは同じ。
 
 /** 記録の種類ごとの差し色。ボタンや選択中の枠に使う。 */
-export type Accent = 'milk' | 'pumping' | 'temperature';
+export type Accent = 'milk' | 'diaper' | 'pumping' | 'temperature';
 
 const ACCENT: Record<Accent, { color: string; surface: string; border: string }> = {
   milk: { color: colors.milk, surface: colors.milkSurface, border: colors.milkBorder },
+  diaper: { color: colors.diaper, surface: colors.diaperSurface, border: colors.diaperBorder },
   pumping: { color: colors.pumping, surface: colors.pumpingSurface, border: colors.pumpingBorder },
   temperature: {
     color: colors.temperature,
