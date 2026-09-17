@@ -6,7 +6,6 @@ import { ArrowLeft, Check, ChevronDown, ChevronRight, Pin, PinOff, Plus, Setting
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
 import { useDragReorder } from '../ui/useDragReorder';
 import ListFormModal, { type ListDraft } from '../modals/ListFormModal';
-import ListItemDetailModal, { type ListItemDraft } from '../modals/ListItemDetailModal';
 
 /**
  * 買い出し・やりたいこと・やることなどのリスト（docs/lists.md）。
@@ -19,6 +18,10 @@ import ListItemDetailModal, { type ListItemDraft } from '../modals/ListItemDetai
  * カードを押すとそのリストだけの画面になり、そこで項目やグループを足す。
  *
  * スクロールするのはカード/枠の一覧だけで、見出しや戻るは上に固定する。
+ *
+ * 追加・書き換え・削除はすべて**その枠の中で終える**（Keepと同じ）。項目を押せば
+ * その行が入力欄になり、直せるのは**内容だけ**（メモも入れ先の選び直しも持たない）。
+ * グループの名前も同じく見出しを押してその場で直す。
  *
  * 並べ替えとピン止めもKeepに合わせる。よく開くリストは一覧の先頭へ固定でき、
  * 並び順は**長押ししてそのまま動かす**（モードにも矢印にも入らない）。
@@ -37,7 +40,8 @@ interface ListTabProps {
   onDeleteGroup: (id: string) => void;
   onAddItem: (listId: string, groupId: string | null, title: string) => void;
   onToggleItem: (id: string) => void;
-  onUpdateItem: (item: ListItem, draft: ListItemDraft) => void;
+  /** 項目の内容を書き換える。持てるのは内容だけなので、渡すのも内容だけ。 */
+  onRenameItem: (item: ListItem, title: string) => void;
   onDeleteItem: (id: string) => void;
   onClearDone: (listId: string) => void;
   onAddDefaultLists: () => void;
@@ -53,6 +57,8 @@ function ItemCheck({ done, onToggle, label }: { done: boolean; onToggle: () => v
   return (
     <button
       type="button"
+      // 書き換え中に押しても入力欄から焦点が外れない（続けて書ける）ようにする。
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onToggle}
       aria-label={label}
       aria-pressed={done}
@@ -65,10 +71,14 @@ function ItemCheck({ done, onToggle, label }: { done: boolean; onToggle: () => v
   );
 }
 
+/**
+ * 項目の行。押すとその場で入力欄になり、枠の中で書き換える
+ * （Keepと同じで、項目のためだけの画面は出さない）。持っているのは内容だけ。
+ */
 function ItemRow({
   item,
   onToggle,
-  onOpen,
+  onRename,
   onDelete,
   attachRef,
   onGrab,
@@ -76,37 +86,132 @@ function ItemRow({
 }: {
   item: ListItem;
   onToggle: () => void;
-  onOpen: () => void;
+  onRename: (title: string) => void;
   onDelete: () => void;
   /** 長押しで動かすための持ち手。完了した項目には渡さない（並びを持たない）。 */
   attachRef?: (el: HTMLElement | null) => void;
   onGrab?: (event: ReactPointerEvent<HTMLElement>) => void;
   dragging?: boolean;
 }) {
+  // null のあいだは読むだけの行。押すと書きかけを持って入力欄になる。
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const close = (value: string) => {
+    const title = value.trim();
+    // 空のまま離れたのが消したいのか打ち間違いかは分からないので、元に戻す（消すのは×）。
+    if (title && title !== item.title) onRename(title);
+    setDraft(null);
+  };
+
   return (
     <div
-      ref={attachRef}
-      onPointerDown={onGrab}
-      className={`flex items-start gap-2 pl-3 pr-1 py-2.5 border-b border-gray-100 last:border-b-0 ${
+      ref={draft === null ? attachRef : undefined}
+      onPointerDown={draft === null ? onGrab : undefined}
+      className={`flex items-center gap-2 pl-3 pr-1 py-2.5 border-b border-gray-100 last:border-b-0 ${
         dragging ? 'relative z-20 bg-white rounded-lg shadow-lg' : ''
       }`}
     >
       <ItemCheck done={item.done} onToggle={onToggle} label={`${item.title}を${item.done ? '戻す' : '完了にする'}`} />
-      <button type="button" onClick={onOpen} className="flex-1 min-w-0 text-left">
-        <span className={`block text-sm break-words ${item.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
-          {item.title}
-        </span>
-        {item.note && <span className="block text-[11px] text-gray-400 break-words mt-0.5">{item.note}</span>}
-      </button>
+      {draft === null ? (
+        <button type="button" onClick={() => setDraft(item.title)} className="flex-1 min-w-0 text-left">
+          <span className={`block text-sm break-words ${item.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+            {item.title}
+          </span>
+        </button>
+      ) : (
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') close(draft);
+            if (e.key === 'Escape') setDraft(null);
+          }}
+          onBlur={() => close(draft)}
+          autoFocus
+          aria-label="項目の内容"
+          className="flex-1 min-w-0 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-blue-500"
+        />
+      )}
       {/* その場で消せるようにする。打ち間違いをすぐ取り消せるほうが、
-          いちいち詳細を開くより手数が少ない。 */}
+          いちいち書き換えに入るより手数が少ない。 */}
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={onDelete}
         aria-label={`${item.title}を削除`}
         className="flex-none text-gray-300 hover:text-red-500 p-1.5"
       >
         <X size={16} />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * 枠（グループ）の見出し。名前を押すとその場で直せる（設定の画面を出さない）。
+ * 枠ごと動かすときはこの見出しを長押しする（中の項目と取り合いにならない）。
+ */
+function GroupHeader({
+  group,
+  count,
+  onRename,
+  onDelete,
+  handleProps,
+}: {
+  group: ListGroup;
+  count: number;
+  onRename: (name: string) => void;
+  onDelete: () => void;
+  handleProps: { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void };
+}) {
+  // null のあいだは読むだけの見出し。押すと書きかけを持って入力欄になる。
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const close = (value: string) => {
+    const name = value.trim();
+    if (name && name !== group.name) onRename(name);
+    setDraft(null);
+  };
+
+  return (
+    <div
+      // 書き換え中は長押しで動かさない（文字を選びたいだけのことが多い）。
+      {...(draft === null ? handleProps : {})}
+      className="flex items-center justify-between pl-3 pr-1.5 py-2 bg-gray-100 border-b border-gray-200 select-none"
+    >
+      {draft === null ? (
+        <button
+          type="button"
+          onClick={() => setDraft(group.name)}
+          className="flex-1 min-w-0 text-left text-[13px] font-bold text-gray-900 py-0.5"
+        >
+          {group.name}
+          {count > 0 && <span className="ml-1.5 text-gray-400">{count}</span>}
+        </button>
+      ) : (
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') close(draft);
+            if (e.key === 'Escape') setDraft(null);
+          }}
+          onBlur={() => close(draft)}
+          autoFocus
+          aria-label="グループの名前"
+          className="flex-1 min-w-0 border border-gray-300 rounded-lg px-2 py-1 text-[13px] font-bold outline-none focus:border-blue-500"
+        />
+      )}
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onDelete}
+        aria-label={`${group.name}を削除`}
+        className="flex-none text-gray-400 hover:text-red-500 p-1.5"
+      >
+        <Trash2 size={16} />
       </button>
     </div>
   );
@@ -317,7 +422,7 @@ export default function ListTab({
   onDeleteGroup,
   onAddItem,
   onToggleItem,
-  onUpdateItem,
+  onRenameItem,
   onDeleteItem,
   onClearDone,
   onAddDefaultLists,
@@ -330,7 +435,6 @@ export default function ListTab({
   const [openListId, setOpenListId] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
   const [listModal, setListModal] = useState<{ mode: 'add' | 'edit'; list: ListBoard | null } | null>(null);
-  const [detailItem, setDetailItem] = useState<ListItem | null>(null);
 
   // 固定したリストが先。中は並び順（position）で、同じなら読み込んだ順のまま。
   const sortedLists = useMemo(
@@ -398,7 +502,7 @@ export default function ListTab({
         key={item.id}
         item={item}
         onToggle={() => onToggleItem(item.id)}
-        onOpen={() => setDetailItem(item)}
+        onRename={(title) => onRenameItem(item, title)}
         onDelete={() => onDeleteItem(item.id)}
         attachRef={drag.dragRef(item.id)}
         onGrab={drag.handleProps(sectionKey, arranged, item.id).onPointerDown}
@@ -541,23 +645,13 @@ export default function ListTab({
                     lifting(groupItems) ? '' : 'overflow-hidden'
                   } ${drag.isDragging(group.id) ? 'relative z-20 shadow-xl border-blue-300' : ''}`}
                 >
-                  {/* 枠そのものは見出しを長押しして動かす（中の項目と取り合いにならない）。 */}
-                  <div
-                    {...drag.handleProps(GROUPS, drag.arrange(GROUPS, listGroups), group.id)}
-                    className="flex items-center justify-between pl-3 pr-1.5 py-2 bg-gray-100 border-b border-gray-200 select-none"
-                  >
-                    <h3 className="text-[13px] font-bold text-gray-900">
-                      {group.name}
-                      {groupItems.length > 0 && <span className="ml-1.5 text-gray-400">{groupItems.length}</span>}
-                    </h3>
-                    <button
-                      onClick={() => deleteGroupWithConfirm(group)}
-                      aria-label={`${group.name}を削除`}
-                      className="text-gray-400 hover:text-red-500 p-1.5"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+                  <GroupHeader
+                    group={group}
+                    count={groupItems.length}
+                    onRename={(name) => onRenameGroup(group.id, name)}
+                    onDelete={() => deleteGroupWithConfirm(group)}
+                    handleProps={drag.handleProps(GROUPS, drag.arrange(GROUPS, listGroups), group.id)}
+                  />
                   {itemRows(itemsSection(group.id), groupItems)}
                   <AddRow
                     divided={groupItems.length > 0}
@@ -627,7 +721,7 @@ export default function ListTab({
                   key={item.id}
                   item={item}
                   onToggle={() => onToggleItem(item.id)}
-                  onOpen={() => setDetailItem(item)}
+                  onRename={(title) => onRenameItem(item, title)}
                   onDelete={() => onDeleteItem(item.id)}
                 />
               ))}
@@ -660,20 +754,6 @@ export default function ListTab({
           onDeleteList(id);
           setOpenListId(null);
           setListModal(null);
-        }}
-      />
-      <ListItemDetailModal
-        key={detailItem?.id ?? 'none'}
-        item={detailItem}
-        groups={listGroups}
-        onClose={() => setDetailItem(null)}
-        onSubmit={(item, draft) => {
-          onUpdateItem(item, draft);
-          setDetailItem(null);
-        }}
-        onDelete={(id) => {
-          onDeleteItem(id);
-          setDetailItem(null);
         }}
       />
     </div>

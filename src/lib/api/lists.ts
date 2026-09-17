@@ -28,7 +28,6 @@ const rowToItem = (row: ListItemRow): ListItem => ({
   listId: row.list_id,
   groupId: row.group_id,
   title: row.title,
-  note: row.note ?? '',
   done: row.is_done,
   doneAt: row.done_at ? new Date(row.done_at) : null,
   position: row.position,
@@ -220,11 +219,9 @@ export async function updateItemDone(
   if (error) throw error;
 }
 
-export async function updateItem(supabase: SupabaseDb, item: ListItem): Promise<void> {
-  const { error } = await supabase
-    .from('list_items')
-    .update({ title: item.title, note: item.note, group_id: item.groupId })
-    .eq('id', item.id);
+/** 項目の書き換え。持っているのは内容だけなので、書き換えるのも内容だけ。 */
+export async function updateItemTitle(supabase: SupabaseDb, id: string, title: string): Promise<void> {
+  const { error } = await supabase.from('list_items').update({ title }).eq('id', id);
   if (error) throw error;
 }
 

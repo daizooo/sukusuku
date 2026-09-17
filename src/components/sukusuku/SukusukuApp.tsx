@@ -113,7 +113,7 @@ import {
   insertList,
   loadLists,
   seedDefaultLists,
-  updateItem as updateItemApi,
+  updateItemTitle as updateItemTitleApi,
   updateItemDone,
   updateList as updateListApi,
   updateGroupPositions,
@@ -133,7 +133,6 @@ import type { TemperatureLogInput } from './modals/TemperatureLogModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 import type { NurseryDraft } from './modals/NurseryFormModal';
 import type { ListDraft } from './modals/ListFormModal';
-import type { ListItemDraft } from './modals/ListItemDetailModal';
 
 // 起動直後に表示するのはホームタブだけなので、残りのタブは実際に開かれるまで読み込まない。
 // 特にLogTabは成長グラフのためにrecharts(単体で約350KB)を持ち込むため、静的importのままだと
@@ -1210,11 +1209,10 @@ export default function SukusukuApp({
     }
   };
 
-  const updateItemHandler = async (item: ListItem, draft: ListItemDraft) => {
-    const updated: ListItem = { ...item, ...draft };
-    setListItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
+  const renameItemHandler = async (item: ListItem, title: string) => {
+    setListItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, title } : i)));
     try {
-      await updateItemApi(supabase, updated);
+      await updateItemTitleApi(supabase, item.id, title);
     } catch (err) {
       console.error('Failed to update list item:', err);
       setListItems((prev) => prev.map((i) => (i.id === item.id ? item : i)));
@@ -1345,7 +1343,7 @@ export default function SukusukuApp({
               onDeleteGroup={deleteGroupHandler}
               onAddItem={addItemHandler}
               onToggleItem={toggleItemHandler}
-              onUpdateItem={updateItemHandler}
+              onRenameItem={renameItemHandler}
               onDeleteItem={deleteItemHandler}
               onClearDone={clearDoneItemsHandler}
               onAddDefaultLists={addDefaultListsHandler}
