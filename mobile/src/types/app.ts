@@ -247,7 +247,7 @@ export interface UserProfile {
   customFields: ProfileField[];
 }
 
-export type TabId = 'home' | 'schedule' | 'log' | 'memo' | 'info';
+export type TabId = 'home' | 'schedule' | 'log' | 'list' | 'nursery' | 'info';
 
 // スケジュールタブの表示切り替え。既定は月（カレンダー）。
 /**
