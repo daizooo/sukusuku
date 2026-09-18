@@ -28,7 +28,7 @@ export function TimelineScale() {
   return (
     <View style={styles.scale}>
       {[0, 6, 12, 18, 24].map((hour) => (
-        <Text key={hour} style={styles.scaleText}>
+        <Text numberOfLines={1} key={hour} style={styles.scaleText}>
           {hour}時
         </Text>
       ))}
@@ -80,7 +80,7 @@ export default function DayTimeline({ logs, day, variant = 'week' }: DayTimeline
 
 const styles = StyleSheet.create({
   scale: { flexDirection: 'row', justifyContent: 'space-between' },
-  scaleText: { fontSize: 10, color: colors.textFaint, flexShrink: 1 },
+  scaleText: { fontSize: 10, color: colors.textFaint },
   track: { position: 'relative', overflow: 'hidden', backgroundColor: colors.neutralSurface },
   trackWeek: { height: 16, borderRadius: 4 },
   trackDay: { height: 36, borderRadius: 8 },

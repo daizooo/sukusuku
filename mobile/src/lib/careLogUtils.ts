@@ -332,13 +332,16 @@ export const getLogBadges = (log: CareLog): LogBadge[] => {
  * バッジの配色。記録タブとカレンダーの日表示で共通して使う。
  * Web版はTailwindのクラス名を持っていたが、React Nativeにクラス名は無いので色そのものを持つ。
  */
-export const BADGE_TONE_COLORS: Record<BadgeTone, { background: string; text: string }> = {
-  milk: { background: colors.milkSurface, text: colors.milkText },
-  diaper: { background: colors.diaperSurface, text: colors.diaperText },
-  pumping: { background: colors.pumpingSurface, text: colors.pumpingText },
-  temperature: { background: colors.temperatureSurface, text: colors.temperatureText },
-  alert: { background: colors.alertSurface, text: colors.alertText },
-  neutral: { background: colors.neutralSurface, text: colors.textMuted },
+export const BADGE_TONE_COLORS: Record<
+  BadgeTone,
+  { background: string; text: string; bold: boolean }
+> = {
+  milk: { background: colors.milkBadge, text: colors.milkBadgeText, bold: true },
+  diaper: { background: colors.diaperBadge, text: colors.diaperText, bold: false },
+  pumping: { background: colors.pumpingBadge, text: colors.pumpingText, bold: true },
+  temperature: { background: colors.temperatureBadge, text: colors.temperatureText, bold: true },
+  alert: { background: colors.alertSurface, text: colors.alertText, bold: true },
+  neutral: { background: colors.neutralSurface, text: colors.neutralBadgeText, bold: false },
 };
 
 /** カード全体を強調するか（白・赤・黒の便、受診の目安になる体温）。 */

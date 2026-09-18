@@ -44,7 +44,7 @@ export default function TaskRow({ task, onToggle, onOpen, showDate }: TaskRowPro
           <View
             style={[styles.label, { backgroundColor: label.background, borderColor: label.border }]}
           >
-            <Text style={[styles.labelText, { color: label.text }]}>{task.label}</Text>
+            <Text numberOfLines={1} style={[styles.labelText, { color: label.text }]}>{task.label}</Text>
           </View>
         </View>
 
@@ -52,12 +52,12 @@ export default function TaskRow({ task, onToggle, onOpen, showDate }: TaskRowPro
           {showDate && (
             <View style={styles.metaItem}>
               <CalendarDays size={12} color={colors.navActiveText} />
-              <Text style={styles.metaDate}>{task.targetDate}</Text>
+              <Text numberOfLines={1} style={styles.metaDate}>{task.targetDate}</Text>
             </View>
           )}
           <View style={styles.metaItem}>
             <Clock size={12} color={colors.textMuted} />
-            <Text style={styles.metaText}>{formatTimeRange(task.startTime, task.endTime)}</Text>
+            <Text numberOfLines={1} style={styles.metaText}>{formatTimeRange(task.startTime, task.endTime)}</Text>
           </View>
           {task.place !== '' && (
             <View style={styles.metaItem}>
@@ -93,6 +93,6 @@ const styles = StyleSheet.create({
   labelText: { fontSize: 10, fontWeight: '700' },
   meta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 6 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
-  metaDate: { fontSize: 12, fontWeight: '500', color: colors.navActiveText, flexShrink: 1 },
+  metaDate: { fontSize: 12, fontWeight: '500', color: colors.navActiveText },
   metaText: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
 });

@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  title: { fontSize: 16, fontWeight: '700', color: colors.textSubtle, flexShrink: 1 },
+  title: { fontSize: 16, fontWeight: '700', color: colors.textSubtle },
   content: { paddingHorizontal: 20, paddingVertical: 16 },
   footer: {
     paddingHorizontal: 20,

@@ -1,5 +1,7 @@
 // 画面の色。Web版(Tailwind)で使っていた値を持ってきて、名前で参照できるようにする。
 export const colors = {
+  // アプリの地の色。PWA版のmanifestの theme_color と同じで、画面の一番上の帯に使う。
+  brand: '#CE6B74',
   background: '#f9fafb', // gray-50
   surface: '#ffffff',
   border: '#e5e7eb', // gray-200
@@ -34,6 +36,15 @@ export const colors = {
 
   // 記録の種類ごとの色。Web版の記録タブと同じ割り当て（ミルク=琥珀・おむつ=青・搾乳=薔薇）。
   // 体温の色。Web版(src/)のTailwindの orange 系と同じ値にそろえてある。
+  // 記録のバッジと、タイムラインの丸。PWA版はTailwindの100番台を使う。
+  milkBadge: '#fef3c7', // amber-100
+  milkBadgeText: '#92400e', // amber-800
+  diaperBadge: '#dbeafe', // blue-100
+  pumpingBadge: '#ffe4e6', // rose-100
+  temperatureBadge: '#ffedd5', // orange-100
+  neutralBadgeText: '#4b5563', // gray-600
+  dangerBorder: '#fca5a5', // red-300（受診の目安の記録の枠）
+
   milk: '#d97706', // amber-600
   milkSurface: '#fffbeb', // amber-50
   milkBorder: '#fde68a', // amber-200
@@ -52,6 +63,17 @@ export const colors = {
   temperatureSurface: '#fff7ed', // orange-50
   temperatureBorder: '#fed7aa', // orange-200
   temperatureText: '#c2410c', // orange-700
+  // ホームのショートカット。PWA版の quickActions と同じ割り当て
+  // （産院=薔薇・小児科=青・相手の会社=緑・相手への連絡=紫）。
+  quickHospitalSurface: '#ffe4e6', // rose-100
+  quickHospitalIcon: '#e11d48', // rose-600
+  quickPediatricSurface: '#dbeafe', // blue-100
+  quickPediatricIcon: '#2563eb', // blue-600
+  quickCompanySurface: '#dcfce7', // green-100
+  quickCompanyIcon: '#16a34a', // green-600
+  quickContactSurface: '#f3e8ff', // purple-100
+  quickContactIcon: '#9333ea', // purple-600
+
   sunday: '#ef4444', // red-500（カレンダーの日曜）
   milestone: '#d97706', // amber-600（節目の日の小さな文字）
   milestoneSurface: '#fffbeb', // amber-50（節目の札）

@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     backgroundColor: colors.surface,
   },
-  title: { fontSize: 16, fontWeight: '700', color: colors.text, flexShrink: 1 },
+  title: { fontSize: 16, fontWeight: '700', color: colors.text },
   close: { fontSize: 14, color: colors.textMuted },
   subheader: { paddingHorizontal: 16, paddingTop: 16 },
   content: { padding: 16, gap: 16, paddingBottom: 24 },

@@ -101,6 +101,7 @@ export default function MonthView({
                   <View style={styles.dateRow}>
                     <View style={[styles.dateBubble, isToday && styles.dateBubbleToday]}>
                       <Text
+                        numberOfLines={1}
                         style={[
                           styles.dateText,
                           isToday

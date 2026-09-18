@@ -169,15 +169,15 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
       ) : (
         <View style={styles.gap16}>
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>メールアドレス</Text>
+            <Text numberOfLines={1} style={styles.rowLabel}>メールアドレス</Text>
             <Text style={styles.rowValueSmall}>{email || '未取得'}</Text>
           </View>
 
           <View>
             <View style={styles.row}>
-              <Text style={styles.rowLabel}>あなたの役割</Text>
+              <Text numberOfLines={1} style={styles.rowLabel}>あなたの役割</Text>
               {!isEditing && (
-                <Text style={styles.rowValue}>{me?.role ? ROLE_LABEL[me.role] : '未設定'}</Text>
+                <Text numberOfLines={1} style={styles.rowValue}>{me?.role ? ROLE_LABEL[me.role] : '未設定'}</Text>
               )}
             </View>
             {isEditing && (
@@ -204,8 +204,8 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
 
           <View>
             <View style={styles.row}>
-              <Text style={styles.rowLabel}>お名前</Text>
-              {!isEditing && <Text style={styles.rowValue}>{me?.name || '未設定'}</Text>}
+              <Text numberOfLines={1} style={styles.rowLabel}>お名前</Text>
+              {!isEditing && <Text numberOfLines={1} style={styles.rowValue}>{me?.name || '未設定'}</Text>}
             </View>
             {isEditing && (
               <TextInput
@@ -233,11 +233,11 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
 
           {partners.length > 0 && (
             <View>
-              <Text style={styles.rowLabel}>パートナー</Text>
+              <Text numberOfLines={1} style={styles.rowLabel}>パートナー</Text>
               <View style={styles.partners}>
                 {partners.map((partner) => (
                   <View key={partner.id} style={styles.partner}>
-                    <Text style={styles.partnerName}>{partner.name || '名前未設定'}</Text>
+                    <Text numberOfLines={1} style={styles.partnerName}>{partner.name || '名前未設定'}</Text>
                     <View style={styles.partnerRole}>
                       <Text style={styles.partnerRoleText}>
                         {partner.role ? ROLE_LABEL[partner.role] : '役割未設定'}
@@ -250,7 +250,7 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
           )}
 
           <View>
-            <Text style={styles.rowLabel}>家族の招待コード</Text>
+            <Text numberOfLines={1} style={styles.rowLabel}>家族の招待コード</Text>
             <View style={styles.inviteRow}>
               <Text style={styles.inviteCode}>{familyId}</Text>
               <Pressable
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle, flexShrink: 1 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle },
   headerButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  headerButtonText: { fontSize: 12, fontWeight: '500', color: colors.navActiveText, flexShrink: 1 },
+  headerButtonText: { fontSize: 12, fontWeight: '500', color: colors.navActiveText },
   headerButtonPrimary: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 6,
   },
-  headerButtonPrimaryText: { fontSize: 12, fontWeight: '500', color: colors.primaryText, flexShrink: 1 },
+  headerButtonPrimaryText: { fontSize: 12, fontWeight: '500', color: colors.primaryText },
   disabled: { opacity: 0.5 },
 
   loading: { alignItems: 'center', paddingVertical: 24 },
@@ -342,8 +342,8 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 4,
   },
-  rowLabel: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
-  rowValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle, flexShrink: 1 },
+  rowLabel: { fontSize: 12, color: colors.textMuted },
+  rowValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
   rowValueSmall: { flex: 1, fontSize: 12, fontWeight: '500', color: colors.textSubtle, textAlign: 'right' },
 
   roleRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  partnerName: { fontSize: 12, color: colors.textSubtle, flexShrink: 1 },
+  partnerName: { fontSize: 12, color: colors.textSubtle },
   partnerRole: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -443,5 +443,5 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 10,
   },
-  signOutText: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
+  signOutText: { fontSize: 12, color: colors.textMuted },
 });

@@ -71,6 +71,7 @@ export default function WeekView({
                 </Text>
               </View>
               <Text
+                numberOfLines={1}
                 style={[
                   styles.weekday,
                   day.getDay() === 0 && styles.sunday,
@@ -129,7 +130,7 @@ const styles = StyleSheet.create({
   dateBubbleToday: { backgroundColor: colors.navActive },
   dateText: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
   dateTextToday: { color: colors.primaryText },
-  weekday: { fontSize: 12, fontWeight: '500', color: colors.textMuted, flexShrink: 1 },
+  weekday: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
   sunday: { color: colors.sunday },
   saturday: { color: colors.navActive },
   milestone: {

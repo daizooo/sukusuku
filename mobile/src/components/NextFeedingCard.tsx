@@ -57,9 +57,9 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
       <View style={styles.headerRow}>
         <View style={styles.headerLabel}>
           <BabyBottleIcon size={13} color={colors.milkText} />
-          <Text style={styles.headerText}>次の授乳の目安</Text>
+          <Text numberOfLines={1} style={styles.headerText}>次の授乳の目安</Text>
         </View>
-        <Text style={styles.interval}>{formatMinutesText(info.intervalMinutes)}ごと</Text>
+        <Text numberOfLines={1} style={styles.interval}>{formatMinutesText(info.intervalMinutes)}ごと</Text>
       </View>
 
       {info.isLoading && <Text style={styles.placeholder}>読み込み中...</Text>}
@@ -71,10 +71,10 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
       {schedule && (
         <>
           <View style={styles.dueRow}>
-            <Text style={[styles.dueTime, schedule.isOverdue && styles.overdueText]}>
+            <Text numberOfLines={1} style={[styles.dueTime, schedule.isOverdue && styles.overdueText]}>
               {formatTimeString(schedule.dueAt)}
             </Text>
-            <Text style={[styles.remaining, schedule.isOverdue && styles.overdueText]}>
+            <Text numberOfLines={1} style={[styles.remaining, schedule.isOverdue && styles.overdueText]}>
               {remainingText(schedule)}
             </Text>
           </View>
@@ -127,13 +127,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerLabel: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  headerText: { fontSize: 12, fontWeight: '700', color: colors.milkText, flexShrink: 1 },
-  interval: { fontSize: 11, fontWeight: '500', color: colors.textFaint, flexShrink: 1 },
+  headerText: { fontSize: 12, fontWeight: '700', color: colors.milkText },
+  interval: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
   placeholder: { fontSize: 13, color: colors.textFaint, marginTop: 6 },
   empty: { fontSize: 13, color: colors.textMuted, marginTop: 6 },
   dueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginTop: 2 },
-  dueTime: { fontSize: 24, fontWeight: '700', color: colors.text, flexShrink: 1 },
-  remaining: { fontSize: 13, fontWeight: '700', color: colors.milk, flexShrink: 1 },
+  dueTime: { fontSize: 24, fontWeight: '700', color: colors.text },
+  remaining: { fontSize: 13, fontWeight: '700', color: colors.milk },
   overdueText: { color: colors.pumping },
   track: {
     height: 6,

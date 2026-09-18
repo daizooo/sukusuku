@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  editText: { fontSize: 14, fontWeight: '700', color: colors.navActiveText, flexShrink: 1 },
+  editText: { fontSize: 14, fontWeight: '700', color: colors.navActiveText },
   saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -246,5 +246,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  saveText: { fontSize: 14, fontWeight: '700', color: colors.primaryText, flexShrink: 1 },
+  saveText: { fontSize: 14, fontWeight: '700', color: colors.primaryText },
 });

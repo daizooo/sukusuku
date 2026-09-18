@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     paddingBottom: 8,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle, flexShrink: 1 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   flex: { flex: 1 },
   label: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },

@@ -59,7 +59,7 @@ export function Segmented<T extends string>({
             onPress={() => onChange(option.value)}
             style={[styles.segment, selected && styles.segmentSelected]}
           >
-            <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
+            <Text numberOfLines={1} style={[styles.segmentText, selected && styles.segmentTextSelected]}>
               {option.label}
             </Text>
           </Pressable>
@@ -111,6 +111,7 @@ export function OptionGrid<T extends string | number>({
                   ]}
                 >
                   <Text
+                    numberOfLines={1}
                     style={[styles.gridItemText, selected && { color: tone.color, fontWeight: '700' }]}
                   >
                     {option.label}
@@ -234,7 +235,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
   },
-  gridItemText: { fontSize: 13, color: colors.textSubtle, flexShrink: 1 },
+  gridItemText: { fontSize: 13, color: colors.textSubtle },
   input: {
     borderWidth: 1,
     borderColor: colors.borderStrong,

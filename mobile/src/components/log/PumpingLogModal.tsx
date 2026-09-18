@@ -198,5 +198,5 @@ function PumpingLogModalBody({
 const styles = StyleSheet.create({
   switchers: { gap: 12 },
   discard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8 },
-  discardText: { fontSize: 12, fontWeight: '500', color: colors.pumpingText, flexShrink: 1 },
+  discardText: { fontSize: 12, fontWeight: '500', color: colors.pumpingText },
 });

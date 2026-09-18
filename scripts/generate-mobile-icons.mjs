@@ -84,16 +84,18 @@ const SAMPLES = 4;
  * @param size      出来上がりの一辺(px)
  * @param background 地の色。null なら透明
  * @param foot      足あとの色。null なら足あとを描かない
- * @param safe      足あとを画の中心に置き、その長辺を一辺の何割にするか。
+ * @param safe      足あとを画の中心に置き、その対角線を一辺の何割に収めるか。
  *                  渡さなければ viewBox ごと目一杯に描く（PWA版と同じ絵）。
  */
 const render = ({ size, background, foot, safe }) => {
   const pixels = Buffer.alloc(size * size * 4);
   const bounds = safe ? footBounds() : null;
-  // safe を渡したときは、足あとの長辺が safe の割合になるところまで縮める。
-  const fit = bounds
-    ? (safe * 200) / Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY)
-    : 1;
+  // 切り抜かれるのは円なので、収めるべきは長辺ではなく対角線。
+  // 長辺で測ると、丸から角がはみ出して足あとの先が切れる。
+  const diagonal = bounds
+    ? Math.hypot(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY)
+    : 0;
+  const fit = bounds ? (safe * 200) / diagonal : 1;
   const scale = (size * fit) / 200;
   // viewBox のどの点を画の中心に置くか。
   const originX = bounds ? (bounds.minX + bounds.maxX) / 2 : 100;
@@ -178,11 +180,11 @@ const toPng = (pixels, size) => {
 // --- 書き出す ---
 
 /**
- * アダプティブアイコンの前景で、足あとを一辺の何割にするか。
- * 108dpの下地のうち、どの形に切り抜かれても残るのは中央の66dpぶんなので、
- * そこ（0.61）に収まる大きさにしておく。
+ * アダプティブアイコンの前景で、足あとの対角線を一辺の何割にするか。
+ * 108dpの下地のうち、どの形に切り抜かれても残るのは中央の直径66dpの円なので、
+ * 足あとを囲む四角の対角線がその 66/108 に収まっていれば、円で切っても欠けない。
  */
-const ADAPTIVE_SAFE = 0.6;
+const ADAPTIVE_SAFE = 66 / 108;
 
 const OUTPUTS = [
   // アプリのアイコン。PWAの /icons/icon-512.png と同じ絵柄。
@@ -210,10 +212,10 @@ const OUTPUTS = [
     size: 96,
     background: null,
     foot: [0xff, 0xff, 0xff],
-    safe: 0.75,
+    safe: 0.8,
   },
   // 起動画面。地はapp.jsonの背景色に任せるので、足あとだけを透明の上に置く。
-  { file: 'splash-icon.png', size: 1024, background: null, foot: BRAND, safe: 0.6 },
+  { file: 'splash-icon.png', size: 1024, background: null, foot: BRAND, safe: 66 / 108 },
 ];
 
 for (const { file, size, background, foot, safe } of OUTPUTS) {

@@ -30,28 +30,28 @@ export function CareLogSummaryLine({ logs }: CareLogSummaryProps) {
     <View style={styles.summary}>
       <View style={styles.summaryItem}>
         <BabyBottleIcon size={12} color={colors.milk} />
-        <Text style={styles.summaryText}>{summary.milk.count}回</Text>
-        {summary.milk.ml > 0 && <Text style={styles.summaryText}>{summary.milk.ml}ml</Text>}
+        <Text numberOfLines={1} style={styles.summaryText}>{summary.milk.count}回</Text>
+        {summary.milk.ml > 0 && <Text numberOfLines={1} style={styles.summaryText}>{summary.milk.ml}ml</Text>}
       </View>
       <View style={styles.summaryItem}>
         <Droplet size={12} color={colors.diaper} />
-        <Text style={styles.summaryText}>{summary.diaper.count}回</Text>
+        <Text numberOfLines={1} style={styles.summaryText}>{summary.diaper.count}回</Text>
         {summary.diaper.poopCount > 0 && (
-          <Text style={styles.summaryText}>(💩{summary.diaper.poopCount})</Text>
+          <Text numberOfLines={1} style={styles.summaryText}>(💩{summary.diaper.poopCount})</Text>
         )}
       </View>
       <View style={styles.summaryItem}>
         <Milk size={12} color={colors.pumping} />
-        <Text style={styles.summaryText}>{summary.pumping.count}回</Text>
-        {summary.pumping.ml > 0 && <Text style={styles.summaryText}>{summary.pumping.ml}ml</Text>}
+        <Text numberOfLines={1} style={styles.summaryText}>{summary.pumping.count}回</Text>
+        {summary.pumping.ml > 0 && <Text numberOfLines={1} style={styles.summaryText}>{summary.pumping.ml}ml</Text>}
       </View>
       {/* 体温は無い日のほうが多いので、その日にあったときだけ並べる。 */}
       {summary.temperature.count > 0 && (
         <View style={styles.summaryItem}>
           <Thermometer size={12} color={colors.temperature} />
-          <Text style={styles.summaryText}>{summary.temperature.count}回</Text>
+          <Text numberOfLines={1} style={styles.summaryText}>{summary.temperature.count}回</Text>
           {summary.temperature.maxCelsius !== null && (
-            <Text style={styles.summaryText}>
+            <Text numberOfLines={1} style={styles.summaryText}>
               最高 {formatCelsius(summary.temperature.maxCelsius)}
             </Text>
           )}
@@ -105,8 +105,8 @@ export default function CareLogSection({
             <View style={styles.list}>
               {ordered.map((log) => (
                 <View key={log.id} style={styles.logRow}>
-                  <Text style={styles.logTime}>{getLogTimeText(log)}</Text>
-                  <Text style={[styles.logTitle, isAlertLog(log) && styles.logTitleAlert]}>
+                  <Text numberOfLines={1} style={styles.logTime}>{getLogTimeText(log)}</Text>
+                  <Text numberOfLines={1} style={[styles.logTitle, isAlertLog(log) && styles.logTitleAlert]}>
                     {getLogTitle(log)}
                   </Text>
                   <View style={styles.badges}>
@@ -117,7 +117,16 @@ export default function CareLogSection({
                           key={`${badge.text}-${i}`}
                           style={[styles.badge, { backgroundColor: tone.background }]}
                         >
-                          <Text style={[styles.badgeText, { color: tone.text }]}>{badge.text}</Text>
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              styles.badgeText,
+                              { color: tone.text },
+                              tone.bold && styles.badgeTextBold,
+                            ]}
+                          >
+                            {badge.text}
+                          </Text>
                         </View>
                       );
                     })}
@@ -136,7 +145,7 @@ const styles = StyleSheet.create({
   empty: { fontSize: 11, color: colors.textFaint },
   summary: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
   summaryItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  summaryText: { fontSize: 11, color: colors.textSubtle, flexShrink: 1 },
+  summaryText: { fontSize: 11, color: colors.textSubtle },
 
   sectionHeader: {
     flexDirection: 'row',
@@ -145,9 +154,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 4,
   },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted, flexShrink: 1 },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   link: { flexDirection: 'row', alignItems: 'center' },
-  linkText: { fontSize: 12, fontWeight: '500', color: colors.navActive, flexShrink: 1 },
+  linkText: { fontSize: 12, fontWeight: '500', color: colors.navActive },
   loading: { fontSize: 14, color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
 
   card: {
@@ -160,10 +169,11 @@ const styles = StyleSheet.create({
   },
   list: { borderTopWidth: 1, borderTopColor: colors.background, paddingTop: 4 },
   logRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 6 },
-  logTime: { minWidth: 52, fontSize: 12, color: colors.textMuted },
-  logTitle: { fontSize: 12, fontWeight: '500', color: colors.textSubtle, flexShrink: 1 },
+  logTime: { width: 52, fontSize: 12, color: colors.textMuted },
+  logTitle: { fontSize: 12, fontWeight: '500', color: colors.textSubtle },
   logTitleAlert: { color: colors.danger },
   badges: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginLeft: 8 },
   badge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   badgeText: { fontSize: 10 },
+  badgeTextBold: { fontWeight: '700' },
 });

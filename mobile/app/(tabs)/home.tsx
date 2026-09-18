@@ -27,7 +27,7 @@ import {
   Phone,
   Stethoscope,
 } from 'lucide-react-native';
-import type { DynamicTask, MilkLog, Task, UserProfile } from '@/types/app';
+import type { DynamicTask, LoginRole, MilkLog, Task, UserProfile } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
@@ -66,6 +66,7 @@ export default function HomeScreen() {
   const router = useRouter();
 
   const [familyId, setFamilyId] = useState<string | null>(null);
+  const [loginRole, setLoginRole] = useState<LoginRole>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [todos, setTodos] = useState<Task[]>([]);
   const [isLoadingTodos, setIsLoadingTodos] = useState(true);
@@ -86,6 +87,7 @@ export default function HomeScreen() {
         const membership = await getMyMembership(supabase, userId);
         if (!isMounted || !membership.familyId) return;
         setFamilyId(membership.familyId);
+        setLoginRole(membership.role);
         const [loadedProfile, loadedTasks, loadedMilk, settings] = await Promise.all([
           getProfile(supabase, membership.familyId),
           listTasks(supabase, membership.familyId),
@@ -227,20 +229,45 @@ export default function HomeScreen() {
 
   // ママがログイン中(または役割未設定)はパパの連絡先を、パパがログイン中はママの連絡先を出す。
   // 役割はまだこちらで持っていないので、Web版の既定と同じくパパの連絡先を出す。
+  // ママがログイン中(または役割未設定)はパパの連絡先を、パパがログイン中はママの連絡先を出す
+  // （PWA版 src/components/sukusuku/tabs/HomeTab.tsx と同じ）。
+  const showPapaContact = loginRole !== 'papa';
   const quickActions = profile
     ? [
-        { icon: Phone, label: '産院', phone: getProfileFieldValue(profile, 'hospitalPhone') },
+        {
+          icon: Phone,
+          label: '産院',
+          phone: getProfileFieldValue(profile, 'hospitalPhone'),
+          surface: colors.quickHospitalSurface,
+          tint: colors.quickHospitalIcon,
+        },
         {
           icon: Stethoscope,
           label: '小児科',
           phone: getProfileFieldValue(profile, 'pediatricPhone'),
+          surface: colors.quickPediatricSurface,
+          tint: colors.quickPediatricIcon,
         },
         {
           icon: Building2,
-          label: 'パパ会社',
-          phone: getProfileFieldValue(profile, 'papaCompanyPhone'),
+          label: showPapaContact ? 'パパ会社' : 'ママ会社',
+          phone: getProfileFieldValue(
+            profile,
+            showPapaContact ? 'papaCompanyPhone' : 'mamaCompanyPhone',
+          ),
+          surface: colors.quickCompanySurface,
+          tint: colors.quickCompanyIcon,
         },
-        { icon: Heart, label: 'パパ連絡', phone: getProfileFieldValue(profile, 'papaContactPhone') },
+        {
+          icon: Heart,
+          label: showPapaContact ? 'パパ連絡' : 'ママ連絡',
+          phone: getProfileFieldValue(
+            profile,
+            showPapaContact ? 'papaContactPhone' : 'mamaContactPhone',
+          ),
+          surface: colors.quickContactSurface,
+          tint: colors.quickContactIcon,
+        },
       ]
     : [];
 
@@ -277,33 +304,33 @@ export default function HomeScreen() {
           <View style={styles.heroAge}>
             {ageInDays < 0 ? (
               <>
-                <Text style={styles.heroUnitSmall}>誕生まで あと</Text>
-                <Text style={styles.heroNumber}>{Math.abs(ageInDays)}</Text>
-                <Text style={styles.heroUnit}>日</Text>
+                <Text numberOfLines={1} style={styles.heroUnitSmall}>誕生まで あと</Text>
+                <Text numberOfLines={1} style={styles.heroNumber}>{Math.abs(ageInDays)}</Text>
+                <Text numberOfLines={1} style={styles.heroUnit}>日</Text>
               </>
             ) : ageInMonths.months > 0 ? (
               // 1ヶ月を過ぎたら「◯ヶ月◯日」のほうが月齢の目安として通じるため、
               // こちらを主表示にして、通算の日数は補足に回す。
               <>
-                <Text style={styles.heroUnitSmall}>生後</Text>
-                <Text style={styles.heroNumberSmall}>{ageInMonths.months}</Text>
-                <Text style={styles.heroUnit}>ヶ月</Text>
-                <Text style={styles.heroNumberSmall}>{ageInMonths.days}</Text>
-                <Text style={styles.heroUnit}>日</Text>
+                <Text numberOfLines={1} style={styles.heroUnitSmall}>生後</Text>
+                <Text numberOfLines={1} style={styles.heroNumberSmall}>{ageInMonths.months}</Text>
+                <Text numberOfLines={1} style={styles.heroUnit}>ヶ月</Text>
+                <Text numberOfLines={1} style={styles.heroNumberSmall}>{ageInMonths.days}</Text>
+                <Text numberOfLines={1} style={styles.heroUnit}>日</Text>
               </>
             ) : (
               <>
-                <Text style={styles.heroUnitSmall}>生後</Text>
-                <Text style={styles.heroNumber}>{ageInDays}</Text>
-                <Text style={styles.heroUnit}>日目</Text>
+                <Text numberOfLines={1} style={styles.heroUnitSmall}>生後</Text>
+                <Text numberOfLines={1} style={styles.heroNumber}>{ageInDays}</Text>
+                <Text numberOfLines={1} style={styles.heroUnit}>日目</Text>
               </>
             )}
           </View>
           {ageInDays >= 0 && ageInMonths.months > 0 && (
-            <Text style={styles.heroSub}>( 生後 {ageInDays}日目 )</Text>
+            <Text numberOfLines={1} style={styles.heroSub}>( 生後 {ageInDays}日目 )</Text>
           )}
 
-          <Text style={styles.heroBirth}>
+          <Text numberOfLines={1} style={styles.heroBirth}>
             お誕生日:{' '}
             {birthDate
               ? `${birthDate.getFullYear()}年${birthDate.getMonth() + 1}月${birthDate.getDate()}日`
@@ -330,8 +357,14 @@ export default function HomeScreen() {
               }}
               style={styles.quickAction}
             >
-              <View style={[styles.quickIcon, !item.phone && styles.quickIconDisabled]}>
-                <item.icon size={20} color={colors.navActive} />
+              <View
+                style={[
+                  styles.quickIcon,
+                  { backgroundColor: item.surface },
+                  !item.phone && styles.quickIconDisabled,
+                ]}
+              >
+                <item.icon size={20} color={item.tint} />
               </View>
               <Text style={[styles.quickLabel, !item.phone && styles.quickLabelDisabled]}>
                 {item.label}
@@ -408,17 +441,17 @@ export default function HomeScreen() {
                         { backgroundColor: label.background, borderColor: label.border },
                       ]}
                     >
-                      <Text style={[styles.taskLabelText, { color: label.text }]}>{task.label}</Text>
+                      <Text numberOfLines={1} style={[styles.taskLabelText, { color: label.text }]}>{task.label}</Text>
                     </View>
                   </View>
 
                   <View style={styles.taskMeta}>
                     <View style={styles.taskMetaItem}>
                       <Calendar size={12} color={colors.navActive} />
-                      <Text style={styles.taskDate}>{task.targetDate}</Text>
+                      <Text numberOfLines={1} style={styles.taskDate}>{task.targetDate}</Text>
                       {/* 何日後かは予定タブの一覧と同じ表記に揃える。 */}
                       {task.targetDateObj && (
-                        <Text style={styles.taskRelative}>
+                        <Text numberOfLines={1} style={styles.taskRelative}>
                           {formatRelativeDay(task.targetDateObj, today)}
                         </Text>
                       )}
@@ -477,12 +510,12 @@ const styles = StyleSheet.create({
   hero: { borderRadius: 16, padding: 24, overflow: 'hidden' },
   heroBaby: { position: 'absolute', right: -8, bottom: -8 },
   heroLabel: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  heroLabelText: { fontSize: 13, fontWeight: '500', color: colors.primaryText, opacity: 0.9, flexShrink: 1 },
-  heroAge: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 4, marginTop: 8 },
+  heroLabelText: { fontSize: 13, fontWeight: '500', color: colors.primaryText, opacity: 0.9 },
+  heroAge: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 8 },
   heroNumber: { fontSize: 56, fontWeight: '700', color: colors.primaryText },
   heroNumberSmall: { fontSize: 44, fontWeight: '700', color: colors.primaryText },
-  heroUnit: { fontSize: 18, fontWeight: '500', color: colors.primaryText, flexShrink: 1 },
-  heroUnitSmall: { fontSize: 13, fontWeight: '500', color: colors.primaryText, flexShrink: 1 },
+  heroUnit: { fontSize: 18, fontWeight: '500', color: colors.primaryText },
+  heroUnitSmall: { fontSize: 13, fontWeight: '500', color: colors.primaryText },
   heroSub: { fontSize: 13, fontWeight: '500', color: colors.primaryText, opacity: 0.9, marginTop: 2 },
   heroBirth: {
     alignSelf: 'flex-start',
@@ -510,7 +543,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   quickIcon: {
-    backgroundColor: colors.diaperSurface,
     borderRadius: 999,
     padding: 10,
     marginBottom: 6,
@@ -520,9 +552,9 @@ const styles = StyleSheet.create({
   quickLabelDisabled: { color: colors.textFaint },
 
   sectionHeader: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
-  sectionTitle: { fontSize: 17, fontWeight: '700', color: colors.text, flexShrink: 1 },
+  sectionTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
   seeAll: { flexDirection: 'row', alignItems: 'center' },
-  seeAllText: { fontSize: 13, fontWeight: '500', color: colors.navActive, flexShrink: 1 },
+  seeAllText: { fontSize: 13, fontWeight: '500', color: colors.navActive },
 
   overdue: {
     flexDirection: 'row',
@@ -536,7 +568,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   overdueLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  overdueText: { fontSize: 13, fontWeight: '500', color: colors.alertText, flexShrink: 1 },
+  overdueText: { fontSize: 13, fontWeight: '500', color: colors.alertText },
 
   taskList: {
     backgroundColor: colors.surface,
@@ -555,8 +587,8 @@ const styles = StyleSheet.create({
   taskLabelText: { fontSize: 10, fontWeight: '700' },
   taskMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 4 },
   taskMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
-  taskDate: { fontSize: 12, fontWeight: '500', color: colors.navActive, flexShrink: 1 },
-  taskRelative: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
+  taskDate: { fontSize: 12, fontWeight: '500', color: colors.navActive },
+  taskRelative: { fontSize: 12, color: colors.textMuted },
   taskMetaText: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
 
   notice: { fontSize: 12, color: colors.textMuted, lineHeight: 18 },

@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle, flexShrink: 1 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle },
   content: { paddingHorizontal: 20, paddingVertical: 16, gap: 24 },
   sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 8 },
   fields: { gap: 12 },
@@ -279,5 +279,5 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginTop: 4,
   },
-  deleteText: { fontSize: 12, fontWeight: '500', color: colors.danger, flexShrink: 1 },
+  deleteText: { fontSize: 12, fontWeight: '500', color: colors.danger },
 });

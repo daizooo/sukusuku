@@ -551,7 +551,7 @@ const styles = StyleSheet.create({
   },
   navArrow: { padding: 8 },
   navTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  navTitle: { fontSize: 17, fontWeight: '700', color: colors.text, flexShrink: 1 },
+  navTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
   todayButton: {
     backgroundColor: colors.diaperSurface,
     borderRadius: 6,

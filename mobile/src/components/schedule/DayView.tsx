@@ -60,12 +60,12 @@ export default function DayView({
 
       <View>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>
+          <Text numberOfLines={1} style={styles.sectionTitle}>
             予定 {tasks.length > 0 ? `(${tasks.length}件)` : ''}
           </Text>
           <Pressable accessibilityRole="button" onPress={() => onAddTask(date)} style={styles.link}>
             <Plus size={14} color={colors.navActive} />
-            <Text style={styles.linkText}>この日に追加</Text>
+            <Text numberOfLines={1} style={styles.linkText}>この日に追加</Text>
           </Pressable>
         </View>
         {tasks.length === 0 ? (
@@ -112,9 +112,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 4,
   },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted, flexShrink: 1 },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   link: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  linkText: { fontSize: 12, fontWeight: '500', color: colors.navActive, flexShrink: 1 },
+  linkText: { fontSize: 12, fontWeight: '500', color: colors.navActive },
   empty: {
     fontSize: 14,
     color: colors.textFaint,
