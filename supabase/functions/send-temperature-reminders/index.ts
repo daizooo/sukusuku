@@ -1,6 +1,6 @@
 // すくすく手帳: 検温のお知らせ
 //
-// pg_cron から5分おきに叩かれ、設定した朝・夕の時刻になった家族の端末へ
+// pg_cron から1分おきに叩かれ、設定した朝・夕の時刻になった家族の端末へ
 // 「体温を測って記録しましょう」を FCM で送る（_shared/deliver.ts）。
 //
 // お知らせの時刻は temperature_reminder_schedule ビューが出す
@@ -19,8 +19,11 @@ import { DeliveryContext, type DeliveryTarget } from '../_shared/deliver.ts';
 // 送信済み記録(temperature_reminder_deliveries)があるものは除外されるので二重には飛ばない。
 // 逆にこれを過ぎたら送らない（朝の検温のお知らせが昼に届いても意味がない）。
 const LOOKBACK_MINUTES = 120;
-// 次の実行までの間に来る通知を少しだけ先取りして送る
-const LOOKAHEAD_MINUTES = 1;
+// **先取りはしない。** かつては次の実行までに来るぶんを1分だけ先取りしていたが、
+// 通知の時刻が5の倍数の分でないと予定より早く届いてしまっていた
+// （20:26の予定が20:25に届いた）。書いてある時刻と合わない通知は、
+// 少し遅れて届く通知より困る。いまは pg_cron が1分おきに叩くので(0038)、
+// 先取りしなくてもその分のうちに届く。
 
 type Slot = 'morning' | 'evening';
 
@@ -60,7 +63,7 @@ Deno.serve(async (request) => {
 
   const now = Date.now();
   const from = new Date(now - LOOKBACK_MINUTES * 60_000).toISOString();
-  const to = new Date(now + LOOKAHEAD_MINUTES * 60_000).toISOString();
+  const to = new Date(now).toISOString();
 
   const { data: due, error: dueError } = await supabase
     .from('temperature_reminder_schedule')

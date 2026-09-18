@@ -1,6 +1,6 @@
 // すくすく手帳: 次の授乳の目安の通知
 //
-// pg_cron から5分おきに叩かれ、前回の授乳から設定した間隔が経った家族の端末へ
+// pg_cron から1分おきに叩かれ、前回の授乳から設定した間隔が経った家族の端末へ
 // 「そろそろ次の授乳」を FCM で送る（_shared/deliver.ts）。
 //
 // 目安の時刻は next_feeding_schedule ビューが出す
@@ -20,8 +20,11 @@ import { DeliveryContext, type DeliveryTarget } from '../_shared/deliver.ts';
 // 送信済み記録(feeding_reminder_deliveries)があるものは除外されるので二重には飛ばない。
 // 逆にこれを過ぎたら送らない（何時間も後に「そろそろ授乳」が来ても困る）。
 const LOOKBACK_MINUTES = 120;
-// 次の実行までの間に来る通知を少しだけ先取りして送る
-const LOOKAHEAD_MINUTES = 1;
+// **先取りはしない。** かつては次の実行までに来るぶんを1分だけ先取りしていたが、
+// 通知の時刻が5の倍数の分でないと予定より早く届いてしまっていた
+// （20:26の予定が20:25に届いた）。書いてある時刻と合わない通知は、
+// 少し遅れて届く通知より困る。いまは pg_cron が1分おきに叩くので(0038)、
+// 先取りしなくてもその分のうちに届く。
 
 interface ScheduleRow {
   family_id: string;
@@ -74,7 +77,7 @@ Deno.serve(async (request) => {
 
   const now = Date.now();
   const from = new Date(now - LOOKBACK_MINUTES * 60_000).toISOString();
-  const to = new Date(now + LOOKAHEAD_MINUTES * 60_000).toISOString();
+  const to = new Date(now).toISOString();
 
   const { data: due, error: dueError } = await supabase
     .from('next_feeding_schedule')
