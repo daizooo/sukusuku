@@ -1,47 +1,34 @@
-// すくすく手帳: 授乳の経過時間お知らせ（端末が鳴らせなかった分の肩代わり）
+// すくすく手帳: 「いま授乳中」の印(nursing_alarms)の片付け
 //
-// 授乳は「左5分 → 右5分 → ゲップ5分」で1セット。どの区切りを計測中かは side に入る。
-// お知らせは区切りごとに1回（5分に達したとき）だけ。鳴らし続けると休めないため、
-// 5分を過ぎてもその区切りでは二度と鳴らさない。
+// pg_cron から1分おきに叩かれ、置き去りになった行を消す。
 //
-// pg_cron から1分おきに叩かれ、計測中の端末(nursing_alarms)のうち
-// 次の区切りに達したものへ Web Push を送る。
+// **かつてはここから授乳の経過時間お知らせを Web Push で送っていた。**
+// ブラウザは画面が消えるとタイマーを間引くため、端末内の setInterval だけでは
+// お知らせが遅れる/鳴らない——それを肩代わりする役目だった。ネイティブ版(Android)は
+// 授乳中だけ前面サービスが動いて自分で鳴らすので肩代わりが要らず
+// （docs/native-app-rewrite.md §4）、家族全員がそちらへ移ったので撤去した
+// （フェーズ4の条件D。docs/notifications.md §11）。
 //
-// なぜサーバーから送るのか:
-//   ブラウザは画面が消える・裏に回るとタイマーを間引くため、端末内の
-//   setInterval だけではお知らせが遅れる/鳴らない。iOS Safari は振動もできない。
-//   計測そのものは端末内で完結させたまま、「鳴らす」ところだけを肩代わりする。
+// そのため nursing_alarms の2つの役目のうち、いま残っているのは2つ目だけ。
 //
-// 端末が自分で鳴らせたときは、端末側が notified_step を進める。
-// ここでは区切りを少し過ぎてから送るので、画面を開いている間は送られない。
+//   1. （撤去）端末が鳴らせなかった分の肩代わり
+//   2. 「いま授乳中（または飲ませ終えて記録待ち）だから『そろそろ次の授乳』を送らない」
+//      という印。send-feeding-reminders がこれを見て止まる（0027 を参照）
 //
-// ネイティブ版(Android)の行へは送らない。あちらは授乳中だけ前面サービスが動いて
-// 自分で鳴らすので、肩代わりが要らない（docs/native-app-rewrite.md §4）。
-// それでも行を預かるのは、「そろそろ次の授乳」(send-feeding-reminders)を
-// 止めるという、もう1つの役目のため。置き去りの片付けはこちらで行う。
+// 2つ目は**行が残っていること自体が印**なので、置き去りを片付けないと
+// 「そろそろ次の授乳」が永久に止まってしまう。この関数はそのための番人になる。
 //
-// stopped_at が入っている行は「計測は終わったが、まだ記録していない」印なので鳴らさない。
-// (残しているのは、その間の「そろそろ次の授乳」を止めるため。0027 を参照)
+// 名前が send- のままなのは、pg_cron の登録(nursing_alarm_cron)と既にデプロイ済みの
+// 関数名がこの名前を指しているため。付け替えるなら両方を同時に直す必要がある。
 //
 // 認証: pg_cron から呼ぶため JWT は使わず、共有シークレットのヘッダーで認可する。
 //       予定のリマインダーと同じ REMINDER_CRON_SECRET を使う。
 //       supabase/config.toml で verify_jwt = false にしている。
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.2';
-import {
-  createVapidContext,
-  sendPushNotification,
-  type VapidKeys,
-} from '../_shared/webpush.ts';
 
-// 区切りを過ぎてすぐには送らない。画面を開いている端末は自分で鳴らし、
-// その直後に notified_step を書き戻してくるので、それを待つための猶予。
-// 逆に言うと、端末が寝ている場合のお知らせはこの秒数ぶん遅れて届く。
-const FOREGROUND_GRACE_SECONDS = 20;
-
-// 計測を止めずにアプリを閉じたままだと、行が残って鳴り続けてしまう。
-// 1回の授乳がこれを超えることはまずないので、過ぎたものは片付ける。
-// (授乳が終わっているのに鳴り続けるのを、ここで打ち切る)
+// 計測を止めずにアプリを閉じたままだと、行が残って「そろそろ次の授乳」が
+// 止まり続けてしまう。1回の授乳がこれを超えることはまずないので、過ぎたものは片付ける。
 const MAX_ELAPSED_MINUTES = 90;
 
 // 計測を止めてから記録が保存されるまでの「記録待ち」を、いつまで授乳中として扱うか。
@@ -52,24 +39,11 @@ const MAX_PENDING_MINUTES = 60;
 
 interface AlarmRow {
   subscription_id: string;
-  /** 計測中の区切り。左右のほか、ゲップの時間(burp)もここに入る。 */
-  side: 'left' | 'right' | 'burp';
+  /** その区切りの合計時間が0だった時刻。計測中かどうかの起点。 */
   baseline_at: string;
-  interval_minutes: number;
-  /** お知らせを鳴らし終えていれば1。区切りごとに1回しか鳴らさない。 */
-  notified_step: number;
   /** 計測を止めた時刻。記録を保存するまでの間だけ入る（計測中は null）。 */
   stopped_at: string | null;
-  push_subscriptions: {
-    /** 宛先の種類。'fcm' はネイティブ版で、鳴らすのは端末の前面サービス。 */
-    kind: string;
-    endpoint: string;
-    p256dh: string;
-    auth: string;
-  } | null;
 }
-
-const PHASE_LABEL: Record<AlarmRow['side'], string> = { left: '左', right: '右', burp: 'ゲップ' };
 
 Deno.serve(async (request) => {
   const cronSecret = Deno.env.get('REMINDER_CRON_SECRET');
@@ -80,12 +54,6 @@ Deno.serve(async (request) => {
     return json({ error: 'unauthorized' }, 401);
   }
 
-  const vapidKeysRaw = Deno.env.get('VAPID_KEYS');
-  const vapidSubject = Deno.env.get('VAPID_SUBJECT');
-  if (!vapidKeysRaw || !vapidSubject) {
-    return json({ error: 'VAPID_KEYS / VAPID_SUBJECT が未設定です' }, 500);
-  }
-
   // service_role で動くため RLS は適用されない（全員の計測中の端末を集める必要がある）
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -93,144 +61,36 @@ Deno.serve(async (request) => {
     { auth: { persistSession: false } },
   );
 
-  // 対象は「いま授乳中の端末」だけなので、ほとんどの実行はここで終わる。
-  // VAPIDの鍵の用意は送る分があると分かってからにする。
+  // 対象は「いま授乳中・記録待ちの端末」だけなので、ほとんどの実行はここで終わる。
   const { data: alarms, error: alarmsError } = await supabase
     .from('nursing_alarms')
-    .select(
-      'subscription_id, side, baseline_at, interval_minutes, notified_step, stopped_at, push_subscriptions(kind, endpoint, p256dh, auth)',
-    )
+    .select('subscription_id, baseline_at, stopped_at')
     .returns<AlarmRow[]>();
   if (alarmsError) return json({ error: alarmsError.message }, 500);
-  if (!alarms || alarms.length === 0) return json({ active: 0, sent: 0, failed: 0, skipped: 0 });
+  if (!alarms || alarms.length === 0) return json({ active: 0, kept: 0, expired: 0 });
 
   const now = Date.now();
-  let vapid: Awaited<ReturnType<typeof createVapidContext>> | null = null;
-  let sent = 0;
-  let failed = 0;
-  let skipped = 0;
+  let kept = 0;
   let expired = 0;
 
   for (const alarm of alarms) {
-    const expire = async () => {
+    // 計測は止まっていて、記録を保存するのを待っているだけの行。
+    const stoppedAt = alarm.stopped_at ? Date.parse(alarm.stopped_at) : null;
+    const limitMinutes = stoppedAt === null ? MAX_ELAPSED_MINUTES : MAX_PENDING_MINUTES;
+    const since = stoppedAt ?? Date.parse(alarm.baseline_at);
+    const elapsedMinutes = (now - since) / 60_000;
+
+    // 時刻が読めない行も置き去りとして片付ける（残しても印として働かない）。
+    if (!Number.isFinite(elapsedMinutes) || elapsedMinutes > limitMinutes) {
       expired++;
       await supabase.from('nursing_alarms').delete().eq('subscription_id', alarm.subscription_id);
-    };
-
-    // 計測は止まっていて、記録を保存するのを待っているだけの行。
-    // もう飲ませていないので鳴らさない。「そろそろ次の授乳」(send-feeding-reminders)は
-    // この行があることで止まる（授乳は済んでいるため）。
-    if (alarm.stopped_at) {
-      const pendingMinutes = (now - Date.parse(alarm.stopped_at)) / 60_000;
-      if (!Number.isFinite(pendingMinutes) || pendingMinutes > MAX_PENDING_MINUTES) {
-        // 記録されないまま置き去りになった分。授乳中の扱いをここで終える。
-        await expire();
-      } else {
-        skipped++;
-      }
       continue;
     }
 
-    const baselineAt = Date.parse(alarm.baseline_at);
-    const elapsedMinutes = (now - baselineAt) / 60_000;
-
-    if (!Number.isFinite(elapsedMinutes) || elapsedMinutes > MAX_ELAPSED_MINUTES) {
-      await expire();
-      continue;
-    }
-
-    // ネイティブ版の行は「いま授乳中」の印を預かっているだけ。鳴らすのは端末側なので送らない。
-    // (置き去りの片付けは上で済んでいるので、ここでは何もしない)
-    if (alarm.push_subscriptions?.kind === 'fcm') {
-      skipped++;
-      continue;
-    }
-
-    // 鳴らすのは区切りごとに1回だけ。端末が自分で鳴らせていれば notified_step が1になる。
-    if (alarm.notified_step >= 1) {
-      skipped++;
-      continue;
-    }
-
-    // 区切りちょうどではなく、少し過ぎてから送る（端末が自分で鳴らす猶予）
-    const boundaryAt = baselineAt + alarm.interval_minutes * 60_000;
-    if (now - boundaryAt < FOREGROUND_GRACE_SECONDS * 1000) {
-      skipped++;
-      continue;
-    }
-
-    const subscription = alarm.push_subscriptions;
-    if (!subscription) {
-      skipped++;
-      continue;
-    }
-
-    // 送信権を取る。notified_step を先に進めることで、実行が重なっても
-    // 送るのは片方だけになる（更新できた側だけが送る）。
-    const { data: claimed, error: claimError } = await supabase
-      .from('nursing_alarms')
-      .update({ notified_step: 1, updated_at: new Date().toISOString() })
-      .eq('subscription_id', alarm.subscription_id)
-      .lt('notified_step', 1)
-      .select('subscription_id')
-      .maybeSingle();
-    if (claimError) {
-      console.error('お知らせの送信権の取得に失敗しました', claimError);
-      skipped++;
-      continue;
-    }
-    if (!claimed) {
-      // 端末が自分で鳴らして書き戻したか、別の実行が先に取った
-      skipped++;
-      continue;
-    }
-
-    if (!vapid) {
-      vapid = await createVapidContext(JSON.parse(vapidKeysRaw) as VapidKeys, vapidSubject);
-    }
-
-    const minutes = alarm.interval_minutes;
-    const result = await sendPushNotification(
-      vapid,
-      subscription,
-      JSON.stringify({
-        kind: 'nursing',
-        // 鳴らし方(長音=30分・短音=5分)を組み立てるのに使う
-        minutes,
-        step: 1,
-        side: alarm.side,
-        // ゲップは飲ませている時間ではないので、見出しでも授乳と分けて出す
-        title: alarm.side === 'burp' ? `ゲップ ${minutes}分` : `授乳 ${minutes}分`,
-        body: `${PHASE_LABEL[alarm.side]}を計測中`,
-        url: '/',
-      }),
-      // 経過時間のお知らせは鮮度がすべて。届かなかった分を後から出しても意味がない。
-      2 * 60,
-      // 配送を後回しにされると「何分経ったか」がずれるため、優先度を上げる
-      'high',
-    );
-
-    if (result.ok) {
-      sent++;
-      await supabase
-        .from('push_subscriptions')
-        .update({ last_success_at: new Date().toISOString(), failure_count: 0 })
-        .eq('id', alarm.subscription_id);
-      continue;
-    }
-
-    failed++;
-    console.error('授乳のお知らせの送信に失敗しました', subscription.endpoint, result.error);
-
-    if (result.gone) {
-      // 購読が失効している。nursing_alarms の行も cascade で一緒に消える。
-      await supabase.from('push_subscriptions').delete().eq('id', alarm.subscription_id);
-    } else {
-      await supabase.rpc('increment_push_failure', { p_subscription_id: alarm.subscription_id });
-    }
+    kept++;
   }
 
-  return json({ active: alarms.length, sent, failed, skipped, expired });
+  return json({ active: alarms.length, kept, expired });
 });
 
 function json(body: unknown, status = 200): Response {

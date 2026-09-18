@@ -1,8 +1,7 @@
 // すくすく手帳: 検温のお知らせ
 //
 // pg_cron から5分おきに叩かれ、設定した朝・夕の時刻になった家族の端末へ
-// 「体温を測って記録しましょう」を送る。ブラウザへは Web Push、
-// ネイティブ版(Android)へは FCM で送る（振り分けは _shared/deliver.ts）。
+// 「体温を測って記録しましょう」を FCM で送る（_shared/deliver.ts）。
 //
 // お知らせの時刻は temperature_reminder_schedule ビューが出す
 // （temperature_reminder_settings の morning_time / evening_time を日本時間で解決したもの）。
@@ -14,7 +13,7 @@
 //       supabase/config.toml で verify_jwt = false にしている。
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.2';
-import { DeliveryContext, preferNative, type DeliveryTarget } from '../_shared/deliver.ts';
+import { DeliveryContext, type DeliveryTarget } from '../_shared/deliver.ts';
 
 // 取りこぼしを拾うため、時刻を過ぎたものも一定時間ぶんは対象にする。
 // 送信済み記録(temperature_reminder_deliveries)があるものは除外されるので二重には飛ばない。
@@ -33,7 +32,6 @@ interface ScheduleRow {
 
 interface SubscriptionRow extends DeliveryTarget {
   family_id: string;
-  user_id: string;
 }
 
 // 家族全員が日本にいる前提。時刻は日本時間で出す。
@@ -74,18 +72,19 @@ Deno.serve(async (request) => {
   if (!due || due.length === 0) return json({ due: 0, sent: 0, failed: 0, skipped: 0 });
 
   const familyIds = [...new Set(due.map((row) => row.family_id))];
-  const { data: allSubscriptions, error: subscriptionError } = await supabase
+  // 送り先はネイティブ版だけ。ブラウザ向けの Web Push は撤去した（フェーズ4の条件D）。
+  // PWA版を開いて通知をオンにすると kind = 'webpush' の行がまた作られるが、
+  // ここで絞っているので送ろうとして失敗することはない（届かないだけ）。
+  const { data: subscriptions, error: subscriptionError } = await supabase
     .from('push_subscriptions')
-    .select('id, kind, family_id, user_id, endpoint, p256dh, auth')
+    .select('id, kind, family_id, endpoint')
+    .eq('kind', 'fcm')
     .in('family_id', familyIds)
     .returns<SubscriptionRow[]>();
   if (subscriptionError) return json({ error: subscriptionError.message }, 500);
-  // 同じ人がネイティブ版とPWA版の両方を登録していたら、ネイティブ版だけに送る。
-  // 移行の途中は1人が宛先を複数持つので、絞らないと同じお知らせが何通も出る。
-  const subscriptions = preferNative(allSubscriptions ?? []);
 
   const subscriptionsByFamily = new Map<string, SubscriptionRow[]>();
-  for (const subscription of subscriptions) {
+  for (const subscription of subscriptions ?? []) {
     const list = subscriptionsByFamily.get(subscription.family_id) ?? [];
     list.push(subscription);
     subscriptionsByFamily.set(subscription.family_id, list);
@@ -95,7 +94,7 @@ Deno.serve(async (request) => {
   // 送り始める前にそろっているかを確かめる。ここで止めないと、鍵が無いまま
   // 失敗の記録だけが残り、設定を直してもその通知は二度と送られない。
   const delivery = new DeliveryContext();
-  const notReady = await delivery.ensureReady(subscriptions);
+  const notReady = await delivery.ensureReady(subscriptions ?? []);
   if (notReady) return json({ error: notReady }, 500);
 
   let sent = 0;
