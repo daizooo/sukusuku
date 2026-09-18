@@ -551,20 +551,22 @@ export type Database = {
           failure_count: number
           family_id: string
           id: string
+          kind: string
           last_success_at: string | null
           p256dh: string
           user_agent: string
           user_id: string
         }
         Insert: {
-          auth: string
+          auth?: string
           created_at?: string
           endpoint: string
           failure_count?: number
           family_id: string
           id?: string
+          kind?: string
           last_success_at?: string | null
-          p256dh: string
+          p256dh?: string
           user_agent?: string
           user_id: string
         }
@@ -575,6 +577,7 @@ export type Database = {
           failure_count?: number
           family_id?: string
           id?: string
+          kind?: string
           last_success_at?: string | null
           p256dh?: string
           user_agent?: string

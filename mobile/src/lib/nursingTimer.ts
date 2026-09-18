@@ -221,6 +221,66 @@ const alarmTarget = (active: ActiveNursing): NursingAlarmTarget | null => {
   };
 };
 
+/**
+ * 計測を止めてから記録するまでを「授乳中」として預けておく上限。
+ * サーバー側の打ち切り(send-nursing-alarms の MAX_PENDING_MINUTES)と合わせている。
+ */
+const PENDING_MAX_MS = 60 * 60_000;
+
+/** サーバーへ預ける「いま授乳中」の内容。 */
+export interface NursingStateTarget {
+  /** 計測中の区切り。ゲップも含む（nursing_alarms.side に入る）。 */
+  side: NursingPhase;
+  /** その区切りの合計時間が0だった時刻。 */
+  baselineAt: number;
+  intervalMinutes: number;
+  /** 計測を止めた時刻。まだ記録していない間だけ入る（計測中は null）。 */
+  stoppedAt: number | null;
+}
+
+/**
+ * サーバーへ預ける内容。PWA版(src/lib/nursingTimer.ts の alarmTarget)と同じ形にしてある。
+ *
+ * ネイティブ版では鳴らすのは前面サービスなので、これはお知らせの予約ではなく
+ * 「そろそろ次の授乳」を止めるための印（src/lib/api/nursingAlarms.ts）。
+ * 計測中も、止めたあと記録するまでの間も預ける。記録・リセットすれば null。
+ */
+const stateTarget = (active: ActiveNursing): NursingStateTarget | null => {
+  const running = active.runningPhase;
+  if (running && active.startedAt) {
+    return {
+      side: running,
+      baselineAt: active.startedAt - active.elapsed[running],
+      intervalMinutes: NURSING_PHASE_MINUTES,
+      stoppedAt: null,
+    };
+  }
+
+  // 計測は止まっているが、まだ記録していない。授乳は済んでいるので、
+  // この間に「そろそろ次の授乳」が飛ばないよう、預けたままにしておく。
+  const side = active.lastSide;
+  if (!side || !active.stoppedAt) return null;
+  if (!hasElapsed(active.elapsed)) return null;
+  // 記録されないまま置き去りになった分は預けない（サーバー側の打ち切りと同じ長さ）。
+  if (Date.now() - active.stoppedAt > PENDING_MAX_MS) return null;
+  return {
+    side,
+    baselineAt: active.stoppedAt - active.elapsed[side],
+    intervalMinutes: NURSING_PHASE_MINUTES,
+    stoppedAt: active.stoppedAt,
+  };
+};
+
+type NursingStateSink = (target: NursingStateTarget | null) => void;
+
+let stateSink: NursingStateSink | null = null;
+
+/** サーバーへ預ける処理を差し込む。渡した時点の状態も一度流す。 */
+export const setNursingStateSink = (next: NursingStateSink | null): void => {
+  stateSink = next;
+  next?.(stateTarget(getSnapshot()));
+};
+
 const store = (next: ActiveNursing) => {
   cached = next;
   // 控えの書き込みを待たせると、押した手応えが遅れる。結果は待たない。
@@ -232,6 +292,7 @@ const store = (next: ActiveNursing) => {
   });
   emit();
   applyNursingAlarm(alarmTarget(next));
+  stateSink?.(stateTarget(next));
 };
 
 /** その区切りの合計時間(ミリ秒)。計測中ならその分も含む。 */
@@ -272,6 +333,9 @@ const hydrate = (): Promise<void> => {
       .then((raw) => {
         cached = parse(raw);
         emit();
+        // 読み戻した内容もサーバーへ預け直す。アプリを開き直したときに
+        // 「授乳中」の印が消えたままにならないようにするため。
+        stateSink?.(stateTarget(cached));
       })
       .catch(() => {
         // 読めなければ計測なしとして始める。

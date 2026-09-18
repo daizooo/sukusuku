@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Redirect, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { List, Plus, TrendingUp } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -58,6 +58,7 @@ import {
   parseDateString,
   startOfDay,
 } from '@/lib/dateUtils';
+import { OPEN_LOG_PARAM, parseLogType } from '@/lib/appLinks';
 import { useNursingTimer } from '@/lib/nursingTimer';
 import {
   isNursingForegroundServiceAvailable,
@@ -83,9 +84,8 @@ import TemperatureLogModal, {
   type TemperatureLogInput,
 } from '@/components/log/TemperatureLogModal';
 
-// 記録タブ（フェーズ1）。授乳まわりと体温をネイティブで回せるようにしたもの。
-// おむつ・搾乳の入力と他のタブはフェーズ2で作るので、それまでは凍結したPWA版で見る
-// （docs/native-app-rewrite.md §7）。
+// 記録タブ。授乳・ミルク / 搾乳 / おむつ / 体温 と成長曲線を、PWA版の
+// `src/components/sukusuku/tabs/LogTab.tsx` に合わせて置き換えたもの。
 //
 // 体温は PWA版（src/）にも同じものが入っている（docs/what-to-record.md §4-1・§8）。
 //
@@ -103,7 +103,11 @@ export default function LogScreen() {
   const [logDate, setLogDate] = useState(() => startOfDay(new Date()));
   // 予定タブの日表示から「記録タブで開く」で来たときは、その日を開く
   // （Web版が記録タブの日付を差し替えるのと同じ動き）。
-  const { date: requestedDate } = useLocalSearchParams<{ date?: string }>();
+  // お知らせのタップで来たときは、その用件の入力画面を開く（open）。
+  const { date: requestedDate, open: requestedOpen } = useLocalSearchParams<{
+    date?: string;
+    open?: string;
+  }>();
   useEffect(() => {
     const picked = requestedDate ? parseDateString(requestedDate) : null;
     if (picked) setLogDate(startOfDay(picked));
@@ -137,6 +141,20 @@ export default function LogScreen() {
   const [editingTemperature, setEditingTemperature] = useState<{
     log: TemperatureLog | null;
   } | null>(null);
+
+  // お知らせをタップして来たときに、その用件の入力画面を開く。
+  // 検温のお知らせなら体温、次の授乳の目安なら授乳・ミルク——PWA版がURLの `open` で
+  // 同じことをしている（src/lib/appLinks.ts）。
+  useEffect(() => {
+    const type = parseLogType(requestedOpen);
+    if (!type) return;
+    // 開いたらパラメータを消す。この画面へ戻るたびに開き直さないため（PWA版と同じ）。
+    router.setParams({ [OPEN_LOG_PARAM]: '' });
+    if (type === 'milk') setEditing({ log: null });
+    else if (type === 'pumping') setEditingPumping({ log: null });
+    else if (type === 'diaper') setEditingDiaper({ log: null });
+    else setEditingTemperature({ log: null });
+  }, [requestedOpen]);
 
   // グラフの横軸。生後ヶ月が未入力の記録は横軸が空になってしまうため、記録日で代替する。
   const growthChartData = useMemo(

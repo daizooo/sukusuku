@@ -2,17 +2,22 @@
 
 予定に設定したリマインダーを、その時刻に端末へ通知として届けるための仕組み。
 
+**受け取り手は2つある。** PWA版（ブラウザ）はWeb Pushで、ネイティブ版（Android）はFCMで
+受け取る。送るのはどちらも同じEdge Functionで、**通知の文面もそこで作るので両方で同じものが出る**
+（ルートの `CLAUDE.md`）。ネイティブ版のセットアップは §11。
+
 ---
 
 ## 1. 全体の流れ
 
 ```
-[ブラウザ]                    [Supabase]                        [プッシュサービス]
+[ブラウザ / ネイティブ版]      [Supabase]                        [プッシュサービス]
                                                                 (FCM / Mozilla / Apple)
 設定タブで通知をオン
-  └ Service Worker (sw.js) を登録
-  └ PushManager.subscribe()
-        └ 購読情報 ─────→ push_subscriptions
+  ├ (ブラウザ)   Service Worker (sw.js) を登録 → PushManager.subscribe()
+  └ (ネイティブ) 通知を許可 → FCMの登録トークンを取る
+        └ 宛先 ─────────→ push_subscriptions
+                            (kind = 'webpush' / 'fcm')
 
                               pg_cron (5分おき)
                                 └ Edge Function: send-reminders
@@ -20,14 +25,17 @@
                                      │  通知時刻を過ぎた予定を取る
                                      ├ reminder_deliveries に記録を作る
                                      │  (二重送信の防止)
-                                     └ Web Push で送信 ───────→ プッシュサービス
-                                                                      │
-sw.js の push イベント ←───────────────────────────────────────────────┘
-  └ 通知を表示
+                                     └ 宛先の種類で振り分けて送信 ──→ プッシュサービス
+                                        (_shared/deliver.ts)              │
+                                                                          │
+  ├ (ブラウザ)   sw.js の push イベント ←──────────────────────────────────┘
+  │                └ 通知を表示
+  └ (ネイティブ) FCMの通知をOSがそのまま表示
 ```
 
 - **通知先** — 予定は家族で共有しているものなので、ラベル（パパ / ママ / 家族）に関わらず
-  その家族が登録した全端末へ送る。
+  その家族が登録した全端末へ送る。**PWA版とネイティブ版が混ざっていてもよい**
+  （宛先は同じ `push_subscriptions` で、`kind` だけが違う）。
 - **通知のタイミング** — `task_reminder_schedule` ビューが計算する。
   日付・時刻は `date` + `time` で保存されている（[calendar.md](./calendar.md) 参照）ため、
   ここで `Asia/Tokyo` として解釈して通知時刻を求めている。
@@ -119,9 +127,12 @@ select vault.create_secret('<REMINDER_CRON_SECRETと同じ値>', 'reminder_cron_
 - **iPhone / iPad** — ホーム画面に追加したアプリから開いたときだけ通知を使える（iOS 16.4以降）。
   Safari のタブで開いている状態では購読できないため、設定タブにその旨が表示される。
 - **Android / パソコン** — ブラウザからそのまま購読できる。
+- **ネイティブ版（Android）** — 設定タブの同じトグルでオンにする。受け取り方だけが
+  FCMの登録トークンに変わる（§11）。Expo Goでは受け取れないため、その旨が表示される。
 
 一度ブラウザで通知をブロックすると、アプリ側からは再要求できない。
 その場合はブラウザのサイト設定から許可し直す必要がある。
+ネイティブ版も同じで、断ったあとは端末の「設定 > アプリ > すくすく > 通知」から許可し直す。
 
 ---
 
@@ -200,6 +211,15 @@ select status, return_message, start_time
 | `supabase/migrations/0031_temperature_reminder_cron.sql` | 定期実行の登録 |
 | `src/lib/appLinks.ts` | 開く画面をURLで表す決まりごと（§9） |
 | `src/lib/notificationCleanup.ts` | 用が済んだ通知を消す判断と実行（§10） |
+| `supabase/functions/_shared/deliver.ts` | 宛先の種類で送り方を振り分ける（§11） |
+| `supabase/functions/_shared/fcm.ts` | FCM HTTP v1 での送信（§11） |
+| `supabase/migrations/0037_push_subscriptions_fcm.sql` | 宛先の種類(`kind`)を足す（§11） |
+| `mobile/src/lib/push.ts` | ネイティブ版の許可・登録トークン・通知チャンネル（§11） |
+| `mobile/src/lib/api/pushSubscriptions.ts` | ネイティブ版の宛先の保存・削除 |
+| `mobile/src/components/info/NotificationSetting.tsx` | ネイティブ版の設定タブの通知トグル |
+| `mobile/src/lib/appLinks.ts` | ネイティブ版の飛び先の決まりごと（§9） |
+| `mobile/src/lib/nursingState.ts` | ネイティブ版の「いま授乳中」をサーバーへ預ける（§11） |
+| `mobile/src/lib/api/nursingAlarms.ts` | 同上。`nursing_alarms` の読み書き |
 
 ---
 
@@ -556,6 +576,10 @@ select status, return_message, start_time
 どのURLへ飛ばすかは `public/sw.js` がお知らせの種類（`kind`）から決めるので、
 Edge Function 側は今までどおりの本文のままでよい。
 
+**ネイティブ版も同じ飛び先にする。** URLではなくExpo Routerのパスとパラメータで表すが、
+種類と飛び先の対応は同じで、`mobile/src/lib/appLinks.ts` に置いている
+（FCMの `data.kind` から決める。`open` は入力画面を開いた時点で消す）。
+
 URLで表しているのは、**画面を更新してもタブが戻らないようにする**ためでもある。
 タブの切り替えは `history.replaceState` でURLへ書き戻しているので、
 読み込み直しても見ていたタブのまま戻ってくる（ホームは既定なのでURLに載せない）。
@@ -608,3 +632,125 @@ npm run test:notification
 
 端末によっては `ServiceWorkerRegistration.getNotifications()` が使えない。
 その場合は何もしない（これまでどおり手で払う形に戻るだけ）。
+
+> **ネイティブ版にはまだ入れていない。** ここの判断には記録・体温・予定・計測中の授乳が
+> まとめて要るが、ネイティブ版ではそれぞれ別のタブが持っている。まとめる仕組みを
+> 先に作る必要があるので、通知をFCMへ移す変更とは分けている。
+> 同じ種類のお知らせは差し替わる（タグで揃えている）ので、残るのは種類ごとに1つまで。
+
+---
+
+## 11. ネイティブ版（Android）へ届ける
+
+ネイティブ版（`mobile/`）はService Workerを持たないので、Web Pushでは届かない。
+代わりに **FCM（Firebase Cloud Messaging）の登録トークン**で受け取る。
+
+### 何が同じで、何が違うか
+
+**送る側は同じ。** 通知の時刻を決めるビューも、二重送信を防ぐ記録も、通知の文面も
+これまでどおりEdge Functionが持つ。だから**PWA版とネイティブ版で同じ文面が出る**。
+違うのは最後の「送る」ところだけで、`_shared/deliver.ts` が宛先の種類で振り分ける。
+
+```
+                                      ┌─ kind = 'webpush' → Web Push（_shared/webpush.ts）
+Edge Function ─→ _shared/deliver.ts ──┤
+                                      └─ kind = 'fcm'     → FCM HTTP v1（_shared/fcm.ts）
+```
+
+宛先は**同じ `push_subscriptions`** に入る。別の表を作っていないのは、送信済み記録
+（`reminder_deliveries` ほか）と授乳の予約（`nursing_alarms`）がこの表を参照しているため。
+表を分けると、二重送信の防止・失効した宛先の片付け・RLSを種類ごとに二重に持つことになる。
+
+| | `kind = 'webpush'` | `kind = 'fcm'` |
+| --- | --- | --- |
+| `endpoint` | プッシュサービスのURL | `fcm:` + 登録トークン |
+| `p256dh` / `auth` | 暗号化に使う鍵 | 空文字（使わない） |
+| 表示用 | `navigator.userAgent` | `Android <APIレベル>` |
+
+`endpoint` に接頭辞を付けているのは、一意キー（`endpoint`）をそのまま「端末ごとに1行」の
+決まりとして使い続けるため。トークンだけを入れるとURLと見分けが付かない。
+
+### 授乳のお知らせはサーバーを通らない
+
+授乳の経過時間お知らせ（§6）だけは、ネイティブ版では**前面サービス（Kotlin）が鳴らす**。
+画面が消えていてもアプリを閉じていても圏外でも鳴り、マナーモードでも鳴るので、
+サーバーからの肩代わりが要らない（`docs/native-app-rewrite.md` §4）。
+`send-nursing-alarms` は `kind = 'fcm'` の宛先へは送らない。
+
+ただし `nursing_alarms` の行は**ネイティブ版でも預ける**。この表にはもう1つ
+「いま授乳中（または飲ませ終えて記録待ち）だから『そろそろ次の授乳』を送らない」
+という役目があり（§7・`0027`）、預けないとネイティブ版で授乳したときに
+**飲ませ終えたばかりなのに家族全員へ「そろそろ次の授乳」が飛ぶ**。
+鳴らさせないよう `notified_step` は1で入れる（`mobile/src/lib/nursingState.ts`）。
+
+### セットアップ
+
+**一度やれば以降は不要**。§2（VAPID鍵）とは別に、次の3つが要る。
+
+#### 手順1: Firebase プロジェクトを作る
+
+[Firebase コンソール](https://console.firebase.google.com/)でプロジェクトを作り、
+**Android アプリを追加**する。パッケージ名は `mobile/app.json` の
+`android.package` と揃える（`com.sukusuku.app`）。
+
+> Supabase とは別のサービスだが、**FCMの経路だけを借りる**形なので、
+> Firestore や Authentication は使わない（データは今までどおりSupabaseにある）。
+
+#### 手順2: `google-services.json` を置く
+
+アプリを追加したときに落とせる `google-services.json` を `mobile/` に置く。
+これが無いとビルドが通らない（`app.json` の `android.googleServicesFile` が指している）。
+
+**リポジトリにはコミットしない**（`mobile/.gitignore`）。CIは Actions の Secrets から
+書き出すので、`GOOGLE_SERVICES_JSON` に**ファイルの中身をそのまま**登録する
+（リポジトリの Settings > Secrets and variables > Actions）。
+未登録のときは仮のもので進んで、`.apk` を配る手前で止まる。
+
+#### 手順3: サービスアカウントの鍵を Edge Function に設定する
+
+Firebase コンソールの **プロジェクトの設定 > サービス アカウント** から
+「新しい秘密鍵の生成」でJSONを落とし、その**中身をそのまま**1行のシークレットにする。
+
+```bash
+supabase secrets set FCM_SERVICE_ACCOUNT="$(cat /path/to/service-account.json)"
+```
+
+そのあと Edge Function をデプロイし直す（§2 手順4と同じ）。
+
+- 鍵は `project_id` / `client_email` / `private_key` だけを使う
+- これで送れるのはFCMのメッセージだけ（`firebase.messaging` のスコープのみ要求している）
+- **`VAPID_KEYS` を消してはいけない。** PWA版の端末が残っている間は両方使う
+
+#### 手順4: 端末でオンにする
+
+`.apk` を入れて設定タブの「通知」をオンにする（`mobile/README.md`）。
+最初の1回だけ通知の許可を聞かれる。
+
+### 動かないときの確認
+
+| 症状 | 見るところ |
+| --- | --- |
+| 設定タブに「Expo Goでは通知を受け取れません」と出る | Expo Goには通知の設定が入らない。`.apk` を入れたアプリで設定する |
+| トグルをオンにできない | 端末の「設定 > アプリ > すくすく > 通知」で許可されているか |
+| オンにはなるが届かない | Edge Function のログで `FCM_SERVICE_ACCOUNT が未設定です` が出ていないか。出ていれば手順3 |
+| `403 PERMISSION_DENIED` | 鍵のプロジェクトと `google-services.json` のプロジェクトが違う。両方を同じプロジェクトから取り直す |
+| 入れ直したら届かなくなった | 登録トークンが変わる。設定タブでオフ→オンし直す（古い行は送信に失敗した時点で片付けられる） |
+| 通知が静かに積まれるだけ | 通知チャンネルの設定。端末の「設定 > アプリ > すくすく > 通知」で各チャンネルを確認する |
+
+送る側だけを確かめたいときは、`_shared/fcm.ts` の検証を走らせる。
+
+```bash
+npm run test:fcm
+```
+
+### 通知チャンネル
+
+Androidは鳴り方・振動を**チャンネルに固定する**（作ったあとは名前と説明しか変えられない）。
+そのため、お知らせの種類ごとに分けてある。idは送る側（`_shared/deliver.ts`）と
+アプリ側（`mobile/src/lib/push.ts`）で揃えること。
+
+| チャンネル | 何のお知らせか |
+| --- | --- |
+| `task-reminder` | 予定のリマインダー（§2） |
+| `feeding-reminder` | 次の授乳の目安（§7） |
+| `temperature-reminder` | 検温（§8） |

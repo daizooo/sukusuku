@@ -1,7 +1,8 @@
 // すくすく手帳: リマインダーの配信
 //
 // pg_cron から数分おきに叩かれ、通知時刻を過ぎたリマインダーを
-// 家族の端末(push_subscriptions)へ Web Push で送る。
+// 家族の端末(push_subscriptions)へ送る。ブラウザへは Web Push、
+// ネイティブ版(Android)へは FCM で送る（振り分けは _shared/deliver.ts）。
 //
 // 通知時刻の計算は task_reminder_schedule ビューが行う（出生日基準の予定の
 // 日付解決と Asia/Tokyo でのタイムゾーン補正を含む）。
@@ -10,11 +11,7 @@
 //       supabase/config.toml で verify_jwt = false にしている。
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.2';
-import {
-  createVapidContext,
-  sendPushNotification,
-  type VapidKeys,
-} from '../_shared/webpush.ts';
+import { DeliveryContext, type DeliveryTarget } from '../_shared/deliver.ts';
 
 // 取りこぼしを拾うため、通知時刻を過ぎたものも一定時間ぶんは対象にする。
 // 送信済み記録(reminder_deliveries)があるものは除外されるので二重には飛ばない。
@@ -35,12 +32,8 @@ interface ScheduleRow {
   remind_at: string;
 }
 
-interface SubscriptionRow {
-  id: string;
+interface SubscriptionRow extends DeliveryTarget {
   family_id: string;
-  endpoint: string;
-  p256dh: string;
-  auth: string;
 }
 
 // 通知本文。「8月20日(水) 10:00 ・ 城南まちづくりセンター」のように出す。
@@ -66,13 +59,8 @@ Deno.serve(async (request) => {
     return json({ error: 'unauthorized' }, 401);
   }
 
-  const vapidKeysRaw = Deno.env.get('VAPID_KEYS');
-  const vapidSubject = Deno.env.get('VAPID_SUBJECT');
-  if (!vapidKeysRaw || !vapidSubject) {
-    return json({ error: 'VAPID_KEYS / VAPID_SUBJECT が未設定です' }, 500);
-  }
-
-  const vapid = await createVapidContext(JSON.parse(vapidKeysRaw) as VapidKeys, vapidSubject);
+  // 鍵は送る宛先の種類が分かってから用意する（_shared/deliver.ts）。
+  const delivery = new DeliveryContext();
 
   // service_role で動くため RLS は適用されない（家族をまたいで配信対象を集める必要がある）
   const supabase = createClient(
@@ -97,10 +85,16 @@ Deno.serve(async (request) => {
   const familyIds = [...new Set(due.map((row) => row.family_id))];
   const { data: subscriptions, error: subscriptionError } = await supabase
     .from('push_subscriptions')
-    .select('id, family_id, endpoint, p256dh, auth')
+    .select('id, kind, family_id, endpoint, p256dh, auth')
     .in('family_id', familyIds)
     .returns<SubscriptionRow[]>();
   if (subscriptionError) return json({ error: subscriptionError.message }, 500);
+
+  // 送り始める前に、宛先の種類に必要な鍵がそろっているかを確かめる。
+  // ここで止めないと、鍵が無いまま失敗の記録だけが残り、設定を直しても
+  // その通知は二度と送られない（_shared/deliver.ts の ensureReady）。
+  const notReady = await delivery.ensureReady(subscriptions ?? []);
+  if (notReady) return json({ error: notReady }, 500);
 
   const subscriptionsByFamily = new Map<string, SubscriptionRow[]>();
   for (const subscription of subscriptions ?? []) {
@@ -139,16 +133,12 @@ Deno.serve(async (request) => {
         continue;
       }
 
-      const result = await sendPushNotification(
-        vapid,
-        subscription,
-        JSON.stringify({
-          taskId: row.task_id,
-          title: row.title,
-          body: formatWhen(row),
-          url: '/',
-        }),
-      );
+      const result = await delivery.deliver(subscription, {
+        taskId: row.task_id,
+        title: row.title,
+        body: formatWhen(row),
+        url: '/',
+      });
 
       if (result.ok) {
         sent++;
@@ -164,7 +154,7 @@ Deno.serve(async (request) => {
       }
 
       failed++;
-      console.error('プッシュ送信に失敗しました', subscription.endpoint, result.error);
+      console.error('プッシュ送信に失敗しました', subscription.kind, subscription.endpoint, result.error);
       await supabase
         .from('reminder_deliveries')
         .update({ status: 'failed', error: result.error })

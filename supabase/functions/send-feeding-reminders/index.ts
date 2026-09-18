@@ -1,7 +1,8 @@
 // すくすく手帳: 次の授乳の目安の通知
 //
 // pg_cron から5分おきに叩かれ、前回の授乳から設定した間隔が経った家族の端末へ
-// 「そろそろ次の授乳」を Web Push で送る。
+// 「そろそろ次の授乳」を送る。ブラウザへは Web Push、ネイティブ版(Android)へは
+// FCM で送る（振り分けは _shared/deliver.ts）。
 //
 // 目安の時刻は next_feeding_schedule ビューが出す
 // （家族ごとのいちばん新しい授乳の記録 + feeding_settings.interval_minutes）。
@@ -14,11 +15,7 @@
 //       supabase/config.toml で verify_jwt = false にしている。
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.2';
-import {
-  createVapidContext,
-  sendPushNotification,
-  type VapidKeys,
-} from '../_shared/webpush.ts';
+import { DeliveryContext, type DeliveryTarget } from '../_shared/deliver.ts';
 
 // 取りこぼしを拾うため、目安の時刻を過ぎたものも一定時間ぶんは対象にする。
 // 送信済み記録(feeding_reminder_deliveries)があるものは除外されるので二重には飛ばない。
@@ -35,12 +32,8 @@ interface ScheduleRow {
   due_at: string;
 }
 
-interface SubscriptionRow {
-  id: string;
+interface SubscriptionRow extends DeliveryTarget {
   family_id: string;
-  endpoint: string;
-  p256dh: string;
-  auth: string;
 }
 
 interface ActiveNursingRow {
@@ -71,12 +64,6 @@ Deno.serve(async (request) => {
   }
   if (request.headers.get('x-reminder-secret') !== cronSecret) {
     return json({ error: 'unauthorized' }, 401);
-  }
-
-  const vapidKeysRaw = Deno.env.get('VAPID_KEYS');
-  const vapidSubject = Deno.env.get('VAPID_SUBJECT');
-  if (!vapidKeysRaw || !vapidSubject) {
-    return json({ error: 'VAPID_KEYS / VAPID_SUBJECT が未設定です' }, 500);
   }
 
   // service_role で動くため RLS は適用されない（家族をまたいで配信対象を集める必要がある）
@@ -122,7 +109,7 @@ Deno.serve(async (request) => {
   const familyIds = [...new Set(targets.map((row) => row.family_id))];
   const { data: subscriptions, error: subscriptionError } = await supabase
     .from('push_subscriptions')
-    .select('id, family_id, endpoint, p256dh, auth')
+    .select('id, kind, family_id, endpoint, p256dh, auth')
     .in('family_id', familyIds)
     .returns<SubscriptionRow[]>();
   if (subscriptionError) return json({ error: subscriptionError.message }, 500);
@@ -134,7 +121,12 @@ Deno.serve(async (request) => {
     subscriptionsByFamily.set(subscription.family_id, list);
   }
 
-  const vapid = await createVapidContext(JSON.parse(vapidKeysRaw) as VapidKeys, vapidSubject);
+  // 鍵は送る宛先の種類が分かってから用意する（_shared/deliver.ts）。
+  // 送り始める前にそろっているかを確かめる。ここで止めないと、鍵が無いまま
+  // 失敗の記録だけが残り、設定を直してもその通知は二度と送られない。
+  const delivery = new DeliveryContext();
+  const notReady = await delivery.ensureReady(subscriptions ?? []);
+  if (notReady) return json({ error: notReady }, 500);
 
   let sent = 0;
   let failed = 0;
@@ -165,15 +157,14 @@ Deno.serve(async (request) => {
         continue;
       }
 
-      const result = await sendPushNotification(
-        vapid,
+      const result = await delivery.deliver(
         subscription,
-        JSON.stringify({
+        {
           kind: 'feeding',
           title: 'そろそろ次の授乳',
           body: `前回 ${JST_TIME.format(new Date(row.last_fed_at))} から${formatMinutes(row.interval_minutes)}たちました`,
           url: '/',
-        }),
+        },
         // 目安の時刻を知らせるものなので、何時間も後に届いても意味がない
         30 * 60,
       );
@@ -192,7 +183,7 @@ Deno.serve(async (request) => {
       }
 
       failed++;
-      console.error('授乳の目安の送信に失敗しました', subscription.endpoint, result.error);
+      console.error('授乳の目安の送信に失敗しました', subscription.kind, subscription.endpoint, result.error);
       await supabase
         .from('feeding_reminder_deliveries')
         .update({ status: 'failed', error: result.error })

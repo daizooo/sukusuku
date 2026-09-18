@@ -15,6 +15,11 @@
 // 端末が自分で鳴らせたときは、端末側が notified_step を進める。
 // ここでは区切りを少し過ぎてから送るので、画面を開いている間は送られない。
 //
+// ネイティブ版(Android)の行へは送らない。あちらは授乳中だけ前面サービスが動いて
+// 自分で鳴らすので、肩代わりが要らない（docs/native-app-rewrite.md §4）。
+// それでも行を預かるのは、「そろそろ次の授乳」(send-feeding-reminders)を
+// 止めるという、もう1つの役目のため。置き去りの片付けはこちらで行う。
+//
 // stopped_at が入っている行は「計測は終わったが、まだ記録していない」印なので鳴らさない。
 // (残しているのは、その間の「そろそろ次の授乳」を止めるため。0027 を参照)
 //
@@ -56,6 +61,8 @@ interface AlarmRow {
   /** 計測を止めた時刻。記録を保存するまでの間だけ入る（計測中は null）。 */
   stopped_at: string | null;
   push_subscriptions: {
+    /** 宛先の種類。'fcm' はネイティブ版で、鳴らすのは端末の前面サービス。 */
+    kind: string;
     endpoint: string;
     p256dh: string;
     auth: string;
@@ -91,7 +98,7 @@ Deno.serve(async (request) => {
   const { data: alarms, error: alarmsError } = await supabase
     .from('nursing_alarms')
     .select(
-      'subscription_id, side, baseline_at, interval_minutes, notified_step, stopped_at, push_subscriptions(endpoint, p256dh, auth)',
+      'subscription_id, side, baseline_at, interval_minutes, notified_step, stopped_at, push_subscriptions(kind, endpoint, p256dh, auth)',
     )
     .returns<AlarmRow[]>();
   if (alarmsError) return json({ error: alarmsError.message }, 500);
@@ -129,6 +136,13 @@ Deno.serve(async (request) => {
 
     if (!Number.isFinite(elapsedMinutes) || elapsedMinutes > MAX_ELAPSED_MINUTES) {
       await expire();
+      continue;
+    }
+
+    // ネイティブ版の行は「いま授乳中」の印を預かっているだけ。鳴らすのは端末側なので送らない。
+    // (置き去りの片付けは上で済んでいるので、ここでは何もしない)
+    if (alarm.push_subscriptions?.kind === 'fcm') {
+      skipped++;
       continue;
     }
 
