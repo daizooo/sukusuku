@@ -14,7 +14,7 @@
 //       supabase/config.toml で verify_jwt = false にしている。
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.2';
-import { DeliveryContext, type DeliveryTarget } from '../_shared/deliver.ts';
+import { DeliveryContext, preferNative, type DeliveryTarget } from '../_shared/deliver.ts';
 
 // 取りこぼしを拾うため、時刻を過ぎたものも一定時間ぶんは対象にする。
 // 送信済み記録(temperature_reminder_deliveries)があるものは除外されるので二重には飛ばない。
@@ -33,6 +33,7 @@ interface ScheduleRow {
 
 interface SubscriptionRow extends DeliveryTarget {
   family_id: string;
+  user_id: string;
 }
 
 // 家族全員が日本にいる前提。時刻は日本時間で出す。
@@ -73,15 +74,18 @@ Deno.serve(async (request) => {
   if (!due || due.length === 0) return json({ due: 0, sent: 0, failed: 0, skipped: 0 });
 
   const familyIds = [...new Set(due.map((row) => row.family_id))];
-  const { data: subscriptions, error: subscriptionError } = await supabase
+  const { data: allSubscriptions, error: subscriptionError } = await supabase
     .from('push_subscriptions')
-    .select('id, kind, family_id, endpoint, p256dh, auth')
+    .select('id, kind, family_id, user_id, endpoint, p256dh, auth')
     .in('family_id', familyIds)
     .returns<SubscriptionRow[]>();
   if (subscriptionError) return json({ error: subscriptionError.message }, 500);
+  // 同じ人がネイティブ版とPWA版の両方を登録していたら、ネイティブ版だけに送る。
+  // 移行の途中は1人が宛先を複数持つので、絞らないと同じお知らせが何通も出る。
+  const subscriptions = preferNative(allSubscriptions ?? []);
 
   const subscriptionsByFamily = new Map<string, SubscriptionRow[]>();
-  for (const subscription of subscriptions ?? []) {
+  for (const subscription of subscriptions) {
     const list = subscriptionsByFamily.get(subscription.family_id) ?? [];
     list.push(subscription);
     subscriptionsByFamily.set(subscription.family_id, list);
@@ -91,7 +95,7 @@ Deno.serve(async (request) => {
   // 送り始める前にそろっているかを確かめる。ここで止めないと、鍵が無いまま
   // 失敗の記録だけが残り、設定を直してもその通知は二度と送られない。
   const delivery = new DeliveryContext();
-  const notReady = await delivery.ensureReady(subscriptions ?? []);
+  const notReady = await delivery.ensureReady(subscriptions);
   if (notReady) return json({ error: notReady }, 500);
 
   let sent = 0;
