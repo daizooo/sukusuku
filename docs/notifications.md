@@ -633,10 +633,30 @@ npm run test:notification
 端末によっては `ServiceWorkerRegistration.getNotifications()` が使えない。
 その場合は何もしない（これまでどおり手で払う形に戻るだけ）。
 
-> **ネイティブ版にはまだ入れていない。** ここの判断には記録・体温・予定・計測中の授乳が
-> まとめて要るが、ネイティブ版ではそれぞれ別のタブが持っている。まとめる仕組みを
-> 先に作る必要があるので、通知をFCMへ移す変更とは分けている。
-> 同じ種類のお知らせは差し替わる（タグで揃えている）ので、残るのは種類ごとに1つまで。
+### ネイティブ版
+
+**同じ規則で同じように消す**（`mobile/src/lib/notificationCleanup.ts`）。上の表の条件は
+そのまま移してある。違うのは2か所だけ。
+
+| | PWA版 | ネイティブ版 |
+| --- | --- | --- |
+| 出ている通知の数え方 | `registration.getNotifications()` | `Notifications.getPresentedNotificationsAsync()` |
+| 判断の材料 | 画面が既に持っている値を渡す | 必要な分だけ取り直す（タブごとに別々に持っているため） |
+
+**タグの取り方に気をつける。** 出どころで入り方が変わる。
+
+- **閉じている間に届いた分**はFCMがそのまま出すので、expo-notifications から見ると
+  「よそのお知らせ」になり、identifier が
+  `expo-notifications://foreign_notifications?tag=<タグ>&id=<番号>` の形になる。
+  送るときに付けたタグはここに入っている
+- **開いている間に届いた分**は expo-notifications 自身が出すので identifier はFCMの
+  メッセージidで、タグは入らない。こちらは `data`（`kind` / `taskId`）から
+  組み立て直す（送る側 `_shared/deliver.ts` の `tagOf` と同じ規則）
+
+授乳の常駐通知（前面サービス）はタグを持たないので、ここでは触らない。
+
+問い合わせは**出ている通知が1つも無ければしない**。前面に戻るたびに毎回
+取り直すことにはならない。
 
 ---
 

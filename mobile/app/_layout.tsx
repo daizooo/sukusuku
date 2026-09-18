@@ -6,6 +6,7 @@ import * as Notifications from 'expo-notifications';
 import { SessionProvider, useSession } from '@/lib/session';
 import { useNursingAlarmWatcher } from '@/lib/nursingTimer';
 import { useNursingStateSync } from '@/lib/nursingState';
+import { useSettledNotificationCleanup } from '@/lib/notificationCleanup';
 import { configureNotificationChannels } from '@/lib/push';
 import { notificationTarget, OPEN_LOG_PARAM } from '@/lib/appLinks';
 import { colors } from '@/lib/theme';
@@ -52,6 +53,8 @@ function AppEffects() {
   useNursingStateSync(session?.user.id ?? null);
   // お知らせのタップで、その用件の画面を開く。
   useNotificationTapHandler();
+  // 用が済んだお知らせを端末から消す。
+  useSettledNotificationCleanup(session?.user.id ?? null);
 
   return null;
 }
