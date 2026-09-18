@@ -774,12 +774,40 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat /path/to/service-account.json)"
 | `403 PERMISSION_DENIED` | 鍵のプロジェクトと `google-services.json` のプロジェクトが違う。両方を同じプロジェクトから取り直す |
 | 入れ直したら届かなくなった | 登録トークンが変わる。設定タブでオフ→オンし直す（古い行は送信に失敗した時点で片付けられる） |
 | 通知が静かに積まれるだけ | 通知チャンネルの設定。端末の「設定 > アプリ > すくすく > 通知」で各チャンネルを確認する |
+| タップしても消えるだけでアプリが開かない | `_shared/fcm.ts` で `click_action` を送っていないか。下の「タップで開く」を参照 |
 
 送る側だけを確かめたいときは、`_shared/fcm.ts` の検証を走らせる。
 
 ```bash
 npm run test:fcm
 ```
+
+### タップで開く
+
+**`click_action` は指定しない。** 指定すると、その名前のアクションに合う intent-filter を持つ
+Activityが探されるが、`MainActivity` の `MAIN` のフィルタは `LAUNCHER` しか持たず
+`android.intent.category.DEFAULT` が無いため、どれにも当たらない。結果、**タップしても通知が
+消えるだけでアプリが開かない**（2026-09-18に実機で起きた。`android.intent.action.MAIN` を
+指定していた）。
+
+```xml
+<!-- expo prebuild が作る android/app/src/main/AndroidManifest.xml -->
+<intent-filter>
+  <action android:name="android.intent.action.MAIN"/>
+  <category android:name="android.intent.category.LAUNCHER"/>   <!-- DEFAULT が無い -->
+</intent-filter>
+```
+
+指定しなければFCMの既定どおりランチャーのActivityが開き、通知の `data` がIntentのextrasで
+渡る。expo-notifications の `ExpoNotificationLifecycleListener` がそれを拾って「通知のタップ」
+として扱うので、飛び先の処理（`mobile/app/_layout.tsx` の §9）が動く。アプリを消していた
+とき（`onCreate`）も、裏で動いていたとき（`onNewIntent`）も同じ。
+
+「タップで既にあるアプリを前面に出す（新しく積み上げない）」ことは、`MainActivity` の
+`launchMode="singleTask"` が担っているので指定は要らない。
+
+> 授乳の常駐通知（前面サービス）はこの経路を通らない。`NursingAlarmService` が
+> `getLaunchIntentForPackage()` で自前のPendingIntentを組むので、ここの影響を受けない。
 
 ### 通知チャンネル
 

@@ -173,8 +173,18 @@ export async function sendFcmNotification(
                 channel_id: notification.channelId,
                 // 同じ用件のお知らせは積み上げずに差し替える（Web Push側のtagと同じ考え方）
                 tag: notification.tag,
-                // タップで既にあるアプリを前面に出す（新しく積み上げない）
-                click_action: 'android.intent.action.MAIN',
+                // **click_action は指定しない。** 指定すると、その名前のアクションに合う
+                // intent-filter を持つActivityが探されるが、MainActivity の MAIN のフィルタは
+                // LAUNCHER しか持たず android.intent.category.DEFAULT が無いため、どれにも
+                // 当たらない。タップしても通知が消えるだけでアプリが開かなくなる。
+                //
+                // 指定しなければFCMの既定どおりランチャーのActivityが開き、通知の data が
+                // Intentのextrasで渡る。expo-notifications の ExpoNotificationLifecycleListener が
+                // それを拾って「通知のタップ」として扱うので、飛び先の処理
+                // (mobile/app/_layout.tsx) が動く。アプリを消していたときも、起こしてからでも同じ。
+                //
+                // 「タップで既にあるアプリを前面に出す（新しく積み上げない）」ことは、
+                // MainActivity の launchMode="singleTask" が担っているので指定は要らない。
               },
             },
           },
