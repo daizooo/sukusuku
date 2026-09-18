@@ -283,5 +283,5 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 8,
   },
-  deleteText: { fontSize: 12, fontWeight: '500', color: colors.danger },
+  deleteText: { fontSize: 12, fontWeight: '500', color: colors.danger, flexShrink: 1 },
 });

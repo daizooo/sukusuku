@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     marginBottom: 16,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle, flexShrink: 1 },
   label: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
   note: { fontSize: 12, color: colors.textMuted, marginTop: 4, lineHeight: 18 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12 },

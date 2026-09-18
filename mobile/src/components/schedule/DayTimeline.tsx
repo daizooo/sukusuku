@@ -80,7 +80,7 @@ export default function DayTimeline({ logs, day, variant = 'week' }: DayTimeline
 
 const styles = StyleSheet.create({
   scale: { flexDirection: 'row', justifyContent: 'space-between' },
-  scaleText: { fontSize: 10, color: colors.textFaint },
+  scaleText: { fontSize: 10, color: colors.textFaint, flexShrink: 1 },
   track: { position: 'relative', overflow: 'hidden', backgroundColor: colors.neutralSurface },
   trackWeek: { height: 16, borderRadius: 4 },
   trackDay: { height: 36, borderRadius: 8 },

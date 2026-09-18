@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
 
   stepper: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
   stepButton: {
-    width: 64,
+    width: 56,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -330,10 +330,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
     textAlign: 'center',
-    minWidth: 110,
+    minWidth: 88,
+    flexShrink: 1,
     padding: 0,
   },
-  unit: { fontSize: 16, color: colors.textMuted },
+  unit: { fontSize: 16, color: colors.textMuted, flexShrink: 1 },
   note: { fontSize: 11, color: colors.textFaint, marginTop: 6 },
   errorNote: { fontSize: 11, color: colors.danger, marginTop: 6 },
 

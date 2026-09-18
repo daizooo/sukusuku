@@ -112,9 +112,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 4,
   },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted, flexShrink: 1 },
   link: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  linkText: { fontSize: 12, fontWeight: '500', color: colors.navActive },
+  linkText: { fontSize: 12, fontWeight: '500', color: colors.navActive, flexShrink: 1 },
   empty: {
     fontSize: 14,
     color: colors.textFaint,

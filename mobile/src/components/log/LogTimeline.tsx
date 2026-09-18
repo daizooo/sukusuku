@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   body: { flex: 1, gap: 4 },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   title: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.text },
-  time: { fontSize: 12, color: colors.textMuted },
+  time: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   badge: {
     flexDirection: 'row',
@@ -124,9 +124,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 2,
   },
-  badgeText: { fontSize: 11 },
+  badgeText: { fontSize: 11, flexShrink: 1 },
   swatch: { width: 9, height: 9, borderRadius: 5 },
   footer: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 },
   note: { flex: 1, fontSize: 12, color: colors.textMuted },
-  author: { fontSize: 11, color: colors.textFaint },
+  author: { fontSize: 11, color: colors.textFaint, flexShrink: 1 },
 });

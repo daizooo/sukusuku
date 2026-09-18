@@ -863,7 +863,7 @@ const styles = StyleSheet.create({
   customMinutes: { marginTop: 6 },
 
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  stock: { fontSize: 11, color: colors.textMuted, marginBottom: 6 },
+  stock: { fontSize: 11, color: colors.textMuted, marginBottom: 6, flexShrink: 1 },
   batchList: { gap: 6 },
   batchListSpaced: { marginTop: 8 },
   batchRow: {
@@ -905,8 +905,8 @@ const styles = StyleSheet.create({
   },
   discardedText: { flex: 1, fontSize: 11, color: colors.textSubtle },
   undoText: { fontSize: 11, fontWeight: '700', color: colors.pumpingText },
-  batchTime: { fontSize: 14, color: colors.textSubtle },
-  batchAmount: { fontSize: 14, fontWeight: '700', color: colors.textSubtle },
+  batchTime: { fontSize: 14, color: colors.textSubtle, flexShrink: 1 },
+  batchAmount: { fontSize: 14, fontWeight: '700', color: colors.textSubtle, flexShrink: 1 },
   batchTextSelected: { color: colors.pumpingText },
   batchSummary: { marginTop: 8, fontSize: 12, fontWeight: '700', color: colors.pumpingText },
   drankReset: { fontSize: 11, fontWeight: '500', color: colors.pumpingText, marginBottom: 6 },
@@ -925,7 +925,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  stopwatchTitle: { fontSize: 12, fontWeight: '700', color: colors.milkText },
+  stopwatchTitle: { fontSize: 12, fontWeight: '700', color: colors.milkText, flexShrink: 1 },
   setNumber: { fontSize: 12, fontWeight: '700', color: colors.milk },
   reset: { fontSize: 11, color: colors.milkText },
 

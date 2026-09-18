@@ -725,7 +725,7 @@ const styles = StyleSheet.create({
   overviewContent: { paddingBottom: 24 },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingBottom: 6 },
   sectionHeadingSpaced: { paddingTop: 16 },
-  sectionHeadingText: { fontSize: 11, fontWeight: '700', color: colors.textFaint },
+  sectionHeadingText: { fontSize: 11, fontWeight: '700', color: colors.textFaint, flexShrink: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start' },
   gridCell: { width: '50%', padding: 6 },
   addList: {
@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
     borderRadius: 12,
   },
-  addListText: { fontSize: 14, color: colors.textFaint },
+  addListText: { fontSize: 14, color: colors.textFaint, flexShrink: 1 },
   holdHint: { fontSize: 10, color: colors.borderStrong, textAlign: 'center', paddingTop: 12 },
 
   topBar: {
@@ -787,7 +787,7 @@ const styles = StyleSheet.create({
   },
   doneHeaderOpen: { borderBottomWidth: 1, borderBottomColor: colors.border },
   doneToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 },
-  doneToggleText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  doneToggleText: { fontSize: 12, fontWeight: '700', color: colors.textMuted, flexShrink: 1 },
   clearDone: { paddingHorizontal: 8, paddingVertical: 4 },
   clearDoneText: { fontSize: 11, color: colors.textFaint },
 });

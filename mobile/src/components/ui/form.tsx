@@ -84,35 +84,47 @@ export function OptionGrid<T extends string | number>({
   accent: Accent;
 }) {
   const tone = ACCENT[accent];
+  // 列ごとに割合で幅を出すと、端数の丸めで合計が100%を超え、最後の1つだけ
+  // 次の行へ落ちることがある。Web版のグリッドと同じ並びにするため、
+  // 列の数ずつの行に切り分けて、1行の中を均等に分ける。
+  const rows: Option<T>[][] = [];
+  for (let i = 0; i < options.length; i += columns) rows.push(options.slice(i, i + columns));
+
   return (
-    <View style={styles.grid}>
-      {options.map((option) => {
-        const selected = option.value === value;
-        return (
-          <Pressable
-            key={String(option.value)}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            onPress={() => onChange(option.value)}
-            style={[
-              styles.gridItem,
-              // 端数を吸わせるため、幅は列の数から割り出す（gap のぶんを引く）。
-              { width: `${100 / columns}%` },
-            ]}
-          >
-            <View
-              style={[
-                styles.gridItemInner,
-                selected && { backgroundColor: tone.surface, borderColor: tone.color },
-              ]}
-            >
-              <Text style={[styles.gridItemText, selected && { color: tone.color, fontWeight: '700' }]}>
-                {option.label}
-              </Text>
-            </View>
-          </Pressable>
-        );
-      })}
+    <View>
+      {rows.map((row, rowIndex) => (
+        <View key={rowIndex} style={styles.grid}>
+          {row.map((option) => {
+            const selected = option.value === value;
+            return (
+              <Pressable
+                key={String(option.value)}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => onChange(option.value)}
+                style={styles.gridItem}
+              >
+                <View
+                  style={[
+                    styles.gridItemInner,
+                    selected && { backgroundColor: tone.surface, borderColor: tone.color },
+                  ]}
+                >
+                  <Text
+                    style={[styles.gridItemText, selected && { color: tone.color, fontWeight: '700' }]}
+                  >
+                    {option.label}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+          {/* 最後の行が欠けても、ボタンの幅が他の行と変わらないようにする。 */}
+          {Array.from({ length: columns - row.length }, (_, i) => (
+            <View key={`gap-${i}`} style={styles.gridItem} />
+          ))}
+        </View>
+      ))}
     </View>
   );
 }
@@ -212,8 +224,8 @@ const styles = StyleSheet.create({
   segmentSelected: { backgroundColor: colors.surface },
   segmentText: { fontSize: 13, color: colors.textMuted },
   segmentTextSelected: { color: colors.text, fontWeight: '700' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  gridItem: { padding: 2 },
+  grid: { flexDirection: 'row' },
+  gridItem: { flex: 1, padding: 2 },
   gridItemInner: {
     borderWidth: 1,
     borderColor: colors.borderStrong,
@@ -222,7 +234,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
   },
-  gridItemText: { fontSize: 13, color: colors.textSubtle },
+  gridItemText: { fontSize: 13, color: colors.textSubtle, flexShrink: 1 },
   input: {
     borderWidth: 1,
     borderColor: colors.borderStrong,

@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: colors.surface,
   },
-  fieldText: { fontSize: 14, fontWeight: '700', color: colors.textSubtle },
+  fieldText: { fontSize: 14, fontWeight: '700', color: colors.textSubtle, flexShrink: 1 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.surface,

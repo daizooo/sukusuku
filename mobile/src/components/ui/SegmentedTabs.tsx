@@ -66,6 +66,6 @@ const styles = StyleSheet.create({
   tabFill: { flex: 1, paddingHorizontal: 8 },
   tabHug: { paddingHorizontal: 12 },
   tabSelected: { backgroundColor: colors.surface },
-  label: { fontSize: 14, fontWeight: '700', color: colors.textSubtle },
+  label: { fontSize: 14, fontWeight: '700', color: colors.textSubtle, flexShrink: 1 },
   labelSelected: { color: colors.navActiveText },
 });

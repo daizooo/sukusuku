@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
   empty: { fontSize: 11, color: colors.textFaint },
   summary: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
   summaryItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  summaryText: { fontSize: 11, color: colors.textSubtle },
+  summaryText: { fontSize: 11, color: colors.textSubtle, flexShrink: 1 },
 
   sectionHeader: {
     flexDirection: 'row',
@@ -145,9 +145,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 4,
   },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted, flexShrink: 1 },
   link: { flexDirection: 'row', alignItems: 'center' },
-  linkText: { fontSize: 12, fontWeight: '500', color: colors.navActive },
+  linkText: { fontSize: 12, fontWeight: '500', color: colors.navActive, flexShrink: 1 },
   loading: { fontSize: 14, color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
 
   card: {
@@ -160,8 +160,8 @@ const styles = StyleSheet.create({
   },
   list: { borderTopWidth: 1, borderTopColor: colors.background, paddingTop: 4 },
   logRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 6 },
-  logTime: { width: 52, fontSize: 12, color: colors.textMuted },
-  logTitle: { fontSize: 12, fontWeight: '500', color: colors.textSubtle },
+  logTime: { minWidth: 52, fontSize: 12, color: colors.textMuted },
+  logTitle: { fontSize: 12, fontWeight: '500', color: colors.textSubtle, flexShrink: 1 },
   logTitleAlert: { color: colors.danger },
   badges: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginLeft: 8 },
   badge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },

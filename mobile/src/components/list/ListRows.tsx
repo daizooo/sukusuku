@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
   },
 
   addButton: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
-  addLabel: { fontSize: 14, color: colors.textFaint },
+  addLabel: { fontSize: 14, color: colors.textFaint, flexShrink: 1 },
   addRow: {
     flexDirection: 'row',
     alignItems: 'center',

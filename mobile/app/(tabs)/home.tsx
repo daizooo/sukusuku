@@ -477,12 +477,12 @@ const styles = StyleSheet.create({
   hero: { borderRadius: 16, padding: 24, overflow: 'hidden' },
   heroBaby: { position: 'absolute', right: -8, bottom: -8 },
   heroLabel: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  heroLabelText: { fontSize: 13, fontWeight: '500', color: colors.primaryText, opacity: 0.9 },
-  heroAge: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 8 },
+  heroLabelText: { fontSize: 13, fontWeight: '500', color: colors.primaryText, opacity: 0.9, flexShrink: 1 },
+  heroAge: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 4, marginTop: 8 },
   heroNumber: { fontSize: 56, fontWeight: '700', color: colors.primaryText },
   heroNumberSmall: { fontSize: 44, fontWeight: '700', color: colors.primaryText },
-  heroUnit: { fontSize: 18, fontWeight: '500', color: colors.primaryText },
-  heroUnitSmall: { fontSize: 13, fontWeight: '500', color: colors.primaryText },
+  heroUnit: { fontSize: 18, fontWeight: '500', color: colors.primaryText, flexShrink: 1 },
+  heroUnitSmall: { fontSize: 13, fontWeight: '500', color: colors.primaryText, flexShrink: 1 },
   heroSub: { fontSize: 13, fontWeight: '500', color: colors.primaryText, opacity: 0.9, marginTop: 2 },
   heroBirth: {
     alignSelf: 'flex-start',
@@ -520,9 +520,9 @@ const styles = StyleSheet.create({
   quickLabelDisabled: { color: colors.textFaint },
 
   sectionHeader: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
-  sectionTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
+  sectionTitle: { fontSize: 17, fontWeight: '700', color: colors.text, flexShrink: 1 },
   seeAll: { flexDirection: 'row', alignItems: 'center' },
-  seeAllText: { fontSize: 13, fontWeight: '500', color: colors.navActive },
+  seeAllText: { fontSize: 13, fontWeight: '500', color: colors.navActive, flexShrink: 1 },
 
   overdue: {
     flexDirection: 'row',
@@ -536,7 +536,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   overdueLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  overdueText: { fontSize: 13, fontWeight: '500', color: colors.alertText },
+  overdueText: { fontSize: 13, fontWeight: '500', color: colors.alertText, flexShrink: 1 },
 
   taskList: {
     backgroundColor: colors.surface,
@@ -555,8 +555,8 @@ const styles = StyleSheet.create({
   taskLabelText: { fontSize: 10, fontWeight: '700' },
   taskMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 4 },
   taskMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
-  taskDate: { fontSize: 12, fontWeight: '500', color: colors.navActive },
-  taskRelative: { fontSize: 12, color: colors.textMuted },
+  taskDate: { fontSize: 12, fontWeight: '500', color: colors.navActive, flexShrink: 1 },
+  taskRelative: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
   taskMetaText: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
 
   notice: { fontSize: 12, color: colors.textMuted, lineHeight: 18 },

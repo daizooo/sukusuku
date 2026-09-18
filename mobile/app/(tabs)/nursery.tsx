@@ -439,7 +439,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     marginRight: 24,
   },
-  underlineLabel: { fontSize: 14, fontWeight: '700', color: colors.textMuted },
+  underlineLabel: { fontSize: 14, fontWeight: '700', color: colors.textMuted, flexShrink: 1 },
   underlineLabelOn: { color: colors.navActiveText },
   underline: {
     position: 'absolute',
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  editText: { fontSize: 12, fontWeight: '700', color: colors.navActiveText },
+  editText: { fontSize: 12, fontWeight: '700', color: colors.navActiveText, flexShrink: 1 },
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 12 },
   infoRowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
   infoIcon: { width: 20, marginTop: 1 },

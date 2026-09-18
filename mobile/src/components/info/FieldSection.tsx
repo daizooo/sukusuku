@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     marginBottom: 16,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle, flexShrink: 1 },
 
   empty: { fontSize: 14, color: colors.textFaint, textAlign: 'center', paddingVertical: 8 },
   readRow: {
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   readRowDivided: { borderTopWidth: 1, borderTopColor: colors.background },
-  readLabel: { fontSize: 14, color: colors.textMuted },
+  readLabel: { fontSize: 14, color: colors.textMuted, flexShrink: 1 },
   readValues: { flex: 1, alignItems: 'flex-end', gap: 2 },
   readValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle, textAlign: 'right' },
   readPhone: { fontSize: 14, fontWeight: '500', color: colors.navActiveText },
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   valueRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   valueDelete: { padding: 4 },
   addValue: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 6 },
-  addValueText: { fontSize: 12, color: colors.navActiveText },
+  addValueText: { fontSize: 12, color: colors.navActiveText, flexShrink: 1 },
   addField: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -279,5 +279,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 10,
   },
-  addFieldText: { fontSize: 14, color: colors.navActiveText },
+  addFieldText: { fontSize: 14, color: colors.navActiveText, flexShrink: 1 },
 });

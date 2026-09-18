@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     marginBottom: 16,
   },
-  doneBadgeText: { fontSize: 12, fontWeight: '500', color: colors.doneText },
+  doneBadgeText: { fontSize: 12, fontWeight: '500', color: colors.doneText, flexShrink: 1 },
 
   detailCard: {
     gap: 16,
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   detailLabel: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
-  detailLabelText: { fontSize: 12, color: colors.textMuted },
+  detailLabelText: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
   detailValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
   detailSub: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
 
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
   },
-  noteLabel: { fontSize: 12, fontWeight: '700', color: colors.noteText },
+  noteLabel: { fontSize: 12, fontWeight: '700', color: colors.noteText, flexShrink: 1 },
   noteText: { fontSize: 14, color: colors.noteBody, lineHeight: 21 },
 
   footer: { gap: 8 },
@@ -243,9 +243,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 14,
   },
-  primaryText: { fontSize: 15, fontWeight: '500', color: colors.primaryText },
+  primaryText: { fontSize: 15, fontWeight: '500', color: colors.primaryText, flexShrink: 1 },
   undo: { backgroundColor: colors.border },
-  undoText: { fontSize: 15, fontWeight: '500', color: colors.textSubtle },
+  undoText: { fontSize: 15, fontWeight: '500', color: colors.textSubtle, flexShrink: 1 },
   delete: { alignItems: 'center', paddingVertical: 8 },
   deleteText: { fontSize: 12, fontWeight: '500', color: colors.danger },
 });

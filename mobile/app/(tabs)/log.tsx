@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
-import { List, Plus, TrendingUp } from 'lucide-react-native';
+import { Droplet, List, Plus, Thermometer, TrendingUp } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import type {
@@ -73,6 +73,7 @@ import {
   readCachedPumpedBatches,
   syncCareLogsInRange,
 } from '@/lib/offline/careLogs';
+import BabyBottleIcon from '@/components/ui/BabyBottleIcon';
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import LogTimeline from '@/components/log/LogTimeline';
 import GrowthChart from '@/components/log/GrowthChart';
@@ -664,7 +665,11 @@ export default function LogScreen() {
                 onPress={() => setEditing({ log: null })}
                 style={styles.recordButton}
               >
-                <Text style={styles.recordTitle}>授乳</Text>
+                <Plus size={12} color={colors.borderStrong} style={styles.recordPlus} />
+                <View style={styles.recordTitleRow}>
+                  <BabyBottleIcon size={17} color={colors.milk} />
+                  <Text style={styles.recordTitle}>授乳</Text>
+                </View>
                 {/* その日の回数・量・分数は出さない（判断に使うのは体重とおしっこの回数）。
                     代わりに、次の授乳で使える搾乳ストックの残りを出す。表示中の日だけでは
                     求まらないため、日付の送りとは関わらず常に今の残りになる。 */}
@@ -679,7 +684,11 @@ export default function LogScreen() {
                 onPress={() => setEditingDiaper({ log: null })}
                 style={styles.recordButton}
               >
-                <Text style={styles.recordTitle}>おむつ</Text>
+                <Plus size={12} color={colors.borderStrong} style={styles.recordPlus} />
+                <View style={styles.recordTitleRow}>
+                  <Droplet size={17} color={colors.diaper} />
+                  <Text style={styles.recordTitle}>おむつ</Text>
+                </View>
                 {/* おしっことうんちは見たいことが別（水分が足りているか／お通じ）なので、
                     合わせた回数ではなくそれぞれの回数を出す。「両方」の記録は両方に数える。 */}
                 <Text style={styles.recordValue}>おしっこ {summary.diaper.peeCount}回</Text>
@@ -692,7 +701,11 @@ export default function LogScreen() {
                 onPress={() => setEditingTemperature({ log: null })}
                 style={styles.recordButton}
               >
-                <Text style={styles.recordTitle}>体温</Text>
+                <Plus size={12} color={colors.borderStrong} style={styles.recordPlus} />
+                <View style={styles.recordTitleRow}>
+                  <Thermometer size={17} color={colors.temperature} />
+                  <Text style={styles.recordTitle}>体温</Text>
+                </View>
                 <Text style={styles.recordValue}>{temperatureSummaryText}</Text>
               </Pressable>
             </View>
@@ -854,7 +867,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 14,
   },
-  addGrowthText: { fontSize: 15, fontWeight: '500', color: colors.navActiveText },
+  addGrowthText: { fontSize: 15, fontWeight: '500', color: colors.navActiveText, flexShrink: 1 },
   growthMessage: { fontSize: 14, color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
   growthList: {
     backgroundColor: colors.surface,
@@ -871,8 +884,8 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   growthRowDivided: { borderTopWidth: 1, borderTopColor: colors.background },
-  growthDate: { fontSize: 12, color: colors.textMuted },
-  growthValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
+  growthDate: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
+  growthValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle, flexShrink: 1 },
 
   header: {
     flexDirection: 'row',
@@ -924,7 +937,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     overflow: 'hidden',
-  },
+    flexShrink: 1,
+},
 
   // 記録ボタン。授乳・おむつ・体温を横に3つ並べる（PWA版と同じ並び）。
   recordRow: { flexDirection: 'row', gap: 8 },
@@ -938,7 +952,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     alignItems: 'center',
   },
-  recordTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+  recordPlus: { position: 'absolute', top: 6, right: 6 },
+  recordTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  recordTitle: { fontSize: 14, fontWeight: '700', color: colors.text, flexShrink: 1 },
   recordValue: {
     fontSize: 11,
     fontWeight: '500',

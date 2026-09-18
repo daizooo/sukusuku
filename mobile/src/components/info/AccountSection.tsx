@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle, flexShrink: 1 },
   headerButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  headerButtonText: { fontSize: 12, fontWeight: '500', color: colors.navActiveText },
+  headerButtonText: { fontSize: 12, fontWeight: '500', color: colors.navActiveText, flexShrink: 1 },
   headerButtonPrimary: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 6,
   },
-  headerButtonPrimaryText: { fontSize: 12, fontWeight: '500', color: colors.primaryText },
+  headerButtonPrimaryText: { fontSize: 12, fontWeight: '500', color: colors.primaryText, flexShrink: 1 },
   disabled: { opacity: 0.5 },
 
   loading: { alignItems: 'center', paddingVertical: 24 },
@@ -342,8 +342,8 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 4,
   },
-  rowLabel: { fontSize: 12, color: colors.textMuted },
-  rowValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
+  rowLabel: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
+  rowValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle, flexShrink: 1 },
   rowValueSmall: { flex: 1, fontSize: 12, fontWeight: '500', color: colors.textSubtle, textAlign: 'right' },
 
   roleRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  partnerName: { fontSize: 12, color: colors.textSubtle },
+  partnerName: { fontSize: 12, color: colors.textSubtle, flexShrink: 1 },
   partnerRole: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -443,5 +443,5 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 10,
   },
-  signOutText: { fontSize: 12, color: colors.textMuted },
+  signOutText: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
 });
