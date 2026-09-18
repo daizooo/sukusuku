@@ -8,7 +8,7 @@
 //   1. 送ったJWTがサービスアカウントの公開鍵で検証できるか
 //   2. messages:send に載せる中身が意図どおりか
 //   3. 失効したトークンを失効として扱えるか
-// を確かめている（webpush.test.ts と同じ考え方）。
+// を確かめている。
 import assert from 'node:assert';
 import { generateKeyPairSync } from 'node:crypto';
 import {

@@ -7,12 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:webpush": "node --experimental-strip-types supabase/functions/_shared/webpush.test.ts",
     "test:fcm": "node --experimental-strip-types supabase/functions/_shared/fcm.test.ts",
     "test:growth": "node --experimental-strip-types src/lib/growthRecordInput.test.ts",
     "test:notification": "node --experimental-strip-types src/lib/notificationCleanup.test.ts",
-    "test:date": "node --experimental-strip-types src/lib/dateUtils.test.ts",
-    "test:deliver": "node --experimental-strip-types supabase/functions/_shared/deliver.test.ts"
+    "test:date": "node --experimental-strip-types src/lib/dateUtils.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

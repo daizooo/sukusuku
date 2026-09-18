@@ -2,9 +2,25 @@
 
 予定に設定したリマインダーを、その時刻に端末へ通知として届けるための仕組み。
 
-**受け取り手は2つある。** PWA版（ブラウザ）はWeb Pushで、ネイティブ版（Android）はFCMで
-受け取る。送るのはどちらも同じEdge Functionで、**通知の文面もそこで作るので両方で同じものが出る**
-（ルートの `CLAUDE.md`）。ネイティブ版のセットアップは §11。
+**受け取り手はネイティブ版（Android）だけ。** FCMで受け取る。セットアップは §11。
+
+> ## 【現況】2026-09-18にWeb Pushの経路を撤去した
+>
+> もともとは受け取り手が2つあり、PWA版（ブラウザ）はWeb Push、ネイティブ版はFCMで
+> 受け取っていた。**家族全員がネイティブ版へ移ったので、送る側からWeb Pushを外した**
+> （フェーズ4の条件D。`docs/native-app-rewrite.md` §7）。
+>
+> | | どうなったか |
+> | --- | --- |
+> | `_shared/webpush.ts` | 削除。`_shared/deliver.ts` の振り分けも無くなり、FCMへ渡すだけになった |
+> | 宛先の取得 | 3つの配信Functionが `kind = 'fcm'` で絞る。`webpush` の行は残っていても使わない |
+> | `send-nursing-alarms` | 送るのをやめ、置き去りの片付けだけになった（§6） |
+> | `VAPID_KEYS` / `VAPID_SUBJECT` | **消していない。** もう読まれないが、戻すときのために置いてある |
+> | PWA版（`src/`） | まだ触っていない。畳むのは次の段（§11「これから」） |
+>
+> **§1〜§5 と §6 の「なぜサーバーから送るのか」は、当時の記録として残している。**
+> 書いてある手順（VAPIDの鍵の生成、Vercelへの公開鍵の設定など）はもう要らない。
+> PWAを畳むときにまとめて整理する。
 
 ---
 
@@ -187,12 +203,12 @@ select status, return_message, start_time
 | `src/lib/api/pushSubscriptions.ts` | 購読情報の保存・削除 |
 | `src/components/sukusuku/NotificationSetting.tsx` | 設定タブの通知トグル |
 | `supabase/functions/send-reminders/index.ts` | 配信の本体 |
-| `supabase/functions/send-reminders/webpush.ts` | Web Push の暗号化・VAPID署名 |
 | `supabase/migrations/0012_push_notifications.sql` | テーブル・ビュー |
 | `supabase/migrations/0013_reminder_cron.sql` | 定期実行の登録 |
 | `scripts/generate-vapid-keys.mjs` | 鍵の生成 |
-| `supabase/functions/_shared/webpush.ts` | Web Push の暗号化・VAPID署名（2つの配信で共用） |
-| `supabase/functions/send-nursing-alarms/index.ts` | 授乳のお知らせの配信（§6） |
+| `supabase/functions/_shared/deliver.ts` | 通知の中身をFCMへ渡す形に詰め替える層 |
+| `supabase/functions/_shared/fcm.ts` | FCM HTTP v1 の送信（アクセストークンの取得を含む） |
+| `supabase/functions/send-nursing-alarms/index.ts` | 「いま授乳中」の印の片付け（§6） |
 | `src/lib/nursingAlarmSync.ts` | 授乳のお知らせをサーバーへ預ける橋渡し |
 | `src/lib/api/nursingAlarms.ts` | `nursing_alarms` の読み書き |
 | `supabase/migrations/0021_nursing_alarms.sql` | テーブル |
@@ -225,7 +241,13 @@ select status, return_message, start_time
 
 ## 6. 授乳の経過時間お知らせ
 
-予定のリマインダーとは別に、**授乳中の経過時間のお知らせ**も同じWeb Pushの仕組みで送る。
+> **いまはサーバーから送っていない。** ネイティブ版では授乳中だけ前面サービスが動いて
+> 端末が自分で鳴らすため、肩代わりが要らない（`docs/native-app-rewrite.md` §4）。
+> 2026-09-18に `send-nursing-alarms` の送る部分を撤去し、**置き去りになった
+> `nursing_alarms` の行を片付けるだけ**にした。以下の「なぜサーバーから送るのか」は
+> 当時の記録。数え方（区切り・セット）と表の使い方はいまも同じ。
+
+予定のリマインダーとは別に、**授乳中の経過時間のお知らせ**を出す。
 
 授乳は **左5分 → 右5分 → ゲップ5分で1セット**として測る。区切りが5分に達すると
 お知らせが**1回だけ**鳴るので、画面を見ていなくても次の区切りへ移るタイミングが分かる
@@ -665,48 +687,41 @@ npm run test:notification
 ネイティブ版（`mobile/`）はService Workerを持たないので、Web Pushでは届かない。
 代わりに **FCM（Firebase Cloud Messaging）の登録トークン**で受け取る。
 
-### 何が同じで、何が違うか
+### 送る側の形
 
-**送る側は同じ。** 通知の時刻を決めるビューも、二重送信を防ぐ記録も、通知の文面も
-これまでどおりEdge Functionが持つ。だから**PWA版とネイティブ版で同じ文面が出る**。
-違うのは最後の「送る」ところだけで、`_shared/deliver.ts` が宛先の種類で振り分ける。
+通知の時刻を決めるビューも、二重送信を防ぐ記録も、通知の文面もEdge Functionが持つ。
+`_shared/deliver.ts` はその中身をFCMへ渡す形に詰め替えるだけ。
 
 ```
-                                      ┌─ kind = 'webpush' → Web Push（_shared/webpush.ts）
-Edge Function ─→ _shared/deliver.ts ──┤
-                                      └─ kind = 'fcm'     → FCM HTTP v1（_shared/fcm.ts）
+Edge Function ─→ _shared/deliver.ts ─→ FCM HTTP v1（_shared/fcm.ts）
 ```
 
-宛先は**同じ `push_subscriptions`** に入る。別の表を作っていないのは、送信済み記録
-（`reminder_deliveries` ほか）と授乳の予約（`nursing_alarms`）がこの表を参照しているため。
-表を分けると、二重送信の防止・失効した宛先の片付け・RLSを種類ごとに二重に持つことになる。
+宛先は `push_subscriptions` の **`kind = 'fcm'` の行**。3つの配信Functionが
+`.eq('kind', 'fcm')` で絞って引く。
 
-| | `kind = 'webpush'` | `kind = 'fcm'` |
-| --- | --- | --- |
-| `endpoint` | プッシュサービスのURL | `fcm:` + 登録トークン |
-| `p256dh` / `auth` | 暗号化に使う鍵 | 空文字（使わない） |
-| 表示用 | `navigator.userAgent` | `Android <APIレベル>` |
+| | `kind = 'fcm'` |
+| --- | --- |
+| `endpoint` | `fcm:` + 登録トークン |
+| `p256dh` / `auth` | 空文字（Web Pushの暗号化に使っていた列。いまは使わない） |
+| 表示用 | `Android <APIレベル>` |
 
 `endpoint` に接頭辞を付けているのは、一意キー（`endpoint`）をそのまま「端末ごとに1行」の
-決まりとして使い続けるため。トークンだけを入れるとURLと見分けが付かない。
+決まりとして使い続けるため。Web Pushを撤去したいまは見分ける相手がいないが、
+列の形は変えていない。
 
-### 移行の途中は、同じ人に二重に届かないようにする
+### これから（PWAを畳むまで）
 
-**PWA版で通知をオンにしたブラウザの行は、ネイティブ版を入れても残る。** 何もしないと、
-同じお知らせがその人の端末に何通も出る（2026-09-18の予定のお知らせは、ネイティブ版を
-入れた1人へ**3通**出ていた。`fcm` 1 + `webpush` 2）。
+**PWA版（`src/`）にはまだ手を付けていない。** そのため、PWA版を開いて通知をオンにすると
+`kind = 'webpush'` の行がまた作られる。送る側が `fcm` で絞っているので**誤って送ろうとして
+失敗することはない**が、その人には何も届かない。
 
-そこで宛先を取ったあと、**同じ人が `kind = 'fcm'` の行を持っていれば、その人の
-`webpush` の行へは送らない**（`_shared/deliver.ts` の `preferNative`）。
+残っているのは次の3つ。`docs/native-app-rewrite.md` §7 のフェーズ4の続きで片付ける。
 
-- **人ごとに判断する。家族ごとにまとめてはいけない。** 片方がネイティブ版へ移り、
-  もう片方がまだPWA版という間に、後者へのお知らせまで止まってしまう。
-- **行は消さない。** ネイティブ版を消して `kind = 'fcm'` の行が無くなれば、
-  PWA版へそのまま戻る。PWA版を開き直して購読が作り直されても、同じ規則で無視される。
-- 授乳のお知らせ（次の項）は経路そのものが別なので、この絞り込みとは関係しない。
-
-PWAを畳むとき（`docs/native-app-rewrite.md` §7 のフェーズ4）に、残った `webpush` の行と
-VAPIDの鍵をまとめて片付ける。それまでは**残しておいてよい**（送られないだけで害がない）。
+| | やること |
+| --- | --- |
+| PWA版 | 通知の設定・`public/sw.js`・`src/lib/push.ts` を外す |
+| `VAPID_KEYS` / `VAPID_SUBJECT` | もう読まれないので消してよい（戻すときのために置いてある） |
+| `kind = 'webpush'` の行 | 消す。`kind` 列そのものを畳むかは、PWAを消すときに決める |
 
 ### 授乳のお知らせはサーバーを通らない
 
