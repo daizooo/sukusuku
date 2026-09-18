@@ -38,6 +38,28 @@ export interface DeliveryTarget {
   auth: string;
 }
 
+/**
+ * 同じ人がネイティブ版とPWA版の両方を登録しているとき、ネイティブ版の宛先だけを残す。
+ *
+ * 移行の途中では1人が宛先を複数持つ。ネイティブ版を入れても、PWA版で通知をオンにした
+ * ブラウザの行(kind='webpush')は残り続けるため、同じお知らせが端末に何通も出る。
+ *
+ * **人ごとに見るのが肝心で、家族ごとにまとめてはいけない。** 片方がネイティブ版へ移り、
+ * もう片方がまだPWA版という間に、後者へのお知らせまで止まってしまう。
+ *
+ * 行そのものは消さない。ネイティブ版を消して kind='fcm' の行が無くなれば、
+ * PWA版へそのまま戻る。
+ */
+export function preferNative<T extends { kind: string; user_id: string }>(
+  targets: readonly T[],
+): T[] {
+  const nativeUsers = new Set(
+    targets.filter((target) => target.kind === 'fcm').map((target) => target.user_id),
+  );
+  if (nativeUsers.size === 0) return [...targets];
+  return targets.filter((target) => target.kind === 'fcm' || !nativeUsers.has(target.user_id));
+}
+
 /** お知らせの中身。Web Push の本文(JSON)にそのまま載る形。 */
 export interface NotificationContent {
   /** お知らせの種類。予定のリマインダーだけは持たない（従来の形のまま）。 */
