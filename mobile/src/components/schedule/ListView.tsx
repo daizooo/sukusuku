@@ -70,7 +70,7 @@ function DayHeading({
 
   return (
     <View style={styles.dayHeading}>
-      <Text numberOfLines={1} style={styles.dayHeadingDate}>{formatDateHeading(date, today)}</Text>
+      <Text style={styles.dayHeadingDate}>{formatDateHeading(date, today)}</Text>
       {/* セクションの見出しと同じことを繰り返さない（「今日」の中の「今日」など）。 */}
       {relative !== sectionTitle && <Text style={styles.dayHeadingRelative}>{relative}</Text>}
       {babyAge && <Text style={styles.dayHeadingAge}>{babyAge}</Text>}
@@ -162,7 +162,7 @@ export default function ListView({
                 ))}
               <Text style={[styles.sectionTitle, { color: section.color }]}>{section.title}</Text>
             </View>
-            <Text numberOfLines={1} style={styles.sectionCount}>{section.count}件</Text>
+            <Text style={styles.sectionCount}>{section.count}件</Text>
           </View>
         );
         if (!section.collapsible) return heading;
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sectionTitle: { fontSize: 12, fontWeight: '700' },
-  sectionCount: { fontSize: 11, color: colors.textFaint },
+  sectionCount: { fontSize: 11, color: colors.textFaint, fontWeight: '500' },
   dayHeading: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -227,8 +227,8 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   dayHeadingDate: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
-  dayHeadingRelative: { fontSize: 11, color: colors.textMuted },
-  dayHeadingAge: { fontSize: 11, color: colors.textFaint },
-  note: { fontSize: 11, color: colors.textFaint, paddingHorizontal: 4, paddingBottom: 8, lineHeight: 17 },
+  dayHeadingRelative: { fontSize: 11, color: colors.textMuted, fontWeight: '500' },
+  dayHeadingAge: { fontSize: 11, color: colors.textFaint, fontWeight: '500' },
+  note: { fontSize: 11, color: colors.textFaint, paddingHorizontal: 4, paddingBottom: 8, lineHeight: 17, fontWeight: '500' },
   taskWrap: { paddingBottom: 8 },
 });

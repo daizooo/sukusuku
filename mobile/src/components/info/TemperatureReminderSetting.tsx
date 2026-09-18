@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   timeFieldDisabled: { backgroundColor: colors.background },
-  timeText: { fontSize: 14, color: colors.textSubtle },
+  timeText: { fontSize: 14, color: colors.textSubtle, fontWeight: '500' },
   timeTextDisabled: { color: colors.textFaint },
   error: { fontSize: 12, color: colors.danger, marginTop: 12 },
 });

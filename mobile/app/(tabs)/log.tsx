@@ -552,11 +552,11 @@ export default function LogScreen() {
                     onPress={() => setGrowthModal({ mode: 'edit', record })}
                     style={[styles.growthRow, index > 0 && styles.growthRowDivided]}
                   >
-                    <Text numberOfLines={1} style={styles.growthDate}>
+                    <Text style={styles.growthDate}>
                       {record.recordedDate}
                       {record.month !== null ? ` (生後${record.month}ヶ月)` : ''}
                     </Text>
-                    <Text numberOfLines={1} style={styles.growthValue}>
+                    <Text style={styles.growthValue}>
                       {record.height !== null ? `${record.height}cm` : '-'} /{' '}
                       {record.weight !== null ? `${record.weight}kg` : '-'}
                     </Text>
@@ -598,7 +598,7 @@ export default function LogScreen() {
             }
             style={styles.dateButton}
           >
-            <Text numberOfLines={1} style={styles.date}>{formatDateWithWeekday(logDate)}</Text>
+            <Text style={styles.date}>{formatDateWithWeekday(logDate)}</Text>
           </Pressable>
 
           {!isToday && (
@@ -647,7 +647,7 @@ export default function LogScreen() {
                         : '授乳の計測中'}
                   </Text>
                   {/* 出すのは記録に入る合計。何セット目かは、続きから測るときの目印になる。 */}
-                  <Text numberOfLines={1} style={styles.nursingTime}>
+                  <Text style={styles.nursingTime}>
                     {timer.setNumber}セット目・左 {formatStopwatch(timer.total.left)} / 右{' '}
                     {formatStopwatch(timer.total.right)}
                   </Text>
@@ -668,14 +668,14 @@ export default function LogScreen() {
                 <Plus size={12} color={colors.borderStrong} style={styles.recordPlus} />
                 <View style={styles.recordTitleRow}>
                   <BabyBottleIcon size={17} color={colors.milk} />
-                  <Text numberOfLines={1} style={styles.recordTitle}>授乳</Text>
+                  <Text style={styles.recordTitle}>授乳</Text>
                 </View>
                 {/* その日の回数・量・分数は出さない（判断に使うのは体重とおしっこの回数）。
                     代わりに、次の授乳で使える搾乳ストックの残りを出す。表示中の日だけでは
                     求まらないため、日付の送りとは関わらず常に今の残りになる。 */}
-                <Text numberOfLines={1} style={styles.stockValue}>ストック・{pumpedStockMl(pumpedBatches)}ml</Text>
+                <Text style={styles.stockValue}>ストック・{pumpedStockMl(pumpedBatches)}ml</Text>
                 {nextBreastSide && !timer.hasSession && (
-                  <Text numberOfLines={1} style={styles.recordHint}>次は{getSideLabel(nextBreastSide)}から</Text>
+                  <Text style={styles.recordHint}>次は{getSideLabel(nextBreastSide)}から</Text>
                 )}
               </Pressable>
 
@@ -687,12 +687,12 @@ export default function LogScreen() {
                 <Plus size={12} color={colors.borderStrong} style={styles.recordPlus} />
                 <View style={styles.recordTitleRow}>
                   <Droplet size={17} color={colors.diaper} />
-                  <Text numberOfLines={1} style={styles.recordTitle}>おむつ</Text>
+                  <Text style={styles.recordTitle}>おむつ</Text>
                 </View>
                 {/* おしっことうんちは見たいことが別（水分が足りているか／お通じ）なので、
                     合わせた回数ではなくそれぞれの回数を出す。「両方」の記録は両方に数える。 */}
-                <Text numberOfLines={1} style={styles.recordValue}>おしっこ {summary.diaper.peeCount}回</Text>
-                <Text numberOfLines={1} style={styles.recordValue}>うんち {summary.diaper.poopCount}回</Text>
+                <Text style={styles.recordValue}>おしっこ {summary.diaper.peeCount}回</Text>
+                <Text style={styles.recordValue}>うんち {summary.diaper.poopCount}回</Text>
               </Pressable>
 
               {/* 体温はその子の平熱だけを出す。日ごとの平均や最高は出さない。 */}
@@ -704,9 +704,9 @@ export default function LogScreen() {
                 <Plus size={12} color={colors.borderStrong} style={styles.recordPlus} />
                 <View style={styles.recordTitleRow}>
                   <Thermometer size={17} color={colors.temperature} />
-                  <Text numberOfLines={1} style={styles.recordTitle}>体温</Text>
+                  <Text style={styles.recordTitle}>体温</Text>
                 </View>
-                <Text numberOfLines={1} style={styles.recordValue}>{temperatureSummaryText}</Text>
+                <Text style={styles.recordValue}>{temperatureSummaryText}</Text>
               </Pressable>
             </View>
 
@@ -733,7 +733,7 @@ export default function LogScreen() {
               <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
             }
           >
-            <Text numberOfLines={1} style={styles.listHeading}>
+            <Text style={styles.listHeading}>
               {formatDateWithWeekday(logDate)}の記録 {logs.length}件
             </Text>
             {isLoading && logs.length === 0 ? (
@@ -884,7 +884,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   growthRowDivided: { borderTopWidth: 1, borderTopColor: colors.background },
-  growthDate: { fontSize: 12, color: colors.textMuted },
+  growthDate: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
   growthValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
 
   header: {
@@ -900,7 +900,7 @@ const styles = StyleSheet.create({
   },
   arrow: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   arrowDisabled: { opacity: 0.3 },
-  arrowText: { fontSize: 24, color: colors.textMuted, lineHeight: 26 },
+  arrowText: { fontSize: 24, color: colors.textMuted, lineHeight: 26, fontWeight: '500' },
   dateGroup: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   dateButton: { paddingVertical: 4 },
   date: { fontSize: 15, fontWeight: '700', color: colors.text },
@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   nursingTitle: { fontSize: 12, fontWeight: '700', color: colors.milkText },
-  nursingTime: { fontSize: 11, color: colors.milk, marginTop: 2 },
+  nursingTime: { fontSize: 11, color: colors.milk, marginTop: 2, fontWeight: '500' },
   nursingOpen: {
     fontSize: 12,
     fontWeight: '700',
@@ -970,8 +970,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  pastDayNote: { fontSize: 11, color: colors.textMuted, lineHeight: 17 },
-  unsent: { fontSize: 11, color: colors.milkText },
+  pastDayNote: { fontSize: 11, color: colors.textMuted, lineHeight: 17, fontWeight: '500' },
+  unsent: { fontSize: 11, color: colors.milkText, fontWeight: '500' },
   error: { fontSize: 11, color: colors.danger },
 
   list: { paddingHorizontal: 12, paddingBottom: 24, gap: 8 },

@@ -148,7 +148,7 @@ function TemperatureLogModalBody({
               selectTextOnFocus
               accessibilityLabel="体温"
             />
-            <Text numberOfLines={1} style={styles.unit}>℃</Text>
+            <Text style={styles.unit}>℃</Text>
           </View>
           <StepButton label="＋" accessibilityLabel="0.1℃上げる" onPress={() => step(CELSIUS_STEP)} />
         </View>
@@ -205,14 +205,14 @@ function Yardstick({
     <View style={styles.yardstick}>
       <View style={[styles.yardstickBox, styles.normalBox]}>
         <Text style={styles.normalLabel}>正常範囲</Text>
-        <Text numberOfLines={1} style={styles.normalValue}>{formatNormalRange()}</Text>
+        <Text style={styles.normalValue}>{formatNormalRange()}</Text>
       </View>
       <View style={[styles.yardstickBox, styles.baselineBox]}>
         <Text style={styles.baselineLabel}>{babyName ? `${babyName}の平熱` : '平熱'}</Text>
         {baseline ? (
-          <Text numberOfLines={1} style={styles.baselineValue}>
+          <Text style={styles.baselineValue}>
             {formatCelsius(baseline.celsius)}
-            <Text numberOfLines={1} style={styles.baselineCount}> 直近{baseline.count}回</Text>
+            <Text style={styles.baselineCount}> 直近{baseline.count}回</Text>
           </Text>
         ) : (
           // 平熱が出るまでは、何回ぶん足りないのかではなく「これから分かる」ことを伝える。
@@ -333,9 +333,9 @@ const styles = StyleSheet.create({
     minWidth: 110,
     padding: 0,
   },
-  unit: { fontSize: 16, color: colors.textMuted },
-  note: { fontSize: 11, color: colors.textFaint, marginTop: 6 },
-  errorNote: { fontSize: 11, color: colors.danger, marginTop: 6 },
+  unit: { fontSize: 16, color: colors.textMuted, fontWeight: '500' },
+  note: { fontSize: 11, color: colors.textFaint, marginTop: 6, fontWeight: '500' },
+  errorNote: { fontSize: 11, color: colors.danger, marginTop: 6, fontWeight: '500' },
 
   advice: {
     borderWidth: 1,

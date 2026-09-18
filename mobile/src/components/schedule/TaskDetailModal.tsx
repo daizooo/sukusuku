@@ -218,9 +218,9 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   detailLabel: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
-  detailLabelText: { fontSize: 12, color: colors.textMuted },
+  detailLabelText: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
   detailValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
-  detailSub: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  detailSub: { fontSize: 12, color: colors.textMuted, marginTop: 2, fontWeight: '500' },
 
   noteCard: {
     marginTop: 16,

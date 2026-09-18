@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     color: colors.textSubtle,
     backgroundColor: colors.surface,
   },
-  inputText: { fontSize: 14, color: colors.textSubtle },
+  inputText: { fontSize: 14, color: colors.textSubtle, fontWeight: '500' },
   hint: { fontSize: 10, color: colors.textFaint, marginTop: 4 },
   units: {
     flexDirection: 'row',

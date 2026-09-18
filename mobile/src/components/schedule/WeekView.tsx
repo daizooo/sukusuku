@@ -71,7 +71,6 @@ export default function WeekView({
                 </Text>
               </View>
               <Text
-                numberOfLines={1}
                 style={[
                   styles.weekday,
                   day.getDay() === 0 && styles.sunday,

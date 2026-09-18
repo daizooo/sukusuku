@@ -789,5 +789,5 @@ const styles = StyleSheet.create({
   doneToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 },
   doneToggleText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   clearDone: { paddingHorizontal: 8, paddingVertical: 4 },
-  clearDoneText: { fontSize: 11, color: colors.textFaint },
+  clearDoneText: { fontSize: 11, color: colors.textFaint, fontWeight: '500' },
 });

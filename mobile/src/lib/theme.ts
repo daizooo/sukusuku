@@ -31,6 +31,8 @@ export const colors = {
   navActive: '#3b82f6', // blue-500
   navInactive: '#6b7280', // gray-500
   navActiveText: '#2563eb', // blue-600（切り替えで選んでいる方の文字）
+  selectedRing: '#60a5fa', // blue-400（カレンダーで選んでいる日の枠）
+  selectedSurface: '#eff6ffb3', // blue-50/70（同じく地の色）
   dragBorder: '#93c5fd', // blue-300（長押しで持ち上げている枠）
   borderStrongSoft: '#e5e7ebcc', // gray-200/80（切り替えの下地）
 

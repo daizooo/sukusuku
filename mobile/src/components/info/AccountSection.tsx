@@ -169,15 +169,15 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
       ) : (
         <View style={styles.gap16}>
           <View style={styles.row}>
-            <Text numberOfLines={1} style={styles.rowLabel}>メールアドレス</Text>
+            <Text style={styles.rowLabel}>メールアドレス</Text>
             <Text style={styles.rowValueSmall}>{email || '未取得'}</Text>
           </View>
 
           <View>
             <View style={styles.row}>
-              <Text numberOfLines={1} style={styles.rowLabel}>あなたの役割</Text>
+              <Text style={styles.rowLabel}>あなたの役割</Text>
               {!isEditing && (
-                <Text numberOfLines={1} style={styles.rowValue}>{me?.role ? ROLE_LABEL[me.role] : '未設定'}</Text>
+                <Text style={styles.rowValue}>{me?.role ? ROLE_LABEL[me.role] : '未設定'}</Text>
               )}
             </View>
             {isEditing && (
@@ -204,8 +204,8 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
 
           <View>
             <View style={styles.row}>
-              <Text numberOfLines={1} style={styles.rowLabel}>お名前</Text>
-              {!isEditing && <Text numberOfLines={1} style={styles.rowValue}>{me?.name || '未設定'}</Text>}
+              <Text style={styles.rowLabel}>お名前</Text>
+              {!isEditing && <Text style={styles.rowValue}>{me?.name || '未設定'}</Text>}
             </View>
             {isEditing && (
               <TextInput
@@ -233,11 +233,11 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
 
           {partners.length > 0 && (
             <View>
-              <Text numberOfLines={1} style={styles.rowLabel}>パートナー</Text>
+              <Text style={styles.rowLabel}>パートナー</Text>
               <View style={styles.partners}>
                 {partners.map((partner) => (
                   <View key={partner.id} style={styles.partner}>
-                    <Text numberOfLines={1} style={styles.partnerName}>{partner.name || '名前未設定'}</Text>
+                    <Text style={styles.partnerName}>{partner.name || '名前未設定'}</Text>
                     <View style={styles.partnerRole}>
                       <Text style={styles.partnerRoleText}>
                         {partner.role ? ROLE_LABEL[partner.role] : '役割未設定'}
@@ -250,7 +250,7 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
           )}
 
           <View>
-            <Text numberOfLines={1} style={styles.rowLabel}>家族の招待コード</Text>
+            <Text style={styles.rowLabel}>家族の招待コード</Text>
             <View style={styles.inviteRow}>
               <Text style={styles.inviteCode}>{familyId}</Text>
               <Pressable
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 4,
   },
-  rowLabel: { fontSize: 12, color: colors.textMuted },
+  rowLabel: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
   rowValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
   rowValueSmall: { flex: 1, fontSize: 12, fontWeight: '500', color: colors.textSubtle, textAlign: 'right' },
 
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  partnerName: { fontSize: 12, color: colors.textSubtle },
+  partnerName: { fontSize: 12, color: colors.textSubtle, fontWeight: '500' },
   partnerRole: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     padding: 10,
     marginTop: 6,
   },
-  inviteCode: { flex: 1, fontSize: 10, color: colors.textSubtle },
+  inviteCode: { flex: 1, fontSize: 10, color: colors.textSubtle, fontWeight: '500' },
   copyButton: { padding: 6, borderRadius: 8 },
   inviteNote: { fontSize: 10, color: colors.textFaint, marginTop: 6, lineHeight: 15 },
 

@@ -193,7 +193,7 @@ function FieldValue({ fieldKey, value }: { fieldKey?: ProfileFieldKey; value: st
     const date = parseDateString(value);
     // PWA版は toLocaleDateString('ja-JP') なので「2026/8/17」の形で出る。同じにする。
     return (
-      <Text numberOfLines={1} style={styles.readValue}>
+      <Text style={styles.readValue}>
         {date ? `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}` : value}
       </Text>
     );
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   readRowDivided: { borderTopWidth: 1, borderTopColor: colors.background },
-  readLabel: { fontSize: 14, color: colors.textMuted },
+  readLabel: { fontSize: 14, color: colors.textMuted, fontWeight: '500' },
   readValues: { flex: 1, alignItems: 'flex-end', gap: 2 },
   readValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle, textAlign: 'right' },
   readPhone: { fontSize: 14, fontWeight: '500', color: colors.navActiveText },
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
     color: colors.textSubtle,
     backgroundColor: colors.surface,
   },
-  inputText: { fontSize: 14, color: colors.textSubtle },
+  inputText: { fontSize: 14, color: colors.textSubtle, fontWeight: '500' },
   inputPlaceholder: { fontSize: 14, color: colors.textFaint },
   valueList: { gap: 6 },
   valueRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },

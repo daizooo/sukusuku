@@ -67,7 +67,7 @@ export default function LogTimeline({ logs, memberLabel, onSelect }: LogTimeline
           >
             <View style={styles.titleRow}>
               <Text style={styles.title}>{getLogTitle(log)}</Text>
-              <Text numberOfLines={1} style={styles.time}>
+              <Text style={styles.time}>
                 {getLogTimeText(log)}
               </Text>
             </View>
@@ -80,7 +80,7 @@ export default function LogTimeline({ logs, memberLabel, onSelect }: LogTimeline
               </Text>
               <View style={styles.author}>
                 <User size={11} color={colors.textFaint} />
-                <Text numberOfLines={1} style={styles.authorText}>
+                <Text style={styles.authorText}>
                   {memberLabel(log.createdBy)}が記録
                 </Text>
               </View>
@@ -106,7 +106,6 @@ function Badges({ log }: { log: CareLog }) {
           <View key={badge.text} style={[styles.badge, { backgroundColor: tone.background }]}>
             {badge.swatch && <View style={[styles.swatch, { backgroundColor: badge.swatch }]} />}
             <Text
-              numberOfLines={1}
               style={[styles.badgeText, { color: tone.text }, tone.bold && styles.badgeTextBold]}
             >
               {badge.text}
@@ -116,7 +115,7 @@ function Badges({ log }: { log: CareLog }) {
       })}
       {unsent && (
         <View style={[styles.badge, { backgroundColor: colors.neutralSurface }]}>
-          <Text numberOfLines={1} style={[styles.badgeText, { color: colors.neutralBadgeText }]}>
+          <Text style={[styles.badgeText, { color: colors.neutralBadgeText }]}>
             未送信
           </Text>
         </View>
@@ -173,12 +172,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  badgeText: { fontSize: 11 },
+  badgeText: { fontSize: 11, fontWeight: '500' },
   badgeTextBold: { fontWeight: '700' },
   swatch: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: colors.borderStrong },
 
   footer: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 },
   note: { flex: 1, fontSize: 12, color: colors.textSubtle },
   author: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  authorText: { fontSize: 11, color: colors.textFaint },
+  authorText: { fontSize: 11, color: colors.textFaint, fontWeight: '500' },
 });

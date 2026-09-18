@@ -304,33 +304,33 @@ export default function HomeScreen() {
           <View style={styles.heroAge}>
             {ageInDays < 0 ? (
               <>
-                <Text numberOfLines={1} style={styles.heroUnitSmall}>誕生まで あと</Text>
-                <Text numberOfLines={1} style={styles.heroNumber}>{Math.abs(ageInDays)}</Text>
-                <Text numberOfLines={1} style={styles.heroUnit}>日</Text>
+                <Text style={styles.heroUnitSmall}>誕生まで あと</Text>
+                <Text style={styles.heroNumber}>{Math.abs(ageInDays)}</Text>
+                <Text style={styles.heroUnit}>日</Text>
               </>
             ) : ageInMonths.months > 0 ? (
               // 1ヶ月を過ぎたら「◯ヶ月◯日」のほうが月齢の目安として通じるため、
               // こちらを主表示にして、通算の日数は補足に回す。
               <>
-                <Text numberOfLines={1} style={styles.heroUnitSmall}>生後</Text>
-                <Text numberOfLines={1} style={styles.heroNumberSmall}>{ageInMonths.months}</Text>
-                <Text numberOfLines={1} style={styles.heroUnit}>ヶ月</Text>
-                <Text numberOfLines={1} style={styles.heroNumberSmall}>{ageInMonths.days}</Text>
-                <Text numberOfLines={1} style={styles.heroUnit}>日</Text>
+                <Text style={styles.heroUnitSmall}>生後</Text>
+                <Text style={styles.heroNumberSmall}>{ageInMonths.months}</Text>
+                <Text style={styles.heroUnit}>ヶ月</Text>
+                <Text style={styles.heroNumberSmall}>{ageInMonths.days}</Text>
+                <Text style={styles.heroUnit}>日</Text>
               </>
             ) : (
               <>
-                <Text numberOfLines={1} style={styles.heroUnitSmall}>生後</Text>
-                <Text numberOfLines={1} style={styles.heroNumber}>{ageInDays}</Text>
-                <Text numberOfLines={1} style={styles.heroUnit}>日目</Text>
+                <Text style={styles.heroUnitSmall}>生後</Text>
+                <Text style={styles.heroNumber}>{ageInDays}</Text>
+                <Text style={styles.heroUnit}>日目</Text>
               </>
             )}
           </View>
           {ageInDays >= 0 && ageInMonths.months > 0 && (
-            <Text numberOfLines={1} style={styles.heroSub}>( 生後 {ageInDays}日目 )</Text>
+            <Text style={styles.heroSub}>( 生後 {ageInDays}日目 )</Text>
           )}
 
-          <Text numberOfLines={1} style={styles.heroBirth}>
+          <Text style={styles.heroBirth}>
             お誕生日:{' '}
             {birthDate
               ? `${birthDate.getFullYear()}年${birthDate.getMonth() + 1}月${birthDate.getDate()}日`
@@ -441,17 +441,17 @@ export default function HomeScreen() {
                         { backgroundColor: label.background, borderColor: label.border },
                       ]}
                     >
-                      <Text numberOfLines={1} style={[styles.taskLabelText, { color: label.text }]}>{task.label}</Text>
+                      <Text style={[styles.taskLabelText, { color: label.text }]}>{task.label}</Text>
                     </View>
                   </View>
 
                   <View style={styles.taskMeta}>
                     <View style={styles.taskMetaItem}>
                       <Calendar size={12} color={colors.navActive} />
-                      <Text numberOfLines={1} style={styles.taskDate}>{task.targetDate}</Text>
+                      <Text style={styles.taskDate}>{task.targetDate}</Text>
                       {/* 何日後かは予定タブの一覧と同じ表記に揃える。 */}
                       {task.targetDateObj && (
-                        <Text numberOfLines={1} style={styles.taskRelative}>
+                        <Text style={styles.taskRelative}>
                           {formatRelativeDay(task.targetDateObj, today)}
                         </Text>
                       )}
@@ -521,6 +521,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginTop: 14,
     fontSize: 11,
+    fontWeight: '500',
     color: colors.primaryText,
     backgroundColor: 'rgba(0,0,0,0.1)',
     borderWidth: 1,
@@ -588,8 +589,8 @@ const styles = StyleSheet.create({
   taskMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 4 },
   taskMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
   taskDate: { fontSize: 12, fontWeight: '500', color: colors.navActive },
-  taskRelative: { fontSize: 12, color: colors.textMuted },
-  taskMetaText: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
+  taskRelative: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
+  taskMetaText: { fontSize: 12, color: colors.textMuted, flexShrink: 1, fontWeight: '500' },
 
   notice: { fontSize: 12, color: colors.textMuted, lineHeight: 18 },
 });

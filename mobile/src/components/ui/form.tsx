@@ -59,7 +59,7 @@ export function Segmented<T extends string>({
             onPress={() => onChange(option.value)}
             style={[styles.segment, selected && styles.segmentSelected]}
           >
-            <Text numberOfLines={1} style={[styles.segmentText, selected && styles.segmentTextSelected]}>
+            <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
               {option.label}
             </Text>
           </Pressable>
@@ -111,7 +111,6 @@ export function OptionGrid<T extends string | number>({
                   ]}
                 >
                   <Text
-                    numberOfLines={1}
                     style={[styles.gridItemText, selected && { color: tone.color, fontWeight: '700' }]}
                   >
                     {option.label}
@@ -213,7 +212,7 @@ export function DeleteButton({ onPress }: { onPress: () => void }) {
 const styles = StyleSheet.create({
   fieldLabel: { fontSize: 12, fontWeight: '700', color: colors.textSubtle, marginBottom: 6 },
   hint: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
-  hintText: { fontSize: 12, lineHeight: 18 },
+  hintText: { fontSize: 12, lineHeight: 18, fontWeight: '500' },
   segmented: {
     flexDirection: 'row',
     backgroundColor: colors.neutralSurface,
@@ -223,7 +222,7 @@ const styles = StyleSheet.create({
   },
   segment: { flex: 1, borderRadius: 8, paddingVertical: 9, alignItems: 'center' },
   segmentSelected: { backgroundColor: colors.surface },
-  segmentText: { fontSize: 13, color: colors.textMuted },
+  segmentText: { fontSize: 13, color: colors.textMuted, fontWeight: '500' },
   segmentTextSelected: { color: colors.text, fontWeight: '700' },
   grid: { flexDirection: 'row' },
   gridItem: { flex: 1, padding: 2 },
@@ -235,7 +234,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
   },
-  gridItemText: { fontSize: 13, color: colors.textSubtle },
+  gridItemText: { fontSize: 13, color: colors.textSubtle, fontWeight: '500' },
   input: {
     borderWidth: 1,
     borderColor: colors.borderStrong,

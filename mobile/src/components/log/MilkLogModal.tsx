@@ -527,7 +527,7 @@ function PumpedBatchPicker({
     <View>
       <View style={styles.pickerHeader}>
         <FieldLabel>飲ませる搾乳を選ぶ</FieldLabel>
-        <Text numberOfLines={1} style={styles.stock}>残り {stockMl}ml</Text>
+        <Text style={styles.stock}>残り {stockMl}ml</Text>
       </View>
 
       {discardedNotice}
@@ -543,11 +543,11 @@ function PumpedBatchPicker({
                 onPress={() => onToggle(batch.id)}
                 style={styles.batch}
               >
-                <Text numberOfLines={1} style={[styles.batchTime, selected && styles.batchTextSelected]}>
+                <Text style={[styles.batchTime, selected && styles.batchTextSelected]}>
                   {selected ? '✓ ' : ''}
                   {formatBatchTime(batch)}
                 </Text>
-                <Text numberOfLines={1} style={[styles.batchAmount, selected && styles.batchTextSelected]}>
+                <Text style={[styles.batchAmount, selected && styles.batchTextSelected]}>
                   {batch.amountMl}ml
                 </Text>
               </Pressable>
@@ -808,7 +808,7 @@ function NursingSetTimer({
 
       {hasSession ? (
         <>
-          <Text numberOfLines={1} style={styles.stopwatchSummary}>
+          <Text style={styles.stopwatchSummary}>
             左{recordedLeft}分・右{recordedRight}分で記録します
           </Text>
           <Text style={styles.note}>
@@ -842,7 +842,7 @@ function NursingSetTimer({
           >
             <Text style={styles.stepperText}>−</Text>
           </Pressable>
-          <Text numberOfLines={1} style={styles.stepperValue}>{untrackedSets}</Text>
+          <Text style={styles.stepperValue}>{untrackedSets}</Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="測る前に済ませたセットを1つ増やす"
@@ -863,7 +863,7 @@ const styles = StyleSheet.create({
   customMinutes: { marginTop: 6 },
 
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  stock: { fontSize: 11, color: colors.textMuted, marginBottom: 6 },
+  stock: { fontSize: 11, color: colors.textMuted, marginBottom: 6, fontWeight: '500' },
   batchList: { gap: 6 },
   batchListSpaced: { marginTop: 8 },
   batchRow: {
@@ -903,9 +903,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  discardedText: { flex: 1, fontSize: 11, color: colors.textSubtle },
+  discardedText: { flex: 1, fontSize: 11, color: colors.textSubtle, fontWeight: '500' },
   undoText: { fontSize: 11, fontWeight: '700', color: colors.pumpingText },
-  batchTime: { fontSize: 14, color: colors.textSubtle },
+  batchTime: { fontSize: 14, color: colors.textSubtle, fontWeight: '500' },
   batchAmount: { fontSize: 14, fontWeight: '700', color: colors.textSubtle },
   batchTextSelected: { color: colors.pumpingText },
   batchSummary: { marginTop: 8, fontSize: 12, fontWeight: '700', color: colors.pumpingText },
@@ -977,8 +977,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.milkBorder,
   },
   flex: { flex: 1 },
-  untrackedLabel: { fontSize: 11, color: colors.textMuted },
-  untrackedNote: { fontSize: 10, color: colors.textFaint, marginTop: 1 },
+  untrackedLabel: { fontSize: 11, color: colors.textMuted, fontWeight: '500' },
+  untrackedNote: { fontSize: 10, color: colors.textFaint, marginTop: 1, fontWeight: '500' },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   stepperButton: {
     width: 30,
