@@ -32,6 +32,10 @@ export const supabase: SupabaseDb = createClient<Database>(supabaseUrl, supabase
     persistSession: true,
     // URLからセッションを拾うのはWebのOAuthリダイレクト用。ネイティブでは要らない。
     detectSessionInUrl: false,
+    // サインアップ確認メールのリンクは `?code=` を付けてアプリへ戻ってくる（PKCE）。
+    // 既定の implicit だと `#access_token=…` の断片で戻るため、ディープリンクでは拾えない
+    // （mobile/app/auth/confirm.tsx が受けて exchangeCodeForSession する）。
+    flowType: 'pkce',
     lock: processLock,
   },
 });
