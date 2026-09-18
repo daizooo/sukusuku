@@ -3,7 +3,7 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Baby, Loader2 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, createPasswordResetRequestClient } from '@/lib/supabase/client';
 
 type Mode = 'signin' | 'signup' | 'reset';
 
@@ -76,8 +76,10 @@ export default function LoginPage() {
           );
         }
       } else {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/auth/confirm?next=/auth/reset-password`,
+        // 別クライアント(暗黙的フロー)で送る理由は src/lib/supabase/client.ts 参照。
+        // /auth/confirm(PKCE用の受け口)は経由せず、直接 /auth/reset-password へ。
+        const { error } = await createPasswordResetRequestClient().auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth/reset-password`,
         });
         if (error) {
           setErrorMessage(error.message);
