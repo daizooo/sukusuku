@@ -33,6 +33,11 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Firebase（通知）の設定。プロジェクトのIDや鍵が入るのでコミットしない。
+# CIは Actions の Secrets (GOOGLE_SERVICES_JSON) から書き出す
+# （.github/workflows/mobile-apk.yml）。手元では Firebase コンソールから落として置く。
+google-services.json
+
 # typescript
 *.tsbuildinfo
 

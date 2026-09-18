@@ -58,6 +58,44 @@ jobs:
 
       - run: npm run typecheck
 
+      # 通知(FCM)の設定。app.json が android.googleServicesFile として要求するので、
+      # 無いと prebuild も Gradle も通らない。中身はプロジェクトのIDと鍵なので
+      # コミットせず（mobile/.gitignore）、Secrets から書き出す。
+      #
+      # 未登録でもビルドそのものは確かめられるようにしたいので、そのときは
+      # 形だけそろえた仮のものを置く。これで作った .apk では通知を受け取れないため、
+      # 配る手前の確認（下の「必要な設定があるか確かめる」）で止める。
+      - name: google-services.json を置く
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > google-services.json
+          else
+            echo '::warning::GOOGLE_SERVICES_JSON が未登録のため、仮の google-services.json でビルドします（通知は受け取れません）。'
+            cat > google-services.json <<'PLACEHOLDER'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "sukusuku-placeholder",
+              "storage_bucket": "sukusuku-placeholder.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                  "android_client_info": { "package_name": "com.sukusuku.app" }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "AIzaSyPlaceholderPlaceholderPlaceholder00" }],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          PLACEHOLDER
+          fi
+
       # android/ はコミットしていない（mobile/.gitignore）ので毎回生成する。
       # modules/nursing-alarm（前面サービス）は autolinking で自動的に組み込まれる。
       - run: npx expo prebuild --platform android --no-install
@@ -71,18 +109,26 @@ jobs:
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
         run: ./gradlew assembleRelease --no-daemon
 
-      # EXPO_PUBLIC_* はビルド時にJSへ埋め込まれる。未設定のまま作った .apk は
-      # 起動した瞬間に落ちるだけなので、配らずにここで止める。ビルドが通るかどうかは
+      # EXPO_PUBLIC_* はビルド時にJSへ埋め込まれ、google-services.json は通知の宛先を
+      # 決める。どちらも未設定のまま作った .apk は起動した瞬間に落ちる／通知を
+      # 受け取れないだけなので、配らずにここで止める。ビルドが通るかどうかは
       # 設定が無くても分かるので、確認はビルドの後に置いている。
       # 値はリポジトリの Settings > Secrets and variables > Actions に登録する
-      # （Web版の .env.local と同じ Supabase プロジェクトの URL と anon key）。
-      - name: Supabaseの設定があるか確かめる
+      # （Web版の .env.local と同じ Supabase プロジェクトの URL と anon key、
+      #  および Firebase コンソールから落とした google-services.json の中身。
+      #  手順は docs/notifications.md §11）。
+      - name: 必要な設定があるか確かめる
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           if [ -z "$EXPO_PUBLIC_SUPABASE_URL" ] || [ -z "$EXPO_PUBLIC_SUPABASE_ANON_KEY" ]; then
             echo '::error::ビルドは通りましたが、EXPO_PUBLIC_SUPABASE_URL と EXPO_PUBLIC_SUPABASE_ANON_KEY が Actions の Secrets に未登録のため .apk を配りません。'
+            exit 1
+          fi
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo '::error::ビルドは通りましたが、GOOGLE_SERVICES_JSON が Actions の Secrets に未登録のため .apk を配りません（通知を受け取れません。docs/notifications.md §11）。'
             exit 1
           fi
 
