@@ -390,6 +390,19 @@ const syncWatcher = () => {
 };
 
 /**
+ * 記録前の授乳が端末に残っているか（計測中・測った時間・測っていないセットのいずれか）。
+ *
+ * PWA版の useHasNursingSession と同じ判断だが、こちらは描画とは関係なく
+ * 「いまどうか」を1度だけ知りたい側（notificationCleanup.ts）から呼ぶのでフックにしない。
+ * 控えの読み戻しが済んでいなければ待つ。まだなら「計測なし」と答えてしまい、
+ * 出ている授乳のお知らせを誤って消すことになる。
+ */
+export const hasNursingSession = async (): Promise<boolean> => {
+  await hydrate();
+  return hasSession(getSnapshot());
+};
+
+/**
  * 端末に控えた計測を読み戻し、前面サービスへ預け直す。アプリ全体で1回だけ動かす。
  *
  * 前面サービスは機種によっては落とされることがあるので、前面に戻るたびに預け直す。
