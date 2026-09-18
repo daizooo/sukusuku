@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Baby, BellRing, Edit2, ListPlus, Phone, Save, User } from 'lucide-react-native';
+import { Baby, Edit2, ListPlus, Phone, Save, User } from 'lucide-react-native';
 import type { ProfileField, UserProfile } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
@@ -20,6 +20,7 @@ import {
   type TemperatureReminderSettings,
 } from '@/lib/api/temperatureReminderSettings';
 import FieldSection from '@/components/info/FieldSection';
+import NotificationSetting from '@/components/info/NotificationSetting';
 import FeedingIntervalSetting from '@/components/info/FeedingIntervalSetting';
 import TemperatureReminderSetting from '@/components/info/TemperatureReminderSetting';
 import AccountSection from '@/components/info/AccountSection';
@@ -27,9 +28,9 @@ import AccountSection from '@/components/info/AccountSection';
 // 設定タブ。Web版の `src/components/sukusuku/tabs/InfoTab.tsx` を
 // React Nativeに置き換えたもの。出す項目・並び・文言は同じにしてある。
 //
-// Web版と違うのは「通知」の枠だけ。あちらはWeb Pushの購読を切り替える枠だが、
-// こちらの通知はフェーズ3でFCMへ移すまで作らないので、その旨だけを出す
-// （docs/native-app-rewrite.md §7）。
+// 「通知」の枠も同じ位置・同じ文言で、この端末で受け取るかどうかを切り替える。
+// 受け取り方だけがWeb Push購読からFCMの登録トークンへ変わっている
+// （src/components/info/NotificationSetting.tsx）。
 //
 // 設定タブは画面全体がスクロールしてよい（ルートの CLAUDE.md の「画面の作り方」の例外）。
 
@@ -195,22 +196,10 @@ export default function InfoScreen() {
           />
         ))}
 
-        {/* 通知。Web版はここでこの端末のWeb Pushを切り替えるが、ネイティブ側の通知は
-            フェーズ3でFCMへ移すまで作らない。授乳の計測中のお知らせだけは
-            前面サービスから出ているので、それとは別ものだと分かるように書いておく。 */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <BellRing size={18} color={colors.navActive} />
-            <Text style={styles.sectionTitle}>通知</Text>
-          </View>
-          <Text style={styles.sectionNote}>
-            予定・授乳の目安・検温のお知らせは、いまはPWA版の設定タブでオンにしてください。
-            授乳の計測中のお知らせだけは、このアプリがそのまま出します。
-          </Text>
-        </View>
-
         {familyId && (
           <>
+            <NotificationSetting familyId={familyId} userId={session.user.id} />
+
             <FeedingIntervalSetting
               familyId={familyId}
               settings={feedingSettings}
@@ -258,23 +247,4 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   saveText: { fontSize: 14, fontWeight: '700', color: colors.primaryText },
-
-  section: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingBottom: 8,
-    marginBottom: 16,
-  },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle },
-  sectionNote: { fontSize: 12, color: colors.textMuted, lineHeight: 18 },
 });
