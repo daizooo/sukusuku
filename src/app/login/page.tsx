@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Baby, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
-type Mode = 'signin' | 'signup';
+type Mode = 'signin' | 'signup' | 'reset';
 
 function ConfirmResultBanner() {
   const searchParams = useSearchParams();
@@ -57,7 +57,7 @@ export default function LoginPage() {
         }
         router.push('/');
         router.refresh();
-      } else {
+      } else if (mode === 'signup') {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -75,6 +75,17 @@ export default function LoginPage() {
             '確認メールを送信しました。メール内のリンクから登録を完了してください。別の端末やメールアプリ内のブラウザでリンクを開いた場合は、確認後にこの画面からログインしてください。',
           );
         }
+      } else {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth/confirm?next=/auth/reset-password`,
+        });
+        if (error) {
+          setErrorMessage(error.message);
+          return;
+        }
+        // メール未登録でもエラーにはしない(登録済みメールアドレスの有無が外部から
+        // 分かってしまうのを防ぐため。Supabase側もこの想定で成功を返す)。
+        setInfoMessage('パスワード再設定用のメールを送信しました。メール内のリンクから新しいパスワードを設定してください。');
       }
     } finally {
       setIsLoading(false);
@@ -96,22 +107,30 @@ export default function LoginPage() {
           <ConfirmResultBanner />
         </Suspense>
 
-        <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
-          <button
-            type="button"
-            onClick={() => setMode('signin')}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition ${mode === 'signin' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
-          >
-            ログイン
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('signup')}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition ${mode === 'signup' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
-          >
-            新規登録
-          </button>
-        </div>
+        {mode !== 'reset' && (
+          <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
+            <button
+              type="button"
+              onClick={() => setMode('signin')}
+              className={`flex-1 py-1.5 text-xs font-medium rounded-md transition ${mode === 'signin' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+            >
+              ログイン
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('signup')}
+              className={`flex-1 py-1.5 text-xs font-medium rounded-md transition ${mode === 'signup' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+            >
+              新規登録
+            </button>
+          </div>
+        )}
+
+        {mode === 'reset' && (
+          <p className="text-xs text-gray-500 mb-4">
+            登録したメールアドレスへ、パスワード再設定用のリンクを送ります。
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -125,18 +144,34 @@ export default function LoginPage() {
               placeholder="you@example.com"
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">パスワード</label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg p-2.5 text-sm outline-none focus:border-blue-500"
-              placeholder="6文字以上"
-            />
-          </div>
+          {mode !== 'reset' && (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">パスワード</label>
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm outline-none focus:border-blue-500"
+                placeholder="6文字以上"
+              />
+            </div>
+          )}
+
+          {mode === 'signin' && (
+            <button
+              type="button"
+              onClick={() => {
+                setErrorMessage('');
+                setInfoMessage('');
+                setMode('reset');
+              }}
+              className="block text-xs text-blue-600 hover:text-blue-700 transition"
+            >
+              パスワードをお忘れですか？
+            </button>
+          )}
 
           {errorMessage && <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg p-2.5">{errorMessage}</p>}
           {infoMessage && <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg p-2.5">{infoMessage}</p>}
@@ -146,8 +181,30 @@ export default function LoginPage() {
             disabled={isLoading}
             className="w-full bg-blue-500 text-white font-medium py-2.5 rounded-xl shadow-sm hover:bg-blue-600 active:bg-blue-700 transition disabled:bg-gray-300 flex items-center justify-center"
           >
-            {isLoading ? <Loader2 size={18} className="animate-spin" /> : mode === 'signin' ? 'ログイン' : '登録する'}
+            {isLoading ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : mode === 'signin' ? (
+              'ログイン'
+            ) : mode === 'signup' ? (
+              '登録する'
+            ) : (
+              '再設定メールを送る'
+            )}
           </button>
+
+          {mode === 'reset' && (
+            <button
+              type="button"
+              onClick={() => {
+                setErrorMessage('');
+                setInfoMessage('');
+                setMode('signin');
+              }}
+              className="w-full text-center text-xs text-gray-400 py-1 hover:text-gray-600 transition"
+            >
+              ログインへ戻る
+            </button>
+          )}
         </form>
       </div>
     </div>
