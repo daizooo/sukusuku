@@ -9,13 +9,12 @@
 # （ストアには出さない方針。docs/native-app-rewrite.md §8）。
 name: mobile APK
 
+# mainへのpushでは作らない。PRで作った .apk と中身が同じものをもう一度作ることになり、
+# 1つの変更あたりの所要時間とActionsの消費が倍になるため。
+# マージ後の .apk が要るときは workflow_dispatch から手で走らせる
+# （PRのArtifactsは30日残るので、普段はそちらで足りる）。
 on:
   pull_request:
-    paths:
-      - 'mobile/**'
-      - '.github/workflows/mobile-apk.yml'
-  push:
-    branches: [main]
     paths:
       - 'mobile/**'
       - '.github/workflows/mobile-apk.yml'
@@ -102,12 +101,17 @@ jobs:
 
       # assembleRelease はJSを .apk に同梱するので、Metroを立てなくても単体で動く。
       # 署名はExpoが用意するdebug用の鍵のまま（ストアに出さないので足りる）。
+      # 既定では armeabi-v7a / arm64-v8a / x86 / x86_64 の4つぶんネイティブを
+      # ビルドするため、ここだけで37分かかっていた（実測。ほかの工程は全部で2分弱）。
+      # 入れる端末はどちらも arm64 なので、作るのを arm64-v8a だけにする。
+      # 上書きの仕方は prebuild が生成する android/gradle.properties に書いてある。
+      # x86 系が要るのはエミュレータで動かすときだが、それは手元で作れば済む。
       - name: .apk を作る
         working-directory: mobile/android
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 
       # EXPO_PUBLIC_* はビルド時にJSへ埋め込まれ、google-services.json は通知の宛先を
       # 決める。どちらも未設定のまま作った .apk は起動した瞬間に落ちる／通知を
