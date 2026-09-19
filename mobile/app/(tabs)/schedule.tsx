@@ -15,6 +15,7 @@ import type { CareLog, DynamicTask, Label, ScheduleView, Task, UserProfile } fro
 import { LABELS } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
+import { useRefreshOnFocus } from '@/lib/screenFocus';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
 import { getProfile } from '@/lib/api/profile';
@@ -107,6 +108,9 @@ export default function ScheduleScreen() {
   const [isEditingTask, setIsEditingTask] = useState(false);
   const [tempEditingTask, setTempEditingTask] = useState<DynamicTask | null>(null);
 
+  // 日表示の育児記録を読み直すための印。記録タブで記録した分に追いつかせるために使う。
+  const [logReloadKey, setLogReloadKey] = useState(0);
+
   useEffect(() => {
     if (!userId) return;
     let isMounted = true;
@@ -132,6 +136,22 @@ export default function ScheduleScreen() {
       isMounted = false;
     };
   }, [userId]);
+
+  // 他のタブで変えた分に追いつかせる。予定はホームでもチェックを付けられ、子の生年月日は
+  // 設定タブで変わる（出生日基準の予定の日付が動く）。日表示の記録は記録タブで増える。
+  // 読み込み中の表示には戻さず、届いたら差し替える。
+  useRefreshOnFocus(() => {
+    setLogReloadKey((prev) => prev + 1);
+    if (!familyId) return;
+    void Promise.all([getProfile(supabase, familyId), listTasks(supabase, familyId)])
+      .then(([loadedProfile, loadedTasks]) => {
+        setProfile(loadedProfile);
+        setTodos(loadedTasks);
+      })
+      .catch(() => {
+        // 圏外なら前に読んだ分を出したままにする。
+      });
+  });
 
   const birthDate = profile ? getProfileFieldValue(profile, 'birthDate') : '';
 
@@ -208,7 +228,7 @@ export default function ScheduleScreen() {
     return () => {
       cancelled = true;
     };
-  }, [familyId, needsLogs, logFrom, logTo, logRangeKey]);
+  }, [familyId, needsLogs, logFrom, logTo, logRangeKey, logReloadKey]);
 
   // 日を選ぶと日表示へ移る（月・週は俯瞰、日は詳細という役割分担）。
   const selectDate = (date: Date, openDayView = true) => {
