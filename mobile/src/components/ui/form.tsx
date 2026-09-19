@@ -201,10 +201,17 @@ export function SubmitButton({
   );
 }
 
-export function DeleteButton({ onPress }: { onPress: () => void }) {
+export function DeleteButton({
+  onPress,
+  label = 'この記録を削除する',
+}: {
+  onPress: () => void;
+  /** 消す相手が記録でないとき（計測中の授乳など）に差し替える。 */
+  label?: string;
+}) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.delete}>
-      <Text style={styles.deleteText}>この記録を削除する</Text>
+      <Text style={styles.deleteText}>{label}</Text>
     </Pressable>
   );
 }

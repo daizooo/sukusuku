@@ -91,14 +91,6 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
               style={{ width: `${schedule.progress * 100}%` }}
             />
           </div>
-
-          <p className="mt-1.5 text-[11px] text-gray-500">
-            前回 {formatTimeString(schedule.lastFedAt)}
-            {info.lastFedTitle && `（${info.lastFedTitle}）`}
-            {/* 設定した間隔が実際と合っているか確かめられるよう、実績も添える */}
-            {info.averageIntervalMinutes !== null &&
-              ` ・ 最近の平均 ${formatMinutesText(info.averageIntervalMinutes)}`}
-          </p>
         </>
       )}
     </>

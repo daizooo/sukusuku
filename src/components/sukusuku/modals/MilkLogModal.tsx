@@ -241,6 +241,12 @@ function MilkLogModalBody({
     setEditedRight(false);
   };
 
+  /** 測り始めた授乳ごと取りやめる。記録は作らず、計測だけを捨てて画面を閉じる。 */
+  const handleDeleteSession = () => {
+    timer.reset();
+    onClose();
+  };
+
   const handleResetTimer = () => {
     timer.reset();
     setLeftMinutes(undefined);
@@ -318,7 +324,15 @@ function MilkLogModalBody({
           >
             保存する
           </SubmitButton>
-          {log && <DeleteButton onDelete={onDelete} />}
+          {log ? (
+            <DeleteButton onDelete={onDelete} />
+          ) : (
+            // 記録にする前でも、測り始めた授乳ごと取りやめられるようにする。
+            // 間違えて始めた計測が、記録するまで消せないままになるのを避ける。
+            timer.hasSession && (
+              <DeleteButton label="計測中の授乳を削除する" onDelete={handleDeleteSession} />
+            )
+          )}
         </>
       }
     >
@@ -558,7 +572,7 @@ function PumpedBatchPicker({
       <p className="mt-2 text-xs font-bold text-rose-700 tabular-nums">
         {selectedIds.length === 0
           ? '搾乳を選んでください'
-          : `${selectedIds.length}パック・合計 ${selectedMl}ml を用意`}
+          : `合計 ${selectedMl}ml を用意`}
       </p>
       <p className="mt-1 text-[10px] text-gray-400">
         飲ませずに捨てるときは「破棄」。この記録を保存しなくてもストックから外れます。

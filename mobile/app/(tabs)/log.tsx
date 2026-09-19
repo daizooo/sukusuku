@@ -38,7 +38,11 @@ import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
 import { listFamilyMembers } from '@/lib/api/familyMembers';
-import { listRecentTemperatureLogs, setPumpedBatchDiscarded } from '@/lib/api/careLogs';
+import {
+  listRecentMilkLogs,
+  listRecentTemperatureLogs,
+  setPumpedBatchDiscarded,
+} from '@/lib/api/careLogs';
 import { getProfile } from '@/lib/api/profile';
 import { ensureChildId } from '@/lib/api/children';
 import {
@@ -102,6 +106,10 @@ import TemperatureLogModal, {
 // 画面の作り方はルートの CLAUDE.md に従い、日付送りと記録ボタンは固定して、
 // スクロールはその日の一覧だけに閉じる。
 
+// 「次はどちらから」を決めるために読む直近の授乳の件数。母乳以外（ミルク・搾乳）の
+// 記録が続くと母乳の記録まで届かないため、1日ぶんの授乳の回数より多めに取る。
+const RECENT_MILK_LIMIT = 30;
+
 export default function LogScreen() {
   const { session, isLoading: isSessionLoading } = useSession();
   const userId = session?.user.id ?? null;
@@ -127,6 +135,9 @@ export default function LogScreen() {
   const [unsentCount, setUnsentCount] = useState(0);
   // 平熱に使う直近の体温。その子自身の記録の平均なので、表示中の日だけでは求まらない。
   const [recentTemperatureLogs, setRecentTemperatureLogs] = useState<TemperatureLog[]>([]);
+  // 「次はどちらから」に使う直近の授乳。夜中の授乳は前の日の記録になるため、
+  // 表示中の日だけを見ると前回を取りこぼし、おすすめの側が出なくなる。
+  const [recentMilkLogs, setRecentMilkLogs] = useState<MilkLog[]>([]);
   // プロフィールに登録された子の名前。体温の入力画面で「◯の平熱」と出すのに使う。
   const [babyName, setBabyName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -289,6 +300,20 @@ export default function LogScreen() {
     void refreshRecentTemperatureLogs();
   }, [refreshRecentTemperatureLogs]);
 
+  /** 「次はどちらから」に使う直近の授乳を読み直す。授乳を足したり直したりするたびに呼ぶ。 */
+  const refreshRecentMilkLogs = useCallback(async () => {
+    if (!familyId) return;
+    try {
+      setRecentMilkLogs(await listRecentMilkLogs(supabase, familyId, RECENT_MILK_LIMIT));
+    } catch {
+      // 圏外でも表示中の日の記録からは出せるので、ここでは止めない。
+    }
+  }, [familyId]);
+
+  useEffect(() => {
+    void refreshRecentMilkLogs();
+  }, [refreshRecentMilkLogs]);
+
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     void sync().finally(() => setIsRefreshing(false));
@@ -305,7 +330,13 @@ export default function LogScreen() {
   );
 
   const summary = useMemo(() => summarizeLogs(logs), [logs]);
-  const nextBreastSide = useMemo<BreastSide | null>(() => getNextBreastSide(logs), [logs]);
+  // 表示中の日の記録と、日付にとらわれない直近の授乳を合わせて渡し、
+  // その中でいちばん新しい母乳の記録から決める。
+  // （表示中の日の記録は保存した時点で入るので、圏外でも直後から新しい側が出る）
+  const nextBreastSide = useMemo<BreastSide | null>(
+    () => getNextBreastSide([...logs, ...recentMilkLogs]),
+    [logs, recentMilkLogs],
+  );
   // 体温のボタンにはその子の平熱だけを出す。日ごとの平均や最高は出さず、
   // 測ったときに比べる相手になる基準の1つの数に絞る。
   const temperatureBaseline = useMemo(
@@ -337,6 +368,7 @@ export default function LogScreen() {
       }
       await showCached();
       await sync();
+      await refreshRecentMilkLogs();
     } catch (error) {
       setErrorMessage(toMessage(error));
     }
@@ -497,6 +529,7 @@ export default function LogScreen() {
       await queueDeleteCareLog(familyId, log.id);
       await showCached();
       await sync();
+      if (log.type === 'milk') await refreshRecentMilkLogs();
     } catch (error) {
       setErrorMessage(toMessage(error));
     }

@@ -3,6 +3,7 @@
 import { Plus } from 'lucide-react';
 import type { CareLog, DynamicTask } from '@/types/app';
 import { isSameDay } from '@/lib/dateUtils';
+import { getHolidayName } from '@/lib/japaneseHolidays';
 import { formatBabyAgeAt, getMilestoneLabel } from '@/lib/milestones';
 import TaskRow from './TaskRow';
 import CareLogSection from './CareLogSection';
@@ -37,6 +38,7 @@ export default function DayView({
   onOpenLogTab,
 }: DayViewProps) {
   const babyAge = formatBabyAgeAt(birthDate, date);
+  const holiday = getHolidayName(date);
   const milestone = getMilestoneLabel(birthDate, date);
   // 未来の日には記録が存在しないため、記録の枠自体を出さない。
   const isPastOrToday = date.getTime() <= today.getTime();
@@ -45,9 +47,14 @@ export default function DayView({
 
   return (
     <div className="space-y-5">
-      {(babyAge || milestone) && (
+      {(babyAge || holiday || milestone) && (
         <div className="flex items-center gap-2 px-1">
           {babyAge && <span className="text-xs font-medium text-gray-500">{babyAge}</span>}
+          {holiday && (
+            <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
+              {holiday}
+            </span>
+          )}
           {milestone && (
             <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
               {milestone}

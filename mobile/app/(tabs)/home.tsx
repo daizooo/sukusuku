@@ -36,9 +36,7 @@ import { getProfile } from '@/lib/api/profile';
 import { deleteTask, listTasks, updateTask, updateTaskDone } from '@/lib/api/tasks';
 import { listRecentMilkLogs } from '@/lib/api/careLogs';
 import { getFeedingSettings } from '@/lib/api/feedingSettings';
-import { getLogTitle } from '@/lib/careLogUtils';
 import {
-  averageFeedingIntervalMinutes,
   DEFAULT_FEEDING_INTERVAL_MINUTES,
   type NextFeedingInfo,
 } from '@/lib/feedingSchedule';
@@ -49,7 +47,6 @@ import {
   parseDateString,
   startOfDay,
 } from '@/lib/dateUtils';
-import { formatRelativeDay } from '@/lib/scheduleUtils';
 import { getLabelColors, getProfileFieldValue } from '@/lib/uiUtils';
 import NextFeedingCard from '@/components/NextFeedingCard';
 import TaskDetailModal from '@/components/schedule/TaskDetailModal';
@@ -150,16 +147,14 @@ export default function HomeScreen() {
     return { months, days };
   }, [birthDateValue, today]);
 
-  const nextFeeding = useMemo<NextFeedingInfo>(() => {
-    const lastFed = recentMilkLogs[0] ?? null;
-    return {
-      lastFedAt: lastFed?.time ?? null,
-      lastFedTitle: lastFed ? getLogTitle(lastFed) : '',
+  const nextFeeding = useMemo<NextFeedingInfo>(
+    () => ({
+      lastFedAt: recentMilkLogs[0]?.time ?? null,
       intervalMinutes,
-      averageIntervalMinutes: averageFeedingIntervalMinutes(recentMilkLogs.map((log) => log.time)),
       isLoading: isLoadingRecentMilk,
-    };
-  }, [recentMilkLogs, intervalMinutes, isLoadingRecentMilk]);
+    }),
+    [recentMilkLogs, intervalMinutes, isLoadingRecentMilk],
+  );
 
   const startOfToday = startOfDay(today).getTime();
   const pendingTasks = dynamicTodos.filter((t) => !t.done);
@@ -449,12 +444,6 @@ export default function HomeScreen() {
                     <View style={styles.taskMetaItem}>
                       <Calendar size={12} color={colors.navActive} />
                       <Text style={styles.taskDate}>{task.targetDate}</Text>
-                      {/* 何日後かは予定タブの一覧と同じ表記に揃える。 */}
-                      {task.targetDateObj && (
-                        <Text style={styles.taskRelative}>
-                          {formatRelativeDay(task.targetDateObj, today)}
-                        </Text>
-                      )}
                     </View>
                     <View style={styles.taskMetaItem}>
                       <Clock size={12} color={colors.textMuted} />
@@ -590,7 +579,6 @@ const styles = StyleSheet.create({
   taskMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 4 },
   taskMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
   taskDate: { fontSize: 12, fontWeight: '500', color: colors.navActive, fontVariant: ['tabular-nums'] },
-  taskRelative: { fontSize: 12, color: colors.textMuted, fontWeight: '500', fontVariant: ['tabular-nums'] },
   taskMetaText: { fontSize: 12, color: colors.textMuted, flexShrink: 1, fontWeight: '500' },
 
   notice: { fontSize: 12, color: colors.textMuted, lineHeight: 18 },

@@ -266,6 +266,12 @@ function MilkLogModalBody({
     setEditedRight(false);
   };
 
+  /** 測り始めた授乳ごと取りやめる。記録は作らず、計測だけを捨てて画面を閉じる。 */
+  const handleDeleteSession = () => {
+    timer.reset();
+    onClose();
+  };
+
   const handleResetTimer = () => {
     timer.reset();
     setLeftMinutes(undefined);
@@ -342,7 +348,15 @@ function MilkLogModalBody({
           >
             保存する
           </SubmitButton>
-          {log && <DeleteButton onPress={onDelete} />}
+          {log ? (
+            <DeleteButton onPress={onDelete} />
+          ) : (
+            // 記録にする前でも、測り始めた授乳ごと取りやめられるようにする。
+            // 間違えて始めた計測が、記録するまで消せないままになるのを避ける。
+            timer.hasSession && (
+              <DeleteButton label="計測中の授乳を削除する" onPress={handleDeleteSession} />
+            )
+          )}
         </>
       }
     >
@@ -570,7 +584,7 @@ function PumpedBatchPicker({
       <Text style={styles.batchSummary}>
         {selectedIds.length === 0
           ? '搾乳を選んでください'
-          : `${selectedIds.length}パック・合計 ${selectedMl}ml を用意`}
+          : `合計 ${selectedMl}ml を用意`}
       </Text>
     </View>
   );

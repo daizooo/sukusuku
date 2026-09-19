@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Plus } from 'lucide-react-native';
 import type { CareLog, DynamicTask } from '@/types/app';
 import { isSameDay } from '@/lib/dateUtils';
+import { getHolidayName } from '@/lib/japaneseHolidays';
 import { formatBabyAgeAt, getMilestoneLabel } from '@/lib/milestones';
 import { colors } from '@/lib/theme';
 import TaskRow from './TaskRow';
@@ -39,6 +40,7 @@ export default function DayView({
   onOpenLogTab,
 }: DayViewProps) {
   const babyAge = formatBabyAgeAt(birthDate, date);
+  const holiday = getHolidayName(date);
   const milestone = getMilestoneLabel(birthDate, date);
   // 未来の日には記録が存在しないため、記録の枠自体を出さない。
   const isPastOrToday = date.getTime() <= today.getTime();
@@ -47,9 +49,14 @@ export default function DayView({
 
   return (
     <View style={styles.page}>
-      {(babyAge || milestone) && (
+      {(babyAge || holiday || milestone) && (
         <View style={styles.ageRow}>
-          {babyAge && <Text style={styles.age}>{babyAge}</Text>}
+          {babyAge !== '' && <Text style={styles.age}>{babyAge}</Text>}
+          {holiday && (
+            <View style={styles.holiday}>
+              <Text style={styles.holidayText}>{holiday}</Text>
+            </View>
+          )}
           {milestone && (
             <View style={styles.milestone}>
               <Text style={styles.milestoneText}>{milestone}</Text>
@@ -95,6 +102,15 @@ const styles = StyleSheet.create({
   page: { gap: 20 },
   ageRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
   age: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
+  holiday: {
+    backgroundColor: colors.holidaySurface,
+    borderWidth: 1,
+    borderColor: colors.holidayBorder,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  holidayText: { fontSize: 10, fontWeight: '700', color: colors.holidayText },
   milestone: {
     backgroundColor: colors.milestoneSurface,
     borderWidth: 1,

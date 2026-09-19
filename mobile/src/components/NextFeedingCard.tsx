@@ -89,15 +89,6 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
               ]}
             />
           </View>
-
-          <Text style={styles.lastFed}>
-            前回 {formatTimeString(schedule.lastFedAt)}
-            {info.lastFedTitle ? `（${info.lastFedTitle}）` : ''}
-            {/* 設定した間隔が実際と合っているか確かめられるよう、実績も添える */}
-            {info.averageIntervalMinutes !== null
-              ? ` ・ 最近の平均 ${formatMinutesText(info.averageIntervalMinutes)}`
-              : ''}
-          </Text>
         </>
       )}
     </>
@@ -144,5 +135,4 @@ const styles = StyleSheet.create({
   },
   trackFill: { height: '100%', borderRadius: 999, backgroundColor: colors.milkProgress },
   trackFillOverdue: { backgroundColor: colors.pumping },
-  lastFed: { fontSize: 11, color: colors.textMuted, marginTop: 6, fontWeight: '500', fontVariant: ['tabular-nums'] },
 });
