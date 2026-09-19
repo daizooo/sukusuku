@@ -1,11 +1,9 @@
 'use client';
 
-import type { CareLog, DynamicTask } from '@/types/app';
+import type { DynamicTask } from '@/types/app';
 import { WEEKDAY_LABELS, addDays, isSameDay, startOfWeek } from '@/lib/dateUtils';
 import { getMilestoneLabel } from '@/lib/milestones';
 import TaskRow from './TaskRow';
-import { CareLogSummaryLine } from './CareLogSection';
-import DayTimeline, { TimelineScale } from './DayTimeline';
 import { tasksOnDate } from './utils';
 
 interface WeekViewProps {
@@ -14,9 +12,6 @@ interface WeekViewProps {
   today: Date;
   tasks: DynamicTask[];
   birthDate: string;
-  /** 表示中の週の記録（日ごとに振り分けて使う）。 */
-  careLogs: CareLog[];
-  isLoadingCareLogs?: boolean;
   onSelectDate: (date: Date) => void;
   onToggleTodo: (id: string) => void;
   onOpenTask: (task: DynamicTask) => void;
@@ -24,15 +19,16 @@ interface WeekViewProps {
 
 /**
  * 7日分を縦に並べた週の面。月表示と日表示の中間として、
- * 「この1週間に何があるか」と「記録がどれくらいあったか」を1画面で見る。
+ * 「この1週間に何があるか」を1画面で見る。
+ *
+ * 育児記録はここには出さない。7日ぶんの帯と合計を並べると縦に伸びて、
+ * 肝心の7日が1画面に収まらなくなるため。記録は日表示と記録タブで見る。
  */
 export default function WeekView({
   date,
   today,
   tasks,
   birthDate,
-  careLogs,
-  isLoadingCareLogs,
   onSelectDate,
   onToggleTodo,
   onOpenTask,
@@ -42,18 +38,9 @@ export default function WeekView({
 
   return (
     <div className="space-y-3">
-      {/* 帯の目盛り。7日ぶんの帯に共通するので、上に1本だけ置く。
-          記録がなく帯が1本も出ない週（これから来る週など）では出さない。 */}
-      {careLogs.length > 0 && !isLoadingCareLogs && (
-        <div className="px-1">
-          <TimelineScale />
-        </div>
-      )}
       {days.map((day) => {
         const dayTasks = tasksOnDate(tasks, day);
-        const dayLogs = careLogs.filter((log) => isSameDay(log.time, day));
         const isToday = isSameDay(day, today);
-        const isPastOrToday = day.getTime() <= today.getTime();
         const milestone = getMilestoneLabel(birthDate, day);
 
         return (
@@ -89,13 +76,6 @@ export default function WeekView({
               </div>
             ) : (
               <p className="text-xs text-gray-400 px-1 py-1">予定なし</p>
-            )}
-
-            {isPastOrToday && !isLoadingCareLogs && (
-              <div className="mt-1.5 px-1 space-y-1">
-                <DayTimeline logs={dayLogs} day={day} />
-                <CareLogSummaryLine logs={dayLogs} />
-              </div>
             )}
           </section>
         );

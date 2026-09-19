@@ -9,7 +9,16 @@ import {
   View,
 } from 'react-native';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
-import { Droplet, List, Plus, Thermometer, TrendingUp } from 'lucide-react-native';
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Droplet,
+  List,
+  Plus,
+  Thermometer,
+  TrendingUp,
+} from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import type {
@@ -578,10 +587,9 @@ export default function LogScreen() {
           accessibilityRole="button"
           accessibilityLabel="前の日"
           onPress={() => setLogDate(addDays(logDate, -1))}
-          hitSlop={8}
           style={styles.arrow}
         >
-          <Text style={styles.arrowText}>‹</Text>
+          <ChevronLeft size={20} color={colors.textSubtle} />
         </Pressable>
 
         <View style={styles.dateGroup}>
@@ -596,14 +604,17 @@ export default function LogScreen() {
                 onChange: (_event, picked) => picked && setLogDate(startOfDay(picked)),
               })
             }
+            hitSlop={8}
             style={styles.dateButton}
           >
             <Text style={styles.date}>{formatDateWithWeekday(logDate)}</Text>
           </Pressable>
+          {/* 端末の日付ピッカーで任意の日へ飛べることを示す印。PWA版と同じ位置。 */}
+          <CalendarDays size={16} color={colors.textFaint} />
 
           {!isToday && (
-            <Pressable accessibilityRole="button" onPress={() => setLogDate(today)} hitSlop={8}>
-              <Text style={styles.todayButton}>今日</Text>
+            <Pressable accessibilityRole="button" onPress={() => setLogDate(today)} style={styles.todayButton}>
+              <Text style={styles.todayText}>今日</Text>
             </Pressable>
           )}
         </View>
@@ -613,10 +624,9 @@ export default function LogScreen() {
           accessibilityLabel="次の日"
           disabled={isToday}
           onPress={() => setLogDate(addDays(logDate, 1))}
-          hitSlop={8}
           style={[styles.arrow, isToday && styles.arrowDisabled]}
         >
-          <Text style={styles.arrowText}>›</Text>
+          <ChevronRight size={20} color={colors.textSubtle} />
         </Pressable>
       </View>
 
@@ -884,35 +894,33 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   growthRowDivided: { borderTopWidth: 1, borderTopColor: colors.background },
-  growthDate: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
-  growthValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
+  growthDate: { fontSize: 12, color: colors.textMuted, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  growthValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle, fontVariant: ['tabular-nums'] },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    marginHorizontal: 12,
+    marginTop: 8,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
     backgroundColor: colors.surface,
   },
-  arrow: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  arrow: { padding: 8 },
   arrowDisabled: { opacity: 0.3 },
-  arrowText: { fontSize: 24, color: colors.textMuted, lineHeight: 26, fontWeight: '500' },
   dateGroup: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   dateButton: { paddingVertical: 4 },
-  date: { fontSize: 15, fontWeight: '700', color: colors.text },
+  date: { fontSize: 15, fontWeight: '700', color: colors.text, flexShrink: 1, fontVariant: ['tabular-nums'] },
   todayButton: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.diaperText,
     backgroundColor: colors.diaperSurface,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
+  todayText: { fontSize: 12, fontWeight: '700', color: colors.navActiveText },
 
   fixed: { padding: 12, gap: 8 },
   nursingBanner: {
@@ -927,7 +935,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   nursingTitle: { fontSize: 12, fontWeight: '700', color: colors.milkText },
-  nursingTime: { fontSize: 11, color: colors.milk, marginTop: 2, fontWeight: '500' },
+  nursingTime: { fontSize: 11, color: colors.milk, marginTop: 2, fontWeight: '500', fontVariant: ['tabular-nums'] },
   nursingOpen: {
     fontSize: 12,
     fontWeight: '700',
@@ -960,6 +968,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2,
     textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   recordHint: { fontSize: 10, fontWeight: '700', color: colors.milkText, marginTop: 1 },
   stockValue: {
@@ -968,6 +977,7 @@ const styles = StyleSheet.create({
     color: colors.pumpingText,
     marginTop: 2,
     textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
 
   pastDayNote: { fontSize: 11, color: colors.textMuted, lineHeight: 17, fontWeight: '500' },
@@ -975,7 +985,7 @@ const styles = StyleSheet.create({
   error: { fontSize: 11, color: colors.danger },
 
   list: { paddingHorizontal: 12, paddingBottom: 24, gap: 8 },
-  listHeading: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  listHeading: { fontSize: 13, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   listLoading: { marginTop: 24 },
   empty: { fontSize: 13, color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
   phaseNote: { fontSize: 11, color: colors.textFaint, lineHeight: 17, marginTop: 12 },

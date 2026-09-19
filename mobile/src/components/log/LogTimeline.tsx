@@ -75,8 +75,9 @@ export default function LogTimeline({ logs, memberLabel, onSelect }: LogTimeline
             <Badges log={log} />
 
             <View style={styles.footer}>
+              {/* メモは書いたときだけ出す。「メモなし」を並べても読むものが増えるだけなので出さない。 */}
               <Text style={styles.note} numberOfLines={2}>
-                {log.note || 'メモなし'}
+                {log.note}
               </Text>
               <View style={styles.author}>
                 <User size={11} color={colors.textFaint} />
@@ -161,7 +162,7 @@ const styles = StyleSheet.create({
 
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
   title: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.text },
-  time: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
+  time: { fontSize: 12, fontWeight: '500', color: colors.textMuted, fontVariant: ['tabular-nums'] },
 
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   badge: {
@@ -172,7 +173,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  badgeText: { fontSize: 11, fontWeight: '500' },
+  badgeText: { fontSize: 11, fontWeight: '500', fontVariant: ['tabular-nums'] },
   badgeTextBold: { fontWeight: '700' },
   swatch: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: colors.borderStrong },
 

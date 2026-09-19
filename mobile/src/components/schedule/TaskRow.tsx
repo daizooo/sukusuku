@@ -96,6 +96,6 @@ const styles = StyleSheet.create({
   labelText: { fontSize: 10, fontWeight: '700' },
   meta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 6 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
-  metaDate: { fontSize: 12, fontWeight: '500', color: colors.navActiveText },
-  metaText: { fontSize: 12, color: colors.textMuted, flexShrink: 1, fontWeight: '500' },
+  metaDate: { fontSize: 12, fontWeight: '500', color: colors.navActiveText, fontVariant: ['tabular-nums'] },
+  metaText: { fontSize: 12, color: colors.textMuted, flexShrink: 1, fontWeight: '500', fontVariant: ['tabular-nums'] },
 });

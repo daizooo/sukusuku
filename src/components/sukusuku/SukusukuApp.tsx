@@ -43,7 +43,6 @@ import {
   isSameDay,
   parseDateString,
   startOfDay,
-  startOfWeek,
   toDateString,
 } from '@/lib/dateUtils';
 import { createClient } from '@/lib/supabase/client';
@@ -346,7 +345,7 @@ export default function SukusukuApp({
   const [scheduleView, setScheduleView] = useState<ScheduleView>('month');
   const [currentCalendarDate, setCurrentCalendarDate] = useState(today);
   const [selectedScheduleDate, setSelectedScheduleDate] = useState(today);
-  // 週表示・日表示に出す育児記録。記録タブの1日分(logs)とは表示範囲が違うため別に持つ。
+  // 日表示に出す育児記録。記録タブの1日分(logs)とは表示範囲が違うため別に持つ。
   const [scheduleLogs, setScheduleLogs] = useState<CareLog[]>([]);
   const [loadedScheduleLogRange, setLoadedScheduleLogRange] = useState<string | null>(null);
 
@@ -409,17 +408,13 @@ export default function SukusukuApp({
     };
   }, [supabase, familyId, logDate]);
 
-  // カレンダーの週表示・日表示に出す育児記録。表示中の範囲だけを取りに行く。
-  // 月表示は記録を出さないため、月をめくっても問い合わせは起きない。
+  // カレンダーの日表示に出す育児記録。表示中の範囲だけを取りに行く。
+  // 月表示・週表示は記録を出さないため、めくっても問い合わせは起きない。
   const scheduleLogRange = useMemo(() => {
     if (activeTab !== 'schedule') return null;
     if (scheduleView === 'day') {
       const from = startOfDay(selectedScheduleDate);
       return { from, to: addDays(from, 1) };
-    }
-    if (scheduleView === 'week') {
-      const from = startOfWeek(selectedScheduleDate);
-      return { from, to: addDays(from, 7) };
     }
     return null;
   }, [activeTab, scheduleView, selectedScheduleDate]);

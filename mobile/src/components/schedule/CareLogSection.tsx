@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   empty: { fontSize: 11, color: colors.textFaint, fontWeight: '500' },
   summary: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
   summaryItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  summaryText: { fontSize: 11, color: colors.textSubtle, fontWeight: '500' },
+  summaryText: { fontSize: 11, color: colors.textSubtle, fontWeight: '500', fontVariant: ['tabular-nums'] },
 
   sectionHeader: {
     flexDirection: 'row',
@@ -168,11 +168,11 @@ const styles = StyleSheet.create({
   },
   list: { borderTopWidth: 1, borderTopColor: colors.background, paddingTop: 4 },
   logRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 6 },
-  logTime: { width: 52, fontSize: 12, color: colors.textMuted, fontWeight: '500' },
+  logTime: { width: 52, fontSize: 12, color: colors.textMuted, fontWeight: '500', fontVariant: ['tabular-nums'] },
   logTitle: { fontSize: 12, fontWeight: '500', color: colors.textSubtle },
   logTitleAlert: { color: colors.danger },
   badges: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginLeft: 8 },
   badge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  badgeText: { fontSize: 10, fontWeight: '500' },
+  badgeText: { fontSize: 10, fontWeight: '500', fontVariant: ['tabular-nums'] },
   badgeTextBold: { fontWeight: '700' },
 });

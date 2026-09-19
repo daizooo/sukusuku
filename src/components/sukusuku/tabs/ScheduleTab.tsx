@@ -236,8 +236,6 @@ export default function ScheduleTab({
             today={today}
             tasks={filteredTodos}
             birthDate={birthDate}
-            careLogs={careLogs}
-            isLoadingCareLogs={isLoadingCareLogs}
             onSelectDate={(date) => selectDate(date)}
             onToggleTodo={onToggleTodo}
             onOpenTask={onOpenTask}

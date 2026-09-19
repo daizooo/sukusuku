@@ -248,8 +248,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSubtle,
     backgroundColor: colors.surface,
+    fontVariant: ['tabular-nums'],
   },
-  inputText: { fontSize: 14, color: colors.textSubtle, fontWeight: '500' },
+  inputText: { fontSize: 14, color: colors.textSubtle, fontWeight: '500', fontVariant: ['tabular-nums'] },
   hint: { fontSize: 10, color: colors.textFaint, marginTop: 4 },
   units: {
     flexDirection: 'row',
