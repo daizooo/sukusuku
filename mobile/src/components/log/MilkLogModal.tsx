@@ -145,12 +145,12 @@ function MilkLogModalBody({
   // ボタンに無い分数は直接入力欄の側で持つ。
   const [customLeft, setCustomLeft] = useState(() => toCustomMinutes(initialLeft));
   const [customRight, setCustomRight] = useState(() => toCustomMinutes(initialRight));
-  const [lastSide, setLastSide] = useState<BreastSide | undefined>(
-    log?.lastSide ?? (measured ? (timer.lastSide ?? undefined) : undefined),
-  );
+  const [lastSide, setLastSide] = useState<BreastSide | undefined>(log?.lastSide);
   // 分数を手で選び直した側は、計測した値より手入力を優先する。
   const [editedLeft, setEditedLeft] = useState(false);
   const [editedRight, setEditedRight] = useState(false);
+  // 「最後に飲ませた側」を手で選び直したときも、計測した側より手入力を優先する。
+  const [editedSide, setEditedSide] = useState(false);
   // 新規は表示中の日 + 今の時刻。編集は保存されている日時をそのまま出す。
   const [time, setTime] = useState(() => {
     if (log) return log.time;
@@ -209,6 +209,13 @@ function MilkLogModalBody({
     measuring && !editedLeft ? nursingMinutes(timer.total.left) : (leftMinutes ?? 0);
   const recordedRight =
     measuring && !editedRight ? nursingMinutes(timer.total.right) : (rightMinutes ?? 0);
+  // 「最後に飲ませた側」も分数と同じで、計測中は計測した側をそのまま出す。
+  //
+  // PWA版は開いた時点の計測を初期値に入れているが、ネイティブ版は控えの読み戻しが
+  // 非同期なので、それでは間に合わないことがある（お知らせのタップで起動と同時に
+  // この画面が開く場合など）。分数は計測から出し直していて埋まるのに側だけ空、
+  // という食い違いが出るため、側も同じ出し方にそろえる。
+  const recordedSide = measuring && !editedSide ? (timer.lastSide ?? undefined) : lastSide;
 
   // 分数を手で決め直したときの反映。ボタン・直接入力のどちらからでもここを通る。
   const applyMinutes = (side: BreastSide, minutes: number | undefined, custom: string) => {
@@ -251,6 +258,7 @@ function MilkLogModalBody({
     applyTotal(timer.togglePhase(phase));
     if (phase === 'burp') return;
     setLastSide(phase);
+    setEditedSide(false);
     // 測り直した側は計測の値に戻す。
     if (phase === 'left') setEditedLeft(false);
     else setEditedRight(false);
@@ -279,6 +287,7 @@ function MilkLogModalBody({
     setLastSide(undefined);
     setEditedLeft(false);
     setEditedRight(false);
+    setEditedSide(false);
   };
 
   const handleSubmit = () => {
@@ -305,7 +314,7 @@ function MilkLogModalBody({
       leftMinutes: left,
       rightMinutes: right,
       // どちらも0分のときは「最後に飲ませた側」も残さない。
-      lastSide: left === 0 && right === 0 ? undefined : lastSide,
+      lastSide: left === 0 && right === 0 ? undefined : recordedSide,
     });
   };
 
@@ -402,8 +411,11 @@ function MilkLogModalBody({
               <FieldLabel>最後に飲ませた側</FieldLabel>
               <OptionGrid
                 options={SIDE_OPTIONS}
-                value={lastSide}
-                onChange={setLastSide}
+                value={recordedSide}
+                onChange={(value) => {
+                  setLastSide(value);
+                  setEditedSide(true);
+                }}
                 columns={2}
                 accent="milk"
               />

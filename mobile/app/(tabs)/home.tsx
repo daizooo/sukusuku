@@ -30,6 +30,7 @@ import {
 import type { DynamicTask, LoginRole, MilkLog, Task, UserProfile } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
+import { useRefreshOnFocus } from '@/lib/screenFocus';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
 import { getProfile } from '@/lib/api/profile';
@@ -76,6 +77,22 @@ export default function HomeScreen() {
 
   const today = useMemo(() => new Date(), []);
 
+  /**
+   * このタブに出すものを読む。
+   *
+   * 予定は予定タブ、授乳は記録タブ、子の生年月日と授乳の間隔は設定タブでも変わるので、
+   * ホームへ戻ってきたときにも同じものを読み直す（useRefreshOnFocus）。
+   */
+  const loadFamilyData = useCallback(async (id: string) => {
+    const [loadedProfile, loadedTasks, loadedMilk, settings] = await Promise.all([
+      getProfile(supabase, id),
+      listTasks(supabase, id),
+      listRecentMilkLogs(supabase, id),
+      getFeedingSettings(supabase, id),
+    ]);
+    return { loadedProfile, loadedTasks, loadedMilk, settings };
+  }, []);
+
   useEffect(() => {
     if (!userId) return;
     let isMounted = true;
@@ -85,12 +102,9 @@ export default function HomeScreen() {
         if (!isMounted || !membership.familyId) return;
         setFamilyId(membership.familyId);
         setLoginRole(membership.role);
-        const [loadedProfile, loadedTasks, loadedMilk, settings] = await Promise.all([
-          getProfile(supabase, membership.familyId),
-          listTasks(supabase, membership.familyId),
-          listRecentMilkLogs(supabase, membership.familyId),
-          getFeedingSettings(supabase, membership.familyId),
-        ]);
+        const { loadedProfile, loadedTasks, loadedMilk, settings } = await loadFamilyData(
+          membership.familyId,
+        );
         if (!isMounted) return;
         setProfile(loadedProfile);
         setTodos(loadedTasks);
@@ -108,7 +122,22 @@ export default function HomeScreen() {
     return () => {
       isMounted = false;
     };
-  }, [userId]);
+  }, [userId, loadFamilyData]);
+
+  // 他のタブで変えた分に追いつかせる。読み込み中の表示には戻さず、届いたら差し替える。
+  useRefreshOnFocus(() => {
+    if (!familyId) return;
+    void loadFamilyData(familyId)
+      .then(({ loadedProfile, loadedTasks, loadedMilk, settings }) => {
+        setProfile(loadedProfile);
+        setTodos(loadedTasks);
+        setRecentMilkLogs(loadedMilk);
+        setIntervalMinutes(settings.intervalMinutes);
+      })
+      .catch(() => {
+        // 圏外なら前に読んだ分を出したままにする。
+      });
+  });
 
   const birthDateValue = profile ? getProfileFieldValue(profile, 'birthDate') : '';
   const babyName = profile ? getProfileFieldValue(profile, 'babyName') : '';
