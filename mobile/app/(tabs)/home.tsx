@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -109,6 +109,34 @@ export default function HomeScreen() {
       isMounted = false;
     };
   }, [userId]);
+
+  // 授乳は記録タブで記録するので、このタブを開いたままでは「次の授乳の目安」が
+  // 記録前のままになる。PWA版は記録した中身をアプリ全体で1つ持っていて記録した
+  // その場で反映される（src/components/sukusuku/SukusukuApp.tsx）が、ネイティブ版は
+  // タブごとに読むため、戻ってきたところで読み直して同じ見え方にする。
+  // 授乳の間隔も設定タブで変えられるので、あわせて読み直す。
+  useFocusEffect(
+    useCallback(() => {
+      if (!familyId) return;
+      let isMounted = true;
+      void (async () => {
+        try {
+          const [loadedMilk, settings] = await Promise.all([
+            listRecentMilkLogs(supabase, familyId),
+            getFeedingSettings(supabase, familyId),
+          ]);
+          if (!isMounted) return;
+          setRecentMilkLogs(loadedMilk);
+          setIntervalMinutes(settings.intervalMinutes);
+        } catch {
+          // 圏外なら前に読んだ分を出したままにする。
+        }
+      })();
+      return () => {
+        isMounted = false;
+      };
+    }, [familyId]),
+  );
 
   const birthDateValue = profile ? getProfileFieldValue(profile, 'birthDate') : '';
   const babyName = profile ? getProfileFieldValue(profile, 'babyName') : '';
