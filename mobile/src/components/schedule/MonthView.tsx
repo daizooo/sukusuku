@@ -8,6 +8,7 @@ import {
   isSameDay,
   startOfWeek,
 } from '@/lib/dateUtils';
+import { getHolidayName } from '@/lib/japaneseHolidays';
 import { getMilestoneLabel } from '@/lib/milestones';
 import { tasksOnDate } from '@/lib/scheduleUtils';
 import { getLabelColors } from '@/lib/uiUtils';
@@ -82,13 +83,14 @@ export default function MonthView({
               const isToday = isSameDay(date, today);
               const isSelected = isSameDay(date, selectedDate);
               const isOtherMonth = date.getMonth() !== monthIndex;
+              const holiday = getHolidayName(date);
               const milestone = getMilestoneLabel(birthDate, date);
 
               return (
                 <Pressable
                   key={date.toISOString()}
                   accessibilityRole="button"
-                  accessibilityLabel={`${date.getMonth() + 1}月${date.getDate()}日 予定${dayTasks.length}件`}
+                  accessibilityLabel={`${date.getMonth() + 1}月${date.getDate()}日${holiday ? ` ${holiday}` : ''} 予定${dayTasks.length}件`}
                   onPress={() => onSelectDate(date)}
                   style={[
                     styles.cell,
@@ -107,7 +109,7 @@ export default function MonthView({
                             ? styles.dateTextToday
                             : isOtherMonth
                               ? styles.dateTextOtherMonth
-                              : date.getDay() === 0
+                              : date.getDay() === 0 || holiday
                                 ? styles.sunday
                                 : date.getDay() === 6
                                   ? styles.saturday
@@ -119,9 +121,13 @@ export default function MonthView({
                     </View>
                   </View>
 
-                  {milestone && !isOtherMonth && (
-                    <Text numberOfLines={1} style={styles.milestone}>
-                      {milestone}
+                  {/* 祝日と節目が重なる日は祝日を出す。1マスの高さに収めるため1行だけにする。 */}
+                  {!isOtherMonth && (holiday || milestone) && (
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.milestone, holiday !== null && styles.holidayLabel]}
+                    >
+                      {holiday ?? milestone}
                     </Text>
                   )}
 
@@ -218,6 +224,7 @@ const styles = StyleSheet.create({
   dateTextToday: { color: colors.primaryText, fontWeight: '700' },
   dateTextOtherMonth: { color: colors.borderStrong },
   milestone: { fontSize: 8, textAlign: 'center', color: colors.milestone, fontWeight: '500' },
+  holidayLabel: { color: colors.sunday },
   chips: { marginTop: 2, gap: 2 },
   chip: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1 },
   chipDone: { backgroundColor: colors.neutralSurface, borderColor: colors.border },

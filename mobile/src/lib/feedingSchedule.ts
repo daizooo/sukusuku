@@ -58,35 +58,10 @@ export const nextFeedingSchedule = (
   };
 };
 
-// 記録し忘れて大きく空いた分は平均を引っ張るだけなので、数えない。
-const MAX_COUNTED_GAP_MINUTES = 360;
-// 少ない回数の平均は日によってぶれるため、これだけ溜まってから出す。
-const MIN_COUNTED_GAPS = 3;
-
-/**
- * 最近の授乳間隔の平均(分)。設定した間隔が実際と合っているかの目安に出す。
- * 判断材料が足りなければ null。
- *
- * @param feedTimes 授乳の時刻。新しい順。
- */
-export const averageFeedingIntervalMinutes = (feedTimes: Date[]): number | null => {
-  const gaps: number[] = [];
-  for (let i = 0; i + 1 < feedTimes.length; i += 1) {
-    const gap = (feedTimes[i].getTime() - feedTimes[i + 1].getTime()) / 60_000;
-    if (gap > 0 && gap <= MAX_COUNTED_GAP_MINUTES) gaps.push(gap);
-  }
-  if (gaps.length < MIN_COUNTED_GAPS) return null;
-  return Math.round(gaps.reduce((total, gap) => total + gap, 0) / gaps.length);
-};
-
 /** 「次の授乳の目安」の表示に要るものをまとめて渡すための入れ物。 */
 export interface NextFeedingInfo {
   /** 前回の授乳の時刻。まだ記録が無ければ null。 */
   lastFedAt: Date | null;
-  /** 前回の授乳の見出し（「母乳」など）。 */
-  lastFedTitle: string;
   intervalMinutes: number;
-  /** 最近の実績の平均(分)。足りなければ null。 */
-  averageIntervalMinutes: number | null;
   isLoading: boolean;
 }

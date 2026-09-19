@@ -240,14 +240,21 @@ export function SubmitButton({ accent, onClick, disabled, children }: SubmitButt
 }
 
 /** 既存の記録を編集しているときだけ出す削除ボタン。 */
-export function DeleteButton({ onDelete }: { onDelete: () => void }) {
+export function DeleteButton({
+  onDelete,
+  label = '削除する',
+}: {
+  onDelete: () => void;
+  /** 消す相手が記録でないとき（計測中の授乳など）に差し替える。 */
+  label?: string;
+}) {
   return (
     <button
       type="button"
       onClick={onDelete}
       className="w-full flex items-center justify-center text-xs text-red-500 font-medium py-2 hover:text-red-600"
     >
-      <Trash2 size={14} className="mr-1" /> 削除する
+      <Trash2 size={14} className="mr-1" /> {label}
     </button>
   );
 }

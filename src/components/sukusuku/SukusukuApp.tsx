@@ -66,9 +66,8 @@ import {
   setPumpedBatchDiscarded,
   updateCareLog as updateCareLogApi,
 } from '@/lib/api/careLogs';
-import { getNextBreastSide, getLogTitle } from '@/lib/careLogUtils';
+import { getNextBreastSide } from '@/lib/careLogUtils';
 import {
-  averageFeedingIntervalMinutes,
   nextFeedingSchedule,
   type NextFeedingInfo,
 } from '@/lib/feedingSchedule';
@@ -157,6 +156,10 @@ const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
   { id: 'nursery', icon: ClipboardCheck, label: '保活' },
   { id: 'info', icon: Folder, label: '設定' },
 ];
+
+// 「次はどちらから」を決めるために読む直近の授乳の件数。母乳以外（ミルク・搾乳）の
+// 記録が続くと母乳の記録まで届かないため、1日ぶんの授乳の回数より多めに取る。
+const RECENT_MILK_LIMIT = 30;
 
 const emptyTaskDraft = (date: Date): TaskDraft => ({
   title: '',
@@ -466,7 +469,7 @@ export default function SukusukuApp({
 
   // 直近の授乳を読み込む。記録を触るたびに取り直す。
   const refreshRecentMilkLogs = useCallback(() => {
-    listRecentMilkLogs(supabase, familyId)
+    listRecentMilkLogs(supabase, familyId, RECENT_MILK_LIMIT)
       .then(setRecentMilkLogs)
       .catch((err: unknown) => console.error('Failed to load recent milk logs:', err))
       .finally(() => setIsLoadingRecentMilk(false));
@@ -614,20 +617,24 @@ export default function SukusukuApp({
     };
   }, [supabase, familyId]);
 
-  // 次にどちらの乳首から授乳するか。表示中の日に読み込んだ記録から判断する。
-  const nextBreastSide = useMemo<BreastSide | null>(() => getNextBreastSide(logs), [logs]);
+  // 次にどちらの乳首から授乳するか。夜中の授乳は前の日の記録になるため、表示中の日の
+  // 記録だけでは前回を取りこぼし、おすすめの側が出なくなる。日付にとらわれない直近の授乳も
+  // 合わせて渡し、その中でいちばん新しい母乳の記録から決める。
+  // （表示中の日の記録は保存した時点で入るので、圏外でも直後から新しい側が出る）
+  const nextBreastSide = useMemo<BreastSide | null>(
+    () => getNextBreastSide([...logs, ...recentMilkLogs]),
+    [logs, recentMilkLogs],
+  );
 
   // 「次の授乳の目安」に出す一式。ホームと記録タブで同じものを見せる。
-  const nextFeeding = useMemo<NextFeedingInfo>(() => {
-    const lastFed = recentMilkLogs[0] ?? null;
-    return {
-      lastFedAt: lastFed?.time ?? null,
-      lastFedTitle: lastFed ? getLogTitle(lastFed) : '',
+  const nextFeeding = useMemo<NextFeedingInfo>(
+    () => ({
+      lastFedAt: recentMilkLogs[0]?.time ?? null,
       intervalMinutes: feedingSettings.intervalMinutes,
-      averageIntervalMinutes: averageFeedingIntervalMinutes(recentMilkLogs.map((log) => log.time)),
       isLoading: isLoadingRecentMilk,
-    };
-  }, [recentMilkLogs, feedingSettings.intervalMinutes, isLoadingRecentMilk]);
+    }),
+    [recentMilkLogs, feedingSettings.intervalMinutes, isLoadingRecentMilk],
+  );
 
   // 済んだ予定のid。お知らせを消してよいかの判断に使う。
   const doneTaskIds = useMemo(

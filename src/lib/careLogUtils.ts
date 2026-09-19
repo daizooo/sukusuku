@@ -263,9 +263,8 @@ export const getLogBadges = (log: CareLog): LogBadge[] => {
   switch (log.type) {
     case 'milk': {
       if (log.method !== 'breast') {
+        // 搾乳の記録に出すのは飲んだ量だけ。何パックぶんかは、その場の判断には使わない。
         const badges: LogBadge[] = log.amountMl ? [{ text: `${log.amountMl} ml`, tone: 'milk' }] : [];
-        // 搾乳は何パックぶんを飲ませたかも出す（1パック=1回の搾乳）。
-        if (log.pumpedFrom?.length) badges.push({ text: `搾乳${log.pumpedFrom.length}パック`, tone: 'pumping' });
         // 飲みきれずに捨てた分。用意した量 = 飲んだ量 + 捨てた量になる。
         if (log.discardedMl) badges.push({ text: `残り ${log.discardedMl} ml 廃棄`, tone: 'neutral' });
         return badges;

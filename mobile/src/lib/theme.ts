@@ -95,4 +95,7 @@ export const colors = {
   neutralSurface: '#f3f4f6', // gray-100
   borderFaint: '#e5e7ebb3', // gray-200/70（帯の細かい目盛り）
   dangerSurface: '#fef2f2', // red-50（ログイン画面の確認リンクのエラーの下地）
+  holidaySurface: '#fef2f2', // red-50（祝日の札）
+  holidayBorder: '#fecaca', // red-200
+  holidayText: '#dc2626', // red-600
 } as const;

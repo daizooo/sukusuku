@@ -10,6 +10,7 @@ import {
   isSameDay,
   startOfWeek,
 } from '@/lib/dateUtils';
+import { getHolidayName } from '@/lib/japaneseHolidays';
 import { getMilestoneLabel } from '@/lib/milestones';
 import { tasksOnDate } from './utils';
 
@@ -76,6 +77,7 @@ export default function MonthView({
           const isToday = isSameDay(date, today);
           const isSelected = isSameDay(date, selectedDate);
           const isOtherMonth = date.getMonth() !== monthIndex;
+          const holiday = getHolidayName(date);
           const milestone = getMilestoneLabel(birthDate, date);
 
           return (
@@ -83,7 +85,7 @@ export default function MonthView({
               key={date.toISOString()}
               role="button"
               tabIndex={0}
-              aria-label={`${date.getMonth() + 1}月${date.getDate()}日 予定${dayTasks.length}件`}
+              aria-label={`${date.getMonth() + 1}月${date.getDate()}日${holiday ? ` ${holiday}` : ''} 予定${dayTasks.length}件`}
               onClick={() => onSelectDate(date)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -102,7 +104,7 @@ export default function MonthView({
                       ? 'bg-blue-500 text-white font-bold'
                       : isOtherMonth
                         ? 'text-gray-300'
-                        : date.getDay() === 0
+                        : date.getDay() === 0 || holiday
                           ? 'text-red-500'
                           : date.getDay() === 6
                             ? 'text-blue-500'
@@ -113,8 +115,15 @@ export default function MonthView({
                 </span>
               </div>
 
-              {milestone && !isOtherMonth && (
-                <p className="text-[8px] leading-tight text-center text-amber-600 truncate">{milestone}</p>
+              {/* 祝日と節目が重なる日は祝日を出す。1マスの高さに収めるため1行だけにする。 */}
+              {!isOtherMonth && (holiday || milestone) && (
+                <p
+                  className={`text-[8px] leading-tight text-center truncate ${
+                    holiday ? 'text-red-500' : 'text-amber-600'
+                  }`}
+                >
+                  {holiday ?? milestone}
+                </p>
               )}
 
               <div className="mt-0.5 space-y-0.5">

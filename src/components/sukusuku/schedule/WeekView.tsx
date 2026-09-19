@@ -2,6 +2,7 @@
 
 import type { DynamicTask } from '@/types/app';
 import { WEEKDAY_LABELS, addDays, isSameDay, startOfWeek } from '@/lib/dateUtils';
+import { getHolidayName } from '@/lib/japaneseHolidays';
 import { getMilestoneLabel } from '@/lib/milestones';
 import TaskRow from './TaskRow';
 import { tasksOnDate } from './utils';
@@ -41,6 +42,7 @@ export default function WeekView({
       {days.map((day) => {
         const dayTasks = tasksOnDate(tasks, day);
         const isToday = isSameDay(day, today);
+        const holiday = getHolidayName(day);
         const milestone = getMilestoneLabel(birthDate, day);
 
         return (
@@ -57,10 +59,15 @@ export default function WeekView({
                 {day.getDate()}
               </span>
               <span
-                className={`text-xs font-medium ${day.getDay() === 0 ? 'text-red-500' : day.getDay() === 6 ? 'text-blue-500' : 'text-gray-500'}`}
+                className={`text-xs font-medium ${day.getDay() === 0 || holiday ? 'text-red-500' : day.getDay() === 6 ? 'text-blue-500' : 'text-gray-500'}`}
               >
                 {WEEKDAY_LABELS[day.getDay()]}
               </span>
+              {holiday && (
+                <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
+                  {holiday}
+                </span>
+              )}
               {milestone && (
                 <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
                   {milestone}

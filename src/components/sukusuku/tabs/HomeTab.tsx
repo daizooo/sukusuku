@@ -6,7 +6,6 @@ import { getLabelColor, getProfileFieldValue } from '@/lib/uiUtils';
 import { formatTimeRange, parseDateString, startOfDay } from '@/lib/dateUtils';
 import type { NextFeedingInfo } from '@/lib/feedingSchedule';
 import NextFeedingCard from '../NextFeedingCard';
-import { formatRelativeDay } from '../schedule/utils';
 
 interface QuickAction {
   icon: typeof Phone;
@@ -219,12 +218,6 @@ export default function HomeTab({
                   <span className="flex items-center text-blue-600 font-medium">
                     <Calendar size={12} className="mr-1" />
                     {task.targetDate}
-                    {/* 何日後かはスケジュールのリスト表示と同じ表記に揃える。 */}
-                    {task.targetDateObj && (
-                      <span className="ml-1.5 text-gray-500 font-normal">
-                        {formatRelativeDay(task.targetDateObj, today)}
-                      </span>
-                    )}
                   </span>
                   <span className="flex items-center">
                     <Clock size={12} className="mr-1" />

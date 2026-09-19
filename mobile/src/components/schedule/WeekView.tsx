@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { DynamicTask } from '@/types/app';
 import { WEEKDAY_LABELS, addDays, isSameDay, startOfWeek } from '@/lib/dateUtils';
+import { getHolidayName } from '@/lib/japaneseHolidays';
 import { getMilestoneLabel } from '@/lib/milestones';
 import { tasksOnDate } from '@/lib/scheduleUtils';
 import { colors } from '@/lib/theme';
@@ -41,6 +42,7 @@ export default function WeekView({
       {days.map((day) => {
         const dayTasks = tasksOnDate(tasks, day);
         const isToday = isSameDay(day, today);
+        const holiday = getHolidayName(day);
         const milestone = getMilestoneLabel(birthDate, day);
 
         return (
@@ -58,12 +60,17 @@ export default function WeekView({
               <Text
                 style={[
                   styles.weekday,
-                  day.getDay() === 0 && styles.sunday,
+                  (day.getDay() === 0 || holiday !== null) && styles.sunday,
                   day.getDay() === 6 && styles.saturday,
                 ]}
               >
                 {WEEKDAY_LABELS[day.getDay()]}
               </Text>
+              {holiday && (
+                <View style={styles.holiday}>
+                  <Text style={styles.holidayText}>{holiday}</Text>
+                </View>
+              )}
               {milestone && (
                 <View style={styles.milestone}>
                   <Text style={styles.milestoneText}>{milestone}</Text>
@@ -109,6 +116,15 @@ const styles = StyleSheet.create({
   weekday: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
   sunday: { color: colors.sunday },
   saturday: { color: colors.navActive },
+  holiday: {
+    backgroundColor: colors.holidaySurface,
+    borderWidth: 1,
+    borderColor: colors.holidayBorder,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  holidayText: { fontSize: 10, fontWeight: '700', color: colors.holidayText },
   milestone: {
     backgroundColor: colors.milestoneSurface,
     borderWidth: 1,
