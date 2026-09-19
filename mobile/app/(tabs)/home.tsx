@@ -512,11 +512,11 @@ const styles = StyleSheet.create({
   heroLabel: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   heroLabelText: { fontSize: 13, fontWeight: '500', color: colors.primaryText, opacity: 0.9 },
   heroAge: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 8 },
-  heroNumber: { fontSize: 56, fontWeight: '700', color: colors.primaryText },
-  heroNumberSmall: { fontSize: 44, fontWeight: '700', color: colors.primaryText },
+  heroNumber: { fontSize: 56, fontWeight: '700', color: colors.primaryText, fontVariant: ['tabular-nums'] },
+  heroNumberSmall: { fontSize: 44, fontWeight: '700', color: colors.primaryText, fontVariant: ['tabular-nums'] },
   heroUnit: { fontSize: 18, fontWeight: '500', color: colors.primaryText },
   heroUnitSmall: { fontSize: 13, fontWeight: '500', color: colors.primaryText },
-  heroSub: { fontSize: 13, fontWeight: '500', color: colors.primaryText, opacity: 0.9, marginTop: 2 },
+  heroSub: { fontSize: 13, fontWeight: '500', color: colors.primaryText, opacity: 0.9, marginTop: 2, fontVariant: ['tabular-nums'] },
   heroBirth: {
     alignSelf: 'flex-start',
     marginTop: 14,
@@ -530,6 +530,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     overflow: 'hidden',
+    fontVariant: ['tabular-nums'],
   },
 
   quickRow: { flexDirection: 'row', gap: 10 },
@@ -588,8 +589,8 @@ const styles = StyleSheet.create({
   taskLabelText: { fontSize: 10, fontWeight: '700' },
   taskMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 4 },
   taskMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
-  taskDate: { fontSize: 12, fontWeight: '500', color: colors.navActive },
-  taskRelative: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
+  taskDate: { fontSize: 12, fontWeight: '500', color: colors.navActive, fontVariant: ['tabular-nums'] },
+  taskRelative: { fontSize: 12, color: colors.textMuted, fontWeight: '500', fontVariant: ['tabular-nums'] },
   taskMetaText: { fontSize: 12, color: colors.textMuted, flexShrink: 1, fontWeight: '500' },
 
   notice: { fontSize: 12, color: colors.textMuted, lineHeight: 18 },

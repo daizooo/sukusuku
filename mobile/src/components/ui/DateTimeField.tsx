@@ -70,5 +70,5 @@ const styles = StyleSheet.create({
   },
   dateChip: { flex: 2 },
   timeChip: { flex: 1 },
-  chipText: { fontSize: 15, color: colors.text, fontWeight: '500' },
+  chipText: { fontSize: 15, color: colors.text, fontWeight: '500', fontVariant: ['tabular-nums'] },
 });

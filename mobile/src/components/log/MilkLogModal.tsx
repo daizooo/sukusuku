@@ -863,7 +863,7 @@ const styles = StyleSheet.create({
   customMinutes: { marginTop: 6 },
 
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  stock: { fontSize: 11, color: colors.textMuted, marginBottom: 6, fontWeight: '500' },
+  stock: { fontSize: 11, color: colors.textMuted, marginBottom: 6, fontWeight: '500', fontVariant: ['tabular-nums'] },
   batchList: { gap: 6 },
   batchListSpaced: { marginTop: 8 },
   batchRow: {
@@ -903,10 +903,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  discardedText: { flex: 1, fontSize: 11, color: colors.textSubtle, fontWeight: '500' },
+  discardedText: { flex: 1, fontSize: 11, color: colors.textSubtle, fontWeight: '500', fontVariant: ['tabular-nums'] },
   undoText: { fontSize: 11, fontWeight: '700', color: colors.pumpingText },
-  batchTime: { fontSize: 14, color: colors.textSubtle, fontWeight: '500' },
-  batchAmount: { fontSize: 14, fontWeight: '700', color: colors.textSubtle },
+  batchTime: { fontSize: 14, color: colors.textSubtle, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  batchAmount: { fontSize: 14, fontWeight: '700', color: colors.textSubtle, fontVariant: ['tabular-nums'] },
   batchTextSelected: { color: colors.pumpingText },
   batchSummary: { marginTop: 8, fontSize: 12, fontWeight: '700', color: colors.pumpingText },
   drankReset: { fontSize: 11, fontWeight: '500', color: colors.pumpingText, marginBottom: 6 },
@@ -946,7 +946,7 @@ const styles = StyleSheet.create({
   phaseNext: { borderColor: colors.milk },
   phaseLabel: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   phaseLabelDone: { color: colors.milkText },
-  phaseTime: { fontSize: 20, fontWeight: '700', color: colors.text, marginVertical: 2 },
+  phaseTime: { fontSize: 20, fontWeight: '700', color: colors.text, marginVertical: 2, fontVariant: ['tabular-nums'] },
   phaseHint: { fontSize: 10, fontWeight: '500', color: colors.milkText },
   phaseTextRunning: { color: colors.primaryText },
 
@@ -964,7 +964,7 @@ const styles = StyleSheet.create({
   trackFillRunning: { backgroundColor: colors.primaryText },
 
   guide: { fontSize: 11, fontWeight: '700', color: colors.milkText, marginTop: 8 },
-  stopwatchSummary: { fontSize: 12, fontWeight: '700', color: colors.milkText, marginTop: 6 },
+  stopwatchSummary: { fontSize: 12, fontWeight: '700', color: colors.milkText, marginTop: 6, fontVariant: ['tabular-nums'] },
 
   // 測る前に済ませたセット。
   untracked: {
@@ -998,5 +998,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: colors.milkText,
+    fontVariant: ['tabular-nums'],
   },
 });

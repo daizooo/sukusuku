@@ -156,21 +156,17 @@ export default function ScheduleScreen() {
   const weekStart = startOfWeek(selectedDate);
   const monthStart = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth(), 1);
 
-  // 週表示・日表示に出す育児記録。表示中の範囲だけを取りに行く。
-  // 月表示は記録を出さないため、月をめくっても問い合わせは起きない。
+  // 日表示に出す育児記録。表示中の範囲だけを取りに行く。
+  // 月表示・週表示は記録を出さないため、めくっても問い合わせは起きない。
   const logRange = useMemo(() => {
     if (view === 'day') {
       const from = startOfDay(selectedDate);
       return { from, to: addDays(from, 1) };
     }
-    if (view === 'week') {
-      const from = startOfWeek(selectedDate);
-      return { from, to: addDays(from, 7) };
-    }
     return null;
   }, [view, selectedDate]);
 
-  // 範囲が変わったときだけ取り直す（週表示で同じ週の中の日を選び直しても再取得しない）。
+  // 範囲が変わったときだけ取り直す。
   // これから来る日には記録が存在しないため、未来だけの範囲は問い合わせない。
   const logFrom = logRange?.from.getTime() ?? null;
   const logTo = logRange?.to.getTime() ?? null;
@@ -458,8 +454,6 @@ export default function ScheduleScreen() {
               today={today}
               tasks={filteredTodos}
               birthDate={birthDate}
-              careLogs={visibleLogs}
-              isLoadingCareLogs={isLoadingCareLogs}
               onSelectDate={(date) => selectDate(date)}
               onToggleTodo={toggleTodo}
               onOpenTask={openTaskDetail}

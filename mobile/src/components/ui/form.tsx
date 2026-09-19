@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
   },
-  gridItemText: { fontSize: 13, color: colors.textSubtle, fontWeight: '500' },
+  gridItemText: { fontSize: 13, color: colors.textSubtle, fontWeight: '500', fontVariant: ['tabular-nums'] },
   input: {
     borderWidth: 1,
     borderColor: colors.borderStrong,
@@ -244,6 +244,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.text,
     backgroundColor: colors.surface,
+    fontVariant: ['tabular-nums'],
   },
   noteInput: { minHeight: 68, textAlignVertical: 'top' },
   submit: { borderRadius: 12, paddingVertical: 14, alignItems: 'center' },

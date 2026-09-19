@@ -418,7 +418,8 @@ export default function LogTab({
                         </div>
                       )}
                       <div className="flex justify-between items-end mt-2 gap-2">
-                        <p className="text-xs text-gray-600">{log.note || 'メモなし'}</p>
+                        {/* メモは書いたときだけ出す。「メモなし」を並べても読むものが増えるだけなので出さない。 */}
+                        <p className="text-xs text-gray-600">{log.note}</p>
                         <span className="text-[11px] text-gray-400 flex items-center shrink-0">
                           <User size={11} className="mr-1" />
                           {memberLabel(log.createdBy)}が記録

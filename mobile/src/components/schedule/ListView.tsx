@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sectionTitle: { fontSize: 12, fontWeight: '700' },
-  sectionCount: { fontSize: 11, color: colors.textFaint, fontWeight: '500' },
+  sectionCount: { fontSize: 11, color: colors.textFaint, fontWeight: '500', fontVariant: ['tabular-nums'] },
   dayHeading: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -226,9 +226,9 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 6,
   },
-  dayHeadingDate: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
-  dayHeadingRelative: { fontSize: 11, color: colors.textMuted, fontWeight: '500' },
-  dayHeadingAge: { fontSize: 11, color: colors.textFaint, fontWeight: '500' },
+  dayHeadingDate: { fontSize: 12, fontWeight: '700', color: colors.textSubtle, fontVariant: ['tabular-nums'] },
+  dayHeadingRelative: { fontSize: 11, color: colors.textMuted, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  dayHeadingAge: { fontSize: 11, color: colors.textFaint, fontWeight: '500', fontVariant: ['tabular-nums'] },
   note: { fontSize: 11, color: colors.textFaint, paddingHorizontal: 4, paddingBottom: 8, lineHeight: 17, fontWeight: '500' },
   taskWrap: { paddingBottom: 8 },
 });
