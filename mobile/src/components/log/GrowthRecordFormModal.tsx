@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { Trash2 } from 'lucide-react-native';
 import type { GrowthRecord } from '@/types/app';
@@ -18,7 +18,8 @@ import {
   type WeightUnit,
 } from '@/lib/growthRecordInput';
 import { colors } from '@/lib/theme';
-import LogModalShell from '@/components/log/LogModalShell';
+import LogModalShell, { LOG_SHEET_HEIGHT } from '@/components/log/LogModalShell';
+import SheetModal from '@/components/ui/SheetModal';
 
 // 身長・体重の記録。Web版の
 // `src/components/sukusuku/modals/GrowthRecordFormModal.tsx` を置き換えたもの。
@@ -125,7 +126,7 @@ export default function GrowthRecordFormModal({
     });
 
   return (
-    <Modal visible={mode !== null} animationType="slide" onRequestClose={onClose}>
+    <SheetModal visible={mode !== null} onClose={onClose} height={LOG_SHEET_HEIGHT}>
       {/* 他の記録の入力と同じ枠・同じ大きさで開く。 */}
       <LogModalShell
         title={mode === 'add' ? '身長・体重を記録' : '記録を編集'}
@@ -231,7 +232,7 @@ export default function GrowthRecordFormModal({
           </Text>
         )}
       </LogModalShell>
-    </Modal>
+    </SheetModal>
   );
 }
 

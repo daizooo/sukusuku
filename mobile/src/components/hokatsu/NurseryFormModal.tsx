@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { Trash2, X } from 'lucide-react-native';
 import type { Nursery, NurseryStatus } from '@/types/app';
 import { formatDateWithWeekday, parseDateString, parseTimeInput, toDateString } from '@/lib/dateUtils';
 import { colors } from '@/lib/theme';
 import SelectField from '@/components/ui/SelectField';
+import SheetModal from '@/components/ui/SheetModal';
 
 // 園の情報（連絡先・見学の日時・メモ）を編集する。Web版の
 // `src/components/sukusuku/modals/NurseryFormModal.tsx` を置き換えたもの。
@@ -91,137 +91,140 @@ export default function NurseryFormModal({
     });
 
   return (
-    <Modal visible={mode !== null} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.screen}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>
-            {mode === 'add' ? '保育園を追加' : draft.name || '保育園を編集'}
-          </Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="閉じる" onPress={onClose} hitSlop={12}>
-            <X size={20} color={colors.textFaint} />
-          </Pressable>
+    <SheetModal visible={mode !== null} onClose={onClose}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>
+          {mode === 'add' ? '保育園を追加' : draft.name || '保育園を編集'}
+        </Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="閉じる" onPress={onClose} hitSlop={12}>
+          <X size={20} color={colors.textFaint} />
+        </Pressable>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View>
+          <SectionTitle>園の情報</SectionTitle>
+          <View style={styles.fields}>
+            <View>
+              <Text style={styles.label}>
+                園名 <Text style={styles.required}>*</Text>
+              </Text>
+              <TextInput
+                style={styles.input}
+                value={draft.name}
+                onChangeText={(name) => set({ name })}
+                placeholder="例: 舞原保育園"
+                placeholderTextColor={colors.textFaint}
+              />
+            </View>
+            <View>
+              <Text style={styles.label}>住所</Text>
+              <TextInput
+                style={styles.input}
+                value={draft.address}
+                onChangeText={(address) => set({ address })}
+                placeholder="例: 熊本市南区城南町舞原291-7"
+                placeholderTextColor={colors.textFaint}
+              />
+            </View>
+            <View>
+              <Text style={styles.label}>電話番号</Text>
+              <TextInput
+                style={styles.input}
+                value={draft.phone}
+                onChangeText={(phone) => set({ phone })}
+                keyboardType="phone-pad"
+                placeholder="例: 0964-28-2121"
+                placeholderTextColor={colors.textFaint}
+              />
+            </View>
+            <View>
+              <Text style={styles.label}>状況</Text>
+              <SelectField
+                accessibilityLabel="状況"
+                options={STATUSES.map((status) => ({ value: status, label: status }))}
+                value={draft.status}
+                onChange={(status) => set({ status })}
+                style={styles.select}
+                textStyle={styles.selectText}
+              />
+            </View>
+          </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View>
-            <SectionTitle>園の情報</SectionTitle>
-            <View style={styles.fields}>
-              <View>
-                <Text style={styles.label}>
-                  園名 <Text style={styles.required}>*</Text>
-                </Text>
-                <TextInput
-                  style={styles.input}
-                  value={draft.name}
-                  onChangeText={(name) => set({ name })}
-                  placeholder="例: 舞原保育園"
-                  placeholderTextColor={colors.textFaint}
-                />
-              </View>
-              <View>
-                <Text style={styles.label}>住所</Text>
-                <TextInput
-                  style={styles.input}
-                  value={draft.address}
-                  onChangeText={(address) => set({ address })}
-                  placeholder="例: 熊本市南区城南町舞原291-7"
-                  placeholderTextColor={colors.textFaint}
-                />
-              </View>
-              <View>
-                <Text style={styles.label}>電話番号</Text>
-                <TextInput
-                  style={styles.input}
-                  value={draft.phone}
-                  onChangeText={(phone) => set({ phone })}
-                  keyboardType="phone-pad"
-                  placeholder="例: 0964-28-2121"
-                  placeholderTextColor={colors.textFaint}
-                />
-              </View>
-              <View>
-                <Text style={styles.label}>状況</Text>
-                <SelectField
-                  accessibilityLabel="状況"
-                  options={STATUSES.map((status) => ({ value: status, label: status }))}
-                  value={draft.status}
-                  onChange={(status) => set({ status })}
-                  style={styles.select}
-                  textStyle={styles.selectText}
-                />
-              </View>
-            </View>
-          </View>
-
-          <View>
-            <SectionTitle>見学の日時</SectionTitle>
-            <View style={styles.visitRow}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="見学の日付"
-                onPress={openDatePicker}
-                style={[styles.input, styles.flex]}
-              >
-                <Text style={visitDate ? styles.value : styles.placeholder}>
-                  {visitDate ? formatDateWithWeekday(visitDate) : '日付を選ぶ'}
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="見学の時刻"
-                onPress={openTimePicker}
-                style={[styles.input, styles.timeField]}
-              >
-                <Text style={draft.visitTime ? styles.value : styles.placeholder}>
-                  {draft.visitTime ?? '時刻'}
-                </Text>
-              </Pressable>
-            </View>
-            <Text style={styles.hint}>
-              日時が決まったら、状況も「見学予約済」に変えておきましょう。
-            </Text>
-          </View>
-
-          <View>
-            <SectionTitle>その他のメモ</SectionTitle>
-            <TextInput
-              style={[styles.input, styles.memo]}
-              value={draft.memo}
-              onChangeText={(memo) => set({ memo })}
-              placeholder="申請時期、園の雰囲気、夫婦で相談したいことなど"
-              placeholderTextColor={colors.textFaint}
-              multiline
-            />
-          </View>
-        </ScrollView>
-
-        <View style={styles.footer}>
-          <Pressable
-            accessibilityRole="button"
-            disabled={draft.name === ''}
-            onPress={() => onSubmit(draft)}
-            style={[styles.submit, draft.name === '' && styles.submitDisabled]}
-          >
-            <Text style={styles.submitText}>{mode === 'add' ? '追加する' : '保存する'}</Text>
-          </Pressable>
-          {mode === 'edit' && nursery && onDelete && (
+        <View>
+          <SectionTitle>見学の日時</SectionTitle>
+          <View style={styles.visitRow}>
             <Pressable
               accessibilityRole="button"
-              onPress={() => onDelete(nursery.id)}
-              style={styles.deleteButton}
+              accessibilityLabel="見学の日付"
+              onPress={openDatePicker}
+              style={[styles.input, styles.flex]}
             >
-              <Trash2 size={14} color={colors.danger} />
-              <Text style={styles.deleteText}>削除する</Text>
+              <Text style={visitDate ? styles.value : styles.placeholder}>
+                {visitDate ? formatDateWithWeekday(visitDate) : '日付を選ぶ'}
+              </Text>
             </Pressable>
-          )}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="見学の時刻"
+              onPress={openTimePicker}
+              style={[styles.input, styles.timeField]}
+            >
+              <Text style={draft.visitTime ? styles.value : styles.placeholder}>
+                {draft.visitTime ?? '時刻'}
+              </Text>
+            </Pressable>
+          </View>
+          <Text style={styles.hint}>
+            日時が決まったら、状況も「見学予約済」に変えておきましょう。
+          </Text>
         </View>
-      </SafeAreaView>
-    </Modal>
+
+        <View>
+          <SectionTitle>その他のメモ</SectionTitle>
+          <TextInput
+            style={[styles.input, styles.memo]}
+            value={draft.memo}
+            onChangeText={(memo) => set({ memo })}
+            placeholder="申請時期、園の雰囲気、夫婦で相談したいことなど"
+            placeholderTextColor={colors.textFaint}
+            multiline
+          />
+        </View>
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={draft.name === ''}
+          onPress={() => onSubmit(draft)}
+          style={[styles.submit, draft.name === '' && styles.submitDisabled]}
+        >
+          <Text style={styles.submitText}>{mode === 'add' ? '追加する' : '保存する'}</Text>
+        </Pressable>
+        {mode === 'edit' && nursery && onDelete && (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => onDelete(nursery.id)}
+            style={styles.deleteButton}
+          >
+            <Trash2 size={14} color={colors.danger} />
+            <Text style={styles.deleteText}>削除する</Text>
+          </Pressable>
+        )}
+      </View>
+    </SheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface },
+  // 中身が多いときだけ縮めてスクロールさせる（flex: 1 にすると中身が少なくても枠が伸びる）。
+  scroll: { flexShrink: 1 },
   flex: { flex: 1 },
   header: {
     flexDirection: 'row',

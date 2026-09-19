@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ban, Undo2 } from 'lucide-react-native';
 import type { FeedingEntryMode, FeedingMethod, PumpedBatch, PumpingLog } from '@/types/app';
 import { FEEDING_ENTRY_MODE_OPTIONS, FEEDING_METHOD_OPTIONS, pumpedStockMl } from '@/lib/careLogUtils';
@@ -14,7 +14,8 @@ import {
   SubmitButton,
 } from '@/components/ui/form';
 import DateTimeField from '@/components/ui/DateTimeField';
-import LogModalShell from '@/components/log/LogModalShell';
+import LogModalShell, { LOG_SHEET_HEIGHT } from '@/components/log/LogModalShell';
+import SheetModal from '@/components/ui/SheetModal';
 
 // 搾乳の記録。Web版の `src/components/sukusuku/modals/PumpingLogModal.tsx` を
 // React Nativeに置き換えたもの。入力の順序・既定値・保存する中身は同じにしてある。
@@ -55,9 +56,9 @@ export default function PumpingLogModal({
   ...props
 }: PumpingLogModalProps & { show: boolean }) {
   return (
-    <Modal visible={show} animationType="slide" onRequestClose={props.onClose}>
+    <SheetModal visible={show} onClose={props.onClose} height={LOG_SHEET_HEIGHT}>
       {show ? <PumpingLogModalBody {...props} /> : null}
-    </Modal>
+    </SheetModal>
   );
 }
 

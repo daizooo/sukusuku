@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Modal } from 'react-native';
 import type { DiaperKind, DiaperLog, PoopColor, PoopConsistency } from '@/types/app';
 import { DIAPER_KIND_OPTIONS } from '@/lib/careLogUtils';
 import { DeleteButton, FieldLabel, NoteField, Segmented, SubmitButton } from '@/components/ui/form';
 import DateTimeField from '@/components/ui/DateTimeField';
-import LogModalShell from '@/components/log/LogModalShell';
+import LogModalShell, { LOG_SHEET_HEIGHT } from '@/components/log/LogModalShell';
+import SheetModal from '@/components/ui/SheetModal';
 
 // おむつの記録。PWA版の `src/components/sukusuku/modals/DiaperLogModal.tsx` を
 // React Nativeに置き換えたもの。入力の順序・既定値・保存する中身は同じにしてある。
@@ -42,9 +42,9 @@ export default function DiaperLogModal({
   ...props
 }: DiaperLogModalProps & { show: boolean }) {
   return (
-    <Modal visible={show} animationType="slide" onRequestClose={props.onClose}>
+    <SheetModal visible={show} onClose={props.onClose} height={LOG_SHEET_HEIGHT}>
       {show ? <DiaperLogModalBody {...props} /> : null}
-    </Modal>
+    </SheetModal>
   );
 }
 
