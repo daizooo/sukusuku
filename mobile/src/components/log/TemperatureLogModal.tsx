@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { TemperatureLog } from '@/types/app';
 import {
   BASELINE_NOTABLE_DIFF,
@@ -21,7 +21,8 @@ import { formatTimeString } from '@/lib/dateUtils';
 import { colors } from '@/lib/theme';
 import { DeleteButton, FieldLabel, HintBanner, NoteField, SubmitButton } from '@/components/ui/form';
 import DateTimeField from '@/components/ui/DateTimeField';
-import LogModalShell from '@/components/log/LogModalShell';
+import LogModalShell, { LOG_SHEET_HEIGHT } from '@/components/log/LogModalShell';
+import SheetModal from '@/components/ui/SheetModal';
 
 // 体温の記録。Web版には無い、ネイティブから足した記録（docs/what-to-record.md §4-1）。
 //
@@ -56,9 +57,9 @@ export default function TemperatureLogModal({
   ...props
 }: TemperatureLogModalProps & { show: boolean }) {
   return (
-    <Modal visible={show} animationType="slide" onRequestClose={props.onClose}>
+    <SheetModal visible={show} onClose={props.onClose} height={LOG_SHEET_HEIGHT}>
       {show ? <TemperatureLogModalBody {...props} /> : null}
-    </Modal>
+    </SheetModal>
   );
 }
 

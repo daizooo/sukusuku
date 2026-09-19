@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type {
   BreastSide,
   FeedingEntryMode,
@@ -40,7 +40,8 @@ import {
   SubmitButton,
 } from '@/components/ui/form';
 import DateTimeField from '@/components/ui/DateTimeField';
-import LogModalShell from '@/components/log/LogModalShell';
+import LogModalShell, { LOG_SHEET_HEIGHT } from '@/components/log/LogModalShell';
+import SheetModal from '@/components/ui/SheetModal';
 
 // 授乳・ミルクの記録。Web版の `src/components/sukusuku/modals/MilkLogModal.tsx` を
 // React Nativeに置き換えたもの。入力の順序・既定値・保存する中身は同じにしてある。
@@ -102,9 +103,9 @@ const toCustomMinutes = (minutes: number | undefined): string =>
 /** 開くたびに入力内容を作り直したいので、閉じている間は中身ごと外す。 */
 export default function MilkLogModal({ show, ...props }: MilkLogModalProps & { show: boolean }) {
   return (
-    <Modal visible={show} animationType="slide" onRequestClose={props.onClose}>
+    <SheetModal visible={show} onClose={props.onClose} height={LOG_SHEET_HEIGHT}>
       {show ? <MilkLogModalBody {...props} /> : null}
-    </Modal>
+    </SheetModal>
   );
 }
 

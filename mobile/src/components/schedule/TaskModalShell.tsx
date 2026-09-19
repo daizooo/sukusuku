@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { X } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
+import SheetModal from '@/components/ui/SheetModal';
 
 // 予定の追加・編集・詳細の外枠。Web版の `TaskForm.tsx` の中にある `ModalShell` にあたる。
 //
-// 見出しと下のボタンは固定し、スクロールするのは中身だけ。
-// 保存・完了のボタンが隠れないよう、Web版と同じく下に置いたままにする。
+// 画面いっぱいにはせず、Web版と同じく画面の下に浮かぶ枠にする（SheetModal）。
+// 高さは中身なりで、入りきらないときだけ枠が縮んで中身がスクロールする
+// （Web版の `max-h-[90vh]`）。見出しと下のボタンは固定し、保存・完了のボタンは隠れない。
 
 interface TaskModalShellProps {
   show: boolean;
@@ -25,27 +26,28 @@ export default function TaskModalShell({
   footer,
 }: TaskModalShellProps) {
   return (
-    <Modal visible={show} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.screen}>
-        <View style={styles.header}>
-          <Text style={styles.title}>{title}</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="閉じる" onPress={onClose} hitSlop={12}>
-            <X size={20} color={colors.textFaint} />
-          </Pressable>
-        </View>
+    <SheetModal visible={show} onClose={onClose}>
+      <View style={styles.header}>
+        <Text style={styles.title}>{title}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="閉じる" onPress={onClose} hitSlop={12}>
+          <X size={20} color={colors.textFaint} />
+        </Pressable>
+      </View>
 
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          {children}
-        </ScrollView>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        {children}
+      </ScrollView>
 
-        <View style={styles.footer}>{footer}</View>
-      </SafeAreaView>
-    </Modal>
+      <View style={styles.footer}>{footer}</View>
+    </SheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -56,6 +58,8 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   title: { fontSize: 16, fontWeight: '700', color: colors.textSubtle },
+  // 中身が多いときだけ縮めてスクロールさせる（flex: 1 にすると中身が少なくても枠が伸びる）。
+  scroll: { flexShrink: 1 },
   content: { paddingHorizontal: 20, paddingVertical: 16 },
   footer: {
     paddingHorizontal: 20,

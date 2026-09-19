@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Trash2, X } from 'lucide-react-native';
 import type { ListBoard, ListGroup } from '@/types/app';
 import { colors } from '@/lib/theme';
+import SheetModal from '@/components/ui/SheetModal';
 
 // リストそのものの追加・編集。Web版の
 // `src/components/sukusuku/modals/ListFormModal.tsx` を置き換えたもの。
@@ -104,97 +104,100 @@ export default function ListFormModal({
   const canSubmit = draft.name.trim() !== '';
 
   return (
-    <Modal visible={mode !== null} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.screen}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>
-            {mode === 'add' ? 'リストを追加' : 'リストの設定'}
+    <SheetModal visible={mode !== null} onClose={onClose}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>
+          {mode === 'add' ? 'リストを追加' : 'リストの設定'}
+        </Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="閉じる" onPress={onClose} hitSlop={12}>
+          <X size={20} color={colors.textFaint} />
+        </Pressable>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View>
+          <Text style={styles.label}>
+            リスト名 <Text style={styles.required}>*</Text>
           </Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="閉じる" onPress={onClose} hitSlop={12}>
-            <X size={20} color={colors.textFaint} />
-          </Pressable>
+          <TextInput
+            style={styles.input}
+            value={draft.name}
+            onChangeText={(name) => set({ name })}
+            placeholder="例: 買い出し🛒 / やりたいこと / やること"
+            placeholderTextColor={colors.textFaint}
+          />
+          <View style={styles.emojiRow}>
+            {NAME_EMOJIS.map((emoji) => (
+              <Pressable
+                key={emoji}
+                accessibilityRole="button"
+                accessibilityLabel={`${emoji}を名前に足す`}
+                onPress={() => set({ name: draft.name + emoji })}
+                style={styles.emoji}
+              >
+                <Text style={styles.emojiText}>{emoji}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.hint}>
+            絵文字は名前の末尾に足されます。自分で打ち込んでも構いません。
+          </Text>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {/* 枠のゴミ箱からも消せるが、名前を直せるのはここだけなので一覧を置く。 */}
+        {mode === 'edit' && groups.length > 0 && onRenameGroup && onDeleteGroup && (
           <View>
-            <Text style={styles.label}>
-              リスト名 <Text style={styles.required}>*</Text>
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={draft.name}
-              onChangeText={(name) => set({ name })}
-              placeholder="例: 買い出し🛒 / やりたいこと / やること"
-              placeholderTextColor={colors.textFaint}
-            />
-            <View style={styles.emojiRow}>
-              {NAME_EMOJIS.map((emoji) => (
-                <Pressable
-                  key={emoji}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${emoji}を名前に足す`}
-                  onPress={() => set({ name: draft.name + emoji })}
-                  style={styles.emoji}
-                >
-                  <Text style={styles.emojiText}>{emoji}</Text>
-                </Pressable>
+            <Text style={styles.label}>グループの一覧</Text>
+            <View style={styles.groupList}>
+              {groups.map((group) => (
+                <GroupRow
+                  key={group.id}
+                  group={group}
+                  onRename={onRenameGroup}
+                  onDelete={onDeleteGroup}
+                />
               ))}
             </View>
             <Text style={styles.hint}>
-              絵文字は名前の末尾に足されます。自分で打ち込んでも構いません。
+              名前は入力を終えると保存されます。消しても中の項目は「未分類」に残ります。
             </Text>
           </View>
+        )}
+      </ScrollView>
 
-          {/* 枠のゴミ箱からも消せるが、名前を直せるのはここだけなので一覧を置く。 */}
-          {mode === 'edit' && groups.length > 0 && onRenameGroup && onDeleteGroup && (
-            <View>
-              <Text style={styles.label}>グループの一覧</Text>
-              <View style={styles.groupList}>
-                {groups.map((group) => (
-                  <GroupRow
-                    key={group.id}
-                    group={group}
-                    onRename={onRenameGroup}
-                    onDelete={onDeleteGroup}
-                  />
-                ))}
-              </View>
-              <Text style={styles.hint}>
-                名前は入力を終えると保存されます。消しても中の項目は「未分類」に残ります。
-              </Text>
-            </View>
-          )}
-        </ScrollView>
-
-        <View style={styles.footer}>
+      <View style={styles.footer}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={!canSubmit}
+          onPress={() =>
+            onSubmit({ ...draft, groupLabel: draft.groupLabel.trim() || DEFAULT_GROUP_LABEL })
+          }
+          style={[styles.submit, !canSubmit && styles.submitDisabled]}
+        >
+          <Text style={styles.submitText}>{mode === 'add' ? '追加する' : '保存する'}</Text>
+        </Pressable>
+        {mode === 'edit' && list && onDelete && (
           <Pressable
             accessibilityRole="button"
-            disabled={!canSubmit}
-            onPress={() =>
-              onSubmit({ ...draft, groupLabel: draft.groupLabel.trim() || DEFAULT_GROUP_LABEL })
-            }
-            style={[styles.submit, !canSubmit && styles.submitDisabled]}
+            onPress={() => onDelete(list.id)}
+            style={styles.deleteButton}
           >
-            <Text style={styles.submitText}>{mode === 'add' ? '追加する' : '保存する'}</Text>
+            <Trash2 size={14} color={colors.danger} />
+            <Text style={styles.deleteText}>このリストを削除する</Text>
           </Pressable>
-          {mode === 'edit' && list && onDelete && (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => onDelete(list.id)}
-              style={styles.deleteButton}
-            >
-              <Trash2 size={14} color={colors.danger} />
-              <Text style={styles.deleteText}>このリストを削除する</Text>
-            </Pressable>
-          )}
-        </View>
-      </SafeAreaView>
-    </Modal>
+        )}
+      </View>
+    </SheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface },
+  // 中身が多いときだけ縮めてスクロールさせる（flex: 1 にすると中身が少なくても枠が伸びる）。
+  scroll: { flexShrink: 1 },
   flex: { flex: 1 },
   header: {
     flexDirection: 'row',
