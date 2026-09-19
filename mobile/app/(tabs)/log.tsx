@@ -329,7 +329,16 @@ export default function LogScreen() {
     [members, userId],
   );
 
-  const summary = useMemo(() => summarizeLogs(logs), [logs]);
+  // 日付の表記。今年のうちは年を省き、それ以外の年を見ているときだけ年を付ける（PWA版と同じ）。
+  const dateLabel =
+    logDate.getFullYear() === today.getFullYear()
+      ? formatDateWithWeekday(logDate)
+      : `${logDate.getFullYear()}年${formatDateWithWeekday(logDate)}`;
+
+  // 日を切り替えた直後は前の日の記録が残っているため、読み込み中は空として扱う（PWA版と同じ）。
+  // 端末の控えは読み込みのうちに入るので、圏外でもここで待たされるのは一瞬で済む。
+  const visibleLogs = useMemo(() => (isLoading ? [] : logs), [isLoading, logs]);
+  const summary = useMemo(() => summarizeLogs(visibleLogs), [visibleLogs]);
   // 表示中の日の記録と、日付にとらわれない直近の授乳を合わせて渡し、
   // その中でいちばん新しい母乳の記録から決める。
   // （表示中の日の記録は保存した時点で入るので、圏外でも直後から新しい側が出る）
@@ -347,7 +356,7 @@ export default function LogScreen() {
     ? `平熱 ${formatCelsius(temperatureBaseline.celsius)}`
     : 'まだ記録なし';
   // 入力画面に出す「前回の体温」。ボタンの平熱とは別に、直前の1件が要る。
-  const latestTemperature = useMemo(() => getLatestTemperature(logs), [logs]);
+  const latestTemperature = useMemo(() => getLatestTemperature(visibleLogs), [visibleLogs]);
 
   const handleSave = async (input: MilkLogInput, existing: MilkLog | null) => {
     if (!familyId || !userId) return;
@@ -640,7 +649,7 @@ export default function LogScreen() {
             hitSlop={8}
             style={styles.dateButton}
           >
-            <Text style={styles.date}>{formatDateWithWeekday(logDate)}</Text>
+            <Text style={styles.date}>{dateLabel}</Text>
           </Pressable>
           {/* 端末の日付ピッカーで任意の日へ飛べることを示す印。PWA版と同じ位置。 */}
           <CalendarDays size={16} color={colors.textFaint} />
@@ -755,8 +764,7 @@ export default function LogScreen() {
 
             {!isToday && (
               <Text style={styles.pastDayNote}>
-                過去の日を表示中です。記録を追加すると{formatDateWithWeekday(logDate)}に
-                登録されます。
+                過去の日を表示中です。記録を追加すると{dateLabel}に登録されます。
               </Text>
             )}
 
@@ -777,15 +785,15 @@ export default function LogScreen() {
             }
           >
             <Text style={styles.listHeading}>
-              {formatDateWithWeekday(logDate)}の記録 {logs.length}件
+              {dateLabel}の記録 {visibleLogs.length}件
             </Text>
-            {isLoading && logs.length === 0 ? (
+            {isLoading ? (
               <ActivityIndicator color={colors.primary} style={styles.listLoading} />
-            ) : logs.length === 0 ? (
+            ) : visibleLogs.length === 0 ? (
               <Text style={styles.empty}>この日の記録はありません</Text>
             ) : (
               <LogTimeline
-                logs={logs}
+                logs={visibleLogs}
                 memberLabel={memberLabel}
                 onSelect={(log) => {
                   if (log.type === 'milk') setEditing({ log });

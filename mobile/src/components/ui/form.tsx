@@ -203,7 +203,7 @@ export function SubmitButton({
 
 export function DeleteButton({
   onPress,
-  label = 'この記録を削除する',
+  label = '削除する',
 }: {
   onPress: () => void;
   /** 消す相手が記録でないとき（計測中の授乳など）に差し替える。 */
