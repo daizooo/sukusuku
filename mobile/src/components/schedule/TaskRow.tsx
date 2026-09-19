@@ -37,10 +37,12 @@ export default function TaskRow({ task, onToggle, onOpen, showDate }: TaskRowPro
 
       <View style={styles.body}>
         <View style={styles.titleRow}>
-          <Text style={[styles.title, task.done && styles.titleDone]}>{task.title}</Text>
-          {task.remindMinutesBefore !== null && !task.done && (
-            <BellRing size={12} color={colors.milkProgress} />
-          )}
+          <View style={styles.titleGroup}>
+            <Text style={[styles.title, task.done && styles.titleDone]}>{task.title}</Text>
+            {task.remindMinutesBefore !== null && !task.done && (
+              <BellRing size={12} color={colors.milkProgress} />
+            )}
+          </View>
           <View
             style={[styles.label, { backgroundColor: label.background, borderColor: label.border }]}
           >
@@ -77,7 +79,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: 12,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -86,13 +88,14 @@ const styles = StyleSheet.create({
   },
   check: { marginTop: 1 },
   body: { flex: 1 },
-  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  title: { flex: 1, fontSize: 14, fontWeight: '500', color: colors.textSubtle, lineHeight: 19 },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  titleGroup: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  title: { fontSize: 14, fontWeight: '500', color: colors.textSubtle, lineHeight: 19 },
   titleDone: { color: colors.textFaint, textDecorationLine: 'line-through' },
-  label: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  label: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   labelText: { fontSize: 10, fontWeight: '700' },
   meta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 6 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
   metaDate: { fontSize: 12, fontWeight: '500', color: colors.navActiveText },
-  metaText: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
+  metaText: { fontSize: 12, color: colors.textMuted, flexShrink: 1, fontWeight: '500' },
 });

@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { View } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { SessionProvider, useSession } from '@/lib/session';
 import { useNursingAlarmWatcher } from '@/lib/nursingTimer';
@@ -27,16 +28,41 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <SessionProvider>
-        <StatusBar style="dark" />
+        <StatusBar style="light" />
         <Stack
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: colors.background },
           }}
         />
+        <StatusBarBand />
         <AppEffects />
       </SessionProvider>
     </SafeAreaProvider>
+  );
+}
+
+/**
+ * 画面の一番上（時計や電池が出ている帯）をアプリの色で塗る。
+ *
+ * PWA版はmanifestの theme_color でここが同じ色になる。塗らないと地の灰色のままで、
+ * 2つを行き来したときに別のアプリに見えるため、同じ形にそろえる。
+ * どの画面の上にも出したいので、タブではなくアプリの一番外側に置く。
+ */
+function StatusBarBand() {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: insets.top,
+        backgroundColor: colors.brand,
+      }}
+    />
   );
 }
 

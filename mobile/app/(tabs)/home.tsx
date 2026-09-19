@@ -27,7 +27,7 @@ import {
   Phone,
   Stethoscope,
 } from 'lucide-react-native';
-import type { DynamicTask, MilkLog, Task, UserProfile } from '@/types/app';
+import type { DynamicTask, LoginRole, MilkLog, Task, UserProfile } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
@@ -66,6 +66,7 @@ export default function HomeScreen() {
   const router = useRouter();
 
   const [familyId, setFamilyId] = useState<string | null>(null);
+  const [loginRole, setLoginRole] = useState<LoginRole>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [todos, setTodos] = useState<Task[]>([]);
   const [isLoadingTodos, setIsLoadingTodos] = useState(true);
@@ -86,6 +87,7 @@ export default function HomeScreen() {
         const membership = await getMyMembership(supabase, userId);
         if (!isMounted || !membership.familyId) return;
         setFamilyId(membership.familyId);
+        setLoginRole(membership.role);
         const [loadedProfile, loadedTasks, loadedMilk, settings] = await Promise.all([
           getProfile(supabase, membership.familyId),
           listTasks(supabase, membership.familyId),
@@ -227,20 +229,45 @@ export default function HomeScreen() {
 
   // ママがログイン中(または役割未設定)はパパの連絡先を、パパがログイン中はママの連絡先を出す。
   // 役割はまだこちらで持っていないので、Web版の既定と同じくパパの連絡先を出す。
+  // ママがログイン中(または役割未設定)はパパの連絡先を、パパがログイン中はママの連絡先を出す
+  // （PWA版 src/components/sukusuku/tabs/HomeTab.tsx と同じ）。
+  const showPapaContact = loginRole !== 'papa';
   const quickActions = profile
     ? [
-        { icon: Phone, label: '産院', phone: getProfileFieldValue(profile, 'hospitalPhone') },
+        {
+          icon: Phone,
+          label: '産院',
+          phone: getProfileFieldValue(profile, 'hospitalPhone'),
+          surface: colors.quickHospitalSurface,
+          tint: colors.quickHospitalIcon,
+        },
         {
           icon: Stethoscope,
           label: '小児科',
           phone: getProfileFieldValue(profile, 'pediatricPhone'),
+          surface: colors.quickPediatricSurface,
+          tint: colors.quickPediatricIcon,
         },
         {
           icon: Building2,
-          label: 'パパ会社',
-          phone: getProfileFieldValue(profile, 'papaCompanyPhone'),
+          label: showPapaContact ? 'パパ会社' : 'ママ会社',
+          phone: getProfileFieldValue(
+            profile,
+            showPapaContact ? 'papaCompanyPhone' : 'mamaCompanyPhone',
+          ),
+          surface: colors.quickCompanySurface,
+          tint: colors.quickCompanyIcon,
         },
-        { icon: Heart, label: 'パパ連絡', phone: getProfileFieldValue(profile, 'papaContactPhone') },
+        {
+          icon: Heart,
+          label: showPapaContact ? 'パパ連絡' : 'ママ連絡',
+          phone: getProfileFieldValue(
+            profile,
+            showPapaContact ? 'papaContactPhone' : 'mamaContactPhone',
+          ),
+          surface: colors.quickContactSurface,
+          tint: colors.quickContactIcon,
+        },
       ]
     : [];
 
@@ -330,8 +357,14 @@ export default function HomeScreen() {
               }}
               style={styles.quickAction}
             >
-              <View style={[styles.quickIcon, !item.phone && styles.quickIconDisabled]}>
-                <item.icon size={20} color={colors.navActive} />
+              <View
+                style={[
+                  styles.quickIcon,
+                  { backgroundColor: item.surface },
+                  !item.phone && styles.quickIconDisabled,
+                ]}
+              >
+                <item.icon size={20} color={item.tint} />
               </View>
               <Text style={[styles.quickLabel, !item.phone && styles.quickLabelDisabled]}>
                 {item.label}
@@ -488,6 +521,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginTop: 14,
     fontSize: 11,
+    fontWeight: '500',
     color: colors.primaryText,
     backgroundColor: 'rgba(0,0,0,0.1)',
     borderWidth: 1,
@@ -510,7 +544,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   quickIcon: {
-    backgroundColor: colors.diaperSurface,
     borderRadius: 999,
     padding: 10,
     marginBottom: 6,
@@ -556,8 +589,8 @@ const styles = StyleSheet.create({
   taskMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 4 },
   taskMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
   taskDate: { fontSize: 12, fontWeight: '500', color: colors.navActive },
-  taskRelative: { fontSize: 12, color: colors.textMuted },
-  taskMetaText: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
+  taskRelative: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
+  taskMetaText: { fontSize: 12, color: colors.textMuted, flexShrink: 1, fontWeight: '500' },
 
   notice: { fontSize: 12, color: colors.textMuted, lineHeight: 18 },
 });

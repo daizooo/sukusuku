@@ -143,6 +143,6 @@ const styles = StyleSheet.create({
   },
   itemTitle: { flex: 1, fontSize: 12, color: colors.textSubtle, lineHeight: 17 },
   empty: { fontSize: 12, color: colors.borderStrong, paddingVertical: 4 },
-  rest: { fontSize: 11, color: colors.textFaint, paddingTop: 6 },
+  rest: { fontSize: 11, color: colors.textFaint, paddingTop: 6, fontWeight: '500' },
   pin: { position: 'absolute', top: 4, right: 4, padding: 6, borderRadius: 999 },
 });

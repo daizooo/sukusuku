@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
     color: colors.textSubtle,
     backgroundColor: colors.surface,
   },
-  value: { fontSize: 14, color: colors.textSubtle },
+  value: { fontSize: 14, color: colors.textSubtle, fontWeight: '500' },
   placeholder: { fontSize: 14, color: colors.textFaint },
   select: { borderColor: colors.borderStrong, borderRadius: 8, minHeight: 40 },
   selectText: { flex: 1, fontWeight: '400', fontSize: 14 },

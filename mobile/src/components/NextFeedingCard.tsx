@@ -129,8 +129,8 @@ const styles = StyleSheet.create({
   headerLabel: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   headerText: { fontSize: 12, fontWeight: '700', color: colors.milkText },
   interval: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
-  placeholder: { fontSize: 13, color: colors.textFaint, marginTop: 6 },
-  empty: { fontSize: 13, color: colors.textMuted, marginTop: 6 },
+  placeholder: { fontSize: 13, color: colors.textFaint, marginTop: 6, fontWeight: '500' },
+  empty: { fontSize: 13, color: colors.textMuted, marginTop: 6, fontWeight: '500' },
   dueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginTop: 2 },
   dueTime: { fontSize: 24, fontWeight: '700', color: colors.text },
   remaining: { fontSize: 13, fontWeight: '700', color: colors.milk },
@@ -144,5 +144,5 @@ const styles = StyleSheet.create({
   },
   trackFill: { height: '100%', borderRadius: 999, backgroundColor: colors.milkProgress },
   trackFillOverdue: { backgroundColor: colors.pumping },
-  lastFed: { fontSize: 11, color: colors.textMuted, marginTop: 6 },
+  lastFed: { fontSize: 11, color: colors.textMuted, marginTop: 6, fontWeight: '500' },
 });

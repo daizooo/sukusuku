@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sectionTitle: { fontSize: 12, fontWeight: '700' },
-  sectionCount: { fontSize: 11, color: colors.textFaint },
+  sectionCount: { fontSize: 11, color: colors.textFaint, fontWeight: '500' },
   dayHeading: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -227,8 +227,8 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   dayHeadingDate: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
-  dayHeadingRelative: { fontSize: 11, color: colors.textMuted },
-  dayHeadingAge: { fontSize: 11, color: colors.textFaint },
-  note: { fontSize: 11, color: colors.textFaint, paddingHorizontal: 4, paddingBottom: 8, lineHeight: 17 },
+  dayHeadingRelative: { fontSize: 11, color: colors.textMuted, fontWeight: '500' },
+  dayHeadingAge: { fontSize: 11, color: colors.textFaint, fontWeight: '500' },
+  note: { fontSize: 11, color: colors.textFaint, paddingHorizontal: 4, paddingBottom: 8, lineHeight: 17, fontWeight: '500' },
   taskWrap: { paddingBottom: 8 },
 });

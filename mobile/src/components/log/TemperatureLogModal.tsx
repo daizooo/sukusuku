@@ -333,9 +333,9 @@ const styles = StyleSheet.create({
     minWidth: 110,
     padding: 0,
   },
-  unit: { fontSize: 16, color: colors.textMuted },
-  note: { fontSize: 11, color: colors.textFaint, marginTop: 6 },
-  errorNote: { fontSize: 11, color: colors.danger, marginTop: 6 },
+  unit: { fontSize: 16, color: colors.textMuted, fontWeight: '500' },
+  note: { fontSize: 11, color: colors.textFaint, marginTop: 6, fontWeight: '500' },
+  errorNote: { fontSize: 11, color: colors.danger, marginTop: 6, fontWeight: '500' },
 
   advice: {
     borderWidth: 1,

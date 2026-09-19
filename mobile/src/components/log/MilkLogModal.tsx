@@ -863,7 +863,7 @@ const styles = StyleSheet.create({
   customMinutes: { marginTop: 6 },
 
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  stock: { fontSize: 11, color: colors.textMuted, marginBottom: 6 },
+  stock: { fontSize: 11, color: colors.textMuted, marginBottom: 6, fontWeight: '500' },
   batchList: { gap: 6 },
   batchListSpaced: { marginTop: 8 },
   batchRow: {
@@ -903,9 +903,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  discardedText: { flex: 1, fontSize: 11, color: colors.textSubtle },
+  discardedText: { flex: 1, fontSize: 11, color: colors.textSubtle, fontWeight: '500' },
   undoText: { fontSize: 11, fontWeight: '700', color: colors.pumpingText },
-  batchTime: { fontSize: 14, color: colors.textSubtle },
+  batchTime: { fontSize: 14, color: colors.textSubtle, fontWeight: '500' },
   batchAmount: { fontSize: 14, fontWeight: '700', color: colors.textSubtle },
   batchTextSelected: { color: colors.pumpingText },
   batchSummary: { marginTop: 8, fontSize: 12, fontWeight: '700', color: colors.pumpingText },
@@ -977,8 +977,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.milkBorder,
   },
   flex: { flex: 1 },
-  untrackedLabel: { fontSize: 11, color: colors.textMuted },
-  untrackedNote: { fontSize: 10, color: colors.textFaint, marginTop: 1 },
+  untrackedLabel: { fontSize: 11, color: colors.textMuted, fontWeight: '500' },
+  untrackedNote: { fontSize: 10, color: colors.textFaint, marginTop: 1, fontWeight: '500' },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   stepperButton: {
     width: 30,

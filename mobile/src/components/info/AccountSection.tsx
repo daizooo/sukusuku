@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 4,
   },
-  rowLabel: { fontSize: 12, color: colors.textMuted },
+  rowLabel: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
   rowValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
   rowValueSmall: { flex: 1, fontSize: 12, fontWeight: '500', color: colors.textSubtle, textAlign: 'right' },
 
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  partnerName: { fontSize: 12, color: colors.textSubtle },
+  partnerName: { fontSize: 12, color: colors.textSubtle, fontWeight: '500' },
   partnerRole: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     padding: 10,
     marginTop: 6,
   },
-  inviteCode: { flex: 1, fontSize: 10, color: colors.textSubtle },
+  inviteCode: { flex: 1, fontSize: 10, color: colors.textSubtle, fontWeight: '500' },
   copyButton: { padding: 6, borderRadius: 8 },
   inviteNote: { fontSize: 10, color: colors.textFaint, marginTop: 6, lineHeight: 15 },
 

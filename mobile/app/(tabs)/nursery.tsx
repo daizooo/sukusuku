@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
   infoRowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
   infoIcon: { width: 20, marginTop: 1 },
   infoLabel: { width: 60, fontSize: 12, color: colors.textMuted, marginTop: 1 },
-  infoValue: { fontSize: 14, color: colors.textSubtle },
+  infoValue: { fontSize: 14, color: colors.textSubtle, fontWeight: '500' },
   infoEmpty: { fontSize: 14, color: colors.textFaint },
   phone: { fontSize: 14, fontWeight: '500', color: colors.navActive },
   visit: { fontSize: 14, fontWeight: '700', color: colors.textSubtle },
