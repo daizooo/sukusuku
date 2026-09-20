@@ -196,13 +196,15 @@ export default function LogScreen() {
   // 表示している日の範囲。描画のたびに作り直すと読み込みが止まらなくなるので、日が変わったときだけ。
   const range = useMemo(() => ({ from: logDate, to: addDays(logDate, 1) }), [logDate]);
 
-  // 矢印ボタンと同じ操作を、日付送りの帯（header）上でのスワイプでもできるようにする。
+  // 矢印ボタンと同じ操作を、画面上どこでの横スワイプでもできるようにする。
   // 「次の日」ボタンが isToday で disabled なのと同じく、今日より先へはスワイプでも進めない。
+  // 成長曲線タブには日付送りが無いため、タイムライン表示中だけ有効にする。
   const swipeHandlers = useSwipeNavigation({
     onSwipeLeft: () => {
       if (!isToday) setLogDate(addDays(logDate, 1));
     },
     onSwipeRight: () => setLogDate(addDays(logDate, -1)),
+    enabled: logView === 'timeline',
   });
 
   // 所属の家族と、記録した人の名前。どちらも1回取れば足りる。
@@ -564,7 +566,7 @@ export default function LogScreen() {
   if (!session) return <Redirect href="/login" />;
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen} {...swipeHandlers}>
       <View style={styles.viewSwitcher}>
         <SegmentedTabs
           accessibilityLabel="育児記録の表示"
@@ -634,7 +636,7 @@ export default function LogScreen() {
       ) : (
       <>
       {/* 日付送り。タブを開いた時点では常に今日なので、「今日」は今日以外を見ているときだけ出す。 */}
-      <View style={styles.header} {...swipeHandlers}>
+      <View style={styles.header}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="前の日"
