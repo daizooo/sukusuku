@@ -66,17 +66,18 @@ export default function LogTimeline({ logs, memberLabel, onSelect }: LogTimeline
             style={[styles.card, isAlertLog(log) && styles.alertCard]}
           >
             <View style={styles.titleRow}>
-              <Text style={styles.title}>{getLogTitle(log)}</Text>
+              <View style={styles.titleGroup}>
+                <Text style={styles.title}>{getLogTitle(log)}</Text>
+                <Badges log={log} />
+              </View>
               <Text style={styles.time}>
                 {getLogTimeText(log)}
               </Text>
             </View>
 
-            <Badges log={log} />
-
             <View style={styles.footer}>
               {/* メモは書いたときだけ出す。「メモなし」を並べても読むものが増えるだけなので出さない。 */}
-              <Text style={styles.note} numberOfLines={2}>
+              <Text style={styles.note} numberOfLines={1}>
                 {log.note}
               </Text>
               <View style={styles.author}>
@@ -126,7 +127,7 @@ function Badges({ log }: { log: CareLog }) {
 }
 
 const styles = StyleSheet.create({
-  list: { gap: 24, paddingBottom: 24 },
+  list: { gap: 14, paddingBottom: 24 },
   rail: {
     position: 'absolute',
     top: 0,
@@ -154,30 +155,40 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-    gap: 6,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 3,
   },
   alertCard: { borderColor: colors.dangerBorder, borderLeftWidth: 4, borderLeftColor: colors.danger },
 
-  titleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
-  title: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.text },
-  time: { fontSize: 12, fontWeight: '500', color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  // 見出し・バッジ・時刻を1段にまとめて、バッジ専用の行を無くす。
+  // これでバッジの有無によってカードの高さが変わらなくなる。
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  titleGroup: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5 },
+  title: { fontSize: 14, fontWeight: '700', color: colors.text },
+  time: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+    flexShrink: 0,
+  },
 
-  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
     borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
   },
-  badgeText: { fontSize: 11, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  badgeText: { fontSize: 10, fontWeight: '500', fontVariant: ['tabular-nums'] },
   badgeTextBold: { fontWeight: '700' },
-  swatch: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: colors.borderStrong },
+  swatch: { width: 8, height: 8, borderRadius: 4, borderWidth: 1, borderColor: colors.borderStrong },
 
-  footer: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 },
+  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   note: { flex: 1, fontSize: 12, color: colors.textSubtle },
   author: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   authorText: { fontSize: 11, color: colors.textFaint, fontWeight: '500' },
