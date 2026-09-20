@@ -30,7 +30,10 @@ export interface Task {
   startTime: string | null; // 'HH:mm' / null なら終日
   endTime: string | null; // 'HH:mm'
   daysAfterBirth: number; // anchorType === 'birth_relative' のときのみ意味を持つ
-  // 参加者・リマインダー
+  // 主体・参加者・リマインダー
+  // owner: 色分けの基準になる「主体」(1人だけ、または未設定)。
+  // participants: 主体を含む、関わる全員（複数選択）。
+  owner: Participant | null;
   participants: Participant[];
   remindMinutesBefore: number | null; // null は通知なし
   done: boolean;
@@ -312,3 +315,10 @@ export type ScheduleView = 'month' | 'week' | 'day' | 'list';
 
 // ログイン中のユーザーの役割。users.role (Supabase) に対応。未設定の場合はnull。
 export type LoginRole = 'papa' | 'mama' | null;
+
+// 新規の予定・タスクを追加するとき、ログイン中の役割から主体・参加者を
+// 自動で決めるための対応表（パパ→大造 / ママ→いづみ）。
+export const ROLE_TO_PARTICIPANT: Record<'papa' | 'mama', Participant> = {
+  papa: '大造',
+  mama: 'いづみ',
+};

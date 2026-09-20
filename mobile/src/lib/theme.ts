@@ -19,9 +19,9 @@ export const colors = {
   labelDaizoSurface: '#dbeafe', // blue-100
   labelDaizoText: '#1d4ed8', // blue-700
   labelDaizoBorder: '#bfdbfe', // blue-200
-  labelIzumiSurface: '#fce7f3', // pink-100
-  labelIzumiText: '#be185d', // pink-700
-  labelIzumiBorder: '#fbcfe8', // pink-200
+  labelIzumiSurface: '#fee2e2', // red-100
+  labelIzumiText: '#b91c1c', // red-700
+  labelIzumiBorder: '#fecaca', // red-200
   labelGakuSurface: '#d1fae5', // emerald-100
   labelGakuText: '#047857', // emerald-700
   labelGakuBorder: '#a7f3d0', // emerald-200

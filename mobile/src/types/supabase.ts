@@ -668,6 +668,7 @@ export type Database = {
           is_private: boolean
           kind: string
           note: string | null
+          owner: string | null
           participants: string[]
           place: string | null
           remind_minutes_before: number | null
@@ -692,6 +693,7 @@ export type Database = {
           is_private?: boolean
           kind?: string
           note?: string | null
+          owner?: string | null
           participants?: string[]
           place?: string | null
           remind_minutes_before?: number | null
@@ -716,6 +718,7 @@ export type Database = {
           is_private?: boolean
           kind?: string
           note?: string | null
+          owner?: string | null
           participants?: string[]
           place?: string | null
           remind_minutes_before?: number | null
