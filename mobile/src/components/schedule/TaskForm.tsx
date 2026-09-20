@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { BellRing, Clock, Lock, MapPin, Repeat, User, Users, Text as TextIcon } from 'lucide-react-native';
+import { BellRing, Clock, Lock, MapPin, Repeat, Star, Users, Text as TextIcon } from 'lucide-react-native';
 import type { AnchorType, Participant, Recurrence, RecurrenceFreq, Task, TaskKind } from '@/types/app';
 import { PARTICIPANTS } from '@/types/app';
 import {
@@ -56,12 +56,19 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
 
   const isEvent = value.kind === 'event';
   const isAllDay = value.startTime === null;
-  const showAnchorChoice = allowBirthRelative || value.anchorType === 'birth_relative';
+  // 生後日数での指定は、誕生日登録前でも作れるタスク（例:「生後14日: 出生届提出」）のためのもの。
+  // 予定はこの指定を持たない。
+  const showAnchorChoice = !isEvent && (allowBirthRelative || value.anchorType === 'birth_relative');
 
   const setKind = (kind: TaskKind) => {
     // タスクは場所・参加者・時刻を持たないため、予定へ戻したときのために
     // 参加者は残すが、タスクにするときは終日へ寄せる。
-    set(kind === 'task' ? { kind, startTime: null, endTime: null } : { kind });
+    // 予定は生後日数指定を持たないため、予定に切り替えたときは日付指定へ戻す。
+    if (kind === 'task') {
+      set({ kind, startTime: null, endTime: null });
+    } else {
+      set(value.anchorType === 'birth_relative' ? { kind, anchorType: 'absolute' } : { kind });
+    }
   };
 
   const setAnchorType = (anchorType: AnchorType) => {
@@ -73,24 +80,22 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
     set(isAllDay ? { startTime: '09:00', endTime: null } : { startTime: null, endTime: null });
   };
 
-  const toggleParticipant = (participant: Participant) => {
-    const has = value.participants.includes(participant);
-    set({
-      participants: has
-        ? value.participants.filter((p) => p !== participant)
-        : [...value.participants, participant],
-    });
-  };
-
-  // 主体は色分けの基準になる1人（単一選択）。参加者欄には無くても選べるよう、
-  // 選んだ本人が参加者に含まれていなければ合わせて加える。
-  const setOwner = (owner: Participant) => {
-    set({
-      owner,
-      participants: value.participants.includes(owner)
-        ? value.participants
-        : [...value.participants, owner],
-    });
+  // 参加者欄は1つのボタン列で「未選択→参加者→主体→未選択」の3段階を順に切り替える。
+  // 主体(owner)は色分けの基準になる1人だけ。既に主体の誰かがいるところで別の人を
+  // 主体にすると、入れ替わった元の主体は参加者のまま残る（参加者からは外れない）。
+  const cycleParticipant = (participant: Participant) => {
+    const isOwner = value.owner === participant;
+    const isParticipant = value.participants.includes(participant);
+    if (isOwner) {
+      set({
+        owner: null,
+        participants: value.participants.filter((p) => p !== participant),
+      });
+    } else if (isParticipant) {
+      set({ owner: participant });
+    } else {
+      set({ participants: [...value.participants, participant] });
+    }
   };
 
   const openDatePicker = () =>
@@ -433,39 +438,9 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
         </View>
       )}
 
-      {/* 主体（予定のみ。色分けの基準になる1人だけを選ぶ） */}
-      {isEvent && (
-        <View>
-          <View style={styles.iconLabel}>
-            <User size={14} color={colors.textFaint} />
-            <Text style={styles.iconLabelText}>主体</Text>
-          </View>
-          <View style={styles.labelRow}>
-            {PARTICIPANTS.map((participant) => {
-              const selected = value.owner === participant;
-              const tone = getParticipantColor(participant);
-              return (
-                <Pressable
-                  key={participant}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  onPress={() => setOwner(participant)}
-                  style={[
-                    styles.labelButton,
-                    selected && { backgroundColor: tone.background, borderColor: tone.border },
-                  ]}
-                >
-                  <Text style={[styles.labelText, selected && { color: tone.text }]}>
-                    {participant}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      )}
-
-      {/* 参加者（予定のみ。主体以外に関わる人も含めて複数選択できる） */}
+      {/* 参加者（予定のみ）。1つのボタンで参加者/主体を兼ねる:
+          タップで参加者に追加 → もう一度タップでその人を主体に(★付き・色付き) →
+          もう一度タップで外れる。 */}
       {isEvent && (
         <View>
           <View style={styles.iconLabel}>
@@ -474,26 +449,33 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
           </View>
           <View style={styles.labelRow}>
             {PARTICIPANTS.map((participant) => {
-              const selected = value.participants.includes(participant);
+              const isOwner = value.owner === participant;
+              const isParticipant = value.participants.includes(participant);
               const tone = getParticipantColor(participant);
               return (
                 <Pressable
                   key={participant}
                   accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  onPress={() => toggleParticipant(participant)}
+                  accessibilityState={{ selected: isParticipant }}
+                  accessibilityLabel={`${participant}${isOwner ? '（主体）' : ''}`}
+                  onPress={() => cycleParticipant(participant)}
                   style={[
                     styles.labelButton,
-                    selected && { backgroundColor: tone.background, borderColor: tone.border },
+                    isParticipant && !isOwner && styles.labelButtonParticipant,
+                    isOwner && { backgroundColor: tone.background, borderColor: tone.border },
                   ]}
                 >
-                  <Text style={[styles.labelText, selected && { color: tone.text }]}>
-                    {participant}
-                  </Text>
+                  <View style={styles.labelButtonContent}>
+                    {isOwner && <Star size={11} color={tone.text} fill={tone.text} />}
+                    <Text style={[styles.labelText, isOwner && { color: tone.text }]}>
+                      {participant}
+                    </Text>
+                  </View>
                 </Pressable>
               );
             })}
           </View>
+          <Text style={styles.hintText}>タップで参加者に、もう一度タップで★主体に</Text>
         </View>
       )}
 
@@ -628,7 +610,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
+  labelButtonParticipant: { backgroundColor: colors.neutralSurface, borderColor: colors.borderStrong },
+  labelButtonContent: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   labelText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  hintText: { fontSize: 11, color: colors.textFaint, marginTop: 6 },
   noteInput: { minHeight: 96, textAlignVertical: 'top' },
   select: { borderColor: colors.borderStrong, borderRadius: 8, minHeight: 42 },
   selectText: { flex: 1, fontWeight: '400', fontSize: 14 },
