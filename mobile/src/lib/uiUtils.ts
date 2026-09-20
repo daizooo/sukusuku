@@ -52,11 +52,22 @@ export const getParticipantColor = (
 /**
  * 予定・タスクの参加者の色分け。参加者がちょうど1人のときだけその人の色にし、
  * 0人または複数（=まとめて関わる）のときは既定の色にする。
+ * 主体(owner)が無い古いデータ向けのフォールバックとして getOwnerTone から使う。
  */
 export const getParticipantsTone = (
   participants: string[],
 ): { background: string; text: string; border: string } =>
   getParticipantColor(participants.length === 1 ? participants[0] : '');
+
+/**
+ * 予定・タスクの色分け。主体(owner)が決まっていればその人の色にし、
+ * 主体が未設定の古いデータは今までどおり参加者の人数で決める。
+ */
+export const getOwnerTone = (
+  owner: string | null,
+  participants: string[],
+): { background: string; text: string; border: string } =>
+  owner !== null ? getParticipantColor(owner) : getParticipantsTone(participants);
 
 // 全角数字を半角に変換
 const toHalfWidthDigits = (value: string): string =>

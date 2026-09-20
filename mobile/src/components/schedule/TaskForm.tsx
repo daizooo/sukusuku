@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { BellRing, Clock, Lock, MapPin, Users, Text as TextIcon } from 'lucide-react-native';
+import { BellRing, Clock, Lock, MapPin, User, Users, Text as TextIcon } from 'lucide-react-native';
 import type { AnchorType, Participant, Task, TaskKind } from '@/types/app';
 import { PARTICIPANTS } from '@/types/app';
 import {
@@ -77,6 +77,17 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
       participants: has
         ? value.participants.filter((p) => p !== participant)
         : [...value.participants, participant],
+    });
+  };
+
+  // 主体は色分けの基準になる1人（単一選択）。参加者欄には無くても選べるよう、
+  // 選んだ本人が参加者に含まれていなければ合わせて加える。
+  const setOwner = (owner: Participant) => {
+    set({
+      owner,
+      participants: value.participants.includes(owner)
+        ? value.participants
+        : [...value.participants, owner],
     });
   };
 
@@ -237,7 +248,39 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
         </View>
       )}
 
-      {/* 参加者（予定のみ。複数選択できる） */}
+      {/* 主体（予定のみ。色分けの基準になる1人だけを選ぶ） */}
+      {isEvent && (
+        <View>
+          <View style={styles.iconLabel}>
+            <User size={14} color={colors.textFaint} />
+            <Text style={styles.iconLabelText}>主体</Text>
+          </View>
+          <View style={styles.labelRow}>
+            {PARTICIPANTS.map((participant) => {
+              const selected = value.owner === participant;
+              const tone = getParticipantColor(participant);
+              return (
+                <Pressable
+                  key={participant}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => setOwner(participant)}
+                  style={[
+                    styles.labelButton,
+                    selected && { backgroundColor: tone.background, borderColor: tone.border },
+                  ]}
+                >
+                  <Text style={[styles.labelText, selected && { color: tone.text }]}>
+                    {participant}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* 参加者（予定のみ。主体以外に関わる人も含めて複数選択できる） */}
       {isEvent && (
         <View>
           <View style={styles.iconLabel}>

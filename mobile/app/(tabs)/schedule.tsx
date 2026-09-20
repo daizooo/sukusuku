@@ -11,8 +11,8 @@ import {
   Filter,
   Plus,
 } from 'lucide-react-native';
-import type { CareLog, DynamicTask, Participant, ScheduleView, Task, UserProfile } from '@/types/app';
-import { PARTICIPANTS } from '@/types/app';
+import type { CareLog, DynamicTask, LoginRole, Participant, ScheduleView, Task, UserProfile } from '@/types/app';
+import { PARTICIPANTS, ROLE_TO_PARTICIPANT } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { useRefreshOnFocus } from '@/lib/screenFocus';
@@ -66,7 +66,9 @@ const VIEW_TABS: { id: ScheduleView; label: string }[] = [
 
 const formatShortDate = (date: Date): string => `${date.getMonth() + 1}月${date.getDate()}日`;
 
-const emptyTaskDraft = (date: Date): TaskDraft => ({
+// owner: ログイン中の役割から決まる主体（未ログイン相当ならnull）。
+// 主体が決まっているときは参加者にも同じ人を初期値として入れる。
+const emptyTaskDraft = (date: Date, owner: Participant | null): TaskDraft => ({
   title: '',
   place: '',
   note: '',
@@ -76,7 +78,8 @@ const emptyTaskDraft = (date: Date): TaskDraft => ({
   startTime: null,
   endTime: null,
   daysAfterBirth: 0,
-  participants: [],
+  owner,
+  participants: owner ? [owner] : [],
   remindMinutesBefore: null,
   isPrivate: false,
   timing: '',
@@ -90,6 +93,9 @@ export default function ScheduleScreen() {
   const today = useMemo(() => new Date(), []);
 
   const [familyId, setFamilyId] = useState<string | null>(null);
+  const [loginRole, setLoginRole] = useState<LoginRole>(null);
+  // ログイン中の役割から決まる主体。新規の予定・タスクの初期値に使う。
+  const ownerFromRole = loginRole ? ROLE_TO_PARTICIPANT[loginRole] : null;
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [todos, setTodos] = useState<Task[]>([]);
   const [isLoadingTodos, setIsLoadingTodos] = useState(true);
@@ -105,7 +111,7 @@ export default function ScheduleScreen() {
   const [loadedLogRange, setLoadedLogRange] = useState<string | null>(null);
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newTask, setNewTask] = useState<TaskDraft>(() => emptyTaskDraft(today));
+  const [newTask, setNewTask] = useState<TaskDraft>(() => emptyTaskDraft(today, null));
   const [selectedTask, setSelectedTask] = useState<DynamicTask | null>(null);
   const [isEditingTask, setIsEditingTask] = useState(false);
   const [tempEditingTask, setTempEditingTask] = useState<DynamicTask | null>(null);
@@ -121,6 +127,7 @@ export default function ScheduleScreen() {
         const membership = await getMyMembership(supabase, userId);
         if (!isMounted || !membership.familyId) return;
         setFamilyId(membership.familyId);
+        setLoginRole(membership.role);
         const [loadedProfile, loadedTasks] = await Promise.all([
           getProfile(supabase, membership.familyId),
           listTasks(supabase, membership.familyId),
@@ -353,7 +360,7 @@ export default function ScheduleScreen() {
     const input = { ...newTask };
 
     setShowAddModal(false);
-    setNewTask(emptyTaskDraft(today));
+    setNewTask(emptyTaskDraft(today, ownerFromRole));
 
     try {
       const created = await insertTask(supabase, familyId, input, userId);
@@ -365,7 +372,7 @@ export default function ScheduleScreen() {
 
   // カレンダーで選んでいる日を初期値にして予定を追加する。
   const openAddTaskModal = (date: Date) => {
-    setNewTask(emptyTaskDraft(date));
+    setNewTask(emptyTaskDraft(date, ownerFromRole));
     setShowAddModal(true);
   };
 
