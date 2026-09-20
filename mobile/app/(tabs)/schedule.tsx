@@ -37,6 +37,7 @@ import {
 } from '@/lib/dateUtils';
 import { byDateThenTime, tasksOnDate } from '@/lib/scheduleUtils';
 import { getParticipantColor, getProfileFieldValue } from '@/lib/uiUtils';
+import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import SelectField from '@/components/ui/SelectField';
 import MonthView from '@/components/schedule/MonthView';
@@ -255,6 +256,12 @@ export default function ScheduleScreen() {
     setSelectedDate(startOfDay(today));
   };
 
+  // 矢印ボタンと同じ操作を、日付送りの帯（nav）上でのスワイプでもできるようにする。
+  const swipeHandlers = useSwipeNavigation({
+    onSwipeLeft: () => step(1),
+    onSwipeRight: () => step(-1),
+  });
+
   // 任意の月・日へ直接ジャンプする。Web版は <input type="month"> / <input type="date"> だが、
   // Androidに月のピッカーは無いので、月表示でも日付のピッカーから年と月だけを受け取る。
   const openJumpPicker = () =>
@@ -410,7 +417,7 @@ export default function ScheduleScreen() {
         </View>
 
         {view !== 'list' && (
-          <View style={styles.nav}>
+          <View style={styles.nav} {...swipeHandlers}>
             <Pressable accessibilityRole="button" accessibilityLabel="前へ" onPress={() => step(-1)} style={styles.navArrow}>
               <ChevronLeft size={20} color={colors.textSubtle} />
             </Pressable>
