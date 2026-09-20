@@ -73,6 +73,7 @@ import {
 } from '@/lib/dateUtils';
 import { OPEN_LOG_PARAM, parseLogType } from '@/lib/appLinks';
 import { useNursingTimer } from '@/lib/nursingTimer';
+import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import {
   isNursingForegroundServiceAvailable,
   requestNursingNotificationPermission,
@@ -194,6 +195,15 @@ export default function LogScreen() {
   const isToday = isSameDay(logDate, today);
   // 表示している日の範囲。描画のたびに作り直すと読み込みが止まらなくなるので、日が変わったときだけ。
   const range = useMemo(() => ({ from: logDate, to: addDays(logDate, 1) }), [logDate]);
+
+  // 矢印ボタンと同じ操作を、日付送りの帯（header）上でのスワイプでもできるようにする。
+  // 「次の日」ボタンが isToday で disabled なのと同じく、今日より先へはスワイプでも進めない。
+  const swipeHandlers = useSwipeNavigation({
+    onSwipeLeft: () => {
+      if (!isToday) setLogDate(addDays(logDate, 1));
+    },
+    onSwipeRight: () => setLogDate(addDays(logDate, -1)),
+  });
 
   // 所属の家族と、記録した人の名前。どちらも1回取れば足りる。
   useEffect(() => {
@@ -624,7 +634,7 @@ export default function LogScreen() {
       ) : (
       <>
       {/* 日付送り。タブを開いた時点では常に今日なので、「今日」は今日以外を見ているときだけ出す。 */}
-      <View style={styles.header}>
+      <View style={styles.header} {...swipeHandlers}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="前の日"
