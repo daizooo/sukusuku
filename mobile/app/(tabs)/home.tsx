@@ -48,7 +48,7 @@ import {
   parseDateString,
   startOfDay,
 } from '@/lib/dateUtils';
-import { getOwnerTone, getProfileFieldValue } from '@/lib/uiUtils';
+import { describeError, getOwnerTone, getProfileFieldValue } from '@/lib/uiUtils';
 import NextFeedingCard from '@/components/NextFeedingCard';
 import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 
@@ -226,6 +226,8 @@ export default function HomeScreen() {
   const saveTaskEdit = async () => {
     if (!tempEditingTask) return;
     const updated = tempEditingTask;
+    const previousTodos = todos;
+    const previousSelectedTask = selectedTask;
 
     setTodos((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)));
     setSelectedTask(updated);
@@ -233,8 +235,12 @@ export default function HomeScreen() {
 
     try {
       await updateTask(supabase, updated);
-    } catch {
-      Alert.alert('保存できませんでした', 'もう一度お試しください。');
+    } catch (err) {
+      // 失敗したまま新しい値を表示し続けると、保存できたと誤解されるため元に戻す
+      setTodos(previousTodos);
+      setSelectedTask(previousSelectedTask);
+      setIsEditingTask(true);
+      Alert.alert('保存できませんでした', `もう一度お試しください。${describeError(err)}`);
     }
   };
 
@@ -423,81 +429,89 @@ export default function HomeScreen() {
           </Pressable>
         )}
 
-        <View style={styles.taskList}>
-          {isLoadingTodos && <Text style={styles.taskEmpty}>読み込み中...</Text>}
-          {!isLoadingTodos && upcomingTasks.length === 0 && (
+        {isLoadingTodos && (
+          <View style={styles.taskEmptyBox}>
+            <Text style={styles.taskEmpty}>読み込み中...</Text>
+          </View>
+        )}
+        {!isLoadingTodos && upcomingTasks.length === 0 && (
+          <View style={styles.taskEmptyBox}>
             <Text style={styles.taskEmpty}>直近の予定はありません</Text>
-          )}
-          {upcomingTasks.map((task, index) => {
-            const label = getOwnerTone(task.owner, task.participants);
-            return (
-              <Pressable
-                key={task.id}
-                accessibilityRole="button"
-                onPress={() => openTaskDetail(task)}
-                style={[styles.taskRow, index > 0 && styles.taskRowDivided]}
-              >
+          </View>
+        )}
+        {!isLoadingTodos && upcomingTasks.length > 0 && (
+          <View style={styles.taskList}>
+            {upcomingTasks.map((task) => {
+              const label = getOwnerTone(task.owner, task.participants);
+              return (
                 <Pressable
+                  key={task.id}
                   accessibilityRole="button"
-                  accessibilityLabel={task.done ? '完了を取り消す' : '完了にする'}
-                  onPress={() => void toggleTodo(task.id, task.done)}
-                  hitSlop={8}
+                  onPress={() => openTaskDetail(task)}
+                  style={styles.taskRow}
                 >
-                  {task.done ? (
-                    <CheckCircle2 size={24} color={colors.navActive} />
-                  ) : (
-                    <Circle size={24} color={colors.textFaint} />
-                  )}
-                </Pressable>
-
-                <View style={styles.flex}>
-                  <View style={styles.taskTitleRow}>
-                    <Text style={[styles.taskTitle, task.done && styles.taskTitleDone]}>
-                      {task.title}
-                      {task.remindMinutesBefore !== null && !task.done ? ' ' : ''}
-                    </Text>
-                    {task.remindMinutesBefore !== null && !task.done && (
-                      <BellRing size={12} color={colors.milkProgress} />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={task.done ? '完了を取り消す' : '完了にする'}
+                    onPress={() => void toggleTodo(task.id, task.done)}
+                    hitSlop={8}
+                  >
+                    {task.done ? (
+                      <CheckCircle2 size={22} color={colors.navActive} />
+                    ) : (
+                      <Circle size={22} color={colors.textFaint} />
                     )}
-                    {task.participants.length > 0 && (
-                      <View
-                        style={[
-                          styles.taskLabel,
-                          { backgroundColor: label.background, borderColor: label.border },
-                        ]}
-                      >
-                        <Text style={[styles.taskLabelText, { color: label.text }]}>
-                          {task.participants.join('・')}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
+                  </Pressable>
 
-                  <View style={styles.taskMeta}>
-                    <View style={styles.taskMetaItem}>
-                      <Calendar size={12} color={colors.navActive} />
-                      <Text style={styles.taskDate}>{task.targetDate}</Text>
-                    </View>
-                    <View style={styles.taskMetaItem}>
-                      <Clock size={12} color={colors.textMuted} />
-                      <Text style={styles.taskMetaText}>
-                        {formatTimeRange(task.startTime, task.endTime)}
+                  <View style={styles.flex}>
+                    <View style={styles.taskTitleRow}>
+                      <Text style={[styles.taskTitle, task.done && styles.taskTitleDone]}>
+                        {task.title}
+                        {task.remindMinutesBefore !== null && !task.done ? ' ' : ''}
                       </Text>
+                      {task.remindMinutesBefore !== null && !task.done && (
+                        <BellRing size={12} color={colors.milkProgress} />
+                      )}
+                      {task.participants.length > 0 && (
+                        <View
+                          style={[
+                            styles.taskLabel,
+                            { backgroundColor: label.background, borderColor: label.border },
+                          ]}
+                        >
+                          <Text style={[styles.taskLabelText, { color: label.text }]}>
+                            {task.participants.join('・')}
+                          </Text>
+                        </View>
+                      )}
                     </View>
-                    {task.place !== '' && (
+
+                    <View style={styles.taskMeta}>
                       <View style={styles.taskMetaItem}>
-                        <MapPin size={12} color={colors.textMuted} />
-                        <Text style={styles.taskMetaText} numberOfLines={1}>
-                          {task.place}
+                        <Calendar size={12} color={colors.navActive} />
+                        <Text style={styles.taskDate}>{task.targetDate}</Text>
+                      </View>
+                      <View style={styles.taskMetaItem}>
+                        <Clock size={12} color={colors.textMuted} />
+                        <Text style={styles.taskMetaText}>
+                          {formatTimeRange(task.startTime, task.endTime)}
                         </Text>
                       </View>
-                    )}
+                      {task.place !== '' && (
+                        <View style={styles.taskMetaItem}>
+                          <MapPin size={12} color={colors.textMuted} />
+                          <Text style={styles.taskMetaText} numberOfLines={1}>
+                            {task.place}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
         {!familyId && !isLoadingTodos && (
           <Text style={styles.notice}>
@@ -594,16 +608,25 @@ const styles = StyleSheet.create({
   overdueLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   overdueText: { fontSize: 13, fontWeight: '500', color: colors.alertText },
 
-  taskList: {
+  taskList: { gap: 8 },
+  taskEmptyBox: {
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 16,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   taskEmpty: { fontSize: 13, color: colors.textFaint, textAlign: 'center', padding: 16 },
-  taskRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 16 },
-  taskRowDivided: { borderTopWidth: 1, borderTopColor: colors.background },
+  taskRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 12,
+  },
   taskTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   taskTitle: { flex: 1, fontSize: 14, fontWeight: '500', color: colors.text },
   taskTitleDone: { color: colors.textFaint, textDecorationLine: 'line-through' },
