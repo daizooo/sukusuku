@@ -36,7 +36,7 @@ import {
   toDateString,
 } from '@/lib/dateUtils';
 import { byDateThenTime, tasksOnDate } from '@/lib/scheduleUtils';
-import { getParticipantColor, getProfileFieldValue } from '@/lib/uiUtils';
+import { describeError, getParticipantColor, getProfileFieldValue } from '@/lib/uiUtils';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import SelectField from '@/components/ui/SelectField';
@@ -337,6 +337,8 @@ export default function ScheduleScreen() {
   const saveTaskEdit = async () => {
     if (!tempEditingTask) return;
     const updated = tempEditingTask;
+    const previousTodos = todos;
+    const previousSelectedTask = selectedTask;
 
     setTodos((prev) => prev.map((todo) => (todo.id === updated.id ? { ...todo, ...updated } : todo)));
     setSelectedTask(updated);
@@ -344,8 +346,12 @@ export default function ScheduleScreen() {
 
     try {
       await updateTask(supabase, updated);
-    } catch {
-      Alert.alert('保存できませんでした', 'もう一度お試しください。');
+    } catch (err) {
+      // 失敗したまま新しい値を表示し続けると、保存できたと誤解されるため元に戻す
+      setTodos(previousTodos);
+      setSelectedTask(previousSelectedTask);
+      setIsEditingTask(true);
+      Alert.alert('保存できませんでした', `もう一度お試しください。${describeError(err)}`);
     }
   };
 

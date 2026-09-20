@@ -48,7 +48,7 @@ import {
   parseDateString,
   startOfDay,
 } from '@/lib/dateUtils';
-import { getOwnerTone, getProfileFieldValue } from '@/lib/uiUtils';
+import { describeError, getOwnerTone, getProfileFieldValue } from '@/lib/uiUtils';
 import NextFeedingCard from '@/components/NextFeedingCard';
 import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 
@@ -226,6 +226,8 @@ export default function HomeScreen() {
   const saveTaskEdit = async () => {
     if (!tempEditingTask) return;
     const updated = tempEditingTask;
+    const previousTodos = todos;
+    const previousSelectedTask = selectedTask;
 
     setTodos((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)));
     setSelectedTask(updated);
@@ -233,8 +235,12 @@ export default function HomeScreen() {
 
     try {
       await updateTask(supabase, updated);
-    } catch {
-      Alert.alert('保存できませんでした', 'もう一度お試しください。');
+    } catch (err) {
+      // 失敗したまま新しい値を表示し続けると、保存できたと誤解されるため元に戻す
+      setTodos(previousTodos);
+      setSelectedTask(previousSelectedTask);
+      setIsEditingTask(true);
+      Alert.alert('保存できませんでした', `もう一度お試しください。${describeError(err)}`);
     }
   };
 
