@@ -748,6 +748,8 @@ export default function SukusukuApp({
   const saveTaskEdit = async () => {
     if (!tempEditingTask) return;
     const updated = tempEditingTask;
+    const previousTodos = todos;
+    const previousSelectedTask = selectedTask;
 
     setTodos((prev) => prev.map((todo) => (todo.id === updated.id ? { ...todo, ...updated } : todo)));
     setSelectedTask(updated);
@@ -757,7 +759,11 @@ export default function SukusukuApp({
       await updateTaskApi(supabase, updated);
     } catch (err) {
       console.error('Failed to save task:', err);
-      alert('保存に失敗しました。もう一度お試しください。');
+      // 失敗したまま新しい値を表示し続けると、保存できたと誤解されるため元に戻す
+      setTodos(previousTodos);
+      setSelectedTask(previousSelectedTask);
+      setIsEditingTask(true);
+      alert(`保存に失敗しました。もう一度お試しください。${describeError(err)}`);
     }
   };
 

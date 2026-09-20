@@ -34,6 +34,10 @@ export default function TaskDetailModal({
   if (!selectedTask) return null;
 
   if (isEditingTask && tempEditingTask) {
+    const canSubmit =
+      tempEditingTask.title.trim() !== '' &&
+      (tempEditingTask.anchorType === 'birth_relative' || tempEditingTask.startDate !== null);
+
     return (
       <ModalShell
         title="予定を編集"
@@ -41,7 +45,8 @@ export default function TaskDetailModal({
         footer={
           <button
             onClick={onSaveEdit}
-            className="w-full bg-blue-500 text-white font-medium py-3 rounded-xl shadow-sm transition active:bg-blue-600 flex items-center justify-center"
+            disabled={!canSubmit}
+            className="w-full bg-blue-500 text-white font-medium py-3 rounded-xl shadow-sm transition active:bg-blue-600 disabled:bg-gray-200 disabled:text-gray-400 flex items-center justify-center"
           >
             <Save size={16} className="mr-2" /> 保存する
           </button>
