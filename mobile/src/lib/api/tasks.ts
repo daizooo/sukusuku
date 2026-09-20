@@ -39,6 +39,7 @@ export const rowToTask = (row: TaskRow): Task => ({
   participants: toParticipants(row.participants),
   remindMinutesBefore: row.remind_minutes_before,
   done: row.is_done,
+  isPrivate: row.is_private,
   timing: row.timing_memo ?? '',
 });
 
@@ -57,6 +58,7 @@ const toWritableRow = (input: NewTaskInput) => ({
   days_after_birth: input.daysAfterBirth,
   participants: input.participants,
   remind_minutes_before: input.remindMinutesBefore,
+  is_private: input.isPrivate,
   timing_memo: input.timing,
   // 持ち物は詳細(note)へ統合済み。旧データを保存し直したときに残らないよう空にする。
   belongings: null,
@@ -77,8 +79,13 @@ export async function insertTask(
   supabase: SupabaseDb,
   familyId: string,
   input: NewTaskInput,
+  createdBy: string,
 ): Promise<Task> {
-  const row: TablesInsert<'tasks'> = { family_id: familyId, ...toWritableRow(input) };
+  const row: TablesInsert<'tasks'> = {
+    family_id: familyId,
+    created_by: createdBy,
+    ...toWritableRow(input),
+  };
   const { data, error } = await supabase.from('tasks').insert(row).select('*').single();
   if (error) throw error;
   return rowToTask(data);

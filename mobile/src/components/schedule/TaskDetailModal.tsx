@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Clock,
   Edit2,
+  Lock,
   MapPin,
   Save,
   Users,
@@ -148,10 +149,20 @@ export default function TaskDetailModal({
         </View>
       </View>
 
-      {selectedTask.done && (
-        <View style={styles.doneBadge}>
-          <CheckCircle2 size={12} color={colors.doneText} />
-          <Text style={styles.doneBadgeText}>完了済</Text>
+      {(selectedTask.done || selectedTask.isPrivate) && (
+        <View style={styles.badgeRow}>
+          {selectedTask.done && (
+            <View style={styles.doneBadge}>
+              <CheckCircle2 size={12} color={colors.doneText} />
+              <Text style={styles.doneBadgeText}>完了済</Text>
+            </View>
+          )}
+          {selectedTask.isPrivate && (
+            <View style={styles.privateBadge}>
+              <Lock size={12} color={colors.textMuted} />
+              <Text style={styles.privateBadgeText}>自分だけ</Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -214,6 +225,7 @@ const styles = StyleSheet.create({
   label: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
   labelText: { fontSize: 10, fontWeight: '700' },
 
+  badgeRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   doneBadge: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
@@ -223,9 +235,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    marginBottom: 16,
   },
   doneBadgeText: { fontSize: 12, fontWeight: '500', color: colors.doneText },
+  privateBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.neutralSurface,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  privateBadgeText: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
 
   detailCard: {
     gap: 16,

@@ -9,13 +9,15 @@ type TaskTemplate = Omit<Task, 'id'>;
 type TaskTemplateBase = Omit<TaskTemplate, 'kind'>;
 
 const birthRelative = (
-  t: Omit<TaskTemplateBase, 'anchorType' | 'startDate' | 'startTime' | 'endTime'>,
+  t: Omit<TaskTemplateBase, 'anchorType' | 'startDate' | 'startTime' | 'endTime' | 'isPrivate'>,
 ): TaskTemplateBase => ({
   ...t,
   anchorType: 'birth_relative',
   startDate: null,
   startTime: null,
   endTime: null,
+  // 定番の項目は家族全員で共有するものなので、共有設定(自分だけ)にはしない。
+  isPrivate: false,
 });
 
 // 手続き系はタスク、健診・行事系は予定として登録する。
