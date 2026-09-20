@@ -78,6 +78,7 @@ const emptyTaskDraft = (date: Date): TaskDraft => ({
   daysAfterBirth: 0,
   participants: [],
   remindMinutesBefore: null,
+  isPrivate: false,
   timing: '',
 });
 
@@ -348,14 +349,14 @@ export default function ScheduleScreen() {
   };
 
   const handleAddTask = async () => {
-    if (!newTask.title || !familyId) return;
+    if (!newTask.title || !familyId || !userId) return;
     const input = { ...newTask };
 
     setShowAddModal(false);
     setNewTask(emptyTaskDraft(today));
 
     try {
-      const created = await insertTask(supabase, familyId, input);
+      const created = await insertTask(supabase, familyId, input, userId);
       setTodos((prev) => [...prev, created]);
     } catch {
       Alert.alert('予定を追加できませんでした', 'もう一度お試しください。');
