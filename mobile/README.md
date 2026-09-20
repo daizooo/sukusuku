@@ -158,6 +158,11 @@ PRの `build` が緑になったら、実行ページの **Artifacts** にある
 PWA版とは別アプリとして入るので、ホーム画面に「すくすく」が2つ並ぶ。
 更新は同じ `.apk` を上書きインストールすればよく、消す必要はない。
 
+初回はここまでの手作業が要るが、**以後の更新はセットアップしておけば自動で届く**。
+mainへマージされるたびにCIがFirebase App Distributionへ配布し、テスター登録した
+端末に更新通知が届く（GitHub→NAS→各端末という手作業が要らなくなる）。
+セットアップ手順は [docs/mobile-distribution.md](../docs/mobile-distribution.md)。
+
 手元のPCで作ることもできる。**Android SDKが要る**（Claude Code側の環境では通せない）。
 
 ```bash

@@ -1,20 +1,26 @@
-# mobile/（Androidネイティブ版）の .apk を PRごとに作る。
+# mobile/（Androidネイティブ版）の .apk を作る。
 #
 # 凍結の原因は「開発環境にAndroid SDKが無く、mobile/ へ入れたものが実機で一度も
 # 動いていない」ことだった（docs/native-app-rewrite.md の【現況】）。PWA側が
 # Vercelのプレビューで PRごとに実機で確かめられるのと同じ状態を、ネイティブ側にも
 # 用意して原因そのものを潰す。
 #
-# できた .apk は Actions の実行ページ > Artifacts から落として端末へ直接入れる
-# （ストアには出さない方針。docs/native-app-rewrite.md §8）。
+# - PRでの実行: 実機確認用。できた .apk は Actions の実行ページ > Artifacts から
+#   落として端末へ直接入れる（ストアには出さない方針。docs/native-app-rewrite.md §8）。
+# - mainへのpushでの実行: 配布用。ビルドに加えて Firebase App Distribution へ渡し、
+#   テスター登録した端末に更新を届ける（GitHub→NAS→各端末という手作業を無くすため。
+#   セットアップは docs/mobile-distribution.md）。Firebase側の設定が済んでいない
+#   間は配布ステップだけをスキップし、ビルド確認は続ける。
 name: mobile APK
 
-# mainへのpushでは作らない。PRで作った .apk と中身が同じものをもう一度作ることになり、
-# 1つの変更あたりの所要時間とActionsの消費が倍になるため。
-# マージ後の .apk が要るときは workflow_dispatch から手で走らせる
-# （PRのArtifactsは30日残るので、普段はそちらで足りる）。
 on:
   pull_request:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/mobile-apk.yml'
+  push:
+    branches:
+      - main
     paths:
       - 'mobile/**'
       - '.github/workflows/mobile-apk.yml'
@@ -142,3 +148,27 @@ jobs:
           path: mobile/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      # mainへマージされた分だけ配る（PRの段階でテスターに配ると未レビューのものが
+      # 届いてしまう）。FIREBASE_SERVICE_ACCOUNT / FIREBASE_ANDROID_APP_ID は
+      # docs/mobile-distribution.md の手順で登録する。未登録の間はビルド確認だけ
+      # できればよいので、エラーにはせず警告して抜ける。
+      - name: Firebase App Distribution へ配布
+        if: github.event_name == 'push'
+        working-directory: mobile
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
+          RELEASE_NOTES: ${{ github.event.head_commit.message }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ] || [ -z "$FIREBASE_ANDROID_APP_ID" ]; then
+            echo '::warning::FIREBASE_SERVICE_ACCOUNT か FIREBASE_ANDROID_APP_ID が未登録のため配布をスキップします（docs/mobile-distribution.md）。'
+            exit 0
+          fi
+          echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-service-account.json"
+          npx --yes firebase-tools appdistribution:distribute \
+            android/app/build/outputs/apk/release/app-release.apk \
+            --app "$FIREBASE_ANDROID_APP_ID" \
+            --groups family \
+            --release-notes "$RELEASE_NOTES"
