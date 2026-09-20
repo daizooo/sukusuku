@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { BellRing, Clock, MapPin, Users, Text as TextIcon } from 'lucide-react-native';
+import { BellRing, Clock, Lock, MapPin, Users, Text as TextIcon } from 'lucide-react-native';
 import type { AnchorType, Participant, Task, TaskKind } from '@/types/app';
 import { PARTICIPANTS } from '@/types/app';
 import {
@@ -42,6 +42,11 @@ const REMINDER_SELECT_OPTIONS = REMINDER_OPTIONS.map((option) => ({
 const KIND_TABS: { value: TaskKind; label: string }[] = [
   { value: 'event', label: '予定' },
   { value: 'task', label: 'タスク' },
+];
+
+const SHARING_TABS: { value: boolean; label: string }[] = [
+  { value: false, label: '共有（家族全員）' },
+  { value: true, label: '自分だけ' },
 ];
 
 export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFormProps) {
@@ -313,6 +318,32 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
           style={styles.select}
           textStyle={styles.selectText}
         />
+      </View>
+
+      {/* 共有設定。自分だけにすると、家族の他のメンバーには表示されなくなる。 */}
+      <View>
+        <View style={styles.iconLabel}>
+          <Lock size={14} color={colors.textFaint} />
+          <Text style={styles.iconLabelText}>共有設定</Text>
+        </View>
+        <View style={styles.switcher}>
+          {SHARING_TABS.map((tab) => {
+            const selected = value.isPrivate === tab.value;
+            return (
+              <Pressable
+                key={String(tab.value)}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => set({ isPrivate: tab.value })}
+                style={[styles.switcherTab, selected && styles.switcherTabOn]}
+              >
+                <Text style={[styles.switcherText, selected && styles.switcherTextOn]}>
+                  {tab.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
     </View>
   );

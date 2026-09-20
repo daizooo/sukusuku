@@ -34,6 +34,8 @@ export interface Task {
   participants: Participant[];
   remindMinutesBefore: number | null; // null は通知なし
   done: boolean;
+  // 共有設定。true は自分だけに見える（作成した本人以外には表示されない）。
+  isPrivate: boolean;
   // 既存機能
   timing: string;
 }

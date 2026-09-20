@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { BellRing, CalendarDays, CheckCircle2, Circle, Clock, MapPin } from 'lucide-react-native';
+import { BellRing, CalendarDays, CheckCircle2, Circle, Clock, Lock, MapPin } from 'lucide-react-native';
 import type { DynamicTask } from '@/types/app';
 import { formatTimeRange } from '@/lib/dateUtils';
 import { getParticipantsTone } from '@/lib/uiUtils';
@@ -42,6 +42,7 @@ export default function TaskRow({ task, onToggle, onOpen, showDate }: TaskRowPro
             {task.remindMinutesBefore !== null && !task.done && (
               <BellRing size={12} color={colors.milkProgress} />
             )}
+            {task.isPrivate && <Lock size={12} color={colors.textFaint} />}
           </View>
           {task.participants.length > 0 && (
             <View
