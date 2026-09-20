@@ -670,6 +670,7 @@ export type Database = {
           note: string | null
           participants: string[]
           place: string | null
+          recurrence: Json | null
           remind_minutes_before: number | null
           start_date: string | null
           start_time: string | null
@@ -694,6 +695,7 @@ export type Database = {
           note?: string | null
           participants?: string[]
           place?: string | null
+          recurrence?: Json | null
           remind_minutes_before?: number | null
           start_date?: string | null
           start_time?: string | null
@@ -718,6 +720,7 @@ export type Database = {
           note?: string | null
           participants?: string[]
           place?: string | null
+          recurrence?: Json | null
           remind_minutes_before?: number | null
           start_date?: string | null
           start_time?: string | null

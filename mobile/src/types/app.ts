@@ -36,8 +36,31 @@ export interface Task {
   done: boolean;
   // 共有設定。true は自分だけに見える（作成した本人以外には表示されない）。
   isPrivate: boolean;
+  // 繰り返し設定。null なら繰り返さない単発の予定・タスク。
+  recurrence: Recurrence | null;
   // 既存機能
   timing: string;
+}
+
+// 繰り返し設定（Googleカレンダーの「カスタムの繰り返し」と同じ形）。
+// iCalendarのRRULEに相当する最小限の情報だけを持つ、このアプリ独自のJSON。
+//
+// 注意（スコープ）: これは「繰り返しのルール」を保存・表示するためだけの型。
+// 1件のタスクを実際に複数の日付へ展開してカレンダー上に並べる処理は別途必要で、
+// 現時点ではまだ実装していない。
+export type RecurrenceFreq = 'daily' | 'weekly' | 'monthly' | 'yearly';
+
+export type RecurrenceEnd =
+  | { type: 'never' }
+  | { type: 'until'; date: string } // 'YYYY-MM-DD'
+  | { type: 'count'; count: number }; // 1以上
+
+export interface Recurrence {
+  freq: RecurrenceFreq;
+  interval: number; // 1以上（「2週間ごと」なら freq: 'weekly', interval: 2）
+  // freq === 'weekly' のときだけ意味を持つ。0=日 ... 6=土（Date#getDayと同じ）。
+  byWeekday?: number[];
+  end: RecurrenceEnd;
 }
 
 // UI表示用に実際の日付を解決して付与したタスク

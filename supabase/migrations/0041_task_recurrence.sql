@@ -1,0 +1,22 @@
+-- すくすく手帳: 予定・タスクの「繰り返し設定」
+--
+-- Googleカレンダーの「カスタムの繰り返し」と同じ形（RRULEのFREQ/INTERVAL/
+-- BYDAY/UNTIL/COUNTに相当）を、1つのjsonb列にまとめて持たせる。
+-- 繰り返しの構造は自己完結していてSQL側で条件検索する必要が無いため、
+-- 列を分けずjsonbにまとめている。
+--
+-- 例:
+--   { "freq": "weekly", "interval": 1, "byWeekday": [0, 3],
+--     "end": { "type": "never" } }
+--   { "freq": "monthly", "interval": 1,
+--     "end": { "type": "until", "date": "2026-12-20" } }
+--   { "freq": "daily", "interval": 2,
+--     "end": { "type": "count", "count": 10 } }
+--
+-- 繰り返し無しの予定・タスク（既存データを含む）は null のまま。
+--
+-- 注意（スコープ）: この列は繰り返しの「ルール」を保存・表示するためだけのもので、
+-- 1件のタスクを複数の日付に展開する処理（インスタンス生成）はまだ無い。
+-- カレンダー上に複数回分を表示するには、別途その展開処理の実装が必要。
+alter table public.tasks
+  add column if not exists recurrence jsonb;

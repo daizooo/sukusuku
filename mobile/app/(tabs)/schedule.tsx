@@ -79,6 +79,7 @@ const emptyTaskDraft = (date: Date): TaskDraft => ({
   participants: [],
   remindMinutesBefore: null,
   isPrivate: false,
+  recurrence: null,
   timing: '',
 });
 
