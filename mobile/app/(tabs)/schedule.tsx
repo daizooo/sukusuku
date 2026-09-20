@@ -36,7 +36,8 @@ import {
   toDateString,
 } from '@/lib/dateUtils';
 import { byDateThenTime, tasksOnDate } from '@/lib/scheduleUtils';
-import { getParticipantColor, getProfileFieldValue } from '@/lib/uiUtils';
+import { describeError, getParticipantColor, getProfileFieldValue } from '@/lib/uiUtils';
+import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import SelectField from '@/components/ui/SelectField';
 import MonthView from '@/components/schedule/MonthView';
@@ -82,6 +83,7 @@ const emptyTaskDraft = (date: Date, owner: Participant | null): TaskDraft => ({
   participants: owner ? [owner] : [],
   remindMinutesBefore: null,
   isPrivate: false,
+  recurrence: null,
   timing: '',
 });
 
@@ -262,6 +264,12 @@ export default function ScheduleScreen() {
     setSelectedDate(startOfDay(today));
   };
 
+  // 矢印ボタンと同じ操作を、日付送りの帯（nav）上でのスワイプでもできるようにする。
+  const swipeHandlers = useSwipeNavigation({
+    onSwipeLeft: () => step(1),
+    onSwipeRight: () => step(-1),
+  });
+
   // 任意の月・日へ直接ジャンプする。Web版は <input type="month"> / <input type="date"> だが、
   // Androidに月のピッカーは無いので、月表示でも日付のピッカーから年と月だけを受け取る。
   const openJumpPicker = () =>
@@ -330,6 +338,8 @@ export default function ScheduleScreen() {
   const saveTaskEdit = async () => {
     if (!tempEditingTask) return;
     const updated = tempEditingTask;
+    const previousTodos = todos;
+    const previousSelectedTask = selectedTask;
 
     setTodos((prev) => prev.map((todo) => (todo.id === updated.id ? { ...todo, ...updated } : todo)));
     setSelectedTask(updated);
@@ -337,8 +347,12 @@ export default function ScheduleScreen() {
 
     try {
       await updateTask(supabase, updated);
-    } catch {
-      Alert.alert('保存できませんでした', 'もう一度お試しください。');
+    } catch (err) {
+      // 失敗したまま新しい値を表示し続けると、保存できたと誤解されるため元に戻す
+      setTodos(previousTodos);
+      setSelectedTask(previousSelectedTask);
+      setIsEditingTask(true);
+      Alert.alert('保存できませんでした', `もう一度お試しください。${describeError(err)}`);
     }
   };
 
@@ -417,7 +431,7 @@ export default function ScheduleScreen() {
         </View>
 
         {view !== 'list' && (
-          <View style={styles.nav}>
+          <View style={styles.nav} {...swipeHandlers}>
             <Pressable accessibilityRole="button" accessibilityLabel="前へ" onPress={() => step(-1)} style={styles.navArrow}>
               <ChevronLeft size={20} color={colors.textSubtle} />
             </Pressable>

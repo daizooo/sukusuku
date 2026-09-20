@@ -1,10 +1,11 @@
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { BellRing, Clock, Lock, MapPin, Star, Users, Text as TextIcon } from 'lucide-react-native';
-import type { AnchorType, Participant, Task, TaskKind } from '@/types/app';
+import { BellRing, Clock, Lock, MapPin, Repeat, Star, Users, Text as TextIcon } from 'lucide-react-native';
+import type { AnchorType, Participant, Recurrence, RecurrenceFreq, Task, TaskKind } from '@/types/app';
 import { PARTICIPANTS } from '@/types/app';
 import {
   REMINDER_OPTIONS,
+  WEEKDAY_LABELS,
   formatDateWithWeekday,
   parseDateString,
   parseTimeInput,
@@ -13,6 +14,7 @@ import {
 import { getParticipantColor } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 import SelectField from '@/components/ui/SelectField';
+import { END_TYPE_OPTIONS, FREQ_OPTIONS, defaultRecurrence, summarizeRecurrence } from '@/lib/recurrence';
 
 // 予定・タスクの入力欄（追加・編集で共通）。Googleカレンダーの追加画面に
 // ならい、種別（予定/タスク）をまず選び、予定のときだけ場所・参加者を持つ。
@@ -119,6 +121,68 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
 
   const startDate = parseDateString(value.startDate ?? '');
 
+  // 繰り返し。null は「繰り返さない」。オンにした瞬間だけ既定値を入れる。
+  const recurrence = value.recurrence;
+
+  const toggleRecurring = () => {
+    set({ recurrence: recurrence ? null : defaultRecurrence(value.startDate) });
+  };
+
+  const setFreq = (freq: RecurrenceFreq) => {
+    if (!recurrence) return;
+    // 週間ごと以外は曜日選択を持たない。週間ごとへ戻したときのために
+    // 選んでいた曜日が空なら、日付の曜日を初期値にする。
+    const byWeekday =
+      freq === 'weekly'
+        ? recurrence.byWeekday && recurrence.byWeekday.length > 0
+          ? recurrence.byWeekday
+          : (startDate ? [startDate.getDay()] : [])
+        : undefined;
+    set({ recurrence: { ...recurrence, freq, byWeekday } });
+  };
+
+  const setIntervalValue = (text: string) => {
+    if (!recurrence) return;
+    const parsed = Math.floor(Number(text));
+    set({ recurrence: { ...recurrence, interval: parsed > 0 ? parsed : 1 } });
+  };
+
+  const toggleWeekday = (day: number) => {
+    if (!recurrence) return;
+    const current = recurrence.byWeekday ?? [];
+    const byWeekday = current.includes(day) ? current.filter((d) => d !== day) : [...current, day];
+    set({ recurrence: { ...recurrence, byWeekday } });
+  };
+
+  const setEndType = (type: Recurrence['end']['type']) => {
+    if (!recurrence) return;
+    const end: Recurrence['end'] =
+      type === 'never'
+        ? { type: 'never' }
+        : type === 'until'
+          ? { type: 'until', date: recurrence.end.type === 'until' ? recurrence.end.date : (value.startDate ?? toDateString(new Date())) }
+          : { type: 'count', count: recurrence.end.type === 'count' ? recurrence.end.count : 1 };
+    set({ recurrence: { ...recurrence, end } });
+  };
+
+  const openEndDatePicker = () => {
+    if (!recurrence || recurrence.end.type !== 'until') return;
+    const currentEnd = recurrence.end;
+    DateTimePickerAndroid.open({
+      value: parseDateString(currentEnd.date) ?? new Date(),
+      mode: 'date',
+      onChange: (_event, picked) => {
+        if (picked) set({ recurrence: { ...recurrence, end: { type: 'until', date: toDateString(picked) } } });
+      },
+    });
+  };
+
+  const setEndCount = (text: string) => {
+    if (!recurrence || recurrence.end.type !== 'count') return;
+    const parsed = Math.floor(Number(text));
+    set({ recurrence: { ...recurrence, end: { type: 'count', count: parsed > 0 ? parsed : 1 } } });
+  };
+
   return (
     <View style={styles.form}>
       {/* 種別（予定/タスク） */}
@@ -207,6 +271,127 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
               accessibilityLabel="生後日数"
             />
             <Text style={styles.inlineLabel}>日</Text>
+          </View>
+        )}
+      </View>
+
+      {/* 繰り返し。予定・タスクどちらにも設定できる。既定は「繰り返さない」で、
+          オンのときだけ間隔・曜日・終了条件を出す（Googleカレンダーの
+          「カスタムの繰り返し」と同じ形）。 */}
+      <View style={styles.block}>
+        <View style={styles.row}>
+          <View style={styles.iconLabel}>
+            <Repeat size={14} color={colors.textFaint} />
+            <Text style={styles.iconLabelText}>繰り返し</Text>
+          </View>
+          <Switch
+            accessibilityLabel="繰り返しの切り替え"
+            value={recurrence !== null}
+            onValueChange={toggleRecurring}
+            trackColor={{ true: colors.navActive, false: colors.borderStrong }}
+            thumbColor={colors.surface}
+          />
+        </View>
+
+        {recurrence && (
+          <View style={styles.recurrenceBox}>
+            {/* 繰り返す間隔 */}
+            <View>
+              <Text style={styles.subLabel}>繰り返す間隔</Text>
+              <View style={styles.intervalRow}>
+                <TextInput
+                  style={styles.intervalInput}
+                  value={String(recurrence.interval)}
+                  onChangeText={setIntervalValue}
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                  accessibilityLabel="繰り返す間隔"
+                />
+                <SelectField
+                  accessibilityLabel="繰り返しの単位"
+                  options={FREQ_OPTIONS}
+                  value={recurrence.freq}
+                  onChange={setFreq}
+                  style={styles.freqSelect}
+                  textStyle={styles.selectText}
+                />
+              </View>
+            </View>
+
+            {/* 曜日（週間ごとのときだけ。複数選べる） */}
+            {recurrence.freq === 'weekly' && (
+              <View>
+                <Text style={styles.subLabel}>曜日</Text>
+                <View style={styles.weekdayRow}>
+                  {WEEKDAY_LABELS.map((label, day) => {
+                    const selected = (recurrence.byWeekday ?? []).includes(day);
+                    return (
+                      <Pressable
+                        key={day}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        onPress={() => toggleWeekday(day)}
+                        style={[styles.weekdayButton, selected && styles.weekdayButtonOn]}
+                      >
+                        <Text style={[styles.weekdayText, selected && styles.weekdayTextOn]}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* 終了日。なし/終了日を指定/回数を指定の3択。 */}
+            <View>
+              <Text style={styles.subLabel}>終了日</Text>
+              {END_TYPE_OPTIONS.map((option) => {
+                const selected = recurrence.end.type === option.value;
+                return (
+                  <View key={option.value} style={styles.radioBlock}>
+                    <Pressable
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      onPress={() => setEndType(option.value)}
+                      style={styles.radioRow}
+                    >
+                      <View style={[styles.radioDot, selected && styles.radioDotOn]}>
+                        {selected && <View style={styles.radioDotInner} />}
+                      </View>
+                      <Text style={styles.radioText}>{option.label}</Text>
+                    </Pressable>
+                    {option.value === 'until' && selected && recurrence.end.type === 'until' && (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="終了日"
+                        onPress={openEndDatePicker}
+                        style={[styles.field, styles.endInlineField]}
+                      >
+                        <Text style={styles.fieldText}>
+                          {formatDateWithWeekday(parseDateString(recurrence.end.date))}
+                        </Text>
+                      </Pressable>
+                    )}
+                    {option.value === 'count' && selected && recurrence.end.type === 'count' && (
+                      <View style={styles.endInlineCount}>
+                        <TextInput
+                          style={styles.intervalInput}
+                          value={String(recurrence.end.count)}
+                          onChangeText={setEndCount}
+                          keyboardType="number-pad"
+                          inputMode="numeric"
+                          accessibilityLabel="繰り返す回数"
+                        />
+                        <Text style={styles.inlineLabel}>回</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+
+            <Text style={styles.recurrenceSummary}>{summarizeRecurrence(recurrence)}</Text>
           </View>
         )}
       </View>
@@ -432,4 +617,53 @@ const styles = StyleSheet.create({
   noteInput: { minHeight: 96, textAlignVertical: 'top' },
   select: { borderColor: colors.borderStrong, borderRadius: 8, minHeight: 42 },
   selectText: { flex: 1, fontWeight: '400', fontSize: 14 },
+
+  // 繰り返し
+  recurrenceBox: { gap: 14, marginTop: 4 },
+  subLabel: { fontSize: 12, fontWeight: '500', color: colors.textMuted, marginBottom: 6 },
+  intervalRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  intervalInput: {
+    width: 56,
+    fontSize: 14,
+    color: colors.textSubtle,
+    fontWeight: '500',
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    textAlign: 'center',
+  },
+  freqSelect: { flex: 1, borderColor: colors.borderStrong, borderRadius: 8, minHeight: 42 },
+  weekdayRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 4 },
+  weekdayButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekdayButtonOn: { backgroundColor: colors.navActive, borderColor: colors.navActive },
+  weekdayText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  weekdayTextOn: { color: colors.primaryText },
+  radioBlock: { gap: 8, marginBottom: 8 },
+  radioRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 },
+  radioDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioDotOn: { borderColor: colors.navActive },
+  radioDotInner: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.navActive },
+  radioText: { fontSize: 14, color: colors.textSubtle, fontWeight: '500' },
+  endInlineField: { marginLeft: 26 },
+  endInlineCount: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 26 },
+  recurrenceSummary: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
 });
