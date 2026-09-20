@@ -11,7 +11,10 @@ type TaskTemplate = Omit<Task, 'id'>;
 type TaskTemplateBase = Omit<TaskTemplate, 'kind' | 'owner'>;
 
 const birthRelative = (
-  t: Omit<TaskTemplateBase, 'anchorType' | 'startDate' | 'startTime' | 'endTime' | 'isPrivate'>,
+  t: Omit<
+    TaskTemplateBase,
+    'anchorType' | 'startDate' | 'startTime' | 'endTime' | 'isPrivate' | 'recurrence'
+  >,
 ): TaskTemplateBase => ({
   ...t,
   anchorType: 'birth_relative',
@@ -20,6 +23,8 @@ const birthRelative = (
   endTime: null,
   // 定番の項目は家族全員で共有するものなので、共有設定(自分だけ)にはしない。
   isPrivate: false,
+  // 定番の項目に繰り返しは無い。
+  recurrence: null,
 });
 
 // 参加者がちょうど1人のときだけ、その人を主体(owner)とみなす

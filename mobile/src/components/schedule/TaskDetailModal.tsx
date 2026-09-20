@@ -7,6 +7,7 @@ import {
   Edit2,
   Lock,
   MapPin,
+  Repeat,
   Save,
   User,
   Users,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react-native';
 import type { DynamicTask } from '@/types/app';
 import { formatReminder, formatTimeRange } from '@/lib/dateUtils';
+import { summarizeRecurrence } from '@/lib/recurrence';
 import { getOwnerTone } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 import TaskForm from './TaskForm';
@@ -220,6 +222,13 @@ export default function TaskDetailModal({
           label="リマインダー"
           value={formatReminder(selectedTask.remindMinutesBefore)}
         />
+        {selectedTask.recurrence && (
+          <DetailRow
+            icon={<Repeat size={14} color={colors.textMuted} />}
+            label="繰り返し"
+            value={summarizeRecurrence(selectedTask.recurrence)}
+          />
+        )}
       </View>
 
       {selectedTask.note !== '' && (
