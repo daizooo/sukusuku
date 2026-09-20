@@ -655,7 +655,6 @@ export type Database = {
       tasks: {
         Row: {
           anchor_type: string
-          assignee: string
           belongings: string | null
           category: string
           created_at: string
@@ -665,7 +664,9 @@ export type Database = {
           has_notification: boolean
           id: string
           is_done: boolean
+          kind: string
           note: string | null
+          participants: string[]
           place: string | null
           remind_minutes_before: number | null
           start_date: string | null
@@ -676,7 +677,6 @@ export type Database = {
         }
         Insert: {
           anchor_type?: string
-          assignee?: string
           belongings?: string | null
           category?: string
           created_at?: string
@@ -686,7 +686,9 @@ export type Database = {
           has_notification?: boolean
           id?: string
           is_done?: boolean
+          kind?: string
           note?: string | null
+          participants?: string[]
           place?: string | null
           remind_minutes_before?: number | null
           start_date?: string | null
@@ -697,7 +699,6 @@ export type Database = {
         }
         Update: {
           anchor_type?: string
-          assignee?: string
           belongings?: string | null
           category?: string
           created_at?: string
@@ -707,7 +708,9 @@ export type Database = {
           has_notification?: boolean
           id?: string
           is_done?: boolean
+          kind?: string
           note?: string | null
+          participants?: string[]
           place?: string | null
           remind_minutes_before?: number | null
           start_date?: string | null

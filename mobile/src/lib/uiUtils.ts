@@ -16,31 +16,29 @@ export const getProfileFieldValue = (profile: UserProfile, key: ProfileFieldKey)
 };
 
 /**
- * 予定のラベルの色。Web版の `getLabelColor` と同じ割り当て
- * （パパ=青 / ママ=桃 / 家族=翠 / それ以外=灰）。
- * Web版はTailwindのクラス名を返すが、こちらは色そのものを返す。
+ * 参加者1人の色分け（大造=青 / いづみ=桃 / 岳=翠 / それ以外=灰）。
  */
-export const getLabelColors = (
-  label: string,
+export const getParticipantColor = (
+  participant: string,
 ): { background: string; text: string; border: string } => {
-  switch (label) {
-    case 'パパ':
+  switch (participant) {
+    case '大造':
       return {
-        background: colors.labelPapaSurface,
-        text: colors.labelPapaText,
-        border: colors.labelPapaBorder,
+        background: colors.labelDaizoSurface,
+        text: colors.labelDaizoText,
+        border: colors.labelDaizoBorder,
       };
-    case 'ママ':
+    case 'いづみ':
       return {
-        background: colors.labelMamaSurface,
-        text: colors.labelMamaText,
-        border: colors.labelMamaBorder,
+        background: colors.labelIzumiSurface,
+        text: colors.labelIzumiText,
+        border: colors.labelIzumiBorder,
       };
-    case '家族':
+    case '岳':
       return {
-        background: colors.labelFamilySurface,
-        text: colors.labelFamilyText,
-        border: colors.labelFamilyBorder,
+        background: colors.labelGakuSurface,
+        text: colors.labelGakuText,
+        border: colors.labelGakuBorder,
       };
     default:
       return {
@@ -50,6 +48,15 @@ export const getLabelColors = (
       };
   }
 };
+
+/**
+ * 予定・タスクの参加者の色分け。参加者がちょうど1人のときだけその人の色にし、
+ * 0人または複数（=まとめて関わる）のときは既定の色にする。
+ */
+export const getParticipantsTone = (
+  participants: string[],
+): { background: string; text: string; border: string } =>
+  getParticipantColor(participants.length === 1 ? participants[0] : '');
 
 // 全角数字を半角に変換
 const toHalfWidthDigits = (value: string): string =>

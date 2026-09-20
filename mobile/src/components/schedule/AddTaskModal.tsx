@@ -31,7 +31,7 @@ export default function AddTaskModal({
   return (
     <TaskModalShell
       show={show}
-      title="予定を追加"
+      title={newTask.kind === 'task' ? 'タスクを追加' : '予定を追加'}
       onClose={onClose}
       footer={
         <Pressable

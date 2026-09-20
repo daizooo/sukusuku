@@ -6,10 +6,11 @@ import type { Task, UserProfile } from '@/types/app';
 // それ以外のデータ(育児記録・お祝い・成長記録・書類)はSupabaseから取得する実データのみを扱う。
 // ToDo・イベントはいずれも出生日を起点に時期が決まるため anchorType は 'birth_relative'。
 type TaskTemplate = Omit<Task, 'id'>;
+type TaskTemplateBase = Omit<TaskTemplate, 'kind'>;
 
 const birthRelative = (
-  t: Omit<Task, 'id' | 'anchorType' | 'startDate' | 'startTime' | 'endTime'>,
-): TaskTemplate => ({
+  t: Omit<TaskTemplateBase, 'anchorType' | 'startDate' | 'startTime' | 'endTime'>,
+): TaskTemplateBase => ({
   ...t,
   anchorType: 'birth_relative',
   startDate: null,
@@ -17,43 +18,49 @@ const birthRelative = (
   endTime: null,
 });
 
-export const INITIAL_TODOS: TaskTemplate[] = [
-  birthRelative({ title: '出生届・マイナンバー提出', place: '城南まちづくりセンター', timing: '出生後すぐ', daysAfterBirth: 0, done: false, note: '戸籍謄本いつできるか聞く\n持ち物: 母子手帳、届出書、印鑑', label: 'パパ', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '児童手当申請', place: 'マイナポータル', timing: '出生後2週間以内', daysAfterBirth: 14, done: false, note: '持ち物: キャッシュカード写し', label: 'パパ', remindMinutesBefore: null }),
-  birthRelative({ title: '出生報告 (夫会社)', place: 'メール', timing: '出生後2週間以内', daysAfterBirth: 14, done: false, note: '', label: 'パパ', remindMinutesBefore: null }),
-  birthRelative({ title: '名前報告 (妻会社)', place: '電話', timing: '出生後2週間以内', daysAfterBirth: 14, done: false, note: '持ち物: 母子手帳の出生届出済証明ページ', label: 'ママ', remindMinutesBefore: null }),
-  birthRelative({ title: '出産手当金・育休申請', place: '郵送', timing: '退院したら', daysAfterBirth: 5, done: false, note: '病院記入あり\n持ち物: 申請書、同意書', label: 'ママ', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '妻の扶養申請', place: '郵送', timing: '戸籍ができたら', daysAfterBirth: 10, done: false, note: '持ち物: 住民票(全員)、夫給与明細(直近3ヶ月)、戸籍謄本', label: 'パパ', remindMinutesBefore: null }),
-  birthRelative({ title: '保育園見学・相談', place: '各保育園', timing: '生後1ヶ月〜', daysAfterBirth: 30, done: false, note: '', label: '家族', remindMinutesBefore: null }),
-  birthRelative({ title: '夫の勤務先へマイナンバー提出', place: 'WEB', timing: 'マイナンバーが届いたら', daysAfterBirth: 20, done: false, note: '持ち物: マイナンバー(夫)', label: 'パパ', remindMinutesBefore: null }),
-  birthRelative({ title: 'マイナンバーと健康保険証の紐づけ', place: 'マイナポータル', timing: '健康保険証が届いたら', daysAfterBirth: 25, done: false, note: '持ち物: マイナンバー(夫)、健康保険証', label: '家族', remindMinutesBefore: null }),
-  birthRelative({ title: 'ひまわりカード申請', place: 'WEB', timing: '健康保険証が届いたら', daysAfterBirth: 25, done: false, note: '持ち物: 健康保険証', label: '家族', remindMinutesBefore: null }),
-  birthRelative({ title: '保育園申請案内の確認', place: '郵送', timing: '9月〜', daysAfterBirth: 30, done: false, note: '就労証明書の依頼をする', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '保育園入園申請', place: 'WEB', timing: '10月〜', daysAfterBirth: 70, done: false, note: '持ち物: 就労証明書ほか', label: '家族', remindMinutesBefore: 1440 }),
-];
+// 手続き系はタスク、健診・行事系は予定として登録する。
+const asTasks = (list: TaskTemplateBase[]): TaskTemplate[] =>
+  list.map((t) => ({ ...t, kind: 'task' }));
+const asEvents = (list: TaskTemplateBase[]): TaskTemplate[] =>
+  list.map((t) => ({ ...t, kind: 'event' }));
 
-export const INITIAL_EVENTS: TaskTemplate[] = [
-  birthRelative({ title: '産婦検診 (母体)', place: 'まつばせレディースクリニック', timing: '出生後2週間', daysAfterBirth: 14, done: false, note: '持ち物: 母子手帳', label: 'ママ', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '1ヶ月検診 (母体・赤ちゃん)', place: 'まつばせL.C / 北野小児科', timing: '出生1ヶ月', daysAfterBirth: 30, done: false, note: '持ち物: 母子手帳、乳幼児健診番号', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: 'お宮参り', place: '-', timing: '1ヶ月〜', daysAfterBirth: 35, done: false, note: '', label: '家族', remindMinutesBefore: null }),
-  birthRelative({ title: '予防接種①', place: '北野小児科', timing: '生後2ヶ月', daysAfterBirth: 60, done: false, note: '五種混合, 肺炎球菌, B型肝炎, ロタ\n持ち物: 母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '予防接種予約', place: '北野小児科', timing: '1ヶ月健診が終わったら', daysAfterBirth: 30, done: false, note: 'RSワクチン接種済を伝える\n持ち物: 母子手帳', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '3ヶ月健診', place: '北野小児科', timing: '生後3ヶ月', daysAfterBirth: 90, done: false, note: '持ち物: 母子手帳', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: 'お食い初め', place: '-', timing: '生後100日', daysAfterBirth: 100, done: false, note: '', label: '家族', remindMinutesBefore: null }),
-  birthRelative({ title: '予防接種②', place: '北野小児科', timing: '生後3ヶ月〜4ヶ月になる前日', daysAfterBirth: 119, done: false, note: '五種混合②, 小児用肺炎球菌②, B型肝炎②, ロタウイルス②\n持ち物: 母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '予防接種③', place: '北野小児科', timing: '生後4ヶ月', daysAfterBirth: 120, done: false, note: '五種混合③, 小児用肺炎球菌③, ロタウイルス③(ワクチン次第)\n持ち物: 母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: 'インフルエンザ予防接種', place: '北野小児科', timing: '生後6ヶ月〜', daysAfterBirth: 180, done: false, note: '流行次第で任意\n持ち物: 母子手帳', label: '家族', remindMinutesBefore: null }),
-  birthRelative({ title: '7ヶ月健診', place: '北野小児科', timing: '生後7ヶ月〜8ヶ月', daysAfterBirth: 210, done: false, note: '持ち物: 母子手帳', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '予防接種④', place: '北野小児科', timing: '生後7ヶ月〜8ヶ月', daysAfterBirth: 210, done: false, note: 'BCG, B型肝炎③\n持ち物: 母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '予防接種(1歳)', place: '北野小児科', timing: '1歳', daysAfterBirth: 365, done: false, note: 'MR(麻しん風しん), 水痘(水ぼうそう), 小児用肺炎球菌④, 五種混合④, おたふくかぜ(任意だが必須)\n持ち物: 母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '予防接種(1歳6ヶ月)', place: '北野小児科', timing: '1歳6ヶ月', daysAfterBirth: 545, done: false, note: '水痘(水ぼうそう)②\n持ち物: 母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '予防接種(3歳)①', place: '', timing: '3歳', daysAfterBirth: 1095, done: false, note: '日本脳炎①\n持ち物: 母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '予防接種(3歳)②', place: '', timing: '3歳', daysAfterBirth: 1125, done: false, note: '日本脳炎②\n持ち物: 母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '予防接種(4歳)', place: '', timing: '4歳', daysAfterBirth: 1460, done: false, note: '日本脳炎③\n持ち物: 母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '予防接種(就学前)', place: '', timing: '小学校入学前の1年間', daysAfterBirth: 2190, done: false, note: 'MR(麻しん風しん)②, おたふくかぜ②\n持ち物: 母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '予防接種(9歳)', place: '', timing: '9歳', daysAfterBirth: 3285, done: false, note: '日本脳炎④\n持ち物: 母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
-  birthRelative({ title: '予防接種(11歳)', place: '', timing: '11歳', daysAfterBirth: 4015, done: false, note: '2種混合\n持ち物: 母子手帳、予防接種番号', label: '家族', remindMinutesBefore: 1440 }),
-];
+export const INITIAL_TODOS: TaskTemplate[] = asTasks([
+  birthRelative({ title: '出生届・マイナンバー提出', place: '城南まちづくりセンター', timing: '出生後すぐ', daysAfterBirth: 0, done: false, note: '戸籍謄本いつできるか聞く\n持ち物: 母子手帳、届出書、印鑑', participants: ['大造'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '児童手当申請', place: 'マイナポータル', timing: '出生後2週間以内', daysAfterBirth: 14, done: false, note: '持ち物: キャッシュカード写し', participants: ['大造'], remindMinutesBefore: null }),
+  birthRelative({ title: '出生報告 (夫会社)', place: 'メール', timing: '出生後2週間以内', daysAfterBirth: 14, done: false, note: '', participants: ['大造'], remindMinutesBefore: null }),
+  birthRelative({ title: '名前報告 (妻会社)', place: '電話', timing: '出生後2週間以内', daysAfterBirth: 14, done: false, note: '持ち物: 母子手帳の出生届出済証明ページ', participants: ['いづみ'], remindMinutesBefore: null }),
+  birthRelative({ title: '出産手当金・育休申請', place: '郵送', timing: '退院したら', daysAfterBirth: 5, done: false, note: '病院記入あり\n持ち物: 申請書、同意書', participants: ['いづみ'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '妻の扶養申請', place: '郵送', timing: '戸籍ができたら', daysAfterBirth: 10, done: false, note: '持ち物: 住民票(全員)、夫給与明細(直近3ヶ月)、戸籍謄本', participants: ['大造'], remindMinutesBefore: null }),
+  birthRelative({ title: '保育園見学・相談', place: '各保育園', timing: '生後1ヶ月〜', daysAfterBirth: 30, done: false, note: '', participants: ['岳'], remindMinutesBefore: null }),
+  birthRelative({ title: '夫の勤務先へマイナンバー提出', place: 'WEB', timing: 'マイナンバーが届いたら', daysAfterBirth: 20, done: false, note: '持ち物: マイナンバー(夫)', participants: ['大造'], remindMinutesBefore: null }),
+  birthRelative({ title: 'マイナンバーと健康保険証の紐づけ', place: 'マイナポータル', timing: '健康保険証が届いたら', daysAfterBirth: 25, done: false, note: '持ち物: マイナンバー(夫)、健康保険証', participants: ['岳'], remindMinutesBefore: null }),
+  birthRelative({ title: 'ひまわりカード申請', place: 'WEB', timing: '健康保険証が届いたら', daysAfterBirth: 25, done: false, note: '持ち物: 健康保険証', participants: ['岳'], remindMinutesBefore: null }),
+  birthRelative({ title: '保育園申請案内の確認', place: '郵送', timing: '9月〜', daysAfterBirth: 30, done: false, note: '就労証明書の依頼をする', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '保育園入園申請', place: 'WEB', timing: '10月〜', daysAfterBirth: 70, done: false, note: '持ち物: 就労証明書ほか', participants: ['岳'], remindMinutesBefore: 1440 }),
+]);
+
+export const INITIAL_EVENTS: TaskTemplate[] = asEvents([
+  birthRelative({ title: '産婦検診 (母体)', place: 'まつばせレディースクリニック', timing: '出生後2週間', daysAfterBirth: 14, done: false, note: '持ち物: 母子手帳', participants: ['いづみ'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '1ヶ月検診 (母体・赤ちゃん)', place: 'まつばせL.C / 北野小児科', timing: '出生1ヶ月', daysAfterBirth: 30, done: false, note: '持ち物: 母子手帳、乳幼児健診番号', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: 'お宮参り', place: '-', timing: '1ヶ月〜', daysAfterBirth: 35, done: false, note: '', participants: ['岳'], remindMinutesBefore: null }),
+  birthRelative({ title: '予防接種①', place: '北野小児科', timing: '生後2ヶ月', daysAfterBirth: 60, done: false, note: '五種混合, 肺炎球菌, B型肝炎, ロタ\n持ち物: 母子手帳、予防接種番号', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '予防接種予約', place: '北野小児科', timing: '1ヶ月健診が終わったら', daysAfterBirth: 30, done: false, note: 'RSワクチン接種済を伝える\n持ち物: 母子手帳', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '3ヶ月健診', place: '北野小児科', timing: '生後3ヶ月', daysAfterBirth: 90, done: false, note: '持ち物: 母子手帳', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: 'お食い初め', place: '-', timing: '生後100日', daysAfterBirth: 100, done: false, note: '', participants: ['岳'], remindMinutesBefore: null }),
+  birthRelative({ title: '予防接種②', place: '北野小児科', timing: '生後3ヶ月〜4ヶ月になる前日', daysAfterBirth: 119, done: false, note: '五種混合②, 小児用肺炎球菌②, B型肝炎②, ロタウイルス②\n持ち物: 母子手帳、予防接種番号', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '予防接種③', place: '北野小児科', timing: '生後4ヶ月', daysAfterBirth: 120, done: false, note: '五種混合③, 小児用肺炎球菌③, ロタウイルス③(ワクチン次第)\n持ち物: 母子手帳、予防接種番号', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: 'インフルエンザ予防接種', place: '北野小児科', timing: '生後6ヶ月〜', daysAfterBirth: 180, done: false, note: '流行次第で任意\n持ち物: 母子手帳', participants: ['岳'], remindMinutesBefore: null }),
+  birthRelative({ title: '7ヶ月健診', place: '北野小児科', timing: '生後7ヶ月〜8ヶ月', daysAfterBirth: 210, done: false, note: '持ち物: 母子手帳', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '予防接種④', place: '北野小児科', timing: '生後7ヶ月〜8ヶ月', daysAfterBirth: 210, done: false, note: 'BCG, B型肝炎③\n持ち物: 母子手帳、予防接種番号', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '予防接種(1歳)', place: '北野小児科', timing: '1歳', daysAfterBirth: 365, done: false, note: 'MR(麻しん風しん), 水痘(水ぼうそう), 小児用肺炎球菌④, 五種混合④, おたふくかぜ(任意だが必須)\n持ち物: 母子手帳、予防接種番号', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '予防接種(1歳6ヶ月)', place: '北野小児科', timing: '1歳6ヶ月', daysAfterBirth: 545, done: false, note: '水痘(水ぼうそう)②\n持ち物: 母子手帳、予防接種番号', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '予防接種(3歳)①', place: '', timing: '3歳', daysAfterBirth: 1095, done: false, note: '日本脳炎①\n持ち物: 母子手帳、予防接種番号', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '予防接種(3歳)②', place: '', timing: '3歳', daysAfterBirth: 1125, done: false, note: '日本脳炎②\n持ち物: 母子手帳、予防接種番号', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '予防接種(4歳)', place: '', timing: '4歳', daysAfterBirth: 1460, done: false, note: '日本脳炎③\n持ち物: 母子手帳、予防接種番号', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '予防接種(就学前)', place: '', timing: '小学校入学前の1年間', daysAfterBirth: 2190, done: false, note: 'MR(麻しん風しん)②, おたふくかぜ②\n持ち物: 母子手帳、予防接種番号', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '予防接種(9歳)', place: '', timing: '9歳', daysAfterBirth: 3285, done: false, note: '日本脳炎④\n持ち物: 母子手帳、予防接種番号', participants: ['岳'], remindMinutesBefore: 1440 }),
+  birthRelative({ title: '予防接種(11歳)', place: '', timing: '11歳', daysAfterBirth: 4015, done: false, note: '2種混合\n持ち物: 母子手帳、予防接種番号', participants: ['岳'], remindMinutesBefore: 1440 }),
+]);
 
 // 見学候補の保育園。熊本市南区（城南町）の3園を初期登録する。
 // 住所・電話番号は公開情報をもとにした初期値なので、電話をかける前に園のサイト等で確認する。

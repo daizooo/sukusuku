@@ -11,8 +11,8 @@ import {
   Filter,
   Plus,
 } from 'lucide-react-native';
-import type { CareLog, DynamicTask, Label, ScheduleView, Task, UserProfile } from '@/types/app';
-import { LABELS } from '@/types/app';
+import type { CareLog, DynamicTask, Participant, ScheduleView, Task, UserProfile } from '@/types/app';
+import { PARTICIPANTS } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { useRefreshOnFocus } from '@/lib/screenFocus';
@@ -36,7 +36,7 @@ import {
   toDateString,
 } from '@/lib/dateUtils';
 import { byDateThenTime, tasksOnDate } from '@/lib/scheduleUtils';
-import { getLabelColors, getProfileFieldValue } from '@/lib/uiUtils';
+import { getParticipantColor, getProfileFieldValue } from '@/lib/uiUtils';
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import SelectField from '@/components/ui/SelectField';
 import MonthView from '@/components/schedule/MonthView';
@@ -55,7 +55,7 @@ import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 // 画面の作り方はルートの CLAUDE.md に従い、表示の切り替えと日付送りは固定して、
 // スクロールは予定の一覧だけに閉じる。
 
-const LABEL_FILTERS: (Label | 'すべて')[] = ['すべて', ...LABELS];
+const PARTICIPANT_FILTERS: (Participant | 'すべて')[] = ['すべて', ...PARTICIPANTS];
 
 const VIEW_TABS: { id: ScheduleView; label: string }[] = [
   { id: 'month', label: '月' },
@@ -70,12 +70,13 @@ const emptyTaskDraft = (date: Date): TaskDraft => ({
   title: '',
   place: '',
   note: '',
+  kind: 'event',
   anchorType: 'absolute',
   startDate: toDateString(date),
   startTime: null,
   endTime: null,
   daysAfterBirth: 0,
-  label: '家族',
+  participants: [],
   remindMinutesBefore: null,
   timing: '',
 });
@@ -97,7 +98,7 @@ export default function ScheduleScreen() {
   const [currentCalendarDate, setCurrentCalendarDate] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
-  const [labelFilter, setLabelFilter] = useState<Label | 'すべて'>('すべて');
+  const [participantFilter, setParticipantFilter] = useState<Participant | 'すべて'>('すべて');
 
   const [careLogs, setCareLogs] = useState<CareLog[]>([]);
   const [loadedLogRange, setLoadedLogRange] = useState<string | null>(null);
@@ -170,7 +171,7 @@ export default function ScheduleScreen() {
   );
 
   const filteredTodos = dynamicTodos.filter(
-    (t) => labelFilter === 'すべて' || t.label === labelFilter,
+    (t) => participantFilter === 'すべて' || t.participants.includes(participantFilter),
   );
 
   const weekStart = startOfWeek(selectedDate);
@@ -380,7 +381,7 @@ export default function ScheduleScreen() {
   }
   if (!session) return <Redirect href="/login" />;
 
-  const filterTone = labelFilter === 'すべて' ? null : getLabelColors(labelFilter);
+  const filterTone = participantFilter === 'すべて' ? null : getParticipantColor(participantFilter);
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -396,10 +397,10 @@ export default function ScheduleScreen() {
             fill={false}
           />
           <SelectField
-            accessibilityLabel="担当で絞り込む"
-            options={LABEL_FILTERS.map((a) => ({ value: a, label: a }))}
-            value={labelFilter}
-            onChange={setLabelFilter}
+            accessibilityLabel="参加者で絞り込む"
+            options={PARTICIPANT_FILTERS.map((a) => ({ value: a, label: a }))}
+            value={participantFilter}
+            onChange={setParticipantFilter}
             icon={<Filter size={14} color={filterTone?.text ?? colors.textSubtle} />}
             style={filterTone ? { backgroundColor: filterTone.background, borderColor: filterTone.border } : undefined}
             textStyle={filterTone ? { color: filterTone.text } : undefined}

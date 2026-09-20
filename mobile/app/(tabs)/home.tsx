@@ -48,7 +48,7 @@ import {
   parseDateString,
   startOfDay,
 } from '@/lib/dateUtils';
-import { getLabelColors, getProfileFieldValue } from '@/lib/uiUtils';
+import { getParticipantsTone, getProfileFieldValue } from '@/lib/uiUtils';
 import NextFeedingCard from '@/components/NextFeedingCard';
 import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 
@@ -429,7 +429,7 @@ export default function HomeScreen() {
             <Text style={styles.taskEmpty}>直近の予定はありません</Text>
           )}
           {upcomingTasks.map((task, index) => {
-            const label = getLabelColors(task.label);
+            const label = getParticipantsTone(task.participants);
             return (
               <Pressable
                 key={task.id}
@@ -459,14 +459,18 @@ export default function HomeScreen() {
                     {task.remindMinutesBefore !== null && !task.done && (
                       <BellRing size={12} color={colors.milkProgress} />
                     )}
-                    <View
-                      style={[
-                        styles.taskLabel,
-                        { backgroundColor: label.background, borderColor: label.border },
-                      ]}
-                    >
-                      <Text style={[styles.taskLabelText, { color: label.text }]}>{task.label}</Text>
-                    </View>
+                    {task.participants.length > 0 && (
+                      <View
+                        style={[
+                          styles.taskLabel,
+                          { backgroundColor: label.background, borderColor: label.border },
+                        ]}
+                      >
+                        <Text style={[styles.taskLabelText, { color: label.text }]}>
+                          {task.participants.join('・')}
+                        </Text>
+                      </View>
+                    )}
                   </View>
 
                   <View style={styles.taskMeta}>
