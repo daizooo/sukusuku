@@ -264,10 +264,12 @@ export default function ScheduleScreen() {
     setSelectedDate(startOfDay(today));
   };
 
-  // 矢印ボタンと同じ操作を、日付送りの帯（nav）上でのスワイプでもできるようにする。
+  // 矢印ボタンと同じ操作を、画面上どこでの横スワイプでもできるようにする。
+  // 一覧表示（list）には日付送りが無いため、それ以外の表示中だけ有効にする。
   const swipeHandlers = useSwipeNavigation({
     onSwipeLeft: () => step(1),
     onSwipeRight: () => step(-1),
+    enabled: view !== 'list',
   });
 
   // 任意の月・日へ直接ジャンプする。Web版は <input type="month"> / <input type="date"> だが、
@@ -406,7 +408,7 @@ export default function ScheduleScreen() {
   const filterTone = participantFilter === 'すべて' ? null : getParticipantColor(participantFilter);
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen} {...swipeHandlers}>
       <View style={styles.page}>
         {/* 表示の切り替えと担当の絞り込みは同じ1段に置く（縦の高さを予定表に回すため）。
             絞り込みは選択肢が増えても幅が変わらないよう、横並びのボタンではなく選択にしている。 */}
@@ -431,7 +433,7 @@ export default function ScheduleScreen() {
         </View>
 
         {view !== 'list' && (
-          <View style={styles.nav} {...swipeHandlers}>
+          <View style={styles.nav}>
             <Pressable accessibilityRole="button" accessibilityLabel="前へ" onPress={() => step(-1)} style={styles.navArrow}>
               <ChevronLeft size={20} color={colors.textSubtle} />
             </Pressable>
