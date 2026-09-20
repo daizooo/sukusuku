@@ -48,7 +48,7 @@ import {
   parseDateString,
   startOfDay,
 } from '@/lib/dateUtils';
-import { getParticipantsTone, getProfileFieldValue } from '@/lib/uiUtils';
+import { getOwnerTone, getProfileFieldValue } from '@/lib/uiUtils';
 import NextFeedingCard from '@/components/NextFeedingCard';
 import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 
@@ -429,7 +429,7 @@ export default function HomeScreen() {
             <Text style={styles.taskEmpty}>直近の予定はありません</Text>
           )}
           {upcomingTasks.map((task, index) => {
-            const label = getParticipantsTone(task.participants);
+            const label = getOwnerTone(task.owner, task.participants);
             return (
               <Pressable
                 key={task.id}

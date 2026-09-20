@@ -6,7 +6,9 @@ import type { Task, UserProfile } from '@/types/app';
 // それ以外のデータ(育児記録・お祝い・成長記録・書類)はSupabaseから取得する実データのみを扱う。
 // ToDo・イベントはいずれも出生日を起点に時期が決まるため anchorType は 'birth_relative'。
 type TaskTemplate = Omit<Task, 'id'>;
-type TaskTemplateBase = Omit<TaskTemplate, 'kind'>;
+// 主体(owner)は下のasTasks/asEventsで参加者から自動的に決めるため、
+// 定番項目そのものには持たせない。
+type TaskTemplateBase = Omit<TaskTemplate, 'kind' | 'owner'>;
 
 const birthRelative = (
   t: Omit<
@@ -25,11 +27,16 @@ const birthRelative = (
   recurrence: null,
 });
 
+// 参加者がちょうど1人のときだけ、その人を主体(owner)とみなす
+// （定番項目は基本1人だけが担当のため、これで大半が埋まる）。
+const ownerFromParticipants = (participants: TaskTemplateBase['participants']) =>
+  participants.length === 1 ? participants[0] : null;
+
 // 手続き系はタスク、健診・行事系は予定として登録する。
 const asTasks = (list: TaskTemplateBase[]): TaskTemplate[] =>
-  list.map((t) => ({ ...t, kind: 'task' }));
+  list.map((t) => ({ ...t, kind: 'task', owner: ownerFromParticipants(t.participants) }));
 const asEvents = (list: TaskTemplateBase[]): TaskTemplate[] =>
-  list.map((t) => ({ ...t, kind: 'event' }));
+  list.map((t) => ({ ...t, kind: 'event', owner: ownerFromParticipants(t.participants) }));
 
 export const INITIAL_TODOS: TaskTemplate[] = asTasks([
   birthRelative({ title: '出生届・マイナンバー提出', place: '城南まちづくりセンター', timing: '出生後すぐ', daysAfterBirth: 0, done: false, note: '戸籍謄本いつできるか聞く\n持ち物: 母子手帳、届出書、印鑑', participants: ['大造'], remindMinutesBefore: 1440 }),

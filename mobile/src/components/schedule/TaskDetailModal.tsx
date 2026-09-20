@@ -9,13 +9,14 @@ import {
   MapPin,
   Repeat,
   Save,
+  User,
   Users,
   Text as TextIcon,
 } from 'lucide-react-native';
 import type { DynamicTask } from '@/types/app';
 import { formatReminder, formatTimeRange } from '@/lib/dateUtils';
 import { summarizeRecurrence } from '@/lib/recurrence';
-import { getParticipantsTone } from '@/lib/uiUtils';
+import { getOwnerTone } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 import TaskForm from './TaskForm';
 import TaskModalShell from './TaskModalShell';
@@ -131,7 +132,7 @@ export default function TaskDetailModal({
         <View style={styles.titleActions}>
           {selectedTask.participants.length > 0 &&
             (() => {
-              const tone = getParticipantsTone(selectedTask.participants);
+              const tone = getOwnerTone(selectedTask.owner, selectedTask.participants);
               return (
                 <View style={[styles.label, { backgroundColor: tone.background, borderColor: tone.border }]}>
                   <Text style={[styles.labelText, { color: tone.text }]}>
@@ -191,6 +192,13 @@ export default function TaskDetailModal({
             icon={<MapPin size={14} color={colors.textMuted} />}
             label="場所"
             value={selectedTask.place || '未設定'}
+          />
+        )}
+        {isEvent && (
+          <DetailRow
+            icon={<User size={14} color={colors.textMuted} />}
+            label="主体"
+            value={selectedTask.owner ?? '未設定'}
           />
         )}
         {isEvent && (

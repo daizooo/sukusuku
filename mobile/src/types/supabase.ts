@@ -668,6 +668,7 @@ export type Database = {
           is_private: boolean
           kind: string
           note: string | null
+          owner: string | null
           participants: string[]
           place: string | null
           recurrence: Json | null
@@ -693,6 +694,7 @@ export type Database = {
           is_private?: boolean
           kind?: string
           note?: string | null
+          owner?: string | null
           participants?: string[]
           place?: string | null
           recurrence?: Json | null
@@ -718,6 +720,7 @@ export type Database = {
           is_private?: boolean
           kind?: string
           note?: string | null
+          owner?: string | null
           participants?: string[]
           place?: string | null
           recurrence?: Json | null

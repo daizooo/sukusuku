@@ -13,6 +13,10 @@ type SupabaseDb = SupabaseClient<Database>;
 const toParticipants = (value: string[] | null): Participant[] =>
   (value ?? []).filter((v): v is Participant => (PARTICIPANTS as string[]).includes(v));
 
+// 消えた参加者名や壊れたデータが入っていても無視し、主体無し(null)として扱う。
+const toOwner = (value: string | null): Participant | null =>
+  value !== null && (PARTICIPANTS as string[]).includes(value) ? (value as Participant) : null;
+
 const toKind = (value: string | null): TaskKind => (value === 'task' ? 'task' : 'event');
 
 // DBのjsonbは型を保証しないため、最低限の形（freq/interval を持つオブジェクト）だけ
@@ -45,6 +49,7 @@ export const rowToTask = (row: TaskRow): Task => ({
   endTime: normalizeTime(row.end_time),
   daysAfterBirth: row.days_after_birth,
   kind: toKind(row.kind),
+  owner: toOwner(row.owner),
   participants: toParticipants(row.participants),
   remindMinutesBefore: row.remind_minutes_before,
   done: row.is_done,
@@ -66,6 +71,7 @@ const toWritableRow = (input: NewTaskInput) => ({
   start_time: input.startTime,
   end_time: input.endTime,
   days_after_birth: input.daysAfterBirth,
+  owner: input.owner,
   participants: input.participants,
   remind_minutes_before: input.remindMinutesBefore,
   is_private: input.isPrivate,
