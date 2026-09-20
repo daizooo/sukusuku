@@ -48,7 +48,7 @@ import {
   parseDateString,
   startOfDay,
 } from '@/lib/dateUtils';
-import { getParticipantsTone, getProfileFieldValue } from '@/lib/uiUtils';
+import { getOwnerTone, getProfileFieldValue } from '@/lib/uiUtils';
 import NextFeedingCard from '@/components/NextFeedingCard';
 import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 
@@ -436,7 +436,7 @@ export default function HomeScreen() {
         {!isLoadingTodos && upcomingTasks.length > 0 && (
           <View style={styles.taskList}>
             {upcomingTasks.map((task) => {
-              const label = getParticipantsTone(task.participants);
+              const label = getOwnerTone(task.owner, task.participants);
               return (
                 <Pressable
                   key={task.id}
