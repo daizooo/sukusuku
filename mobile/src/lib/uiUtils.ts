@@ -72,3 +72,13 @@ export const isPhoneNumberLike = (value: string): boolean => {
 };
 
 // tel:リンク用に電話番号を正規化する
+
+// 保存に失敗したとき、Supabaseが返した理由まで画面に出す。
+// 「失敗しました」だけだと、入力のどこが悪いのか利用者にも開発者にも分からないため。
+export const describeError = (err: unknown): string => {
+  if (typeof err === 'object' && err !== null && 'message' in err) {
+    const message = (err as { message: unknown }).message;
+    if (typeof message === 'string' && message !== '') return `\n（${message}）`;
+  }
+  return '';
+};

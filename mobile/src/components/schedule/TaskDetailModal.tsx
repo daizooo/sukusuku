@@ -74,15 +74,24 @@ export default function TaskDetailModal({
   if (!selectedTask) return null;
 
   if (isEditingTask && tempEditingTask) {
+    const canSubmit =
+      tempEditingTask.title.trim() !== '' &&
+      (tempEditingTask.anchorType === 'birth_relative' || tempEditingTask.startDate !== null);
+
     return (
       <TaskModalShell
         show
         title={tempEditingTask.kind === 'task' ? 'タスクを編集' : '予定を編集'}
         onClose={onClose}
         footer={
-          <Pressable accessibilityRole="button" onPress={onSaveEdit} style={styles.primary}>
-            <Save size={16} color={colors.primaryText} />
-            <Text style={styles.primaryText}>保存する</Text>
+          <Pressable
+            accessibilityRole="button"
+            disabled={!canSubmit}
+            onPress={onSaveEdit}
+            style={[styles.primary, !canSubmit && styles.primaryDisabled]}
+          >
+            <Save size={16} color={canSubmit ? colors.primaryText : colors.textFaint} />
+            <Text style={[styles.primaryText, !canSubmit && styles.primaryTextDisabled]}>保存する</Text>
           </Pressable>
         }
       >
@@ -284,6 +293,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   primaryText: { fontSize: 15, fontWeight: '500', color: colors.primaryText },
+  primaryDisabled: { backgroundColor: colors.border },
+  primaryTextDisabled: { color: colors.textFaint },
   undo: { backgroundColor: colors.border },
   undoText: { fontSize: 15, fontWeight: '500', color: colors.textSubtle },
   delete: { alignItems: 'center', paddingVertical: 8 },
