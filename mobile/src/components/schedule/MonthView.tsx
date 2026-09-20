@@ -11,7 +11,7 @@ import {
 import { getHolidayName } from '@/lib/japaneseHolidays';
 import { getMilestoneLabel } from '@/lib/milestones';
 import { tasksOnDate } from '@/lib/scheduleUtils';
-import { getLabelColors } from '@/lib/uiUtils';
+import { getParticipantsTone } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 
 // 月グリッド。Web版の `src/components/sukusuku/schedule/MonthView.tsx` を置き換えたもの。
@@ -133,7 +133,7 @@ export default function MonthView({
 
                   <View style={styles.chips}>
                     {dayTasks.slice(0, CHIPS).map((task) => {
-                      const label = getLabelColors(task.label);
+                      const label = getParticipantsTone(task.participants);
                       return (
                         <Pressable
                           key={task.id}

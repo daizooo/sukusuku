@@ -7,11 +7,12 @@ import {
   Edit2,
   MapPin,
   Save,
+  Users,
   Text as TextIcon,
 } from 'lucide-react-native';
 import type { DynamicTask } from '@/types/app';
 import { formatReminder, formatTimeRange } from '@/lib/dateUtils';
-import { getLabelColors } from '@/lib/uiUtils';
+import { getParticipantsTone } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 import TaskForm from './TaskForm';
 import TaskModalShell from './TaskModalShell';
@@ -75,7 +76,7 @@ export default function TaskDetailModal({
     return (
       <TaskModalShell
         show
-        title="予定を編集"
+        title={tempEditingTask.kind === 'task' ? 'タスクを編集' : '予定を編集'}
         onClose={onClose}
         footer={
           <Pressable accessibilityRole="button" onPress={onSaveEdit} style={styles.primary}>
@@ -93,12 +94,12 @@ export default function TaskDetailModal({
     );
   }
 
-  const label = getLabelColors(selectedTask.label);
+  const isEvent = selectedTask.kind === 'event';
 
   return (
     <TaskModalShell
       show
-      title="予定の詳細"
+      title={isEvent ? '予定の詳細' : 'タスクの詳細'}
       onClose={onClose}
       footer={
         <View style={styles.footer}>
@@ -117,7 +118,7 @@ export default function TaskDetailModal({
             )}
           </Pressable>
           <Pressable accessibilityRole="button" onPress={onDelete} style={styles.delete}>
-            <Text style={styles.deleteText}>この予定を削除</Text>
+            <Text style={styles.deleteText}>{isEvent ? 'この予定を削除' : 'このタスクを削除'}</Text>
           </Pressable>
         </View>
       }
@@ -125,11 +126,17 @@ export default function TaskDetailModal({
       <View style={styles.titleRow}>
         <Text style={styles.title}>{selectedTask.title}</Text>
         <View style={styles.titleActions}>
-          <View
-            style={[styles.label, { backgroundColor: label.background, borderColor: label.border }]}
-          >
-            <Text style={[styles.labelText, { color: label.text }]}>{selectedTask.label}</Text>
-          </View>
+          {selectedTask.participants.length > 0 &&
+            (() => {
+              const tone = getParticipantsTone(selectedTask.participants);
+              return (
+                <View style={[styles.label, { backgroundColor: tone.background, borderColor: tone.border }]}>
+                  <Text style={[styles.labelText, { color: tone.text }]}>
+                    {selectedTask.participants.join('・')}
+                  </Text>
+                </View>
+              );
+            })()}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="編集"
@@ -159,16 +166,27 @@ export default function TaskDetailModal({
               : undefined
           }
         />
-        <DetailRow
-          icon={<Clock size={14} color={colors.textMuted} />}
-          label="時刻"
-          value={formatTimeRange(selectedTask.startTime, selectedTask.endTime)}
-        />
-        <DetailRow
-          icon={<MapPin size={14} color={colors.textMuted} />}
-          label="場所"
-          value={selectedTask.place || '未設定'}
-        />
+        {isEvent && (
+          <DetailRow
+            icon={<Clock size={14} color={colors.textMuted} />}
+            label="時刻"
+            value={formatTimeRange(selectedTask.startTime, selectedTask.endTime)}
+          />
+        )}
+        {isEvent && (
+          <DetailRow
+            icon={<MapPin size={14} color={colors.textMuted} />}
+            label="場所"
+            value={selectedTask.place || '未設定'}
+          />
+        )}
+        {isEvent && (
+          <DetailRow
+            icon={<Users size={14} color={colors.textMuted} />}
+            label="参加者"
+            value={selectedTask.participants.length > 0 ? selectedTask.participants.join('・') : '未設定'}
+          />
+        )}
         <DetailRow
           icon={<BellRing size={14} color={colors.textMuted} />}
           label="リマインダー"

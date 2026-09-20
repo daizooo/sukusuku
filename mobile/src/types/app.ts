@@ -1,29 +1,37 @@
 // すくすく手帳 - 共有ドメイン型定義
 // 将来的に src/lib/supabase から取得するデータもこの形に正規化して扱う。
 
-// 予定に付けるラベル
-export type Label = 'パパ' | 'ママ' | '家族';
+// 予定・タスクの参加者（家族の各人）。以前は「パパ/ママ/家族」という
+// 役割ラベルの単一選択だったが、Googleカレンダーのゲストにならい、
+// 実際の名前を複数選択できる「参加者」に一本化した。
+export type Participant = '大造' | 'いづみ' | '岳';
 
-export const LABELS: Label[] = ['パパ', 'ママ', '家族'];
+export const PARTICIPANTS: Participant[] = ['大造', 'いづみ', '岳'];
 
 // 日付の決まり方。
 // - absolute:       start_date を直接指定する
 // - birth_relative: 子の誕生日 + daysAfterBirth で決まる
 export type AnchorType = 'absolute' | 'birth_relative';
 
+// 予定タブに追加する項目の種類。
+// - event: 日時範囲・場所・参加者を持つ「予定」（Googleカレンダーのイベントに相当）
+// - task:  日付とタイトルだけの軽い「タスク」（Googleカレンダーのタスクに相当。場所・参加者は持たない）
+export type TaskKind = 'event' | 'task';
+
 export interface Task {
   id: string;
   title: string;
   place: string;
   note: string;
+  kind: TaskKind;
   // 日付・時刻
   anchorType: AnchorType;
   startDate: string | null; // 'YYYY-MM-DD'
   startTime: string | null; // 'HH:mm' / null なら終日
   endTime: string | null; // 'HH:mm'
   daysAfterBirth: number; // anchorType === 'birth_relative' のときのみ意味を持つ
-  // ラベル・リマインダー
-  label: Label;
+  // 参加者・リマインダー
+  participants: Participant[];
   remindMinutesBefore: number | null; // null は通知なし
   done: boolean;
   // 既存機能

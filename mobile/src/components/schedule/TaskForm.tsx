@@ -1,8 +1,8 @@
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { BellRing, Clock, MapPin, Tag, Text as TextIcon } from 'lucide-react-native';
-import type { AnchorType, Label, Task } from '@/types/app';
-import { LABELS } from '@/types/app';
+import { BellRing, Clock, MapPin, Users, Text as TextIcon } from 'lucide-react-native';
+import type { AnchorType, Participant, Task, TaskKind } from '@/types/app';
+import { PARTICIPANTS } from '@/types/app';
 import {
   REMINDER_OPTIONS,
   formatDateWithWeekday,
@@ -10,13 +10,17 @@ import {
   parseTimeInput,
   toDateString,
 } from '@/lib/dateUtils';
-import { getLabelColors } from '@/lib/uiUtils';
+import { getParticipantColor } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 import SelectField from '@/components/ui/SelectField';
 
-// 予定の入力欄（追加・編集で共通）。Web版の
-// `src/components/sukusuku/modals/TaskForm.tsx` を置き換えたもの。
-// 項目の並び・既定値・保存する中身は同じにしてある。
+// 予定・タスクの入力欄（追加・編集で共通）。Googleカレンダーの追加画面に
+// ならい、種別（予定/タスク）をまず選び、予定のときだけ場所・参加者を持つ。
+//
+// 「ゲスト」にあたる欄は、外部の相手を招待する仕組みではなく、家族の誰の
+// 予定かを複数選べる「参加者」にしている（この家族アプリでは招待する相手が
+// 常に家族の誰かのため）。ビデオ会議の追加やカレンダー選択のような、
+// この家族には要らない項目は作らない。
 //
 // 日付・時刻・リマインダーはWeb版では <input>/<select> だが、React Nativeには無いので
 // 端末のピッカーと選択欄で置き換えている（出す中身と並びは同じ）。
@@ -35,11 +39,23 @@ const REMINDER_SELECT_OPTIONS = REMINDER_OPTIONS.map((option) => ({
   label: option.label,
 }));
 
+const KIND_TABS: { value: TaskKind; label: string }[] = [
+  { value: 'event', label: '予定' },
+  { value: 'task', label: 'タスク' },
+];
+
 export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFormProps) {
   const set = (patch: Partial<TaskDraft>) => onChange({ ...value, ...patch });
 
+  const isEvent = value.kind === 'event';
   const isAllDay = value.startTime === null;
   const showAnchorChoice = allowBirthRelative || value.anchorType === 'birth_relative';
+
+  const setKind = (kind: TaskKind) => {
+    // タスクは場所・参加者・時刻を持たないため、予定へ戻したときのために
+    // 参加者は残すが、タスクにするときは終日へ寄せる。
+    set(kind === 'task' ? { kind, startTime: null, endTime: null } : { kind });
+  };
 
   const setAnchorType = (anchorType: AnchorType) => {
     set({ anchorType });
@@ -48,6 +64,15 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
   const toggleAllDay = () => {
     // 終日 <-> 時刻あり。時刻ありに切り替えたときは 09:00 を初期値にする。
     set(isAllDay ? { startTime: '09:00', endTime: null } : { startTime: null, endTime: null });
+  };
+
+  const toggleParticipant = (participant: Participant) => {
+    const has = value.participants.includes(participant);
+    set({
+      participants: has
+        ? value.participants.filter((p) => p !== participant)
+        : [...value.participants, participant],
+    });
   };
 
   const openDatePicker = () =>
@@ -75,6 +100,26 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
 
   return (
     <View style={styles.form}>
+      {/* 種別（予定/タスク） */}
+      <View style={styles.switcher}>
+        {KIND_TABS.map((tab) => {
+          const selected = value.kind === tab.value;
+          return (
+            <Pressable
+              key={tab.value}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={() => setKind(tab.value)}
+              style={[styles.switcherTab, selected && styles.switcherTabOn]}
+            >
+              <Text style={[styles.switcherText, selected && styles.switcherTextOn]}>
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       <TextInput
         style={styles.titleInput}
         value={value.title}
@@ -145,88 +190,96 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
         )}
       </View>
 
-      {/* 時刻 */}
-      <View style={styles.block}>
-        <View style={styles.row}>
-          <View style={styles.iconLabel}>
-            <Clock size={14} color={colors.textFaint} />
-            <Text style={styles.iconLabelText}>終日</Text>
+      {/* 時刻（予定のみ。タスクは日付だけを持つ） */}
+      {isEvent && (
+        <View style={styles.block}>
+          <View style={styles.row}>
+            <View style={styles.iconLabel}>
+              <Clock size={14} color={colors.textFaint} />
+              <Text style={styles.iconLabelText}>終日</Text>
+            </View>
+            <Switch
+              accessibilityLabel="終日の切り替え"
+              value={isAllDay}
+              onValueChange={toggleAllDay}
+              trackColor={{ true: colors.navActive, false: colors.borderStrong }}
+              thumbColor={colors.surface}
+            />
           </View>
-          <Switch
-            accessibilityLabel="終日の切り替え"
-            value={isAllDay}
-            onValueChange={toggleAllDay}
-            trackColor={{ true: colors.navActive, false: colors.borderStrong }}
-            thumbColor={colors.surface}
+          {!isAllDay && (
+            <View style={styles.timeRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="始まりの時刻"
+                onPress={() => openTimePicker('startTime')}
+                style={[styles.field, styles.flex]}
+              >
+                <Text style={styles.fieldText}>{value.startTime ?? ''}</Text>
+              </Pressable>
+              <Text style={styles.dash}>-</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="終わりの時刻"
+                onPress={() => openTimePicker('endTime')}
+                style={[styles.field, styles.flex]}
+              >
+                <Text style={value.endTime ? styles.fieldText : styles.fieldPlaceholder}>
+                  {value.endTime ?? '未設定'}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* 参加者（予定のみ。複数選択できる） */}
+      {isEvent && (
+        <View>
+          <View style={styles.iconLabel}>
+            <Users size={14} color={colors.textFaint} />
+            <Text style={styles.iconLabelText}>参加者</Text>
+          </View>
+          <View style={styles.labelRow}>
+            {PARTICIPANTS.map((participant) => {
+              const selected = value.participants.includes(participant);
+              const tone = getParticipantColor(participant);
+              return (
+                <Pressable
+                  key={participant}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => toggleParticipant(participant)}
+                  style={[
+                    styles.labelButton,
+                    selected && { backgroundColor: tone.background, borderColor: tone.border },
+                  ]}
+                >
+                  <Text style={[styles.labelText, selected && { color: tone.text }]}>
+                    {participant}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* 場所（予定のみ） */}
+      {isEvent && (
+        <View>
+          <View style={styles.iconLabel}>
+            <MapPin size={14} color={colors.textFaint} />
+            <Text style={styles.iconLabelText}>場所</Text>
+          </View>
+          <TextInput
+            style={[styles.field, styles.fieldText]}
+            value={value.place}
+            onChangeText={(place) => set({ place })}
+            placeholder="場所を入力"
+            placeholderTextColor={colors.textFaint}
           />
         </View>
-        {!isAllDay && (
-          <View style={styles.timeRow}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="始まりの時刻"
-              onPress={() => openTimePicker('startTime')}
-              style={[styles.field, styles.flex]}
-            >
-              <Text style={styles.fieldText}>{value.startTime ?? ''}</Text>
-            </Pressable>
-            <Text style={styles.dash}>-</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="終わりの時刻"
-              onPress={() => openTimePicker('endTime')}
-              style={[styles.field, styles.flex]}
-            >
-              <Text style={value.endTime ? styles.fieldText : styles.fieldPlaceholder}>
-                {value.endTime ?? '未設定'}
-              </Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
-
-      {/* ラベル */}
-      <View>
-        <View style={styles.iconLabel}>
-          <Tag size={14} color={colors.textFaint} />
-          <Text style={styles.iconLabelText}>ラベル</Text>
-        </View>
-        <View style={styles.labelRow}>
-          {LABELS.map((label: Label) => {
-            const selected = value.label === label;
-            const tone = getLabelColors(label);
-            return (
-              <Pressable
-                key={label}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                onPress={() => set({ label })}
-                style={[
-                  styles.labelButton,
-                  selected && { backgroundColor: tone.background, borderColor: tone.border },
-                ]}
-              >
-                <Text style={[styles.labelText, selected && { color: tone.text }]}>{label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* 場所 */}
-      <View>
-        <View style={styles.iconLabel}>
-          <MapPin size={14} color={colors.textFaint} />
-          <Text style={styles.iconLabelText}>場所</Text>
-        </View>
-        <TextInput
-          style={[styles.field, styles.fieldText]}
-          value={value.place}
-          onChangeText={(place) => set({ place })}
-          placeholder="例: 城南まちづくりセンター"
-          placeholderTextColor={colors.textFaint}
-        />
-      </View>
+      )}
 
       {/* 詳細（持ち物もここにまとめて書く） */}
       <View>
@@ -238,7 +291,7 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
           style={[styles.field, styles.fieldText, styles.noteInput]}
           value={value.note}
           onChangeText={(note) => set({ note })}
-          placeholder="メモ・持ち物（母子手帳、印鑑など）を入力"
+          placeholder="詳細を入力"
           placeholderTextColor={colors.textFaint}
           multiline
         />

@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BellRing, CalendarDays, CheckCircle2, Circle, Clock, MapPin } from 'lucide-react-native';
 import type { DynamicTask } from '@/types/app';
 import { formatTimeRange } from '@/lib/dateUtils';
-import { getLabelColors } from '@/lib/uiUtils';
+import { getParticipantsTone } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 
 // 予定1件の行。Web版の `src/components/sukusuku/schedule/TaskRow.tsx` を置き換えたもの。
@@ -17,7 +17,7 @@ interface TaskRowProps {
 }
 
 export default function TaskRow({ task, onToggle, onOpen, showDate }: TaskRowProps) {
-  const label = getLabelColors(task.label);
+  const tone = getParticipantsTone(task.participants);
 
   return (
     <Pressable accessibilityRole="button" onPress={() => onOpen(task)} style={styles.row}>
@@ -43,11 +43,15 @@ export default function TaskRow({ task, onToggle, onOpen, showDate }: TaskRowPro
               <BellRing size={12} color={colors.milkProgress} />
             )}
           </View>
-          <View
-            style={[styles.label, { backgroundColor: label.background, borderColor: label.border }]}
-          >
-            <Text style={[styles.labelText, { color: label.text }]}>{task.label}</Text>
-          </View>
+          {task.participants.length > 0 && (
+            <View
+              style={[styles.label, { backgroundColor: tone.background, borderColor: tone.border }]}
+            >
+              <Text style={[styles.labelText, { color: tone.text }]}>
+                {task.participants.join('・')}
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.meta}>
@@ -57,10 +61,12 @@ export default function TaskRow({ task, onToggle, onOpen, showDate }: TaskRowPro
               <Text style={styles.metaDate}>{task.targetDate}</Text>
             </View>
           )}
-          <View style={styles.metaItem}>
-            <Clock size={12} color={colors.textMuted} />
-            <Text style={styles.metaText}>{formatTimeRange(task.startTime, task.endTime)}</Text>
-          </View>
+          {task.kind === 'event' && (
+            <View style={styles.metaItem}>
+              <Clock size={12} color={colors.textMuted} />
+              <Text style={styles.metaText}>{formatTimeRange(task.startTime, task.endTime)}</Text>
+            </View>
+          )}
           {task.place !== '' && (
             <View style={styles.metaItem}>
               <MapPin size={12} color={colors.textMuted} />

@@ -15,16 +15,16 @@ export const colors = {
   danger: '#ef4444', // red-500
   accentSurface: '#fdf2f8', // pink-50
 
-  // 予定のラベルの色。Web版の getLabelColor と同じ割り当て。
-  labelPapaSurface: '#dbeafe', // blue-100
-  labelPapaText: '#1d4ed8', // blue-700
-  labelPapaBorder: '#bfdbfe', // blue-200
-  labelMamaSurface: '#fce7f3', // pink-100
-  labelMamaText: '#be185d', // pink-700
-  labelMamaBorder: '#fbcfe8', // pink-200
-  labelFamilySurface: '#d1fae5', // emerald-100
-  labelFamilyText: '#047857', // emerald-700
-  labelFamilyBorder: '#a7f3d0', // emerald-200
+  // 予定・タスクの参加者1人だけが選ばれているときの色分け。
+  labelDaizoSurface: '#dbeafe', // blue-100
+  labelDaizoText: '#1d4ed8', // blue-700
+  labelDaizoBorder: '#bfdbfe', // blue-200
+  labelIzumiSurface: '#fce7f3', // pink-100
+  labelIzumiText: '#be185d', // pink-700
+  labelIzumiBorder: '#fbcfe8', // pink-200
+  labelGakuSurface: '#d1fae5', // emerald-100
+  labelGakuText: '#047857', // emerald-700
+  labelGakuBorder: '#a7f3d0', // emerald-200
   labelDefaultText: '#4b5563', // gray-600
 
   // 下のタブバー。Web版の下部ナビと同じ（選択中=blue-500 / それ以外=gray-500）。

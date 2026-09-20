@@ -49,7 +49,7 @@ const statusColors = (status: Nursery['status']) =>
     ? { background: colors.doneSurface, text: colors.doneText }
     : status === '未見学'
       ? { background: colors.neutralSurface, text: colors.labelDefaultText }
-      : { background: colors.labelPapaSurface, text: colors.labelPapaText };
+      : { background: colors.labelDaizoSurface, text: colors.labelDaizoText };
 
 /**
  * 中身の切り替えに使う下線タブ。園の切り替え(SegmentedTabs)と重ねても、
