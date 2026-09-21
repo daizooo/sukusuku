@@ -84,7 +84,7 @@ jobs:
 
       - run: npm run typecheck
 
-      # 通知(FCM)の設定。app.json が android.googleServicesFile として要求するので、
+      # 通知(FCM)の設定。app.config.js が android.googleServicesFile として要求するので、
       # 無いと prebuild も Gradle も通らない。中身はプロジェクトのIDと鍵なので
       # コミットせず（mobile/.gitignore）、Secrets から書き出す。
       #
