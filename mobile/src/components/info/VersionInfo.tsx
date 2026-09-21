@@ -15,6 +15,10 @@ import { colors } from '@/lib/theme';
 //   コミット   … その .apk がどのコミットから作られたか。ビルド番号
 //                （ワークフローの実行回数）はコミットと結び付かないため、
 //                期待した変更が入っているかはこちらでしか確かめられない。
+//
+// **2つを1行にまとめない。** 1行に続けて出していたときは、端末では
+// 「バージョン 0.1.0（ビルド 92・」までで切れてコミットが読めなかった。
+// 行を分ければ、横幅がどれだけ狭くてもどちらの値も最後まで出る。
 export default function VersionInfo() {
   const version = Application.nativeApplicationVersion ?? '?';
   // OSが持つ値。入っている .apk そのものの番号。
@@ -22,14 +26,16 @@ export default function VersionInfo() {
   // JSバンドル側に焼いた値（src/lib/buildInfo.ts）。
   // 2つが食い違うのは、古いJSバンドルが再利用された .apk が入っているとき
   // （PR #133 で起きたのがこれ）。黙って古い目印を出さず、そうと分かるようにする。
-  const isStaleBundle = nativeBuild !== null && BUILD_NUMBER !== 'dev' && nativeBuild !== BUILD_NUMBER;
+  const isStaleBundle =
+    nativeBuild !== null && BUILD_NUMBER !== 'dev' && nativeBuild !== BUILD_NUMBER;
 
   return (
     <View style={styles.container}>
       <Text style={styles.text}>
         バージョン {version}
-        {nativeBuild ? `（ビルド ${nativeBuild}・${BUILD_COMMIT}）` : `（${BUILD_COMMIT}）`}
+        {nativeBuild ? `（ビルド ${nativeBuild}）` : ''}
       </Text>
+      <Text style={styles.text}>コミット {BUILD_COMMIT}</Text>
       {isStaleBundle && (
         <Text style={styles.text}>※画面側はビルド {BUILD_NUMBER} のままです</Text>
       )}
@@ -38,6 +44,8 @@ export default function VersionInfo() {
 }
 
 const styles = StyleSheet.create({
-  container: { alignItems: 'center', paddingTop: 4, paddingBottom: 12 },
-  text: { fontSize: 11, color: colors.textFaint },
+  // 横幅いっぱいに置いたうえで中央に寄せる。親の幅に合わせて縮められると、
+  // 中の文字が途中で切れてしまうため。
+  container: { alignSelf: 'stretch', alignItems: 'center', gap: 2, paddingTop: 4, paddingBottom: 12 },
+  text: { fontSize: 11, color: colors.textFaint, textAlign: 'center' },
 });
