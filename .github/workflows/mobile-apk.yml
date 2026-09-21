@@ -84,7 +84,7 @@ jobs:
 
       - run: npm run typecheck
 
-      # 通知(FCM)の設定。app.json が android.googleServicesFile として要求するので、
+      # 通知(FCM)の設定。app.config.js が android.googleServicesFile として要求するので、
       # 無いと prebuild も Gradle も通らない。中身はプロジェクトのIDと鍵なので
       # コミットせず（mobile/.gitignore）、Secrets から書き出す。
       #
@@ -124,7 +124,13 @@ jobs:
 
       # android/ はコミットしていない（mobile/.gitignore）ので毎回生成する。
       # modules/nursing-alarm（前面サービス）は autolinking で自動的に組み込まれる。
-      - run: npx expo prebuild --platform android --no-install
+      # ANDROID_VERSION_CODE はここで android/app/build.gradle に焼き込まれる
+      # （app.config.js）。run_number は同じワークフローの実行のたびに増えるので、
+      # Firebase App Distributionの表示がビルドごとに変わるようにする。
+      - name: npx expo prebuild --platform android --no-install
+        env:
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: npx expo prebuild --platform android --no-install
 
       # assembleRelease はJSを .apk に同梱するので、Metroを立てなくても単体で動く。
       # 署名はExpoが用意するdebug用の鍵のまま（ストアに出さないので足りる）。
