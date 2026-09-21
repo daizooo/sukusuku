@@ -11,7 +11,8 @@
     "test:growth": "node --experimental-strip-types src/lib/growthRecordInput.test.ts",
     "test:notification": "node --experimental-strip-types src/lib/notificationCleanup.test.ts",
     "test:date": "node --experimental-strip-types src/lib/dateUtils.test.ts",
-    "test:holiday": "node --experimental-strip-types src/lib/japaneseHolidays.test.ts"
+    "test:holiday": "node --experimental-strip-types src/lib/japaneseHolidays.test.ts",
+    "test:feeding": "node --experimental-strip-types mobile/src/lib/feedingSchedule.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

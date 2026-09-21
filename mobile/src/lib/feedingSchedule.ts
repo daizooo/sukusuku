@@ -58,10 +58,92 @@ export const nextFeedingSchedule = (
   };
 };
 
+// ここから下は「まだ記録に入っていない授乳」の扱い。
+//
+// 母乳はストップウォッチを止めたあと、入力画面で保存して初めて記録(care_logs)になる。
+// 止めてから保存するまでには数十分の開きが出ることがあり、その間の「前回の授乳」は
+// 1つ前のままに見える。通知の側はこの隙間を手当てしてあるが(0027・send-feeding-reminders)、
+// 画面はずっと記録だけを見ていたため、飲ませ終えた直後でも目安を過ぎた赤い表示のまま
+// だった（測った端末でも、パートナーの端末でも）。
+//
+// そこで、計測中・記録待ちのぶん(nursing_alarms)も前回の授乳として扱う。
+
+/** 置き去りの印を信じないための古さの上限。サーバー側(send-nursing-alarms)と合わせている。 */
+const NURSING_MAX_ELAPSED_MINUTES = 90;
+const NURSING_MAX_PENDING_MINUTES = 60;
+
+/** まだ記録に入っていない授乳（計測中、または測り終えて記録待ち）。 */
+export interface PendingNursing {
+  /** 飲ませ始めた時刻の目安（計測を始めた時刻）。 */
+  startedAt: Date;
+  /** 計測を止めた時刻。まだ測っている間は null。 */
+  stoppedAt: Date | null;
+}
+
+/**
+ * 家族が預けている印から、いま数えるべき1件を選ぶ。
+ *
+ * 夫婦の端末が同時に印を持つことは、ふつうは無い。それでも両方あるときは
+ * 「まだ測っている」ほうを優先し、同じ種類なら新しいほうを採る。
+ * 古すぎる印（サーバーの片付けが追いつく前の行）は無いものとして落とす。
+ */
+export const activePendingNursing = (
+  states: readonly PendingNursing[],
+  now: number,
+): PendingNursing | null => {
+  const fresh = states.filter((state) => {
+    const limit = state.stoppedAt ? NURSING_MAX_PENDING_MINUTES : NURSING_MAX_ELAPSED_MINUTES;
+    const since = (state.stoppedAt ?? state.startedAt).getTime();
+    return Number.isFinite(since) && now - since <= limit * 60_000;
+  });
+  if (fresh.length === 0) return null;
+  return fresh.reduce((best, state) => {
+    // 計測中が1つでもあれば、そちらが「いまの授乳」。
+    if (!best.stoppedAt !== !state.stoppedAt) return best.stoppedAt ? state : best;
+    return state.startedAt.getTime() > best.startedAt.getTime() ? state : best;
+  });
+};
+
+/** 画面に出す「前回の授乳」。記録に入る前のぶんも含めて決めたもの。 */
+export interface LastFeeding {
+  /** 目安の起点。いま飲ませている最中なら、まだ終わっていないので null。 */
+  lastFedAt: Date | null;
+  /** いま飲ませている最中。 */
+  isNursing: boolean;
+  /** 飲ませ終えたが、まだ記録に入っていない。 */
+  isPendingRecord: boolean;
+}
+
+/**
+ * 記録と「記録に入る前の授乳」から、前回の授乳を決める。
+ *
+ * 保存が済めば印は消えるが、消えたことがこちらに届くまでには少し間がある。
+ * その授乳が始まったあとに授乳の記録が入っていれば、それが保存されたぶんと見て
+ * 印は使わない（同じ授乳を二重に数えて目安が後ろへずれないようにする）。
+ */
+export const resolveLastFeeding = (
+  lastLoggedAt: Date | null,
+  pending: PendingNursing | null,
+): LastFeeding => {
+  const isRecorded =
+    pending !== null &&
+    lastLoggedAt !== null &&
+    lastLoggedAt.getTime() >= pending.startedAt.getTime();
+  if (!pending || isRecorded) {
+    return { lastFedAt: lastLoggedAt, isNursing: false, isPendingRecord: false };
+  }
+  if (!pending.stoppedAt) {
+    return { lastFedAt: null, isNursing: true, isPendingRecord: false };
+  }
+  return { lastFedAt: pending.stoppedAt, isNursing: false, isPendingRecord: true };
+};
+
 /** 「次の授乳の目安」の表示に要るものをまとめて渡すための入れ物。 */
 export interface NextFeedingInfo {
-  /** 前回の授乳の時刻。まだ記録が無ければ null。 */
+  /** 前回の授乳の記録の時刻。まだ記録が無ければ null。 */
   lastFedAt: Date | null;
+  /** まだ記録に入っていない授乳。あればこちらを前回の授乳として扱う。 */
+  pendingNursing: PendingNursing | null;
   intervalMinutes: number;
   isLoading: boolean;
 }

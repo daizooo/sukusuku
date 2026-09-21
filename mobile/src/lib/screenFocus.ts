@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 
 // タブを行き来したときに、出ているものを他のタブでの変更に追いつかせるための決まりごと。
@@ -37,5 +38,39 @@ export function useRefreshOnFocus(refresh: () => void): void {
         hasLeft.current = true;
       };
     }, []),
+  );
+}
+
+/**
+ * そのタブを見ている間だけ、一定の間隔で読み直す。
+ *
+ * 他のタブへ行って戻る（useRefreshOnFocus）だけでは、開きっぱなしのホームに
+ * パートナーの端末の動きが出てこない。「いま授乳中」のように、こちらが何もしなくても
+ * 変わるものだけに使う（記録や予定はタブを切り替えたときに追いつけば足りる）。
+ *
+ * 見ていない間は動かさないので、裏で通信し続けることはない。
+ *
+ * @param refresh 読み直す処理。毎回の描画で作り直してもよい。
+ * @param intervalMs 読み直す間隔。
+ */
+export function useRefreshWhileFocused(refresh: () => void, intervalMs: number): void {
+  const latest = useRef(refresh);
+  useEffect(() => {
+    latest.current = refresh;
+  });
+
+  useFocusEffect(
+    useCallback(() => {
+      const tick = () => latest.current();
+      const timerId = setInterval(tick, intervalMs);
+      // 画面を消している間はタイマーが間引かれるので、前面に戻ったところで1回読む。
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') tick();
+      });
+      return () => {
+        clearInterval(timerId);
+        subscription.remove();
+      };
+    }, [intervalMs]),
   );
 }
