@@ -87,10 +87,10 @@ export interface PendingNursing {
  * 「まだ測っている」ほうを優先し、同じ種類なら新しいほうを採る。
  * 古すぎる印（サーバーの片付けが追いつく前の行）は無いものとして落とす。
  */
-export const activePendingNursing = (
-  states: readonly PendingNursing[],
+export const activePendingNursing = <T extends PendingNursing>(
+  states: readonly T[],
   now: number,
-): PendingNursing | null => {
+): T | null => {
   const fresh = states.filter((state) => {
     const limit = state.stoppedAt ? NURSING_MAX_PENDING_MINUTES : NURSING_MAX_ELAPSED_MINUTES;
     const since = (state.stoppedAt ?? state.startedAt).getTime();
