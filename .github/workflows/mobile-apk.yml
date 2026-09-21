@@ -112,11 +112,15 @@ jobs:
       # 入れる端末はどちらも arm64 なので、作るのを arm64-v8a だけにする。
       # 上書きの仕方は prebuild が生成する android/gradle.properties に書いてある。
       # x86 系が要るのはエミュレータで動かすときだが、それは手元で作れば済む。
+      # EXPO_PUBLIC_BUILD_SHA はSecretsではなく毎回変わるコミットのSHA。設定タブに
+      # 出して、App Distributionで入れ直したあと実際に更新されたか確かめられるように
+      # する（mobile/src/components/info/VersionInfo.tsx）。
       - name: .apk を作る
         working-directory: mobile/android
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_BUILD_SHA: ${{ github.sha }}
         run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 
       # EXPO_PUBLIC_* はビルド時にJSへ埋め込まれ、google-services.json は通知の宛先を

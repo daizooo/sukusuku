@@ -24,6 +24,7 @@ import NotificationSetting from '@/components/info/NotificationSetting';
 import FeedingIntervalSetting from '@/components/info/FeedingIntervalSetting';
 import TemperatureReminderSetting from '@/components/info/TemperatureReminderSetting';
 import AccountSection from '@/components/info/AccountSection';
+import VersionInfo from '@/components/info/VersionInfo';
 
 // 設定タブ。Web版の `src/components/sukusuku/tabs/InfoTab.tsx` を
 // React Nativeに置き換えたもの。出す項目・並び・文言は同じにしてある。
@@ -215,6 +216,8 @@ export default function InfoScreen() {
             <AccountSection familyId={familyId} userId={session.user.id} />
           </>
         )}
+
+        <VersionInfo />
       </ScrollView>
     </SafeAreaView>
   );
