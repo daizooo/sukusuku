@@ -790,7 +790,7 @@ Edge Function ─→ _shared/deliver.ts ─→ FCM HTTP v1（_shared/fcm.ts）
 #### 手順1: Firebase プロジェクトを作る
 
 [Firebase コンソール](https://console.firebase.google.com/)でプロジェクトを作り、
-**Android アプリを追加**する。パッケージ名は `mobile/app.json` の
+**Android アプリを追加**する。パッケージ名は `mobile/app.config.js` の
 `android.package` と揃える（`com.sukusuku.app`）。
 
 > Supabase とは別のサービスだが、**FCMの経路だけを借りる**形なので、
@@ -799,7 +799,7 @@ Edge Function ─→ _shared/deliver.ts ─→ FCM HTTP v1（_shared/fcm.ts）
 #### 手順2: `google-services.json` を置く
 
 アプリを追加したときに落とせる `google-services.json` を `mobile/` に置く。
-これが無いとビルドが通らない（`app.json` の `android.googleServicesFile` が指している）。
+これが無いとビルドが通らない（`app.config.js` の `android.googleServicesFile` が指している）。
 
 **リポジトリにはコミットしない**（`mobile/.gitignore`）。CIは Actions の Secrets から
 書き出すので、`GOOGLE_SERVICES_JSON` に**ファイルの中身をそのまま**登録する

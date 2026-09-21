@@ -214,7 +214,7 @@ const OUTPUTS = [
     foot: [0xff, 0xff, 0xff],
     safe: 0.8,
   },
-  // 起動画面。地はapp.jsonの背景色に任せるので、足あとだけを透明の上に置く。
+  // 起動画面。地はapp.config.jsの背景色に任せるので、足あとだけを透明の上に置く。
   { file: 'splash-icon.png', size: 1024, background: null, foot: BRAND, safe: 66 / 108 },
 ];
 
