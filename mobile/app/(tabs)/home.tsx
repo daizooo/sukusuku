@@ -37,12 +37,11 @@ import { getProfile } from '@/lib/api/profile';
 import { deleteTask, listTasks, updateTask, updateTaskDone } from '@/lib/api/tasks';
 import { listRecentMilkLogs } from '@/lib/api/careLogs';
 import { getFeedingSettings } from '@/lib/api/feedingSettings';
-import { listFamilyNursingState } from '@/lib/api/nursingAlarms';
+import { listFamilyNursingState, type FamilyNursingState } from '@/lib/api/nursingAlarms';
 import {
   activePendingNursing,
   DEFAULT_FEEDING_INTERVAL_MINUTES,
   type NextFeedingInfo,
-  type PendingNursing,
 } from '@/lib/feedingSchedule';
 import {
   calculateTargetDate,
@@ -73,10 +72,9 @@ const NURSING_POLL_MS = 60_000;
  * 「印は無い」として扱えばよい（今までどおり記録だけで目安を出す）ので、
  * 失敗しても画面は止めない。
  */
-const loadNursingStates = async (): Promise<PendingNursing[]> => {
+const loadNursingStates = async (): Promise<FamilyNursingState[]> => {
   try {
-    const states = await listFamilyNursingState(supabase);
-    return states.map((state) => ({ startedAt: state.baselineAt, stoppedAt: state.stoppedAt }));
+    return await listFamilyNursingState(supabase);
   } catch {
     return [];
   }
@@ -95,7 +93,7 @@ export default function HomeScreen() {
   const [recentMilkLogs, setRecentMilkLogs] = useState<MilkLog[]>([]);
   const [isLoadingRecentMilk, setIsLoadingRecentMilk] = useState(true);
   const [intervalMinutes, setIntervalMinutes] = useState(DEFAULT_FEEDING_INTERVAL_MINUTES);
-  const [nursingStates, setNursingStates] = useState<PendingNursing[]>([]);
+  const [nursingStates, setNursingStates] = useState<FamilyNursingState[]>([]);
   const [selectedTask, setSelectedTask] = useState<DynamicTask | null>(null);
   const [isEditingTask, setIsEditingTask] = useState(false);
   const [tempEditingTask, setTempEditingTask] = useState<DynamicTask | null>(null);

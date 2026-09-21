@@ -73,6 +73,9 @@ import {
 } from '@/lib/dateUtils';
 import { OPEN_LOG_PARAM, parseLogType } from '@/lib/appLinks';
 import { useNursingTimer } from '@/lib/nursingTimer';
+import { listFamilyNursingState, type FamilyNursingState } from '@/lib/api/nursingAlarms';
+import { activePendingNursing, resolveLastFeeding } from '@/lib/feedingSchedule';
+import { useRefreshWhileFocused } from '@/lib/screenFocus';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import {
   isNursingForegroundServiceAvailable,
@@ -111,6 +114,12 @@ import TemperatureLogModal, {
 // 記録が続くと母乳の記録まで届かないため、1日ぶんの授乳の回数より多めに取る。
 const RECENT_MILK_LIMIT = 30;
 
+/**
+ * 「いま授乳中・記録待ち」を読み直す間隔。ホーム（app/(tabs)/home.tsx）と同じ。
+ * 授乳の始まり・終わりはパートナーの端末で起きるので、こちらからは待つしかない。
+ */
+const NURSING_POLL_MS = 60_000;
+
 export default function LogScreen() {
   const { session, isLoading: isSessionLoading } = useSession();
   const userId = session?.user.id ?? null;
@@ -139,6 +148,9 @@ export default function LogScreen() {
   // 「次はどちらから」に使う直近の授乳。夜中の授乳は前の日の記録になるため、
   // 表示中の日だけを見ると前回を取りこぼし、おすすめの側が出なくなる。
   const [recentMilkLogs, setRecentMilkLogs] = useState<MilkLog[]>([]);
+  // 家族の端末が預けている「いま授乳中・記録待ち」の印。パートナーが授乳を終えて
+  // まだ記録していない間、記録だけを見ると1つ前の側が出てしまうため。
+  const [nursingStates, setNursingStates] = useState<FamilyNursingState[]>([]);
   // プロフィールに登録された子の名前。体温の入力画面で「◯の平熱」と出すのに使う。
   const [babyName, setBabyName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -326,6 +338,30 @@ export default function LogScreen() {
     void refreshRecentMilkLogs();
   }, [refreshRecentMilkLogs]);
 
+  /**
+   * 「いま授乳中・記録待ち」を読み直す。
+   *
+   * 通知をオフにしている端末は印を預けられず、圏外なら読めない。どちらも
+   * 「印は無い」として扱えばよいので、失敗しても画面は止めない。
+   */
+  const refreshNursingStates = useCallback(async () => {
+    if (!familyId) return;
+    try {
+      setNursingStates(await listFamilyNursingState(supabase));
+    } catch {
+      // 印が読めないだけ。記録から出す「次はどちらから」はそのまま出る。
+    }
+  }, [familyId]);
+
+  useEffect(() => {
+    void refreshNursingStates();
+  }, [refreshNursingStates]);
+
+  // 授乳の始まり・終わりはパートナーの端末で起きるので、見ている間は読み直す。
+  useRefreshWhileFocused(() => {
+    void refreshNursingStates();
+  }, NURSING_POLL_MS);
+
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     void sync().finally(() => setIsRefreshing(false));
@@ -354,10 +390,40 @@ export default function LogScreen() {
   // 表示中の日の記録と、日付にとらわれない直近の授乳を合わせて渡し、
   // その中でいちばん新しい母乳の記録から決める。
   // （表示中の日の記録は保存した時点で入るので、圏外でも直後から新しい側が出る）
-  const nextBreastSide = useMemo<BreastSide | null>(
+  const recordedNextBreastSide = useMemo<BreastSide | null>(
     () => getNextBreastSide([...logs, ...recentMilkLogs]),
     [logs, recentMilkLogs],
   );
+  // 記録に入る前の授乳（家族の端末の計測中・記録待ち）。記録だけを見ていると、
+  // パートナーが授乳を終えて保存するまでの間、1つ前の側が出てしまう。
+  // 自分の端末で測っている分はここには要らない（計測中のバナーが出る）。
+  const familyNursing = useMemo(
+    () => (timer.hasSession ? null : activePendingNursing(nursingStates, Date.now())),
+    [timer.hasSession, nursingStates],
+  );
+  // 保存が済んだあと印の消え方が遅れても、記録と食い違わないようにする
+  // （ホームの「次の授乳の目安」と同じ決め方。feedingSchedule.ts）。
+  const lastMilkAt = useMemo(() => {
+    const times = [...logs, ...recentMilkLogs]
+      .filter((log) => log.type === 'milk')
+      .map((log) => log.time.getTime());
+    return times.length > 0 ? new Date(Math.max(...times)) : null;
+  }, [logs, recentMilkLogs]);
+  const lastFeeding = resolveLastFeeding(lastMilkAt, familyNursing);
+
+  // 相手がまだ飲ませている最中は、次の側ではなくそれを出す（終わってから決まるため）。
+  const nursingBy = lastFeeding.isNursing ? (familyNursing?.userId ?? null) : null;
+  // 測り終えて記録がまだなら、その最後に飲ませた側の逆がおすすめ。
+  // （計測中の区切りにはゲップも入るが、記録待ちの印に入るのは左右だけ）
+  const pendingLastSide =
+    lastFeeding.isPendingRecord && familyNursing && familyNursing.side !== 'burp'
+      ? familyNursing.side
+      : null;
+  const nextBreastSide: BreastSide | null = pendingLastSide
+    ? pendingLastSide === 'left'
+      ? 'right'
+      : 'left'
+    : recordedNextBreastSide;
   // 体温のボタンにはその子の平熱だけを出す。日ごとの平均や最高は出さず、
   // 測ったときに比べる相手になる基準の1つの数に絞る。
   const temperatureBaseline = useMemo(
@@ -738,7 +804,10 @@ export default function LogScreen() {
                     代わりに、次の授乳で使える搾乳ストックの残りを出す。表示中の日だけでは
                     求まらないため、日付の送りとは関わらず常に今の残りになる。 */}
                 <Text style={styles.stockValue}>ストック・{pumpedStockMl(pumpedBatches)}ml</Text>
-                {nextBreastSide && !timer.hasSession && (
+                {nursingBy && (
+                  <Text style={styles.recordHint}>{memberLabel(nursingBy)}が授乳中</Text>
+                )}
+                {!nursingBy && nextBreastSide && !timer.hasSession && (
                   <Text style={styles.recordHint}>次は{getSideLabel(nextBreastSide)}から</Text>
                 )}
               </Pressable>

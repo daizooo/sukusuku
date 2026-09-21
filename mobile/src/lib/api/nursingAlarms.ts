@@ -86,10 +86,16 @@ export async function deleteNursingState(
 export interface FamilyNursingState {
   /** 測っている（測り終えた）人。 */
   userId: string;
-  /** 計測中の区切り。ゲップも入る。 */
+  /**
+   * 計測中なら、いま測っている区切り（ゲップも入る）。
+   * 記録待ちなら、最後に飲ませた側（左右のみ）。「次はどちらから」に使える。
+   */
   side: NursingPhase;
-  /** その区切りの合計時間が0だった時刻。計測中なら「飲ませ始め」の目安になる。 */
-  baselineAt: Date;
+  /**
+   * その区切りの合計時間が0だった時刻。飲ませ始めた時刻の目安として扱う
+   * （feedingSchedule.ts の PendingNursing）。
+   */
+  startedAt: Date;
   /** 計測を止めた時刻。記録待ちの間だけ入る（計測中は null）。 */
   stoppedAt: Date | null;
 }
@@ -106,7 +112,7 @@ export async function listFamilyNursingState(
   return (data ?? []).map((row) => ({
     userId: row.user_id,
     side: row.side as NursingPhase,
-    baselineAt: new Date(row.baseline_at),
+    startedAt: new Date(row.baseline_at),
     stoppedAt: row.stopped_at ? new Date(row.stopped_at) : null,
   }));
 }
