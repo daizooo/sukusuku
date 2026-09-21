@@ -4,6 +4,7 @@ import { formatTimeString } from '@/lib/dateUtils';
 import {
   formatMinutesText,
   nextFeedingSchedule,
+  resolveLastFeeding,
   type FeedingSchedule,
   type NextFeedingInfo,
 } from '@/lib/feedingSchedule';
@@ -11,7 +12,9 @@ import { colors } from '@/lib/theme';
 import BabyBottleIcon from '@/components/ui/BabyBottleIcon';
 
 // 「次の授乳はいつだっけ」に、画面を見るだけで答えるためのホームのカード。
-// Web版の `src/components/sukusuku/NextFeedingCard.tsx` と出す中身・並びを同じにしてある。
+//
+// 目安の起点は「前回の授乳」。保存済みの記録だけでなく、まだ記録に入っていない
+// 授乳（母乳の計測中・記録待ち）も起点として扱う（src/lib/feedingSchedule.ts）。
 
 interface NextFeedingProps {
   info: NextFeedingInfo;
@@ -50,7 +53,10 @@ const remainingText = (schedule: FeedingSchedule): string => {
 /** ホーム用。目安の時刻・残り時間・前回からの進み具合をまとめて出す。 */
 export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
   const now = useNow();
-  const schedule = nextFeedingSchedule(info.lastFedAt, info.intervalMinutes, now);
+  // 母乳は測り終えて保存するまで記録に入らない。その間も前回の授乳として数える
+  // （そうしないと、飲ませ終えた直後に「◯分すぎ」と赤く出てしまう）。
+  const last = resolveLastFeeding(info.lastFedAt, info.pendingNursing);
+  const schedule = nextFeedingSchedule(last.lastFedAt, info.intervalMinutes, now);
 
   const content = (
     <>
@@ -64,7 +70,11 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
 
       {info.isLoading && <Text style={styles.placeholder}>読み込み中...</Text>}
 
-      {!info.isLoading && !schedule && (
+      {/* 飲ませている最中は、終わる時刻が分からないので目安を出しようがない。
+          前の授乳の目安を過ぎた赤い表示のままにせず、いまの様子をそのまま出す。 */}
+      {last.isNursing && <Text style={styles.nursing}>いま授乳中です</Text>}
+
+      {!info.isLoading && !last.isNursing && !schedule && (
         <Text style={styles.empty}>授乳を記録すると、次の目安の時刻が出ます。</Text>
       )}
 
@@ -78,6 +88,12 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
               {remainingText(schedule)}
             </Text>
           </View>
+
+          {/* 記録より先に目安を進めているので、そう分かるようにしておく。
+              記録し忘れたまま放っておかれないよう、ここから入力画面へ促す。 */}
+          {last.isPendingRecord && (
+            <Text style={styles.pending}>授乳の記録がまだです。忘れないうちに記録を。</Text>
+          )}
 
           {/* 前回からいまへの進み具合。時刻を読まなくても目で分かるように。 */}
           <View style={styles.track}>
@@ -122,6 +138,8 @@ const styles = StyleSheet.create({
   interval: { fontSize: 11, fontWeight: '500', color: colors.textFaint, fontVariant: ['tabular-nums'] },
   placeholder: { fontSize: 13, color: colors.textFaint, marginTop: 6, fontWeight: '500' },
   empty: { fontSize: 13, color: colors.textMuted, marginTop: 6, fontWeight: '500' },
+  nursing: { fontSize: 20, fontWeight: '700', color: colors.milkText, marginTop: 2 },
+  pending: { fontSize: 11, fontWeight: '500', color: colors.milkText, marginTop: 4 },
   dueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginTop: 2 },
   dueTime: { fontSize: 24, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   remaining: { fontSize: 13, fontWeight: '700', color: colors.milk, fontVariant: ['tabular-nums'] },

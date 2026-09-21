@@ -30,16 +30,19 @@ import {
 import type { DynamicTask, LoginRole, MilkLog, Task, UserProfile } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
-import { useRefreshOnFocus } from '@/lib/screenFocus';
+import { useRefreshOnFocus, useRefreshWhileFocused } from '@/lib/screenFocus';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
 import { getProfile } from '@/lib/api/profile';
 import { deleteTask, listTasks, updateTask, updateTaskDone } from '@/lib/api/tasks';
 import { listRecentMilkLogs } from '@/lib/api/careLogs';
 import { getFeedingSettings } from '@/lib/api/feedingSettings';
+import { listFamilyNursingState } from '@/lib/api/nursingAlarms';
 import {
+  activePendingNursing,
   DEFAULT_FEEDING_INTERVAL_MINUTES,
   type NextFeedingInfo,
+  type PendingNursing,
 } from '@/lib/feedingSchedule';
 import {
   calculateTargetDate,
@@ -52,11 +55,32 @@ import { describeError, getOwnerTone, getProfileFieldValue } from '@/lib/uiUtils
 import NextFeedingCard from '@/components/NextFeedingCard';
 import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 
-// ホームタブ。Web版の `src/components/sukusuku/tabs/HomeTab.tsx` を
-// React Nativeに置き換えたもの。出す項目・並び・文言は同じにしてある。
-//
-// Web版はアプリ全体で1つ持っている状態を受け取るが、こちらはタブごとの画面なので
-// この画面で読む。読むものはWeb版と同じ（プロフィール・予定・直近の授乳・授乳の間隔）。
+// ホームタブ。タブごとの画面なので、出すものはこの画面で読む
+// （プロフィール・予定・直近の授乳・授乳の間隔・いま授乳中かどうか）。
+
+/**
+ * 「いま授乳中・記録待ち」を読み直す間隔。
+ *
+ * 授乳の始まり・終わりは、こちらが何もしなくても（パートナーの端末で）変わる。
+ * カードの残り時間が分単位なので、1分ごとに読めば表示が食い違わない。
+ */
+const NURSING_POLL_MS = 60_000;
+
+/**
+ * いま家族の誰かが授乳中か（記録待ちか）を読む。
+ *
+ * 通知をオフにしている端末は印を預けられず、圏外なら読めない。どちらも
+ * 「印は無い」として扱えばよい（今までどおり記録だけで目安を出す）ので、
+ * 失敗しても画面は止めない。
+ */
+const loadNursingStates = async (): Promise<PendingNursing[]> => {
+  try {
+    const states = await listFamilyNursingState(supabase);
+    return states.map((state) => ({ startedAt: state.baselineAt, stoppedAt: state.stoppedAt }));
+  } catch {
+    return [];
+  }
+};
 
 export default function HomeScreen() {
   const { session, isLoading: isSessionLoading } = useSession();
@@ -71,6 +95,7 @@ export default function HomeScreen() {
   const [recentMilkLogs, setRecentMilkLogs] = useState<MilkLog[]>([]);
   const [isLoadingRecentMilk, setIsLoadingRecentMilk] = useState(true);
   const [intervalMinutes, setIntervalMinutes] = useState(DEFAULT_FEEDING_INTERVAL_MINUTES);
+  const [nursingStates, setNursingStates] = useState<PendingNursing[]>([]);
   const [selectedTask, setSelectedTask] = useState<DynamicTask | null>(null);
   const [isEditingTask, setIsEditingTask] = useState(false);
   const [tempEditingTask, setTempEditingTask] = useState<DynamicTask | null>(null);
@@ -84,13 +109,14 @@ export default function HomeScreen() {
    * ホームへ戻ってきたときにも同じものを読み直す（useRefreshOnFocus）。
    */
   const loadFamilyData = useCallback(async (id: string) => {
-    const [loadedProfile, loadedTasks, loadedMilk, settings] = await Promise.all([
+    const [loadedProfile, loadedTasks, loadedMilk, settings, nursing] = await Promise.all([
       getProfile(supabase, id),
       listTasks(supabase, id),
       listRecentMilkLogs(supabase, id),
       getFeedingSettings(supabase, id),
+      loadNursingStates(),
     ]);
-    return { loadedProfile, loadedTasks, loadedMilk, settings };
+    return { loadedProfile, loadedTasks, loadedMilk, settings, nursing };
   }, []);
 
   useEffect(() => {
@@ -102,14 +128,14 @@ export default function HomeScreen() {
         if (!isMounted || !membership.familyId) return;
         setFamilyId(membership.familyId);
         setLoginRole(membership.role);
-        const { loadedProfile, loadedTasks, loadedMilk, settings } = await loadFamilyData(
-          membership.familyId,
-        );
+        const { loadedProfile, loadedTasks, loadedMilk, settings, nursing } =
+          await loadFamilyData(membership.familyId);
         if (!isMounted) return;
         setProfile(loadedProfile);
         setTodos(loadedTasks);
         setRecentMilkLogs(loadedMilk);
         setIntervalMinutes(settings.intervalMinutes);
+        setNursingStates(nursing);
       } catch {
         // 圏外でも画面は出す。出せるところまで出して、残りは空のままにする。
       } finally {
@@ -128,16 +154,25 @@ export default function HomeScreen() {
   useRefreshOnFocus(() => {
     if (!familyId) return;
     void loadFamilyData(familyId)
-      .then(({ loadedProfile, loadedTasks, loadedMilk, settings }) => {
+      .then(({ loadedProfile, loadedTasks, loadedMilk, settings, nursing }) => {
         setProfile(loadedProfile);
         setTodos(loadedTasks);
         setRecentMilkLogs(loadedMilk);
         setIntervalMinutes(settings.intervalMinutes);
+        setNursingStates(nursing);
       })
       .catch(() => {
         // 圏外なら前に読んだ分を出したままにする。
       });
   });
+
+  // 授乳中かどうかは、こちらが何もしなくても変わる。ホームを開いたままでも
+  // 「いま授乳中」「記録待ち」に追いつけるよう、見ている間だけ短い間隔で読み直す。
+  // 読むのは印だけ（授乳中・記録待ちの端末が無ければ0件で返る軽い問い合わせ）。
+  useRefreshWhileFocused(() => {
+    if (!familyId) return;
+    void loadNursingStates().then(setNursingStates);
+  }, NURSING_POLL_MS);
 
   const birthDateValue = profile ? getProfileFieldValue(profile, 'birthDate') : '';
   const babyName = profile ? getProfileFieldValue(profile, 'babyName') : '';
@@ -179,10 +214,12 @@ export default function HomeScreen() {
   const nextFeeding = useMemo<NextFeedingInfo>(
     () => ({
       lastFedAt: recentMilkLogs[0]?.time ?? null,
+      // 母乳は測り終えて保存するまで記録に入らない。その隙間も前回の授乳として扱う。
+      pendingNursing: activePendingNursing(nursingStates, Date.now()),
       intervalMinutes,
       isLoading: isLoadingRecentMilk,
     }),
-    [recentMilkLogs, intervalMinutes, isLoadingRecentMilk],
+    [recentMilkLogs, nursingStates, intervalMinutes, isLoadingRecentMilk],
   );
 
   const startOfToday = startOfDay(today).getTime();

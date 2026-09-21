@@ -4,6 +4,9 @@
     "strict": true,
     // process.env(EXPO_PUBLIC_*)の型解決に要る。無いと `process` が未定義扱いになる。
     "types": ["node"],
+    // テスト(*.test.ts)は `node --experimental-strip-types` で直に動かすため、
+    // import のパスに拡張子(.ts)が要る。ここはビルド出力を作らない(noEmit)ので許可できる。
+    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": ["./src/*"]
     }
