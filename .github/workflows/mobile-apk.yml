@@ -122,6 +122,23 @@ jobs:
           PLACEHOLDER
           fi
 
+      # 設定タブに出す「どのコミットの .apk か」を、JSのソースとして書き出す。
+      # 環境変数で渡すとGradle Build Cacheの鍵に入らず、ソースが変わらない
+      # ビルドでは古いJSバンドルが再利用されて目印が更新されない（PR #133）。
+      # ソースファイルなら中身が変わった時点でバンドルも作り直される。
+      - name: ビルドの目印を書き出す
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          cat > src/lib/buildInfo.ts <<EOF
+          // このファイルはCIが書き換えている（.github/workflows/mobile-apk.yml）。
+          // もとの内容と、なぜソースファイルに書くのかは、その版のコメントを参照。
+          export const BUILD_COMMIT: string = '${BUILD_COMMIT:0:7}';
+          export const BUILD_NUMBER: string = '${BUILD_NUMBER}';
+          EOF
+          cat src/lib/buildInfo.ts
+
       # android/ はコミットしていない（mobile/.gitignore）ので毎回生成する。
       # modules/nursing-alarm（前面サービス）は autolinking で自動的に組み込まれる。
       # ANDROID_VERSION_CODE はここで android/app/build.gradle に焼き込まれる
