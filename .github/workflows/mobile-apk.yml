@@ -5,12 +5,12 @@
 # Vercelのプレビューで PRごとに実機で確かめられるのと同じ状態を、ネイティブ側にも
 # 用意して原因そのものを潰す。
 #
-# - PRでの実行: 実機確認用。できた .apk は Actions の実行ページ > Artifacts から
-#   落として端末へ直接入れる（ストアには出さない方針。docs/native-app-rewrite.md §8）。
-# - mainへのpushでの実行: 配布用。ビルドに加えて Firebase App Distribution へ渡し、
-#   テスター登録した端末に更新を届ける（GitHub→NAS→各端末という手作業を無くすため。
-#   セットアップは docs/mobile-distribution.md）。Firebase側の設定が済んでいない
-#   間は配布ステップだけをスキップし、ビルド確認は続ける。
+# 実際の運用はPRごとの実機確認ではなく、mainへのpush(マージ)がそのまま
+# Firebase App Distribution経由の実機更新になっている。そのためAndroidの
+# フルビルドはmainへのpushとworkflow_dispatch(手動)でのみ行い、GitHub Actionsの
+# 実行時間を消費しないPRでは型チェックだけを行う。実機で確かめたいPRがあれば
+# Actionsの実行ページからworkflow_dispatchで手動実行し、Artifactsから .apk を
+# 落として端末へ直接入れる（ストアには出さない方針。docs/native-app-rewrite.md §8）。
 name: mobile APK
 
 on:
@@ -32,7 +32,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # PRでは型チェックのみ（Androidのフルビルドはmainへのpush/手動実行に限る）。
+  typecheck:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
   build:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -121,7 +142,13 @@ jobs:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
           EXPO_PUBLIC_BUILD_SHA: ${{ github.sha }}
-        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+        # Gradle Build Cache を有効化する。android/ は prebuild で毎回作り直され
+        # gradle.properties も消えるため、直前にここで追記する。ソースが変わって
+        # いないタスクの再実行を省き、setup-java の cache: gradle で ~/.gradle/caches
+        # ごと次回のrunへ持ち越す。
+        run: |
+          echo 'org.gradle.caching=true' >> gradle.properties
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 
       # EXPO_PUBLIC_* はビルド時にJSへ埋め込まれ、google-services.json は通知の宛先を
       # 決める。どちらも未設定のまま作った .apk は起動した瞬間に落ちる／通知を
@@ -148,7 +175,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sukusuku-apk-${{ github.event.pull_request.number || github.run_number }}
+          name: sukusuku-apk-${{ github.run_number }}
           path: mobile/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 30
