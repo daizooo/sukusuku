@@ -19,6 +19,12 @@ import { colors } from '@/lib/theme';
 // **2つを1行にまとめない。** 1行に続けて出していたときは、端末では
 // 「バージョン 0.1.0（ビルド 92・」までで切れてコミットが読めなかった。
 // 行を分ければ、横幅がどれだけ狭くてもどちらの値も最後まで出る。
+//
+// 行を分けてもまだ「（ビルド」「コミット」のあとが空で出ていた。原因は
+// レイアウトではなく、fontWeight を指定していなかったこと（534e9e8）。
+// このリポジトリでは「幅が内容で決まる文字で fontWeight 未指定のものだけが
+// 欠ける／数字・英字を含むと欠ける」と分かっており、ここはその両方に当たる。
+// **数字を出す文字には必ず太さを入れること。**
 export default function VersionInfo() {
   const version = Application.nativeApplicationVersion ?? '?';
   // OSが持つ値。入っている .apk そのものの番号。
@@ -47,5 +53,7 @@ const styles = StyleSheet.create({
   // 横幅いっぱいに置いたうえで中央に寄せる。親の幅に合わせて縮められると、
   // 中の文字が途中で切れてしまうため。
   container: { alignSelf: 'stretch', alignItems: 'center', gap: 2, paddingTop: 4, paddingBottom: 12 },
-  text: { fontSize: 11, color: colors.textFaint, textAlign: 'center' },
+  // fontWeight は必須。指定が無いとAndroidが幅を測り損ね、数字と英字が
+  // 末尾から欠ける（534e9e8。このファイルはそれで3回作り直している）。
+  text: { fontSize: 11, fontWeight: '500', color: colors.textFaint, textAlign: 'center' },
 });
