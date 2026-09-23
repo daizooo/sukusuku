@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Trash2, X } from 'lucide-react-native';
+import { Lock, Trash2, X } from 'lucide-react-native';
 import type { ListBoard, ListGroup } from '@/types/app';
 import { colors } from '@/lib/theme';
 import SheetModal from '@/components/ui/SheetModal';
@@ -16,9 +16,20 @@ import SheetModal from '@/components/ui/SheetModal';
 export interface ListDraft {
   name: string;
   groupLabel: string;
+  /** 自分だけのリストか。新しく作るときの既定は「自分だけ」。 */
+  isPrivate: boolean;
 }
 
 export const DEFAULT_GROUP_LABEL = 'グループ';
+
+/**
+ * 共有設定の2択。予定（TaskForm）と同じ文言・同じ並びにする。
+ * 新しいリストの既定は「自分だけ」で、家族に見せたいものだけ共有へ切り替える。
+ */
+const SHARING_TABS: { value: boolean; label: string }[] = [
+  { value: false, label: '共有（家族全員）' },
+  { value: true, label: '自分だけ' },
+];
 
 // リスト名に添える絵文字の候補。名前は自由入力なので絵文字を打ち込めば入るが、
 // 探して打つのは手間なので、よく使うものをタップで足せるようにする。
@@ -96,8 +107,8 @@ export default function ListFormModal({
 }: ListFormModalProps) {
   const [draft, setDraft] = useState<ListDraft>(() =>
     mode === 'edit' && list
-      ? { name: list.name, groupLabel: list.groupLabel }
-      : { name: '', groupLabel: DEFAULT_GROUP_LABEL },
+      ? { name: list.name, groupLabel: list.groupLabel, isPrivate: list.isPrivate }
+      : { name: '', groupLabel: DEFAULT_GROUP_LABEL, isPrivate: true },
   );
 
   const set = (patch: Partial<ListDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
@@ -145,6 +156,36 @@ export default function ListFormModal({
           </View>
           <Text style={styles.hint}>
             絵文字は名前の末尾に足されます。自分で打ち込んでも構いません。
+          </Text>
+        </View>
+
+        {/* 共有設定。自分だけにすると、家族の他のメンバーにはリストごと（中の項目も）
+            表示されなくなる。予定の共有設定と同じ2択・同じ文言にしてある。 */}
+        <View>
+          <View style={styles.shareLabel}>
+            <Lock size={12} color={colors.textFaint} />
+            <Text style={styles.label}>共有設定</Text>
+          </View>
+          <View style={styles.switcher}>
+            {SHARING_TABS.map((tab) => {
+              const selected = draft.isPrivate === tab.value;
+              return (
+                <Pressable
+                  key={String(tab.value)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => set({ isPrivate: tab.value })}
+                  style={[styles.switcherTab, selected && styles.switcherTabOn]}
+                >
+                  <Text style={[styles.switcherText, selected && styles.switcherTextOn]}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={styles.hint}>
+            「自分だけ」にすると、このリストと中の項目は自分にしか表示されません。
           </Text>
         </View>
 
@@ -211,6 +252,18 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle },
   content: { paddingHorizontal: 20, paddingVertical: 16, gap: 20 },
   label: { fontSize: 12, fontWeight: '500', color: colors.textSubtle, marginBottom: 4 },
+  shareLabel: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  switcher: {
+    flexDirection: 'row',
+    backgroundColor: colors.neutralSurface,
+    borderRadius: 8,
+    padding: 4,
+    gap: 4,
+  },
+  switcherTab: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 6 },
+  switcherTabOn: { backgroundColor: colors.surface },
+  switcherText: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
+  switcherTextOn: { color: colors.navActiveText },
   required: { color: colors.danger },
   input: {
     borderWidth: 1,

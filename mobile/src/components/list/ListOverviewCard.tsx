@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Pin, PinOff } from 'lucide-react-native';
+import { Lock, Pin, PinOff } from 'lucide-react-native';
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
 import { colors } from '@/lib/theme';
 
@@ -63,8 +63,13 @@ export default function ListOverviewCard({
        長押しはこの枠でつかむ。 */
     <View style={[styles.card, dragging && styles.cardDragging]}>
       <Pressable accessibilityRole="button" onPress={onOpen} {...holdProps}>
-        {/* 見出し（リスト名）は帯にして、中身と一目で分かれるようにする。 */}
-        <Text style={styles.title}>{list.name}</Text>
+        {/* 見出し（リスト名）は帯にして、中身と一目で分かれるようにする。
+            自分だけのリストは錠前を添える（予定の一覧と同じ印）。 */}
+        <View style={styles.titleRow}>
+          {/* 長い名前は今までどおり折り返す（行数は絞らない）。 */}
+          <Text style={styles.title}>{list.name}</Text>
+          {list.isPrivate && <Lock size={11} color={colors.textFaint} />}
+        </View>
         <View style={styles.body}>
           {shown.map((row, index) =>
             row.type === 'group' ? (
@@ -117,17 +122,19 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardDragging: { borderColor: colors.dragBorder, elevation: 8 },
-  title: {
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 12,
+    // 右上のピンと重ならないように空けておく。
     paddingRight: 36,
     paddingVertical: 8,
     backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text,
   },
+  title: { flexShrink: 1, fontSize: 13, fontWeight: '700', color: colors.text },
   body: { paddingHorizontal: 12, paddingVertical: 8 },
   groupRow: { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 4, marginBottom: 6 },
   groupRowSpaced: { marginTop: 10 },

@@ -304,6 +304,13 @@ export interface ListBoard {
   /** 一覧の先頭に固定するか（Google Keepのピン止めと同じ）。 */
   pinned: boolean;
   position: number;
+  /**
+   * 自分だけのリストか。trueのリストは作成者（createdBy）以外には見えない。
+   * 中のグループ・項目もまとめて見えなくなる（予定の isPrivate と同じ考え方）。
+   */
+  isPrivate: boolean;
+  /** 作成者。「自分だけ」の判定に使う。古いリストは持っていないのでnullになりうる。 */
+  createdBy: string | null;
 }
 
 /**
