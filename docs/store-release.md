@@ -68,16 +68,22 @@ Googleが「Androidデベロッパー確認（Android developer verification）�
 
 ### 手順（初回だけ）
 
-```bash
+手元（Windows）のPowerShellで行う。`keytool` はJDKに入っている
+（docs/mobile-local-build.md §1 で入れたもの）。
+
+```powershell
 # 1. 鍵を作る（有効期限は長めに。無くすと同じアプリとして更新できなくなる）
-keytool -genkeypair -v \
-  -keystore sukusuku-release.keystore \
-  -alias sukusuku \
+& "$env:JAVA_HOME\bin\keytool.exe" -genkeypair -v `
+  -keystore sukusuku-release.keystore `
+  -alias sukusuku `
   -keyalg RSA -keysize 2048 -validity 10000
 
-# 2. Base64にする（改行なし）
-base64 -w0 sukusuku-release.keystore > keystore.base64   # macOSは base64 -i ... | tr -d '\n'
+# 2. Base64にする（Windowsには base64 コマンドが無いのでPowerShellで作る）
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD\sukusuku-release.keystore")) `
+  | Set-Content -NoNewline keystore.base64
 ```
+
+`keystore.base64` をメモ帳で開き、中身をまるごとコピーして次の Secret に貼る。
 
 リポジトリの Settings > Secrets and variables > Actions に登録する。
 
@@ -110,7 +116,7 @@ base64 -w0 sukusuku-release.keystore > keystore.base64   # macOSは base64 -i ..
 | 端末内の控え（`src/lib/offline/`）。**送信待ちの記録があると消える**ので、圏外で付けた記録が残っていないか確かめてから入れ替える | |
 | 設定タブの通知のオン/オフ（端末ごとに入れ直す） | |
 
-手元でビルドするときも同じ鍵で署名する必要がある（docs/mobile-local-build.md §4）。
+手元でビルドするときも同じ鍵で署名する必要がある（docs/mobile-local-build.md §5）。
 
 ## 4. ストアに出すアプリを作るときの型
 
