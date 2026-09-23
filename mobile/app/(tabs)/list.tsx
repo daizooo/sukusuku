@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, ChevronDown, ChevronRight, Pin, Plus, Settings2 } from 'lucide-react-native';
+import { ArrowLeft, ChevronDown, ChevronRight, Lock, Pin, Plus, Settings2 } from 'lucide-react-native';
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
@@ -201,13 +201,19 @@ export default function ListScreen() {
   );
 
   const addList = async (draft: ListDraft) => {
-    if (!familyId) return;
+    if (!familyId || !userId) return;
     try {
-      const created = await insertList(supabase, familyId, {
-        name: draft.name.trim(),
-        groupLabel: draft.groupLabel,
-        position: lists.length,
-      });
+      const created = await insertList(
+        supabase,
+        familyId,
+        {
+          name: draft.name.trim(),
+          groupLabel: draft.groupLabel,
+          position: lists.length,
+          isPrivate: draft.isPrivate,
+        },
+        userId,
+      );
       setLists((prev) => [...prev, created]);
     } catch {
       failed('リストの追加');
@@ -216,7 +222,15 @@ export default function ListScreen() {
 
   const saveList = async (list: ListBoard, draft: ListDraft) => {
     const previous = lists;
-    const updated = { ...list, name: draft.name.trim(), groupLabel: draft.groupLabel };
+    const updated = {
+      ...list,
+      name: draft.name.trim(),
+      groupLabel: draft.groupLabel,
+      isPrivate: draft.isPrivate,
+      // 共有設定が入る前に作られたリストは作成者を持たない。そのまま「自分だけ」に
+      // すると誰にも見えなくなるため、切り替えた本人を作成者として入れる。
+      createdBy: list.createdBy ?? (draft.isPrivate ? userId : null),
+    };
     setLists((prev) => prev.map((l) => (l.id === list.id ? updated : l)));
     try {
       await updateList(supabase, updated);
@@ -370,9 +384,9 @@ export default function ListScreen() {
   };
 
   const addDefaultLists = async () => {
-    if (!familyId) return;
+    if (!familyId || !userId) return;
     try {
-      const created = await seedDefaultLists(supabase, familyId);
+      const created = await seedDefaultLists(supabase, familyId, userId);
       setLists((prev) => [...prev, ...created]);
     } catch {
       failed('リストの作成');
@@ -558,9 +572,13 @@ export default function ListScreen() {
           >
             <ArrowLeft size={20} color={colors.textMuted} />
           </Pressable>
-          <Text numberOfLines={1} style={styles.topBarTitle}>
-            {selected.name}
-          </Text>
+          <View style={styles.topBarTitleRow}>
+            <Text numberOfLines={1} style={styles.topBarTitle}>
+              {selected.name}
+            </Text>
+            {/* 自分だけのリストは、開いたときも一目で分かるようにする。 */}
+            {selected.isPrivate && <Lock size={13} color={colors.textFaint} />}
+          </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="リストの設定"
@@ -753,7 +771,8 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   topBarButton: { padding: 8 },
-  topBarTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.textSubtle },
+  topBarTitleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  topBarTitle: { flexShrink: 1, fontSize: 16, fontWeight: '700', color: colors.textSubtle },
 
   listContent: { paddingBottom: 24 },
   card: {
