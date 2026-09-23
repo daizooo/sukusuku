@@ -299,24 +299,28 @@ iPhone / Macを考えないことが決まった（§5）ので、**PWAを恒久
 ## 8. ビルドと配布
 
 - **ストアには出さない。** `.apk` を自分たちの端末に直接入れる。審査も登録も要らない。
-- **`.apk` はPRごとにCIで作る**（`.github/workflows/mobile-apk.yml`）。
-  `mobile/` を触ったPRでGitHub Actionsが走り、実行ページの Artifacts から `.apk` を
-  落として端末に入れられる。`src/` がVercelのプレビューで確かめられるのと同じ形を
-  ネイティブ側にも用意したもので、**これが凍結の原因（実機で一度も動かないまま
+- **`.apk` はCIを手で走らせて作る**（`.github/workflows/mobile-apk.yml`）。
+  Actions > mobile APK > Run workflow で作り、そのままFirebase App Distributionで
+  配る（docs/mobile-distribution.md）。`src/` がVercelのプレビューで確かめられるのと
+  同じ形をネイティブ側にも用意したもので、**これが凍結の原因（実機で一度も動かないまま
   積み上がること）への手当て**にあたる。
+  - **2026-09-23に、mainへのマージごとの自動ビルドをやめた。** 1回18分かかるため
+    マージのたびにActionsの無料枠を削り、使い切ったため。日々の確認は手元のビルドに
+    移し（docs/mobile-local-build.md）、CIは家族へ配る正式なビルドだけを作る。
   - 初回だけ、リポジトリの Settings > Secrets and variables > Actions に
     `EXPO_PUBLIC_SUPABASE_URL` と `EXPO_PUBLIC_SUPABASE_ANON_KEY` を登録する
     （Web版の `.env.local` と同じ値）。ビルド時にJSへ埋め込まれるため、
     未登録だとCIは「登録してください」と言って止まる。
-  - 署名はExpoが用意するdebug用の鍵のまま。ストアに出さないので足りる。
-    自分たちの鍵に変えるのは、入れ替えの手順を固めてからでよい。
+  - 署名はExpoが用意するdebug用の鍵のまま。ストアに出さないので足りていたが、
+    Androidのデベロッパー確認（2027年に日本へ拡大予定）で**自分たちの鍵が要る**ように
+    なるため、入れ替えの手順と受け口をCIに用意した（docs/store-release.md §3）。
+    Secretsに鍵を登録した時点で切り替わる。
   - **作るのは arm64-v8a のぶんだけ**（`-PreactNativeArchitectures=arm64-v8a`）。
     既定の4つ（armeabi-v7a / arm64-v8a / x86 / x86_64）ぶんネイティブをビルドすると、
     そこだけで37分かかる（実測。ほかの工程は全部で2分弱）。入れる端末はどちらもarm64
     なので、残りは作っても使わない。エミュレータ用のx86系が要るときは手元で作る。
-  - **mainへのpushでは作らない。** PRで作ったものと中身が同じで、1つの変更あたりの
-    所要時間とActionsの消費が倍になるため。マージ後の分が要るときはActionsのページから
-    手で走らせる（PRのArtifactsは30日残るので、普段はそちらで足りる）。
+  - **PRでは型チェックだけを行う。** Androidのフルビルドは手動実行のときだけで、
+    Artifactsは30日残る。
 - 手元でも作れる。Android Studio か `./gradlew`、あるいは EAS Build。Macは要らない。
   **Claude Code側の環境にはAndroid SDKが無いのでここでは通せない**ので、
   コードを書くのがこちら、実機に入れて使うのが手元、という分担は変わらない。

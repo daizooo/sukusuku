@@ -5,12 +5,20 @@
 # Vercelのプレビューで PRごとに実機で確かめられるのと同じ状態を、ネイティブ側にも
 # 用意して原因そのものを潰す。
 #
-# 実際の運用はPRごとの実機確認ではなく、mainへのpush(マージ)がそのまま
-# Firebase App Distribution経由の実機更新になっている。そのためAndroidの
-# フルビルドはmainへのpushとworkflow_dispatch(手動)でのみ行い、GitHub Actionsの
-# 実行時間を消費しないPRでは型チェックだけを行う。実機で確かめたいPRがあれば
-# Actionsの実行ページからworkflow_dispatchで手動実行し、Artifactsから .apk を
-# 落として端末へ直接入れる（ストアには出さない方針。docs/native-app-rewrite.md §8）。
+# Androidのフルビルドは**手動実行(workflow_dispatch)のときだけ**行う。PRでは
+# Actionsの実行時間を使わない型チェックだけを行う。
+#
+# 以前はmainへのpush(マージ)ごとにビルドして配っていたが、1回18分かかるため
+# マージのたびに無料枠を削り、実際に使い切った（2026-09-23）。配るのは「端末に
+# 入れて使いたくなったとき」だけでよく、複数のPRをまとめて1回のビルドで配れる。
+# 手元でビルドできるようにしておけば、日々の確認はそちらで足りる
+# （docs/mobile-local-build.md）。CIの役目は「誰の環境でも同じものが出る、
+# 家族へ配るための正式なビルド」に絞る。
+#
+# 配りたいとき: Actionsの "mobile APK" > Run workflow（distribute を on のまま実行）。
+# 動くかどうかだけ見たいとき: distribute を off にすると Artifacts に .apk が残る。
+#
+# ストアには出さない方針（docs/native-app-rewrite.md §8、docs/store-release.md）。
 name: mobile APK
 
 on:
@@ -18,13 +26,12 @@ on:
     paths:
       - 'mobile/**'
       - '.github/workflows/mobile-apk.yml'
-  push:
-    branches:
-      - main
-    paths:
-      - 'mobile/**'
-      - '.github/workflows/mobile-apk.yml'
   workflow_dispatch:
+    inputs:
+      distribute:
+        description: 'Firebase App Distribution で家族の端末へ配る'
+        type: boolean
+        default: true
 
 # 同じブランチへ続けてpushしたときは古い実行を止める（Actionsの時間を無駄にしない）。
 concurrency:
@@ -32,7 +39,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # PRでは型チェックのみ（Androidのフルビルドはmainへのpush/手動実行に限る）。
+  # PRでは型チェックのみ（Androidのフルビルドは手動実行に限る）。
   typecheck:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -169,6 +176,40 @@ jobs:
           echo 'org.gradle.caching=true' >> gradle.properties
           ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 
+      # 署名鍵。既定ではExpoのdebug鍵（誰のExpoプロジェクトにも同じものが入っている
+      # 共有の鍵）で署名されるため、自分たちのものだと示せない。Androidの
+      # デベロッパー確認（2027年に日本へ拡大予定）では、パッケージ名を自分の鍵と
+      # 一緒に登録することになるので、その前に自分たちの鍵へ移しておく
+      # （docs/store-release.md §3）。
+      #
+      # ANDROID_KEYSTORE_BASE64 が未登録のあいだは今までどおりdebug鍵のまま。
+      # 登録して初めて切り替わる。**切り替えた最初の1回は、家族の端末で
+      # いったんアンインストールしてから入れ直す**（署名が変わると上書きできない）。
+      - name: 自分たちの鍵で署名し直す
+        working-directory: mobile/android/app/build/outputs/apk/release
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo '::warning::ANDROID_KEYSTORE_BASE64 が未登録のため、Expoのdebug鍵のまま配ります（docs/store-release.md §3）。'
+            exit 0
+          fi
+          # build-tools は版が増えるので、入っている中でいちばん新しいものを使う。
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          "$APKSIGNER" sign \
+            --ks "$RUNNER_TEMP/release.keystore" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --key-pass env:ANDROID_KEY_PASSWORD \
+            app-release.apk
+          rm -f "$RUNNER_TEMP/release.keystore" app-release.apk.idsig
+          # どの鍵で署名されたかを実行ログに残す（入れ替えの確認に使う）。
+          "$APKSIGNER" verify --print-certs app-release.apk
+
       # EXPO_PUBLIC_* はビルド時にJSへ埋め込まれ、google-services.json は通知の宛先を
       # 決める。どちらも未設定のまま作った .apk は起動した瞬間に落ちる／通知を
       # 受け取れないだけなので、配らずにここで止める。ビルドが通るかどうかは
@@ -199,18 +240,20 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # mainへマージされた分だけ配る（PRの段階でテスターに配ると未レビューのものが
-      # 届いてしまう）。FIREBASE_SERVICE_ACCOUNT / FIREBASE_ANDROID_APP_ID は
+      # 配るのは手動実行で distribute を on にしたときだけ（既定は on）。
+      # 走らせたブランチの中身がそのまま端末へ届くので、配るのは基本的にmainから。
+      # FIREBASE_SERVICE_ACCOUNT / FIREBASE_ANDROID_APP_ID は
       # docs/mobile-distribution.md の手順で登録する。未登録の間はビルド確認だけ
       # できればよいので、エラーにはせず警告して抜ける。
       - name: Firebase App Distribution へ配布
-        if: github.event_name == 'push'
+        if: ${{ inputs.distribute }}
         working-directory: mobile
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
-          RELEASE_NOTES: ${{ github.event.head_commit.message }}
         run: |
+          # 手動実行では head_commit が無いので、走らせた地点のコミットから作る。
+          RELEASE_NOTES=$(git log -1 --pretty='%s')
           if [ -z "$FIREBASE_SERVICE_ACCOUNT" ] || [ -z "$FIREBASE_ANDROID_APP_ID" ]; then
             echo '::warning::FIREBASE_SERVICE_ACCOUNT か FIREBASE_ANDROID_APP_ID が未登録のため配布をスキップします（docs/mobile-distribution.md）。'
             exit 0
