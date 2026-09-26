@@ -38,6 +38,7 @@ module.exports = {
           defaultChannel: 'task-reminder',
         },
       ],
+      './plugins/withDevVariant',
     ],
   },
 };
