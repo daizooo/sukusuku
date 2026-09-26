@@ -5,18 +5,23 @@
 # Vercelのプレビューで PRごとに実機で確かめられるのと同じ状態を、ネイティブ側にも
 # 用意して原因そのものを潰す。
 #
-# Androidのフルビルドは**手動実行(workflow_dispatch)のときだけ**行う。PRでは
+# Androidのフルビルドは**毎日18時(日本時間)の定時実行**と**手動実行**のときだけ行い、
+# Firebase App Distribution で家族の端末(App Tester)へ配る。PRでは
 # Actionsの実行時間を使わない型チェックだけを行う。
 #
-# 以前はmainへのpush(マージ)ごとにビルドして配っていたが、1回18分かかるため
-# マージのたびに無料枠を削り、実際に使い切った（2026-09-23）。配るのは「端末に
-# 入れて使いたくなったとき」だけでよく、複数のPRをまとめて1回のビルドで配れる。
-# 手元でビルドできるようにしておけば、日々の確認はそちらで足りる
-# （docs/mobile-local-build.md）。CIの役目は「誰の環境でも同じものが出る、
-# 家族へ配るための正式なビルド」に絞る。
+# 以前はmainへのpush(マージ)ごとにビルドして配っていたが、1回19分ほどかかるため
+# マージのたびに無料枠(月2000分)を削り、実際に使い切った（2026-09-23。9月の実測
+# 1935分）。9/17〜9/26のペース（mobile/ に触れるマージが1日平均4.8回）だと、
+# マージごとの配信では月2300〜2700分になり足りない。定時に1日1回へまとめれば
+# 月30回×19分≒570分が上限になり、ペースによらず収まる。
+# 定時実行では、前回の定時配信から mobile/ が変わっていなければビルドしない。
+# 日々の確認は手元の開発ビルドで足りる（docs/mobile-local-build.md）。
 #
-# 配りたいとき: Actionsの "mobile APK" > Run workflow（distribute を on のまま実行）。
+# すぐ配りたいとき: Actionsの "mobile APK" > Run workflow（distribute を on のまま実行）。
 # 動くかどうかだけ見たいとき: distribute を off にすると Artifacts に .apk が残る。
+#
+# schedule はリポジトリの既定ブランチ(Settings > General > Default branch)で
+# 動くので、既定ブランチは main にしておく。
 #
 # ストアには出さない方針（docs/native-app-rewrite.md §8、docs/store-release.md）。
 name: mobile APK
@@ -26,6 +31,9 @@ on:
     paths:
       - 'mobile/**'
       - '.github/workflows/mobile-apk.yml'
+  # 毎日18:00(日本時間) = 09:00(UTC)。混雑時は数分〜十数分遅れることがある。
+  schedule:
+    - cron: '0 9 * * *'
   workflow_dispatch:
     inputs:
       distribute:
@@ -39,7 +47,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # PRでは型チェックのみ（Androidのフルビルドは手動実行に限る）。
+  # PRでは型チェックのみ（Androidのフルビルドは定時実行と手動実行に限る）。
   typecheck:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -59,8 +67,52 @@ jobs:
 
       - run: npm run typecheck
 
-  build:
+  # 定時実行で、前回配ってから mobile/ が変わったかを見る。変わっていなければ
+  # 19分のビルドを丸ごと省く。手動実行は常にビルドする。
+  #
+  # 「前回」は main で成功した定時実行（とmainへのpushで配っていた頃の実行）。
+  # 変更が無くて省いた日も成功扱いになるが、その日の main は前回配った中身と
+  # 同じなので基準にしてよい。ビルドに失敗した日は失敗扱いで基準にならず、
+  # 翌日にやり直される。手動実行は distribute を off にもできるので基準にしない
+  # （手動で配った直後の定時実行は、同じ中身をもう一度配ることがある）。
+  changes:
     if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" != 'schedule' ]; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          BASE=$(gh api "repos/${{ github.repository }}/actions/workflows/mobile-apk.yml/runs?branch=main&status=success&per_page=50" \
+            --jq '[.workflow_runs[] | select(.event == "schedule" or .event == "push")][0].head_sha // empty')
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "前回配ったコミットが分からないのでビルドする（BASE=${BASE:-なし}）"
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          elif git diff --quiet "$BASE" HEAD -- mobile .github/workflows/mobile-apk.yml; then
+            echo "前回（${BASE:0:7}）から mobile/ に変更が無いのでビルドしない"
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            echo "前回（${BASE:0:7}）から変更がある:"
+            git log --oneline "$BASE..HEAD" -- mobile .github/workflows/mobile-apk.yml
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -240,19 +292,19 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # 配るのは手動実行で distribute を on にしたときだけ（既定は on）。
-      # 走らせたブランチの中身がそのまま端末へ届くので、配るのは基本的にmainから。
+      # 配るのは定時実行と、手動実行で distribute を on にしたとき（既定は on）。
+      # 手動実行は走らせたブランチの中身がそのまま端末へ届くので、配るのは基本的にmainから。
       # FIREBASE_SERVICE_ACCOUNT / FIREBASE_ANDROID_APP_ID は
       # docs/mobile-distribution.md の手順で登録する。未登録の間はビルド確認だけ
       # できればよいので、エラーにはせず警告して抜ける。
       - name: Firebase App Distribution へ配布
-        if: ${{ inputs.distribute }}
+        if: github.event_name == 'schedule' || inputs.distribute
         working-directory: mobile
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
         run: |
-          # 手動実行では head_commit が無いので、走らせた地点のコミットから作る。
+          # 定時・手動実行では head_commit が無いので、走らせた地点のコミットから作る。
           RELEASE_NOTES=$(git log -1 --pretty='%s')
           if [ -z "$FIREBASE_SERVICE_ACCOUNT" ] || [ -z "$FIREBASE_ANDROID_APP_ID" ]; then
             echo '::warning::FIREBASE_SERVICE_ACCOUNT か FIREBASE_ANDROID_APP_ID が未登録のため配布をスキップします（docs/mobile-distribution.md）。'

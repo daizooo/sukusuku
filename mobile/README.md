@@ -128,11 +128,12 @@ Web版と同じメールアドレス・パスワードでログインできる�
 **日々の確認は手元で作る。** JDK17とAndroid SDKを入れれば、JSの変更は保存した瞬間に
 画面へ反映される（手順は [docs/mobile-local-build.md](../docs/mobile-local-build.md)）。
 
-**家族へ配るぶんはCIが作る。** Actions > mobile APK > Run workflow を手で走らせると
-`.apk` を作り、そのままFirebase App Distributionで配る
-（`.github/workflows/mobile-apk.yml`）。**PRでは型チェックだけが走る。**
+**家族へ配るぶんはCIが作る。** **毎日18時(日本時間)**に、前日から `mobile/` が
+変わっていれば `.apk` を作り、そのままFirebase App Distributionで配る
+（`.github/workflows/mobile-apk.yml`）。急ぐときは Actions > mobile APK >
+Run workflow で今すぐ配れる。**PRでは型チェックだけが走る。**
 以前はmainへマージするたびに自動でビルドしていたが、1回18分かかり無料枠を
-使い切ったため2026-09-23に手動実行だけにした。
+使い切ったため、2026-09-26に1日1回の定時配信へまとめた。
 
 リポジトリの Settings > Secrets and variables > Actions に次が登録されている前提で動く。
 未登録だとビルドは通しつつ配る手前で止まる。
@@ -144,7 +145,7 @@ Web版と同じメールアドレス・パスワードでログインできる�
 
 #### 端末に入れる
 
-手動実行した `build` が緑になったら、実行ページの **Artifacts** にある
+`build` が緑になったら、実行ページの **Artifacts** にある
 `sukusuku-apk-<実行番号>` を落とす（zip。解凍すると `app-release.apk`）。
 Firebase App Distributionの設定が済んでいれば、落とさなくても端末へ更新通知が届く。
 

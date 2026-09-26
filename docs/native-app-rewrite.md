@@ -299,14 +299,15 @@ iPhone / Macを考えないことが決まった（§5）ので、**PWAを恒久
 ## 8. ビルドと配布
 
 - **ストアには出さない。** `.apk` を自分たちの端末に直接入れる。審査も登録も要らない。
-- **`.apk` はCIを手で走らせて作る**（`.github/workflows/mobile-apk.yml`）。
-  Actions > mobile APK > Run workflow で作り、そのままFirebase App Distributionで
-  配る（docs/mobile-distribution.md）。`src/` がVercelのプレビューで確かめられるのと
+- **`.apk` はCIが毎日18時(日本時間)に作る**（`.github/workflows/mobile-apk.yml`）。
+  前日から `mobile/` が変わっていればビルドし、そのままFirebase App Distributionで
+  配る（docs/mobile-distribution.md）。急ぐときは Actions > mobile APK > Run workflow。`src/` がVercelのプレビューで確かめられるのと
   同じ形をネイティブ側にも用意したもので、**これが凍結の原因（実機で一度も動かないまま
   積み上がること）への手当て**にあたる。
-  - **2026-09-23に、mainへのマージごとの自動ビルドをやめた。** 1回18分かかるため
-    マージのたびにActionsの無料枠を削り、使い切ったため。日々の確認は手元のビルドに
-    移し（docs/mobile-local-build.md）、CIは家族へ配る正式なビルドだけを作る。
+  - **2026-09-26に、mainへのマージごとの自動ビルドを1日1回の定時ビルドへまとめた。**
+    1回18分かかるためマージのたびにActionsの無料枠を削り、2026-09-23に使い切ったため。
+    日々の確認は手元のビルドに移し（docs/mobile-local-build.md）、CIは家族へ配る
+    正式なビルドだけを作る。
   - 初回だけ、リポジトリの Settings > Secrets and variables > Actions に
     `EXPO_PUBLIC_SUPABASE_URL` と `EXPO_PUBLIC_SUPABASE_ANON_KEY` を登録する
     （Web版の `.env.local` と同じ値）。ビルド時にJSへ埋め込まれるため、
@@ -319,7 +320,7 @@ iPhone / Macを考えないことが決まった（§5）ので、**PWAを恒久
     既定の4つ（armeabi-v7a / arm64-v8a / x86 / x86_64）ぶんネイティブをビルドすると、
     そこだけで37分かかる（実測。ほかの工程は全部で2分弱）。入れる端末はどちらもarm64
     なので、残りは作っても使わない。エミュレータ用のx86系が要るときは手元で作る。
-  - **PRでは型チェックだけを行う。** Androidのフルビルドは手動実行のときだけで、
+  - **PRでは型チェックだけを行う。** Androidのフルビルドは定時実行と手動実行のときだけで、
     Artifactsは30日残る。
 - 手元でも作れる。Android Studio か `./gradlew`、あるいは EAS Build。Macは要らない。
   **Claude Code側の環境にはAndroid SDKが無いのでここでは通せない**ので、
