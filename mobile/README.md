@@ -125,9 +125,15 @@ Web版と同じメールアドレス・パスワードでログインできる�
 前面サービス（Kotlin）とFCMの設定はExpo Goに入っていないので、**アラームと通知を
 実機で試すには `.apk` を作って入れる必要がある**。
 
-**いつもはCIが作る。** `mobile/` を触ったPRでGitHub Actionsが走り
-（`.github/workflows/mobile-apk.yml`）、実行ページの Artifacts から `.apk` を落として
-端末に入れられる。`src/` をVercelのプレビューで確かめるのと同じ形。
+**日々の確認は手元で作る。** JDK17とAndroid SDKを入れれば、JSの変更は保存した瞬間に
+画面へ反映される（手順は [docs/mobile-local-build.md](../docs/mobile-local-build.md)）。
+
+**家族へ配るぶんはCIが作る。** **毎日18時(日本時間)**に、前日から `mobile/` が
+変わっていれば `.apk` を作り、そのままFirebase App Distributionで配る
+（`.github/workflows/mobile-apk.yml`）。急ぐときは Actions > mobile APK >
+Run workflow で今すぐ配れる。**PRでは型チェックだけが走る。**
+以前はmainへマージするたびに自動でビルドしていたが、1回18分かかり無料枠を
+使い切ったため、2026-09-26に1日1回の定時配信へまとめた。
 
 リポジトリの Settings > Secrets and variables > Actions に次が登録されている前提で動く。
 未登録だとビルドは通しつつ配る手前で止まる。
@@ -139,8 +145,9 @@ Web版と同じメールアドレス・パスワードでログインできる�
 
 #### 端末に入れる
 
-PRの `build` が緑になったら、実行ページの **Artifacts** にある `sukusuku-apk-<PR番号>` を
-落とす（zip。解凍すると `app-release.apk`）。
+`build` が緑になったら、実行ページの **Artifacts** にある
+`sukusuku-apk-<実行番号>` を落とす（zip。解凍すると `app-release.apk`）。
+Firebase App Distributionの設定が済んでいれば、落とさなくても端末へ更新通知が届く。
 
 - **PCから**: 落として解凍し、Googleドライブ経由かUSB接続で端末へ送って開く
 - **端末だけで**: ChromeでGitHubに**ログインした状態で**同じページを開いて落とし、
@@ -158,20 +165,24 @@ PRの `build` が緑になったら、実行ページの **Artifacts** にある
 PWA版とは別アプリとして入るので、ホーム画面に「すくすく」が2つ並ぶ。
 更新は同じ `.apk` を上書きインストールすればよく、消す必要はない。
 
-初回はここまでの手作業が要るが、**以後の更新はセットアップしておけば自動で届く**。
-mainへマージされるたびにCIがFirebase App Distributionへ配布し、テスター登録した
-端末に更新通知が届く（GitHub→NAS→各端末という手作業が要らなくなる）。
+初回はここまでの手作業が要るが、**以後の更新はセットアップしておけば通知で届く**。
+CIを手で走らせるたびにFirebase App Distributionへ配布され、テスター登録した端末に
+更新通知が届く（GitHub→NAS→各端末という手作業が要らなくなる）。
 セットアップ手順は [docs/mobile-distribution.md](../docs/mobile-distribution.md)。
 
-手元のPCで作ることもできる。**Android SDKが要る**（Claude Code側の環境では通せない）。
+手元のPCでも作れる。**Android SDKが要る**（Claude Code側の環境では通せない）。
 
 ```bash
 npm run prebuild   # android/ を生成する（modules/nursing-alarm も自動で組み込まれる）
 npm run android    # USB接続した端末へインストールする
 ```
 
+用意の仕方・配る用の `.apk` の作り方・`ANDROID_VERSION_CODE` の決め方は
+[docs/mobile-local-build.md](../docs/mobile-local-build.md)。
+
 ストアには出さず `.apk` を自分たちの端末に直接入れる方針（docs/native-app-rewrite.md §8）。
-署名鍵(keystore)はリポジトリにコミットしない。
+署名鍵(keystore)はリポジトリにコミットしない。鍵をExpoのdebug鍵から自分たちのものへ
+移す手順は [docs/store-release.md](../docs/store-release.md) §3。
 
 ### 新規登録を使えるようにする（初回だけ）
 
