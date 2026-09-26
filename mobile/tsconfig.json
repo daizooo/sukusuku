@@ -11,5 +11,8 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+  // .expo/types と expo-env.d.ts は typed routes を使うときだけ生成される（使っていない）。
+  // ここに書いておくと npm run android のたびにExpoが取り除き、ついでにこのファイルの
+  // コメントまで消して書き直すので、最初から入れない。
+  "include": ["**/*.ts", "**/*.tsx"]
 }
