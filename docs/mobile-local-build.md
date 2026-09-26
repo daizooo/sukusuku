@@ -43,11 +43,21 @@ winget install Git.Git                          # gitを入れていなければ
 setx ANDROID_HOME "$env:LOCALAPPDATA\Android\Sdk"
 setx JAVA_HOME "C:\Program Files\Eclipse Adoptium\jdk-17.0.x-hotspot"
 # ↑ 実際に入ったフォルダ名に合わせる（エクスプローラで確認する）
-setx PATH "$env:PATH;$env:LOCALAPPDATA\Android\Sdk\platform-tools"
+
+# PATH だけは setx を使わず、ユーザーPATHの末尾に足す
+$pt = "$env:LOCALAPPDATA\Android\Sdk\platform-tools"
+$user = [Environment]::GetEnvironmentVariable("PATH", "User")
+[Environment]::SetEnvironmentVariable("PATH", "$user;$pt", "User")
 ```
 
-**`setx` は今開いているウィンドウには効かない。** 設定したらPowerShellを開き直し、
-`adb version` と `java -version` が通ることを確かめる。
+**PATHに `setx PATH "$env:PATH;..."` は使わない。** `$env:PATH` はシステムのPATHと
+ユーザーのPATHを合わせたものなので、システムのPATHがユーザーPATHへ丸ごと複製される。
+さらに `setx` は1024文字を超えると黙って切り捨てるため、末尾に足したはずの
+`platform-tools` が消えることがある（手元ではシステムのPATHが2回分複製され、
+`platform-tools` が入っていなかった）。
+
+**`setx` もPATHの変更も、今開いているウィンドウには効かない。** 設定したらPowerShellを
+開き直し、`adb version` と `java -version` が通ることを確かめる。
 
 ### Windowsでだけ要る下ごしらえ
 
