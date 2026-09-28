@@ -189,7 +189,9 @@ const styles = StyleSheet.create({
   swatch: { width: 8, height: 8, borderRadius: 4, borderWidth: 1, borderColor: colors.borderStrong },
 
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  note: { flex: 1, fontSize: 12, color: colors.textSubtle },
+  // 他の項目（見出し・時刻・記録者）と書体をそろえると、自由記述のメモだけが
+  // 埋もれて読み分けづらい。ひと回り小さく薄い色にして、メモだと分かるようにする。
+  note: { flex: 1, fontSize: 11, fontWeight: '400', color: colors.textMuted },
   author: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   authorText: { fontSize: 11, color: colors.textFaint, fontWeight: '500' },
 });

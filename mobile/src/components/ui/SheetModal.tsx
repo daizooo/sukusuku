@@ -38,7 +38,9 @@ export default function SheetModal({ visible, onClose, height, children }: Sheet
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        // Androidも指定しないと、Modal（別ウィンドウで開く）の中はOSのwindowSoftInputMode
+        // が効かず、キーボードが出てもメモ欄などの入力欄が隠れたままになる。
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={[styles.backdrop, { top: insets.top }]} pointerEvents="none" />
         <View
