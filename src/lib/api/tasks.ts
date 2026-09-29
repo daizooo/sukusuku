@@ -1,16 +1,31 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Tables, TablesInsert } from '@/types/supabase';
-import type { AnchorType, Label, Task } from '@/types/app';
+import type { Database, Json, Tables, TablesInsert } from '@/types/supabase';
+import type { AnchorType, Participant, Recurrence, Task, TaskKind } from '@/types/app';
+import { PARTICIPANTS } from '@/types/app';
 import { normalizeTime } from '@/lib/dateUtils';
 import { INITIAL_EVENTS, INITIAL_TODOS } from '@/lib/seedData';
 
 type TaskRow = Tables<'tasks'>;
 type SupabaseDb = SupabaseClient<Database>;
 
-// 旧ラベル('二人で'/'未定')が残っている行は '家族' として扱う
-const toLabel = (value: string | null): Label => {
-  if (value === 'パパ' || value === 'ママ') return value;
-  return '家族';
+// 保存されている値のうち PARTICIPANTS にある名前だけを参加者として扱う
+// （消えた参加者や壊れたデータが混ざっていても無視する）。
+const toParticipants = (value: string[] | null): Participant[] =>
+  (value ?? []).filter((v): v is Participant => (PARTICIPANTS as string[]).includes(v));
+
+// 消えた参加者名や壊れたデータが入っていても無視し、主体無し(null)として扱う。
+const toOwner = (value: string | null): Participant | null =>
+  value !== null && (PARTICIPANTS as string[]).includes(value) ? (value as Participant) : null;
+
+const toKind = (value: string | null): TaskKind => (value === 'task' ? 'task' : 'event');
+
+// DBのjsonbは型を保証しないため、最低限の形（freq/interval を持つオブジェクト）だけ
+// 確認して復元する。壊れたデータが来ても落ちないように、合わなければ繰り返し無し扱いにする。
+const toRecurrence = (value: TaskRow['recurrence']): Recurrence | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.freq !== 'string' || typeof v.interval !== 'number') return null;
+  return v as unknown as Recurrence;
 };
 
 // 「持ち物」は詳細(note)に統合したため、旧データの belongings は詳細の末尾に取り込んで扱う。
@@ -33,9 +48,13 @@ export const rowToTask = (row: TaskRow): Task => ({
   startTime: normalizeTime(row.start_time),
   endTime: normalizeTime(row.end_time),
   daysAfterBirth: row.days_after_birth,
-  label: toLabel(row.assignee),
+  kind: toKind(row.kind),
+  owner: toOwner(row.owner),
+  participants: toParticipants(row.participants),
   remindMinutesBefore: row.remind_minutes_before,
   done: row.is_done,
+  isPrivate: row.is_private,
+  recurrence: toRecurrence(row.recurrence),
   timing: row.timing_memo ?? '',
 });
 
@@ -45,14 +64,20 @@ const toWritableRow = (input: NewTaskInput) => ({
   title: input.title,
   place: input.place,
   note: input.note,
+  kind: input.kind,
   anchor_type: input.anchorType,
   // 出生日基準のときだけ日数が意味を持つ。日付指定のときは start_date を使う。
   start_date: input.anchorType === 'absolute' ? input.startDate : null,
   start_time: input.startTime,
   end_time: input.endTime,
   days_after_birth: input.daysAfterBirth,
-  assignee: input.label,
+  owner: input.owner,
+  participants: input.participants,
   remind_minutes_before: input.remindMinutesBefore,
+  is_private: input.isPrivate,
+  // Recurrenceは自己完結したJSON互換の形だが、interfaceにインデックスシグネチャが
+  // 無いためJsonへは構造的に代入できない。中身はJSONとして書き出せる値のみなのでキャストする。
+  recurrence: input.recurrence as Json | null,
   timing_memo: input.timing,
   // 持ち物は詳細(note)へ統合済み。旧データを保存し直したときに残らないよう空にする。
   belongings: null,
@@ -73,8 +98,13 @@ export async function insertTask(
   supabase: SupabaseDb,
   familyId: string,
   input: NewTaskInput,
+  createdBy: string,
 ): Promise<Task> {
-  const row: TablesInsert<'tasks'> = { family_id: familyId, ...toWritableRow(input) };
+  const row: TablesInsert<'tasks'> = {
+    family_id: familyId,
+    created_by: createdBy,
+    ...toWritableRow(input),
+  };
   const { data, error } = await supabase.from('tasks').insert(row).select('*').single();
   if (error) throw error;
   return rowToTask(data);
