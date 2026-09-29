@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowLeft, Check, ChevronDown, ChevronRight, Pin, PinOff, Plus, Settings2, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Lock, Pin, PinOff, Plus, Settings2, Trash2, X } from 'lucide-react';
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
 import { useDragReorder } from '../ui/useDragReorder';
 import ListFormModal, { type ListDraft } from '../modals/ListFormModal';
@@ -368,8 +368,10 @@ function ListOverviewCard({
     >
       <button type="button" onClick={onOpen} className="w-full text-left block hover:border-gray-300 transition">
       {/* 見出し（リスト名）は帯にして、中身と一目で分かれるようにする。 */}
-      <h3 className="px-3 py-2 pr-9 bg-gray-50 border-b border-gray-200 text-[13px] font-bold text-gray-900 break-words">
-        {list.name}
+      <h3 className="flex items-center gap-1 px-3 py-2 pr-9 bg-gray-50 border-b border-gray-200 text-[13px] font-bold text-gray-900">
+        <span className="min-w-0 break-words">{list.name}</span>
+        {/* 自分だけのリストは錠前を添える。 */}
+        {list.isPrivate && <Lock size={11} className="flex-none text-gray-400" aria-label="自分だけ" />}
       </h3>
       <div className="px-3 py-2">
         {shown.map((row, index) =>
@@ -606,7 +608,11 @@ export default function ListTab({
         >
           <ArrowLeft size={20} />
         </button>
-        <h2 className="flex-1 min-w-0 px-1 text-base font-bold text-gray-800 truncate">{selected?.name}</h2>
+        <h2 className="flex-1 min-w-0 px-1 flex items-center gap-1 text-base font-bold text-gray-800">
+          <span className="truncate">{selected?.name}</span>
+          {/* 自分だけのリストは、開いたときも一目で分かるようにする。 */}
+          {selected?.isPrivate && <Lock size={13} className="flex-none text-gray-400" aria-label="自分だけ" />}
+        </h2>
         {selected && (
           <button
             onClick={() => setListModal({ mode: 'edit', list: selected })}

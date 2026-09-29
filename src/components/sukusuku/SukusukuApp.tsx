@@ -1051,7 +1051,17 @@ export default function SukusukuApp({
   // 打ち込んだ直後に画面へ出し、保存に失敗したら元へ戻す（買い出し中に入力が引っかからないように）。
   const addListHandler = async (draft: ListDraft) => {
     try {
-      const created = await insertList(supabase, familyId, { ...draft, position: lists.length });
+      const created = await insertList(
+        supabase,
+        familyId,
+        {
+          name: draft.name,
+          groupLabel: draft.groupLabel,
+          position: lists.length,
+          isPrivate: draft.isPrivate,
+        },
+        userId,
+      );
       setLists((prev) => [...prev, created]);
     } catch (err) {
       console.error('Failed to add list:', err);
@@ -1061,7 +1071,13 @@ export default function SukusukuApp({
 
   const updateListHandler = async (list: ListBoard, draft: ListDraft) => {
     const previous = lists;
-    const updated: ListBoard = { ...list, ...draft };
+    const updated: ListBoard = {
+      ...list,
+      ...draft,
+      // 共有設定が入る前に作られたリストは作成者を持たない。そのまま「自分だけ」に
+      // すると誰にも見えなくなるため、切り替えた本人を作成者として入れる。
+      createdBy: list.createdBy ?? (draft.isPrivate ? userId : null),
+    };
     setLists((prev) => prev.map((l) => (l.id === list.id ? updated : l)));
     try {
       await updateListApi(supabase, updated);
@@ -1249,7 +1265,7 @@ export default function SukusukuApp({
   // リストが空のときに、いつも使う3つ(買い出し・やりたいこと・やること)をまとめて作る
   const addDefaultListsHandler = async () => {
     try {
-      const created = await seedDefaultLists(supabase, familyId);
+      const created = await seedDefaultLists(supabase, familyId, userId);
       setLists((prev) => [...prev, ...created]);
     } catch (err) {
       console.error('Failed to add default lists:', err);
