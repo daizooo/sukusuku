@@ -387,7 +387,7 @@ export default function LogTab({
             {!isLoadingLogs && visibleLogs.length === 0 && (
               <p className="text-sm text-gray-400 text-center py-8">この日の記録はありません</p>
             )}
-            <div className={`relative border-l-2 border-gray-200 ml-4 space-y-6 pb-6 ${visibleLogs.length === 0 ? 'hidden' : ''}`}>
+            <div className={`relative border-l-2 border-gray-200 ml-4 space-y-3.5 pb-6 ${visibleLogs.length === 0 ? 'hidden' : ''}`}>
               {visibleLogs.map((log) => {
                 const badges = getLogBadges(log);
                 return (
@@ -397,26 +397,23 @@ export default function LogTab({
                     </div>
                     <button
                       onClick={() => setLogModal({ type: log.type, log })}
-                      className={`w-full text-left bg-white p-3 rounded-xl shadow-sm border hover:bg-gray-50 transition ${
+                      className={`w-full text-left bg-white px-2.5 py-2 rounded-[10px] shadow-sm border hover:bg-gray-50 transition ${
                         isAlertLog(log) ? 'border-red-300 border-l-4 border-l-red-500' : 'border-gray-100'
                       }`}
                     >
-                      <div className="flex justify-between items-start mb-1 gap-2">
-                        <span className="font-bold text-gray-800 text-[15px]">{getLogTitle(log)}</span>
-                        <span className="text-xs text-gray-500 font-medium tabular-nums shrink-0">
-                          {getLogTimeText(log)}
-                        </span>
-                      </div>
-                      {badges.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {/* 見出し・バッジ・時刻を1段にまとめて、バッジ専用の行を無くす。
+                          これでバッジの有無によってカードの高さが変わらなくなる。 */}
+                      <div className="flex justify-between items-center gap-2">
+                        <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                          <span className="font-bold text-gray-800 text-sm">{getLogTitle(log)}</span>
                           {badges.map((badge) => (
                             <span
                               key={badge.text}
-                              className={`text-[11px] px-2 py-0.5 rounded flex items-center tabular-nums ${BADGE_TONE_CLASS[badge.tone]}`}
+                              className={`text-[10px] px-1.5 py-px rounded flex items-center tabular-nums ${BADGE_TONE_CLASS[badge.tone]}`}
                             >
                               {badge.swatch && (
                                 <span
-                                  className="w-2.5 h-2.5 rounded-full border border-black/10 mr-1"
+                                  className="w-2 h-2 rounded-full border border-black/10 mr-0.5"
                                   style={{ backgroundColor: badge.swatch }}
                                 />
                               )}
@@ -424,10 +421,15 @@ export default function LogTab({
                             </span>
                           ))}
                         </div>
-                      )}
-                      <div className="flex justify-between items-end mt-2 gap-2">
-                        {/* メモは書いたときだけ出す。「メモなし」を並べても読むものが増えるだけなので出さない。 */}
-                        <p className="text-xs text-gray-600">{log.note}</p>
+                        <span className="text-[11px] text-gray-500 font-medium tabular-nums shrink-0">
+                          {getLogTimeText(log)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center mt-0.5 gap-2">
+                        {/* メモは書いたときだけ出す。「メモなし」を並べても読むものが増えるだけなので出さない。
+                            他の項目（見出し・時刻・記録者）と書体をそろえると自由記述のメモだけが埋もれるので、
+                            ひと回り小さく薄い色にして、メモだと分かるようにする。 */}
+                        <p className="flex-1 min-w-0 truncate text-[11px] font-normal text-gray-500">{log.note}</p>
                         <span className="text-[11px] text-gray-400 flex items-center shrink-0">
                           <User size={11} className="mr-1" />
                           {memberLabel(log.createdBy)}が記録
