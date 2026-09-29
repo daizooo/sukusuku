@@ -44,6 +44,7 @@ import MonthView from '@/components/schedule/MonthView';
 import WeekView from '@/components/schedule/WeekView';
 import DayView from '@/components/schedule/DayView';
 import ListView from '@/components/schedule/ListView';
+import UpcomingTasks from '@/components/schedule/UpcomingTasks';
 import AddTaskModal, { type TaskDraft } from '@/components/schedule/AddTaskModal';
 import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 
@@ -461,17 +462,21 @@ export default function ScheduleScreen() {
           </View>
         )}
 
+        {/* 月表示は、カレンダーの下に「直近のスケジュール」を並べる。高さは 5:3 で分け、
+            どちらも画面全体はスクロールさせない。 */}
         {view === 'month' && (
           <View style={styles.body}>
-            <MonthView
-              month={monthStart}
-              today={today}
-              selectedDate={selectedDate}
-              tasks={filteredTodos}
-              birthDate={birthDate}
-              onSelectDate={(date) => selectDate(date)}
-              onOpenTask={openTaskDetail}
-            />
+            <View style={styles.calendar}>
+              <MonthView
+                month={monthStart}
+                today={today}
+                selectedDate={selectedDate}
+                tasks={filteredTodos}
+                birthDate={birthDate}
+                onSelectDate={(date) => selectDate(date)}
+                onOpenTask={openTaskDetail}
+              />
+            </View>
             {!isLoadingTodos && tasksInMonth.length === 0 && nextMonthWithTask && (
               <Pressable
                 accessibilityRole="button"
@@ -489,6 +494,17 @@ export default function ScheduleScreen() {
                 </Text>
               </Pressable>
             )}
+            <View style={styles.upcoming}>
+              <UpcomingTasks
+                tasks={filteredTodos}
+                isLoading={isLoadingTodos}
+                today={today}
+                onToggleTodo={toggleTodo}
+                onOpenTask={openTaskDetail}
+                onAddTask={() => openAddTaskModal(selectedDate)}
+                onShowAll={() => setView('list')}
+              />
+            </View>
           </View>
         )}
 
@@ -537,14 +553,18 @@ export default function ScheduleScreen() {
         )}
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="予定を追加"
-        onPress={() => openAddTaskModal(selectedDate)}
-        style={styles.fab}
-      >
-        <Plus size={28} color={colors.primaryText} />
-      </Pressable>
+      {/* 月表示では、右下のボタンが「直近のスケジュール」の一覧に重なって隠してしまうため、
+          追加ボタンをその見出しの中に置く（UpcomingTasks）。それ以外の表示ではここに置く。 */}
+      {view !== 'month' && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="予定を追加"
+          onPress={() => openAddTaskModal(selectedDate)}
+          style={styles.fab}
+        >
+          <Plus size={28} color={colors.primaryText} />
+        </Pressable>
+      )}
 
       <AddTaskModal
         show={showAddModal}
@@ -600,14 +620,17 @@ const styles = StyleSheet.create({
   todayText: { fontSize: 12, fontWeight: '700', color: colors.navActiveText },
 
   body: { flex: 1, minHeight: 0 },
+  // 月表示の縦の配分。カレンダー 5 : 直近のスケジュール 3。
+  calendar: { flex: 5, minHeight: 0 },
+  upcoming: { flex: 3, minHeight: 0, marginTop: 12 },
   scrollContent: { paddingBottom: 96 },
   jump: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginTop: 12,
-    paddingVertical: 10,
+    marginTop: 8,
+    paddingVertical: 8,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,

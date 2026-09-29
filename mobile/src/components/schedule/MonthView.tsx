@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { DynamicTask } from '@/types/app';
 import {
@@ -33,9 +34,31 @@ interface MonthViewProps {
   onOpenTask: (task: DynamicTask) => void;
 }
 
-// 1マスに出す予定の数。Web版は画面の広さで2件と3件を切り替えるが、
+// 1マスに出す予定の数の上限。Web版は画面の広さで2件と3件を切り替えるが、
 // こちらは携帯だけなので、Web版の狭いほうと同じ2件にする。
 const CHIPS = 2;
+
+// マスの高さは画面と週の数で変わる（下に「直近のスケジュール」が並ぶぶん低い）ので、
+// 上の CHIPS 件が入らないときは件数を減らして「+n件」に寄せる。
+// 下の値は styles の実寸の見積もり（余白・枠を含む）。styles を変えたら合わせる。
+const CELL_CHROME = 6; // マスの上下の余白と枠
+const DATE_HEIGHT = 18; // 日付の丸
+const LABEL_HEIGHT = 11; // 祝日・節目の行
+const CHIP_HEIGHT = 16;
+const MORE_HEIGHT = 12;
+const CHIP_GAP = 1;
+
+/** 予定が total 件あるマスで、予定へ回せる高さ room に何件のチップを出せるか。 */
+const chipsThatFit = (total: number, room: number): number => {
+  const stack = (n: number) => n * CHIP_HEIGHT + Math.max(n - 1, 0) * CHIP_GAP;
+  const limit = Math.min(total, CHIPS);
+  // 全部出せるなら「+n件」は要らない（CHIPS を超える分だけは「+n件」が必要）。
+  if (total <= CHIPS && stack(total) <= room) return total;
+  for (let n = limit; n > 0; n -= 1) {
+    if (stack(n) + CHIP_GAP + MORE_HEIGHT <= room) return n;
+  }
+  return 0;
+};
 
 export default function MonthView({
   month,
@@ -54,6 +77,10 @@ export default function MonthView({
   const weekCount = Math.ceil(
     (getFirstDayOfMonth(year, monthIndex) + getDaysInMonth(year, monthIndex)) / 7,
   );
+  // 週1行ぶんの高さ。測れるまでは、予定は CHIPS 件まで出す。
+  const [gridHeight, setGridHeight] = useState<number | null>(null);
+  const rowHeight = gridHeight === null ? null : gridHeight / weekCount;
+
   const weeks = Array.from({ length: weekCount }, (_, w) =>
     Array.from({ length: 7 }, (_, d) => addDays(gridStart, w * 7 + d)),
   );
@@ -75,7 +102,7 @@ export default function MonthView({
         ))}
       </View>
 
-      <View style={styles.grid}>
+      <View style={styles.grid} onLayout={(e) => setGridHeight(e.nativeEvent.layout.height)}>
         {weeks.map((week, w) => (
           <View key={w} style={styles.week}>
             {week.map((date, columnIndex) => {
@@ -85,6 +112,14 @@ export default function MonthView({
               const isOtherMonth = date.getMonth() !== monthIndex;
               const holiday = getHolidayName(date);
               const milestone = getMilestoneLabel(birthDate, date);
+              const hasLabel = !isOtherMonth && (holiday !== null || milestone !== null);
+              const shownChips =
+                rowHeight === null
+                  ? CHIPS
+                  : chipsThatFit(
+                      dayTasks.length,
+                      rowHeight - CELL_CHROME - DATE_HEIGHT - (hasLabel ? LABEL_HEIGHT : 0) - CHIP_GAP,
+                    );
 
               return (
                 <Pressable
@@ -122,7 +157,7 @@ export default function MonthView({
                   </View>
 
                   {/* 祝日と節目が重なる日は祝日を出す。1マスの高さに収めるため1行だけにする。 */}
-                  {!isOtherMonth && (holiday || milestone) && (
+                  {hasLabel && (
                     <Text
                       numberOfLines={1}
                       style={[styles.milestone, holiday !== null && styles.holidayLabel]}
@@ -132,7 +167,7 @@ export default function MonthView({
                   )}
 
                   <View style={styles.chips}>
-                    {dayTasks.slice(0, CHIPS).map((task) => {
+                    {dayTasks.slice(0, shownChips).map((task) => {
                       const label = getOwnerTone(task.owner, task.participants);
                       return (
                         <Pressable
@@ -159,8 +194,8 @@ export default function MonthView({
                         </Pressable>
                       );
                     })}
-                    {dayTasks.length > CHIPS && (
-                      <Text style={styles.more}>+{dayTasks.length - CHIPS}件</Text>
+                    {dayTasks.length > shownChips && (
+                      <Text style={styles.more}>+{dayTasks.length - shownChips}件</Text>
                     )}
                   </View>
                 </Pressable>
@@ -213,8 +248,8 @@ const styles = StyleSheet.create({
   cellSelected: { backgroundColor: colors.selectedSurface, borderColor: colors.selectedRing },
   dateRow: { alignItems: 'center' },
   dateBubble: {
-    width: 20,
-    height: 20,
+    width: DATE_HEIGHT,
+    height: DATE_HEIGHT,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
@@ -225,7 +260,7 @@ const styles = StyleSheet.create({
   dateTextOtherMonth: { color: colors.borderStrong },
   milestone: { fontSize: 8, textAlign: 'center', color: colors.milestone, fontWeight: '500' },
   holidayLabel: { color: colors.sunday },
-  chips: { marginTop: 2, gap: 2 },
+  chips: { marginTop: CHIP_GAP, gap: CHIP_GAP },
   chip: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1 },
   chipDone: { backgroundColor: colors.neutralSurface, borderColor: colors.border },
   chipOtherMonth: { opacity: 0.5 },
