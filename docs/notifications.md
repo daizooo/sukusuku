@@ -442,7 +442,7 @@ select status, return_message, start_time
   ように計測を伴わない授乳を、飲ませてから何十分も後に記録した場合は、その間に
   「そろそろ次の授乳」が飛ぶことがある。授乳のたびにその場で記録するのがいちばん確実。
 
-### 画面の「次の授乳の目安」（ネイティブ版のホーム）
+### 画面の「次の授乳の目安」（ホーム。ネイティブ版とWeb版で同じ）
 
 通知と同じ隙間が**画面にもあった**。ホームのカードは保存済みの記録
 （`care_logs.type = 'milk'`）だけを見ていたため、母乳を測り終えて記録がまだのとき、
@@ -478,7 +478,7 @@ select status, return_message, start_time
 - 相手が記録待ち → 印の `side`（最後に飲ませた側）の逆をおすすめにする
 - 自分の端末で測っているとき → 今までどおり出さない（計測中のバナーが出る）
 
-計算は `mobile/src/lib/feedingSchedule.ts`（テスト: `npm run test:feeding`）。
+計算は `mobile/src/lib/feedingSchedule.ts` と `src/lib/feedingSchedule.ts`（同じ内容。テスト: `npm run test:feeding` / `npm run test:feeding-web`）。
 
 ### 二重送信を防ぐ仕組み
 
