@@ -410,7 +410,7 @@ select status, return_message, start_time
 
 起点になるのは記録の日時なので、そこには**飲ませ始めた時刻**が入っていてほしい。
 母乳をストップウォッチで測っているときは、入力画面が**計測を始めた時刻**を日時の初期値に
-入れる（`mobile/src/components/log/MilkLogModal.tsx`）。保存した時刻のままだと、記録が
+入れる（`mobile/src/components/log/MilkLogModal.tsx`、Web版は `src/components/sukusuku/modals/MilkLogModal.tsx`）。保存した時刻のままだと、記録が
 遅れたぶんだけ目安も後ろへずれるため。過去の日を開いているときと、止め忘れて6時間を
 超えた計測には使わない（いま測っている授乳ではないため）。
 
