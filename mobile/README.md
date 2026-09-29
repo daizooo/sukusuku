@@ -32,8 +32,8 @@
 | `src/types/` | ドメイン型とSupabaseの生成型。Web版と同じもの |
 | `modules/nursing-alarm/` | 前面サービス（Kotlin）。授乳中だけ動き、区切りが5分に達したら1回鳴らす |
 
-`src/lib/api/` と `src/lib/dateUtils.ts` などはWeb版(`../src/lib/`)からのコピー。凍結側は動かさない
-前提なので分岐していく心配は小さい（docs/native-app-rewrite.md §1）。作り直したもの・
+`src/lib/api/` と `src/lib/dateUtils.ts` などはWeb版(`../src/lib/`)からのコピー。凍結を解いた今は
+`src/` 側も変わるので、コピー元とずれないよう注意する（docs/native-app-rewrite.md §1）。作り直したもの・
 持ってこなかったものは次の3つ。
 
 - `pushSubscriptions.ts` / `nursingAlarms.ts` / `push.ts` — 受け取り方がWeb PushからFCMへ
