@@ -78,6 +78,8 @@ interface LogTabProps {
   memberLabel: (id: string | null) => string;
   /** 次に飲ませる乳首。判断材料がなければ null。 */
   nextBreastSide: BreastSide | null;
+  /** いま授乳中の家族（自分の端末で測っている分は含まない）。いなければ null。 */
+  nursingBy: string | null;
   /** 搾乳ストックの全量（使用済みも含む）。残りの表示と、飲ませる搾乳の選択に使う。 */
   pumpedBatches: PumpedBatch[];
   /** 搾乳ストックの1パックを丸ごと捨てる / 捨てたのを取り消す。 */
@@ -141,6 +143,7 @@ export default function LogTab({
   isLoadingGrowth,
   memberLabel,
   nextBreastSide,
+  nursingBy,
   pumpedBatches,
   onDiscardPumpedBatch,
   onSaveMilkLog,
@@ -326,7 +329,12 @@ export default function LogTab({
                 <span className="mt-0.5 text-[11px] font-bold text-rose-600 tabular-nums leading-tight text-center">
                   ストック・{stockMl}ml
                 </span>
-                {nextBreastSide && !nursingTimer.hasSession && (
+                {nursingBy && (
+                  <span className="text-[10px] font-bold text-amber-600 leading-tight">
+                    {memberLabel(nursingBy)}が授乳中
+                  </span>
+                )}
+                {!nursingBy && nextBreastSide && !nursingTimer.hasSession && (
                   <span className="text-[10px] font-bold text-amber-600 leading-tight">
                     次は{getSideLabel(nextBreastSide)}から
                   </span>

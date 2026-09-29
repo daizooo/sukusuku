@@ -5,6 +5,7 @@ import { formatTimeString } from '@/lib/dateUtils';
 import {
   formatMinutesText,
   nextFeedingSchedule,
+  resolveLastFeeding,
   type FeedingSchedule,
   type NextFeedingInfo,
 } from '@/lib/feedingSchedule';
@@ -13,6 +14,9 @@ import BabyBottleIcon from './ui/BabyBottleIcon';
 // 「次の授乳はいつだっけ」に、画面を見るだけで答えるためのホームのカード。
 // 記録タブにも1行の帯を出していたが、同じことを2か所で言っていて
 // タイムラインの場所を取るだけだったのでやめた（表示はホームだけ）。
+//
+// 目安の起点は「前回の授乳」。保存済みの記録だけでなく、まだ記録に入っていない
+// 授乳（母乳の計測中・記録待ち）も起点として扱う（lib/feedingSchedule.ts）。
 
 interface NextFeedingProps {
   info: NextFeedingInfo;
@@ -47,7 +51,10 @@ const remainingText = (schedule: FeedingSchedule): string => {
 /** ホーム用。目安の時刻・残り時間・前回からの進み具合をまとめて出す。 */
 export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
   const now = useNow();
-  const schedule = nextFeedingSchedule(info.lastFedAt, info.intervalMinutes, now);
+  // 母乳は測り終えて保存するまで記録に入らない。その間も前回の授乳として数える
+  // （そうしないと、飲ませ終えた直後に「◯分すぎ」と赤く出てしまう）。
+  const last = resolveLastFeeding(info.lastFedAt, info.pendingNursing);
+  const schedule = nextFeedingSchedule(last.lastFedAt, info.intervalMinutes, now);
 
   const content = (
     <>
@@ -63,7 +70,11 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
 
       {info.isLoading && <p className="mt-1.5 text-sm text-gray-400">読み込み中...</p>}
 
-      {!info.isLoading && !schedule && (
+      {/* 飲ませている最中は、終わる時刻が分からないので目安を出しようがない。
+          前の授乳の目安を過ぎた赤い表示のままにせず、いまの様子をそのまま出す。 */}
+      {last.isNursing && <p className="mt-0.5 text-xl font-bold text-amber-700">いま授乳中です</p>}
+
+      {!info.isLoading && !last.isNursing && !schedule && (
         <p className="mt-1.5 text-sm text-gray-500">授乳を記録すると、次の目安の時刻が出ます。</p>
       )}
 
@@ -81,6 +92,12 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
               {remainingText(schedule)}
             </span>
           </div>
+
+          {/* 記録より先に目安を進めているので、そう分かるようにしておく。
+              記録し忘れたまま放っておかれないよう、ここから入力画面へ促す。 */}
+          {last.isPendingRecord && (
+            <p className="mt-1 text-[11px] font-medium text-amber-700">授乳の記録がまだです。忘れないうちに記録を。</p>
+          )}
 
           {/* 前回からいまへの進み具合。時刻を読まなくても目で分かるように。 */}
           <div className="mt-1.5 h-1.5 rounded-full bg-gray-100 overflow-hidden">

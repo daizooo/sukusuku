@@ -68,9 +68,12 @@ import {
 } from '@/lib/api/careLogs';
 import { getNextBreastSide } from '@/lib/careLogUtils';
 import {
+  activePendingNursing,
   nextFeedingSchedule,
+  resolveLastFeeding,
   type NextFeedingInfo,
 } from '@/lib/feedingSchedule';
+import { listFamilyNursingState, type FamilyNursingState } from '@/lib/api/nursingAlarms';
 import {
   DEFAULT_FEEDING_SETTINGS,
   getFeedingSettings,
@@ -284,6 +287,13 @@ export default function SukusukuApp({
   // 「次の授乳の目安」に使う直近の授乳。夜中の授乳は前の日の記録になるため、
   // 記録タブの1日分(logs)とは別に、日付にとらわれず新しい順で持つ。
   const [recentMilkLogs, setRecentMilkLogs] = useState<MilkLog[]>([]);
+  // 家族の端末が預けている「いま授乳中・記録待ち」の印。パートナーが授乳を終えて
+  // まだ記録していない間、記録だけを見ると前回の授乳が1つ前のままになってしまうため。
+  // 古さの判断（置き去りの印を信じない）は、読んだ時刻を基準にする。
+  const [nursing, setNursing] = useState<{ states: FamilyNursingState[]; readAt: number }>({
+    states: [],
+    readAt: 0,
+  });
   const [isLoadingRecentMilk, setIsLoadingRecentMilk] = useState(true);
   // 平熱に使う直近の体温。その子自身の記録の平均なので、表示中の日だけでは求まらない。
   const [recentTemperatureLogs, setRecentTemperatureLogs] = useState<TemperatureLog[]>([]);
@@ -479,6 +489,31 @@ export default function SukusukuApp({
     refreshRecentMilkLogs();
   }, [refreshRecentMilkLogs]);
 
+  // 「いま授乳中・記録待ち」を読み直す。
+  // 通知をオフにしている端末は印を預けられず、圏外なら読めない。どちらも「印は無い」
+  // として扱えばよい（今までどおり記録だけで目安を出す）ので、失敗しても画面は止めない。
+  const refreshNursingStates = useCallback(() => {
+    listFamilyNursingState(supabase)
+      .then((states) => setNursing({ states, readAt: Date.now() }))
+      .catch(() => {
+        // 印が読めないだけ。
+      });
+  }, [supabase]);
+
+  useEffect(() => {
+    refreshNursingStates();
+  }, [refreshNursingStates]);
+
+  // 授乳の始まり・終わりはパートナーの端末で起きるので、こちらが何もしなくても変わる。
+  // 授乳中の印を出すホームと記録タブを見ている間だけ、1分ごとに印だけ読み直す。
+  useEffect(() => {
+    if (activeTab !== 'home' && activeTab !== 'log') return;
+    const timerId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refreshNursingStates();
+    }, 60_000);
+    return () => window.clearInterval(timerId);
+  }, [activeTab, refreshNursingStates]);
+
   // 平熱に使う直近の体温を読み込む。体温を足したり直したりするたびに取り直す。
   const refreshRecentTemperatureLogs = useCallback(() => {
     listRecentTemperatureLogs(supabase, familyId)
@@ -497,12 +532,13 @@ export default function SukusukuApp({
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
       refreshRecentMilkLogs();
+      refreshNursingStates();
       refreshRecentTemperatureLogs();
       refreshTasks();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [refreshRecentMilkLogs, refreshRecentTemperatureLogs, refreshTasks]);
+  }, [refreshRecentMilkLogs, refreshNursingStates, refreshRecentTemperatureLogs, refreshTasks]);
 
   // 授乳の間隔の設定を読み込む。未設定の家族は既定値(3時間・通知する)のまま。
   useEffect(() => {
@@ -621,19 +657,50 @@ export default function SukusukuApp({
   // 記録だけでは前回を取りこぼし、おすすめの側が出なくなる。日付にとらわれない直近の授乳も
   // 合わせて渡し、その中でいちばん新しい母乳の記録から決める。
   // （表示中の日の記録は保存した時点で入るので、圏外でも直後から新しい側が出る）
-  const nextBreastSide = useMemo<BreastSide | null>(
+  const recordedNextBreastSide = useMemo<BreastSide | null>(
     () => getNextBreastSide([...logs, ...recentMilkLogs]),
     [logs, recentMilkLogs],
   );
+  // 記録に入る前の授乳（家族の端末の計測中・記録待ち）。記録だけを見ていると、
+  // パートナーが授乳を終えて保存するまでの間、1つ前の側が出てしまう。
+  // 自分の端末で測っている分はここには要らない（計測中のバナーが出る）。
+  const familyNursing = useMemo(
+    () => (hasNursingSession ? null : activePendingNursing(nursing.states, nursing.readAt)),
+    [hasNursingSession, nursing],
+  );
+  // 保存が済んだあと印の消え方が遅れても、記録と食い違わないようにする
+  // （ホームの「次の授乳の目安」と同じ決め方。lib/feedingSchedule.ts）。
+  const lastMilkAt = useMemo(() => {
+    const times = [...logs, ...recentMilkLogs]
+      .filter((log) => log.type === 'milk')
+      .map((log) => log.time.getTime());
+    return times.length > 0 ? new Date(Math.max(...times)) : null;
+  }, [logs, recentMilkLogs]);
+  const lastFeeding = resolveLastFeeding(lastMilkAt, familyNursing);
+  // 相手がまだ飲ませている最中は、次の側ではなくそれを出す（終わってから決まるため）。
+  const nursingBy = lastFeeding.isNursing ? (familyNursing?.userId ?? null) : null;
+  // 測り終えて記録がまだなら、その最後に飲ませた側の逆がおすすめ。
+  // （計測中の区切りにはゲップも入るが、記録待ちの印に入るのは左右だけ）
+  const pendingLastSide =
+    lastFeeding.isPendingRecord && familyNursing && familyNursing.side !== 'burp'
+      ? familyNursing.side
+      : null;
+  const nextBreastSide: BreastSide | null = pendingLastSide
+    ? pendingLastSide === 'left'
+      ? 'right'
+      : 'left'
+    : recordedNextBreastSide;
 
   // 「次の授乳の目安」に出す一式。ホームと記録タブで同じものを見せる。
   const nextFeeding = useMemo<NextFeedingInfo>(
     () => ({
       lastFedAt: recentMilkLogs[0]?.time ?? null,
+      // 母乳は測り終えて保存するまで記録に入らない。その隙間も前回の授乳として扱う。
+      pendingNursing: activePendingNursing(nursing.states, nursing.readAt),
       intervalMinutes: feedingSettings.intervalMinutes,
       isLoading: isLoadingRecentMilk,
     }),
-    [recentMilkLogs, feedingSettings.intervalMinutes, isLoadingRecentMilk],
+    [recentMilkLogs, nursing, feedingSettings.intervalMinutes, isLoadingRecentMilk],
   );
 
   // 済んだ予定のid。お知らせを消してよいかの判断に使う。
@@ -648,14 +715,13 @@ export default function SukusukuApp({
   // 読み込み直した記録から用が済んだものを見つけて、こちらから閉じる。
   useEffect(() => {
     const now = Date.now();
-    const schedule = nextFeedingSchedule(
-      nextFeeding.lastFedAt,
-      feedingSettings.intervalMinutes,
-      now,
-    );
+    // 記録に入る前の授乳（計測中・記録待ち）も前回の授乳として数える。
+    const last = resolveLastFeeding(nextFeeding.lastFedAt, nextFeeding.pendingNursing);
+    const schedule = nextFeedingSchedule(last.lastFedAt, feedingSettings.intervalMinutes, now);
     void closeSettledNotifications({
+      // 飲ませている最中なら「そろそろ次の授乳」は済んだ扱い。
       // まだ一度も記録が無ければ目安の出しようがないので、消さずに残す。
-      isFeedingDue: schedule?.isOverdue ?? true,
+      isFeedingDue: last.isNursing ? false : (schedule?.isOverdue ?? true),
       hasNursingSession,
       lastTemperatureAt: recentTemperatureLogs[0]?.time ?? null,
       temperatureTimes: temperatureReminderSettings,
@@ -664,6 +730,7 @@ export default function SukusukuApp({
     });
   }, [
     nextFeeding.lastFedAt,
+    nextFeeding.pendingNursing,
     feedingSettings.intervalMinutes,
     hasNursingSession,
     recentTemperatureLogs,
@@ -1385,6 +1452,7 @@ export default function SukusukuApp({
               isLoadingGrowth={isLoadingGrowth}
               memberLabel={memberLabel}
               nextBreastSide={nextBreastSide}
+              nursingBy={nursingBy}
               pumpedBatches={pumpedBatches}
               onDiscardPumpedBatch={discardPumpedBatch}
               onSaveMilkLog={saveMilkLog}

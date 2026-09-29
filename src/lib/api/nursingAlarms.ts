@@ -94,3 +94,42 @@ export async function deleteNursingAlarm(
     .eq('subscription_id', subscriptionId);
   if (error) throw error;
 }
+
+/**
+ * いま家族の誰かが預けている「授乳中・記録待ち」の印。
+ *
+ * 授乳の記録(care_logs)が入るのは入力画面で保存したあとなので、母乳を測り終えて
+ * から保存するまでの間、前回の授乳は1つ前のままに見える。その隙間を画面にも
+ * 出すために読む（ホームの「次の授乳の目安」・記録タブの「次はどちらから」）。
+ *
+ * 行を持つのは授乳中・記録待ちの端末だけなので、ふだんは空で返る。
+ * 置き去りになった行は send-nursing-alarms が片付けるが、片付くまでの間も
+ * 古い印を信じないよう、読んだ側でも古さを見て落とす（feedingSchedule.ts）。
+ * 家族の行が読めるのは 0043_nursing_alarms_family_select.sql のポリシーによる。
+ */
+export interface FamilyNursingState {
+  /** 測っている（測り終えた）人。 */
+  userId: string;
+  /**
+   * 計測中なら、いま測っている区切り（ゲップも入る）。
+   * 記録待ちなら、最後に飲ませた側（左右のみ）。「次はどちらから」に使える。
+   */
+  side: NursingPhase;
+  /** その区切りの合計時間が0だった時刻。飲ませ始めた時刻の目安として扱う。 */
+  startedAt: Date;
+  /** 計測を止めた時刻。記録待ちの間だけ入る（計測中は null）。 */
+  stoppedAt: Date | null;
+}
+
+export async function listFamilyNursingState(supabase: SupabaseDb): Promise<FamilyNursingState[]> {
+  const { data, error } = await supabase
+    .from('nursing_alarms')
+    .select('user_id, side, baseline_at, stopped_at');
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    userId: row.user_id,
+    side: row.side as NursingPhase,
+    startedAt: new Date(row.baseline_at),
+    stoppedAt: row.stopped_at ? new Date(row.stopped_at) : null,
+  }));
+}
