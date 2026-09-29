@@ -1,7 +1,8 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import type { DynamicTask } from '@/types/app';
-import { getLabelColor } from '@/lib/uiUtils';
+import { getOwnerTone } from '@/lib/uiUtils';
 import {
   WEEKDAY_LABELS,
   addDays,
@@ -19,17 +20,57 @@ interface MonthViewProps {
   month: Date;
   today: Date;
   selectedDate: Date;
-  /** ラベルで絞り込み済みの予定。 */
+  /** 参加者で絞り込み済みの予定。 */
   tasks: DynamicTask[];
   birthDate: string;
   onSelectDate: (date: Date) => void;
   onOpenTask: (task: DynamicTask) => void;
 }
 
-// 1マスに出す予定の数。画面の高さに収める必要があるため、狭い画面では2件までにする。
+// 1マスに出す予定の数。狭い画面では2件まで、広い画面では3件まで。
 // これを超えたぶんは「+n件」にまとめる。
 const CHIPS_NARROW = 2;
 const CHIPS_WIDE = 3;
+const WIDE_GRID_PX = 640;
+
+// マスの高さは画面と週の数で変わる（下に「直近のスケジュール」が並ぶぶん低い）ので、
+// 上の件数が入らないときは件数を減らして「+n件」に寄せる（mobile版の chipsThatFit と同じ考え方）。
+// 下の値は className の実寸の見積もり（余白・枠を含む）。className を変えたら合わせる。
+const CELL_CHROME = 9; // マスの上下の余白と枠
+const DATE_HEIGHT = 22; // 日付の丸（下の余白を含む）
+const LABEL_HEIGHT = 10; // 祝日・節目の行
+const CHIP_HEIGHT = 17;
+const MORE_HEIGHT = 11;
+const CHIP_GAP = 2;
+
+/** 予定が total 件あるマスで、予定へ回せる高さ room に何件のチップを出せるか。 */
+const chipsThatFit = (total: number, room: number, limitChips: number): number => {
+  const stack = (n: number) => n * CHIP_HEIGHT + Math.max(n - 1, 0) * CHIP_GAP;
+  const limit = Math.min(total, limitChips);
+  // 全部出せるなら「+n件」は要らない（上限を超える分だけは「+n件」が必要）。
+  if (total <= limitChips && stack(total) <= room) return total;
+  for (let n = limit; n > 0; n -= 1) {
+    if (stack(n) + CHIP_GAP + MORE_HEIGHT <= room) return n;
+  }
+  return 0;
+};
+
+/** 要素の大きさを追う。最初の計測が済むまでは null。 */
+const useElementSize = () => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setSize({ width, height });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return { ref, size };
+};
 
 /**
  * 月グリッド。予定はタイトル入りのチップで積み、育児記録はここには出さない
@@ -55,6 +96,10 @@ export default function MonthView({
   const weekCount = Math.ceil((getFirstDayOfMonth(year, monthIndex) + getDaysInMonth(year, monthIndex)) / 7);
   const days = Array.from({ length: weekCount * 7 }, (_, i) => addDays(gridStart, i));
 
+  const { ref: gridRef, size: gridSize } = useElementSize();
+  const rowHeight = gridSize ? gridSize.height / weekCount : null;
+  const limitChips = gridSize && gridSize.width >= WIDE_GRID_PX ? CHIPS_WIDE : CHIPS_NARROW;
+
   return (
     <div className="h-full flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="grid grid-cols-7 border-b border-gray-100 flex-none">
@@ -69,6 +114,7 @@ export default function MonthView({
       </div>
 
       <div
+        ref={gridRef}
         className="flex-1 min-h-0 grid grid-cols-7"
         style={{ gridTemplateRows: `repeat(${weekCount}, minmax(0, 1fr))` }}
       >
@@ -79,6 +125,15 @@ export default function MonthView({
           const isOtherMonth = date.getMonth() !== monthIndex;
           const holiday = getHolidayName(date);
           const milestone = getMilestoneLabel(birthDate, date);
+          const hasLabel = !isOtherMonth && (holiday !== null || milestone !== null);
+          const shownChips =
+            rowHeight === null
+              ? limitChips
+              : chipsThatFit(
+                  dayTasks.length,
+                  rowHeight - CELL_CHROME - DATE_HEIGHT - (hasLabel ? LABEL_HEIGHT : 0) - CHIP_GAP,
+                  limitChips,
+                );
 
           return (
             <div
@@ -127,7 +182,7 @@ export default function MonthView({
               )}
 
               <div className="mt-0.5 space-y-0.5">
-                {dayTasks.slice(0, CHIPS_WIDE).map((task, i) => (
+                {dayTasks.slice(0, shownChips).map((task) => (
                   <button
                     key={task.id}
                     onClick={(e) => {
@@ -135,23 +190,16 @@ export default function MonthView({
                       onOpenTask(task);
                     }}
                     className={`w-full text-left text-[9px] leading-tight px-1 py-0.5 rounded border truncate ${
-                      task.done ? 'bg-gray-100 text-gray-400 border-gray-200 line-through' : getLabelColor(task.label)
-                    } ${isOtherMonth ? 'opacity-50' : ''} ${i >= CHIPS_NARROW ? 'hidden md:block' : ''}`}
+                      task.done
+                        ? 'bg-gray-100 text-gray-400 border-gray-200 line-through'
+                        : getOwnerTone(task.owner, task.participants)
+                    } ${isOtherMonth ? 'opacity-50' : ''}`}
                   >
                     {task.title}
                   </button>
                 ))}
-                {dayTasks.length > CHIPS_NARROW && (
-                  <p
-                    className={`text-[9px] leading-tight text-gray-400 px-1 ${
-                      dayTasks.length <= CHIPS_WIDE ? 'md:hidden' : ''
-                    }`}
-                  >
-                    <span className="md:hidden">+{dayTasks.length - CHIPS_NARROW}件</span>
-                    {dayTasks.length > CHIPS_WIDE && (
-                      <span className="hidden md:inline">+{dayTasks.length - CHIPS_WIDE}件</span>
-                    )}
-                  </p>
+                {dayTasks.length > shownChips && (
+                  <p className="text-[9px] leading-tight text-gray-400 px-1">+{dayTasks.length - shownChips}件</p>
                 )}
               </div>
             </div>

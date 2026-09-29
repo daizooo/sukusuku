@@ -1,9 +1,9 @@
 'use client';
 
-import { AlertTriangle, Baby, Building2, Calendar, ChevronRight, CheckCircle2, Circle, Clock, Heart, MapPin, Phone, Stethoscope, BellRing } from 'lucide-react';
-import type { DynamicTask, LoginRole, ScheduleView, UserProfile } from '@/types/app';
-import { getLabelColor, getProfileFieldValue } from '@/lib/uiUtils';
-import { formatTimeRange, parseDateString, startOfDay } from '@/lib/dateUtils';
+import { Baby, Building2, Heart, Phone, Stethoscope } from 'lucide-react';
+import type { LoginRole, UserProfile } from '@/types/app';
+import { getProfileFieldValue } from '@/lib/uiUtils';
+import { parseDateString } from '@/lib/dateUtils';
 import type { NextFeedingInfo } from '@/lib/feedingSchedule';
 import NextFeedingCard from '../NextFeedingCard';
 
@@ -19,17 +19,10 @@ interface HomeTabProps {
   loginRole?: LoginRole;
   ageInDays: number;
   ageInMonths: { months: number; days: number };
-  dynamicTodos: DynamicTask[];
-  isLoadingTodos?: boolean;
-  today: Date;
   /** 次の授乳の目安。 */
   nextFeeding: NextFeedingInfo;
   /** 記録タブへ移る（次の授乳のカードから）。 */
   onOpenLogTab: () => void;
-  onToggleTodo: (id: string) => void;
-  onOpenTask: (task: DynamicTask) => void;
-  /** スケジュールタブへ移る。表示を指定すると、その表示で開く。 */
-  onViewAllSchedule: (view?: ScheduleView) => void;
 }
 
 export default function HomeTab({
@@ -37,29 +30,9 @@ export default function HomeTab({
   loginRole,
   ageInDays,
   ageInMonths,
-  dynamicTodos,
-  isLoadingTodos,
-  today,
   nextFeeding,
   onOpenLogTab,
-  onToggleTodo,
-  onOpenTask,
-  onViewAllSchedule,
 }: HomeTabProps) {
-  const startOfToday = startOfDay(today).getTime();
-  const pendingTasks = dynamicTodos.filter((t) => !t.done);
-
-  // 期限切れは古いものほど先頭に来るため、そのまま並べると直近の4件を
-  // 食いつぶしてしまう。件数だけ知らせて、中身はスケジュールのリスト表示に任せる。
-  const overdueCount = pendingTasks.filter(
-    (t) => t.targetDateObj && startOfDay(t.targetDateObj).getTime() < startOfToday,
-  ).length;
-
-  // 今日以降の予定を近い順に4件。日付未設定は後ろに回す。
-  const upcomingTasks = pendingTasks
-    .filter((t) => !t.targetDateObj || startOfDay(t.targetDateObj).getTime() >= startOfToday)
-    .sort((a, b) => (a.targetDateObj?.getTime() ?? Infinity) - (b.targetDateObj?.getTime() ?? Infinity))
-    .slice(0, 4);
   const birthDateValue = getProfileFieldValue(userProfile, 'birthDate');
   const birthDate = parseDateString(birthDateValue);
   const babyName = getProfileFieldValue(userProfile, 'babyName');
@@ -158,82 +131,6 @@ export default function HomeTab({
             </button>
           )
         )}
-      </div>
-
-      <div className="flex-1 min-h-0 flex flex-col">
-        <div className="flex justify-between items-end gap-3 mb-3 flex-none">
-          {/* タブの見出し(22px)より一段小さくして、画面内の見出しの上下関係が分かるようにする */}
-          <h3 className="text-gray-900 font-bold text-lg tracking-tight">直近のスケジュール</h3>
-          <button onClick={() => onViewAllSchedule()} className="flex-none text-blue-600 text-sm font-medium flex items-center">
-            すべて見る <ChevronRight size={16} />
-          </button>
-        </div>
-
-        {overdueCount > 0 && (
-          <button
-            onClick={() => onViewAllSchedule('list')}
-            className="flex-none w-full mb-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-700 flex items-center justify-between hover:bg-red-100 transition"
-          >
-            <span className="flex items-center text-sm font-medium">
-              <AlertTriangle size={14} className="mr-1.5" />
-              期限切れ {overdueCount}件
-            </span>
-            <ChevronRight size={16} />
-          </button>
-        )}
-
-        <div className="min-h-0 overflow-y-auto bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50">
-          {isLoadingTodos && <p className="p-4 text-sm text-gray-400 text-center">読み込み中...</p>}
-          {!isLoadingTodos && upcomingTasks.length === 0 && (
-            <p className="p-4 text-sm text-gray-400 text-center">直近の予定はありません</p>
-          )}
-          {upcomingTasks.map((task) => (
-            <div
-              key={task.id}
-              className="p-4 flex items-start space-x-3 cursor-pointer hover:bg-gray-50 transition"
-              onClick={() => onOpenTask(task)}
-            >
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleTodo(task.id);
-                }}
-                className={`mt-0.5 flex-shrink-0 transition-colors p-1 -ml-1 ${task.done ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}
-              >
-                {task.done ? <CheckCircle2 size={24} /> : <Circle size={24} />}
-              </button>
-              <div className="flex-1">
-                <div className="flex justify-between items-start">
-                  <p className={`font-medium ${task.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
-                    {task.title}
-                    {task.remindMinutesBefore !== null && !task.done && (
-                      <BellRing size={12} className="inline ml-1.5 text-yellow-500 mb-0.5" />
-                    )}
-                  </p>
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ml-2 ${getLabelColor(task.label)}`}>
-                    {task.label}
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center text-xs text-gray-500 mt-1 gap-x-3 gap-y-1">
-                  <span className="flex items-center text-blue-600 font-medium">
-                    <Calendar size={12} className="mr-1" />
-                    {task.targetDate}
-                  </span>
-                  <span className="flex items-center">
-                    <Clock size={12} className="mr-1" />
-                    {formatTimeRange(task.startTime, task.endTime)}
-                  </span>
-                  {task.place && (
-                    <span className="flex items-center truncate">
-                      <MapPin size={12} className="mr-1 flex-none" />
-                      <span className="truncate">{task.place}</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );

@@ -3,7 +3,7 @@
 import { BellRing, Clock, Lock, MapPin, Repeat, Star, Text, Users, X } from 'lucide-react';
 import type { AnchorType, Participant, Recurrence, RecurrenceFreq, Task, TaskKind } from '@/types/app';
 import { PARTICIPANTS } from '@/types/app';
-import { REMINDER_OPTIONS, WEEKDAY_LABELS, formatDateWithWeekday, parseDateString, toDateString } from '@/lib/dateUtils';
+import { REMINDER_OPTIONS, WEEKDAY_LABELS, parseDateString, toDateString } from '@/lib/dateUtils';
 import { getParticipantColor } from '@/lib/uiUtils';
 import { END_TYPE_OPTIONS, FREQ_OPTIONS, defaultRecurrence, summarizeRecurrence } from '@/lib/recurrence';
 
