@@ -75,6 +75,13 @@ interface ActiveNursing {
   runningPhase: NursingPhase | null;
   startedAt: number | null;
   /**
+   * この授乳を測り始めた時刻（1件目の区切りを押した時刻）。記録・リセットまで変えない。
+   *
+   * 記録の日時は「飲ませ始めた時刻」であってほしい（次の授乳の目安の起点になるため）。
+   * 保存するのは飲ませ終えたあとなので、保存した時刻を入れると実際より後ろにずれる。
+   */
+  sessionStartedAt: number | null;
+  /**
    * 計測を止めた時刻。まだ記録していない計測が残っている間だけ入る。
    * 計測中と、記録・リセットしたあとは null。
    */
@@ -96,6 +103,7 @@ const EMPTY: ActiveNursing = {
   untrackedSets: 0,
   runningPhase: null,
   startedAt: null,
+  sessionStartedAt: null,
   stoppedAt: null,
   lastSide: null,
   notified: ZERO,
@@ -188,6 +196,8 @@ const load = (): ActiveNursing => {
       // 開始時刻が失われていると経過時間を復元できないので、計測中とは扱わない。
       runningPhase: startedAt ? toPhase(parsed.runningPhase ?? parsed.runningSide) : null,
       startedAt,
+      // 持たせる前に控えた分には入っていない。そのときは無いものとして扱う。
+      sessionStartedAt: toMs(parsed.sessionStartedAt) || null,
       stoppedAt: toMs(parsed.stoppedAt) || null,
       lastSide: toSide(parsed.lastSide),
       notified: toPhaseValues(parsed.notified, {
@@ -554,6 +564,11 @@ export interface NursingTimer {
   /** 測る前に済ませたセットの数。 */
   untrackedSets: number;
   runningPhase: NursingPhase | null;
+  /**
+   * この授乳を測り始めた時刻(epoch ms)。測っていなければ null。
+   * 記録の日時の初期値に使う（保存した時刻ではなく、飲ませ始めた時刻を入れるため）。
+   */
+  sessionStartedAt: number | null;
   /** 最後に計測した側。まだ一度も測っていなければ null（ゲップでは変わらない）。 */
   lastSide: BreastSide | null;
   /** 計測中、または止めたあと記録前の内容が残っている。 */
@@ -611,6 +626,8 @@ export function useNursingTimer(): NursingTimer {
       ...base,
       runningPhase: stopping ? null : phase,
       startedAt: stopping ? null : at,
+      // 1件目の区切りを押した時刻。続きを測ったり止めたりしても動かさない。
+      sessionStartedAt: prev.sessionStartedAt ?? at,
       // 止めた時刻は「授乳は済んだが記録はまだ」の印になる。測り直したら消す。
       stoppedAt: stopping ? at : null,
       // ゲップは飲ませていないので「最後に飲ませた側」は変えない。
@@ -649,6 +666,7 @@ export function useNursingTimer(): NursingTimer {
     setNumber: active.untrackedSets + active.measuredSets + 1,
     untrackedSets: active.untrackedSets,
     runningPhase: active.runningPhase,
+    sessionStartedAt: active.sessionStartedAt,
     lastSide: active.lastSide,
     hasSession: hasSession(active) || hasElapsed(elapsed),
     togglePhase,

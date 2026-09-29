@@ -21,7 +21,7 @@ import {
   type NursingPhaseValues,
   type NursingTimer,
 } from '@/lib/nursingTimer';
-import { parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUtils';
+import { isSameDay, parseDateTimeInput, toDateString, toTimeInputValue } from '@/lib/dateUtils';
 import {
   DateTimeField,
   DeleteButton,
@@ -93,6 +93,32 @@ const MINUTE_OPTIONS = BREAST_MINUTE_OPTIONS.map((min) => ({ value: min, label: 
 const toCustomMinutes = (minutes: number | undefined): string =>
   minutes !== undefined && !BREAST_MINUTE_OPTIONS.includes(minutes) ? String(minutes) : '';
 
+/**
+ * 計測を始めた時刻を、記録の日時の初期値として使えるならその時刻を返す。
+ *
+ * 授乳の記録の日時は「飲ませ始めた時刻」。保存するのは飲ませ終えたあとなので、
+ * 保存した時刻を入れると実際より後ろにずれ、「次の授乳の目安」もその分だけ遅れる。
+ *
+ * 使わないのは次の2つ。
+ * - 過去の日を開いているとき（その日の記録を後から足している。いまの計測とは別）
+ * - 止め忘れたまま何時間も残っている計測（そのまま入れると明らかに違う時刻になる。
+ *   どの授乳も数十分で終わるので、これを超えたら計測が残っているだけと見る）
+ */
+const MEASURED_START_MAX_MS = 6 * 60 * 60_000;
+
+const measuredStartTime = (
+  sessionStartedAt: number | null,
+  baseDate: Date,
+  now: Date,
+): Date | null => {
+  if (!sessionStartedAt) return null;
+  const elapsed = now.getTime() - sessionStartedAt;
+  if (elapsed < 0 || elapsed > MEASURED_START_MAX_MS) return null;
+  const startedAt = new Date(sessionStartedAt);
+  if (!isSameDay(startedAt, baseDate)) return null;
+  return startedAt;
+};
+
 /** 開くたびに入力内容を作り直したいので、閉じている間は中身ごと外す。 */
 export default function MilkLogModal({ show, ...props }: MilkLogModalProps & { show: boolean }) {
   if (!show) return null;
@@ -140,8 +166,17 @@ function MilkLogModalBody({
   const [editedLeft, setEditedLeft] = useState(false);
   const [editedRight, setEditedRight] = useState(false);
   // 新規は表示中の日 + 今の時刻。編集は保存されている日時をそのまま出す。
+  // ただし母乳を測っているなら、その計測を始めた時刻（＝飲ませ始めた時刻）を出す。
   const [date, setDate] = useState(() => toDateString(log?.time ?? baseDate));
-  const [time, setTime] = useState(() => toTimeInputValue(log?.time ?? new Date()));
+  const [time, setTime] = useState(() => {
+    if (log) return toTimeInputValue(log.time);
+    const now = new Date();
+    // 測っているのは母乳なので、母乳で開いたときだけ。ミルクや搾乳で開いたなら
+    // いまの時刻のまま（測っている授乳とは別の記録を足しに来ている）。
+    const measuredStart =
+      method === 'breast' ? measuredStartTime(timer.sessionStartedAt, baseDate, now) : null;
+    return toTimeInputValue(measuredStart ?? now);
+  });
   const [note, setNote] = useState(log?.note ?? '');
 
   // 過去の記録を編集しているときは、いま計測しているものと混ざらないよう出さない。
