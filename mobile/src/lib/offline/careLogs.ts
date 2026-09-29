@@ -9,6 +9,7 @@ import {
   type NewCareLogInput,
 } from '@/lib/api/careLogs';
 import { getLocalDb, readKv, writeKv } from '@/lib/offline/db';
+import { requestNotificationCleanup } from '@/lib/notificationCleanupTrigger';
 
 // 記録の読み書きを、端末内の控え（src/lib/offline/db.ts）ごしに行う層。
 //
@@ -173,6 +174,8 @@ export async function queueInsertCareLog(
     );
     await enqueue('insert', familyId, log.id, payload);
   });
+  // 記録した直後に、済んだお知らせ（次の授乳・検温）を消す。
+  requestNotificationCleanup();
   return log;
 }
 
@@ -188,9 +191,10 @@ export async function queueUpdateCareLog(familyId: string, log: CareLog): Promis
   );
   if (isLocalCareLogId(log.id)) {
     await db.runAsync('UPDATE outbox SET payload = ? WHERE log_id = ?', payload, log.id);
-    return;
+  } else {
+    await enqueue('update', familyId, log.id, payload);
   }
-  await enqueue('update', familyId, log.id, payload);
+  requestNotificationCleanup();
 }
 
 /** 記録を消す。まだ送れていない記録なら、積んであるぶんごと取り下げる。 */

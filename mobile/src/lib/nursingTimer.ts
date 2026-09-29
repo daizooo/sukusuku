@@ -3,6 +3,8 @@ import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { BreastSide, NursingPhase } from '@/types/app';
 import { applyNursingAlarm, type NursingAlarmTarget } from '@/lib/nursingAlarm';
+import type { PendingNursing } from '@/lib/feedingSchedule';
+import { requestNotificationCleanup } from '@/lib/notificationCleanupTrigger';
 
 // 授乳を「左5分 → 右5分 → ゲップ5分」の1セットとして計測するストップウォッチ。
 //
@@ -303,6 +305,8 @@ const store = (next: ActiveNursing) => {
   emit();
   applyNursingAlarm(alarmTarget(next));
   stateSink?.(stateTarget(next));
+  // 測り始めた・記録した・リセットした直後に、出ているお知らせを見直す。
+  requestNotificationCleanup();
 };
 
 /** その区切りの合計時間(ミリ秒)。計測中ならその分も含む。 */
@@ -410,6 +414,25 @@ const syncWatcher = () => {
 export const hasNursingSession = async (): Promise<boolean> => {
   await hydrate();
   return hasSession(getSnapshot());
+};
+
+/**
+ * この端末で測っている（測り終えて記録待ちの）授乳。無ければ null。
+ *
+ * サーバーへ預ける印（nursing_alarms）は通知をオフにした端末や圏外では届かないので、
+ * 「そろそろ次の授乳」を消すかの判断にはこの端末の控えを直接使う（notificationCleanup.ts）。
+ * 古さの上限は呼ぶ側（activePendingNursing）が見る。
+ */
+export const localPendingNursing = async (): Promise<PendingNursing | null> => {
+  await hydrate();
+  const active = getSnapshot();
+  if (!hasSession(active)) return null;
+  const startedAt = active.sessionStartedAt ?? active.startedAt ?? active.stoppedAt ?? Date.now();
+  const stopped = !active.runningPhase && active.stoppedAt;
+  return {
+    startedAt: new Date(startedAt),
+    stoppedAt: stopped ? new Date(active.stoppedAt as number) : null,
+  };
 };
 
 /**
