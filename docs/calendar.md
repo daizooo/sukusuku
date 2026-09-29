@@ -2,8 +2,8 @@
 
 家族で予定を共有するためのカレンダー機能の仕様。
 
-**対象はmobile版（`mobile/`）のみ。** PWA版（`src/`）は凍結中で、この仕様書の
-更新をPWA版に反映する必要はない（docs/native-app-rewrite.md参照）。
+**仕様の正はmobile版（`mobile/`）。** PWA版（`src/`）はmobile版のWEB版（兼開発確認用）
+として、この仕様書の更新を追いかけて反映する（ルートの `CLAUDE.md` 参照）。
 
 ---
 
