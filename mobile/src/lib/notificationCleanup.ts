@@ -24,11 +24,18 @@ import * as Notifications from 'expo-notifications';
 import { supabase } from '@/lib/supabase';
 import { getMyMembership } from '@/lib/api/me';
 import { listRecentMilkLogs, listRecentTemperatureLogs } from '@/lib/api/careLogs';
+import { listFamilyNursingState } from '@/lib/api/nursingAlarms';
+import { readCachedLogsInRange } from '@/lib/offline/careLogs';
 import { getFeedingSettings } from '@/lib/api/feedingSettings';
 import { getTemperatureReminderSettings } from '@/lib/api/temperatureReminderSettings';
 import { listTasks } from '@/lib/api/tasks';
-import { nextFeedingSchedule } from '@/lib/feedingSchedule';
-import { hasNursingSession } from '@/lib/nursingTimer';
+import {
+  activePendingNursing,
+  nextFeedingSchedule,
+  resolveLastFeeding,
+} from '@/lib/feedingSchedule';
+import { hasNursingSession, localPendingNursing } from '@/lib/nursingTimer';
+import { onNotificationCleanupRequest } from '@/lib/notificationCleanupTrigger';
 
 /**
  * お知らせに付くタグ（＝お知らせの種類）。組み立て側は
@@ -165,29 +172,59 @@ async function collectSubjects(userId: string): Promise<NotificationSubjects | n
   const familyId = membership.familyId;
   if (!familyId) return null;
 
-  const [milkLogs, temperatureLogs, feedingSettings, temperatureTimes, tasks, nursing] =
-    await Promise.all([
-      // 目安に要るのは前回の授乳だけ、平熱ではなく直近の1件だけ、という具合に最小限にする。
-      listRecentMilkLogs(supabase, familyId, 1),
-      listRecentTemperatureLogs(supabase, familyId, 1),
-      getFeedingSettings(supabase, familyId),
-      getTemperatureReminderSettings(supabase, familyId),
-      listTasks(supabase, familyId),
-      hasNursingSession(),
-    ]);
-
+  // 記録した直後は圏外だとサーバーにまだ無いので、この端末の控え（送信待ちを含む）も見る。
+  // サーバーへの問い合わせが失敗しても、控えだけで判断できるようにここでは止めない。
   const now = Date.now();
-  const schedule = nextFeedingSchedule(
-    milkLogs[0]?.time ?? null,
-    feedingSettings.intervalMinutes,
+  const cacheFrom = new Date(now - 3 * DAY_MS);
+  const cacheTo = new Date(now + DAY_MS);
+  const [
+    milkLogs,
+    temperatureLogs,
+    familyNursing,
+    cachedLogs,
+    feedingSettings,
+    temperatureTimes,
+    tasks,
+    nursing,
+    localNursing,
+  ] = await Promise.all([
+    // 目安に要るのは前回の授乳だけ、平熱ではなく直近の1件だけ、という具合に最小限にする。
+    listRecentMilkLogs(supabase, familyId, 1).catch(() => []),
+    listRecentTemperatureLogs(supabase, familyId, 1).catch(() => []),
+    listFamilyNursingState(supabase).catch(() => []),
+    readCachedLogsInRange(familyId, cacheFrom, cacheTo).catch(() => []),
+    getFeedingSettings(supabase, familyId),
+    getTemperatureReminderSettings(supabase, familyId),
+    listTasks(supabase, familyId),
+    hasNursingSession(),
+    localPendingNursing(),
+  ]);
+
+  const latestTime = (times: (Date | undefined)[]): Date | null =>
+    times.reduce<Date | null>((best, at) => (at && (!best || at > best) ? at : best), null);
+  const lastMilkAt = latestTime([
+    milkLogs[0]?.time,
+    ...cachedLogs.filter((log) => log.type === 'milk').map((log) => log.time),
+  ]);
+  const lastTemperatureAt = latestTime([
+    temperatureLogs[0]?.time,
+    ...cachedLogs.filter((log) => log.type === 'temperature').map((log) => log.time),
+  ]);
+
+  // 測り始めた時点で「そろそろ次の授乳」は済んだ扱い（母乳は保存まで記録に入らないため、
+  // この端末の計測とパートナーが預けた印も前回の授乳として数える）。
+  const pending = activePendingNursing(
+    localNursing ? [...familyNursing, localNursing] : familyNursing,
     now,
   );
+  const last = resolveLastFeeding(lastMilkAt, pending);
+  const schedule = nextFeedingSchedule(last.lastFedAt, feedingSettings.intervalMinutes, now);
 
   return {
     // まだ一度も記録が無ければ目安の出しようがないので、消さずに残す。
-    isFeedingDue: schedule?.isOverdue ?? true,
+    isFeedingDue: last.isNursing ? false : (schedule?.isOverdue ?? true),
     hasNursingSession: nursing,
-    lastTemperatureAt: temperatureLogs[0]?.time ?? null,
+    lastTemperatureAt,
     temperatureTimes,
     doneTaskIds: tasks.filter((task) => task.done).map((task) => task.id),
     now,
@@ -217,7 +254,8 @@ export async function closeSettledNotifications(userId: string): Promise<void> {
 /**
  * 用が済んだお知らせを閉じる。アプリ全体で1回だけ動かす。
  *
- * 開いたときと、前面に戻ったときに見る。PWA版が visibilitychange で取り直しているのと
+ * 開いたとき・前面に戻ったときに加えて、記録や計測の開始の直後にも見る
+ * （notificationCleanupTrigger.ts）。PWA版が visibilitychange で取り直しているのと
  * 同じ間合い（src/components/sukusuku/SukusukuApp.tsx）。
  */
 export function useSettledNotificationCleanup(userId: string | null): void {
@@ -235,6 +273,11 @@ export function useSettledNotificationCleanup(userId: string | null): void {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') run();
     });
-    return () => subscription.remove();
+    // アプリを開いている最中の記録・計測開始でも見直す。
+    const unsubscribe = onNotificationCleanupRequest(run);
+    return () => {
+      subscription.remove();
+      unsubscribe();
+    };
   }, [userId]);
 }
