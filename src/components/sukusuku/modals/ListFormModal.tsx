@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Trash2, X } from 'lucide-react';
+import { Lock, Trash2, X } from 'lucide-react';
 import type { ListBoard, ListGroup } from '@/types/app';
 
 // リストそのものの追加・編集。
@@ -13,9 +13,20 @@ import type { ListBoard, ListGroup } from '@/types/app';
 export interface ListDraft {
   name: string;
   groupLabel: string;
+  /** 自分だけのリストか。新しく作るときの既定は「自分だけ」。 */
+  isPrivate: boolean;
 }
 
 export const DEFAULT_GROUP_LABEL = 'グループ';
+
+/**
+ * 共有設定の2択。mobile版（ListFormModal）と同じ文言・同じ並びにする。
+ * 新しいリストの既定は「自分だけ」で、家族に見せたいものだけ共有へ切り替える。
+ */
+const SHARING_TABS: { value: boolean; label: string }[] = [
+  { value: false, label: '共有（家族全員）' },
+  { value: true, label: '自分だけ' },
+];
 
 // リスト名に添える絵文字の候補。名前は自由入力なので絵文字を打ち込めば入るが、
 // PCのブラウザからは打ちにくいため、よく使うものをタップで足せるようにする。
@@ -95,8 +106,8 @@ export default function ListFormModal({
 }: ListFormModalProps) {
   const [draft, setDraft] = useState<ListDraft>(() =>
     mode === 'edit' && list
-      ? { name: list.name, groupLabel: list.groupLabel }
-      : { name: '', groupLabel: DEFAULT_GROUP_LABEL },
+      ? { name: list.name, groupLabel: list.groupLabel, isPrivate: list.isPrivate }
+      : { name: '', groupLabel: DEFAULT_GROUP_LABEL, isPrivate: true },
   );
 
   if (!mode) return null;
@@ -140,6 +151,32 @@ export default function ListFormModal({
             </div>
             <p className="text-[10px] text-gray-400 mt-1.5">
               絵文字は名前の末尾に足されます。自分で打ち込んでも構いません。
+            </p>
+          </div>
+
+          {/* 共有設定。自分だけにすると、家族の他のメンバーにはリストごと（中の項目も）
+              表示されなくなる。 */}
+          <div>
+            <label className="flex items-center gap-1 text-xs font-medium text-gray-700 mb-1">
+              <Lock size={12} className="text-gray-400" />
+              共有設定
+            </label>
+            <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
+              {SHARING_TABS.map((tab) => (
+                <button
+                  key={String(tab.value)}
+                  type="button"
+                  onClick={() => set({ isPrivate: tab.value })}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-md transition ${
+                    draft.isPrivate === tab.value ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1.5">
+              「自分だけ」にすると、このリストと中の項目は自分にしか表示されません。
             </p>
           </div>
 

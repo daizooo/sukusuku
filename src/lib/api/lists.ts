@@ -14,6 +14,8 @@ const rowToList = (row: ListRow): ListBoard => ({
   groupLabel: row.group_label,
   pinned: row.is_pinned,
   position: row.position,
+  isPrivate: row.is_private,
+  createdBy: row.created_by,
 });
 
 const rowToGroup = (row: ListGroupRow): ListGroup => ({
@@ -90,13 +92,16 @@ export async function loadLists(supabase: SupabaseDb, familyId: string): Promise
 export async function insertList(
   supabase: SupabaseDb,
   familyId: string,
-  input: { name: string; groupLabel: string; position: number },
+  input: { name: string; groupLabel: string; position: number; isPrivate: boolean },
+  createdBy: string,
 ): Promise<ListBoard> {
   const row: TablesInsert<'lists'> = {
     family_id: familyId,
     name: input.name,
     group_label: input.groupLabel,
     position: input.position,
+    is_private: input.isPrivate,
+    created_by: createdBy,
   };
   const { data, error } = await supabase.from('lists').insert(row).select('*').single();
   if (error) throw error;
@@ -106,7 +111,13 @@ export async function insertList(
 export async function updateList(supabase: SupabaseDb, list: ListBoard): Promise<void> {
   const { error } = await supabase
     .from('lists')
-    .update({ name: list.name, group_label: list.groupLabel, position: list.position })
+    .update({
+      name: list.name,
+      group_label: list.groupLabel,
+      position: list.position,
+      is_private: list.isPrivate,
+      created_by: list.createdBy,
+    })
     .eq('id', list.id);
   if (error) throw error;
 }
@@ -243,13 +254,21 @@ export async function deleteDoneItems(supabase: SupabaseDb, listId: string): Pro
 /**
  * リストが1つも無いときに、いつも使う3つをまとめて作る。
  * グループはまだ作らない（使いながら必要なぶんだけ足すほうが、要らない区切りが残らない）。
+ *
+ * 共有設定は他のリストと同じく「自分だけ」。家族に見せたいものは、作ったあと
+ * リストの設定で「共有」に切り替える。
  */
-export async function seedDefaultLists(supabase: SupabaseDb, familyId: string): Promise<ListBoard[]> {
+export async function seedDefaultLists(
+  supabase: SupabaseDb,
+  familyId: string,
+  createdBy: string,
+): Promise<ListBoard[]> {
+  // DB側の既定は共有なので、「自分だけ」は明示して入れる。
   const rows: TablesInsert<'lists'>[] = [
-    { family_id: familyId, name: '買い出し', position: 0 },
-    { family_id: familyId, name: 'やりたいこと', position: 1 },
-    { family_id: familyId, name: 'やること', position: 2 },
-  ];
+    { name: '買い出し', position: 0 },
+    { name: 'やりたいこと', position: 1 },
+    { name: 'やること', position: 2 },
+  ].map((row) => ({ ...row, family_id: familyId, created_by: createdBy, is_private: true }));
   const { data, error } = await supabase.from('lists').insert(rows).select('*');
   if (error) throw error;
   return (data ?? []).map(rowToList);

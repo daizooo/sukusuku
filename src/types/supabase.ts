@@ -413,32 +413,45 @@ export type Database = {
       lists: {
         Row: {
           created_at: string
+          created_by: string | null
           family_id: string
           group_label: string
           id: string
           is_pinned: boolean
+          is_private: boolean
           name: string
           position: number
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           family_id: string
           group_label?: string
           id?: string
           is_pinned?: boolean
+          is_private?: boolean
           name: string
           position?: number
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           family_id?: string
           group_label?: string
           id?: string
           is_pinned?: boolean
+          is_private?: boolean
           name?: string
           position?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "lists_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "lists_family_id_fkey"
             columns: ["family_id"]
