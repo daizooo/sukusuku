@@ -1,8 +1,8 @@
 'use client';
 
-import { BellRing, CalendarDays, CheckCircle2, Circle, Clock, MapPin } from 'lucide-react';
+import { BellRing, CalendarDays, CheckCircle2, Circle, Clock, Lock, MapPin } from 'lucide-react';
 import type { DynamicTask } from '@/types/app';
-import { getLabelColor } from '@/lib/uiUtils';
+import { getOwnerTone } from '@/lib/uiUtils';
 import { formatTimeRange } from '@/lib/dateUtils';
 
 interface TaskRowProps {
@@ -37,10 +37,15 @@ export default function TaskRow({ task, onToggle, onOpen, showDate }: TaskRowPro
             {task.remindMinutesBefore !== null && !task.done && (
               <BellRing size={12} className="inline ml-1.5 text-yellow-500 mb-0.5" />
             )}
+            {task.isPrivate && <Lock size={12} className="inline ml-1.5 text-gray-400 mb-0.5" aria-label="自分だけ" />}
           </p>
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ml-2 ${getLabelColor(task.label)}`}>
-            {task.label}
-          </span>
+          {task.participants.length > 0 && (
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ml-2 ${getOwnerTone(task.owner, task.participants)}`}
+            >
+              {task.participants.join('・')}
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap items-center text-xs text-gray-500 mt-1.5 gap-x-3 gap-y-1">
           {showDate && (
@@ -49,10 +54,12 @@ export default function TaskRow({ task, onToggle, onOpen, showDate }: TaskRowPro
               {task.targetDate}
             </span>
           )}
-          <span className="flex items-center">
-            <Clock size={12} className="mr-1" />
-            {formatTimeRange(task.startTime, task.endTime)}
-          </span>
+          {task.kind === 'event' && (
+            <span className="flex items-center">
+              <Clock size={12} className="mr-1" />
+              {formatTimeRange(task.startTime, task.endTime)}
+            </span>
+          )}
           {task.place && (
             <span className="flex items-center truncate">
               <MapPin size={12} className="mr-1 flex-none" />

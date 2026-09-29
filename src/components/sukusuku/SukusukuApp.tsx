@@ -29,11 +29,13 @@ import type {
   LogType,
   LoginRole,
   Nursery,
+  Participant,
   ScheduleView,
   Task,
   TabId,
   UserProfile,
 } from '@/types/app';
+import { ROLE_TO_PARTICIPANT } from '@/types/app';
 import { INITIAL_PROFILE } from '@/lib/seedData';
 import { getProfileFieldValue } from '@/lib/uiUtils';
 import {
@@ -164,17 +166,23 @@ const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
 // 記録が続くと母乳の記録まで届かないため、1日ぶんの授乳の回数より多めに取る。
 const RECENT_MILK_LIMIT = 30;
 
-const emptyTaskDraft = (date: Date): TaskDraft => ({
+// owner: ログイン中の役割から決まる主体（未ログイン相当ならnull）。
+// 主体が決まっているときは参加者にも同じ人を初期値として入れる。
+const emptyTaskDraft = (date: Date, owner: Participant | null): TaskDraft => ({
   title: '',
   place: '',
   note: '',
+  kind: 'event',
   anchorType: 'absolute',
   startDate: toDateString(date),
   startTime: null,
   endTime: null,
   daysAfterBirth: 0,
-  label: '家族',
+  owner,
+  participants: owner ? [owner] : [],
   remindMinutesBefore: null,
+  isPrivate: false,
+  recurrence: null,
   timing: '',
 });
 
@@ -351,7 +359,9 @@ export default function SukusukuApp({
     setLogDate((current) => (isSameDay(current, previousToday) ? today : current));
   }, [today]);
 
-  const [newTask, setNewTask] = useState<TaskDraft>(() => emptyTaskDraft(today));
+  // ログイン中の役割から、新しい予定の主体・参加者の初期値を決める（パパ→大造 / ママ→いづみ）。
+  const ownerFromRole: Participant | null = role ? ROLE_TO_PARTICIPANT[role] : null;
+  const [newTask, setNewTask] = useState<TaskDraft>(() => emptyTaskDraft(today, ownerFromRole));
 
   // --- スケジュール（カレンダー） ---
   // 既定は月表示。日をタップすると日表示へ移り、そこで予定と育児記録を合わせて見る。
@@ -869,10 +879,10 @@ export default function SukusukuApp({
     const input = { ...newTask };
 
     setShowAddModal(false);
-    setNewTask(emptyTaskDraft(today));
+    setNewTask(emptyTaskDraft(today, ownerFromRole));
 
     try {
-      const created = await insertTask(supabase, familyId, input);
+      const created = await insertTask(supabase, familyId, input, userId);
       setTodos((prev) => [...prev, created]);
     } catch (err) {
       console.error('Failed to add task:', err);
@@ -882,7 +892,7 @@ export default function SukusukuApp({
 
   // カレンダーで選んでいる日を初期値にして予定を追加する。
   const openAddTaskModal = (date: Date) => {
-    setNewTask(emptyTaskDraft(date));
+    setNewTask(emptyTaskDraft(date, ownerFromRole));
     setShowAddModal(true);
   };
 
@@ -1381,17 +1391,8 @@ export default function SukusukuApp({
               loginRole={role}
               ageInDays={ageInDays}
               ageInMonths={ageInMonths}
-              dynamicTodos={dynamicTodos}
-              isLoadingTodos={isLoadingTasks}
-              today={today}
               nextFeeding={nextFeeding}
               onOpenLogTab={() => selectTab('log')}
-              onToggleTodo={toggleTodo}
-              onOpenTask={openTaskDetail}
-              onViewAllSchedule={(view) => {
-                setActiveTab('schedule');
-                if (view) setScheduleView(view);
-              }}
             />
           )}
           {activeTab === 'schedule' && (
@@ -1495,8 +1496,11 @@ export default function SukusukuApp({
           )}
         </main>
 
-        {activeTab === 'schedule' && (
+        {/* 月表示では、右下のボタンが「直近のスケジュール」の一覧に重なって隠してしまうため、
+            追加ボタンをその見出しの中に置く（UpcomingTasks）。それ以外の表示ではここに置く。 */}
+        {activeTab === 'schedule' && scheduleView !== 'month' && (
           <button
+            aria-label="予定を追加"
             onClick={() => openAddTaskModal(selectedScheduleDate)}
             className="absolute bottom-[calc(4rem+env(safe-area-inset-bottom)+1rem)] right-4 desktop:bottom-8 desktop:right-8 w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-all active:scale-95 z-20"
           >

@@ -1,18 +1,26 @@
 // すくすく手帳 - 共有ドメイン型定義
 // 将来的に src/lib/supabase から取得するデータもこの形に正規化して扱う。
 
-// 予定に付けるラベル
-export type Label = 'パパ' | 'ママ' | '家族';
+// 予定・タスクの参加者（家族の各人）。以前は「パパ/ママ/家族」という
+// 役割ラベルの単一選択だったが、Googleカレンダーのゲストにならい、
+// 実際の名前を複数選択できる「参加者」に一本化した。
+export type Participant = '大造' | 'いづみ' | '岳';
 
-export const LABELS: Label[] = ['パパ', 'ママ', '家族'];
+export const PARTICIPANTS: Participant[] = ['大造', 'いづみ', '岳'];
 
 // 日付の決まり方。
 // - absolute:       start_date を直接指定する
 // - birth_relative: 子の誕生日 + daysAfterBirth で決まる
 export type AnchorType = 'absolute' | 'birth_relative';
 
+// 予定タブに追加する項目の種類。
+// - event: 日時範囲・場所・参加者を持つ「予定」（Googleカレンダーのイベントに相当）
+// - task:  日付とタイトルだけの軽い「タスク」（Googleカレンダーのタスクに相当。場所・参加者は持たない）
+export type TaskKind = 'event' | 'task';
+
 export interface Task {
   id: string;
+  kind: TaskKind;
   title: string;
   place: string;
   note: string;
@@ -22,12 +30,40 @@ export interface Task {
   startTime: string | null; // 'HH:mm' / null なら終日
   endTime: string | null; // 'HH:mm'
   daysAfterBirth: number; // anchorType === 'birth_relative' のときのみ意味を持つ
-  // ラベル・リマインダー
-  label: Label;
+  // 主体・参加者・リマインダー
+  // owner: 色分けの基準になる「主体」(1人だけ、または未設定)。
+  // participants: 主体を含む、関わる全員（複数選択）。
+  owner: Participant | null;
+  participants: Participant[];
   remindMinutesBefore: number | null; // null は通知なし
   done: boolean;
   // 既存機能
   timing: string;
+  // 共有設定。true は自分だけに見える（作成した本人以外には表示されない）。
+  isPrivate: boolean;
+  // 繰り返し設定。null なら繰り返さない単発の予定・タスク。
+  recurrence: Recurrence | null;
+}
+
+// 繰り返し設定（Googleカレンダーの「カスタムの繰り返し」と同じ形）。
+// iCalendarのRRULEに相当する最小限の情報だけを持つ、このアプリ独自のJSON。
+//
+// 注意（スコープ）: これは「繰り返しのルール」を保存・表示するためだけの型。
+// 1件のタスクを実際に複数の日付へ展開してカレンダー上に並べる処理は別途必要で、
+// 現時点ではまだ実装していない。
+export type RecurrenceFreq = 'daily' | 'weekly' | 'monthly' | 'yearly';
+
+export type RecurrenceEnd =
+  | { type: 'never' }
+  | { type: 'until'; date: string } // 'YYYY-MM-DD'
+  | { type: 'count'; count: number }; // 1以上
+
+export interface Recurrence {
+  freq: RecurrenceFreq;
+  interval: number; // 1以上（「2週間ごと」なら freq: 'weekly', interval: 2）
+  // freq === 'weekly' のときだけ意味を持つ。0=日 ... 6=土（Date#getDayと同じ）。
+  byWeekday?: number[];
+  end: RecurrenceEnd;
 }
 
 // UI表示用に実際の日付を解決して付与したタスク
@@ -286,3 +322,10 @@ export type ScheduleView = 'month' | 'week' | 'day' | 'list';
 
 // ログイン中のユーザーの役割。users.role (Supabase) に対応。未設定の場合はnull。
 export type LoginRole = 'papa' | 'mama' | null;
+
+// 新規の予定・タスクを追加するとき、ログイン中の役割から主体・参加者を
+// 自動で決めるための対応表（パパ→大造 / ママ→いづみ）。
+export const ROLE_TO_PARTICIPANT: Record<'papa' | 'mama', Participant> = {
+  papa: '大造',
+  mama: 'いづみ',
+};

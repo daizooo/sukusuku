@@ -668,18 +668,23 @@ export type Database = {
       tasks: {
         Row: {
           anchor_type: string
-          assignee: string
           belongings: string | null
           category: string
           created_at: string
+          created_by: string | null
           days_after_birth: number
           end_time: string | null
           family_id: string
           has_notification: boolean
           id: string
           is_done: boolean
+          is_private: boolean
+          kind: string
           note: string | null
+          owner: string | null
+          participants: string[]
           place: string | null
+          recurrence: Json | null
           remind_minutes_before: number | null
           start_date: string | null
           start_time: string | null
@@ -689,18 +694,23 @@ export type Database = {
         }
         Insert: {
           anchor_type?: string
-          assignee?: string
           belongings?: string | null
           category?: string
           created_at?: string
+          created_by?: string | null
           days_after_birth?: number
           end_time?: string | null
           family_id: string
           has_notification?: boolean
           id?: string
           is_done?: boolean
+          is_private?: boolean
+          kind?: string
           note?: string | null
+          owner?: string | null
+          participants?: string[]
           place?: string | null
+          recurrence?: Json | null
           remind_minutes_before?: number | null
           start_date?: string | null
           start_time?: string | null
@@ -710,18 +720,23 @@ export type Database = {
         }
         Update: {
           anchor_type?: string
-          assignee?: string
           belongings?: string | null
           category?: string
           created_at?: string
+          created_by?: string | null
           days_after_birth?: number
           end_time?: string | null
           family_id?: string
           has_notification?: boolean
           id?: string
           is_done?: boolean
+          is_private?: boolean
+          kind?: string
           note?: string | null
+          owner?: string | null
+          participants?: string[]
           place?: string | null
+          recurrence?: Json | null
           remind_minutes_before?: number | null
           start_date?: string | null
           start_time?: string | null
@@ -730,6 +745,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tasks_family_id_fkey"
             columns: ["family_id"]

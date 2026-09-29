@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CornerDownRight, Filter } from 'lucide-react';
-import type { CareLog, DynamicTask, Label, ScheduleView } from '@/types/app';
-import { LABELS } from '@/types/app';
-import { getLabelColor } from '@/lib/uiUtils';
+import type { CareLog, DynamicTask, Participant, ScheduleView } from '@/types/app';
+import { PARTICIPANTS } from '@/types/app';
+import { getParticipantColor } from '@/lib/uiUtils';
 import {
   addDays,
   addMonths,
@@ -21,6 +21,7 @@ import MonthView from '../schedule/MonthView';
 import WeekView from '../schedule/WeekView';
 import DayView from '../schedule/DayView';
 import ListView from '../schedule/ListView';
+import UpcomingTasks from '../schedule/UpcomingTasks';
 import { byDateThenTime, tasksOnDate } from '../schedule/utils';
 
 interface ScheduleTabProps {
@@ -46,7 +47,7 @@ interface ScheduleTabProps {
   onOpenLogTab: (date: Date) => void;
 }
 
-const LABEL_FILTERS: (Label | 'すべて')[] = ['すべて', ...LABELS];
+const PARTICIPANT_FILTERS: (Participant | 'すべて')[] = ['すべて', ...PARTICIPANTS];
 
 const VIEW_TABS: { id: ScheduleView; label: string }[] = [
   { id: 'month', label: '月' },
@@ -75,9 +76,12 @@ export default function ScheduleTab({
   onAddTask,
   onOpenLogTab,
 }: ScheduleTabProps) {
-  const [labelFilter, setLabelFilter] = useState<Label | 'すべて'>('すべて');
+  const [participantFilter, setParticipantFilter] = useState<Participant | 'すべて'>('すべて');
 
-  const filteredTodos = dynamicTodos.filter((t) => labelFilter === 'すべて' || t.label === labelFilter);
+  // 選んだ人が参加者に含まれる予定・タスクを出す。
+  const filteredTodos = dynamicTodos.filter(
+    (t) => participantFilter === 'すべて' || t.participants.includes(participantFilter),
+  );
 
   const weekStart = startOfWeek(selectedDate);
   const monthStart = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth(), 1);
@@ -124,7 +128,7 @@ export default function ScheduleTab({
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-3xl lg:max-w-4xl md:mx-auto md:w-full">
-      {/* 表示の切り替えと担当の絞り込みは同じ1段に置く（スマホで縦の高さを予定表に回すため）。
+      {/* 表示の切り替えと参加者の絞り込みは同じ1段に置く（スマホで縦の高さを予定表に回すため）。
           絞り込みは選択肢が増えても幅が変わらないよう、横並びのボタンではなく選択にしている。 */}
       <div className="flex items-center gap-2 mb-3 flex-none">
         <SegmentedTabs
@@ -137,14 +141,16 @@ export default function ScheduleTab({
         />
         <div className="relative flex-none ml-auto">
           <select
-            value={labelFilter}
-            onChange={(e) => setLabelFilter(e.target.value as Label | 'すべて')}
-            aria-label="担当で絞り込む"
+            value={participantFilter}
+            onChange={(e) => setParticipantFilter(e.target.value as Participant | 'すべて')}
+            aria-label="参加者で絞り込む"
             className={`appearance-none h-11 pl-8 pr-7 rounded-xl border text-sm font-bold transition ${
-              labelFilter === 'すべて' ? 'bg-white text-gray-700 border-gray-200' : getLabelColor(labelFilter)
+              participantFilter === 'すべて'
+                ? 'bg-white text-gray-700 border-gray-200'
+                : getParticipantColor(participantFilter)
             }`}
           >
-            {LABEL_FILTERS.map((a) => (
+            {PARTICIPANT_FILTERS.map((a) => (
               <option key={a} value={a}>
                 {a}
               </option>
@@ -206,26 +212,41 @@ export default function ScheduleTab({
         </div>
       )}
 
+      {/* 月表示は、カレンダーの下に「直近のスケジュール」を並べる。高さは 5:3 で分け、
+          どちらも画面全体はスクロールさせない。 */}
       {view === 'month' && (
         <div className="flex-1 min-h-0 flex flex-col">
-          <MonthView
-            month={monthStart}
-            today={today}
-            selectedDate={selectedDate}
-            tasks={filteredTodos}
-            birthDate={birthDate}
-            onSelectDate={(date) => selectDate(date)}
-            onOpenTask={onOpenTask}
-          />
+          <div className="flex-[5] min-h-0">
+            <MonthView
+              month={monthStart}
+              today={today}
+              selectedDate={selectedDate}
+              tasks={filteredTodos}
+              birthDate={birthDate}
+              onSelectDate={(date) => selectDate(date)}
+              onOpenTask={onOpenTask}
+            />
+          </div>
           {!isLoadingTodos && tasksInMonth.length === 0 && nextMonthWithTask && (
             <button
               onClick={() => onChangeCalendarDate(new Date(nextMonthWithTask.getFullYear(), nextMonthWithTask.getMonth(), 1))}
-              className="flex-none w-full mt-3 py-2.5 text-sm text-blue-600 font-medium bg-white rounded-xl border border-gray-100 shadow-sm flex items-center justify-center"
+              className="flex-none w-full mt-2 py-2 text-sm text-blue-600 font-medium bg-white rounded-xl border border-gray-100 shadow-sm flex items-center justify-center"
             >
               <CornerDownRight size={14} className="mr-1.5" />
               次に予定がある月へ ({nextMonthWithTask.getFullYear()}年{nextMonthWithTask.getMonth() + 1}月)
             </button>
           )}
+          <div className="flex-[3] min-h-0 mt-3">
+            <UpcomingTasks
+              tasks={filteredTodos}
+              isLoading={isLoadingTodos}
+              today={today}
+              onToggleTodo={onToggleTodo}
+              onOpenTask={onOpenTask}
+              onAddTask={() => onAddTask(selectedDate)}
+              onShowAll={() => onChangeView('list')}
+            />
+          </div>
         </div>
       )}
 

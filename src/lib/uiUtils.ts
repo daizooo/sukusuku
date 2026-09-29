@@ -1,32 +1,43 @@
-import type { Label, ProfileFieldKey, UserProfile } from '@/types/app';
+import type { ProfileFieldKey, UserProfile } from '@/types/app';
 
-// ラベルごとのバッジ配色
-export const getLabelColor = (label: Label | string): string => {
-  switch (label) {
-    case 'パパ':
+// 参加者1人のバッジ配色（大造=青 / いづみ=赤 / 岳=緑 / それ以外=灰）。
+export const getParticipantColor = (participant: string): string => {
+  switch (participant) {
+    case '大造':
       return 'bg-blue-100 text-blue-700 border-blue-200';
-    case 'ママ':
-      return 'bg-pink-100 text-pink-700 border-pink-200';
-    case '家族':
+    case 'いづみ':
+      return 'bg-red-100 text-red-700 border-red-200';
+    case '岳':
       return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     default:
       return 'bg-gray-100 text-gray-600 border-gray-200';
   }
 };
 
-// カレンダーのドット表示用（ラベルごとの塗り色）
-export const getLabelDotColor = (label: Label | string): string => {
-  switch (label) {
-    case 'パパ':
+// カレンダーのドット表示用（参加者1人の塗り色）
+export const getParticipantDotColor = (participant: string): string => {
+  switch (participant) {
+    case '大造':
       return 'bg-blue-500';
-    case 'ママ':
-      return 'bg-pink-500';
-    case '家族':
+    case 'いづみ':
+      return 'bg-red-500';
+    case '岳':
       return 'bg-emerald-500';
     default:
       return 'bg-gray-400';
   }
 };
+
+// 予定・タスクの参加者の色分け。参加者がちょうど1人のときだけその人の色にし、
+// 0人または複数（=まとめて関わる）のときは既定の色にする。
+// 主体(owner)が無い古いデータ向けのフォールバックとして getOwnerTone から使う。
+export const getParticipantsTone = (participants: string[]): string =>
+  getParticipantColor(participants.length === 1 ? participants[0] : '');
+
+// 予定・タスクの色分け。主体(owner)が決まっていればその人の色にし、
+// 主体が未設定の古いデータは今までどおり参加者の人数で決める。
+export const getOwnerTone = (owner: string | null, participants: string[]): string =>
+  owner !== null ? getParticipantColor(owner) : getParticipantsTone(participants);
 
 // 全角数字を半角に変換
 const toHalfWidthDigits = (value: string): string =>
