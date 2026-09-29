@@ -153,6 +153,10 @@ export default function LogScreen() {
   const [nursingStates, setNursingStates] = useState<FamilyNursingState[]>([]);
   // プロフィールに登録された子の名前。体温の入力画面で「◯の平熱」と出すのに使う。
   const [babyName, setBabyName] = useState('');
+  // 所属の家族を読み終えたか。familyId が無いままだと下の「その日の記録」の
+  // 読み込みは始まらない（isLoading はそちらの状態なので false にならない）ため、
+  // 「まだ家族に属していません」を出せるかどうかはこちらで別に持つ。
+  const [isLoadingFamily, setIsLoadingFamily] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -247,7 +251,10 @@ export default function LogScreen() {
         // 圏外でも端末の控えは出せるようにしたいので、ここでは止めない。
         if (isMounted) setErrorMessage(toMessage(error));
       } finally {
-        if (isMounted) setIsLoadingGrowth(false);
+        if (isMounted) {
+          setIsLoadingGrowth(false);
+          setIsLoadingFamily(false);
+        }
       }
     })();
     return () => {
@@ -753,7 +760,7 @@ export default function LogScreen() {
       {!familyId ? (
         <View style={styles.centered}>
           <Text style={styles.centeredText}>
-            {isLoading
+            {isLoadingFamily
               ? '読み込み中...'
               : 'まだ家族に属していません。PWA版で家族の登録を済ませてから開いてください。'}
           </Text>
