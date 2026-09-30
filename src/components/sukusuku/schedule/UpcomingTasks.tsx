@@ -11,18 +11,20 @@ import { byDateThenTime, formatRelativeDay } from './utils';
 // 高さは親から与えられたぶんに収め、あふれた分はこの中だけでスクロールする
 // （画面全体はスクロールさせない）。
 //
+// 見出しを押すと、すべての予定を日付順に並べたリスト表示へ移る。
+//
 // 予定の追加ボタンは、右下の丸いボタンだと一覧の右下に重なって隠してしまうため、
 // 月表示ではこの見出しの中に置く。
 
 interface UpcomingTasksProps {
-  /** 参加者で絞り込み済みの予定。 */
+  /** 表示する予定。 */
   tasks: DynamicTask[];
   isLoading?: boolean;
   today: Date;
   onToggleTodo: (id: string) => void;
   onOpenTask: (task: DynamicTask) => void;
   onAddTask: () => void;
-  /** 期限切れの件数を押したとき・「すべて見る」を押したときにリスト表示へ移る。 */
+  /** 見出しを押したとき・期限切れの件数を押したときにリスト表示へ移る。 */
   onShowAll: () => void;
 }
 
@@ -54,9 +56,16 @@ export default function UpcomingTasks({
     .slice(0, MAX_TASKS);
 
   return (
-    <section className="h-full min-h-0 flex flex-col gap-1.5">
+    <section className="h-full min-h-0 overflow-hidden flex flex-col gap-1.5">
       <div className="flex-none flex items-center gap-1.5">
-        <h3 className="text-sm font-bold text-gray-900 whitespace-nowrap">直近のスケジュール</h3>
+        <button
+          onClick={onShowAll}
+          aria-label="直近のスケジュール。押すとすべての予定をリストで見る"
+          className="flex-none flex items-center gap-0.5 text-sm font-bold text-gray-900 whitespace-nowrap"
+        >
+          直近のスケジュール
+          <ChevronRight size={16} className="text-blue-600" />
+        </button>
         {overdueCount > 0 && (
           <button
             onClick={onShowAll}
@@ -68,9 +77,6 @@ export default function UpcomingTasks({
           </button>
         )}
         <div className="flex-1" />
-        <button onClick={onShowAll} className="flex-none flex items-center text-xs font-medium text-blue-600 whitespace-nowrap">
-          すべて見る <ChevronRight size={14} />
-        </button>
         <button
           onClick={onAddTask}
           aria-label="予定を追加"
@@ -85,7 +91,7 @@ export default function UpcomingTasks({
       ) : upcoming.length === 0 ? (
         <p className="text-sm text-gray-400 text-center py-3">直近の予定はありません</p>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
           {upcoming.map((task) => (
             <div
               key={task.id}

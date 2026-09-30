@@ -17,6 +17,8 @@ import { colors } from '@/lib/theme';
 // 高さは親から与えられたぶんに収め、あふれた分はこの中だけでスクロールする
 // （画面全体はスクロールさせない）。
 //
+// 見出しを押すと、すべての予定を日付順に並べたリスト表示へ移る。
+//
 // 予定の追加ボタンは、右下の丸いボタンだと一覧の右下に重なって隠してしまうため、
 // 月表示ではこの見出しの中に置く。
 
@@ -28,7 +30,7 @@ interface UpcomingTasksProps {
   onToggleTodo: (id: string) => void;
   onOpenTask: (task: DynamicTask) => void;
   onAddTask: () => void;
-  /** 期限切れの件数を押したとき・「すべて見る」を押したときにリスト表示へ移る。 */
+  /** 見出しを押したとき・期限切れの件数を押したときにリスト表示へ移る。 */
   onShowAll: () => void;
 }
 
@@ -62,7 +64,16 @@ export default function UpcomingTasks({
   return (
     <View style={styles.section}>
       <View style={styles.header}>
-        <Text style={styles.title}>直近のスケジュール</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="直近のスケジュール。押すとすべての予定をリストで見る"
+          onPress={onShowAll}
+          hitSlop={8}
+          style={styles.titleButton}
+        >
+          <Text style={styles.title}>直近のスケジュール</Text>
+          <ChevronRight size={16} color={colors.navActive} />
+        </Pressable>
         {overdueCount > 0 && (
           <Pressable
             accessibilityRole="button"
@@ -75,10 +86,6 @@ export default function UpcomingTasks({
           </Pressable>
         )}
         <View style={styles.flex} />
-        <Pressable accessibilityRole="button" onPress={onShowAll} style={styles.seeAll}>
-          <Text style={styles.seeAllText}>すべて見る</Text>
-          <ChevronRight size={14} color={colors.navActive} />
-        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="予定を追加"
@@ -94,7 +101,12 @@ export default function UpcomingTasks({
       ) : upcoming.length === 0 ? (
         <Text style={styles.empty}>直近の予定はありません</Text>
       ) : (
-        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          nestedScrollEnabled
+          persistentScrollbar
+        >
           {upcoming.map((task) => {
             const tone = getOwnerTone(task.owner, task.participants);
             return (
@@ -156,9 +168,11 @@ export default function UpcomingTasks({
 }
 
 const styles = StyleSheet.create({
-  section: { flex: 1, minHeight: 0, gap: 6 },
+  // 親から与えられた高さの中に必ず収め、はみ出す分は一覧のスクロールに回す。
+  section: { flex: 1, minHeight: 0, gap: 6, overflow: 'hidden' },
   flex: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  titleButton: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   title: { fontSize: 15, fontWeight: '700', color: colors.text },
   overdue: {
     flexDirection: 'row',
@@ -170,8 +184,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   overdueText: { fontSize: 11, fontWeight: '500', color: colors.alertText },
-  seeAll: { flexDirection: 'row', alignItems: 'center' },
-  seeAllText: { fontSize: 12, fontWeight: '500', color: colors.navActive },
   add: {
     width: 28,
     height: 28,
@@ -183,7 +195,8 @@ const styles = StyleSheet.create({
 
   empty: { fontSize: 13, color: colors.textFaint, textAlign: 'center', paddingVertical: 12 },
   list: { flex: 1, minHeight: 0 },
-  listContent: { gap: 6, paddingBottom: 4 },
+  // 末尾の行が枠の縁で切れて見えないよう、最後まで送ったときに余白が残るようにする。
+  listContent: { gap: 6, paddingBottom: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

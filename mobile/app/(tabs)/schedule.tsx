@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Redirect, useRouter } from 'expo-router';
+import { ActivityIndicator, Alert, BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import {
@@ -8,11 +8,10 @@ import {
   ChevronLeft,
   ChevronRight,
   CornerDownRight,
-  Filter,
   Plus,
 } from 'lucide-react-native';
 import type { CareLog, DynamicTask, LoginRole, Participant, ScheduleView, Task, UserProfile } from '@/types/app';
-import { PARTICIPANTS, ROLE_TO_PARTICIPANT } from '@/types/app';
+import { ROLE_TO_PARTICIPANT } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { useRefreshOnFocus } from '@/lib/screenFocus';
@@ -32,16 +31,12 @@ import {
   isSameMonth,
   parseDateString,
   startOfDay,
-  startOfWeek,
   toDateString,
 } from '@/lib/dateUtils';
 import { byDateThenTime, tasksOnDate } from '@/lib/scheduleUtils';
-import { describeError, getParticipantColor, getProfileFieldValue } from '@/lib/uiUtils';
+import { describeError, getProfileFieldValue } from '@/lib/uiUtils';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
-import SegmentedTabs from '@/components/ui/SegmentedTabs';
-import SelectField from '@/components/ui/SelectField';
 import MonthView from '@/components/schedule/MonthView';
-import WeekView from '@/components/schedule/WeekView';
 import DayView from '@/components/schedule/DayView';
 import ListView from '@/components/schedule/ListView';
 import UpcomingTasks from '@/components/schedule/UpcomingTasks';
@@ -54,19 +49,11 @@ import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 // Web版はアプリ全体で持っている状態を受け取るが、こちらはタブごとの画面なので
 // 予定・プロフィール・表示中の範囲の記録をこの画面で読む。
 //
-// 画面の作り方はルートの CLAUDE.md に従い、表示の切り替えと日付送りは固定して、
+// 画面の作り方はルートの CLAUDE.md に従い、日付送りは固定して、
 // スクロールは予定の一覧だけに閉じる。
-
-const PARTICIPANT_FILTERS: (Participant | 'すべて')[] = ['すべて', ...PARTICIPANTS];
-
-const VIEW_TABS: { id: ScheduleView; label: string }[] = [
-  { id: 'month', label: '月' },
-  { id: 'week', label: '週' },
-  { id: 'day', label: '日' },
-  { id: 'list', label: 'リスト' },
-];
-
-const formatShortDate = (date: Date): string => `${date.getMonth() + 1}月${date.getDate()}日`;
+//
+// 面は月（初期表示）・日（日をタップ）・リスト（「直近のスケジュール」の見出しをタップ）の3つ。
+// 切り替えの帯は置かず、日・リストからは戻るボタン（Androidの戻る操作も）で月へ戻る。
 
 // owner: ログイン中の役割から決まる主体（未ログイン相当ならnull）。
 // 主体が決まっているときは参加者にも同じ人を初期値として入れる。
@@ -108,7 +95,6 @@ export default function ScheduleScreen() {
   const [currentCalendarDate, setCurrentCalendarDate] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
-  const [participantFilter, setParticipantFilter] = useState<Participant | 'すべて'>('すべて');
 
   const [careLogs, setCareLogs] = useState<CareLog[]>([]);
   const [loadedLogRange, setLoadedLogRange] = useState<string | null>(null);
@@ -181,11 +167,6 @@ export default function ScheduleScreen() {
     [todos, birthDate],
   );
 
-  const filteredTodos = dynamicTodos.filter(
-    (t) => participantFilter === 'すべて' || t.participants.includes(participantFilter),
-  );
-
-  const weekStart = startOfWeek(selectedDate);
   const monthStart = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth(), 1);
 
   // 日表示に出す育児記録。表示中の範囲だけを取りに行く。
@@ -257,7 +238,7 @@ export default function ScheduleScreen() {
       setCurrentCalendarDate(addMonths(monthStart, delta));
       return;
     }
-    selectDate(addDays(selectedDate, view === 'week' ? delta * 7 : delta), false);
+    selectDate(addDays(selectedDate, delta), false);
   };
 
   const goToday = () => {
@@ -272,6 +253,18 @@ export default function ScheduleScreen() {
     onSwipeRight: () => step(-1),
     enabled: view !== 'list',
   });
+
+  // 日・リストからは、Androidの戻る操作でも月へ戻る（切り替えの帯を置かないぶん、戻り道を用意する）。
+  useFocusEffect(
+    useCallback(() => {
+      if (view === 'month') return undefined;
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        setView('month');
+        return true;
+      });
+      return () => subscription.remove();
+    }, [view]),
+  );
 
   // 任意の月・日へ直接ジャンプする。Web版は <input type="month"> / <input type="date"> だが、
   // Androidに月のピッカーは無いので、月表示でも日付のピッカーから年と月だけを受け取る。
@@ -289,23 +282,17 @@ export default function ScheduleScreen() {
   const title =
     view === 'month'
       ? `${monthStart.getFullYear()}年 ${monthStart.getMonth() + 1}月`
-      : view === 'week'
-        ? `${formatShortDate(weekStart)} - ${formatShortDate(addDays(weekStart, 6))}`
-        : formatDateHeading(selectedDate, today);
+      : formatDateHeading(selectedDate, today);
 
   const isShowingToday =
-    view === 'month'
-      ? isSameMonth(monthStart, today)
-      : view === 'week'
-        ? isSameDay(weekStart, startOfWeek(today))
-        : isSameDay(selectedDate, today);
+    view === 'month' ? isSameMonth(monthStart, today) : isSameDay(selectedDate, today);
 
-  const tasksInMonth = filteredTodos.filter(
+  const tasksInMonth = dynamicTodos.filter(
     (t) => t.targetDateObj && isSameMonth(t.targetDateObj, monthStart),
   );
 
   // 予定のない月をめくり続けなくて済むよう、次に予定がある日へ直接飛べるようにする。
-  const nextMonthWithTask = filteredTodos
+  const nextMonthWithTask = dynamicTodos
     .filter((t) => t.targetDateObj && t.targetDateObj >= addMonths(monthStart, 1))
     .sort(byDateThenTime)[0]?.targetDateObj;
 
@@ -406,32 +393,25 @@ export default function ScheduleScreen() {
   }
   if (!session) return <Redirect href="/login" />;
 
-  const filterTone = participantFilter === 'すべて' ? null : getParticipantColor(participantFilter);
-
   return (
     <SafeAreaView style={styles.screen} {...swipeHandlers}>
       <View style={styles.page}>
-        {/* 表示の切り替えと担当の絞り込みは同じ1段に置く（縦の高さを予定表に回すため）。
-            絞り込みは選択肢が増えても幅が変わらないよう、横並びのボタンではなく選択にしている。 */}
-        <View style={styles.toolbar}>
-          <SegmentedTabs
-            accessibilityLabel="スケジュールの表示"
-            value={view}
-            onChange={setView}
-            options={VIEW_TABS}
-            fill={false}
-          />
-          <SelectField
-            accessibilityLabel="参加者で絞り込む"
-            options={PARTICIPANT_FILTERS.map((a) => ({ value: a, label: a }))}
-            value={participantFilter}
-            onChange={setParticipantFilter}
-            icon={<Filter size={14} color={filterTone?.text ?? colors.textSubtle} />}
-            style={filterTone ? { backgroundColor: filterTone.background, borderColor: filterTone.border } : undefined}
-            textStyle={filterTone ? { color: filterTone.text } : undefined}
-            chevronColor={filterTone?.text}
-          />
-        </View>
+        {/* 月以外（日・リスト）では、月へ戻るボタンを出す。 */}
+        {view !== 'month' && (
+          <View style={styles.backRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="月表示へ戻る"
+              onPress={() => setView('month')}
+              hitSlop={8}
+              style={styles.backButton}
+            >
+              <ChevronLeft size={18} color={colors.navActive} />
+              <Text style={styles.backText}>月表示</Text>
+            </Pressable>
+            {view === 'list' && <Text style={styles.listTitle}>すべての予定</Text>}
+          </View>
+        )}
 
         {view !== 'list' && (
           <View style={styles.nav}>
@@ -471,7 +451,7 @@ export default function ScheduleScreen() {
                 month={monthStart}
                 today={today}
                 selectedDate={selectedDate}
-                tasks={filteredTodos}
+                tasks={dynamicTodos}
                 birthDate={birthDate}
                 onSelectDate={(date) => selectDate(date)}
                 onOpenTask={openTaskDetail}
@@ -496,7 +476,7 @@ export default function ScheduleScreen() {
             )}
             <View style={styles.upcoming}>
               <UpcomingTasks
-                tasks={filteredTodos}
+                tasks={dynamicTodos}
                 isLoading={isLoadingTodos}
                 today={today}
                 onToggleTodo={toggleTodo}
@@ -508,26 +488,12 @@ export default function ScheduleScreen() {
           </View>
         )}
 
-        {view === 'week' && (
-          <ScrollView style={styles.body} contentContainerStyle={styles.scrollContent}>
-            <WeekView
-              date={selectedDate}
-              today={today}
-              tasks={filteredTodos}
-              birthDate={birthDate}
-              onSelectDate={(date) => selectDate(date)}
-              onToggleTodo={toggleTodo}
-              onOpenTask={openTaskDetail}
-            />
-          </ScrollView>
-        )}
-
         {view === 'day' && (
           <ScrollView style={styles.body} contentContainerStyle={styles.scrollContent}>
             <DayView
               date={selectedDate}
               today={today}
-              tasks={tasksOnDate(filteredTodos, selectedDate)}
+              tasks={tasksOnDate(dynamicTodos, selectedDate)}
               birthDate={birthDate}
               careLogs={visibleLogs}
               isLoadingCareLogs={isLoadingCareLogs}
@@ -542,7 +508,7 @@ export default function ScheduleScreen() {
         {view === 'list' && (
           <View style={styles.body}>
             <ListView
-              tasks={filteredTodos}
+              tasks={dynamicTodos}
               isLoading={isLoadingTodos}
               today={today}
               birthDate={birthDate}
@@ -596,7 +562,10 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   centered: { alignItems: 'center', justifyContent: 'center' },
   page: { flex: 1, padding: 16, gap: 12 },
-  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  backButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
+  backText: { fontSize: 14, fontWeight: '700', color: colors.navActive },
+  listTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
 
   nav: {
     flexDirection: 'row',
@@ -621,6 +590,7 @@ const styles = StyleSheet.create({
 
   body: { flex: 1, minHeight: 0 },
   // 月表示の縦の配分。カレンダー 5 : 直近のスケジュール 3。
+  // 上にあった切り替えの帯をなくして空いた高さは、この比でどちらにも回る。
   calendar: { flex: 5, minHeight: 0 },
   upcoming: { flex: 3, minHeight: 0, marginTop: 12 },
   scrollContent: { paddingBottom: 96 },

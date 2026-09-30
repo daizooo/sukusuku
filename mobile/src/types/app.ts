@@ -341,7 +341,7 @@ export interface ListItem {
   position: number;
 }
 
-export type ScheduleView = 'month' | 'week' | 'day' | 'list';
+export type ScheduleView = 'month' | 'day' | 'list';
 
 // ログイン中のユーザーの役割。users.role (Supabase) に対応。未設定の場合はnull。
 export type LoginRole = 'papa' | 'mama' | null;

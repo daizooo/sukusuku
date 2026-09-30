@@ -1,10 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CornerDownRight, Filter } from 'lucide-react';
-import type { CareLog, DynamicTask, Participant, ScheduleView } from '@/types/app';
-import { PARTICIPANTS } from '@/types/app';
-import { getParticipantColor } from '@/lib/uiUtils';
+import { CalendarDays, ChevronLeft, ChevronRight, CornerDownRight } from 'lucide-react';
+import type { CareLog, DynamicTask, ScheduleView } from '@/types/app';
 import {
   addDays,
   addMonths,
@@ -13,12 +10,9 @@ import {
   isSameMonth,
   parseDateString,
   startOfDay,
-  startOfWeek,
   toDateString,
 } from '@/lib/dateUtils';
-import SegmentedTabs from '../ui/SegmentedTabs';
 import MonthView from '../schedule/MonthView';
-import WeekView from '../schedule/WeekView';
 import DayView from '../schedule/DayView';
 import ListView from '../schedule/ListView';
 import UpcomingTasks from '../schedule/UpcomingTasks';
@@ -32,13 +26,13 @@ interface ScheduleTabProps {
   birthDate: string;
   view: ScheduleView;
   onChangeView: (view: ScheduleView) => void;
-  /** 週表示・日表示の対象日。月表示では選択中の日。 */
+  /** 日表示の対象日。月表示では選択中の日。 */
   selectedDate: Date;
   onChangeSelectedDate: (date: Date) => void;
   /** 月グリッドで表示中の月。 */
   currentCalendarDate: Date;
   onChangeCalendarDate: (date: Date) => void;
-  /** 週表示・日表示で表示中の範囲の育児記録。 */
+  /** 日表示で表示中の範囲の育児記録。 */
   careLogs: CareLog[];
   isLoadingCareLogs?: boolean;
   onToggleTodo: (id: string) => void;
@@ -46,17 +40,6 @@ interface ScheduleTabProps {
   onAddTask: (date: Date) => void;
   onOpenLogTab: (date: Date) => void;
 }
-
-const PARTICIPANT_FILTERS: (Participant | 'すべて')[] = ['すべて', ...PARTICIPANTS];
-
-const VIEW_TABS: { id: ScheduleView; label: string }[] = [
-  { id: 'month', label: '月' },
-  { id: 'week', label: '週' },
-  { id: 'day', label: '日' },
-  { id: 'list', label: 'リスト' },
-];
-
-const formatShortDate = (date: Date): string => `${date.getMonth() + 1}月${date.getDate()}日`;
 
 export default function ScheduleTab({
   dynamicTodos,
@@ -76,14 +59,6 @@ export default function ScheduleTab({
   onAddTask,
   onOpenLogTab,
 }: ScheduleTabProps) {
-  const [participantFilter, setParticipantFilter] = useState<Participant | 'すべて'>('すべて');
-
-  // 選んだ人が参加者に含まれる予定・タスクを出す。
-  const filteredTodos = dynamicTodos.filter(
-    (t) => participantFilter === 'すべて' || t.participants.includes(participantFilter),
-  );
-
-  const weekStart = startOfWeek(selectedDate);
   const monthStart = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth(), 1);
 
   // 日を選ぶと日表示へ移る（月・週は俯瞰、日は詳細という役割分担）。
@@ -101,7 +76,7 @@ export default function ScheduleTab({
       onChangeCalendarDate(addMonths(monthStart, delta));
       return;
     }
-    selectDate(addDays(selectedDate, view === 'week' ? delta * 7 : delta), false);
+    selectDate(addDays(selectedDate, delta), false);
   };
 
   const goToday = () => {
@@ -112,54 +87,34 @@ export default function ScheduleTab({
   const title =
     view === 'month'
       ? `${monthStart.getFullYear()}年 ${monthStart.getMonth() + 1}月`
-      : view === 'week'
-        ? `${formatShortDate(weekStart)} - ${formatShortDate(addDays(weekStart, 6))}`
-        : formatDateHeading(selectedDate, today);
+      : formatDateHeading(selectedDate, today);
 
-  const isShowingToday =
-    view === 'month' ? isSameMonth(monthStart, today) : view === 'week' ? isSameDay(weekStart, startOfWeek(today)) : isSameDay(selectedDate, today);
+  const isShowingToday = view === 'month' ? isSameMonth(monthStart, today) : isSameDay(selectedDate, today);
 
-  const tasksInMonth = filteredTodos.filter((t) => t.targetDateObj && isSameMonth(t.targetDateObj, monthStart));
+  const tasksInMonth = dynamicTodos.filter((t) => t.targetDateObj && isSameMonth(t.targetDateObj, monthStart));
 
   // 予定のない月をめくり続けなくて済むよう、次に予定がある日へ直接飛べるようにする。
-  const nextMonthWithTask = filteredTodos
+  const nextMonthWithTask = dynamicTodos
     .filter((t) => t.targetDateObj && t.targetDateObj >= addMonths(monthStart, 1))
     .sort(byDateThenTime)[0]?.targetDateObj;
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-3xl lg:max-w-4xl md:mx-auto md:w-full">
-      {/* 表示の切り替えと参加者の絞り込みは同じ1段に置く（スマホで縦の高さを予定表に回すため）。
-          絞り込みは選択肢が増えても幅が変わらないよう、横並びのボタンではなく選択にしている。 */}
-      <div className="flex items-center gap-2 mb-3 flex-none">
-        <SegmentedTabs
-          ariaLabel="スケジュールの表示"
-          value={view}
-          onChange={onChangeView}
-          options={VIEW_TABS}
-          fill={false}
-          className="flex-none"
-        />
-        <div className="relative flex-none ml-auto">
-          <select
-            value={participantFilter}
-            onChange={(e) => setParticipantFilter(e.target.value as Participant | 'すべて')}
-            aria-label="参加者で絞り込む"
-            className={`appearance-none h-11 pl-8 pr-7 rounded-xl border text-sm font-bold transition ${
-              participantFilter === 'すべて'
-                ? 'bg-white text-gray-700 border-gray-200'
-                : getParticipantColor(participantFilter)
-            }`}
+      {/* 月以外（日・リスト）では、月へ戻るボタンを出す。
+          面は月（初期表示）・日（日をタップ）・リスト（「直近のスケジュール」の見出しをタップ）の3つ。 */}
+      {view !== 'month' && (
+        <div className="flex items-center gap-3 mb-3 flex-none">
+          <button
+            onClick={() => onChangeView('month')}
+            aria-label="月表示へ戻る"
+            className="flex items-center text-sm font-bold text-blue-600 py-1"
           >
-            {PARTICIPANT_FILTERS.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
-          <Filter size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 opacity-70" />
-          <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 opacity-70" />
+            <ChevronLeft size={18} />
+            月表示
+          </button>
+          {view === 'list' && <h3 className="text-[17px] font-bold text-gray-900">すべての予定</h3>}
         </div>
-      </div>
+      )}
 
       {view !== 'list' && (
         <div className="flex items-center justify-between mb-3 bg-white p-2 rounded-xl shadow-sm border border-gray-100 flex-none">
@@ -221,7 +176,7 @@ export default function ScheduleTab({
               month={monthStart}
               today={today}
               selectedDate={selectedDate}
-              tasks={filteredTodos}
+              tasks={dynamicTodos}
               birthDate={birthDate}
               onSelectDate={(date) => selectDate(date)}
               onOpenTask={onOpenTask}
@@ -238,7 +193,7 @@ export default function ScheduleTab({
           )}
           <div className="flex-[3] min-h-0 mt-3">
             <UpcomingTasks
-              tasks={filteredTodos}
+              tasks={dynamicTodos}
               isLoading={isLoadingTodos}
               today={today}
               onToggleTodo={onToggleTodo}
@@ -250,26 +205,12 @@ export default function ScheduleTab({
         </div>
       )}
 
-      {view === 'week' && (
-        <div className="flex-1 min-h-0 overflow-y-auto pb-24">
-          <WeekView
-            date={selectedDate}
-            today={today}
-            tasks={filteredTodos}
-            birthDate={birthDate}
-            onSelectDate={(date) => selectDate(date)}
-            onToggleTodo={onToggleTodo}
-            onOpenTask={onOpenTask}
-          />
-        </div>
-      )}
-
       {view === 'day' && (
         <div className="flex-1 min-h-0 overflow-y-auto pb-24">
           <DayView
             date={selectedDate}
             today={today}
-            tasks={tasksOnDate(filteredTodos, selectedDate)}
+            tasks={tasksOnDate(dynamicTodos, selectedDate)}
             birthDate={birthDate}
             careLogs={careLogs}
             isLoadingCareLogs={isLoadingCareLogs}
@@ -284,7 +225,7 @@ export default function ScheduleTab({
       {view === 'list' && (
         <div className="flex-1 min-h-0 overflow-y-auto pb-24">
           <ListView
-            tasks={filteredTodos}
+            tasks={dynamicTodos}
             isLoading={isLoadingTodos}
             today={today}
             birthDate={birthDate}
