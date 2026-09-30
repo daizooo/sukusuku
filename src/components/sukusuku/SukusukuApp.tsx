@@ -135,7 +135,7 @@ import type { PumpingLogInput } from './modals/PumpingLogModal';
 import type { TemperatureLogInput } from './modals/TemperatureLogModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 import type { NurseryDraft } from './modals/NurseryFormModal';
-import type { ListDraft } from './modals/ListFormModal';
+import type { ListDraft } from './modals/ListEditorModal';
 
 // 起動直後に表示するのはホームタブだけなので、残りのタブは実際に開かれるまで読み込まない。
 // 特にLogTabは成長グラフのためにrecharts(単体で約350KB)を持ち込むため、静的importのままだと
@@ -1126,7 +1126,7 @@ export default function SukusukuApp({
 
   // --- リスト ---
   // 打ち込んだ直後に画面へ出し、保存に失敗したら元へ戻す（買い出し中に入力が引っかからないように）。
-  const addListHandler = async (draft: ListDraft) => {
+  const addListHandler = async (draft: ListDraft): Promise<ListBoard | null> => {
     try {
       const created = await insertList(
         supabase,
@@ -1140,9 +1140,11 @@ export default function SukusukuApp({
         userId,
       );
       setLists((prev) => [...prev, created]);
+      return created;
     } catch (err) {
       console.error('Failed to add list:', err);
       alert('リストの追加に失敗しました。もう一度お試しください。');
+      return null;
     }
   };
 

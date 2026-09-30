@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, ChevronDown, ChevronRight, Lock, Pin, Plus, Settings2 } from 'lucide-react-native';
+import { ChevronDown, ChevronRight, Pin, Plus } from 'lucide-react-native';
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
@@ -36,7 +36,7 @@ import {
   updateListPinned,
   updateListPositions,
 } from '@/lib/api/lists';
-import ListFormModal, { DEFAULT_GROUP_LABEL, type ListDraft } from '@/components/list/ListFormModal';
+import ListEditorModal from '@/components/list/ListEditorModal';
 import ListOverviewCard from '@/components/list/ListOverviewCard';
 import { AddRow, GroupHeader, ItemRow } from '@/components/list/ListRows';
 import { useDragReorder } from '@/components/list/useDragReorder';
@@ -50,9 +50,10 @@ import { useDragReorder } from '@/components/list/useDragReorder';
  * 枠があり、枠は一覧の中で足せる・消せる。項目もその枠の中で足せる・消せる。
  *
  * 開いたときはKeepと同じく**全部のリストがカードで並ぶ**（1画面に4〜5つ見える）。
- * カードを押すとそのリストだけの画面になり、そこで項目やグループを足す。
+ * カードを押すとそのリストが**画面の中央に拡大して開き（編集モード）**、見出し・項目・
+ * グループ・固定・共有・削除をそこで済ませる。設定の画面は無い（手間を減らすため）。
  *
- * スクロールするのはカード/枠の一覧だけで、見出しや戻るは上に固定する。
+ * スクロールするのは一覧と、編集モードの中身だけ。見出しと下の道具列は固定する。
  *
  * 並べ替えとピン止めもKeepに合わせる。よく開くリストは一覧の先頭へ固定でき、
  * 並び順は**長押ししてそのまま動かす**。仕組みは components/list/useDragReorder.ts。
@@ -60,6 +61,9 @@ import { useDragReorder } from '@/components/list/useDragReorder';
  * Web版はアプリ全体で持っている状態を受け取るが、こちらはタブごとの画面なので
  * リスト・グループ・項目をこの画面で読み書きする。
  */
+
+/** 束ねる区切りの呼び名の既定。画面には出さず、保存済みの値をそのまま持ち回る。 */
+const DEFAULT_GROUP_LABEL = 'グループ';
 
 /** 長押しで動かせる枠（セクション）。動かせるのは同じ枠の中だけ。 */
 const LISTS_PINNED = 'lists:pinned';
@@ -77,12 +81,11 @@ export default function ListScreen() {
   const [items, setItems] = useState<ListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // nullのあいだはリストを並べた一覧を出す。カードを押すとそのリストを開く。
+  // nullのあいだはリストを並べた一覧だけを出す。カードを押すとそのリストを編集モードで開く。
   const [openListId, setOpenListId] = useState<string | null>(null);
+  // 今の編集が「新しく作ったリスト」か。見出しへ入力を移し、何も書かずに閉じたら消す。
+  const [isNewList, setIsNewList] = useState(false);
   const [showDone, setShowDone] = useState(false);
-  const [listModal, setListModal] = useState<{ mode: 'add' | 'edit'; list: ListBoard | null } | null>(
-    null,
-  );
 
   useEffect(() => {
     if (!userId) return;
@@ -200,36 +203,37 @@ export default function ListScreen() {
     ),
   );
 
-  const addList = async (draft: ListDraft) => {
+  /**
+   * 新しいリストを作って、そのまま編集モードで開く（見出しから打ち始める）。
+   * 名前は空で作り、何も書かずに閉じたときは closeEditor が消す。
+   * 新しいリストの既定は「自分だけ」。家族に見せたいものだけ共有へ切り替える。
+   */
+  const createList = async () => {
     if (!familyId || !userId) return;
     try {
       const created = await insertList(
         supabase,
         familyId,
-        {
-          name: draft.name.trim(),
-          groupLabel: draft.groupLabel,
-          position: lists.length,
-          isPrivate: draft.isPrivate,
-        },
+        { name: '', groupLabel: DEFAULT_GROUP_LABEL, position: lists.length, isPrivate: true },
         userId,
       );
       setLists((prev) => [...prev, created]);
+      setIsNewList(true);
+      setOpenListId(created.id);
     } catch {
       failed('リストの追加');
     }
   };
 
-  const saveList = async (list: ListBoard, draft: ListDraft) => {
+  /** 名前・共有設定など、リスト自身の項目を直す。 */
+  const patchList = async (list: ListBoard, patch: Partial<Pick<ListBoard, 'name' | 'isPrivate'>>) => {
     const previous = lists;
-    const updated = {
+    const updated: ListBoard = {
       ...list,
-      name: draft.name.trim(),
-      groupLabel: draft.groupLabel,
-      isPrivate: draft.isPrivate,
+      ...patch,
       // 共有設定が入る前に作られたリストは作成者を持たない。そのまま「自分だけ」に
       // すると誰にも見えなくなるため、切り替えた本人を作成者として入れる。
-      createdBy: list.createdBy ?? (draft.isPrivate ? userId : null),
+      createdBy: list.createdBy ?? (patch.isPrivate ? userId : null),
     };
     setLists((prev) => prev.map((l) => (l.id === list.id ? updated : l)));
     try {
@@ -238,6 +242,26 @@ export default function ListScreen() {
       setLists(previous);
       failed('リストの保存');
     }
+  };
+
+  /**
+   * 編集モードを閉じる。見出しの書きかけがあれば保存してから閉じる。
+   * 新しく作ったまま何も入れなかったリストは、空のカードが残らないよう消す。
+   */
+  const closeEditor = (list: ListBoard, draftName: string) => {
+    const name = draftName.trim();
+    const isEmpty =
+      !groups.some((group) => group.listId === list.id) &&
+      !items.some((item) => item.listId === list.id);
+    setOpenListId(null);
+    setIsNewList(false);
+    if (!name && list.name === '' && isEmpty) {
+      void removeList(list.id);
+      return;
+    }
+    // 見出しを空にしたまま項目だけ入れたときは、名前が無いカードにならないよう仮の名前を付ける。
+    const next = name || list.name || '無題';
+    if (next !== list.name) void patchList(list, { name: next });
   };
 
   const removeList = async (id: string) => {
@@ -404,37 +428,6 @@ export default function ListScreen() {
   }
   if (!session) return <Redirect href="/login" />;
 
-  const formModal = (
-    <ListFormModal
-      // 対象が変わるたびに作り直して、初期値を計算し直す。
-      key={`${listModal?.mode}-${listModal?.list?.id ?? 'new'}`}
-      mode={listModal?.mode ?? null}
-      list={listModal?.list ?? null}
-      groups={listGroups}
-      onRenameGroup={(id, name) => void renameGroup(id, name)}
-      onDeleteGroup={deleteGroupWithConfirm}
-      onClose={() => setListModal(null)}
-      onSubmit={(draft) => {
-        if (listModal?.mode === 'edit' && listModal.list) void saveList(listModal.list, draft);
-        else void addList(draft);
-        setListModal(null);
-      }}
-      onDelete={(id) => {
-        Alert.alert('このリストを削除しますか？', '中の項目もすべて消えます。', [
-          { text: 'やめる', style: 'cancel' },
-          {
-            text: '削除',
-            style: 'destructive',
-            onPress: () => {
-              void removeList(id);
-              setListModal(null);
-            },
-          },
-        ]);
-      }}
-    />
-  );
-
   if (isLoading) {
     return (
       <SafeAreaView style={styles.screen}>
@@ -451,14 +444,9 @@ export default function ListScreen() {
           <Text style={styles.seedTitle}>よく使う3つのリストを作る</Text>
           <Text style={styles.seedNote}>買い出し・やりたいこと・やること</Text>
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setListModal({ mode: 'add', list: null })}
-          style={styles.seedOwn}
-        >
+        <Pressable accessibilityRole="button" onPress={() => void createList()} style={styles.seedOwn}>
           <Text style={styles.seedOwnText}>自分でリストを作る</Text>
         </Pressable>
-        {formModal}
       </SafeAreaView>
     );
   }
@@ -490,7 +478,7 @@ export default function ListScreen() {
         <View style={styles.gridCell}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => setListModal({ mode: 'add', list: null })}
+            onPress={() => void createList()}
             style={styles.addList}
           >
             <Plus size={16} color={colors.textFaint} />
@@ -524,196 +512,172 @@ export default function ListScreen() {
     </View>
   );
 
-  if (!selected) {
-    /* 一覧: Keepと同じく全部のリストをカードで並べる。2列にして1画面に4〜5つ入れる。
-       固定したものは上にまとめ、並べ替えは長押ししてそのまま動かす。 */
-    return (
-      <SafeAreaView style={styles.screen}>
-        <ScrollView
-          style={styles.page}
-          contentContainerStyle={styles.overviewContent}
-          // 持ち上げているあいだは指で並べ替えるので、スクロールを止める。
-          scrollEnabled={!drag.isActive}
-        >
-          {pinnedLists.length > 0 && (
-            <>
-              <View style={styles.sectionHeading}>
-                <Pin size={11} color={colors.textFaint} fill={colors.textFaint} />
-                <Text style={styles.sectionHeadingText}>固定</Text>
-              </View>
-              {overviewCards(LISTS_PINNED, pinnedLists)}
-              {otherLists.length > 0 && (
-                <View style={[styles.sectionHeading, styles.sectionHeadingSpaced]}>
-                  <Text style={styles.sectionHeadingText}>その他</Text>
-                </View>
-              )}
-            </>
-          )}
-          {overviewCards(LISTS_OTHER, otherLists)}
-          {/* 長押しで動かせることは見ただけでは分からないので、小さく添える。 */}
-          {sortedLists.length > 1 && <Text style={styles.holdHint}>長押しで並べ替え</Text>}
-        </ScrollView>
-        {formModal}
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.page}>
-        {/* 上段（固定）: 開いているリストの名前と戻る。 */}
-        <View style={styles.topBar}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="リストの一覧へ戻る"
-            onPress={() => setOpenListId(null)}
-            hitSlop={8}
-            style={styles.topBarButton}
-          >
-            <ArrowLeft size={20} color={colors.textMuted} />
-          </Pressable>
-          <View style={styles.topBarTitleRow}>
-            <Text numberOfLines={1} style={styles.topBarTitle}>
-              {selected.name}
-            </Text>
-            {/* 自分だけのリストは、開いたときも一目で分かるようにする。 */}
-            {selected.isPrivate && <Lock size={13} color={colors.textFaint} />}
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="リストの設定"
-            onPress={() => setListModal({ mode: 'edit', list: selected })}
-            hitSlop={8}
-            style={styles.topBarButton}
-          >
-            <Settings2 size={20} color={colors.textFaint} />
-          </Pressable>
-        </View>
-
-        {/* 下段（スクロール）: 枠の一覧 */}
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={styles.listContent}
-          scrollEnabled={!drag.isActive}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* グループを作っていないリストは、枠1つのただのチェックリストになる。 */}
-          {listGroups.length === 0 ? (
-            <View style={styles.card}>
-              {itemRows(itemsSection(null), undoneItems)}
-              <AddRow
-                divided={undoneItems.length > 0}
-                label="追加"
-                placeholder="追加する項目"
-                onSubmit={(title) => void addItem(selected.id, null, title)}
-              />
-            </View>
-          ) : (
-            <View {...drag.panHandlers}>
-              {listGroups.map((group) => {
-                const groupItems = undoneItems.filter((item) => item.groupId === group.id);
-                return (
-                  <Animated.View
-                    key={group.id}
-                    {...drag.measureProps(group.id)}
-                    style={[
-                      styles.card,
-                      styles.cardSpaced,
-                      drag.styleFor(group.id),
-                      drag.isDragging(group.id) && styles.liftedCard,
-                    ]}
-                  >
-                    {/* 枠ごと動かすときはこの見出しを長押しする（中の項目と取り合いにならない）。 */}
-                    <Pressable {...drag.holdProps(GROUPS, listGroups, group.id)}>
-                      <GroupHeader
-                        group={group}
-                        count={groupItems.length}
-                        onRename={(name) => void renameGroup(group.id, name)}
-                        onDelete={() => deleteGroupWithConfirm(group)}
-                      />
-                    </Pressable>
-                    {itemRows(itemsSection(group.id), groupItems)}
-                    <AddRow
-                      divided={groupItems.length > 0}
-                      label="追加"
-                      placeholder={`${group.name}に追加`}
-                      onSubmit={(title) => void addItem(selected.id, group.id, title)}
-                    />
-                  </Animated.View>
-                );
-              })}
-
-              {/* どの枠にも入れていない項目があるときだけ出す。 */}
-              {ungroupedItems.length > 0 && (
-                <View style={[styles.card, styles.cardSpaced]}>
-                  <Text style={styles.ungroupedTitle}>未分類</Text>
-                  {itemRows(itemsSection(null), ungroupedItems)}
-                  <AddRow
-                    divided
-                    label="追加"
-                    placeholder="追加する項目"
-                    onSubmit={(title) => void addItem(selected.id, null, title)}
-                  />
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* 枠そのものを足す。お店が増えたらここから作る。 */}
-          <View style={styles.cardSpaced}>
+  /* 編集モード: 開いたカードを画面の中央に拡大して出す（Keepと同じ）。
+     見出し・項目・グループ・固定・共有・削除をここで済ませる。 */
+  const editor = selected && (
+    <ListEditorModal
+      // 対象が変わるたびに作り直して、見出しの書きかけを持ち越さない。
+      key={selected.id}
+      list={selected}
+      focusTitle={isNewList}
+      scrollEnabled={!drag.isActive}
+      onRename={(name) => void patchList(selected, { name })}
+      onTogglePin={() => void togglePin(selected)}
+      onToggleShare={() => void patchList(selected, { isPrivate: !selected.isPrivate })}
+      onDelete={() =>
+        Alert.alert('このリストを削除しますか？', '中の項目もすべて消えます。', [
+          { text: 'やめる', style: 'cancel' },
+          { text: '削除', style: 'destructive', onPress: () => void removeList(selected.id) },
+        ])
+      }
+      onClose={(draftName) => closeEditor(selected, draftName)}
+    >
+        {/* グループを作っていないリストは、枠1つのただのチェックリストになる。 */}
+        {listGroups.length === 0 ? (
+          <View style={[styles.card, styles.cardSpaced]}>
+            {itemRows(itemsSection(null), undoneItems)}
             <AddRow
-              tone="outlined"
-              label="グループを追加"
-              placeholder="グループの名前（例: イオン）"
-              onSubmit={(name) => void addGroup(selected.id, name)}
+              divided={undoneItems.length > 0}
+              label="追加"
+              placeholder="追加する項目"
+              onSubmit={(title) => void addItem(selected.id, null, title)}
             />
           </View>
-
-          {doneItems.length > 0 && (
-            <View style={[styles.card, styles.cardSpaced]}>
-              <View style={[styles.doneHeader, showDone && styles.doneHeaderOpen]}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: showDone }}
-                  onPress={() => setShowDone((prev) => !prev)}
-                  style={styles.doneToggle}
+        ) : (
+          <View {...drag.panHandlers}>
+            {listGroups.map((group) => {
+              const groupItems = undoneItems.filter((item) => item.groupId === group.id);
+              return (
+                <Animated.View
+                  key={group.id}
+                  {...drag.measureProps(group.id)}
+                  style={[
+                    styles.card,
+                    styles.cardSpaced,
+                    drag.styleFor(group.id),
+                    drag.isDragging(group.id) && styles.liftedCard,
+                  ]}
                 >
-                  {showDone ? (
-                    <ChevronDown size={14} color={colors.textMuted} />
-                  ) : (
-                    <ChevronRight size={14} color={colors.textMuted} />
-                  )}
-                  <Text style={styles.doneToggleText}>完了 {doneItems.length}</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => clearDone(selected.id, selected.name)}
-                  style={styles.clearDone}
-                >
-                  <Text style={styles.clearDoneText}>まとめて消す</Text>
-                </Pressable>
-              </View>
-              {showDone &&
-                doneItems.map((item, index) => (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    divided={index > 0}
-                    onToggle={() => void toggleItem(item.id)}
-                    onRename={(title) => void renameItem(item, title)}
-                    onDelete={() => void removeItem(item.id)}
+                  {/* 枠ごと動かすときはこの見出しを長押しする（中の項目と取り合いにならない）。 */}
+                  <Pressable {...drag.holdProps(GROUPS, listGroups, group.id)}>
+                    <GroupHeader
+                      group={group}
+                      count={groupItems.length}
+                      onRename={(name) => void renameGroup(group.id, name)}
+                      onDelete={() => deleteGroupWithConfirm(group)}
+                    />
+                  </Pressable>
+                  {itemRows(itemsSection(group.id), groupItems)}
+                  <AddRow
+                    divided={groupItems.length > 0}
+                    label="追加"
+                    placeholder={`${group.name}に追加`}
+                    onSubmit={(title) => void addItem(selected.id, group.id, title)}
                   />
-                ))}
-            </View>
-          )}
+                </Animated.View>
+              );
+            })}
 
-          {/* 長押しで動かせることは見ただけでは分からないので、小さく添える。 */}
-          {(undoneItems.length > 1 || listGroups.length > 1) && (
-            <Text style={styles.holdHint}>長押しで並べ替え</Text>
-          )}
-        </ScrollView>
-      </View>
-      {formModal}
+            {/* どの枠にも入れていない項目があるときだけ出す。 */}
+            {ungroupedItems.length > 0 && (
+              <View style={[styles.card, styles.cardSpaced]}>
+                <Text style={styles.ungroupedTitle}>未分類</Text>
+                {itemRows(itemsSection(null), ungroupedItems)}
+                <AddRow
+                  divided
+                  label="追加"
+                  placeholder="追加する項目"
+                  onSubmit={(title) => void addItem(selected.id, null, title)}
+                />
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* 枠そのものを足す。お店が増えたらここから作る。 */}
+        <View style={styles.cardSpaced}>
+          <AddRow
+            tone="outlined"
+            label="グループを追加"
+            placeholder="グループの名前（例: イオン）"
+            onSubmit={(name) => void addGroup(selected.id, name)}
+          />
+        </View>
+
+        {doneItems.length > 0 && (
+          <View style={[styles.card, styles.cardSpaced]}>
+            <View style={[styles.doneHeader, showDone && styles.doneHeaderOpen]}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showDone }}
+                onPress={() => setShowDone((prev) => !prev)}
+                style={styles.doneToggle}
+              >
+                {showDone ? (
+                  <ChevronDown size={14} color={colors.textMuted} />
+                ) : (
+                  <ChevronRight size={14} color={colors.textMuted} />
+                )}
+                <Text style={styles.doneToggleText}>完了 {doneItems.length}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => clearDone(selected.id, selected.name)}
+                style={styles.clearDone}
+              >
+                <Text style={styles.clearDoneText}>まとめて消す</Text>
+              </Pressable>
+            </View>
+            {showDone &&
+              doneItems.map((item, index) => (
+                <ItemRow
+                  key={item.id}
+                  item={item}
+                  divided={index > 0}
+                  onToggle={() => void toggleItem(item.id)}
+                  onRename={(title) => void renameItem(item, title)}
+                  onDelete={() => void removeItem(item.id)}
+                />
+              ))}
+          </View>
+        )}
+
+        {/* 長押しで動かせることは見ただけでは分からないので、小さく添える。 */}
+        {(undoneItems.length > 1 || listGroups.length > 1) && (
+          <Text style={styles.holdHint}>長押しで並べ替え</Text>
+        )}
+    </ListEditorModal>
+  );
+
+  /* 一覧: Keepと同じく全部のリストをカードで並べる。2列にして1画面に4〜5つ入れる。
+     固定したものは上にまとめ、並べ替えは長押ししてそのまま動かす。 */
+  return (
+    <SafeAreaView style={styles.screen}>
+      <ScrollView
+        style={styles.page}
+        contentContainerStyle={styles.overviewContent}
+        // 持ち上げているあいだは指で並べ替えるので、スクロールを止める。
+        scrollEnabled={!drag.isActive}
+      >
+        {pinnedLists.length > 0 && (
+          <>
+            <View style={styles.sectionHeading}>
+              <Pin size={11} color={colors.textFaint} fill={colors.textFaint} />
+              <Text style={styles.sectionHeadingText}>固定</Text>
+            </View>
+            {overviewCards(LISTS_PINNED, pinnedLists)}
+            {otherLists.length > 0 && (
+              <View style={[styles.sectionHeading, styles.sectionHeadingSpaced]}>
+                <Text style={styles.sectionHeadingText}>その他</Text>
+              </View>
+            )}
+          </>
+        )}
+        {overviewCards(LISTS_OTHER, otherLists)}
+        {/* 長押しで動かせることは見ただけでは分からないので、小さく添える。 */}
+        {sortedLists.length > 1 && <Text style={styles.holdHint}>長押しで並べ替え</Text>}
+      </ScrollView>
+      {editor}
     </SafeAreaView>
   );
 }
@@ -761,20 +725,6 @@ const styles = StyleSheet.create({
   addListText: { fontSize: 14, color: colors.textFaint },
   holdHint: { fontSize: 10, color: colors.borderStrong, textAlign: 'center', paddingTop: 12 },
 
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingBottom: 12,
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  topBarButton: { padding: 8 },
-  topBarTitleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  topBarTitle: { flexShrink: 1, fontSize: 16, fontWeight: '700', color: colors.textSubtle },
-
-  listContent: { paddingBottom: 24 },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 12,

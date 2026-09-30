@@ -67,7 +67,7 @@ export default function ListOverviewCard({
             自分だけのリストは錠前を添える（予定の一覧と同じ印）。 */}
         <View style={styles.titleRow}>
           {/* 長い名前は今までどおり折り返す（行数は絞らない）。 */}
-          <Text style={styles.title}>{list.name}</Text>
+          <Text style={styles.title}>{list.name || '無題'}</Text>
           {list.isPrivate && <Lock size={11} color={colors.textFaint} />}
         </View>
         <View style={styles.body}>
