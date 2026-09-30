@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowLeft, Check, ChevronDown, ChevronRight, Lock, Pin, PinOff, Plus, Settings2, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Lock, Pin, PinOff, Plus, Trash2, X } from 'lucide-react';
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
 import { useDragReorder } from '../ui/useDragReorder';
-import ListFormModal, { type ListDraft } from '../modals/ListFormModal';
+import ListEditorModal, { DEFAULT_GROUP_LABEL, type ListDraft } from '../modals/ListEditorModal';
 
 /**
  * 買い出し・やりたいこと・やることなどのリスト（docs/lists.md）。
@@ -15,9 +15,10 @@ import ListFormModal, { type ListDraft } from '../modals/ListFormModal';
  * どのグループに足すかは「その枠で打つ」ことで決まるので、追加先を選ぶ手順はない。
  *
  * 開いたときはKeepと同じく**全部のリストがカードで並ぶ**（1画面に4〜5つ見える）。
- * カードを押すとそのリストだけの画面になり、そこで項目やグループを足す。
+ * カードを押すとそのリストが**画面の中央に拡大して開き（編集モード）**、見出し・項目・
+ * グループ・固定・共有・削除をそこで済ませる。設定の画面は無い（手間を減らすため）。
  *
- * スクロールするのはカード/枠の一覧だけで、見出しや戻るは上に固定する。
+ * スクロールするのは一覧と、編集モードの中身だけ。見出しと下の道具列は固定する。
  *
  * 追加・書き換え・削除はすべて**その枠の中で終える**（Keepと同じ）。項目を押せば
  * その行が入力欄になり、直せるのは**内容だけ**（メモも入れ先の選び直しも持たない）。
@@ -32,7 +33,8 @@ interface ListTabProps {
   groups: ListGroup[];
   items: ListItem[];
   isLoading?: boolean;
-  onAddList: (draft: ListDraft) => void;
+  /** 作ったリストを返す（作ってすぐ編集モードで開くため）。失敗したら null。 */
+  onAddList: (draft: ListDraft) => Promise<ListBoard | null>;
   onUpdateList: (list: ListBoard, draft: ListDraft) => void;
   onDeleteList: (id: string) => void;
   onAddGroup: (listId: string, name: string) => void;
@@ -433,10 +435,11 @@ export default function ListTab({
   onReorderGroups,
   onReorderItems,
 }: ListTabProps) {
-  // nullのあいだはリストを並べた一覧を出す。カードを押すとそのリストを開く。
+  // nullのあいだはリストを並べた一覧だけを出す。カードを押すとそのリストを編集モードで開く。
   const [openListId, setOpenListId] = useState<string | null>(null);
+  // 今の編集が「新しく作ったリスト」か。見出しへ入力を移し、何も書かずに閉じたら消す。
+  const [isNewList, setIsNewList] = useState(false);
   const [showDone, setShowDone] = useState(false);
-  const [listModal, setListModal] = useState<{ mode: 'add' | 'edit'; list: ListBoard | null } | null>(null);
 
   // 固定したリストが先。中は並び順（position）で、同じなら読み込んだ順のまま。
   const sortedLists = useMemo(
@@ -523,6 +526,41 @@ export default function ListTab({
     onDeleteGroup(group.id);
   };
 
+  /**
+   * 新しいリストを作って、そのまま編集モードで開く（見出しから打ち始める）。
+   * 名前は空で作り、何も書かずに閉じたときは closeEditor が消す。
+   * 新しいリストの既定は「自分だけ」。家族に見せたいものだけ共有へ切り替える。
+   */
+  const createList = async () => {
+    const created = await onAddList({ name: '', groupLabel: DEFAULT_GROUP_LABEL, isPrivate: true });
+    if (!created) return;
+    setIsNewList(true);
+    setOpenListId(created.id);
+  };
+
+  /** 名前・共有設定など、リスト自身の項目を直す。 */
+  const patchList = (list: ListBoard, patch: Partial<Pick<ListDraft, 'name' | 'isPrivate'>>) =>
+    onUpdateList(list, { name: list.name, groupLabel: list.groupLabel, isPrivate: list.isPrivate, ...patch });
+
+  /**
+   * 編集モードを閉じる。見出しの書きかけがあれば保存してから閉じる。
+   * 新しく作ったまま何も入れなかったリストは、空のカードが残らないよう消す。
+   */
+  const closeEditor = (list: ListBoard, draftName: string) => {
+    const name = draftName.trim();
+    const isEmpty =
+      !groups.some((group) => group.listId === list.id) && !items.some((item) => item.listId === list.id);
+    setOpenListId(null);
+    setIsNewList(false);
+    if (!name && list.name === '' && isEmpty) {
+      onDeleteList(list.id);
+      return;
+    }
+    // 見出しを空にしたまま項目だけ入れたときは、名前が無いカードにならないよう仮の名前を付ける。
+    const next = name || list.name || '無題';
+    if (next !== list.name) patchList(list, { name: next });
+  };
+
   if (isLoading) {
     return (
       <div className="p-4 h-full">
@@ -542,31 +580,17 @@ export default function ListTab({
           よく使う3つのリストを作る
           <span className="block font-normal text-[10px] text-blue-400 mt-1">買い出し・やりたいこと・やること</span>
         </button>
-        <button
-          onClick={() => setListModal({ mode: 'add', list: null })}
-          className="text-xs font-bold text-gray-500 px-4 py-2"
-        >
+        <button onClick={() => void createList()} className="text-xs font-bold text-gray-500 px-4 py-2">
           自分でリストを作る
         </button>
-        <ListFormModal
-          key={`${listModal?.mode}-${listModal?.list?.id ?? 'new'}`}
-          mode={listModal?.mode ?? null}
-          list={listModal?.list ?? null}
-          onClose={() => setListModal(null)}
-          onSubmit={(draft) => {
-            onAddList(draft);
-            setListModal(null);
-          }}
-        />
       </div>
     );
   }
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
-      {!selected ? (
-        /* 一覧: Keepと同じく全部のリストをカードで並べる。2列にして1画面に4〜5つ入れる。
-           固定したものは上にまとめ、並べ替えは切り替えてから上下ボタンで動かす。 */
+      {/* 一覧: Keepと同じく全部のリストをカードで並べる。2列にして1画面に4〜5つ入れる。
+          固定したものは上にまとめ、並べ替えは長押ししてそのまま動かす。 */}
         <div className="flex-1 overflow-y-auto">
           {pinnedLists.length > 0 && (
             <>
@@ -584,7 +608,7 @@ export default function ListTab({
             {overviewCards(LISTS_OTHER, otherLists)}
             <button
               type="button"
-              onClick={() => setListModal({ mode: 'add', list: null })}
+              onClick={() => void createList()}
               className="w-full flex items-center justify-center gap-1.5 px-3 py-5 text-sm text-gray-400 border border-dashed border-gray-300 rounded-xl hover:bg-gray-50 transition"
             >
               <Plus size={16} className="flex-none" />
@@ -596,36 +620,26 @@ export default function ListTab({
             <p className="text-[10px] text-gray-300 text-center pt-3">長押しで並べ替え</p>
           )}
         </div>
-      ) : (
-      <>
-      {/* 上段（固定）: 開いているリストの名前と戻る。一覧のときは何も置かず高さを使わない。 */}
-      <div className="shrink-0 flex items-center gap-1 pb-3 mb-3 border-b border-gray-200">
-        <button
-          type="button"
-          onClick={() => setOpenListId(null)}
-          aria-label="リストの一覧へ戻る"
-          className="flex-none text-gray-500 p-2 -ml-2 rounded-full hover:bg-gray-100 transition"
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <h2 className="flex-1 min-w-0 px-1 flex items-center gap-1 text-base font-bold text-gray-800">
-          <span className="truncate">{selected?.name}</span>
-          {/* 自分だけのリストは、開いたときも一目で分かるようにする。 */}
-          {selected?.isPrivate && <Lock size={13} className="flex-none text-gray-400" aria-label="自分だけ" />}
-        </h2>
-        {selected && (
-          <button
-            onClick={() => setListModal({ mode: 'edit', list: selected })}
-            aria-label="リストの設定"
-            className="flex-none text-gray-400 p-2 rounded-full hover:bg-gray-100 transition"
-          >
-            <Settings2 size={20} />
-          </button>
-        )}
-      </div>
 
-      {/* 下段（スクロール）: 枠の一覧 */}
-      <div className="flex-1 overflow-y-auto space-y-3">
+      {/* 編集モード: 開いたカードを画面の中央に拡大して出す（Keepと同じ）。
+          見出し・項目・グループ・固定・共有・削除をここで済ませる。 */}
+      {selected && (
+        <ListEditorModal
+          // 対象が変わるたびに作り直して、見出しの書きかけを持ち越さない。
+          key={selected.id}
+          list={selected}
+          focusTitle={isNewList}
+          onRename={(name) => patchList(selected, { name })}
+          onTogglePin={() => onToggleListPin(selected)}
+          onToggleShare={() => patchList(selected, { isPrivate: !selected.isPrivate })}
+          onDelete={() => {
+            if (!window.confirm('このリストを削除しますか？\n中の項目もすべて消えます。')) return;
+            onDeleteList(selected.id);
+            setOpenListId(null);
+            setIsNewList(false);
+          }}
+          onClose={(draftName) => closeEditor(selected, draftName)}
+        >
         {/* グループを作っていないリストは、枠1つのただのチェックリストになる。 */}
         {listGroups.length === 0 ? (
           <div
@@ -736,32 +750,10 @@ export default function ListTab({
 
         {/* 長押しで動かせることは見ただけでは分からないので、小さく添える。 */}
         {(undoneItems.length > 1 || listGroups.length > 1) && (
-          <p className="text-[10px] text-gray-300 text-center pt-1">長押しで並べ替え</p>
+          <p className="text-[10px] text-gray-300 text-center pt-3">長押しで並べ替え</p>
         )}
-      </div>
-      </>
+        </ListEditorModal>
       )}
-
-      <ListFormModal
-        key={`${listModal?.mode}-${listModal?.list?.id ?? 'new'}`}
-        mode={listModal?.mode ?? null}
-        list={listModal?.list ?? null}
-        groups={listGroups}
-        onRenameGroup={onRenameGroup}
-        onDeleteGroup={deleteGroupWithConfirm}
-        onClose={() => setListModal(null)}
-        onSubmit={(draft) => {
-          if (listModal?.mode === 'edit' && listModal.list) onUpdateList(listModal.list, draft);
-          else onAddList(draft);
-          setListModal(null);
-        }}
-        onDelete={(id) => {
-          if (!window.confirm('このリストを削除しますか？\n中の項目もすべて消えます。')) return;
-          onDeleteList(id);
-          setOpenListId(null);
-          setListModal(null);
-        }}
-      />
     </div>
   );
 }
