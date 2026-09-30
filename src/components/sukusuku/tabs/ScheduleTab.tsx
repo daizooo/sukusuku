@@ -100,20 +100,17 @@ export default function ScheduleTab({
 
   return (
     <div className="p-4 h-full flex flex-col md:max-w-3xl lg:max-w-4xl md:mx-auto md:w-full">
-      {/* 月以外（日・リスト）では、月へ戻るボタンを出す。
-          面は月（初期表示）・日（日をタップ）・リスト（「直近のスケジュール」の見出しをタップ）の3つ。 */}
+      {/* 面は月（初期表示）・日（日をタップ）・リスト（「直近のスケジュール」の見出しをタップ）の3つ。
+          月以外（日・リスト）では、戻るボタンだけを左上に出す（文言は付けない）。
+          ブラウザの戻る操作も同じく月へ戻る（SukusukuApp が履歴に積んでいる）。 */}
       {view !== 'month' && (
-        <div className="flex items-center gap-3 mb-3 flex-none">
-          <button
-            onClick={() => onChangeView('month')}
-            aria-label="月表示へ戻る"
-            className="flex items-center text-sm font-bold text-blue-600 py-1"
-          >
-            <ChevronLeft size={18} />
-            月表示
-          </button>
-          {view === 'list' && <h3 className="text-[17px] font-bold text-gray-900">すべての予定</h3>}
-        </div>
+        <button
+          onClick={() => onChangeView('month')}
+          aria-label="戻る"
+          className="flex-none self-start mb-2 -ml-1 p-1 text-blue-600"
+        >
+          <ChevronLeft size={24} />
+        </button>
       )}
 
       {view !== 'list' && (

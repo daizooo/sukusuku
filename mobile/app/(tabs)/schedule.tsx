@@ -54,6 +54,8 @@ import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 //
 // 面は月（初期表示）・日（日をタップ）・リスト（「直近のスケジュール」の見出しをタップ）の3つ。
 // 切り替えの帯は置かず、日・リストからは戻るボタン（Androidの戻る操作も）で月へ戻る。
+// 月から先の面で戻る操作を握るのはこの画面だけ。月に戻ったあとの戻る操作は、
+// タブの履歴（(tabs)/_layout.tsx の backBehavior）に任せて1つ前のタブへ戻る。
 
 // owner: ログイン中の役割から決まる主体（未ログイン相当ならnull）。
 // 主体が決まっているときは参加者にも同じ人を初期値として入れる。
@@ -396,21 +398,17 @@ export default function ScheduleScreen() {
   return (
     <SafeAreaView style={styles.screen} {...swipeHandlers}>
       <View style={styles.page}>
-        {/* 月以外（日・リスト）では、月へ戻るボタンを出す。 */}
+        {/* 月以外（日・リスト）では、戻るボタンだけを左上に出す（文言は付けない）。 */}
         {view !== 'month' && (
-          <View style={styles.backRow}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="月表示へ戻る"
-              onPress={() => setView('month')}
-              hitSlop={8}
-              style={styles.backButton}
-            >
-              <ChevronLeft size={18} color={colors.navActive} />
-              <Text style={styles.backText}>月表示</Text>
-            </Pressable>
-            {view === 'list' && <Text style={styles.listTitle}>すべての予定</Text>}
-          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="戻る"
+            onPress={() => setView('month')}
+            hitSlop={8}
+            style={styles.backButton}
+          >
+            <ChevronLeft size={24} color={colors.navActive} />
+          </Pressable>
         )}
 
         {view !== 'list' && (
@@ -562,10 +560,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   centered: { alignItems: 'center', justifyContent: 'center' },
   page: { flex: 1, padding: 16, gap: 12 },
-  backRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  backButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
-  backText: { fontSize: 14, fontWeight: '700', color: colors.navActive },
-  listTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
+  backButton: { alignSelf: 'flex-start', paddingVertical: 2 },
 
   nav: {
     flexDirection: 'row',

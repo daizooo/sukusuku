@@ -49,6 +49,7 @@ import {
 } from '@/lib/dateUtils';
 import { createClient } from '@/lib/supabase/client';
 import { OPEN_LOG_PARAM, TAB_PARAM } from '@/lib/appLinks';
+import { onNavPop, syncNav } from '@/lib/browserHistory';
 import {
   deleteTask as deleteTaskApi,
   insertTask,
@@ -910,19 +911,29 @@ export default function SukusukuApp({
     setActiveTab(tab);
   };
 
-  // 開いているタブをURLに書き戻す。画面を更新したときに、見ていたタブのまま
-  // 戻ってこられるようにするため（URLに残っていないと毎回ホームに戻ってしまう）。
-  // ページの読み込みは伴わせたくないので、Nextのルーターではなく履歴の置き換えを使う
-  // （replaceStateはNextのルーターと同期する。pushStateにすると戻るボタンが
-  // タブの履歴を辿ることになり、アプリを閉じる操作ではなくなるので使わない）。
+  // 開いているタブと予定タブの面を、ブラウザの履歴とURLへ書き戻す。
+  // - 履歴: 切り替えるたびに1つ積む。戻る操作（スマホの戻るボタンを含む）で1つ前の
+  //   タブ・面へ戻れるようにするため。最初のタブまで戻ると、アプリを閉じる操作になる
+  // - URL: 画面を更新したときに、見ていたタブのまま戻ってこられるようにするため
+  //   （URLに残っていないと毎回ホームに戻ってしまう）
   // 通知から開くための open は、入力画面を開いたら消す（更新のたびに開き直さないため）。
   useEffect(() => {
     const url = new URL(window.location.href);
     if (activeTab === 'home') url.searchParams.delete(TAB_PARAM);
     else url.searchParams.set(TAB_PARAM, activeTab);
     if (!pendingLogType) url.searchParams.delete(OPEN_LOG_PARAM);
-    if (url.href !== window.location.href) window.history.replaceState(null, '', url);
-  }, [activeTab, pendingLogType]);
+    syncNav({ tab: activeTab, view: scheduleView }, url);
+  }, [activeTab, scheduleView, pendingLogType]);
+
+  // 戻る・進む操作で履歴のタブ・面が変わったときに、画面をそれに合わせる。
+  useEffect(
+    () =>
+      onNavPop(({ tab, view }) => {
+        setActiveTab(tab as TabId);
+        setScheduleView(view as ScheduleView);
+      }),
+    [],
+  );
 
   // --- 育児記録 ---
 
