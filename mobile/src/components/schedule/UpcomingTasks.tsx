@@ -8,8 +8,8 @@ import {
   Plus,
 } from 'lucide-react-native';
 import type { DynamicTask } from '@/types/app';
-import { formatTimeRange, startOfDay } from '@/lib/dateUtils';
-import { byDateThenTime, formatRelativeDay } from '@/lib/scheduleUtils';
+import { formatDateHeading, formatTimeRange, startOfDay } from '@/lib/dateUtils';
+import { byDateThenTime } from '@/lib/scheduleUtils';
 import { getOwnerTone } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 
@@ -132,8 +132,9 @@ export default function UpcomingTasks({
                 {/* 幅の狭い端末でも日付と時刻が欠けないよう、この2つは縮めず、
                     タイトルだけが省略される。 */}
                 <View style={styles.when}>
-                  <Text style={styles.whenDate}>
-                    {task.targetDateObj ? formatRelativeDay(task.targetDateObj, today) : '未定'}
+                  {/* あと○日ではなく日付そのものを出す（日数の計算はしない）。 */}
+                  <Text numberOfLines={1} style={styles.whenDate}>
+                    {task.targetDateObj ? formatDateHeading(task.targetDateObj, today) : '未定'}
                   </Text>
                   <Text style={styles.whenTime}>
                     {task.kind === 'event' ? formatTimeRange(task.startTime, task.endTime) : ''}

@@ -2,9 +2,9 @@
 
 import { AlertTriangle, BellRing, CheckCircle2, ChevronRight, Circle, Plus } from 'lucide-react';
 import type { DynamicTask } from '@/types/app';
-import { formatTimeRange, startOfDay } from '@/lib/dateUtils';
+import { formatDateHeading, formatTimeRange, startOfDay } from '@/lib/dateUtils';
 import { getOwnerTone } from '@/lib/uiUtils';
-import { byDateThenTime, formatRelativeDay } from './utils';
+import { byDateThenTime } from './utils';
 
 // 月表示のカレンダーの下に置く「直近のスケジュール」。以前はホームタブにあったもの
 // （mobile版の `UpcomingTasks` と出す中身・並びを同じにしてある）。
@@ -118,7 +118,8 @@ export default function UpcomingTasks({
                   タイトルだけが省略される。 */}
               <div className="flex-none flex flex-col leading-tight tabular-nums">
                 <span className="text-xs font-bold text-blue-600 whitespace-nowrap">
-                  {task.targetDateObj ? formatRelativeDay(task.targetDateObj, today) : '未定'}
+                  {/* あと○日ではなく日付そのものを出す（日数の計算はしない）。 */}
+                  {task.targetDateObj ? formatDateHeading(task.targetDateObj, today) : '未定'}
                 </span>
                 <span className="text-[10px] text-gray-500 whitespace-nowrap">
                   {task.kind === 'event' ? formatTimeRange(task.startTime, task.endTime) : ''}
