@@ -3,6 +3,7 @@
 import { BellRing, Clock, Lock, MapPin, Repeat, Star, Text, Users, X } from 'lucide-react';
 import type { AnchorType, Participant, Recurrence, RecurrenceFreq, Task, TaskKind } from '@/types/app';
 import { PARTICIPANTS } from '@/types/app';
+import { useBackLayer } from '@/lib/browserHistory';
 import { REMINDER_OPTIONS, WEEKDAY_LABELS, parseDateString, toDateString } from '@/lib/dateUtils';
 import { getParticipantColor } from '@/lib/uiUtils';
 import { END_TYPE_OPTIONS, FREQ_OPTIONS, defaultRecurrence, summarizeRecurrence } from '@/lib/recurrence';
@@ -493,6 +494,9 @@ interface ModalShellProps {
 }
 
 export function ModalShell({ title, onClose, children, footer }: ModalShellProps) {
+  // 戻る操作（ブラウザ・スマホ）でこのモーダルを閉じる。
+  useBackLayer(onClose);
+
   return (
     <div className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">

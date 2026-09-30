@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Trash2, X } from 'lucide-react';
 import type { Nursery, NurseryStatus } from '@/types/app';
+import { useBackLayer } from '@/lib/browserHistory';
 
 // 園の情報（連絡先・見学の日時・メモ）を編集する。
 // 見学チェックリストは保活タブの「チェックリスト」側でその場で編集するため、ここでは触らない
@@ -50,6 +51,9 @@ export default function NurseryFormModal({ mode, nursery, onClose, onSubmit, onD
         }
       : EMPTY_DRAFT,
   );
+
+  // 戻る操作（ブラウザ・スマホ）でこのモーダルを閉じる。開いている間だけ効かせる。
+  useBackLayer(onClose, mode !== null);
 
   if (!mode) return null;
 

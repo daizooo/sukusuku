@@ -18,6 +18,9 @@ import { colors } from '@/lib/theme';
 export default function TabsLayout() {
   return (
     <Tabs
+      // 戻る操作は、開いた順に1つ前のタブへ戻る（既定はどこからでもホームへ戻ってしまう）。
+      // 最初のタブまで戻ったところで、アプリを閉じる。
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.navActive,

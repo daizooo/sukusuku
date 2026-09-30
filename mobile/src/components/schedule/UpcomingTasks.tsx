@@ -5,17 +5,20 @@ import {
   CheckCircle2,
   ChevronRight,
   Circle,
+  MapPin,
   Plus,
 } from 'lucide-react-native';
 import type { DynamicTask } from '@/types/app';
-import { formatTimeRange, startOfDay } from '@/lib/dateUtils';
-import { byDateThenTime, formatRelativeDay } from '@/lib/scheduleUtils';
+import { WEEKDAY_LABELS, startOfDay } from '@/lib/dateUtils';
+import { byDateThenTime } from '@/lib/scheduleUtils';
 import { getOwnerTone } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 
 // 月表示のカレンダーの下に置く「直近のスケジュール」。以前はホームタブにあったもの。
 // 高さは親から与えられたぶんに収め、あふれた分はこの中だけでスクロールする
 // （画面全体はスクロールさせない）。
+//
+// 見出しを押すと、すべての予定を日付順に並べたリスト表示へ移る。
 //
 // 予定の追加ボタンは、右下の丸いボタンだと一覧の右下に重なって隠してしまうため、
 // 月表示ではこの見出しの中に置く。
@@ -28,9 +31,13 @@ interface UpcomingTasksProps {
   onToggleTodo: (id: string) => void;
   onOpenTask: (task: DynamicTask) => void;
   onAddTask: () => void;
-  /** 期限切れの件数を押したとき・「すべて見る」を押したときにリスト表示へ移る。 */
+  /** 見出しを押したとき・期限切れの件数を押したときにリスト表示へ移る。 */
   onShowAll: () => void;
 }
+
+/** 「10/19(月)」の形。日数の計算はせず、日付そのものを出す。 */
+const formatMonthDay = (date: Date): string =>
+  `${date.getMonth() + 1}/${date.getDate()}(${WEEKDAY_LABELS[date.getDay()]})`;
 
 /** 一覧に出す件数の上限。それより先は「すべて見る」で見る。 */
 const MAX_TASKS = 10;
@@ -62,7 +69,16 @@ export default function UpcomingTasks({
   return (
     <View style={styles.section}>
       <View style={styles.header}>
-        <Text style={styles.title}>直近のスケジュール</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="直近のスケジュール。押すとすべての予定をリストで見る"
+          onPress={onShowAll}
+          hitSlop={8}
+          style={styles.titleButton}
+        >
+          <Text style={styles.title}>直近のスケジュール</Text>
+          <ChevronRight size={16} color={colors.navActive} />
+        </Pressable>
         {overdueCount > 0 && (
           <Pressable
             accessibilityRole="button"
@@ -75,10 +91,6 @@ export default function UpcomingTasks({
           </Pressable>
         )}
         <View style={styles.flex} />
-        <Pressable accessibilityRole="button" onPress={onShowAll} style={styles.seeAll}>
-          <Text style={styles.seeAllText}>すべて見る</Text>
-          <ChevronRight size={14} color={colors.navActive} />
-        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="予定を追加"
@@ -94,9 +106,15 @@ export default function UpcomingTasks({
       ) : upcoming.length === 0 ? (
         <Text style={styles.empty}>直近の予定はありません</Text>
       ) : (
-        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          nestedScrollEnabled
+          persistentScrollbar
+        >
           {upcoming.map((task) => {
             const tone = getOwnerTone(task.owner, task.participants);
+            const owner = task.owner ?? (task.participants.length === 1 ? task.participants[0] : '');
             return (
               <Pressable
                 key={task.id}
@@ -117,35 +135,49 @@ export default function UpcomingTasks({
                   )}
                 </Pressable>
 
-                {/* 幅の狭い端末でも日付と時刻が欠けないよう、この2つは縮めず、
-                    タイトルだけが省略される。 */}
+                {/* 列をそろえるため、日付は幅を固定して2段（上に年、下に月日と曜日）で出す。
+                    時刻は一覧では出さない（詳細で見る）。 */}
                 <View style={styles.when}>
-                  <Text style={styles.whenDate}>
-                    {task.targetDateObj ? formatRelativeDay(task.targetDateObj, today) : '未定'}
+                  <Text style={styles.whenYear}>
+                    {task.targetDateObj ? `${task.targetDateObj.getFullYear()}年` : ' '}
                   </Text>
-                  <Text style={styles.whenTime}>
-                    {task.kind === 'event' ? formatTimeRange(task.startTime, task.endTime) : ''}
+                  <Text numberOfLines={1} style={styles.whenDate}>
+                    {task.targetDateObj ? formatMonthDay(task.targetDateObj) : '未定'}
                   </Text>
                 </View>
 
-                <Text numberOfLines={1} style={styles.taskTitle}>
-                  {task.title}
-                </Text>
-                {task.remindMinutesBefore !== null && (
-                  <BellRing size={12} color={colors.milkProgress} />
-                )}
-                {task.participants.length > 0 && (
-                  <View
-                    style={[
-                      styles.label,
-                      { backgroundColor: tone.background, borderColor: tone.border },
-                    ]}
-                  >
-                    <Text style={[styles.labelText, { color: tone.text }]}>
-                      {task.participants.join('・')}
-                    </Text>
-                  </View>
-                )}
+                <View style={styles.main}>
+                  <Text numberOfLines={1} style={styles.taskTitle}>
+                    {task.title}
+                  </Text>
+                  {task.place !== '' && (
+                    <View style={styles.placeRow}>
+                      <MapPin size={11} color={colors.textFaint} />
+                      <Text numberOfLines={1} style={styles.place}>
+                        {task.place}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* 通知の有無。無い行も幅を空けて、主催者の位置をそろえる。 */}
+                <View style={styles.bell}>
+                  {task.remindMinutesBefore !== null && (
+                    <BellRing size={14} color={colors.milkProgress} />
+                  )}
+                </View>
+
+                {/* 主催者（主体）。主体が未設定の古い予定は、参加者が1人のときだけその人を出す。 */}
+                <View
+                  style={[
+                    styles.label,
+                    owner !== '' && { backgroundColor: tone.background, borderColor: tone.border },
+                  ]}
+                >
+                  <Text numberOfLines={1} style={[styles.labelText, { color: tone.text }]}>
+                    {owner}
+                  </Text>
+                </View>
               </Pressable>
             );
           })}
@@ -156,9 +188,11 @@ export default function UpcomingTasks({
 }
 
 const styles = StyleSheet.create({
-  section: { flex: 1, minHeight: 0, gap: 6 },
+  // 親から与えられた高さの中に必ず収め、はみ出す分は一覧のスクロールに回す。
+  section: { flex: 1, minHeight: 0, gap: 6, overflow: 'hidden' },
   flex: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  titleButton: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   title: { fontSize: 15, fontWeight: '700', color: colors.text },
   overdue: {
     flexDirection: 'row',
@@ -170,8 +204,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   overdueText: { fontSize: 11, fontWeight: '500', color: colors.alertText },
-  seeAll: { flexDirection: 'row', alignItems: 'center' },
-  seeAllText: { fontSize: 12, fontWeight: '500', color: colors.navActive },
   add: {
     width: 28,
     height: 28,
@@ -183,7 +215,8 @@ const styles = StyleSheet.create({
 
   empty: { fontSize: 13, color: colors.textFaint, textAlign: 'center', paddingVertical: 12 },
   list: { flex: 1, minHeight: 0 },
-  listContent: { gap: 6, paddingBottom: 4 },
+  // 末尾の行が枠の縁で切れて見えないよう、最後まで送ったときに余白が残るようにする。
+  listContent: { gap: 6, paddingBottom: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -195,10 +228,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  when: { minWidth: 52 },
-  whenDate: { fontSize: 12, fontWeight: '700', color: colors.navActive },
-  whenTime: { fontSize: 10, fontWeight: '500', color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  taskTitle: { flex: 1, fontSize: 14, fontWeight: '500', color: colors.text },
-  label: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
+  // 列の幅は固定して、行ごとに並びがずれないようにする（日付・通知・主催者）。
+  when: { width: 72 },
+  whenYear: { fontSize: 10, fontWeight: '500', color: colors.textFaint, fontVariant: ['tabular-nums'] },
+  whenDate: { fontSize: 13, fontWeight: '700', color: colors.navActive, fontVariant: ['tabular-nums'] },
+  main: { flex: 1, minWidth: 0, gap: 1 },
+  taskTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
+  placeRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  place: { flex: 1, fontSize: 11, fontWeight: '500', color: colors.textMuted },
+  bell: { width: 16, alignItems: 'center' },
+  label: {
+    width: 48,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+    borderRadius: 4,
+    paddingVertical: 1,
+  },
   labelText: { fontSize: 10, fontWeight: '700' },
 });
