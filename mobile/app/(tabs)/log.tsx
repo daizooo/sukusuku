@@ -43,7 +43,7 @@ import {
   listRecentTemperatureLogs,
   setPumpedBatchDiscarded,
 } from '@/lib/api/careLogs';
-import { getProfile } from '@/lib/api/profile';
+import { getChildMember } from '@/lib/api/members';
 import { ensureChildId } from '@/lib/api/children';
 import {
   deleteGrowthRecord,
@@ -52,7 +52,6 @@ import {
   updateGrowthRecord,
 } from '@/lib/api/growthRecords';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
-import { getProfileFieldValue } from '@/lib/uiUtils';
 import {
   formatCelsius,
   formatStopwatch,
@@ -235,11 +234,12 @@ export default function LogScreen() {
         if (!membership.familyId) return;
         const familyMembers = await listFamilyMembers(supabase, membership.familyId);
         if (isMounted) setMembers(familyMembers);
-        const profile = await getProfile(supabase, membership.familyId);
-        if (isMounted && profile) {
-          setBabyName(getProfileFieldValue(profile, 'babyName'));
+        // 名前・誕生日は設定タブの「家族」の子（docs/family-app.md §3）。
+        const child = await getChildMember(supabase, membership.familyId);
+        if (isMounted && child) {
+          setBabyName(child.displayName);
           // 成長曲線の生後ヶ月を自動で埋めるのに使う。
-          setBirthDate(getProfileFieldValue(profile, 'birthDate'));
+          setBirthDate(child.birthDate);
         }
         // 成長記録は日付の送りとは関わらないので、ここで1回だけ読む。
         const id = await ensureChildId(supabase, membership.familyId);

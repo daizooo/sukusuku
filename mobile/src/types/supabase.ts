@@ -72,6 +72,7 @@ export type Database = {
           created_at: string
           family_id: string
           id: string
+          member_id: string | null
           name: string | null
         }
         Insert: {
@@ -79,6 +80,7 @@ export type Database = {
           created_at?: string
           family_id: string
           id?: string
+          member_id?: string | null
           name?: string | null
         }
         Update: {
@@ -86,6 +88,7 @@ export type Database = {
           created_at?: string
           family_id?: string
           id?: string
+          member_id?: string | null
           name?: string | null
         }
         Relationships: [
@@ -94,6 +97,13 @@ export type Database = {
             columns: ["family_id"]
             isOneToOne: false
             referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "children_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "family_members"
             referencedColumns: ["id"]
           },
         ]
@@ -132,18 +142,114 @@ export type Database = {
       }
       families: {
         Row: {
+          address: string
           created_at: string
+          home_phone: string
           id: string
+          name: string
+          postal_code: string
+          updated_at: string
         }
         Insert: {
+          address?: string
           created_at?: string
+          home_phone?: string
           id?: string
+          name?: string
+          postal_code?: string
+          updated_at?: string
         }
         Update: {
+          address?: string
           created_at?: string
+          home_phone?: string
           id?: string
+          name?: string
+          postal_code?: string
+          updated_at?: string
         }
         Relationships: []
+      }
+      family_members: {
+        Row: {
+          birth_date: string | null
+          color: string
+          created_at: string
+          display_name: string
+          email: string
+          family_id: string
+          family_name: string
+          family_name_kana: string
+          given_name: string
+          given_name_kana: string
+          id: string
+          is_guardian: boolean
+          phone: string
+          relation: string
+          sort_order: number
+          updated_at: string
+          user_id: string | null
+          workplace: string
+          workplace_phone: string
+        }
+        Insert: {
+          birth_date?: string | null
+          color?: string
+          created_at?: string
+          display_name: string
+          email?: string
+          family_id: string
+          family_name?: string
+          family_name_kana?: string
+          given_name?: string
+          given_name_kana?: string
+          id?: string
+          is_guardian?: boolean
+          phone?: string
+          relation: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string | null
+          workplace?: string
+          workplace_phone?: string
+        }
+        Update: {
+          birth_date?: string | null
+          color?: string
+          created_at?: string
+          display_name?: string
+          email?: string
+          family_id?: string
+          family_name?: string
+          family_name_kana?: string
+          given_name?: string
+          given_name_kana?: string
+          id?: string
+          is_guardian?: boolean
+          phone?: string
+          relation?: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string | null
+          workplace?: string
+          workplace_phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "family_members_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "family_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       family_profiles: {
         Row: {
@@ -845,6 +951,8 @@ export type Database = {
           id: string
           name: string | null
           role: string | null
+          show_care_tab: boolean
+          start_tab: string
           workplace: string | null
         }
         Insert: {
@@ -853,6 +961,8 @@ export type Database = {
           id: string
           name?: string | null
           role?: string | null
+          show_care_tab?: boolean
+          start_tab?: string
           workplace?: string | null
         }
         Update: {
@@ -861,6 +971,8 @@ export type Database = {
           id?: string
           name?: string | null
           role?: string | null
+          show_care_tab?: boolean
+          start_tab?: string
           workplace?: string | null
         }
         Relationships: [
@@ -940,6 +1052,7 @@ export type Database = {
         Args: { p_subscription_id: string }
         Returns: undefined
       }
+      is_family_guardian: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never

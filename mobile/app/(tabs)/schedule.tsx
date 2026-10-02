@@ -10,14 +10,14 @@ import {
   CornerDownRight,
   Plus,
 } from 'lucide-react-native';
-import type { CareLog, DynamicTask, LoginRole, Participant, ScheduleView, Task, UserProfile } from '@/types/app';
+import type { CareLog, DynamicTask, LoginRole, Member, Participant, ScheduleView, Task } from '@/types/app';
 import { ROLE_TO_PARTICIPANT } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { useRefreshOnFocus } from '@/lib/screenFocus';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
-import { getProfile } from '@/lib/api/profile';
+import { getChildMember } from '@/lib/api/members';
 import { deleteTask, insertTask, listTasks, updateTask, updateTaskDone } from '@/lib/api/tasks';
 import { listCareLogsInRange } from '@/lib/api/careLogs';
 import { readCachedLogsInRange } from '@/lib/offline/careLogs';
@@ -34,7 +34,7 @@ import {
   toDateString,
 } from '@/lib/dateUtils';
 import { byDateThenTime, tasksOnDate } from '@/lib/scheduleUtils';
-import { describeError, getProfileFieldValue } from '@/lib/uiUtils';
+import { describeError } from '@/lib/uiUtils';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import MonthView from '@/components/schedule/MonthView';
 import DayView from '@/components/schedule/DayView';
@@ -88,7 +88,8 @@ export default function ScheduleScreen() {
   const [loginRole, setLoginRole] = useState<LoginRole>(null);
   // ログイン中の役割から決まる主体。新規の予定・タスクの初期値に使う。
   const ownerFromRole = loginRole ? ROLE_TO_PARTICIPANT[loginRole] : null;
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  // 出生日基準の予定の日付を出す子（誕生日は設定タブの「家族」で変える）。
+  const [child, setChild] = useState<Member | null>(null);
   const [todos, setTodos] = useState<Task[]>([]);
   const [isLoadingTodos, setIsLoadingTodos] = useState(true);
 
@@ -119,12 +120,12 @@ export default function ScheduleScreen() {
         if (!isMounted || !membership.familyId) return;
         setFamilyId(membership.familyId);
         setLoginRole(membership.role);
-        const [loadedProfile, loadedTasks] = await Promise.all([
-          getProfile(supabase, membership.familyId),
+        const [loadedChild, loadedTasks] = await Promise.all([
+          getChildMember(supabase, membership.familyId),
           listTasks(supabase, membership.familyId),
         ]);
         if (!isMounted) return;
-        setProfile(loadedProfile);
+        setChild(loadedChild);
         setTodos(loadedTasks);
       } catch {
         // 圏外でも画面は出す。出せるところまで出して、残りは空のままにする。
@@ -143,9 +144,9 @@ export default function ScheduleScreen() {
   useRefreshOnFocus(() => {
     setLogReloadKey((prev) => prev + 1);
     if (!familyId) return;
-    void Promise.all([getProfile(supabase, familyId), listTasks(supabase, familyId)])
-      .then(([loadedProfile, loadedTasks]) => {
-        setProfile(loadedProfile);
+    void Promise.all([getChildMember(supabase, familyId), listTasks(supabase, familyId)])
+      .then(([loadedChild, loadedTasks]) => {
+        setChild(loadedChild);
         setTodos(loadedTasks);
       })
       .catch(() => {
@@ -153,7 +154,7 @@ export default function ScheduleScreen() {
       });
   });
 
-  const birthDate = profile ? getProfileFieldValue(profile, 'birthDate') : '';
+  const birthDate = child?.birthDate ?? '';
 
   // 日付指定の予定は start_date をそのまま使い、
   // 出生日基準の予定は「子の誕生日 + 生後日数」で解決する。
