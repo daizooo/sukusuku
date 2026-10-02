@@ -97,6 +97,10 @@ export default function TaskDetailModal({
           </Pressable>
         }
       >
+        {/* 繰り返す予定は、開いている1回ではなく元の予定を直す。全部の回に反映される。 */}
+        {tempEditingTask.recurrence && (
+          <Text style={styles.seriesNote}>繰り返す予定の変更は、すべての回に反映されます。</Text>
+        )}
         <TaskForm
           value={tempEditingTask}
           onChange={(draft) => onChangeTempEditingTask({ ...tempEditingTask, ...draft })}
@@ -130,7 +134,13 @@ export default function TaskDetailModal({
             )}
           </Pressable>
           <Pressable accessibilityRole="button" onPress={onDelete} style={styles.delete}>
-            <Text style={styles.deleteText}>{isEvent ? 'この予定を削除' : 'このタスクを削除'}</Text>
+            <Text style={styles.deleteText}>
+              {selectedTask.recurrence
+                ? `この${isEvent ? '予定' : 'タスク'}をすべての回とともに削除`
+                : isEvent
+                  ? 'この予定を削除'
+                  : 'このタスクを削除'}
+            </Text>
           </Pressable>
         </View>
       }
@@ -307,5 +317,6 @@ const styles = StyleSheet.create({
   undo: { backgroundColor: colors.border },
   undoText: { fontSize: 15, fontWeight: '500', color: colors.textSubtle },
   delete: { alignItems: 'center', paddingVertical: 8 },
+  seriesNote: { fontSize: 12, fontWeight: '500', color: colors.textMuted, marginBottom: 12 },
   deleteText: { fontSize: 12, fontWeight: '500', color: colors.danger },
 });

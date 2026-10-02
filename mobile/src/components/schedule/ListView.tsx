@@ -25,7 +25,7 @@ interface ListViewProps {
   today: Date;
   /** 生後日数の表示に使う。未登録なら空文字。 */
   birthDate: string;
-  onToggleTodo: (id: string) => void;
+  onToggleTodo: (task: DynamicTask) => void;
   onOpenTask: (task: DynamicTask) => void;
 }
 
@@ -107,7 +107,7 @@ export default function ListView({
         date: group.date,
         sectionTitle: section.title,
       },
-      ...group.tasks.map<Row>((task) => ({ kind: 'task', key: task.id, task })),
+      ...group.tasks.map<Row>((task) => ({ kind: 'task', key: task.occurrenceKey, task })),
     ]),
   }));
 
@@ -123,7 +123,7 @@ export default function ListView({
           key: 'undated-note',
           text: 'お子様の誕生日を設定タブで登録すると、カレンダーに表示されます。',
         },
-        ...undated.map<Row>((task) => ({ kind: 'task', key: task.id, task })),
+        ...undated.map<Row>((task) => ({ kind: 'task', key: task.occurrenceKey, task })),
       ],
     });
   }
@@ -139,7 +139,7 @@ export default function ListView({
       isOpen: showDone,
       onToggle: () => setShowDone((v) => !v),
       data: showDone
-        ? done.map<Row>((task) => ({ kind: 'task', key: task.id, task, showDate: true }))
+        ? done.map<Row>((task) => ({ kind: 'task', key: task.occurrenceKey, task, showDate: true }))
         : [],
     });
   }

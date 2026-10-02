@@ -10,7 +10,7 @@ import { colors } from '@/lib/theme';
 
 interface TaskRowProps {
   task: DynamicTask;
-  onToggle: (id: string) => void;
+  onToggle: (task: DynamicTask) => void;
   onOpen: (task: DynamicTask) => void;
   /** 日付を行に出すか（日をまたいで並べる一覧で使う）。 */
   showDate?: boolean;
@@ -20,11 +20,16 @@ export default function TaskRow({ task, onToggle, onOpen, showDate }: TaskRowPro
   const tone = getOwnerTone(task.owner, task.participants);
 
   return (
-    <Pressable accessibilityRole="button" onPress={() => onOpen(task)} style={styles.row}>
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => onOpen(task)}
+      // 触れている間は地の色を変えて、触った感を出す。
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+    >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={task.done ? '未完了に戻す' : '完了にする'}
-        onPress={() => onToggle(task.id)}
+        onPress={() => onToggle(task)}
         hitSlop={8}
         style={styles.check}
       >
@@ -90,6 +95,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
   },
+  rowPressed: { backgroundColor: colors.selectedSurface, borderColor: colors.selectedRing },
   check: { marginTop: 1 },
   body: { flex: 1 },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },

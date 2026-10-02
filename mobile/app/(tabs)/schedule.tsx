@@ -19,7 +19,14 @@ import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
 import { listMembers } from '@/lib/api/members';
 import { myParticipantName, setFamilyRoster, useFamilyRoster } from '@/lib/familyRoster';
-import { deleteTask, insertTask, listTasks, updateTask, updateTaskDone } from '@/lib/api/tasks';
+import {
+  deleteTask,
+  insertTask,
+  listTasks,
+  updateTask,
+  updateTaskDone,
+  updateTaskDoneDates,
+} from '@/lib/api/tasks';
 import { listCareLogsInRange } from '@/lib/api/careLogs';
 import { readCachedLogsInRange } from '@/lib/offline/careLogs';
 import {
@@ -32,9 +39,11 @@ import {
   isSameMonth,
   parseDateString,
   startOfDay,
+  startOfWeek,
   toDateString,
 } from '@/lib/dateUtils';
 import { byDateThenTime, tasksOnDate } from '@/lib/scheduleUtils';
+import { expandOccurrences, toggledDoneDates } from '@/lib/scheduleExpand';
 import { describeError } from '@/lib/uiUtils';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import MonthView from '@/components/schedule/MonthView';
@@ -76,6 +85,9 @@ const emptyTaskDraft = (date: Date, owner: Participant | null): TaskDraft => ({
   recurrence: null,
   timing: '',
 });
+
+// 「直近のスケジュール」とリストに、繰り返す予定を何日先まで並べるか。
+const FORWARD_DAYS = 366;
 
 export default function ScheduleScreen() {
   const { session, isLoading: isSessionLoading } = useSession();
@@ -158,19 +170,48 @@ export default function ScheduleScreen() {
 
   // 日付指定の予定は start_date をそのまま使い、
   // 出生日基準の予定は「子の誕生日 + 生後日数」で解決する。
-  const dynamicTodos = useMemo<DynamicTask[]>(
+  // 繰り返す予定はここでは1件のまま（元の予定）。表示する範囲ごとに下で回へ展開する。
+  const baseTodos = useMemo<DynamicTask[]>(
     () =>
       todos.map((todo) => {
         const targetDateObj =
           todo.anchorType === 'absolute'
             ? parseDateString(todo.startDate ?? '')
             : calculateTargetDate(birthDate, todo.daysAfterBirth);
-        return { ...todo, targetDateObj, targetDate: formatDateString(targetDateObj) };
+        return {
+          ...todo,
+          targetDateObj,
+          targetDate: formatDateString(targetDateObj),
+          occurrenceDate: targetDateObj ? toDateString(targetDateObj) : null,
+          occurrenceKey: todo.id,
+        };
       }),
     [todos, birthDate],
   );
 
   const monthStart = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth(), 1);
+
+  // 繰り返す予定を回へ展開する範囲。見ている面ごとに必要な分だけ展開する。
+  // - 月: マスに出る範囲（前後の月の日も含めて週単位。最大6週）
+  // - 日: 選んでいる日
+  // - 直近のスケジュール・リスト: 今日から先 FORWARD_DAYS 日。過去の回は期限切れにも
+  //   完了済みにも並べない（毎日の予定が過去ぶん全部「期限切れ」になるのを避ける。
+  //   過ぎた回は月・日の表示で見返せる）
+  const monthTime = monthStart.getTime();
+  const selectedTime = selectedDate.getTime();
+  const todayTime = startOfDay(today).getTime();
+  const monthTodos = useMemo(() => {
+    const gridStart = startOfWeek(new Date(monthTime));
+    return expandOccurrences(baseTodos, gridStart, addDays(gridStart, 6 * 7 - 1));
+  }, [baseTodos, monthTime]);
+  const dayTodos = useMemo(
+    () => expandOccurrences(baseTodos, new Date(selectedTime), new Date(selectedTime)),
+    [baseTodos, selectedTime],
+  );
+  const forwardTodos = useMemo(
+    () => expandOccurrences(baseTodos, new Date(todayTime), addDays(new Date(todayTime), FORWARD_DAYS)),
+    [baseTodos, todayTime],
+  );
 
   // 日表示に出す育児記録。表示中の範囲だけを取りに行く。
   // 月表示・週表示は記録を出さないため、めくっても問い合わせは起きない。
@@ -290,19 +331,53 @@ export default function ScheduleScreen() {
   const isShowingToday =
     view === 'month' ? isSameMonth(monthStart, today) : isSameDay(selectedDate, today);
 
-  const tasksInMonth = dynamicTodos.filter(
+  const tasksInMonth = monthTodos.filter(
     (t) => t.targetDateObj && isSameMonth(t.targetDateObj, monthStart),
   );
 
   // 予定のない月をめくり続けなくて済むよう、次に予定がある日へ直接飛べるようにする。
-  const nextMonthWithTask = dynamicTodos
+  const nextMonthWithTask = forwardTodos
     .filter((t) => t.targetDateObj && t.targetDateObj >= addMonths(monthStart, 1))
     .sort(byDateThenTime)[0]?.targetDateObj;
 
+  // 完了の切り替え。繰り返す予定は、押した1回だけを完了にする（done_dates）。
+  // 繰り返さない予定は、予定そのものの完了（is_done）。
   const toggleTodo = useCallback(
-    async (id: string) => {
-      const target = todos.find((t) => t.id === id);
+    async (task: DynamicTask) => {
+      const target = todos.find((t) => t.id === task.id);
       if (!target) return;
+
+      if (target.recurrence && task.occurrenceDate) {
+        const date = task.occurrenceDate;
+        const previousDates = target.doneDates;
+        const nextDates = toggledDoneDates(previousDates, date);
+        const nextDone = nextDates.includes(date);
+
+        // 楽観的更新
+        setTodos((prev) => prev.map((todo) => (todo.id === task.id ? { ...todo, doneDates: nextDates } : todo)));
+        setSelectedTask((prev) =>
+          prev && prev.occurrenceKey === task.occurrenceKey
+            ? { ...prev, done: nextDone, doneDates: nextDates }
+            : prev,
+        );
+
+        try {
+          await updateTaskDoneDates(supabase, task.id, nextDates);
+        } catch {
+          // 失敗時はロールバック
+          setTodos((prev) =>
+            prev.map((todo) => (todo.id === task.id ? { ...todo, doneDates: previousDates } : todo)),
+          );
+          setSelectedTask((prev) =>
+            prev && prev.occurrenceKey === task.occurrenceKey
+              ? { ...prev, done: !nextDone, doneDates: previousDates }
+              : prev,
+          );
+        }
+        return;
+      }
+
+      const id = task.id;
       const nextDone = !target.done;
 
       // 楽観的更新
@@ -334,8 +409,17 @@ export default function ScheduleScreen() {
     const previousTodos = todos;
     const previousSelectedTask = selectedTask;
 
-    setTodos((prev) => prev.map((todo) => (todo.id === updated.id ? { ...todo, ...updated } : todo)));
-    setSelectedTask(updated);
+    // 編集の対象は展開した1回ぶんだが、保存されるのは元の予定（全部の回に効く）。
+    // 完了の状態は編集では変えないので、元の予定の値を残す。
+    setTodos((prev) =>
+      prev.map((todo) =>
+        todo.id === updated.id
+          ? { ...todo, ...updated, doneDates: todo.doneDates, done: updated.recurrence ? false : updated.done }
+          : todo,
+      ),
+    );
+    // 繰り返す予定は、日付や繰り返しを直すとこの回が無くなることがあるので詳細も閉じる。
+    setSelectedTask(updated.recurrence ? null : updated);
     setIsEditingTask(false);
 
     try {
@@ -452,9 +536,10 @@ export default function ScheduleScreen() {
                 month={monthStart}
                 today={today}
                 selectedDate={selectedDate}
-                tasks={dynamicTodos}
+                tasks={monthTodos}
                 birthDate={birthDate}
                 onSelectDate={(date) => selectDate(date)}
+                onAddTask={openAddTaskModal}
                 onOpenTask={openTaskDetail}
               />
             </View>
@@ -477,7 +562,7 @@ export default function ScheduleScreen() {
             )}
             <View style={styles.upcoming}>
               <UpcomingTasks
-                tasks={dynamicTodos}
+                tasks={forwardTodos}
                 isLoading={isLoadingTodos}
                 today={today}
                 onToggleTodo={toggleTodo}
@@ -494,7 +579,7 @@ export default function ScheduleScreen() {
             <DayView
               date={selectedDate}
               today={today}
-              tasks={tasksOnDate(dynamicTodos, selectedDate)}
+              tasks={tasksOnDate(dayTodos, selectedDate)}
               birthDate={birthDate}
               careLogs={visibleLogs}
               isLoadingCareLogs={isLoadingCareLogs}
@@ -509,7 +594,7 @@ export default function ScheduleScreen() {
         {view === 'list' && (
           <View style={styles.body}>
             <ListView
-              tasks={dynamicTodos}
+              tasks={forwardTodos}
               isLoading={isLoadingTodos}
               today={today}
               birthDate={birthDate}
@@ -552,7 +637,7 @@ export default function ScheduleScreen() {
         onChangeTempEditingTask={setTempEditingTask}
         onSaveEdit={saveTaskEdit}
         onClose={() => setSelectedTask(null)}
-        onToggleDone={() => selectedTask && void toggleTodo(selectedTask.id)}
+        onToggleDone={() => selectedTask && void toggleTodo(selectedTask)}
         onDelete={() => selectedTask && void handleDeleteTask(selectedTask.id)}
       />
     </SafeAreaView>

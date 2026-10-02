@@ -27,7 +27,7 @@ interface UpcomingTasksProps {
   tasks: DynamicTask[];
   isLoading: boolean;
   today: Date;
-  onToggleTodo: (id: string) => void;
+  onToggleTodo: (task: DynamicTask) => void;
   onOpenTask: (task: DynamicTask) => void;
   onAddTask: () => void;
   /** 見出しを押したとき・期限切れの件数を押したときにリスト表示へ移る。 */
@@ -116,15 +116,16 @@ export default function UpcomingTasks({
             const owner = task.owner ?? (task.participants.length === 1 ? task.participants[0] : '');
             return (
               <Pressable
-                key={task.id}
+                key={task.occurrenceKey}
                 accessibilityRole="button"
                 onPress={() => onOpenTask(task)}
-                style={styles.row}
+                // 触れている間は地の色を変えて、触った感を出す。
+                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
               >
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={task.done ? '完了を取り消す' : '完了にする'}
-                  onPress={() => onToggleTodo(task.id)}
+                  onPress={() => onToggleTodo(task)}
                   hitSlop={8}
                 >
                   {task.done ? (
@@ -220,6 +221,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
+  rowPressed: { backgroundColor: colors.selectedSurface, borderColor: colors.selectedRing },
   // 列の幅は固定して、行ごとに並びがずれないようにする（日付・主催者）。
   when: { width: 72 },
   whenYear: { fontSize: 10, fontWeight: '500', color: colors.textFaint, fontVariant: ['tabular-nums'] },

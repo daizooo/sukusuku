@@ -21,7 +21,7 @@ interface DayViewProps {
   /** 表示中の範囲の記録。その日のぶんへの絞り込みはこの中で行う。 */
   careLogs: CareLog[];
   isLoadingCareLogs?: boolean;
-  onToggleTodo: (id: string) => void;
+  onToggleTodo: (task: DynamicTask) => void;
   onOpenTask: (task: DynamicTask) => void;
   onAddTask: (date: Date) => void;
   onOpenLogTab: (date: Date) => void;
@@ -76,11 +76,19 @@ export default function DayView({
           </Pressable>
         </View>
         {tasks.length === 0 ? (
-          <Text style={styles.empty}>予定はありません</Text>
+          // 予定が無いところを押すと、その日の予定・タスクの追加を開く。
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="予定はありません 押すとこの日に追加"
+            onPress={() => onAddTask(date)}
+            style={({ pressed }) => [styles.empty, pressed && styles.emptyPressed]}
+          >
+            <Text style={styles.emptyText}>予定はありません</Text>
+          </Pressable>
         ) : (
           <View style={styles.tasks}>
             {tasks.map((task) => (
-              <TaskRow key={task.id} task={task} onToggle={onToggleTodo} onOpen={onOpenTask} />
+              <TaskRow key={task.occurrenceKey} task={task} onToggle={onToggleTodo} onOpen={onOpenTask} />
             ))}
           </View>
         )}
@@ -131,10 +139,9 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   link: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   linkText: { fontSize: 12, fontWeight: '500', color: colors.navActive },
+  emptyText: { fontSize: 14, color: colors.textFaint, textAlign: 'center' },
+  emptyPressed: { backgroundColor: colors.selectedSurface },
   empty: {
-    fontSize: 14,
-    color: colors.textFaint,
-    textAlign: 'center',
     paddingVertical: 20,
     backgroundColor: colors.surface,
     borderWidth: 1,

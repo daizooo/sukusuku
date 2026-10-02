@@ -19,7 +19,7 @@ interface ListViewProps {
   today: Date;
   /** 生後日数の表示に使う。未登録なら空文字。 */
   birthDate: string;
-  onToggleTodo: (id: string) => void;
+  onToggleTodo: (task: DynamicTask) => void;
   onOpenTask: (task: DynamicTask) => void;
 }
 
@@ -87,7 +87,7 @@ export default function ListView({
                 <DayHeading date={group.date} today={today} birthDate={birthDate} sectionTitle={section.title} />
                 <div className="space-y-2">
                   {group.tasks.map((task) => (
-                    <TaskRow key={task.id} task={task} onToggle={onToggleTodo} onOpen={onOpenTask} />
+                    <TaskRow key={task.occurrenceKey} task={task} onToggle={onToggleTodo} onOpen={onOpenTask} />
                   ))}
                 </div>
               </div>
@@ -107,7 +107,7 @@ export default function ListView({
           </p>
           <div className="space-y-2">
             {undated.map((task) => (
-              <TaskRow key={task.id} task={task} onToggle={onToggleTodo} onOpen={onOpenTask} />
+              <TaskRow key={task.occurrenceKey} task={task} onToggle={onToggleTodo} onOpen={onOpenTask} />
             ))}
           </div>
         </section>
@@ -130,7 +130,7 @@ export default function ListView({
           {showDone && (
             <div className="space-y-2 mt-1.5">
               {done.map((task) => (
-                <TaskRow key={task.id} task={task} onToggle={onToggleTodo} onOpen={onOpenTask} showDate />
+                <TaskRow key={task.occurrenceKey} task={task} onToggle={onToggleTodo} onOpen={onOpenTask} showDate />
               ))}
             </div>
           )}

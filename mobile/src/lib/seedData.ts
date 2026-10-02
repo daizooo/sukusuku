@@ -13,7 +13,7 @@ type TaskTemplateBase = Omit<TaskTemplate, 'kind' | 'owner'>;
 const birthRelative = (
   t: Omit<
     TaskTemplateBase,
-    'anchorType' | 'startDate' | 'startTime' | 'endTime' | 'isPrivate' | 'recurrence'
+    'anchorType' | 'startDate' | 'startTime' | 'endTime' | 'isPrivate' | 'recurrence' | 'doneDates'
   >,
 ): TaskTemplateBase => ({
   ...t,
@@ -25,6 +25,7 @@ const birthRelative = (
   isPrivate: false,
   // 定番の項目に繰り返しは無い。
   recurrence: null,
+  doneDates: [],
 });
 
 // 参加者がちょうど1人のときだけ、その人を主体(owner)とみなす

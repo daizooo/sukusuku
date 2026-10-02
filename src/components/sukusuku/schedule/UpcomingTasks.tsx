@@ -21,7 +21,7 @@ interface UpcomingTasksProps {
   tasks: DynamicTask[];
   isLoading?: boolean;
   today: Date;
-  onToggleTodo: (id: string) => void;
+  onToggleTodo: (task: DynamicTask) => void;
   onOpenTask: (task: DynamicTask) => void;
   onAddTask: () => void;
   /** 見出しを押したとき・期限切れの件数を押したときにリスト表示へ移る。 */
@@ -100,19 +100,19 @@ export default function UpcomingTasks({
             const owner = task.owner ?? (task.participants.length === 1 ? task.participants[0] : '');
             return (
               <div
-                key={task.id}
+                key={task.occurrenceKey}
                 role="button"
                 tabIndex={0}
                 onClick={() => onOpenTask(task)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') onOpenTask(task);
                 }}
-                className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-gray-50 transition"
+                className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-blue-50 active:bg-blue-100 transition"
               >
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onToggleTodo(task.id);
+                    onToggleTodo(task);
                   }}
                   aria-label={task.done ? '完了を取り消す' : '完了にする'}
                   className={`flex-none transition-colors ${task.done ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}

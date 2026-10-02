@@ -57,6 +57,10 @@
   ここで `Asia/Tokyo` として解釈して通知時刻を求めている。
   時刻の無い（終日の）予定・タスクは 09:00 を予定時刻とみなす。通知時刻は予定の日時そのもの
   （以前あった「何分前」の設定は廃止。0049）。
+- **繰り返す予定** — 日付指定で繰り返す予定・タスクはビューが返さず、`send-reminders` が
+  ルールを回ごとの日付へ展開して通知時刻を求める（`_shared/recurringReminders.ts`。展開の中身は
+  アプリ側と同じ `recurrenceExpand.ts` のコピー）。完了にした回（`done_dates`）は通知しない。
+  [calendar.md の「繰り返しの展開」](./calendar.md)
 - **出生日基準の予定** — 誕生日は `family_profiles.child_fields` (jsonb) にあるため、
   `family_birth_date()` 関数で取り出して `days_after_birth` を足している。
   誕生日が未登録の予定は日付が決まらないので通知されない。

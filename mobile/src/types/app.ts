@@ -35,7 +35,10 @@ export interface Task {
   // participants: 主体を含む、関わる全員（複数選択）。
   owner: Participant | null;
   participants: Participant[];
+  // 完了。繰り返さない予定・タスクはこれが完了状態。繰り返すものは回ごとに完了にするため
+  // 使わず（常に false）、完了にした回の日付を doneDates に持つ。
   done: boolean;
+  doneDates: string[]; // 'YYYY-MM-DD'。繰り返すものだけ
   // 共有設定。true は自分だけに見える（作成した本人以外には表示されない）。
   isPrivate: boolean;
   // 繰り返し設定。null なら繰り返さない単発の予定・タスク。
@@ -72,9 +75,17 @@ export interface Recurrence {
 }
 
 // UI表示用に実際の日付を解決して付与したタスク
+//
+// 繰り返す予定・タスクは、回ごとに1件の DynamicTask に展開する（scheduleUtils の expandOccurrences）。
+// id は元の予定のまま（編集・削除は全部の回に効く）で、回を見分けるのは occurrenceKey。
+// 展開した回の done は、その回の日付が doneDates に入っているか。
 export interface DynamicTask extends Task {
   targetDateObj: Date | null;
   targetDate: string;
+  /** 回の日付 'YYYY-MM-DD'。日付が決まらない（生後日数で誕生日が未登録）ときは null。 */
+  occurrenceDate: string | null;
+  /** 一覧の key などに使う、回ごとに一意な値（繰り返さないものは id と同じ）。 */
+  occurrenceKey: string;
 }
 
 export type LogType = 'milk' | 'diaper' | 'pumping' | 'temperature';

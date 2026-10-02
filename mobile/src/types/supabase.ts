@@ -774,6 +774,7 @@ export type Database = {
       tasks: {
         Row: {
           anchor_type: string
+          done_dates: string[]
           belongings: string | null
           category: string
           created_at: string
@@ -800,6 +801,7 @@ export type Database = {
         }
         Insert: {
           anchor_type?: string
+          done_dates?: string[]
           belongings?: string | null
           category?: string
           created_at?: string
@@ -826,6 +828,7 @@ export type Database = {
         }
         Update: {
           anchor_type?: string
+          done_dates?: string[]
           belongings?: string | null
           category?: string
           created_at?: string

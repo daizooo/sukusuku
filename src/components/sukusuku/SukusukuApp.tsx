@@ -44,7 +44,9 @@ import {
   listTasks,
   updateTask as updateTaskApi,
   updateTaskDone,
+  updateTaskDoneDates,
 } from '@/lib/api/tasks';
+import { toggledDoneDates } from '@/lib/scheduleExpand';
 import type { NewCareLogInput } from '@/lib/api/careLogs';
 import {
   deleteCareLog,
@@ -753,10 +755,13 @@ export default function SukusukuApp({
         todo.anchorType === 'absolute'
           ? parseDateString(todo.startDate ?? '')
           : calculateTargetDate(birthDateValue, todo.daysAfterBirth);
+      // 繰り返す予定はここでは1件のまま（元の予定）。表示する範囲ごとに ScheduleTab で回へ展開する。
       return {
         ...todo,
         targetDateObj,
         targetDate: formatDateString(targetDateObj),
+        occurrenceDate: targetDateObj ? toDateString(targetDateObj) : null,
+        occurrenceKey: todo.id,
       };
     });
   }, [todos, birthDateValue]);
@@ -764,9 +769,42 @@ export default function SukusukuApp({
   // 育児タブの見出しに出す子の月齢（「生後123日目（4ヶ月2日）」）。
   const babyAge = useMemo(() => formatBabyAge(birthDateValue, today), [birthDateValue, today]);
 
-  const toggleTodo = async (id: string) => {
-    const target = todos.find((t) => t.id === id);
+  // 完了の切り替え。繰り返す予定は、押した1回だけを完了にする（done_dates）。
+  // 繰り返さない予定は、予定そのものの完了（is_done）。
+  const toggleTodo = async (task: DynamicTask) => {
+    const target = todos.find((t) => t.id === task.id);
     if (!target) return;
+
+    if (target.recurrence && task.occurrenceDate) {
+      const date = task.occurrenceDate;
+      const previousDates = target.doneDates;
+      const nextDates = toggledDoneDates(previousDates, date);
+      const nextDone = nextDates.includes(date);
+
+      // 楽観的更新
+      setTodos((prev) => prev.map((todo) => (todo.id === task.id ? { ...todo, doneDates: nextDates } : todo)));
+      setSelectedTask((prev) =>
+        prev && prev.occurrenceKey === task.occurrenceKey ? { ...prev, done: nextDone, doneDates: nextDates } : prev,
+      );
+
+      try {
+        await updateTaskDoneDates(supabase, task.id, nextDates);
+      } catch (err) {
+        console.error('Failed to update task:', err);
+        // 失敗時はロールバック
+        setTodos((prev) =>
+          prev.map((todo) => (todo.id === task.id ? { ...todo, doneDates: previousDates } : todo)),
+        );
+        setSelectedTask((prev) =>
+          prev && prev.occurrenceKey === task.occurrenceKey
+            ? { ...prev, done: !nextDone, doneDates: previousDates }
+            : prev,
+        );
+      }
+      return;
+    }
+
+    const id = task.id;
     const nextDone = !target.done;
 
     // 楽観的更新
@@ -795,8 +833,17 @@ export default function SukusukuApp({
     if (!tempEditingTask) return;
     const updated = tempEditingTask;
 
-    setTodos((prev) => prev.map((todo) => (todo.id === updated.id ? { ...todo, ...updated } : todo)));
-    setSelectedTask(updated);
+    // 編集の対象は展開した1回ぶんだが、保存されるのは元の予定（全部の回に効く）。
+    // 完了の状態は編集では変えないので、元の予定の値を残す。
+    setTodos((prev) =>
+      prev.map((todo) =>
+        todo.id === updated.id
+          ? { ...todo, ...updated, doneDates: todo.doneDates, done: updated.recurrence ? false : updated.done }
+          : todo,
+      ),
+    );
+    // 繰り返す予定は、日付や繰り返しを直すとこの回が無くなることがあるので詳細も閉じる。
+    setSelectedTask(updated.recurrence ? null : updated);
     setIsEditingTask(false);
 
     try {
@@ -1487,7 +1534,7 @@ export default function SukusukuApp({
         onChangeTempEditingTask={setTempEditingTask}
         onSaveEdit={saveTaskEdit}
         onClose={closeTaskDetail}
-        onToggleDone={() => selectedTask && toggleTodo(selectedTask.id)}
+        onToggleDone={() => selectedTask && toggleTodo(selectedTask)}
         onDelete={() => selectedTask && handleDeleteTask(selectedTask.id)}
       />
     </div>

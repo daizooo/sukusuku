@@ -29,7 +29,7 @@ import RecurrenceModal from './RecurrenceModal';
 // 通知の設定は持たない。予定・タスクとも、設定した日時に必ず通知する（時刻が無い
 // ものは終日として朝9時。docs/calendar.md §5）。
 // 出す中身と並びはmobile版（mobile/src/components/schedule/TaskForm.tsx）と同じ。
-export type TaskDraft = Omit<Task, 'id' | 'done'>;
+export type TaskDraft = Omit<Task, 'id' | 'done' | 'doneDates'>;
 
 interface TaskFormProps {
   value: TaskDraft;

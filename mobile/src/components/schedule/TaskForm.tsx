@@ -39,7 +39,7 @@ import RecurrenceModal from './RecurrenceModal';
 // 日付・時刻はWeb版では <input> だが、React Nativeには無いので
 // 端末のピッカーと選択欄で置き換えている（出す中身と並びは同じ）。
 
-export type TaskDraft = Omit<Task, 'id' | 'done'>;
+export type TaskDraft = Omit<Task, 'id' | 'done' | 'doneDates'>;
 
 interface TaskFormProps {
   value: TaskDraft;

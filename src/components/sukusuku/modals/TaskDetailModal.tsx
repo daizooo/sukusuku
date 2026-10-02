@@ -65,6 +65,10 @@ export default function TaskDetailModal({
           </button>
         }
       >
+        {/* 繰り返す予定は、開いている1回ではなく元の予定を直す。全部の回に反映される。 */}
+        {tempEditingTask.recurrence && (
+          <p className="text-xs font-medium text-gray-500 mb-3">繰り返す予定の変更は、すべての回に反映されます。</p>
+        )}
         <TaskForm
           value={tempEditingTask}
           onChange={(draft) => onChangeTempEditingTask({ ...tempEditingTask, ...draft })}
@@ -97,7 +101,11 @@ export default function TaskDetailModal({
             )}
           </button>
           <button onClick={onDelete} className="w-full text-center text-xs text-red-500 font-medium py-2">
-            {isEvent ? 'この予定を削除' : 'このタスクを削除'}
+            {selectedTask.recurrence
+              ? `この${isEvent ? '予定' : 'タスク'}をすべての回とともに削除`
+              : isEvent
+                ? 'この予定を削除'
+                : 'このタスクを削除'}
           </button>
         </div>
       }
