@@ -77,11 +77,12 @@ export default function DayView({
         </View>
         {tasks.length === 0 ? (
           // 予定が無いところを押すと、その日の予定・タスクの追加を開く。
+          // 予定の行と逆に、触れても色は変えない（Googleカレンダーと同じ）。
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="予定はありません 押すとこの日に追加"
             onPress={() => onAddTask(date)}
-            style={({ pressed }) => [styles.empty, pressed && styles.emptyPressed]}
+            style={styles.empty}
           >
             <Text style={styles.emptyText}>予定はありません</Text>
           </Pressable>
@@ -140,7 +141,6 @@ const styles = StyleSheet.create({
   link: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   linkText: { fontSize: 12, fontWeight: '500', color: colors.navActive },
   emptyText: { fontSize: 14, color: colors.textFaint, textAlign: 'center' },
-  emptyPressed: { backgroundColor: colors.selectedSurface },
   empty: {
     paddingVertical: 20,
     backgroundColor: colors.surface,

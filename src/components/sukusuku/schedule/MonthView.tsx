@@ -86,7 +86,10 @@ const useElementSize = () => {
  * - 日付の数字 → その日の日表示
  * - 予定のチップ → 予定の詳細
  * - それ以外のマスの中（予定の無いところ） → その日の予定・タスクの追加
- * どれもカーソルを合わせる・触れている間は色が変わる（mobile版は触れている間の色）。
+ * 手触りはGoogleカレンダーと同じく、予定と空きで逆にする:
+ * - 予定のチップ・日付の数字 → カーソルが指の形になり、合わせる・押している間は色が濃くなる
+ * - 予定の無いマスの中 → カーソルは矢印のまま、色も変えない（押すと追加が開く）
+ * （mobile版は触れている間の色だけ。チップと日付の数字だけが変わり、空きは変わらない）
  */
 export default function MonthView({
   month,
@@ -159,8 +162,8 @@ export default function MonthView({
                   onAddTask(date);
                 }
               }}
-              className={`min-w-0 overflow-hidden border-r border-b border-gray-100 [&:nth-child(7n)]:border-r-0 px-1 pt-1 pb-1 text-left cursor-pointer transition ${
-                isSelected ? 'bg-blue-50/70 ring-1 ring-inset ring-blue-400 hover:bg-blue-100/70' : 'hover:bg-gray-100'
+              className={`min-w-0 overflow-hidden border-r border-b border-gray-100 [&:nth-child(7n)]:border-r-0 px-1 pt-1 pb-1 text-left cursor-default ${
+                isSelected ? 'bg-blue-50/70 ring-1 ring-inset ring-blue-400' : ''
               } ${isOtherMonth ? 'bg-gray-50/60' : ''}`}
             >
               <div className="flex items-center justify-center">
@@ -171,7 +174,7 @@ export default function MonthView({
                     e.stopPropagation();
                     onSelectDate(date);
                   }}
-                  className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] leading-none transition ${
+                  className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] leading-none cursor-pointer transition ${
                     isToday
                       ? 'bg-blue-500 text-white font-bold hover:bg-blue-600 active:bg-blue-700'
                       : isOtherMonth
@@ -206,8 +209,9 @@ export default function MonthView({
                       e.stopPropagation();
                       onOpenTask(task);
                     }}
-                    // カーソルを合わせる・押している間は色を濃くして、触った感を出す。
-                    className={`w-full text-left text-[9px] leading-tight px-1 py-0.5 rounded border truncate transition hover:brightness-95 active:brightness-90 ${
+                    // カーソルを指の形にし、合わせる・押している間は色を濃くして、触った感を出す。
+    // （空きのマスは逆に、カーソルも色も変えない）
+                    className={`w-full text-left text-[9px] leading-tight px-1 py-0.5 rounded border truncate cursor-pointer transition hover:brightness-90 active:brightness-75 ${
                       task.done
                         ? 'bg-gray-100 text-gray-400 border-gray-200 line-through'
                         : getOwnerTone(task.owner, task.participants)

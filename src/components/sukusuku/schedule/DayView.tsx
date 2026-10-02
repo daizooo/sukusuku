@@ -72,10 +72,11 @@ export default function DayView({
         </div>
         {tasks.length === 0 ? (
           // 予定が無いところを押すと、その日の予定・タスクの追加を開く。
+          // 予定の行と逆に、カーソルも色も変えない（Googleカレンダーと同じ）。
           <button
             onClick={() => onAddTask(date)}
             aria-label="予定はありません 押すとこの日に追加"
-            className="w-full text-sm text-gray-400 text-center py-5 bg-white rounded-xl border border-gray-100 transition hover:bg-blue-50 active:bg-blue-100"
+            className="w-full text-sm text-gray-400 text-center py-5 bg-white rounded-xl border border-gray-100 cursor-default"
           >
             予定はありません
           </button>

@@ -23,7 +23,8 @@ import { colors } from '@/lib/theme';
 // - 日付の数字 → その日の日表示
 // - 予定のチップ → 予定の詳細
 // - それ以外のマスの中（予定の無いところ） → その日の予定・タスクの追加
-// どれも触れている間は色が変わる。
+// 手触りは予定と空きで逆にする（Googleカレンダーと同じ）。予定のチップ・日付の数字は
+// 触れている間に色が変わり、予定の無いマスの中は変わらない。
 //
 // 高さは親から与えられたぶんを週の数で等分する。画面全体をスクロールさせないため、
 // マスに入りきらない予定は「+n件」に寄せる。
@@ -137,13 +138,12 @@ export default function MonthView({
                   accessibilityRole="button"
                   accessibilityLabel={`${date.getMonth() + 1}月${date.getDate()}日${holiday ? ` ${holiday}` : ''} 予定${dayTasks.length}件 押すと予定を追加`}
                   onPress={() => onAddTask(date)}
-                  style={({ pressed }) => [
+                  style={[
                     styles.cell,
                     // 最終列の右の線はカードの縁と重なるので引かない。
                     columnIndex === 6 && styles.cellLastColumn,
                     isOtherMonth && styles.cellOtherMonth,
                     isSelected && styles.cellSelected,
-                    pressed && styles.cellPressed,
                   ]}
                 >
                   <View style={styles.dateRow}>
@@ -271,7 +271,6 @@ const styles = StyleSheet.create({
   cellLastColumn: { borderRightColor: 'transparent' },
   cellOtherMonth: { backgroundColor: colors.background },
   cellSelected: { backgroundColor: colors.selectedSurface, borderColor: colors.selectedRing },
-  cellPressed: { backgroundColor: colors.neutralSurface },
   dateRow: { alignItems: 'center' },
   dateBubble: {
     width: DATE_HEIGHT,
