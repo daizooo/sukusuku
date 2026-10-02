@@ -72,7 +72,6 @@ const emptyTaskDraft = (date: Date, owner: Participant | null): TaskDraft => ({
   daysAfterBirth: 0,
   owner,
   participants: owner ? [owner] : [],
-  remindMinutesBefore: null,
   isPrivate: false,
   recurrence: null,
   timing: '',

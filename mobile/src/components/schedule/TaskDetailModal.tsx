@@ -1,6 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
-  BellRing,
   Calendar,
   CheckCircle2,
   Clock,
@@ -14,7 +13,7 @@ import {
   Text as TextIcon,
 } from 'lucide-react-native';
 import type { DynamicTask } from '@/types/app';
-import { formatReminder, formatTimeRange } from '@/lib/dateUtils';
+import { formatTimeRange } from '@/lib/dateUtils';
 import { summarizeRecurrence } from '@/lib/recurrence';
 import { getOwnerTone } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
@@ -38,7 +37,7 @@ interface TaskDetailModalProps {
   onDelete: () => void;
 }
 
-/** 詳細の1項目（日付・時刻・場所・リマインダー）。 */
+/** 詳細の1項目（日付・時刻・場所など）。 */
 function DetailRow({
   icon,
   label,
@@ -189,13 +188,11 @@ export default function TaskDetailModal({
               : undefined
           }
         />
-        {isEvent && (
-          <DetailRow
-            icon={<Clock size={14} color={colors.textMuted} />}
-            label="時刻"
-            value={formatTimeRange(selectedTask.startTime, selectedTask.endTime)}
-          />
-        )}
+        <DetailRow
+          icon={<Clock size={14} color={colors.textMuted} />}
+          label="時刻"
+          value={formatTimeRange(selectedTask.startTime, selectedTask.endTime)}
+        />
         {isEvent && (
           <DetailRow
             icon={<MapPin size={14} color={colors.textMuted} />}
@@ -217,16 +214,11 @@ export default function TaskDetailModal({
             value={selectedTask.participants.length > 0 ? selectedTask.participants.join('・') : '未設定'}
           />
         )}
-        <DetailRow
-          icon={<BellRing size={14} color={colors.textMuted} />}
-          label="リマインダー"
-          value={formatReminder(selectedTask.remindMinutesBefore)}
-        />
         {selectedTask.recurrence && (
           <DetailRow
             icon={<Repeat size={14} color={colors.textMuted} />}
             label="繰り返し"
-            value={summarizeRecurrence(selectedTask.recurrence)}
+            value={summarizeRecurrence(selectedTask.recurrence, selectedTask.startDate)}
           />
         )}
       </View>

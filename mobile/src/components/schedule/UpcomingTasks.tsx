@@ -1,7 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   AlertTriangle,
-  BellRing,
   CheckCircle2,
   ChevronRight,
   Circle,
@@ -160,13 +159,6 @@ export default function UpcomingTasks({
                   )}
                 </View>
 
-                {/* 通知の有無。無い行も幅を空けて、主催者の位置をそろえる。 */}
-                <View style={styles.bell}>
-                  {task.remindMinutesBefore !== null && (
-                    <BellRing size={14} color={colors.milkProgress} />
-                  )}
-                </View>
-
                 {/* 主催者（主体）。主体が未設定の古い予定は、参加者が1人のときだけその人を出す。 */}
                 <View
                   style={[
@@ -228,7 +220,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  // 列の幅は固定して、行ごとに並びがずれないようにする（日付・通知・主催者）。
+  // 列の幅は固定して、行ごとに並びがずれないようにする（日付・主催者）。
   when: { width: 72 },
   whenYear: { fontSize: 10, fontWeight: '500', color: colors.textFaint, fontVariant: ['tabular-nums'] },
   whenDate: { fontSize: 13, fontWeight: '700', color: colors.navActive, fontVariant: ['tabular-nums'] },
@@ -236,7 +228,6 @@ const styles = StyleSheet.create({
   taskTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
   placeRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   place: { flex: 1, fontSize: 11, fontWeight: '500', color: colors.textMuted },
-  bell: { width: 16, alignItems: 'center' },
   label: {
     width: 48,
     alignItems: 'center',

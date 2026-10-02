@@ -1,6 +1,6 @@
 # リマインダー通知の仕組みと設定手順
 
-予定に設定したリマインダーを、その時刻に端末へ通知として届けるための仕組み。
+予定・タスクを、設定した日時に端末へ通知として届けるための仕組み（通知の設定は持たず、必ず通知する。[calendar.md §5](./calendar.md)）。
 
 **受け取り手はネイティブ版（Android）だけ。** FCMで受け取る。セットアップは §11。
 
@@ -55,7 +55,8 @@
 - **通知のタイミング** — `task_reminder_schedule` ビューが計算する。
   日付・時刻は `date` + `time` で保存されている（[calendar.md](./calendar.md) 参照）ため、
   ここで `Asia/Tokyo` として解釈して通知時刻を求めている。
-  終日予定は 09:00 を予定時刻とみなすので、「前日」を選ぶと前日の 09:00 に届く。
+  時刻の無い（終日の）予定・タスクは 09:00 を予定時刻とみなす。通知時刻は予定の日時そのもの
+  （以前あった「何分前」の設定は廃止。0049）。
 - **出生日基準の予定** — 誕生日は `family_profiles.child_fields` (jsonb) にあるため、
   `family_birth_date()` 関数で取り出して `days_after_birth` を足している。
   誕生日が未登録の予定は日付が決まらないので通知されない。
@@ -68,7 +69,7 @@
 同じ通知が2度飛ばないようにしている。送信前に `pending` の行を作って送信権を取るので、
 実行が重なっても送るのは片方だけになる。
 
-予定の日時やリマインダー設定を変えると `scheduled_for` が変わるため、
+予定の日時を変えると `scheduled_for` が変わるため、
 変更後は改めて通知される。
 
 ---
@@ -162,7 +163,7 @@ select id, user_agent, created_at, last_success_at, failure_count
   from push_subscriptions;
 
 -- 2. 通知時刻がどう計算されているか
-select title, target_date, start_time, remind_minutes_before,
+select title, target_date, start_time,
        remind_at at time zone 'Asia/Tokyo' as remind_at_jst
   from task_reminder_schedule
  order by remind_at;

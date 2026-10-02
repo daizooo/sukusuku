@@ -30,12 +30,11 @@ export interface Task {
   startTime: string | null; // 'HH:mm' / null なら終日
   endTime: string | null; // 'HH:mm'
   daysAfterBirth: number; // anchorType === 'birth_relative' のときのみ意味を持つ
-  // 主体・参加者・リマインダー
+  // 主体・参加者
   // owner: 色分けの基準になる「主体」(1人だけ、または未設定)。
   // participants: 主体を含む、関わる全員（複数選択）。
   owner: Participant | null;
   participants: Participant[];
-  remindMinutesBefore: number | null; // null は通知なし
   done: boolean;
   // 共有設定。true は自分だけに見える（作成した本人以外には表示されない）。
   isPrivate: boolean;
@@ -51,6 +50,9 @@ export interface Task {
 // 注意（スコープ）: これは「繰り返しのルール」を保存・表示するためだけの型。
 // 1件のタスクを実際に複数の日付へ展開してカレンダー上に並べる処理は別途必要で、
 // 現時点ではまだ実装していない。
+//
+// 毎月・毎年の「何日か」は開始日（start_date）から決まるので持たない
+// （Googleカレンダーと同じ）。毎月を「第n曜日」で数えるときだけ byNthWeekday を持つ。
 export type RecurrenceFreq = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 export type RecurrenceEnd =
@@ -63,6 +65,9 @@ export interface Recurrence {
   interval: number; // 1以上（「2週間ごと」なら freq: 'weekly', interval: 2）
   // freq === 'weekly' のときだけ意味を持つ。0=日 ... 6=土（Date#getDayと同じ）。
   byWeekday?: number[];
+  // freq === 'monthly' のときだけ意味を持つ。無ければ「毎月その日」（開始日の日付）。
+  // あれば「毎月 第n曜日」。nth は 1〜4、最終週は -1。weekday は 0=日 ... 6=土。
+  byNthWeekday?: { nth: number; weekday: number };
   end: RecurrenceEnd;
 }
 

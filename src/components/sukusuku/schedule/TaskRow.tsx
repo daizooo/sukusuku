@@ -1,6 +1,6 @@
 'use client';
 
-import { BellRing, CalendarDays, CheckCircle2, Circle, Clock, Lock, MapPin } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Circle, Clock, Lock, MapPin } from 'lucide-react';
 import type { DynamicTask } from '@/types/app';
 import { getOwnerTone } from '@/lib/uiUtils';
 import { formatTimeRange } from '@/lib/dateUtils';
@@ -34,9 +34,6 @@ export default function TaskRow({ task, onToggle, onOpen, showDate }: TaskRowPro
         <div className="flex justify-between items-start">
           <p className={`font-medium text-sm leading-tight ${task.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
             {task.title}
-            {task.remindMinutesBefore !== null && !task.done && (
-              <BellRing size={12} className="inline ml-1.5 text-yellow-500 mb-0.5" />
-            )}
             {task.isPrivate && <Lock size={12} className="inline ml-1.5 text-gray-400 mb-0.5" aria-label="自分だけ" />}
           </p>
           {task.participants.length > 0 && (
@@ -54,7 +51,7 @@ export default function TaskRow({ task, onToggle, onOpen, showDate }: TaskRowPro
               {task.targetDate}
             </span>
           )}
-          {task.kind === 'event' && (
+          {(task.kind === 'event' || task.startTime !== null) && (
             <span className="flex items-center">
               <Clock size={12} className="mr-1" />
               {formatTimeRange(task.startTime, task.endTime)}

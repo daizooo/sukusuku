@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  BellRing,
   Calendar,
   CheckCircle2,
   Clock,
@@ -16,7 +15,7 @@ import {
 } from 'lucide-react';
 import type { DynamicTask } from '@/types/app';
 import { getOwnerTone } from '@/lib/uiUtils';
-import { formatReminder, formatTimeRange } from '@/lib/dateUtils';
+import { formatTimeRange } from '@/lib/dateUtils';
 import { summarizeRecurrence } from '@/lib/recurrence';
 import TaskForm, { ModalShell } from './TaskForm';
 
@@ -146,16 +145,14 @@ export default function TaskDetailModal({
             </p>
           )}
         </div>
-        {isEvent && (
-          <div>
-            <p className="text-gray-500 text-xs mb-1 flex items-center">
-              <Clock size={14} className="mr-1" /> 時刻
-            </p>
-            <p className="font-medium text-gray-800">
-              {formatTimeRange(selectedTask.startTime, selectedTask.endTime)}
-            </p>
-          </div>
-        )}
+        <div>
+          <p className="text-gray-500 text-xs mb-1 flex items-center">
+            <Clock size={14} className="mr-1" /> 時刻
+          </p>
+          <p className="font-medium text-gray-800">
+            {formatTimeRange(selectedTask.startTime, selectedTask.endTime)}
+          </p>
+        </div>
         {isEvent && (
           <div>
             <p className="text-gray-500 text-xs mb-1 flex items-center">
@@ -182,18 +179,12 @@ export default function TaskDetailModal({
             </p>
           </div>
         )}
-        <div>
-          <p className="text-gray-500 text-xs mb-1 flex items-center">
-            <BellRing size={14} className="mr-1" /> リマインダー
-          </p>
-          <p className="font-medium text-gray-800">{formatReminder(selectedTask.remindMinutesBefore)}</p>
-        </div>
         {selectedTask.recurrence && (
           <div>
             <p className="text-gray-500 text-xs mb-1 flex items-center">
               <Repeat size={14} className="mr-1" /> 繰り返し
             </p>
-            <p className="font-medium text-gray-800">{summarizeRecurrence(selectedTask.recurrence)}</p>
+            <p className="font-medium text-gray-800">{summarizeRecurrence(selectedTask.recurrence, selectedTask.startDate)}</p>
           </div>
         )}
       </div>

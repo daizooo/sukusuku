@@ -47,7 +47,6 @@ export const rowToTask = (row: TaskRow): Task => ({
   kind: toKind(row.kind),
   owner: toOwner(row.owner),
   participants: toParticipants(row.participants),
-  remindMinutesBefore: row.remind_minutes_before,
   done: row.is_done,
   isPrivate: row.is_private,
   recurrence: toRecurrence(row.recurrence),
@@ -69,7 +68,9 @@ const toWritableRow = (input: NewTaskInput) => ({
   days_after_birth: input.daysAfterBirth,
   owner: input.owner,
   participants: input.participants,
-  remind_minutes_before: input.remindMinutesBefore,
+  // 通知の設定は持たない。設定した日時に必ず通知する（0049）。列は旧版との互換のため
+  // 残してあり、配信側は値を見ないが、旧版が読んでも壊れないよう常に0（時刻ちょうど）を書く。
+  remind_minutes_before: 0,
   is_private: input.isPrivate,
   // Recurrenceは自己完結したJSON互換の形だが、interfaceにインデックスシグネチャが
   // 無いためJsonへは構造的に代入できない。中身はJSONとして書き出せる値のみなのでキャストする。

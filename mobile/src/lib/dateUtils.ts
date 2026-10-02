@@ -115,22 +115,6 @@ export const isSameDay = (a: Date | null, b: Date | null): boolean => {
   );
 };
 
-// リマインダーの選択肢（分単位。null は通知なし）
-export const REMINDER_OPTIONS: { value: number | null; label: string }[] = [
-  { value: null, label: '通知しない' },
-  { value: 0, label: '予定の時刻' },
-  { value: 10, label: '10分前' },
-  { value: 30, label: '30分前' },
-  { value: 60, label: '1時間前' },
-  { value: 1440, label: '前日' },
-  { value: 2880, label: '2日前' },
-];
-
-export const formatReminder = (minutes: number | null): string => {
-  const option = REMINDER_OPTIONS.find((o) => o.value === minutes);
-  return option ? option.label : `${minutes}分前`;
-};
-
 // --- カレンダー表示用 ---
 
 // その週の日曜0:00を返す（月グリッド・週表示の起点）

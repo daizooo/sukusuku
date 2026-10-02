@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, BellRing, CheckCircle2, ChevronRight, Circle, MapPin, Plus } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronRight, Circle, MapPin, Plus } from 'lucide-react';
 import type { DynamicTask } from '@/types/app';
 import { WEEKDAY_LABELS, startOfDay } from '@/lib/dateUtils';
 import { getOwnerTone } from '@/lib/uiUtils';
@@ -141,11 +141,6 @@ export default function UpcomingTasks({
                     </span>
                   )}
                 </div>
-
-                {/* 通知の有無。無い行も幅を空けて、主催者の位置をそろえる。 */}
-                <span className="flex-none w-4 flex justify-center">
-                  {task.remindMinutesBefore !== null && <BellRing size={14} className="text-yellow-500" />}
-                </span>
 
                 {/* 主催者（主体）。主体が未設定の古い予定は、参加者が1人のときだけその人を出す。 */}
                 <span
