@@ -1,32 +1,29 @@
-import type { ProfileFieldKey, UserProfile } from '@/types/app';
+import type { MemberColor, ProfileFieldKey, UserProfile } from '@/types/app';
+import { participantColorName } from '@/lib/familyRoster';
 
-// 参加者1人のバッジ配色（大造=青 / いづみ=赤 / 岳=緑 / それ以外=灰）。
-export const getParticipantColor = (participant: string): string => {
-  switch (participant) {
-    case '大造':
-      return 'bg-blue-100 text-blue-700 border-blue-200';
-    case 'いづみ':
-      return 'bg-red-100 text-red-700 border-red-200';
-    case '岳':
-      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-    default:
-      return 'bg-gray-100 text-gray-600 border-gray-200';
-  }
+// 参加者1人のバッジ配色（家族メンバーの色ごと）。
+const TONE_BY_COLOR: Record<MemberColor, string> = {
+  blue: 'bg-blue-100 text-blue-700 border-blue-200',
+  pink: 'bg-red-100 text-red-700 border-red-200',
+  emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  gray: 'bg-gray-100 text-gray-600 border-gray-200',
 };
+
+const DOT_BY_COLOR: Record<MemberColor, string> = {
+  blue: 'bg-blue-500',
+  pink: 'bg-red-500',
+  emerald: 'bg-emerald-500',
+  gray: 'bg-gray-400',
+};
+
+// 参加者1人の色分け。色は家族メンバーの色（設定タブの「家族」。lib/familyRoster.ts）、
+// 家族にいない名前は灰。
+export const getParticipantColor = (participant: string): string =>
+  TONE_BY_COLOR[participantColorName(participant)];
 
 // カレンダーのドット表示用（参加者1人の塗り色）
-export const getParticipantDotColor = (participant: string): string => {
-  switch (participant) {
-    case '大造':
-      return 'bg-blue-500';
-    case 'いづみ':
-      return 'bg-red-500';
-    case '岳':
-      return 'bg-emerald-500';
-    default:
-      return 'bg-gray-400';
-  }
-};
+export const getParticipantDotColor = (participant: string): string =>
+  DOT_BY_COLOR[participantColorName(participant)];
 
 // 予定・タスクの参加者の色分け。参加者がちょうど1人のときだけその人の色にし、
 // 0人または複数（=まとめて関わる）のときは既定の色にする。

@@ -1,6 +1,5 @@
 'use client';
 
-import type { Member } from '@/types/app';
 import NotificationSetting from '@/components/sukusuku/NotificationSetting';
 import FeedingIntervalSetting from '@/components/sukusuku/FeedingIntervalSetting';
 import TemperatureReminderSetting from '@/components/sukusuku/TemperatureReminderSetting';
@@ -16,8 +15,6 @@ import type { TemperatureReminderSettings } from '@/lib/api/temperatureReminderS
 interface InfoTabProps {
   familyId: string;
   userId: string;
-  /** 家族の情報を直したとき。子の誕生日（生後日数・出生日基準の予定）を反映するのに使う。 */
-  onMembersChange: (members: Member[]) => void;
   /** 次の授乳の目安の設定。家族で共通なので、変更はアプリ全体へ反映する。 */
   feedingSettings: FeedingSettings;
   onChangeFeedingSettings: (settings: FeedingSettings) => void;
@@ -29,7 +26,6 @@ interface InfoTabProps {
 export default function InfoTab({
   familyId,
   userId,
-  onMembersChange,
   feedingSettings,
   onChangeFeedingSettings,
   temperatureReminderSettings,
@@ -39,7 +35,7 @@ export default function InfoTab({
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <div className="flex-1 overflow-y-auto">
         <div className="space-y-6 pb-6">
-          <FamilySection familyId={familyId} userId={userId} onMembersChange={onMembersChange} />
+          <FamilySection familyId={familyId} userId={userId} />
 
           {/* 通知。授乳の目安・検温のお知らせも同じ枠にまとめる（docs/family-app.md §7-5） */}
           <NotificationSetting familyId={familyId} userId={userId}>

@@ -19,7 +19,6 @@ import type {
   ListGroup,
   ListItem,
   LogType,
-  LoginRole,
   Member,
   Nursery,
   Participant,
@@ -27,7 +26,6 @@ import type {
   Task,
   TabId,
 } from '@/types/app';
-import { ROLE_TO_PARTICIPANT } from '@/types/app';
 import {
   addDays,
   calculateTargetDate,
@@ -95,7 +93,8 @@ import {
   updateNursery as updateNurseryApi,
 } from '@/lib/api/nurseries';
 import { listFamilyMembers } from '@/lib/api/familyMembers';
-import { getChildMember } from '@/lib/api/members';
+import { listMembers } from '@/lib/api/members';
+import { myParticipantName, setFamilyRoster, useFamilyRoster } from '@/lib/familyRoster';
 import { formatBabyAge } from '@/lib/memberUtils';
 import {
   deleteDoneItems,
@@ -230,7 +229,6 @@ const getClientTodayDateString = (): string => toDateString(new Date());
 interface SukusukuAppProps {
   familyId: string;
   userId: string;
-  role: LoginRole;
   // サーバー側(page.tsx)で取得済みのタスク。あればhydration後の再取得を省略する。
   // 取得に失敗していた場合はnullで、その場合は従来通りクライアント側で取得する。
   initialTasks: Task[] | null;
@@ -245,7 +243,6 @@ interface SukusukuAppProps {
 export default function SukusukuApp({
   familyId,
   userId,
-  role,
   initialTasks,
   todayDateString,
   initialTab,
@@ -350,7 +347,10 @@ export default function SukusukuApp({
   }, [today]);
 
   // ログイン中の役割から、新しい予定の主体・参加者の初期値を決める（パパ→大造 / ママ→いづみ）。
-  const ownerFromRole: Participant | null = role ? ROLE_TO_PARTICIPANT[role] : null;
+  // 家族メンバー（予定の参加者の名前と色。lib/familyRoster.ts）。
+  const roster = useFamilyRoster();
+  // ログインしている人の表示名。新規の予定・タスクの主体の初期値に使う。
+  const ownerFromRole: Participant | null = myParticipantName(userId, roster);
   const [newTask, setNewTask] = useState<TaskDraft>(() => emptyTaskDraft(today, ownerFromRole));
 
   // --- スケジュール（カレンダー） ---
@@ -364,7 +364,7 @@ export default function SukusukuApp({
 
   // 生後日数・出生日基準の予定に使う子。名前・誕生日は設定タブの「家族」で変える
   // （docs/family-app.md §3）。
-  const [childMember, setChildMember] = useState<Member | null>(null);
+  const childMember: Member | null = roster.find((member) => member.relation === 'child') ?? null;
 
   // 家族のタスクをSupabaseから取得
   // サーバー側(page.tsx)で取得済み(initialTasks)なら、hydration後の再取得はスキップする。
@@ -639,12 +639,12 @@ export default function SukusukuApp({
 
   useEffect(() => {
     let cancelled = false;
-    getChildMember(supabase, familyId)
-      .then((child) => {
-        if (!cancelled) setChildMember(child);
+    listMembers(supabase, familyId)
+      .then((members) => {
+        if (!cancelled) setFamilyRoster(members);
       })
       .catch((err) => {
-        console.error('Failed to load child member:', err);
+        console.error('Failed to load family members:', err);
       });
     return () => {
       cancelled = true;
@@ -1433,9 +1433,6 @@ export default function SukusukuApp({
             <InfoTab
               familyId={familyId}
               userId={userId}
-              onMembersChange={(members) =>
-                setChildMember(members.find((member) => member.relation === 'child') ?? null)
-              }
               feedingSettings={feedingSettings}
               onChangeFeedingSettings={setFeedingSettings}
               temperatureReminderSettings={temperatureReminderSettings}

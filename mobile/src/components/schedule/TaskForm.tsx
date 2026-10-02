@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-nati
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { BellRing, Clock, Lock, MapPin, Repeat, Star, Users, Text as TextIcon } from 'lucide-react-native';
 import type { AnchorType, Participant, Recurrence, RecurrenceFreq, Task, TaskKind } from '@/types/app';
-import { PARTICIPANTS } from '@/types/app';
+import { participantNames, useFamilyRoster } from '@/lib/familyRoster';
 import {
   REMINDER_OPTIONS,
   WEEKDAY_LABELS,
@@ -52,6 +52,13 @@ const SHARING_TABS: { value: boolean; label: string }[] = [
 ];
 
 export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFormProps) {
+  // 参加者として選べるのは家族メンバー（設定タブの「家族」の表示名の並び）。
+  const roster = useFamilyRoster();
+  // 予定に入っているが家族にいない名前（前の名前など）も、外せるように並べておく。
+  const participantOptions = [
+    ...participantNames(roster),
+    ...value.participants.filter((name) => !participantNames(roster).includes(name)),
+  ];
   const set = (patch: Partial<TaskDraft>) => onChange({ ...value, ...patch });
 
   const isEvent = value.kind === 'event';
@@ -448,7 +455,7 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
             <Text style={styles.iconLabelText}>参加者</Text>
           </View>
           <View style={styles.labelRow}>
-            {PARTICIPANTS.map((participant) => {
+            {participantOptions.map((participant) => {
               const isOwner = value.owner === participant;
               const isParticipant = value.participants.includes(participant);
               const tone = getParticipantColor(participant);

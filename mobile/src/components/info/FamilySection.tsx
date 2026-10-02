@@ -7,6 +7,7 @@ import { RELATION_LABEL } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { getHousehold, listMembers, updateHousehold, updateMember } from '@/lib/api/members';
 import { canEditMember, formatAge, formatFullName } from '@/lib/memberUtils';
+import { setFamilyRoster } from '@/lib/familyRoster';
 import { formatDateString, parseDateString, toDateString } from '@/lib/dateUtils';
 import { colors } from '@/lib/theme';
 import LogModalShell from '@/components/log/LogModalShell';
@@ -40,6 +41,7 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
         if (cancelled) return;
         setHousehold(nextHousehold);
         setMembers(nextMembers);
+        setFamilyRoster(nextMembers);
         setLoadError('');
       })
       .catch(() => {
@@ -63,7 +65,10 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
 
   const saveMember = async (memberId: string, draft: MemberDraft) => {
     const saved = await updateMember(supabase, memberId, draft);
-    setMembers((prev) => prev.map((member) => (member.id === saved.id ? saved : member)));
+    const next = members.map((member) => (member.id === saved.id ? saved : member));
+    setMembers(next);
+    // 予定の参加者の名前・色にもすぐ反映する（表示名を変えた予定はDBが書き換える。0048）。
+    setFamilyRoster(next);
   };
 
   return (
@@ -151,6 +156,7 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
       {editing?.kind === 'member' && (
         <MemberEditSheet
           member={editing.member}
+          otherNames={members.filter((m) => m.id !== editing.member.id).map((m) => m.displayName)}
           onClose={() => setEditing(null)}
           onSave={async (draft) => {
             await saveMember(editing.member.id, draft);
@@ -219,17 +225,25 @@ function EditSheet({
   title,
   onClose,
   onSave,
+  validate,
   children,
 }: {
   title: string;
   onClose: () => void;
   onSave: () => Promise<void>;
+  /** 保存の前に確かめる。問題があれば画面に出す文言を返す。 */
+  validate?: () => string;
   children: ReactNode;
 }) {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
 
   const handleSave = async () => {
+    const invalid = validate?.() ?? '';
+    if (invalid !== '') {
+      setError(invalid);
+      return;
+    }
     setIsSaving(true);
     setError('');
     try {
@@ -302,10 +316,13 @@ function HouseholdEditSheet({
 
 function MemberEditSheet({
   member,
+  otherNames,
   onClose,
   onSave,
 }: {
   member: Member;
+  /** ほかの家族の表示名。同じ名前にはさせない（予定の参加者を名前で持つため）。 */
+  otherNames: string[];
   onClose: () => void;
   onSave: (draft: MemberDraft) => Promise<void>;
 }) {
@@ -339,7 +356,18 @@ function MemberEditSheet({
       title={`${formatFullName(member) || member.displayName}の情報`}
       onClose={onClose}
       onSave={() => onSave(draft)}
+      validate={() => {
+        const name = draft.displayName.trim();
+        if (name === '') return '表示名を入れてください。';
+        if (otherNames.includes(name)) return 'ほかの家族と同じ表示名にはできません。';
+        return '';
+      }}
     >
+      <Field
+        label="表示名（予定やリストに出る名前）"
+        value={draft.displayName}
+        onChange={(displayName) => update({ displayName })}
+      />
       <View style={styles.pair}>
         <Field label="姓" value={draft.familyName} onChange={(familyName) => update({ familyName })} />
         <Field label="名" value={draft.givenName} onChange={(givenName) => update({ givenName })} />

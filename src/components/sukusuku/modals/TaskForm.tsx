@@ -2,7 +2,7 @@
 
 import { BellRing, Clock, Lock, MapPin, Repeat, Star, Text, Users, X } from 'lucide-react';
 import type { AnchorType, Participant, Recurrence, RecurrenceFreq, Task, TaskKind } from '@/types/app';
-import { PARTICIPANTS } from '@/types/app';
+import { participantNames, useFamilyRoster } from '@/lib/familyRoster';
 import { useBackLayer } from '@/lib/browserHistory';
 import { REMINDER_OPTIONS, WEEKDAY_LABELS, parseDateString, toDateString } from '@/lib/dateUtils';
 import { getParticipantColor } from '@/lib/uiUtils';
@@ -44,6 +44,13 @@ const FIELD =
   'w-full border border-gray-300 rounded-lg p-2.5 text-sm outline-none focus:border-blue-500 bg-white text-gray-800';
 
 export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFormProps) {
+  // 参加者として選べるのは家族メンバー（設定タブの「家族」の表示名の並び）。
+  const roster = useFamilyRoster();
+  // 予定に入っているが家族にいない名前（前の名前など）も、外せるように並べておく。
+  const participantOptions = [
+    ...participantNames(roster),
+    ...value.participants.filter((name) => !participantNames(roster).includes(name)),
+  ];
   const set = (patch: Partial<TaskDraft>) => onChange({ ...value, ...patch });
 
   const isEvent = value.kind === 'event';
@@ -372,7 +379,7 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
             <Users size={14} className="mr-1.5 text-gray-400" /> 参加者
           </span>
           <div className="flex space-x-2">
-            {PARTICIPANTS.map((participant) => {
+            {participantOptions.map((participant) => {
               const isOwner = value.owner === participant;
               const isParticipant = value.participants.includes(participant);
               return (

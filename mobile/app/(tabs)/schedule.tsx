@@ -10,14 +10,14 @@ import {
   CornerDownRight,
   Plus,
 } from 'lucide-react-native';
-import type { CareLog, DynamicTask, LoginRole, Member, Participant, ScheduleView, Task } from '@/types/app';
-import { ROLE_TO_PARTICIPANT } from '@/types/app';
+import type { CareLog, DynamicTask, Participant, ScheduleView, Task } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { useRefreshOnFocus } from '@/lib/screenFocus';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
-import { getChildMember } from '@/lib/api/members';
+import { listMembers } from '@/lib/api/members';
+import { myParticipantName, setFamilyRoster, useFamilyRoster } from '@/lib/familyRoster';
 import { deleteTask, insertTask, listTasks, updateTask, updateTaskDone } from '@/lib/api/tasks';
 import { listCareLogsInRange } from '@/lib/api/careLogs';
 import { readCachedLogsInRange } from '@/lib/offline/careLogs';
@@ -85,11 +85,12 @@ export default function ScheduleScreen() {
   const today = useMemo(() => new Date(), []);
 
   const [familyId, setFamilyId] = useState<string | null>(null);
-  const [loginRole, setLoginRole] = useState<LoginRole>(null);
-  // ログイン中の役割から決まる主体。新規の予定・タスクの初期値に使う。
-  const ownerFromRole = loginRole ? ROLE_TO_PARTICIPANT[loginRole] : null;
+  // 家族メンバー（予定の参加者の名前と色。lib/familyRoster.ts）。
+  const roster = useFamilyRoster();
+  // ログインしている人の表示名。新規の予定・タスクの主体の初期値に使う。
+  const ownerFromRole = userId ? myParticipantName(userId, roster) : null;
   // 出生日基準の予定の日付を出す子（誕生日は設定タブの「家族」で変える）。
-  const [child, setChild] = useState<Member | null>(null);
+  const child = roster.find((member) => member.relation === 'child') ?? null;
   const [todos, setTodos] = useState<Task[]>([]);
   const [isLoadingTodos, setIsLoadingTodos] = useState(true);
 
@@ -119,13 +120,12 @@ export default function ScheduleScreen() {
         const membership = await getMyMembership(supabase, userId);
         if (!isMounted || !membership.familyId) return;
         setFamilyId(membership.familyId);
-        setLoginRole(membership.role);
-        const [loadedChild, loadedTasks] = await Promise.all([
-          getChildMember(supabase, membership.familyId),
+        const [loadedMembers, loadedTasks] = await Promise.all([
+          listMembers(supabase, membership.familyId),
           listTasks(supabase, membership.familyId),
         ]);
         if (!isMounted) return;
-        setChild(loadedChild);
+        setFamilyRoster(loadedMembers);
         setTodos(loadedTasks);
       } catch {
         // 圏外でも画面は出す。出せるところまで出して、残りは空のままにする。
@@ -144,9 +144,9 @@ export default function ScheduleScreen() {
   useRefreshOnFocus(() => {
     setLogReloadKey((prev) => prev + 1);
     if (!familyId) return;
-    void Promise.all([getChildMember(supabase, familyId), listTasks(supabase, familyId)])
-      .then(([loadedChild, loadedTasks]) => {
-        setChild(loadedChild);
+    void Promise.all([listMembers(supabase, familyId), listTasks(supabase, familyId)])
+      .then(([loadedMembers, loadedTasks]) => {
+        setFamilyRoster(loadedMembers);
         setTodos(loadedTasks);
       })
       .catch(() => {
