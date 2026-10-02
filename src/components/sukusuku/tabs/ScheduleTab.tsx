@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays, ChevronLeft, ChevronRight, CornerDownRight } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, CornerDownRight, Undo2 } from 'lucide-react';
 import type { CareLog, DynamicTask, ScheduleView } from '@/types/app';
 import {
   addDays,
@@ -151,9 +151,11 @@ export default function ScheduleTab({
             {!isShowingToday && (
               <button
                 onClick={goToday}
-                className="ml-1 text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition"
+                // 育児タブの日付送りと同じ「今日へ戻る」。「今日」だけだと表示中の見出しのラベルに見える。
+                className="ml-1 flex-none flex items-center gap-0.5 text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition"
               >
-                今日
+                <Undo2 size={12} />
+                今日へ戻る
               </button>
             )}
           </div>
