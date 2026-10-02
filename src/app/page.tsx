@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { listTasks } from '@/lib/api/tasks';
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
 import { OPEN_LOG_PARAM, TAB_PARAM, parseLogType, parseTabId } from '@/lib/appLinks';
+import { START_TAB_TO_TAB_ID, toStartTab } from '@/lib/api/me';
 import SukusukuApp from '@/components/sukusuku/SukusukuApp';
 
 interface HomeProps {
@@ -22,7 +23,11 @@ export default async function Home({ searchParams }: HomeProps) {
     redirect('/login');
   }
 
-  const { data: profile } = await supabase.from('users').select('family_id, role').eq('id', userId).single();
+  const { data: profile } = await supabase
+    .from('users')
+    .select('family_id, role, start_tab')
+    .eq('id', userId)
+    .single();
 
   if (!profile?.family_id) {
     redirect('/family-setup');
@@ -56,7 +61,8 @@ export default async function Home({ searchParams }: HomeProps) {
         role={profile.role === 'papa' || profile.role === 'mama' ? profile.role : null}
         initialTasks={initialTasks}
         todayDateString={todayDateString}
-        initialTab={parseTabId(params[TAB_PARAM]) ?? 'home'}
+        // URLにタブが無ければ、設定タブで選んだ「最初に開くタブ」から始める。
+        initialTab={parseTabId(params[TAB_PARAM]) ?? START_TAB_TO_TAB_ID[toStartTab(profile.start_tab)]}
         initialLogType={parseLogType(params[OPEN_LOG_PARAM])}
       />
     </div>

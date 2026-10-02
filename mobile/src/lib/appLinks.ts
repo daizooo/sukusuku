@@ -6,7 +6,7 @@ import type { LogType, TabId } from '@/types/app';
 // public/sw.js）。ネイティブ版もExpo Routerのパスとパラメータでまったく同じ飛び先にする
 // ——検温のお知らせなら体温の入力画面、というように（ルートの CLAUDE.md）。
 
-/** 記録タブで開く入力画面の種類。開いたら消す（画面に戻るたびに開き直さないため）。 */
+/** 育児タブで開く入力画面の種類。開いたら消す（画面に戻るたびに開き直さないため）。 */
 export const OPEN_LOG_PARAM = 'open';
 
 const LOG_TYPES: LogType[] = ['milk', 'diaper', 'pumping', 'temperature'];
@@ -17,7 +17,7 @@ export const parseLogType = (value: string | string[] | undefined): LogType | nu
   return LOG_TYPES.find((type) => type === first) ?? null;
 };
 
-/** お知らせの飛び先。開くタブと、記録タブなら開く入力画面。 */
+/** お知らせの飛び先。開くタブと、育児タブなら開く入力画面。 */
 export interface NotificationTarget {
   tab: TabId;
   openLog?: LogType;
@@ -26,19 +26,18 @@ export interface NotificationTarget {
 /**
  * お知らせの種類ごとの飛び先。PWA版（public/sw.js の URL_BY_KIND）と同じ対応にする。
  *
- * 予定のリマインダーは種類を持たない。PWA版もそのときは `/`（＝ホーム）へ戻るだけなので、
- * こちらもホームタブを開く。
+ * 予定のリマインダーは種類を持たないので、予定タブを開く。
  */
 export const notificationTarget = (kind: unknown): NotificationTarget => {
   switch (kind) {
     // 授乳の経過時間・次の授乳の目安は、どちらも授乳の入力画面へ
     case 'nursing':
     case 'feeding':
-      return { tab: 'log', openLog: 'milk' };
+      return { tab: 'care', openLog: 'milk' };
     // 検温のお知らせは体温の入力画面へ
     case 'temperature':
-      return { tab: 'log', openLog: 'temperature' };
+      return { tab: 'care', openLog: 'temperature' };
     default:
-      return { tab: 'home' };
+      return { tab: 'schedule' };
   }
 };

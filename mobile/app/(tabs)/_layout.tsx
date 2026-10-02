@@ -1,15 +1,9 @@
 import { Tabs } from 'expo-router';
-import {
-  CalendarDays,
-  ClipboardCheck,
-  FileText,
-  Folder,
-  Home,
-  ListTodo,
-} from 'lucide-react-native';
+import { Baby, CalendarDays, ListTodo, Settings } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 
-// 下のタブバー。並び・見出し・アイコンはPWA版の NAV_ITEMS と同じにしてある
+// 下のタブバー。予定・リスト・育児・設定の4つ（docs/family-app.md §4.1）。
+// 並び・見出し・アイコンはPWA版の NAV_ITEMS と同じにしてある
 // （src/components/sukusuku/SukusukuApp.tsx）。
 //
 // PWA版は画面の広い端末では左の縦ナビになるが、こちらは常に下のタブバー。
@@ -31,10 +25,6 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen
-        name="home"
-        options={{ title: 'ホーム', tabBarIcon: ({ color }) => <Home size={22} color={color} /> }}
-      />
-      <Tabs.Screen
         name="schedule"
         options={{
           title: '予定',
@@ -49,19 +39,12 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="log"
-        options={{ title: '記録', tabBarIcon: ({ color }) => <FileText size={22} color={color} /> }}
-      />
-      <Tabs.Screen
-        name="nursery"
-        options={{
-          title: '保活',
-          tabBarIcon: ({ color }) => <ClipboardCheck size={22} color={color} />,
-        }}
+        name="care"
+        options={{ title: '育児', tabBarIcon: ({ color }) => <Baby size={22} color={color} /> }}
       />
       <Tabs.Screen
         name="info"
-        options={{ title: '設定', tabBarIcon: ({ color }) => <Folder size={22} color={color} /> }}
+        options={{ title: '設定', tabBarIcon: ({ color }) => <Settings size={22} color={color} /> }}
       />
     </Tabs>
   );

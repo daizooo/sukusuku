@@ -84,8 +84,8 @@ export default function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Text style={styles.title}>すくすく</Text>
-          <Text style={styles.subtitle}>夫婦で育児を共有しよう</Text>
+          <Text style={styles.title}>かぞく手帳</Text>
+          <Text style={styles.subtitle}>家族の予定・リスト・育児をひとつに</Text>
 
           <ConfirmResultBanner message={message} error={error} />
 

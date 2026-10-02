@@ -385,7 +385,7 @@ export default function ScheduleScreen() {
 
   // 日表示から、その日の記録タブへ移る。
   const openLogTabForDate = (date: Date) =>
-    router.push({ pathname: '/log', params: { date: toDateString(date) } });
+    router.push({ pathname: '/care', params: { date: toDateString(date) } });
 
   if (isSessionLoading) {
     return (

@@ -1,4 +1,4 @@
-// すくすく手帳 - 共有ドメイン型定義
+// かぞく手帳 - 共有ドメイン型定義
 // 将来的に src/lib/supabase から取得するデータもこの形に正規化して扱う。
 
 // 予定・タスクの参加者（家族の各人）。以前は「パパ/ママ/家族」という
@@ -286,7 +286,8 @@ export interface UserProfile {
 /** 授乳の入力画面で「搾乳」を選んだときの、飲ませた分か搾った分かの切り替え。 */
 export type FeedingEntryMode = 'feed' | 'pump';
 
-export type TabId = 'home' | 'schedule' | 'log' | 'list' | 'nursery' | 'info';
+// 予定・リスト・育児・設定の4つ（docs/family-app.md §4.1）。
+export type TabId = 'schedule' | 'list' | 'care' | 'info';
 
 // スケジュールタブの表示切り替え。既定は月（カレンダー）。
 /**

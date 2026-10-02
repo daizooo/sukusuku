@@ -5,6 +5,13 @@ import { useRouter } from 'next/navigation';
 import { Check, Copy, Loader2, LogOut, UserCog } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { listMembers } from '@/lib/api/members';
+import {
+  getMyStartTab,
+  START_TAB_LABEL,
+  START_TABS,
+  updateMyStartTab,
+  type StartTab,
+} from '@/lib/api/me';
 
 interface AccountSectionProps {
   familyId: string;
@@ -21,6 +28,9 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
 
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
+  // アプリを開いたときに最初に出すタブ（1人ずつ。docs/family-app.md §3.4）。
+  const [startTab, setStartTab] = useState<StartTab>('schedule');
+  const [saveError, setSaveError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [copied, setCopied] = useState(false);
@@ -32,9 +42,10 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
     let cancelled = false;
     const supabase = createClient();
 
-    Promise.all([supabase.auth.getUser(), listMembers(supabase, familyId)])
-      .then(([{ data: authData }, members]) => {
+    Promise.all([supabase.auth.getUser(), listMembers(supabase, familyId), getMyStartTab(supabase, userId)])
+      .then(([{ data: authData }, members, tab]) => {
         if (cancelled) return;
+        setStartTab(tab);
         const me = members.find((member) => member.userId === userId);
         setEmail(authData.user?.email ?? '');
         setName(me ? me.givenName || me.displayName : '');
@@ -57,6 +68,19 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
     setIsLoading(true);
     setLoadError('');
     setReloadKey((key) => key + 1);
+  };
+
+  const changeStartTab = async (tab: StartTab) => {
+    const previous = startTab;
+    setStartTab(tab);
+    setSaveError('');
+    try {
+      await updateMyStartTab(createClient(), userId, tab);
+    } catch (err) {
+      console.error('Failed to save start tab:', err);
+      setStartTab(previous);
+      setSaveError('保存できませんでした。もう一度お試しください。');
+    }
   };
 
   const handleCopyInviteCode = async () => {
@@ -112,6 +136,26 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
             <span className="text-gray-500 text-xs">メールアドレス</span>
             <span className="font-medium text-gray-700 text-xs break-all text-right ml-2">{email || '未取得'}</span>
           </div>
+
+          <div className="flex justify-between items-center gap-2 py-1">
+            <span className="text-gray-500 text-xs">最初に開くタブ</span>
+            <div className="flex gap-1">
+              {START_TABS.map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  aria-pressed={startTab === tab}
+                  onClick={() => void changeStartTab(tab)}
+                  className={`px-2 py-1 rounded-lg text-xs font-bold transition ${
+                    startTab === tab ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {START_TAB_LABEL[tab]}
+                </button>
+              ))}
+            </div>
+          </div>
+          {saveError && <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg p-2.5">{saveError}</p>}
 
           <div className="pt-1">
             <span className="text-gray-500 text-xs">家族の招待コード</span>

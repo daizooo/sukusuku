@@ -4,6 +4,13 @@ import * as Clipboard from 'expo-clipboard';
 import { Check, Copy, LogOut, UserCog } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { listMembers } from '@/lib/api/members';
+import {
+  getMyStartTab,
+  START_TAB_LABEL,
+  START_TABS,
+  updateMyStartTab,
+  type StartTab,
+} from '@/lib/api/me';
 import { colors } from '@/lib/theme';
 
 // 設定タブのアカウント情報カード。Web版は `src/components/sukusuku/AccountSection.tsx`。
@@ -20,6 +27,9 @@ interface AccountSectionProps {
 export default function AccountSection({ familyId, userId }: AccountSectionProps) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
+  // アプリを開いたときに最初に出すタブ（1人ずつ。docs/family-app.md §3.4）。
+  const [startTab, setStartTab] = useState<StartTab>('schedule');
+  const [saveError, setSaveError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [copied, setCopied] = useState(false);
@@ -29,9 +39,14 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([supabase.auth.getUser(), listMembers(supabase, familyId)])
-      .then(([{ data: authData }, members]) => {
+    Promise.all([
+      supabase.auth.getUser(),
+      listMembers(supabase, familyId),
+      getMyStartTab(supabase, userId),
+    ])
+      .then(([{ data: authData }, members, tab]) => {
         if (cancelled) return;
+        setStartTab(tab);
         const me = members.find((member) => member.userId === userId);
         setEmail(authData.user?.email ?? '');
         setName(me ? me.givenName || me.displayName : '');
@@ -53,6 +68,18 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
     setIsLoading(true);
     setLoadError('');
     setReloadKey((key) => key + 1);
+  };
+
+  const changeStartTab = async (tab: StartTab) => {
+    const previous = startTab;
+    setStartTab(tab);
+    setSaveError('');
+    try {
+      await updateMyStartTab(supabase, userId, tab);
+    } catch {
+      setStartTab(previous);
+      setSaveError('保存できませんでした。もう一度お試しください。');
+    }
   };
 
   const handleCopyInviteCode = async () => {
@@ -106,6 +133,29 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
             <Text style={styles.rowLabel}>メールアドレス</Text>
             <Text style={styles.rowValueSmall}>{email || '未取得'}</Text>
           </View>
+
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>最初に開くタブ</Text>
+            <View style={styles.tabOptions}>
+              {START_TABS.map((tab) => {
+                const selected = startTab === tab;
+                return (
+                  <Pressable
+                    key={tab}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => void changeStartTab(tab)}
+                    style={[styles.tabOption, selected && styles.tabOptionSelected]}
+                  >
+                    <Text style={[styles.tabOptionText, selected && styles.tabOptionTextSelected]}>
+                      {START_TAB_LABEL[tab]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+          {saveError !== '' && <Text style={styles.errorBox}>{saveError}</Text>}
 
           <View>
             <Text style={styles.rowLabel}>家族の招待コード</Text>
@@ -198,6 +248,16 @@ const styles = StyleSheet.create({
   retryText: { fontSize: 12, color: colors.navActiveText },
 
 
+  tabOptions: { flexDirection: 'row', gap: 4 },
+  tabOption: {
+    borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    backgroundColor: colors.neutralSurface,
+  },
+  tabOptionSelected: { backgroundColor: colors.navActive },
+  tabOptionText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  tabOptionTextSelected: { color: colors.primaryText },
   inviteRow: {
     flexDirection: 'row',
     alignItems: 'center',

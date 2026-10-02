@@ -99,15 +99,15 @@ function useNotificationTapHandler(): void {
 
     const open = (data: Record<string, unknown> | undefined) => {
       const target = notificationTarget(data?.kind);
-      // タブのパスはグループ名を含まない（app/index.tsx の `/home` と同じ形）。
+      // タブのパスはグループ名を含まない（`/care` など。app/index.tsx と同じ形）。
       router.navigate({
         pathname: `/${target.tab}`,
         params: target.openLog ? { [OPEN_LOG_PARAM]: target.openLog } : {},
       });
     };
 
-    // 通知から起動した場合（アプリが動いていなかった）。
-    // 入口(app/index.tsx)がホームへ移すのを待ってから動かす。同じ回で移そうとすると
+    // 通知から起動した場合（アプリが動いていなかった）。入口(app/index.tsx)も同じ
+    // 飛び先へ移すが、入口が移し終えるのを待ってからもう一度動かす。同じ回で移そうとすると
     // そちらに上書きされて、タップした用件の画面が開かない。
     const last = Notifications.getLastNotificationResponse();
     const timer = last

@@ -30,3 +30,41 @@ export async function getMyMembership(supabase: SupabaseDb, userId: string): Pro
     role: data.role === 'papa' || data.role === 'mama' ? data.role : null,
   };
 }
+
+/** アプリを開いたときに最初に出すタブ。users.start_tab に対応（docs/family-app.md §3.4）。 */
+export type StartTab = 'schedule' | 'list' | 'care' | 'settings';
+
+export const START_TABS: StartTab[] = ['schedule', 'list', 'care', 'settings'];
+
+export const START_TAB_LABEL: Record<StartTab, string> = {
+  schedule: '予定',
+  list: 'リスト',
+  care: '育児',
+  settings: '設定',
+};
+
+/** start_tab の値と、タブのパス（設定タブのファイルは info.tsx）。 */
+export const START_TAB_ROUTE: Record<StartTab, string> = {
+  schedule: '/schedule',
+  list: '/list',
+  care: '/care',
+  settings: '/info',
+};
+
+const toStartTab = (value: string | null | undefined): StartTab =>
+  START_TABS.find((tab) => tab === value) ?? 'schedule';
+
+export async function getMyStartTab(supabase: SupabaseDb, userId: string): Promise<StartTab> {
+  const { data, error } = await supabase.from('users').select('start_tab').eq('id', userId).single();
+  if (error) throw error;
+  return toStartTab(data.start_tab);
+}
+
+export async function updateMyStartTab(
+  supabase: SupabaseDb,
+  userId: string,
+  tab: StartTab,
+): Promise<void> {
+  const { error } = await supabase.from('users').update({ start_tab: tab }).eq('id', userId);
+  if (error) throw error;
+}

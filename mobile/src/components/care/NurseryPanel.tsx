@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Redirect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CalendarDays, MapPin, Pencil, Phone, Plus } from 'lucide-react-native';
 import type { Nursery, NurseryChecklist } from '@/types/app';
 import { supabase } from '@/lib/supabase';
@@ -26,8 +24,8 @@ import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import CheckItemCard from '@/components/hokatsu/CheckItemCard';
 import NurseryFormModal, { type NurseryDraft } from '@/components/hokatsu/NurseryFormModal';
 
-// 保活タブ。Web版の `src/components/sukusuku/tabs/HokatsuTab.tsx` を
-// React Nativeに置き換えたもの。出す項目・並び・文言は同じにしてある。
+// 育児タブの「保活」（docs/family-app.md §4.2）。もとは保活タブ。Web版は
+// `src/components/sukusuku/tabs/HokatsuTab.tsx`。出す項目・並び・文言は同じにしてある。
 //
 // 園ごとに「基本情報」と「見学チェックリスト」を分けて表示する。
 // 見学当日はチェックリストだけを見たいので、連絡先や見学日時と同じ画面に混ぜない。
@@ -118,8 +116,8 @@ function InfoRow({
   );
 }
 
-export default function NurseryScreen() {
-  const { session, isLoading: isSessionLoading } = useSession();
+export default function NurseryPanel() {
+  const { session } = useSession();
   const userId = session?.user.id ?? null;
 
   const [familyId, setFamilyId] = useState<string | null>(null);
@@ -215,15 +213,6 @@ export default function NurseryScreen() {
     saveChecklist(nursery, { ...nursery.checklist, [itemId]: { ...current, ...patch } });
   };
 
-  if (isSessionLoading) {
-    return (
-      <SafeAreaView style={[styles.screen, styles.centered]}>
-        <ActivityIndicator color={colors.navActive} />
-      </SafeAreaView>
-    );
-  }
-  if (!session) return <Redirect href="/login" />;
-
   const visitDate = selected ? parseDateString(selected.visitDate ?? '') : null;
   // チェックリストにはその園にだけ聞く項目（和光の宗教行事など）があるので、
   // 出す項目も分母も選んでいる園から決める。
@@ -233,7 +222,8 @@ export default function NurseryScreen() {
   const status = selected ? statusColors(selected.status) : null;
 
   return (
-    <SafeAreaView style={styles.screen}>
+    // 育児タブの中身として出す（外枠・ログインの確認は app/(tabs)/care.tsx）。
+    <View style={styles.screen}>
       <View style={styles.page}>
         {/* 上段は園の切り替え、下段は基本情報とチェックリストの切り替え。どちらも固定し、
             スクロールするのは中身だけにする。
@@ -414,13 +404,12 @@ export default function NurseryScreen() {
           setNurseryModal(null);
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  centered: { alignItems: 'center', justifyContent: 'center' },
   flex: { flex: 1 },
   page: { flex: 1, padding: 16 },
   content: { paddingBottom: 24 },

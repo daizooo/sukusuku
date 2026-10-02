@@ -70,7 +70,7 @@ interface CareLogSectionProps {
 }
 
 /**
- * 日表示に出す育児記録。ここでは閲覧だけを行い、追加・編集は記録タブに任せる
+ * 日表示に出す育児記録。ここでは閲覧だけを行い、追加・編集は育児タブに任せる
  * （同じ入力導線を2か所に置かないため）。
  */
 export default function CareLogSection({
@@ -89,7 +89,7 @@ export default function CareLogSection({
           育児記録 {logs.length > 0 ? `(${logs.length}件)` : ''}
         </Text>
         <Pressable accessibilityRole="button" onPress={onOpenLogTab} style={styles.link}>
-          <Text style={styles.linkText}>記録タブで開く</Text>
+          <Text style={styles.linkText}>育児タブで開く</Text>
           <ChevronRight size={14} color={colors.navActive} />
         </Pressable>
       </View>
