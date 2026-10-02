@@ -47,14 +47,15 @@ export const rowToTask = (row: TaskRow): Task => ({
   kind: toKind(row.kind),
   owner: toOwner(row.owner),
   participants: toParticipants(row.participants),
-  remindMinutesBefore: row.remind_minutes_before,
   done: row.is_done,
+  // 列の追加(0050)の前のDBでは返ってこないので、空として扱う。
+  doneDates: row.done_dates ?? [],
   isPrivate: row.is_private,
   recurrence: toRecurrence(row.recurrence),
   timing: row.timing_memo ?? '',
 });
 
-export type NewTaskInput = Omit<Task, 'id' | 'done'>;
+export type NewTaskInput = Omit<Task, 'id' | 'done' | 'doneDates'>;
 
 const toWritableRow = (input: NewTaskInput) => ({
   title: input.title,
@@ -69,7 +70,9 @@ const toWritableRow = (input: NewTaskInput) => ({
   days_after_birth: input.daysAfterBirth,
   owner: input.owner,
   participants: input.participants,
-  remind_minutes_before: input.remindMinutesBefore,
+  // 通知の設定は持たない。設定した日時に必ず通知する（0049）。列は旧版との互換のため
+  // 残してあり、配信側は値を見ないが、旧版が読んでも壊れないよう常に0（時刻ちょうど）を書く。
+  remind_minutes_before: 0,
   is_private: input.isPrivate,
   // Recurrenceは自己完結したJSON互換の形だが、interfaceにインデックスシグネチャが
   // 無いためJsonへは構造的に代入できない。中身はJSONとして書き出せる値のみなのでキャストする。
@@ -111,10 +114,21 @@ export async function updateTaskDone(supabase: SupabaseDb, id: string, done: boo
   if (error) throw error;
 }
 
+// 繰り返す予定・タスクは回ごとに完了にする（done_dates）ので、列 is_done は使わず false のままにする。
+// 展開した1回ぶんの DynamicTask を保存に渡しても、その回の完了が元の予定に紛れ込まないようにする。
+export async function updateTaskDoneDates(
+  supabase: SupabaseDb,
+  id: string,
+  doneDates: string[],
+): Promise<void> {
+  const { error } = await supabase.from('tasks').update({ done_dates: doneDates }).eq('id', id);
+  if (error) throw error;
+}
+
 export async function updateTask(supabase: SupabaseDb, task: Task): Promise<void> {
   const { error } = await supabase
     .from('tasks')
-    .update({ ...toWritableRow(task), is_done: task.done })
+    .update({ ...toWritableRow(task), is_done: task.recurrence ? false : task.done })
     .eq('id', task.id);
   if (error) throw error;
 }

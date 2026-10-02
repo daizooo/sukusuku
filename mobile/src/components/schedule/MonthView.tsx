@@ -19,6 +19,13 @@ import { colors } from '@/lib/theme';
 // 予定はタイトル入りのチップで積み、育児記録はここには出さない
 // （月表示は予定を見渡すための面。記録は日をタップした先で見る）。
 //
+// 押したところで動きが分かれる（Googleカレンダーと同じ）:
+// - 日付の数字 → その日の日表示
+// - 予定のチップ → 予定の詳細
+// - それ以外のマスの中（予定の無いところ） → その日の予定・タスクの追加
+// 手触りは予定と空きで逆にする（Googleカレンダーと同じ）。予定のチップ・日付の数字は
+// 触れている間に色が変わり、予定の無いマスの中は変わらない。
+//
 // 高さは親から与えられたぶんを週の数で等分する。画面全体をスクロールさせないため、
 // マスに入りきらない予定は「+n件」に寄せる。
 
@@ -30,7 +37,10 @@ interface MonthViewProps {
   /** ラベルで絞り込み済みの予定。 */
   tasks: DynamicTask[];
   birthDate: string;
+  /** 日付の数字を押したとき。その日の日表示へ移る。 */
   onSelectDate: (date: Date) => void;
+  /** マスの予定が無いところを押したとき。その日を初期値にした予定の追加を開く。 */
+  onAddTask: (date: Date) => void;
   onOpenTask: (task: DynamicTask) => void;
 }
 
@@ -67,6 +77,7 @@ export default function MonthView({
   tasks,
   birthDate,
   onSelectDate,
+  onAddTask,
   onOpenTask,
 }: MonthViewProps) {
   const year = month.getFullYear();
@@ -125,8 +136,8 @@ export default function MonthView({
                 <Pressable
                   key={date.toISOString()}
                   accessibilityRole="button"
-                  accessibilityLabel={`${date.getMonth() + 1}月${date.getDate()}日${holiday ? ` ${holiday}` : ''} 予定${dayTasks.length}件`}
-                  onPress={() => onSelectDate(date)}
+                  accessibilityLabel={`${date.getMonth() + 1}月${date.getDate()}日${holiday ? ` ${holiday}` : ''} 予定${dayTasks.length}件 押すと予定を追加`}
+                  onPress={() => onAddTask(date)}
                   style={[
                     styles.cell,
                     // 最終列の右の線はカードの縁と重なるので引かない。
@@ -136,7 +147,17 @@ export default function MonthView({
                   ]}
                 >
                   <View style={styles.dateRow}>
-                    <View style={[styles.dateBubble, isToday && styles.dateBubbleToday]}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`${date.getMonth() + 1}月${date.getDate()}日の予定を見る`}
+                      onPress={() => onSelectDate(date)}
+                      hitSlop={{ top: 4, bottom: 4, left: 10, right: 10 }}
+                      style={({ pressed }) => [
+                        styles.dateBubble,
+                        isToday && styles.dateBubbleToday,
+                        pressed && (isToday ? styles.dateBubbleTodayPressed : styles.dateBubblePressed),
+                      ]}
+                    >
                       <Text
                         style={[
                           styles.dateText,
@@ -153,7 +174,7 @@ export default function MonthView({
                       >
                         {date.getDate()}
                       </Text>
-                    </View>
+                    </Pressable>
                   </View>
 
                   {/* 祝日と節目が重なる日は祝日を出す。1マスの高さに収めるため1行だけにする。 */}
@@ -171,14 +192,18 @@ export default function MonthView({
                       const label = getOwnerTone(task.owner, task.participants);
                       return (
                         <Pressable
-                          key={task.id}
+                          key={task.occurrenceKey}
                           accessibilityRole="button"
                           onPress={() => onOpenTask(task)}
-                          style={[
+                          // 触れている間は地の色を枠の色（濃いほう）に変えて、触った感を出す。
+                          style={({ pressed }) => [
                             styles.chip,
                             task.done
-                              ? styles.chipDone
-                              : { backgroundColor: label.background, borderColor: label.border },
+                              ? [styles.chipDone, pressed && styles.chipDonePressed]
+                              : {
+                                  backgroundColor: pressed ? label.border : label.background,
+                                  borderColor: label.border,
+                                },
                             isOtherMonth && styles.chipOtherMonth,
                           ]}
                         >
@@ -255,6 +280,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dateBubbleToday: { backgroundColor: colors.navActive },
+  dateBubblePressed: { backgroundColor: colors.border },
+  dateBubbleTodayPressed: { backgroundColor: colors.navActiveText },
   dateText: { fontSize: 11, color: colors.textSubtle, fontWeight: '500', fontVariant: ['tabular-nums'] },
   dateTextToday: { color: colors.primaryText, fontWeight: '700' },
   dateTextOtherMonth: { color: colors.borderStrong },
@@ -263,6 +290,7 @@ const styles = StyleSheet.create({
   chips: { marginTop: CHIP_GAP, gap: CHIP_GAP },
   chip: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1 },
   chipDone: { backgroundColor: colors.neutralSurface, borderColor: colors.border },
+  chipDonePressed: { backgroundColor: colors.border },
   chipOtherMonth: { opacity: 0.5 },
   chipText: { fontSize: 9, fontWeight: '500' },
   chipTextDone: { color: colors.textFaint, textDecorationLine: 'line-through' },

@@ -23,7 +23,10 @@ interface MonthViewProps {
   /** 参加者で絞り込み済みの予定。 */
   tasks: DynamicTask[];
   birthDate: string;
+  /** 日付の数字を押したとき。その日の日表示へ移る。 */
   onSelectDate: (date: Date) => void;
+  /** マスの予定が無いところを押したとき。その日を初期値にした予定の追加を開く。 */
+  onAddTask: (date: Date) => void;
   onOpenTask: (task: DynamicTask) => void;
 }
 
@@ -78,6 +81,15 @@ const useElementSize = () => {
  *
  * 高さは親から与えられたぶんを週の数で等分する。画面全体をスクロールさせないため、
  * マスに入りきらない予定は「+n件」に寄せる。
+ *
+ * 押したところで動きが分かれる（Googleカレンダーと同じ）:
+ * - 日付の数字 → その日の日表示
+ * - 予定のチップ → 予定の詳細
+ * - それ以外のマスの中（予定の無いところ） → その日の予定・タスクの追加
+ * 手触りはGoogleカレンダーと同じく、予定と空きで逆にする:
+ * - 予定のチップ・日付の数字 → カーソルが指の形になり、合わせる・押している間は色が濃くなる
+ * - 予定の無いマスの中 → カーソルは矢印のまま、色も変えない（押すと追加が開く）
+ * （mobile版は触れている間の色だけ。チップと日付の数字だけが変わり、空きは変わらない）
  */
 export default function MonthView({
   month,
@@ -86,6 +98,7 @@ export default function MonthView({
   tasks,
   birthDate,
   onSelectDate,
+  onAddTask,
   onOpenTask,
 }: MonthViewProps) {
   const year = month.getFullYear();
@@ -140,23 +153,30 @@ export default function MonthView({
               key={date.toISOString()}
               role="button"
               tabIndex={0}
-              aria-label={`${date.getMonth() + 1}月${date.getDate()}日${holiday ? ` ${holiday}` : ''} 予定${dayTasks.length}件`}
-              onClick={() => onSelectDate(date)}
+              aria-label={`${date.getMonth() + 1}月${date.getDate()}日${holiday ? ` ${holiday}` : ''} 予定${dayTasks.length}件 押すと予定を追加`}
+              onClick={() => onAddTask(date)}
               onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  onSelectDate(date);
+                  onAddTask(date);
                 }
               }}
-              className={`min-w-0 overflow-hidden border-r border-b border-gray-100 [&:nth-child(7n)]:border-r-0 px-1 pt-1 pb-1 text-left cursor-pointer transition ${
-                isSelected ? 'bg-blue-50/70 ring-1 ring-inset ring-blue-400' : 'hover:bg-gray-50'
+              className={`min-w-0 overflow-hidden border-r border-b border-gray-100 [&:nth-child(7n)]:border-r-0 px-1 pt-1 pb-1 text-left cursor-default ${
+                isSelected ? 'bg-blue-50/70 ring-1 ring-inset ring-blue-400' : ''
               } ${isOtherMonth ? 'bg-gray-50/60' : ''}`}
             >
               <div className="flex items-center justify-center">
-                <span
-                  className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] leading-none ${
+                <button
+                  type="button"
+                  aria-label={`${date.getMonth() + 1}月${date.getDate()}日の予定を見る`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectDate(date);
+                  }}
+                  className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] leading-none cursor-pointer transition ${
                     isToday
-                      ? 'bg-blue-500 text-white font-bold'
+                      ? 'bg-blue-500 text-white font-bold hover:bg-blue-600 active:bg-blue-700'
                       : isOtherMonth
                         ? 'text-gray-300'
                         : date.getDay() === 0 || holiday
@@ -164,10 +184,10 @@ export default function MonthView({
                           : date.getDay() === 6
                             ? 'text-blue-500'
                             : 'text-gray-700'
-                  }`}
+                  } ${isToday ? '' : 'hover:bg-gray-200 active:bg-gray-300'}`}
                 >
                   {date.getDate()}
-                </span>
+                </button>
               </div>
 
               {/* 祝日と節目が重なる日は祝日を出す。1マスの高さに収めるため1行だけにする。 */}
@@ -184,12 +204,14 @@ export default function MonthView({
               <div className="mt-0.5 space-y-0.5">
                 {dayTasks.slice(0, shownChips).map((task) => (
                   <button
-                    key={task.id}
+                    key={task.occurrenceKey}
                     onClick={(e) => {
                       e.stopPropagation();
                       onOpenTask(task);
                     }}
-                    className={`w-full text-left text-[9px] leading-tight px-1 py-0.5 rounded border truncate ${
+                    // カーソルを指の形にし、合わせる・押している間は色を濃くして、触った感を出す。
+    // （空きのマスは逆に、カーソルも色も変えない）
+                    className={`w-full text-left text-[9px] leading-tight px-1 py-0.5 rounded border truncate cursor-pointer transition hover:brightness-90 active:brightness-75 ${
                       task.done
                         ? 'bg-gray-100 text-gray-400 border-gray-200 line-through'
                         : getOwnerTone(task.owner, task.participants)

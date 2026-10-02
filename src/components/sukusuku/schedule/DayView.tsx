@@ -18,7 +18,7 @@ interface DayViewProps {
   /** 表示中の範囲の記録。その日のぶんへの絞り込みはこの中で行う。 */
   careLogs: CareLog[];
   isLoadingCareLogs?: boolean;
-  onToggleTodo: (id: string) => void;
+  onToggleTodo: (task: DynamicTask) => void;
   onOpenTask: (task: DynamicTask) => void;
   onAddTask: (date: Date) => void;
   onOpenLogTab: (date: Date) => void;
@@ -71,13 +71,19 @@ export default function DayView({
           </button>
         </div>
         {tasks.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-5 bg-white rounded-xl border border-gray-100">
+          // 予定が無いところを押すと、その日の予定・タスクの追加を開く。
+          // 予定の行と逆に、カーソルも色も変えない（Googleカレンダーと同じ）。
+          <button
+            onClick={() => onAddTask(date)}
+            aria-label="予定はありません 押すとこの日に追加"
+            className="w-full text-sm text-gray-400 text-center py-5 bg-white rounded-xl border border-gray-100 cursor-default"
+          >
             予定はありません
-          </p>
+          </button>
         ) : (
           <div className="space-y-2">
             {tasks.map((task) => (
-              <TaskRow key={task.id} task={task} onToggle={onToggleTodo} onOpen={onOpenTask} />
+              <TaskRow key={task.occurrenceKey} task={task} onToggle={onToggleTodo} onOpen={onOpenTask} />
             ))}
           </div>
         )}

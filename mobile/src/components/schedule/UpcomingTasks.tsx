@@ -1,7 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   AlertTriangle,
-  BellRing,
   CheckCircle2,
   ChevronRight,
   Circle,
@@ -28,7 +27,7 @@ interface UpcomingTasksProps {
   tasks: DynamicTask[];
   isLoading: boolean;
   today: Date;
-  onToggleTodo: (id: string) => void;
+  onToggleTodo: (task: DynamicTask) => void;
   onOpenTask: (task: DynamicTask) => void;
   onAddTask: () => void;
   /** 見出しを押したとき・期限切れの件数を押したときにリスト表示へ移る。 */
@@ -117,15 +116,16 @@ export default function UpcomingTasks({
             const owner = task.owner ?? (task.participants.length === 1 ? task.participants[0] : '');
             return (
               <Pressable
-                key={task.id}
+                key={task.occurrenceKey}
                 accessibilityRole="button"
                 onPress={() => onOpenTask(task)}
-                style={styles.row}
+                // 触れている間は地の色を変えて、触った感を出す。
+                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
               >
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={task.done ? '完了を取り消す' : '完了にする'}
-                  onPress={() => onToggleTodo(task.id)}
+                  onPress={() => onToggleTodo(task)}
                   hitSlop={8}
                 >
                   {task.done ? (
@@ -157,13 +157,6 @@ export default function UpcomingTasks({
                         {task.place}
                       </Text>
                     </View>
-                  )}
-                </View>
-
-                {/* 通知の有無。無い行も幅を空けて、主催者の位置をそろえる。 */}
-                <View style={styles.bell}>
-                  {task.remindMinutesBefore !== null && (
-                    <BellRing size={14} color={colors.milkProgress} />
                   )}
                 </View>
 
@@ -228,7 +221,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  // 列の幅は固定して、行ごとに並びがずれないようにする（日付・通知・主催者）。
+  rowPressed: { backgroundColor: colors.selectedSurface, borderColor: colors.selectedRing },
+  // 列の幅は固定して、行ごとに並びがずれないようにする（日付・主催者）。
   when: { width: 72 },
   whenYear: { fontSize: 10, fontWeight: '500', color: colors.textFaint, fontVariant: ['tabular-nums'] },
   whenDate: { fontSize: 13, fontWeight: '700', color: colors.navActive, fontVariant: ['tabular-nums'] },
@@ -236,7 +230,6 @@ const styles = StyleSheet.create({
   taskTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
   placeRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   place: { flex: 1, fontSize: 11, fontWeight: '500', color: colors.textMuted },
-  bell: { width: 16, alignItems: 'center' },
   label: {
     width: 48,
     alignItems: 'center',

@@ -4,13 +4,20 @@
 // 家族の端末(push_subscriptions)へ FCM で送る（_shared/deliver.ts）。
 //
 // 通知時刻の計算は task_reminder_schedule ビューが行う（出生日基準の予定の
-// 日付解決と Asia/Tokyo でのタイムゾーン補正を含む）。
+// 日付解決と Asia/Tokyo でのタイムゾーン補正を含む）。ただし日付指定で繰り返す
+// 予定・タスクはビューが返さず、こちらでルールを展開して回ごとの通知時刻を求める
+// （_shared/recurringReminders.ts。0050）。
 //
 // 認証: pg_cron から呼ぶため JWT は使わず、共有シークレットのヘッダーで認可する。
 //       supabase/config.toml で verify_jwt = false にしている。
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.2';
 import { DeliveryContext, type DeliveryTarget } from '../_shared/deliver.ts';
+import {
+  dueRecurringReminders,
+  type RecurringTaskRow,
+  type ScheduleRow,
+} from '../_shared/recurringReminders.ts';
 
 // 取りこぼしを拾うため、通知時刻を過ぎたものも一定時間ぶんは対象にする。
 // 送信済み記録(reminder_deliveries)があるものは除外されるので二重には飛ばない。
@@ -20,19 +27,6 @@ const LOOKBACK_MINUTES = 120;
 // （20:26の予定が20:25に届いた）。書いてある時刻と合わない通知は、
 // 少し遅れて届く通知より困る。いまは pg_cron が1分おきに叩くので(0038)、
 // 先取りしなくてもその分のうちに届く。
-
-interface ScheduleRow {
-  task_id: string;
-  family_id: string;
-  title: string;
-  category: string;
-  place: string | null;
-  start_time: string | null;
-  remind_minutes_before: number;
-  target_date: string;
-  starts_at: string;
-  remind_at: string;
-}
 
 interface SubscriptionRow extends DeliveryTarget {
   family_id: string;
@@ -75,14 +69,32 @@ Deno.serve(async (request) => {
   const from = new Date(now - LOOKBACK_MINUTES * 60_000).toISOString();
   const to = new Date(now).toISOString();
 
-  const { data: due, error: dueError } = await supabase
+  const { data: dueFromView, error: dueError } = await supabase
     .from('task_reminder_schedule')
     .select('*')
     .gte('remind_at', from)
     .lte('remind_at', to)
     .returns<ScheduleRow[]>();
   if (dueError) return json({ error: dueError.message }, 500);
-  if (!due || due.length === 0) return json({ due: 0, sent: 0, failed: 0, skipped: 0 });
+
+  // 繰り返す予定・タスクは回ごとに展開して、いま通知すべき回を求める。
+  // done_dates の列が無い（0050の適用前）ときは読めないので、繰り返す予定だけ読み飛ばして
+  // 繰り返さない予定の通知は送る（適用の順序は 0050 の冒頭）。
+  const { data: recurringTasks, error: recurringError } = await supabase
+    .from('tasks')
+    .select('id, family_id, title, category, place, start_time, start_date, recurrence, done_dates')
+    .eq('anchor_type', 'absolute')
+    .not('recurrence', 'is', null)
+    .not('start_date', 'is', null)
+    .returns<RecurringTaskRow[]>();
+  if (recurringError) {
+    console.error('繰り返す予定を読めませんでした（読み飛ばします）', recurringError.message);
+  }
+  const due = [
+    ...(dueFromView ?? []),
+    ...dueRecurringReminders(recurringTasks ?? [], now, LOOKBACK_MINUTES),
+  ];
+  if (due.length === 0) return json({ due: 0, sent: 0, failed: 0, skipped: 0 });
 
   const familyIds = [...new Set(due.map((row) => row.family_id))];
   // 送り先はネイティブ版だけ。ブラウザ向けの Web Push は撤去した（フェーズ4の条件D）。

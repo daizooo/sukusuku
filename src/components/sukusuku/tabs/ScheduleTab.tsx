@@ -10,8 +10,10 @@ import {
   isSameMonth,
   parseDateString,
   startOfDay,
+  startOfWeek,
   toDateString,
 } from '@/lib/dateUtils';
+import { expandOccurrences } from '@/lib/scheduleExpand';
 import MonthView from '../schedule/MonthView';
 import DayView from '../schedule/DayView';
 import ListView from '../schedule/ListView';
@@ -19,6 +21,7 @@ import UpcomingTasks from '../schedule/UpcomingTasks';
 import { byDateThenTime, tasksOnDate } from '../schedule/utils';
 
 interface ScheduleTabProps {
+  /** 日付を解決した予定。繰り返す予定は元の1件のまま（回への展開はここで行う）。 */
   dynamicTodos: DynamicTask[];
   isLoadingTodos?: boolean;
   today: Date;
@@ -35,11 +38,14 @@ interface ScheduleTabProps {
   /** 日表示で表示中の範囲の育児記録。 */
   careLogs: CareLog[];
   isLoadingCareLogs?: boolean;
-  onToggleTodo: (id: string) => void;
+  onToggleTodo: (task: DynamicTask) => void;
   onOpenTask: (task: DynamicTask) => void;
   onAddTask: (date: Date) => void;
   onOpenLogTab: (date: Date) => void;
 }
+
+// 「直近のスケジュール」とリストに、繰り返す予定を何日先まで並べるか。
+const FORWARD_DAYS = 366;
 
 export default function ScheduleTab({
   dynamicTodos,
@@ -60,6 +66,18 @@ export default function ScheduleTab({
   onOpenLogTab,
 }: ScheduleTabProps) {
   const monthStart = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth(), 1);
+
+  // 繰り返す予定を回へ展開する範囲。見ている面ごとに必要な分だけ展開する。
+  // - 月: マスに出る範囲（前後の月の日も含めて週単位。最大6週）
+  // - 日: 選んでいる日
+  // - 直近のスケジュール・リスト: 今日から先 FORWARD_DAYS 日。過去の回は期限切れにも
+  //   完了済みにも並べない（毎日の予定が過去ぶん全部「期限切れ」になるのを避ける。
+  //   過ぎた回は月・日の表示で見返せる）
+  // （React Compiler が値の使い回しを見てくれるので、useMemo は使わない）
+  const gridStart = startOfWeek(monthStart);
+  const monthTodos = expandOccurrences(dynamicTodos, gridStart, addDays(gridStart, 6 * 7 - 1));
+  const dayTodos = expandOccurrences(dynamicTodos, selectedDate, selectedDate);
+  const forwardTodos = expandOccurrences(dynamicTodos, startOfDay(today), addDays(startOfDay(today), FORWARD_DAYS));
 
   // 日を選ぶと日表示へ移る（月・週は俯瞰、日は詳細という役割分担）。
   const selectDate = (date: Date, openDayView = true) => {
@@ -91,10 +109,10 @@ export default function ScheduleTab({
 
   const isShowingToday = view === 'month' ? isSameMonth(monthStart, today) : isSameDay(selectedDate, today);
 
-  const tasksInMonth = dynamicTodos.filter((t) => t.targetDateObj && isSameMonth(t.targetDateObj, monthStart));
+  const tasksInMonth = monthTodos.filter((t) => t.targetDateObj && isSameMonth(t.targetDateObj, monthStart));
 
   // 予定のない月をめくり続けなくて済むよう、次に予定がある日へ直接飛べるようにする。
-  const nextMonthWithTask = dynamicTodos
+  const nextMonthWithTask = forwardTodos
     .filter((t) => t.targetDateObj && t.targetDateObj >= addMonths(monthStart, 1))
     .sort(byDateThenTime)[0]?.targetDateObj;
 
@@ -175,9 +193,10 @@ export default function ScheduleTab({
               month={monthStart}
               today={today}
               selectedDate={selectedDate}
-              tasks={dynamicTodos}
+              tasks={monthTodos}
               birthDate={birthDate}
               onSelectDate={(date) => selectDate(date)}
+              onAddTask={onAddTask}
               onOpenTask={onOpenTask}
             />
           </div>
@@ -192,7 +211,7 @@ export default function ScheduleTab({
           )}
           <div className="flex-[3] min-h-0 mt-3">
             <UpcomingTasks
-              tasks={dynamicTodos}
+              tasks={forwardTodos}
               isLoading={isLoadingTodos}
               today={today}
               onToggleTodo={onToggleTodo}
@@ -209,7 +228,7 @@ export default function ScheduleTab({
           <DayView
             date={selectedDate}
             today={today}
-            tasks={tasksOnDate(dynamicTodos, selectedDate)}
+            tasks={tasksOnDate(dayTodos, selectedDate)}
             birthDate={birthDate}
             careLogs={careLogs}
             isLoadingCareLogs={isLoadingCareLogs}
@@ -224,7 +243,7 @@ export default function ScheduleTab({
       {view === 'list' && (
         <div className="flex-1 min-h-0 overflow-y-auto pb-24">
           <ListView
-            tasks={dynamicTodos}
+            tasks={forwardTodos}
             isLoading={isLoadingTodos}
             today={today}
             birthDate={birthDate}

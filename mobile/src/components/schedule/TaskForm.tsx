@@ -1,11 +1,10 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { BellRing, Clock, Lock, MapPin, Repeat, Star, Users, Text as TextIcon } from 'lucide-react-native';
-import type { AnchorType, Participant, Recurrence, RecurrenceFreq, Task, TaskKind } from '@/types/app';
+import { Clock, Lock, MapPin, Repeat, Star, Users, Text as TextIcon } from 'lucide-react-native';
+import type { AnchorType, Participant, Task, TaskKind } from '@/types/app';
 import { participantNames, useFamilyRoster } from '@/lib/familyRoster';
 import {
-  REMINDER_OPTIONS,
-  WEEKDAY_LABELS,
   formatDateWithWeekday,
   parseDateString,
   parseTimeInput,
@@ -14,7 +13,14 @@ import {
 import { getParticipantColor } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 import SelectField from '@/components/ui/SelectField';
-import { END_TYPE_OPTIONS, FREQ_OPTIONS, defaultRecurrence, summarizeRecurrence } from '@/lib/recurrence';
+import {
+  defaultRecurrence,
+  findPresetKey,
+  recurrencePresets,
+  summarizeRecurrence,
+  type RecurrencePresetKey,
+} from '@/lib/recurrence';
+import RecurrenceModal from './RecurrenceModal';
 
 // 予定・タスクの入力欄（追加・編集で共通）。Googleカレンダーの追加画面に
 // ならい、種別（予定/タスク）をまず選び、予定のときだけ場所・参加者を持つ。
@@ -24,10 +30,16 @@ import { END_TYPE_OPTIONS, FREQ_OPTIONS, defaultRecurrence, summarizeRecurrence 
 // 常に家族の誰かのため）。ビデオ会議の追加やカレンダー選択のような、
 // この家族には要らない項目は作らない。
 //
-// 日付・時刻・リマインダーはWeb版では <input>/<select> だが、React Nativeには無いので
+// 繰り返しはGoogleカレンダーと同じく、開始日から決まる定番の選択肢（毎日・毎週 金曜日・
+// 毎月 第1金曜日・毎年 10月2日・毎週平日）＋「カスタム…」（RecurrenceModal）で選ぶ。
+//
+// 通知の設定は持たない。予定・タスクとも、設定した日時に必ず通知する（時刻が無い
+// ものは終日として朝9時。docs/calendar.md §5）。
+//
+// 日付・時刻はWeb版では <input> だが、React Nativeには無いので
 // 端末のピッカーと選択欄で置き換えている（出す中身と並びは同じ）。
 
-export type TaskDraft = Omit<Task, 'id' | 'done'>;
+export type TaskDraft = Omit<Task, 'id' | 'done' | 'doneDates'>;
 
 interface TaskFormProps {
   value: TaskDraft;
@@ -35,11 +47,6 @@ interface TaskFormProps {
   /** 誕生日が未登録のときだけ「生後日数で指定」を選べるようにする */
   allowBirthRelative: boolean;
 }
-
-const REMINDER_SELECT_OPTIONS = REMINDER_OPTIONS.map((option) => ({
-  value: option.value === null ? '' : String(option.value),
-  label: option.label,
-}));
 
 const KIND_TABS: { value: TaskKind; label: string }[] = [
   { value: 'event', label: '予定' },
@@ -68,18 +75,19 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
   const showAnchorChoice = !isEvent && (allowBirthRelative || value.anchorType === 'birth_relative');
 
   const setKind = (kind: TaskKind) => {
-    // タスクは場所・参加者・時刻を持たないため、予定へ戻したときのために
-    // 参加者は残すが、タスクにするときは終日へ寄せる。
+    // タスクは場所・参加者・終わりの時刻を持たない。予定へ戻したときのために
+    // 参加者は残し、タスクにするときは終わりの時刻だけ外す（始まりの時刻は残る）。
     // 予定は生後日数指定を持たないため、予定に切り替えたときは日付指定へ戻す。
     if (kind === 'task') {
-      set({ kind, startTime: null, endTime: null });
+      set({ kind, endTime: null });
     } else {
       set(value.anchorType === 'birth_relative' ? { kind, anchorType: 'absolute' } : { kind });
     }
   };
 
   const setAnchorType = (anchorType: AnchorType) => {
-    set({ anchorType });
+    // 繰り返しは開始日の曜日・日付から決まるため、日付が決まらない生後日数指定では持てない。
+    set(anchorType === 'birth_relative' ? { anchorType, recurrence: null } : { anchorType });
   };
 
   const toggleAllDay = () => {
@@ -110,7 +118,7 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
       value: parseDateString(value.startDate ?? '') ?? new Date(),
       mode: 'date',
       onChange: (_event, picked) => {
-        if (picked) set({ startDate: toDateString(picked) });
+        if (picked) setStartDate(toDateString(picked));
       },
     });
 
@@ -128,66 +136,43 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
 
   const startDate = parseDateString(value.startDate ?? '');
 
-  // 繰り返し。null は「繰り返さない」。オンにした瞬間だけ既定値を入れる。
+  // 繰り返し。null は「繰り返さない」。選択肢はGoogleカレンダーと同じ定番＋カスタム。
   const recurrence = value.recurrence;
+  const [isCustomOpen, setIsCustomOpen] = useState(false);
+  // 日付が決まらない（生後日数指定）ときは繰り返しの欄そのものを出さない。
+  const baseDate = startDate;
+  const presets = baseDate ? recurrencePresets(baseDate) : [];
+  const currentPresetKey = baseDate ? findPresetKey(recurrence, baseDate) : null;
 
-  const toggleRecurring = () => {
-    set({ recurrence: recurrence ? null : defaultRecurrence(value.startDate) });
+  // 開始日を変えたとき、定番の選択肢（毎週 金曜日 など）を選んでいたなら、
+  // 新しい日付の曜日・日付に合わせ直す（Googleカレンダーと同じ）。カスタムはそのまま。
+  const setStartDate = (next: string) => {
+    const nextDate = parseDateString(next);
+    if (recurrence && baseDate && nextDate && currentPresetKey) {
+      const preset = recurrencePresets(nextDate).find((p) => p.key === currentPresetKey);
+      set({ startDate: next, recurrence: preset?.recurrence ?? recurrence });
+      return;
+    }
+    set({ startDate: next });
   };
 
-  const setFreq = (freq: RecurrenceFreq) => {
-    if (!recurrence) return;
-    // 週間ごと以外は曜日選択を持たない。週間ごとへ戻したときのために
-    // 選んでいた曜日が空なら、日付の曜日を初期値にする。
-    const byWeekday =
-      freq === 'weekly'
-        ? recurrence.byWeekday && recurrence.byWeekday.length > 0
-          ? recurrence.byWeekday
-          : (startDate ? [startDate.getDay()] : [])
-        : undefined;
-    set({ recurrence: { ...recurrence, freq, byWeekday } });
-  };
+  // 選択欄には、定番に当たらないカスタムの設定も1行（現在の要約）として並べる。
+  const recurrenceOptions: { value: RecurrencePresetKey | 'current' | 'custom'; label: string }[] = [
+    ...(recurrence && currentPresetKey === null
+      ? [{ value: 'current' as const, label: summarizeRecurrence(recurrence, value.startDate) }]
+      : []),
+    ...presets.map((p) => ({ value: p.key, label: p.label })),
+    { value: 'custom', label: 'カスタム…' },
+  ];
+  const recurrenceSelected = currentPresetKey ?? (recurrence ? 'current' : 'none');
 
-  const setIntervalValue = (text: string) => {
-    if (!recurrence) return;
-    const parsed = Math.floor(Number(text));
-    set({ recurrence: { ...recurrence, interval: parsed > 0 ? parsed : 1 } });
-  };
-
-  const toggleWeekday = (day: number) => {
-    if (!recurrence) return;
-    const current = recurrence.byWeekday ?? [];
-    const byWeekday = current.includes(day) ? current.filter((d) => d !== day) : [...current, day];
-    set({ recurrence: { ...recurrence, byWeekday } });
-  };
-
-  const setEndType = (type: Recurrence['end']['type']) => {
-    if (!recurrence) return;
-    const end: Recurrence['end'] =
-      type === 'never'
-        ? { type: 'never' }
-        : type === 'until'
-          ? { type: 'until', date: recurrence.end.type === 'until' ? recurrence.end.date : (value.startDate ?? toDateString(new Date())) }
-          : { type: 'count', count: recurrence.end.type === 'count' ? recurrence.end.count : 1 };
-    set({ recurrence: { ...recurrence, end } });
-  };
-
-  const openEndDatePicker = () => {
-    if (!recurrence || recurrence.end.type !== 'until') return;
-    const currentEnd = recurrence.end;
-    DateTimePickerAndroid.open({
-      value: parseDateString(currentEnd.date) ?? new Date(),
-      mode: 'date',
-      onChange: (_event, picked) => {
-        if (picked) set({ recurrence: { ...recurrence, end: { type: 'until', date: toDateString(picked) } } });
-      },
-    });
-  };
-
-  const setEndCount = (text: string) => {
-    if (!recurrence || recurrence.end.type !== 'count') return;
-    const parsed = Math.floor(Number(text));
-    set({ recurrence: { ...recurrence, end: { type: 'count', count: parsed > 0 ? parsed : 1 } } });
+  const pickRecurrence = (key: RecurrencePresetKey | 'current' | 'custom') => {
+    if (key === 'current') return;
+    if (key === 'custom') {
+      setIsCustomOpen(true);
+      return;
+    }
+    set({ recurrence: presets.find((p) => p.key === key)?.recurrence ?? null });
   };
 
   return (
@@ -282,168 +267,80 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
         )}
       </View>
 
-      {/* 繰り返し。予定・タスクどちらにも設定できる。既定は「繰り返さない」で、
-          オンのときだけ間隔・曜日・終了条件を出す（Googleカレンダーの
-          「カスタムの繰り返し」と同じ形）。 */}
-      <View style={styles.block}>
-        <View style={styles.row}>
+      {/* 繰り返し。予定・タスクどちらにも設定できる。Googleカレンダーと同じく、
+          定番の選択肢と「カスタム…」から選ぶ。日付が決まらない生後日数指定では出さない。 */}
+      {baseDate && (
+        <View>
           <View style={styles.iconLabel}>
             <Repeat size={14} color={colors.textFaint} />
             <Text style={styles.iconLabelText}>繰り返し</Text>
           </View>
+          <SelectField
+            accessibilityLabel="繰り返し"
+            options={recurrenceOptions}
+            value={recurrenceSelected}
+            onChange={pickRecurrence}
+            style={styles.select}
+            textStyle={styles.selectText}
+          />
+        </View>
+      )}
+      {isCustomOpen && (
+        <RecurrenceModal
+          initial={recurrence ?? defaultRecurrence(value.startDate)}
+          startDate={value.startDate}
+          onCancel={() => setIsCustomOpen(false)}
+          onDone={(next) => {
+            set({ recurrence: next });
+            setIsCustomOpen(false);
+          }}
+        />
+      )}
+
+      {/* 時刻（予定・タスクとも）。タスクは終わりの時刻を持たず、始まりの時刻だけ。
+          時刻を決めたものはその時刻に、終日のものは朝9時に通知する。 */}
+      <View style={styles.block}>
+        <View style={styles.row}>
+          <View style={styles.iconLabel}>
+            <Clock size={14} color={colors.textFaint} />
+            <Text style={styles.iconLabelText}>終日</Text>
+          </View>
           <Switch
-            accessibilityLabel="繰り返しの切り替え"
-            value={recurrence !== null}
-            onValueChange={toggleRecurring}
+            accessibilityLabel="終日の切り替え"
+            value={isAllDay}
+            onValueChange={toggleAllDay}
             trackColor={{ true: colors.navActive, false: colors.borderStrong }}
             thumbColor={colors.surface}
           />
         </View>
-
-        {recurrence && (
-          <View style={styles.recurrenceBox}>
-            {/* 繰り返す間隔 */}
-            <View>
-              <Text style={styles.subLabel}>繰り返す間隔</Text>
-              <View style={styles.intervalRow}>
-                <TextInput
-                  style={styles.intervalInput}
-                  value={String(recurrence.interval)}
-                  onChangeText={setIntervalValue}
-                  keyboardType="number-pad"
-                  inputMode="numeric"
-                  accessibilityLabel="繰り返す間隔"
-                />
-                <SelectField
-                  accessibilityLabel="繰り返しの単位"
-                  options={FREQ_OPTIONS}
-                  value={recurrence.freq}
-                  onChange={setFreq}
-                  style={styles.freqSelect}
-                  textStyle={styles.selectText}
-                />
-              </View>
-            </View>
-
-            {/* 曜日（週間ごとのときだけ。複数選べる） */}
-            {recurrence.freq === 'weekly' && (
-              <View>
-                <Text style={styles.subLabel}>曜日</Text>
-                <View style={styles.weekdayRow}>
-                  {WEEKDAY_LABELS.map((label, day) => {
-                    const selected = (recurrence.byWeekday ?? []).includes(day);
-                    return (
-                      <Pressable
-                        key={day}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected }}
-                        onPress={() => toggleWeekday(day)}
-                        style={[styles.weekdayButton, selected && styles.weekdayButtonOn]}
-                      >
-                        <Text style={[styles.weekdayText, selected && styles.weekdayTextOn]}>
-                          {label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
+        {!isAllDay && (
+          <View style={styles.timeRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="始まりの時刻"
+              onPress={() => openTimePicker('startTime')}
+              style={[styles.field, styles.flex]}
+            >
+              <Text style={styles.fieldText}>{value.startTime ?? ''}</Text>
+            </Pressable>
+            {isEvent && (
+              <>
+                <Text style={styles.dash}>-</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="終わりの時刻"
+                  onPress={() => openTimePicker('endTime')}
+                  style={[styles.field, styles.flex]}
+                >
+                  <Text style={value.endTime ? styles.fieldText : styles.fieldPlaceholder}>
+                    {value.endTime ?? '未設定'}
+                  </Text>
+                </Pressable>
+              </>
             )}
-
-            {/* 終了日。なし/終了日を指定/回数を指定の3択。 */}
-            <View>
-              <Text style={styles.subLabel}>終了日</Text>
-              {END_TYPE_OPTIONS.map((option) => {
-                const selected = recurrence.end.type === option.value;
-                return (
-                  <View key={option.value} style={styles.radioBlock}>
-                    <Pressable
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected }}
-                      onPress={() => setEndType(option.value)}
-                      style={styles.radioRow}
-                    >
-                      <View style={[styles.radioDot, selected && styles.radioDotOn]}>
-                        {selected && <View style={styles.radioDotInner} />}
-                      </View>
-                      <Text style={styles.radioText}>{option.label}</Text>
-                    </Pressable>
-                    {option.value === 'until' && selected && recurrence.end.type === 'until' && (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="終了日"
-                        onPress={openEndDatePicker}
-                        style={[styles.field, styles.endInlineField]}
-                      >
-                        <Text style={styles.fieldText}>
-                          {formatDateWithWeekday(parseDateString(recurrence.end.date))}
-                        </Text>
-                      </Pressable>
-                    )}
-                    {option.value === 'count' && selected && recurrence.end.type === 'count' && (
-                      <View style={styles.endInlineCount}>
-                        <TextInput
-                          style={styles.intervalInput}
-                          value={String(recurrence.end.count)}
-                          onChangeText={setEndCount}
-                          keyboardType="number-pad"
-                          inputMode="numeric"
-                          accessibilityLabel="繰り返す回数"
-                        />
-                        <Text style={styles.inlineLabel}>回</Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-
-            <Text style={styles.recurrenceSummary}>{summarizeRecurrence(recurrence)}</Text>
           </View>
         )}
       </View>
-
-      {/* 時刻（予定のみ。タスクは日付だけを持つ） */}
-      {isEvent && (
-        <View style={styles.block}>
-          <View style={styles.row}>
-            <View style={styles.iconLabel}>
-              <Clock size={14} color={colors.textFaint} />
-              <Text style={styles.iconLabelText}>終日</Text>
-            </View>
-            <Switch
-              accessibilityLabel="終日の切り替え"
-              value={isAllDay}
-              onValueChange={toggleAllDay}
-              trackColor={{ true: colors.navActive, false: colors.borderStrong }}
-              thumbColor={colors.surface}
-            />
-          </View>
-          {!isAllDay && (
-            <View style={styles.timeRow}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="始まりの時刻"
-                onPress={() => openTimePicker('startTime')}
-                style={[styles.field, styles.flex]}
-              >
-                <Text style={styles.fieldText}>{value.startTime ?? ''}</Text>
-              </Pressable>
-              <Text style={styles.dash}>-</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="終わりの時刻"
-                onPress={() => openTimePicker('endTime')}
-                style={[styles.field, styles.flex]}
-              >
-                <Text style={value.endTime ? styles.fieldText : styles.fieldPlaceholder}>
-                  {value.endTime ?? '未設定'}
-                </Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
-      )}
 
       {/* 参加者（予定のみ）。1つのボタンで参加者/主体を兼ねる:
           タップで参加者に追加 → もう一度タップでその人を主体に(★付き・色付き) →
@@ -516,24 +413,6 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
           placeholder="詳細を入力"
           placeholderTextColor={colors.textFaint}
           multiline
-        />
-      </View>
-
-      {/* リマインダー */}
-      <View>
-        <View style={styles.iconLabel}>
-          <BellRing size={14} color={colors.textFaint} />
-          <Text style={styles.iconLabelText}>リマインダー</Text>
-        </View>
-        <SelectField
-          accessibilityLabel="リマインダー"
-          options={REMINDER_SELECT_OPTIONS}
-          value={value.remindMinutesBefore === null ? '' : String(value.remindMinutesBefore)}
-          onChange={(picked) =>
-            set({ remindMinutesBefore: picked === '' ? null : Number(picked) })
-          }
-          style={styles.select}
-          textStyle={styles.selectText}
         />
       </View>
 
@@ -624,53 +503,4 @@ const styles = StyleSheet.create({
   noteInput: { minHeight: 96, textAlignVertical: 'top' },
   select: { borderColor: colors.borderStrong, borderRadius: 8, minHeight: 42 },
   selectText: { flex: 1, fontWeight: '400', fontSize: 14 },
-
-  // 繰り返し
-  recurrenceBox: { gap: 14, marginTop: 4 },
-  subLabel: { fontSize: 12, fontWeight: '500', color: colors.textMuted, marginBottom: 6 },
-  intervalRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  intervalInput: {
-    width: 56,
-    fontSize: 14,
-    color: colors.textSubtle,
-    fontWeight: '500',
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    textAlign: 'center',
-  },
-  freqSelect: { flex: 1, borderColor: colors.borderStrong, borderRadius: 8, minHeight: 42 },
-  weekdayRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 4 },
-  weekdayButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  weekdayButtonOn: { backgroundColor: colors.navActive, borderColor: colors.navActive },
-  weekdayText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
-  weekdayTextOn: { color: colors.primaryText },
-  radioBlock: { gap: 8, marginBottom: 8 },
-  radioRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 },
-  radioDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: colors.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioDotOn: { borderColor: colors.navActive },
-  radioDotInner: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.navActive },
-  radioText: { fontSize: 14, color: colors.textSubtle, fontWeight: '500' },
-  endInlineField: { marginLeft: 26 },
-  endInlineCount: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 26 },
-  recurrenceSummary: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
 });

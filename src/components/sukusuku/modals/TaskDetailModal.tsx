@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  BellRing,
   Calendar,
   CheckCircle2,
   Clock,
@@ -16,7 +15,7 @@ import {
 } from 'lucide-react';
 import type { DynamicTask } from '@/types/app';
 import { getOwnerTone } from '@/lib/uiUtils';
-import { formatReminder, formatTimeRange } from '@/lib/dateUtils';
+import { formatTimeRange } from '@/lib/dateUtils';
 import { summarizeRecurrence } from '@/lib/recurrence';
 import TaskForm, { ModalShell } from './TaskForm';
 
@@ -66,6 +65,10 @@ export default function TaskDetailModal({
           </button>
         }
       >
+        {/* 繰り返す予定は、開いている1回ではなく元の予定を直す。全部の回に反映される。 */}
+        {tempEditingTask.recurrence && (
+          <p className="text-xs font-medium text-gray-500 mb-3">繰り返す予定の変更は、すべての回に反映されます。</p>
+        )}
         <TaskForm
           value={tempEditingTask}
           onChange={(draft) => onChangeTempEditingTask({ ...tempEditingTask, ...draft })}
@@ -98,7 +101,11 @@ export default function TaskDetailModal({
             )}
           </button>
           <button onClick={onDelete} className="w-full text-center text-xs text-red-500 font-medium py-2">
-            {isEvent ? 'この予定を削除' : 'このタスクを削除'}
+            {selectedTask.recurrence
+              ? `この${isEvent ? '予定' : 'タスク'}をすべての回とともに削除`
+              : isEvent
+                ? 'この予定を削除'
+                : 'このタスクを削除'}
           </button>
         </div>
       }
@@ -146,16 +153,14 @@ export default function TaskDetailModal({
             </p>
           )}
         </div>
-        {isEvent && (
-          <div>
-            <p className="text-gray-500 text-xs mb-1 flex items-center">
-              <Clock size={14} className="mr-1" /> 時刻
-            </p>
-            <p className="font-medium text-gray-800">
-              {formatTimeRange(selectedTask.startTime, selectedTask.endTime)}
-            </p>
-          </div>
-        )}
+        <div>
+          <p className="text-gray-500 text-xs mb-1 flex items-center">
+            <Clock size={14} className="mr-1" /> 時刻
+          </p>
+          <p className="font-medium text-gray-800">
+            {formatTimeRange(selectedTask.startTime, selectedTask.endTime)}
+          </p>
+        </div>
         {isEvent && (
           <div>
             <p className="text-gray-500 text-xs mb-1 flex items-center">
@@ -182,18 +187,12 @@ export default function TaskDetailModal({
             </p>
           </div>
         )}
-        <div>
-          <p className="text-gray-500 text-xs mb-1 flex items-center">
-            <BellRing size={14} className="mr-1" /> リマインダー
-          </p>
-          <p className="font-medium text-gray-800">{formatReminder(selectedTask.remindMinutesBefore)}</p>
-        </div>
         {selectedTask.recurrence && (
           <div>
             <p className="text-gray-500 text-xs mb-1 flex items-center">
               <Repeat size={14} className="mr-1" /> 繰り返し
             </p>
-            <p className="font-medium text-gray-800">{summarizeRecurrence(selectedTask.recurrence)}</p>
+            <p className="font-medium text-gray-800">{summarizeRecurrence(selectedTask.recurrence, selectedTask.startDate)}</p>
           </div>
         )}
       </div>
