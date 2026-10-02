@@ -23,7 +23,7 @@ import FeedingIntervalSetting from '@/components/info/FeedingIntervalSetting';
 import TemperatureReminderSetting from '@/components/info/TemperatureReminderSetting';
 import VersionInfo from '@/components/info/VersionInfo';
 
-// 設定タブ。アカウント・家族・通知・アプリ情報に絞る（docs/family-app.md §4.3）。
+// 設定タブ。家族・通知・アカウント・アプリ情報に絞る（docs/family-app.md §4.3）。
 // 以前の自由入力（お子様の情報・パパママ情報・緊急連絡先・カスタム項目）は
 // 「家族」（family_members・families）に置き換えた。
 // Web版は `src/components/sukusuku/tabs/InfoTab.tsx`。
@@ -82,8 +82,6 @@ export default function InfoScreen() {
 
         {familyId && (
           <>
-            <AccountSection familyId={familyId} userId={session.user.id} />
-
             <FamilySection familyId={familyId} userId={session.user.id} />
 
             {/* 通知。授乳の目安・検温のお知らせも同じ枠にまとめる（docs/family-app.md §7-5） */}
@@ -99,6 +97,8 @@ export default function InfoScreen() {
                 onChange={setTemperatureReminderSettings}
               />
             </NotificationSetting>
+
+            <AccountSection familyId={familyId} userId={session.user.id} />
           </>
         )}
 

@@ -125,9 +125,6 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
                 {copied ? <Check size={16} /> : <Copy size={16} />}
               </button>
             </div>
-            <p className="text-[10px] text-gray-400 mt-1.5 leading-relaxed">
-              家族が新しくアプリに参加するときに使います。
-            </p>
           </div>
 
           <button

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { Thermometer } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
@@ -50,104 +50,55 @@ export default function TemperatureReminderSetting({
       onChange: (_event, picked) => {
         if (!picked) return;
         const time = `${String(picked.getHours()).padStart(2, '0')}:${String(picked.getMinutes()).padStart(2, '0')}`;
-        void apply({ ...settings, [key]: time });
+        // お知らせは「通知」のトグル（端末ごと）で切り替えるので、ここでは常にオン。
+        void apply({ ...settings, enabled: true, [key]: time });
       },
     });
 
   return (
     <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Thermometer size={18} color={colors.temperature} />
-        <Text style={styles.sectionTitle}>検温のお知らせ</Text>
-      </View>
-
-      <View style={styles.toggleRow}>
-        <View style={styles.flex}>
-          <Text style={styles.label}>決まった時刻にお知らせする</Text>
-          <Text style={styles.note}>
-            毎日同じ時刻に測ると平熱が分かり、「この子にしては高い」に気づけます。
-            通知をオンにしている家族の端末すべてに届きます（端末ごとの通知は上の「通知」でオンにしてください）。
-          </Text>
-        </View>
-        <Switch
-          accessibilityLabel="検温のお知らせの切り替え"
-          value={settings.enabled}
-          onValueChange={() => void apply({ ...settings, enabled: !settings.enabled })}
-          trackColor={{ true: colors.navActive, false: colors.borderStrong }}
-          thumbColor={colors.surface}
-        />
-      </View>
-
-      <View style={styles.timeRow}>
+      <View style={styles.row}>
+        <Thermometer size={16} color={colors.temperature} />
+        <Text style={styles.label}>検温</Text>
         {(
           [
             { key: 'morningTime', label: '朝' },
-            { key: 'eveningTime', label: '夕方' },
+            { key: 'eveningTime', label: '夕' },
           ] as const
         ).map(({ key, label }) => (
-          <View key={key} style={styles.flex}>
+          <Pressable
+            key={key}
+            accessibilityRole="button"
+            accessibilityLabel={`${label}の検温の時刻`}
+            onPress={() => openTimePicker(key)}
+            style={styles.timeField}
+          >
             <Text style={styles.timeLabel}>{label}</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${label}の時刻`}
-              disabled={!settings.enabled}
-              onPress={() => openTimePicker(key)}
-              style={[styles.timeField, !settings.enabled && styles.timeFieldDisabled]}
-            >
-              <Text style={[styles.timeText, !settings.enabled && styles.timeTextDisabled]}>
-                {settings[key]}
-              </Text>
-            </Pressable>
-          </View>
+            <Text style={styles.timeText}>{settings[key]}</Text>
+          </Pressable>
         ))}
       </View>
-
-      <Text style={styles.note}>
-        その時刻の1時間前までに測っていれば、その回のお知らせは届きません。
-      </Text>
-
       {error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
   // 「通知」の枠（NotificationSetting）の中に置く。上の項目とは線で区切る。
-  section: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 16,
-  },
-  sectionHeader: {
+  section: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  label: { flex: 1, fontSize: 14, fontWeight: '500', color: colors.textSubtle },
+  timeField: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: colors.textSubtle },
-  toggleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  label: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
-  note: { fontSize: 12, color: colors.textMuted, marginTop: 12, lineHeight: 18 },
-  timeRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  timeLabel: { fontSize: 12, fontWeight: '500', color: colors.textMuted, marginBottom: 4 },
-  timeField: {
+    gap: 4,
     borderWidth: 1,
     borderColor: colors.borderStrong,
     borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 10,
-    backgroundColor: colors.surface,
+    paddingVertical: 6,
   },
-  timeFieldDisabled: { backgroundColor: colors.background },
-  timeText: { fontSize: 14, color: colors.textSubtle, fontWeight: '500' },
-  timeTextDisabled: { color: colors.textFaint },
-  error: { fontSize: 12, color: colors.danger, marginTop: 12 },
+  timeLabel: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
+  timeText: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
+  error: { fontSize: 12, fontWeight: '400', color: colors.danger, marginTop: 8 },
 });

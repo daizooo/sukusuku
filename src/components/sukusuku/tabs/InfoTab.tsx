@@ -9,7 +9,7 @@ import FamilySection from '@/components/sukusuku/FamilySection';
 import type { FeedingSettings } from '@/lib/api/feedingSettings';
 import type { TemperatureReminderSettings } from '@/lib/api/temperatureReminderSettings';
 
-// 設定タブ。アカウント・家族・通知に絞る（docs/family-app.md §4.3）。
+// 設定タブ。家族・通知・アカウントに絞る（docs/family-app.md §4.3）。
 // 以前の自由入力（お子様の情報・パパママ情報・緊急連絡先・カスタム項目）は
 // 「家族」（family_members・families）に置き換えた。mobile版は `mobile/app/(tabs)/info.tsx`。
 
@@ -39,8 +39,6 @@ export default function InfoTab({
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <div className="flex-1 overflow-y-auto">
         <div className="space-y-6 pb-6">
-          <AccountSection familyId={familyId} userId={userId} />
-
           <FamilySection familyId={familyId} userId={userId} onMembersChange={onMembersChange} />
 
           {/* 通知。授乳の目安・検温のお知らせも同じ枠にまとめる（docs/family-app.md §7-5） */}
@@ -56,6 +54,8 @@ export default function InfoTab({
               onChange={onChangeTemperatureReminderSettings}
             />
           </NotificationSetting>
+
+          <AccountSection familyId={familyId} userId={userId} />
         </div>
       </div>
     </div>

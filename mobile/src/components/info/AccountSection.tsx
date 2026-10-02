@@ -125,9 +125,6 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
                 )}
               </Pressable>
             </View>
-            <Text style={styles.inviteNote}>
-              家族が新しくアプリに参加するときに使います。
-            </Text>
           </View>
 
           <Pressable
@@ -214,7 +211,6 @@ const styles = StyleSheet.create({
   },
   inviteCode: { flex: 1, fontSize: 10, color: colors.textSubtle, fontWeight: '500' },
   copyButton: { padding: 6, borderRadius: 8 },
-  inviteNote: { fontSize: 10, color: colors.textFaint, marginTop: 6, lineHeight: 15 },
 
   signOut: {
     flexDirection: 'row',

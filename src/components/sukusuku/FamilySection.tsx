@@ -143,9 +143,6 @@ export default function FamilySection({ familyId, userId, onMembersChange }: Fam
             );
           })}
 
-          {!isGuardian && (
-            <p className="text-xs text-gray-500">自宅の情報と他の家族の情報は、保護者だけが編集できます。</p>
-          )}
         </div>
       )}
 

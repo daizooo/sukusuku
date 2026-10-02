@@ -10,8 +10,8 @@
 /** 設定が無い家族の既定値。新生児〜生後数ヶ月の授乳間隔の目安。 */
 export const DEFAULT_FEEDING_INTERVAL_MINUTES = 180;
 
-/** 設定で選べる間隔。2時間〜4時間を30分刻みで。 */
-export const FEEDING_INTERVAL_OPTIONS = [120, 150, 180, 210, 240];
+/** 設定で選べる間隔。3・4・5時間。 */
+export const FEEDING_INTERVAL_OPTIONS = [180, 240, 300];
 
 /** 180 -> 「3時間」 / 150 -> 「2時間30分」 / 45 -> 「45分」 */
 export const formatMinutesText = (minutes: number): string => {

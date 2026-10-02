@@ -135,9 +135,6 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
             );
           })}
 
-          {!isGuardian && (
-            <Text style={styles.note}>自宅の情報と他の家族の情報は、保護者だけが編集できます。</Text>
-          )}
         </View>
       )}
 
@@ -436,7 +433,6 @@ const styles = StyleSheet.create({
   rowLabel: { width: 84, fontSize: 12, fontWeight: '500', color: colors.textMuted },
   rowValue: { flex: 1, fontSize: 13, fontWeight: '500', color: colors.textSubtle },
   rowValueEmpty: { color: colors.textFaint },
-  note: { fontSize: 12, fontWeight: '400', color: colors.textMuted, lineHeight: 18 },
   errorBlock: { gap: 8, alignItems: 'flex-start' },
   error: { fontSize: 12, fontWeight: '500', color: colors.danger },
   retry: { fontSize: 13, fontWeight: '700', color: colors.navActiveText },
