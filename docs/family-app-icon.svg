@@ -1,0 +1,12 @@
+<!-- かぞく手帳のアイコン原図（D4）。108x108 は Android adaptive icon の座標系。
+     屋根は3人の色（青=大造 / 翠=岳 / 桃=いづみ）、「し」は白石家の頭文字。
+     アイコン一式（mobile/assets/・PWA）はこの原図から書き出す（docs/family-app.md §4.4） -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="1024" height="1024">
+  <rect width="108" height="108" fill="#ffffff"/>
+  <g fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M24 44 L39 33" stroke="#3b82f6"/>
+    <path d="M39 33 L54 22 L69 33" stroke="#10b981"/>
+    <path d="M69 33 L84 44" stroke="#ec4899"/>
+    <path d="M37 54 V71 Q37 86 52 86 Q64 86 72 74" stroke="#33313d"/>
+  </g>
+</svg>
