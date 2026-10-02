@@ -13,6 +13,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.2';
 import { DeliveryContext, type DeliveryTarget } from '../_shared/deliver.ts';
+import { recipientsFor } from '../_shared/reminderRecipients.ts';
 import {
   dueRecurringReminders,
   type RecurringTaskRow,
@@ -30,6 +31,8 @@ const LOOKBACK_MINUTES = 120;
 
 interface SubscriptionRow extends DeliveryTarget {
   family_id: string;
+  /** 端末の持ち主。「自分だけ」の予定を作成者の端末にだけ送るために使う。 */
+  user_id: string;
 }
 
 // 通知本文。「8月20日(水) 10:00 ・ 城南まちづくりセンター」のように出す。
@@ -82,7 +85,9 @@ Deno.serve(async (request) => {
   // 繰り返さない予定の通知は送る（適用の順序は 0050 の冒頭）。
   const { data: recurringTasks, error: recurringError } = await supabase
     .from('tasks')
-    .select('id, family_id, title, category, place, start_time, start_date, recurrence, done_dates')
+    .select(
+      'id, family_id, title, category, place, start_time, start_date, recurrence, done_dates, is_private, created_by',
+    )
     .eq('anchor_type', 'absolute')
     .not('recurrence', 'is', null)
     .not('start_date', 'is', null)
@@ -102,7 +107,7 @@ Deno.serve(async (request) => {
   // ここで絞っているので送ろうとして失敗することはない（届かないだけ）。
   const { data: subscriptions, error: subscriptionError } = await supabase
     .from('push_subscriptions')
-    .select('id, kind, family_id, endpoint')
+    .select('id, kind, family_id, user_id, endpoint')
     .eq('kind', 'fcm')
     .in('family_id', familyIds)
     .returns<SubscriptionRow[]>();
@@ -126,9 +131,10 @@ Deno.serve(async (request) => {
   let skipped = 0;
 
   for (const row of due) {
-    // 予定は家族で共有しているものなので、ラベル(パパ/ママ/家族)に関わらず
-    // その家族の全端末へ送る。
-    for (const subscription of subscriptionsByFamily.get(row.family_id) ?? []) {
+    // 共有の予定は、ラベル(パパ/ママ/家族)に関わらずその家族の全端末へ送る。
+    // 「自分だけ」の予定・タスクは、作成した本人の端末だけへ送る（通知にタイトルと場所が
+    // 入るため。画面ではRLSで本人にしか見えないが、この関数はRLSが効かない。0051）。
+    for (const subscription of recipientsFor(row, subscriptionsByFamily.get(row.family_id) ?? [])) {
       // 先に記録を作って送信権を取る。(task_id, subscription_id, scheduled_for) の
       // 一意制約により、実行が重なっても送るのは片方だけになる。
       const { data: claim, error: claimError } = await supabase

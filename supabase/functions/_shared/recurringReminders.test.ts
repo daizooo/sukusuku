@@ -14,6 +14,8 @@ const task = (patch: Partial<RecurringTaskRow>): RecurringTaskRow => ({
   start_date: '2026-10-02',
   recurrence: { freq: 'weekly', interval: 1, byWeekday: [5], end: { type: 'never' } },
   done_dates: [],
+  is_private: false,
+  created_by: 'u1',
   ...patch,
 });
 const at = (iso: string) => Date.parse(iso);
@@ -58,6 +60,15 @@ assert.equal(dueRecurringReminders([ended], at('2026-10-06T10:00:00+09:00'), LOO
 const broken = [task({ id: 'b1', recurrence: { freq: 'hourly' } }), task({ id: 'b2', start_date: null }), task({ id: 'ok' })];
 rows = dueRecurringReminders(broken, at('2026-10-09T10:00:00+09:00'), LOOKBACK);
 assert.deepEqual(rows.map((r) => r.task_id), ['ok']);
+
+// 「自分だけ」かどうかと作成者は、通知の行へそのまま引き継ぐ（宛先の絞り込みに使う）。
+rows = dueRecurringReminders(
+  [task({ is_private: true, created_by: 'u-papa' })],
+  at('2026-10-09T10:00:00+09:00'),
+  LOOKBACK,
+);
+assert.equal(rows[0].is_private, true);
+assert.equal(rows[0].created_by, 'u-papa');
 
 assert.equal(toRule(null), null);
 assert.equal(toRule({ freq: 'daily', interval: 0, end: { type: 'never' } }), null);
