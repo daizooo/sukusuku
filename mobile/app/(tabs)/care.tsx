@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -8,17 +9,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   CalendarDays,
   ChevronLeft,
-  ClipboardCheck,
   ChevronRight,
   Droplet,
-  List,
   Plus,
   Thermometer,
-  TrendingUp,
   Undo2,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -100,10 +98,8 @@ import {
 } from '@/lib/offline/careLogs';
 import BabyBottleIcon from '@/components/ui/BabyBottleIcon';
 import NextFeedingCard from '@/components/NextFeedingCard';
-import NurseryPanel from '@/components/care/NurseryPanel';
-import SegmentedTabs from '@/components/ui/SegmentedTabs';
+import BodyPanel from '@/components/care/BodyPanel';
 import LogTimeline from '@/components/log/LogTimeline';
-import GrowthChart from '@/components/log/GrowthChart';
 import GrowthRecordFormModal from '@/components/log/GrowthRecordFormModal';
 import DiaperLogModal, { type DiaperLogInput } from '@/components/log/DiaperLogModal';
 import MilkLogModal, { type MilkLogInput } from '@/components/log/MilkLogModal';
@@ -112,11 +108,12 @@ import TemperatureLogModal, {
   type TemperatureLogInput,
 } from '@/components/log/TemperatureLogModal';
 
-// 育児タブ（docs/family-app.md §4.2）。もとの記録タブに、ホームの「生後日数」「次の授乳」と
-// 保活タブをまとめたもの。上に子の月齢と次の授乳を固定し、その下で 記録／成長／保活 を切り替える。
+// 育児タブ（docs/family-app.md §4.2）。もとの記録タブに、ホームの「生後日数」「次の授乳」を
+// まとめたもの。上に子の月齢と次の授乳を固定し、その下にその日の記録を出す。
 //
-// 記録は 授乳・ミルク / 搾乳 / おむつ / 体温、成長は成長曲線。PWA版の
-// `src/components/sukusuku/tabs/CareTab.tsx` に合わせてある。
+// 記録は 授乳・ミルク / 搾乳 / おむつ。体温と身長・体重は「からだ」のボタンから開く画面で
+// 記録して振り返る（以前の「成長」の切り替えをここへ寄せた）。保活は設定タブへ移した。
+// PWA版の `src/components/sukusuku/tabs/CareTab.tsx` に合わせてある。
 //
 // 体温は PWA版（src/）にも同じものが入っている（docs/what-to-record.md §4-1・§8）。
 //
@@ -176,8 +173,8 @@ export default function CareScreen() {
   // 開いている入力画面。log が null なら新規追加、入っていればその記録の編集。
   const [editing, setEditing] = useState<{ log: MilkLog | null } | null>(null);
   const [editingPumping, setEditingPumping] = useState<{ log: PumpingLog | null } | null>(null);
-  // 記録（タイムライン）・成長（成長曲線）・保活の切り替え。開いたときは記録。
-  const [logView, setLogView] = useState<'timeline' | 'growth' | 'nursery'>('timeline');
+  // 「からだ」（体温・身長・体重の記録と履歴）を開いているか。開いたときは閉じている。
+  const [bodyOpen, setBodyOpen] = useState(false);
   // 次の授乳の目安の間隔（設定タブの「通知」で変える）。
   const [intervalMinutes, setIntervalMinutes] = useState(DEFAULT_FEEDING_INTERVAL_MINUTES);
   const [childId, setChildId] = useState<string | null>(null);
@@ -229,14 +226,26 @@ export default function CareScreen() {
 
   // 矢印ボタンと同じ操作を、画面上どこでの横スワイプでもできるようにする。
   // 「次の日」ボタンが isToday で disabled なのと同じく、今日より先へはスワイプでも進めない。
-  // 成長曲線タブには日付送りが無いため、タイムライン表示中だけ有効にする。
+  // 「からだ」には日付送りが無いため、記録の一覧を出している間だけ有効にする。
   const swipeHandlers = useSwipeNavigation({
     onSwipeLeft: () => {
       if (!isToday) setLogDate(addDays(logDate, 1));
     },
     onSwipeRight: () => setLogDate(addDays(logDate, -1)),
-    enabled: logView === 'timeline',
+    enabled: !bodyOpen,
   });
+
+  // 「からだ」からは、Androidの戻る操作でも記録へ戻る（切り替えの帯を置かないぶん、戻り道を用意する）。
+  useFocusEffect(
+    useCallback(() => {
+      if (!bodyOpen) return undefined;
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        setBodyOpen(false);
+        return true;
+      });
+      return () => subscription.remove();
+    }, [bodyOpen]),
+  );
 
   // 所属の家族と、記録した人の名前。どちらも1回取れば足りる。
   useEffect(() => {
@@ -485,8 +494,18 @@ export default function CareScreen() {
   const temperatureSummaryText = temperatureBaseline
     ? `平熱 ${formatCelsius(temperatureBaseline.celsius)}`
     : 'まだ記録なし';
+  // 「からだ」のボタンには、体温の平熱と、いちばん新しい体重を並べて出す。
+  // 成長記録は日付の古い順に持っているので、後ろから探す。
+  const latestWeightKg = useMemo(
+    () => [...growthData].reverse().find((record) => record.weight !== null)?.weight ?? null,
+    [growthData],
+  );
   // 入力画面に出す「前回の体温」。ボタンの平熱とは別に、直前の1件が要る。
-  const latestTemperature = useMemo(() => getLatestTemperature(visibleLogs), [visibleLogs]);
+  // 「からだ」から開いたときは日が決まっていないので、日をまたいだ直近の1件にする。
+  const latestTemperature = useMemo(
+    () => getLatestTemperature(bodyOpen ? recentTemperatureLogs : visibleLogs),
+    [bodyOpen, recentTemperatureLogs, visibleLogs],
+  );
 
   const handleSave = async (input: MilkLogInput, existing: MilkLog | null) => {
     if (!familyId || !userId) return;
@@ -669,6 +688,7 @@ export default function CareScreen() {
       await showCached();
       await sync();
       if (log.type === 'milk') await refreshRecentMilkLogs();
+      if (log.type === 'temperature') await refreshRecentTemperatureLogs();
     } catch (error) {
       setErrorMessage(toMessage(error));
     }
@@ -685,92 +705,36 @@ export default function CareScreen() {
 
   return (
     <SafeAreaView style={styles.screen} {...swipeHandlers}>
-      {/* 見出し（子の月齢・次の授乳）と切り替えは固定し、スクロールは中身だけにする。 */}
+      {!bodyOpen && (
+        <>
+      {/* 見出し（子の月齢・次の授乳）は固定し、スクロールは中身だけにする。 */}
       <View style={styles.careHeader}>
-        {(babyName !== '' || babyAge !== '') && (
+        {babyAge !== '' && (
           <View style={styles.ageRow}>
-            <Text style={styles.ageName}>{babyName}</Text>
             <Text style={styles.ageText}>{babyAge}</Text>
           </View>
         )}
         <NextFeedingCard
           info={nextFeeding}
-          onOpen={() => {
-            setLogView('timeline');
-            setEditing({ log: null });
-          }}
+          onOpen={() => setEditing({ log: null })}
         />
       </View>
+        </>
+      )}
 
-      <View style={styles.viewSwitcher}>
-        <SegmentedTabs
-          accessibilityLabel="育児の表示"
-          value={logView}
-          onChange={setLogView}
-          options={[
-            { id: 'timeline', label: '記録', icon: <List size={15} color={logView === 'timeline' ? colors.navActiveText : colors.textSubtle} /> },
-            { id: 'growth', label: '成長', icon: <TrendingUp size={15} color={logView === 'growth' ? colors.navActiveText : colors.textSubtle} /> },
-            { id: 'nursery', label: '保活', icon: <ClipboardCheck size={15} color={logView === 'nursery' ? colors.navActiveText : colors.textSubtle} /> },
-          ]}
+      {bodyOpen ? (
+        <BodyPanel
+          temperatureLogs={recentTemperatureLogs}
+          growthData={growthData}
+          growthChartData={growthChartData}
+          isLoadingGrowth={isLoadingGrowth}
+          memberLabel={memberLabel}
+          onBack={() => setBodyOpen(false)}
+          onAddTemperature={() => setEditingTemperature({ log: null })}
+          onEditTemperature={(log) => setEditingTemperature({ log })}
+          onAddGrowth={() => setGrowthModal({ mode: 'add', record: null })}
+          onEditGrowth={(record) => setGrowthModal({ mode: 'edit', record })}
         />
-      </View>
-
-      {logView === 'nursery' ? (
-        <NurseryPanel />
-      ) : logView === 'growth' ? (
-        <ScrollView contentContainerStyle={styles.growth}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setGrowthModal({ mode: 'add', record: null })}
-            style={styles.addGrowth}
-          >
-            <Plus size={18} color={colors.navActiveText} />
-            <Text style={styles.addGrowthText}>身長・体重を記録する</Text>
-          </Pressable>
-
-          {isLoadingGrowth && <Text style={styles.growthMessage}>読み込み中...</Text>}
-
-          {!isLoadingGrowth && growthData.length > 0 && (
-            <>
-              <GrowthChart
-                title="身長の推移 (cm)"
-                points={growthChartData.map((r) => ({ axisLabel: r.axisLabel, value: r.height }))}
-                color={colors.navActive}
-                padding={2}
-              />
-              <GrowthChart
-                title="体重の推移 (kg)"
-                points={growthChartData.map((r) => ({ axisLabel: r.axisLabel, value: r.weight }))}
-                color={colors.pumping}
-                padding={1}
-              />
-
-              <View style={styles.growthList}>
-                {growthData.map((record, index) => (
-                  <Pressable
-                    key={record.id}
-                    accessibilityRole="button"
-                    onPress={() => setGrowthModal({ mode: 'edit', record })}
-                    style={[styles.growthRow, index > 0 && styles.growthRowDivided]}
-                  >
-                    <Text style={styles.growthDate}>
-                      {record.recordedDate}
-                      {record.month !== null ? ` (生後${record.month}ヶ月)` : ''}
-                    </Text>
-                    <Text style={styles.growthValue}>
-                      {record.height !== null ? `${record.height}cm` : '-'} /{' '}
-                      {record.weight !== null ? `${record.weight}kg` : '-'}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </>
-          )}
-
-          {!isLoadingGrowth && growthData.length === 0 && (
-            <Text style={styles.growthMessage}>記録はまだありません</Text>
-          )}
-        </ScrollView>
       ) : (
       <>
       {/* 日付送り。タブを開いた時点では常に今日なので、「今日」は今日以外を見ているときだけ出す。 */}
@@ -861,7 +825,7 @@ export default function CareScreen() {
             )}
 
             {/* 記録ボタン。その日のようすを同じボタンに載せ、「見る」と「記録する」を1つに
-                まとめている。授乳・おむつ・体温の3つ。搾乳は授乳の中（入力画面の「搾った」）へ
+                まとめている。授乳・おむつ・からだの3つ。搾乳は授乳の中（入力画面の「搾った」）へ
                 寄せたので、ここには出さず、代わりに授乳のボタンにいまの搾乳ストックを出す。 */}
             <View style={styles.recordRow}>
               <Pressable
@@ -902,18 +866,22 @@ export default function CareScreen() {
                 <Text style={styles.recordValue}>うんち {summary.diaper.poopCount}回</Text>
               </Pressable>
 
-              {/* 体温はその子の平熱だけを出す。日ごとの平均や最高は出さない。 */}
+              {/* からだ（体温・身長・体重）。押すと、記録と履歴をまとめた画面を開く。
+                  体温はその子の平熱だけ、体重はいちばん新しい値だけを出す。 */}
               <Pressable
                 accessibilityRole="button"
-                onPress={() => setEditingTemperature({ log: null })}
+                onPress={() => setBodyOpen(true)}
                 style={styles.recordButton}
               >
-                <Plus size={12} color={colors.borderStrong} style={styles.recordPlus} />
+                <ChevronRight size={12} color={colors.borderStrong} style={styles.recordPlus} />
                 <View style={styles.recordTitleRow}>
                   <Thermometer size={17} color={colors.temperature} />
-                  <Text style={styles.recordTitle}>体温</Text>
+                  <Text style={styles.recordTitle}>からだ</Text>
                 </View>
                 <Text style={styles.recordValue}>{temperatureSummaryText}</Text>
+                <Text style={styles.recordValue}>
+                  {latestWeightKg !== null ? `体重 ${latestWeightKg}kg` : '体重 -'}
+                </Text>
               </Pressable>
             </View>
 
@@ -1037,7 +1005,8 @@ export default function CareScreen() {
       <TemperatureLogModal
         show={editingTemperature !== null}
         log={editingTemperature?.log ?? null}
-        baseDate={logDate}
+        // 「からだ」から足すときは、いま見ている日ではなく今日に登録する。
+        baseDate={bodyOpen ? today : logDate}
         previous={latestTemperature}
         baseline={temperatureBaseline}
         babyName={babyName || undefined}
@@ -1062,40 +1031,7 @@ const styles = StyleSheet.create({
 
   careHeader: { paddingHorizontal: 12, paddingTop: 12, gap: 8 },
   ageRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingHorizontal: 4 },
-  ageName: { fontSize: 16, fontWeight: '700', color: colors.text },
   ageText: { fontSize: 14, fontWeight: '600', color: colors.textSubtle },
-  viewSwitcher: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4 },
-  growth: { padding: 16, gap: 24, paddingBottom: 32 },
-  addGrowth: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: colors.diaperSurface,
-    borderWidth: 1,
-    borderColor: colors.diaperBorder,
-    borderRadius: 12,
-    paddingVertical: 14,
-  },
-  addGrowthText: { fontSize: 15, fontWeight: '500', color: colors.navActiveText },
-  growthMessage: { fontSize: 14, color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
-  growthList: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  growthRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    padding: 12,
-  },
-  growthRowDivided: { borderTopWidth: 1, borderTopColor: colors.background },
-  growthDate: { fontSize: 12, color: colors.textMuted, fontWeight: '500', fontVariant: ['tabular-nums'] },
-  growthValue: { fontSize: 14, fontWeight: '500', color: colors.textSubtle, fontVariant: ['tabular-nums'] },
 
   header: {
     flexDirection: 'row',

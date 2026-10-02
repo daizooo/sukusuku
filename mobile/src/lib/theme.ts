@@ -1,7 +1,7 @@
 // 画面の色。Web版(Tailwind)で使っていた値を持ってきて、名前で参照できるようにする。
 export const colors = {
-  // アプリの地の色。PWA版のmanifestの theme_color と同じで、画面の一番上の帯に使う。
-  brand: '#CE6B74',
+  // 画面の一番上の帯の色。アプリのアイコンの背景（白）に合わせる。PWA版のmanifestの theme_color と同じ。
+  brand: '#ffffff',
   background: '#f9fafb', // gray-50
   surface: '#ffffff',
   border: '#e5e7eb', // gray-200

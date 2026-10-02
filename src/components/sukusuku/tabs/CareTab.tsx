@@ -1,22 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  ClipboardCheck,
   Droplet,
   FileText,
-  List,
   Milk,
   Plus,
   Thermometer,
-  TrendingUp,
   Undo2,
   User,
 } from 'lucide-react';
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type {
   BreastSide,
   CareLog,
@@ -52,7 +48,7 @@ import {
   toDateString,
 } from '@/lib/dateUtils';
 import BabyBottleIcon from '../ui/BabyBottleIcon';
-import SegmentedTabs from '../ui/SegmentedTabs';
+import BodyPanel from './BodyPanel';
 import NextFeedingCard from '../NextFeedingCard';
 import type { NextFeedingInfo } from '@/lib/feedingSchedule';
 import MilkLogModal, { type MilkLogInput } from '../modals/MilkLogModal';
@@ -62,16 +58,16 @@ import TemperatureLogModal, { type TemperatureLogInput } from '../modals/Tempera
 import GrowthRecordFormModal from '../modals/GrowthRecordFormModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 
-// 育児タブ（docs/family-app.md §4.2）。もとの記録タブに、ホームの「生後日数」「次の授乳」と
-// 保活タブをまとめたもの。上に子の月齢と次の授乳を固定し、その下で 記録／成長／保活 を切り替える。
+// 育児タブ（docs/family-app.md §4.2）。もとの記録タブに、ホームの「生後日数」「次の授乳」を
+// まとめたもの。上に子の月齢と次の授乳を固定し、その下にその日の記録を出す。
+// 体温と身長・体重は「からだ」のボタンから開く画面（BodyPanel）で記録して振り返る
+// （以前の「成長」の切り替えをここへ寄せた）。保活は設定タブへ移した。
 // mobile版は `mobile/app/(tabs)/care.tsx`。
 interface CareTabProps {
   /** 見出しに出す子の月齢（「生後123日目（4ヶ月2日）」）。誕生日が未設定なら空文字。 */
   babyAge: string;
   /** 見出しの「次の授乳」。 */
   nextFeeding: NextFeedingInfo;
-  /** 「保活」に出す中身（HokatsuTab）。 */
-  nurseryPanel: ReactNode;
   logs: CareLog[];
   logDate: Date;
   today: Date;
@@ -146,7 +142,6 @@ const getLogColor = (type: LogType) => {
 export default function CareTab({
   babyAge,
   nextFeeding,
-  nurseryPanel,
   logs,
   logDate,
   today,
@@ -173,8 +168,8 @@ export default function CareTab({
   onUpdateGrowthRecord,
   onDeleteGrowthRecord,
 }: CareTabProps) {
-  // 記録（タイムライン）・成長（成長曲線）・保活の切り替え。開いたときは記録。
-  const [logView, setLogView] = useState<'timeline' | 'growth' | 'nursery'>('timeline');
+  // 「からだ」（体温・身長・体重の記録と履歴）を開いているか。開いたときは閉じている。
+  const [bodyOpen, setBodyOpen] = useState(false);
   // 記録の入力画面。log が null なら新規追加、入っていればその記録の編集。
   // 通知から開いたときは、その用件の入力画面を出した状態で始める。
   const [logModal, setLogModal] = useState<{ type: LogType; log: CareLog | null } | null>(
@@ -219,8 +214,15 @@ export default function CareTab({
   const temperatureSummaryText = temperatureBaseline
     ? `平熱 ${formatCelsius(temperatureBaseline.celsius)}`
     : 'まだ記録なし';
+  // 「からだ」のボタンには、体温の平熱と、いちばん新しい体重を並べて出す。
+  // 成長記録は日付の古い順に持っているので、後ろから探す。
+  const latestWeightKg = useMemo(
+    () => [...growthData].reverse().find((record) => record.weight !== null)?.weight ?? null,
+    [growthData],
+  );
   // 入力画面に出す「前回の体温」。ボタンの平均とは別に、直前の1件が要る。
-  const latestTemperature = getLatestTemperature(visibleLogs);
+  // 「からだ」から開いたときは日が決まっていないので、日をまたいだ直近の1件にする。
+  const latestTemperature = getLatestTemperature(bodyOpen ? recentTemperatureLogs : visibleLogs);
   // 搾乳ストックの残り。飲ませた分と丸ごと捨てた分を除いたパックの合計。
   // 表示中の日だけでは求まらないため、日付の送りとは関わらず常に今の残りを出す。
   const stockMl = pumpedStockMl(pumpedBatches);
@@ -233,39 +235,41 @@ export default function CareTab({
   };
 
   return (
-    // PC幅では左の列に 見出し・切り替え・（記録なら）日付送りと記録ボタン、右の列に中身を置く。
-    // スマホ幅では同じ順に縦へ並ぶ。
+    // PC幅では左の列に 見出し・日付送りと記録ボタン、右の列に中身を置く。
+    // スマホ幅では同じ順に縦へ並ぶ。「からだ」を開いている間は、この2列の代わりにそれを出す。
     <div className="p-4 h-full flex flex-col gap-3 lg:grid lg:grid-cols-[20rem_1fr] lg:gap-6">
+      {bodyOpen && (
+        // 「からだ」は自分の余白を持つので、こちらの余白と重ならないよう打ち消す。
+        <div className="flex-1 min-h-0 -m-4 lg:col-span-2 lg:m-0">
+          <BodyPanel
+            temperatureLogs={recentTemperatureLogs}
+            growthData={growthData}
+            growthChartData={growthChartData}
+            isLoadingGrowth={isLoadingGrowth}
+            memberLabel={memberLabel}
+            onBack={() => setBodyOpen(false)}
+            onAddTemperature={() => setLogModal({ type: 'temperature', log: null })}
+            onEditTemperature={(log) => setLogModal({ type: 'temperature', log })}
+            onAddGrowth={() => setGrowthModal({ mode: 'add', record: null })}
+            onEditGrowth={(record) => setGrowthModal({ mode: 'edit', record })}
+          />
+        </div>
+      )}
+      {!bodyOpen && (
+      <>
       <div className="shrink-0 space-y-3 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
-        {/* 見出し（子の月齢・次の授乳）と切り替えは固定し、スクロールは中身だけにする。 */}
+        {/* 見出し（子の月齢・次の授乳）は固定し、スクロールは中身だけにする。 */}
         <div className="space-y-2">
-          {(babyName || babyAge) && (
-            <p className="flex items-baseline gap-2 px-1">
-              <span className="font-bold text-gray-900">{babyName}</span>
-              <span className="text-sm font-semibold text-gray-700">{babyAge}</span>
-            </p>
+          {babyAge && (
+            <p className="px-1 text-sm font-semibold text-gray-700">{babyAge}</p>
           )}
           <NextFeedingCard
             info={nextFeeding}
-            onOpen={() => {
-              setLogView('timeline');
-              setLogModal({ type: 'milk', log: null });
-            }}
+            onOpen={() => setLogModal({ type: 'milk', log: null })}
           />
         </div>
 
-        <SegmentedTabs
-          ariaLabel="育児の表示"
-          value={logView}
-          onChange={setLogView}
-          options={[
-            { id: 'timeline', label: '記録', icon: <List size={15} /> },
-            { id: 'growth', label: '成長', icon: <TrendingUp size={15} /> },
-            { id: 'nursery', label: '保活', icon: <ClipboardCheck size={15} /> },
-          ]}
-        />
-        {logView === 'timeline' && (
-          <>
+        <>
             {/* 日付の送り: 1日区切りで過去の記録を遡る。タブを開いた時点では常に今日なので、
                 「今日」の表示は今日以外を見ているときに戻るボタンとしてだけ出す。 */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-1 flex items-center justify-between gap-1">
@@ -344,7 +348,7 @@ export default function CareTab({
             )}
 
             {/* 記録ボタン。その日のようすを同じボタンに載せ、「見る」と「記録する」を1つにまとめている。
-                授乳・おむつ・体温の3つ。搾乳は授乳の中（入力画面の「搾った」）へ寄せたので、
+                授乳・おむつ・からだの3つ。搾乳は授乳の中（入力画面の「搾った」）へ寄せたので、
                 ここには出さず、代わりに授乳のボタンにいまの搾乳ストックを出す。 */}
             <div className="grid grid-cols-3 gap-2">
               <button
@@ -395,18 +399,22 @@ export default function CareTab({
                   うんち {summary.diaper.poopCount}回
                 </span>
               </button>
-              {/* 体温はその子の平熱だけを出す。日ごとの平均や最高は出さない。 */}
+              {/* からだ（体温・身長・体重）。押すと、記録と履歴をまとめた画面を開く。
+                  体温はその子の平熱だけ、体重はいちばん新しい値だけを出す。 */}
               <button
-                onClick={() => setLogModal({ type: 'temperature', log: null })}
+                onClick={() => setBodyOpen(true)}
                 className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-orange-50 transition active:scale-95"
               >
-                <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
+                <ChevronRight size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
                 <span className="flex items-center gap-1.5">
                   <Thermometer size={17} className="text-orange-600" />
-                  <span className="text-sm font-bold text-gray-800">体温</span>
+                  <span className="text-sm font-bold text-gray-800">からだ</span>
                 </span>
                 <span className="mt-0.5 text-[11px] font-medium tabular-nums leading-tight text-center text-gray-500">
                   {temperatureSummaryText}
+                </span>
+                <span className="text-[11px] font-medium tabular-nums leading-tight text-center text-gray-500">
+                  {latestWeightKg !== null ? `体重 ${latestWeightKg}kg` : '体重 -'}
                 </span>
               </button>
             </div>
@@ -416,15 +424,11 @@ export default function CareTab({
                 過去の日を表示中です。記録を追加すると{dateLabel}に登録されます。
               </p>
             )}
-          </>
-        )}
+        </>
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col">
-        {logView === 'nursery' ? (
-          // 保活の中身は自分の余白を持つので、スマホ幅ではこちらの余白と重ならないよう打ち消す。
-          <div className="flex-1 min-h-0 -mx-4 -mb-4 lg:m-0">{nurseryPanel}</div>
-        ) : logView === 'timeline' ? (
+        {(
           <div className="flex-1 min-h-0 overflow-y-auto lg:max-w-3xl">
               <h3 className="text-sm font-bold text-gray-600 mb-2 px-1">{dateLabel}の記録 {visibleLogs.length}件</h3>
               {isLoadingLogs && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
@@ -485,72 +489,10 @@ export default function CareTab({
                 })}
               </div>
             </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto space-y-6 pb-6">
-            <button
-              onClick={() => setGrowthModal({ mode: 'add', record: null })}
-              className="w-full bg-blue-50 text-blue-600 font-medium py-3 rounded-xl shadow-sm border border-blue-200 transition flex items-center justify-center hover:bg-blue-100"
-            >
-              <Plus size={18} className="mr-1" /> 身長・体重を記録する
-            </button>
-
-            {isLoadingGrowth && <p className="text-sm text-gray-400 text-center py-4">読み込み中...</p>}
-
-            {!isLoadingGrowth && growthData.length > 0 && (
-              <div className="space-y-6 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                  <h3 className="font-bold text-gray-800 text-sm mb-4">身長の推移 (cm)</h3>
-                  <div className="h-48 w-full -ml-3">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={growthChartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="axisLabel" style={{ fontSize: '10px' }} />
-                        <YAxis style={{ fontSize: '10px' }} domain={['dataMin - 2', 'dataMax + 2']} />
-                        <Tooltip />
-                        <Line type="monotone" dataKey="height" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="身長(cm)" connectNulls />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                  <h3 className="font-bold text-gray-800 text-sm mb-4">体重の推移 (kg)</h3>
-                  <div className="h-48 w-full -ml-3">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={growthChartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="axisLabel" style={{ fontSize: '10px' }} />
-                        <YAxis style={{ fontSize: '10px' }} domain={['dataMin - 1', 'dataMax + 1']} />
-                        <Tooltip />
-                        <Line type="monotone" dataKey="weight" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="体重(kg)" connectNulls />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-50 lg:col-span-2">
-                  {growthData.map((record) => (
-                    <button
-                      key={record.id}
-                      onClick={() => setGrowthModal({ mode: 'edit', record })}
-                      className="w-full text-left p-3 flex items-center justify-between hover:bg-gray-50 transition"
-                    >
-                      <span className="text-xs text-gray-500">{record.recordedDate}{record.month !== null ? ` (生後${record.month}ヶ月)` : ''}</span>
-                      <span className="text-sm text-gray-700 font-medium">
-                        {record.height !== null ? `${record.height}cm` : '-'} / {record.weight !== null ? `${record.weight}kg` : '-'}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {!isLoadingGrowth && growthData.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-8">記録はまだありません</p>
-            )}
-          </div>
         )}
       </div>
+      </>
+      )}
 
       <MilkLogModal
         show={logModal?.type === 'milk'}
@@ -603,7 +545,8 @@ export default function CareTab({
       <TemperatureLogModal
         show={logModal?.type === 'temperature'}
         log={logModal?.log?.type === 'temperature' ? logModal.log : null}
-        baseDate={logDate}
+        // 「からだ」から足すときは、いま見ている日ではなく今日に登録する。
+        baseDate={bodyOpen ? today : logDate}
         previous={latestTemperature}
         baseline={temperatureBaseline}
         babyName={babyName}

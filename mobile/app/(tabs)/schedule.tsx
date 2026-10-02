@@ -9,6 +9,7 @@ import {
   ChevronRight,
   CornerDownRight,
   Plus,
+  Undo2,
 } from 'lucide-react-native';
 import type { CareLog, DynamicTask, Participant, ScheduleView, Task } from '@/types/app';
 import { supabase } from '@/lib/supabase';
@@ -429,8 +430,10 @@ export default function ScheduleScreen() {
                 <CalendarDays size={16} color={colors.textFaint} />
               </Pressable>
               {!isShowingToday && (
+                // 育児タブの日付送りと同じ「今日へ戻る」。「今日」だけだと表示中の見出しのラベルに見える。
                 <Pressable accessibilityRole="button" onPress={goToday} style={styles.todayButton}>
-                  <Text style={styles.todayText}>今日</Text>
+                  <Undo2 size={12} color={colors.navActiveText} />
+                  <Text style={styles.todayText}>今日へ戻る</Text>
                 </Pressable>
               )}
             </View>
@@ -577,6 +580,9 @@ const styles = StyleSheet.create({
   navTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   navTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
   todayButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
     backgroundColor: colors.diaperSurface,
     borderRadius: 6,
     paddingHorizontal: 8,

@@ -20,6 +20,7 @@ import AccountSection from '@/components/info/AccountSection';
 import FamilySection from '@/components/info/FamilySection';
 import NotificationSetting from '@/components/info/NotificationSetting';
 import FeedingIntervalSetting from '@/components/info/FeedingIntervalSetting';
+import HokatsuSetting from '@/components/info/HokatsuSetting';
 import TemperatureReminderSetting from '@/components/info/TemperatureReminderSetting';
 import VersionInfo from '@/components/info/VersionInfo';
 
@@ -97,6 +98,9 @@ export default function InfoScreen() {
                 onChange={setTemperatureReminderSettings}
               />
             </NotificationSetting>
+
+            {/* 保活（見学チェック）。見学のときしか開かないので、育児タブから移した。 */}
+            <HokatsuSetting />
 
             <AccountSection familyId={familyId} userId={session.user.id} />
           </>
