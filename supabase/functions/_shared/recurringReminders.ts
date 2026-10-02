@@ -19,6 +19,9 @@ export interface RecurringTaskRow {
   start_date: string | null;
   recurrence: unknown;
   done_dates: string[] | null;
+  /** 「自分だけ」の予定。通知は作成者の端末だけへ送る（reminderRecipients.ts）。 */
+  is_private: boolean | null;
+  created_by: string | null;
 }
 
 /** task_reminder_schedule の1行と同じ形（send-reminders が送る単位）。 */
@@ -33,6 +36,9 @@ export interface ScheduleRow {
   target_date: string;
   starts_at: string;
   remind_at: string;
+  /** 0051 より前のビューには無い（そのときは共有として扱う）。 */
+  is_private?: boolean | null;
+  created_by?: string | null;
 }
 
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
@@ -92,6 +98,8 @@ export function dueRecurringReminders(
         target_date: date,
         starts_at: startsAt,
         remind_at: startsAt,
+        is_private: task.is_private,
+        created_by: task.created_by,
       });
     }
   }
