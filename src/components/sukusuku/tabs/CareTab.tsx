@@ -13,6 +13,7 @@ import {
   Plus,
   Thermometer,
   TrendingUp,
+  Undo2,
   User,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -296,9 +297,11 @@ export default function CareTab({
                 {!isToday && (
                   <button
                     onClick={() => onChangeLogDate(today)}
-                    className="flex-none text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition"
+                    // 「今日」だけだと、表示中の日付のラベルに見えて紛らわしいので、戻る操作だと分かる文言にする。
+                    className="flex-none flex items-center gap-0.5 text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition"
                   >
-                    今日
+                    <Undo2 size={12} />
+                    今日へ戻る
                   </button>
                 )}
               </div>

@@ -19,6 +19,7 @@ import {
   Plus,
   Thermometer,
   TrendingUp,
+  Undo2,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -804,8 +805,10 @@ export default function CareScreen() {
           <CalendarDays size={16} color={colors.textFaint} />
 
           {!isToday && (
+            // 「今日」だけだと、表示中の日付のラベルに見えて紛らわしいので、戻る操作だと分かる文言にする。
             <Pressable accessibilityRole="button" onPress={() => setLogDate(today)} style={styles.todayButton}>
-              <Text style={styles.todayText}>今日</Text>
+              <Undo2 size={12} color={colors.navActiveText} />
+              <Text style={styles.todayText}>今日へ戻る</Text>
             </Pressable>
           )}
         </View>
@@ -1112,6 +1115,9 @@ const styles = StyleSheet.create({
   dateButton: { paddingVertical: 4 },
   date: { fontSize: 15, fontWeight: '700', color: colors.text, flexShrink: 1, fontVariant: ['tabular-nums'] },
   todayButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
     backgroundColor: colors.diaperSurface,
     borderRadius: 6,
     paddingHorizontal: 8,

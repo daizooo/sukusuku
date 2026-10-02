@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Check, Minus, Pause, Play, Plus, RotateCcw } from 'lucide-react';
 import type { BreastSide, FeedingMethod, MilkLog, NursingPhase, PumpedBatch } from '@/types/app';
 import {
-  BREAST_MINUTE_OPTIONS,
   formatBatchTime,
   formatStopwatch,
   getNursingPhaseLabel,
@@ -87,11 +86,9 @@ const SIDE_OPTIONS: { value: BreastSide; label: string }[] = [
 const setOrder = (startSide: BreastSide): NursingPhase[] =>
   startSide === 'right' ? ['right', 'left', 'burp'] : ['left', 'right', 'burp'];
 
-const MINUTE_OPTIONS = BREAST_MINUTE_OPTIONS.map((min) => ({ value: min, label: String(min) }));
-
-/** ボタンに無い分数（計測した端数や、止め忘れを直した値）だけ直接入力欄に出す。 */
-const toCustomMinutes = (minutes: number | undefined): string =>
-  minutes !== undefined && !BREAST_MINUTE_OPTIONS.includes(minutes) ? String(minutes) : '';
+/** 分数の入力欄に出す文字。未入力なら空。 */
+const toMinutesText = (minutes: number | undefined): string =>
+  minutes === undefined ? '' : String(minutes);
 
 /**
  * 計測を始めた時刻を、記録の日時の初期値として使えるならその時刻を返す。
@@ -157,8 +154,8 @@ function MilkLogModalBody({
   const [leftMinutes, setLeftMinutes] = useState<number | undefined>(initialLeft);
   const [rightMinutes, setRightMinutes] = useState<number | undefined>(initialRight);
   // ボタンに無い分数は直接入力欄の側で持つ。
-  const [customLeft, setCustomLeft] = useState(() => toCustomMinutes(initialLeft));
-  const [customRight, setCustomRight] = useState(() => toCustomMinutes(initialRight));
+  const [customLeft, setCustomLeft] = useState(() => toMinutesText(initialLeft));
+  const [customRight, setCustomRight] = useState(() => toMinutesText(initialRight));
   const [lastSide, setLastSide] = useState<BreastSide | undefined>(
     log?.lastSide ?? (measured ? (timer.lastSide ?? undefined) : undefined),
   );
@@ -253,8 +250,8 @@ function MilkLogModalBody({
     const right = nursingMinutes(total.right);
     setLeftMinutes(left);
     setRightMinutes(right);
-    setCustomLeft(toCustomMinutes(left));
-    setCustomRight(toCustomMinutes(right));
+    setCustomLeft(toMinutesText(left));
+    setCustomRight(toMinutesText(right));
   };
 
   // 計測を始める・止める・切り替えるたびに、その時点の合計を分数の入力欄へ入れる。
@@ -394,19 +391,16 @@ function MilkLogModalBody({
               onReset={handleResetTimer}
             />
           )}
+          {/* 計測中は経過時間（分）をそのまま入れておく。手で直した側はその値を優先する。 */}
           <MinuteField
             label="左（分）"
-            value={leftMinutes}
-            custom={customLeft}
-            onSelect={(value) => applyMinutes('left', value, '')}
-            onCustomChange={(value) => handleCustomMinutes('left', value)}
+            value={measuring && !editedLeft ? String(recordedLeft) : customLeft}
+            onChange={(value) => handleCustomMinutes('left', value)}
           />
           <MinuteField
             label="右（分）"
-            value={rightMinutes}
-            custom={customRight}
-            onSelect={(value) => applyMinutes('right', value, '')}
-            onCustomChange={(value) => handleCustomMinutes('right', value)}
+            value={measuring && !editedRight ? String(recordedRight) : customRight}
+            onChange={(value) => handleCustomMinutes('right', value)}
           />
           <div>
             <FieldLabel>最後に飲ませた側</FieldLabel>
@@ -684,37 +678,27 @@ function DrankAmountField({
 
 interface MinuteFieldProps {
   label: string;
-  value: number | undefined;
-  /** ボタンに無い分数を入れている間だけ中身が入る。 */
-  custom: string;
-  onSelect: (value: number) => void;
-  onCustomChange: (value: string) => void;
+  value: string;
+  onChange: (value: string) => void;
 }
 
 /**
- * 母乳の授乳時間。よく使う分数はボタンで選び、それ以外は直接入力する。
+ * 母乳の授乳時間（分）。計測した経過時間が入り、手で直すこともできる。
  * 計測を止め忘れて長い時間が入ってしまったときも、ここで実際の時間に直せる。
  */
-function MinuteField({ label, value, custom, onSelect, onCustomChange }: MinuteFieldProps) {
+function MinuteField({ label, value, onChange }: MinuteFieldProps) {
   return (
     <div>
       <FieldLabel>{label}</FieldLabel>
-      <OptionGrid
-        options={MINUTE_OPTIONS}
-        value={custom === '' ? value : undefined}
-        onChange={onSelect}
-        columns={7}
-        accent="milk"
-      />
       <input
         type="number"
         inputMode="numeric"
         min={0}
-        aria-label={`${label}を直接入力`}
-        value={custom}
-        onChange={(e) => onCustomChange(e.target.value)}
-        className="mt-1.5 w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500"
-        placeholder="上記以外の分数を直接入力"
+        aria-label={label}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500"
+        placeholder="分"
       />
     </div>
   );
