@@ -8,7 +8,7 @@ const versionCode = process.env.ANDROID_VERSION_CODE
 
 module.exports = {
   expo: {
-    name: 'すくすく手帳',
+    name: 'かぞく手帳',
     slug: 'sukusuku',
     scheme: 'sukusuku',
     version: '0.1.0',
@@ -20,7 +20,7 @@ module.exports = {
       package: 'com.sukusuku.app',
       versionCode,
       adaptiveIcon: {
-        backgroundColor: '#CE6B74',
+        backgroundColor: '#ffffff',
         foregroundImage: './assets/android-icon-foreground.png',
         backgroundImage: './assets/android-icon-background.png',
         monochromeImage: './assets/android-icon-monochrome.png',

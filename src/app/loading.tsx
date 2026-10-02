@@ -10,7 +10,7 @@ export default function Loading() {
     <div className="flex flex-col flex-1 bg-gray-50">
       <div className="w-full h-svh relative bg-gray-50 flex font-sans overflow-hidden" aria-busy="true" aria-label="読み込み中">
         <nav className="hidden desktop:flex desktop:flex-col desktop:w-64 flex-none bg-white border-r border-gray-200 px-3 py-6">
-          <h1 className="font-bold text-gray-800 tracking-wide text-lg px-3 mb-8">すくすく手帳</h1>
+          <h1 className="font-bold text-gray-800 tracking-wide text-lg px-3 mb-8">かぞく手帳</h1>
           <div className="flex flex-col space-y-1">
             {NAV_SLOTS.map((i) => (
               <div key={i} className="flex items-center space-x-3 px-3 py-2.5">

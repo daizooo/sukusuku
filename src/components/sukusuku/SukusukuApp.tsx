@@ -2,15 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import dynamic from 'next/dynamic';
-import {
-  Home,
-  CalendarDays,
-  FileText,
-  ClipboardCheck,
-  Folder,
-  ListTodo,
-  Plus,
-} from 'lucide-react';
+import { Baby, CalendarDays, ListTodo, Plus, Settings } from 'lucide-react';
 
 import type {
   BreastSide,
@@ -34,10 +26,8 @@ import type {
   ScheduleView,
   Task,
   TabId,
-  UserProfile,
 } from '@/types/app';
 import { ROLE_TO_PARTICIPANT } from '@/types/app';
-import { INITIAL_PROFILE } from '@/lib/seedData';
 import {
   addDays,
   calculateTargetDate,
@@ -105,8 +95,8 @@ import {
   updateNursery as updateNurseryApi,
 } from '@/lib/api/nurseries';
 import { listFamilyMembers } from '@/lib/api/familyMembers';
-import { getProfile } from '@/lib/api/profile';
 import { getChildMember } from '@/lib/api/members';
+import { formatBabyAge } from '@/lib/memberUtils';
 import {
   deleteDoneItems,
   deleteGroup as deleteGroupApi,
@@ -127,7 +117,6 @@ import {
   updateListPositions,
 } from '@/lib/api/lists';
 
-import HomeTab from './tabs/HomeTab';
 import AddTaskModal from './modals/AddTaskModal';
 import type { TaskDraft } from './modals/TaskForm';
 import TaskDetailModal from './modals/TaskDetailModal';
@@ -139,8 +128,8 @@ import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 import type { NurseryDraft } from './modals/NurseryFormModal';
 import type { ListDraft } from './modals/ListEditorModal';
 
-// 起動直後に表示するのはホームタブだけなので、残りのタブは実際に開かれるまで読み込まない。
-// 特にLogTabは成長グラフのためにrecharts(単体で約350KB)を持ち込むため、静的importのままだと
+// 起動直後に表示するのは最初のタブだけなので、残りのタブは実際に開かれるまで読み込まない。
+// 特にCareTabは成長グラフのためにrecharts(単体で約350KB)を持ち込むため、静的importのままだと
 // グラフを一度も開かないユーザーにも初期バンドルとしてダウンロード・パースさせてしまう。
 // モーダルはタップ直後に開く必要があり、かつ小さいので静的importのまま残す。
 const TabFallback = () => (
@@ -150,18 +139,17 @@ const TabFallback = () => (
 );
 
 const ScheduleTab = dynamic(() => import('./tabs/ScheduleTab'), { loading: TabFallback });
-const LogTab = dynamic(() => import('./tabs/LogTab'), { loading: TabFallback });
+const CareTab = dynamic(() => import('./tabs/CareTab'), { loading: TabFallback });
 const ListTab = dynamic(() => import('./tabs/ListTab'), { loading: TabFallback });
 const HokatsuTab = dynamic(() => import('./tabs/HokatsuTab'), { loading: TabFallback });
 const InfoTab = dynamic(() => import('./tabs/InfoTab'), { loading: TabFallback });
 
-const NAV_ITEMS: { id: TabId; icon: typeof Home; label: string }[] = [
-  { id: 'home', icon: Home, label: 'ホーム' },
+// 予定・リスト・育児・設定の4つ（docs/family-app.md §4.1）。mobile版の app/(tabs)/_layout.tsx と同じ。
+const NAV_ITEMS: { id: TabId; icon: typeof Baby; label: string }[] = [
   { id: 'schedule', icon: CalendarDays, label: '予定' },
   { id: 'list', icon: ListTodo, label: 'リスト' },
-  { id: 'log', icon: FileText, label: '記録' },
-  { id: 'nursery', icon: ClipboardCheck, label: '保活' },
-  { id: 'info', icon: Folder, label: '設定' },
+  { id: 'care', icon: Baby, label: '育児' },
+  { id: 'info', icon: Settings, label: '設定' },
 ];
 
 // 「次はどちらから」を決めるために読む直近の授乳の件数。母乳以外（ミルク・搾乳）の
@@ -374,9 +362,8 @@ export default function SukusukuApp({
   const [scheduleLogs, setScheduleLogs] = useState<CareLog[]>([]);
   const [loadedScheduleLogRange, setLoadedScheduleLogRange] = useState<string | null>(null);
 
-  const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
   // 生後日数・出生日基準の予定に使う子。名前・誕生日は設定タブの「家族」で変える
-  // （docs/family-app.md §3）。userProfile はホームの連絡先ボタンだけが読む。
+  // （docs/family-app.md §3）。
   const [childMember, setChildMember] = useState<Member | null>(null);
 
   // 家族のタスクをSupabaseから取得
@@ -518,9 +505,9 @@ export default function SukusukuApp({
   }, [refreshNursingStates]);
 
   // 授乳の始まり・終わりはパートナーの端末で起きるので、こちらが何もしなくても変わる。
-  // 授乳中の印を出すホームと記録タブを見ている間だけ、1分ごとに印だけ読み直す。
+  // 授乳中の印を出す育児タブを見ている間だけ、1分ごとに印だけ読み直す。
   useEffect(() => {
-    if (activeTab !== 'home' && activeTab !== 'log') return;
+    if (activeTab !== 'care') return;
     const timerId = window.setInterval(() => {
       if (document.visibilityState === 'visible') refreshNursingStates();
     }, 60_000);
@@ -664,22 +651,6 @@ export default function SukusukuApp({
     };
   }, [supabase, familyId]);
 
-  // ホームの連絡先ボタン用（旧・設定タブの自由入力。docs/family-app.md §5 の4で消す）
-  useEffect(() => {
-    let cancelled = false;
-    getProfile(supabase, familyId)
-      .then((profile) => {
-        if (cancelled || !profile) return;
-        setUserProfile(profile);
-      })
-      .catch((err) => {
-        console.error('Failed to load profile:', err);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [supabase, familyId]);
-
   // 次にどちらの乳首から授乳するか。夜中の授乳は前の日の記録になるため、表示中の日の
   // 記録だけでは前回を取りこぼし、おすすめの側が出なくなる。日付にとらわれない直近の授乳も
   // 合わせて渡し、その中でいちばん新しい母乳の記録から決める。
@@ -718,7 +689,7 @@ export default function SukusukuApp({
       : 'left'
     : recordedNextBreastSide;
 
-  // 「次の授乳の目安」に出す一式。ホームと記録タブで同じものを見せる。
+  // 「次の授乳の目安」に出す一式。育児タブの見出しに出す。
   const nextFeeding = useMemo<NextFeedingInfo>(
     () => ({
       lastFedAt: recentMilkLogs[0]?.time ?? null,
@@ -791,26 +762,8 @@ export default function SukusukuApp({
     });
   }, [todos, birthDateValue]);
 
-  const ageInDays = useMemo(() => {
-    const birth = parseDateString(birthDateValue);
-    if (!birth) return 0;
-    const diffTime = today.getTime() - birth.getTime();
-    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  }, [birthDateValue, today]);
-
-  const ageInMonths = useMemo(() => {
-    const birth = parseDateString(birthDateValue);
-    if (!birth) return { months: 0, days: 0 };
-    let months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
-    let tempDate = new Date(birth.getFullYear(), birth.getMonth() + months, birth.getDate());
-
-    if (today < tempDate) {
-      months -= 1;
-      tempDate = new Date(birth.getFullYear(), birth.getMonth() + months, birth.getDate());
-    }
-    const days = Math.floor((today.getTime() - tempDate.getTime()) / (1000 * 60 * 60 * 24));
-    return { months, days };
-  }, [birthDateValue, today]);
+  // 育児タブの見出しに出す子の月齢（「生後123日目（4ヶ月2日）」）。
+  const babyAge = useMemo(() => formatBabyAge(birthDateValue, today), [birthDateValue, today]);
 
   const toggleTodo = async (id: string) => {
     const target = todos.find((t) => t.id === id);
@@ -894,14 +847,14 @@ export default function SukusukuApp({
   // カレンダーの日表示から、その日の記録タブへ移る。
   const openLogTabForDate = (date: Date) => {
     setLogDate(startOfDay(date));
-    setActiveTab('log');
+    setActiveTab('care');
   };
 
   // ナビゲーションからタブを切り替える。
   // 記録タブは開くたびに今日を出す（前に遡って見ていた日を引きずると、
   // 気づかないまま過去の日に記録してしまうため）。
   const selectTab = (tab: TabId) => {
-    if (tab === 'log') setLogDate(startOfDay(new Date()));
+    if (tab === 'care') setLogDate(startOfDay(new Date()));
     setActiveTab(tab);
   };
 
@@ -909,12 +862,11 @@ export default function SukusukuApp({
   // - 履歴: 切り替えるたびに1つ積む。戻る操作（スマホの戻るボタンを含む）で1つ前の
   //   タブ・面へ戻れるようにするため。最初のタブまで戻ると、アプリを閉じる操作になる
   // - URL: 画面を更新したときに、見ていたタブのまま戻ってこられるようにするため
-  //   （URLに残っていないと毎回ホームに戻ってしまう）
+  //   （URLに残っていないと毎回最初のタブに戻ってしまう）
   // 通知から開くための open は、入力画面を開いたら消す（更新のたびに開き直さないため）。
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (activeTab === 'home') url.searchParams.delete(TAB_PARAM);
-    else url.searchParams.set(TAB_PARAM, activeTab);
+    url.searchParams.set(TAB_PARAM, activeTab);
     if (!pendingLogType) url.searchParams.delete(OPEN_LOG_PARAM);
     syncNav({ tab: activeTab, view: scheduleView }, url);
   }, [activeTab, scheduleView, pendingLogType]);
@@ -1367,7 +1319,7 @@ export default function SukusukuApp({
   return (
     <div className="w-full h-svh relative bg-gray-50 flex font-sans overflow-hidden">
       <nav className="hidden desktop:flex desktop:flex-col desktop:w-64 flex-none bg-white border-r border-gray-200 px-3 py-6">
-        <h1 className="font-bold text-gray-800 tracking-wide text-lg px-3 mb-8">すくすく手帳</h1>
+        <h1 className="font-bold text-gray-800 tracking-wide text-lg px-3 mb-8">かぞく手帳</h1>
         <div className="flex flex-col space-y-1">
           {NAV_ITEMS.map((item) => (
             <button
@@ -1392,18 +1344,6 @@ export default function SukusukuApp({
         )}
 
         <main className="flex-1 overflow-hidden">
-          {activeTab === 'home' && (
-            <HomeTab
-              userProfile={userProfile}
-              babyName={childMember?.displayName ?? ''}
-              birthDate={birthDateValue}
-              loginRole={role}
-              ageInDays={ageInDays}
-              ageInMonths={ageInMonths}
-              nextFeeding={nextFeeding}
-              onOpenLogTab={() => selectTab('log')}
-            />
-          )}
           {activeTab === 'schedule' && (
             <ScheduleTab
               dynamicTodos={dynamicTodos}
@@ -1448,8 +1388,20 @@ export default function SukusukuApp({
               onReorderItems={reorderItemsHandler}
             />
           )}
-          {activeTab === 'log' && (
-            <LogTab
+          {activeTab === 'care' && (
+            <CareTab
+              babyAge={babyAge}
+              nextFeeding={nextFeeding}
+              nurseryPanel={
+                <HokatsuTab
+                  nurseries={nurseries}
+                  isLoadingNurseries={isLoadingNurseries}
+                  onAddNursery={addNurseryHandler}
+                  onUpdateNursery={updateNurseryHandler}
+                  onDeleteNursery={deleteNurseryHandler}
+                  onAddDefaultNurseries={addDefaultNurseriesHandler}
+                />
+              }
               logs={logs}
               logDate={logDate}
               initialLogType={pendingLogType}
@@ -1475,16 +1427,6 @@ export default function SukusukuApp({
               onAddGrowthRecord={addGrowthRecordHandler}
               onUpdateGrowthRecord={updateGrowthRecordHandler}
               onDeleteGrowthRecord={deleteGrowthRecordHandler}
-            />
-          )}
-          {activeTab === 'nursery' && (
-            <HokatsuTab
-              nurseries={nurseries}
-              isLoadingNurseries={isLoadingNurseries}
-              onAddNursery={addNurseryHandler}
-              onUpdateNursery={updateNurseryHandler}
-              onDeleteNursery={deleteNurseryHandler}
-              onAddDefaultNurseries={addDefaultNurseriesHandler}
             />
           )}
           {activeTab === 'info' && (

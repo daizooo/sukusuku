@@ -101,8 +101,8 @@ export default function LoginPage() {
           <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 via-blue-400 to-teal-300 flex items-center justify-center mb-3 shadow-sm">
             <Baby className="text-white" size={28} />
           </div>
-          <h1 className="font-bold text-gray-800 text-lg">すくすく手帳</h1>
-          <p className="text-xs text-gray-500 mt-1">夫婦で育児を共有しよう</p>
+          <h1 className="font-bold text-gray-800 text-lg">かぞく手帳</h1>
+          <p className="text-xs text-gray-500 mt-1">家族の予定・リスト・育児をひとつに</p>
         </div>
 
         <Suspense fallback={null}>

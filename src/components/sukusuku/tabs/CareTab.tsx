@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  ClipboardCheck,
   Droplet,
   FileText,
   List,
@@ -51,6 +52,8 @@ import {
 } from '@/lib/dateUtils';
 import BabyBottleIcon from '../ui/BabyBottleIcon';
 import SegmentedTabs from '../ui/SegmentedTabs';
+import NextFeedingCard from '../NextFeedingCard';
+import type { NextFeedingInfo } from '@/lib/feedingSchedule';
 import MilkLogModal, { type MilkLogInput } from '../modals/MilkLogModal';
 import DiaperLogModal, { type DiaperLogInput } from '../modals/DiaperLogModal';
 import PumpingLogModal, { type PumpingLogInput } from '../modals/PumpingLogModal';
@@ -58,7 +61,16 @@ import TemperatureLogModal, { type TemperatureLogInput } from '../modals/Tempera
 import GrowthRecordFormModal from '../modals/GrowthRecordFormModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 
-interface LogTabProps {
+// 育児タブ（docs/family-app.md §4.2）。もとの記録タブに、ホームの「生後日数」「次の授乳」と
+// 保活タブをまとめたもの。上に子の月齢と次の授乳を固定し、その下で 記録／成長／保活 を切り替える。
+// mobile版は `mobile/app/(tabs)/care.tsx`。
+interface CareTabProps {
+  /** 見出しに出す子の月齢（「生後123日目（4ヶ月2日）」）。誕生日が未設定なら空文字。 */
+  babyAge: string;
+  /** 見出しの「次の授乳」。 */
+  nextFeeding: NextFeedingInfo;
+  /** 「保活」に出す中身（HokatsuTab）。 */
+  nurseryPanel: ReactNode;
   logs: CareLog[];
   logDate: Date;
   today: Date;
@@ -130,7 +142,10 @@ const getLogColor = (type: LogType) => {
   }
 };
 
-export default function LogTab({
+export default function CareTab({
+  babyAge,
+  nextFeeding,
+  nurseryPanel,
   logs,
   logDate,
   today,
@@ -156,8 +171,9 @@ export default function LogTab({
   onAddGrowthRecord,
   onUpdateGrowthRecord,
   onDeleteGrowthRecord,
-}: LogTabProps) {
-  const [logView, setLogView] = useState<'timeline' | 'growth'>('timeline');
+}: CareTabProps) {
+  // 記録（タイムライン）・成長（成長曲線）・保活の切り替え。開いたときは記録。
+  const [logView, setLogView] = useState<'timeline' | 'growth' | 'nursery'>('timeline');
   // 記録の入力画面。log が null なら新規追加、入っていればその記録の編集。
   // 通知から開いたときは、その用件の入力画面を出した状態で始める。
   const [logModal, setLogModal] = useState<{ type: LogType; log: CareLog | null } | null>(
@@ -217,18 +233,39 @@ export default function LogTab({
 
   return (
     <div className="p-4 h-full flex flex-col">
+      {/* 見出し（子の月齢・次の授乳）と切り替えは固定し、スクロールは中身だけにする。 */}
+      <div className="shrink-0 space-y-2 mb-3">
+        {(babyName || babyAge) && (
+          <p className="flex items-baseline gap-2 px-1">
+            <span className="font-bold text-gray-900">{babyName}</span>
+            <span className="text-sm font-semibold text-gray-700">{babyAge}</span>
+          </p>
+        )}
+        <NextFeedingCard
+          info={nextFeeding}
+          onOpen={() => {
+            setLogView('timeline');
+            setLogModal({ type: 'milk', log: null });
+          }}
+        />
+      </div>
+
       <SegmentedTabs
-        ariaLabel="育児記録の表示"
+        ariaLabel="育児の表示"
         value={logView}
         onChange={setLogView}
         className="mb-3 shrink-0"
         options={[
-          { id: 'timeline', label: 'タイムライン', icon: <List size={15} /> },
-          { id: 'growth', label: '成長曲線', icon: <TrendingUp size={15} /> },
+          { id: 'timeline', label: '記録', icon: <List size={15} /> },
+          { id: 'growth', label: '成長', icon: <TrendingUp size={15} /> },
+          { id: 'nursery', label: '保活', icon: <ClipboardCheck size={15} /> },
         ]}
       />
 
-      {logView === 'timeline' ? (
+      {logView === 'nursery' ? (
+        // 保活の中身は自分の余白を持つので、こちらの余白と重ならないよう打ち消す。
+        <div className="flex-1 min-h-0 -mx-4 -mb-4">{nurseryPanel}</div>
+      ) : logView === 'timeline' ? (
         <div className="flex-1 min-h-0 flex flex-col gap-4 lg:grid lg:grid-cols-[20rem_1fr] lg:gap-6">
           <div className="shrink-0 space-y-3 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
             {/* 日付の送り: 1日区切りで過去の記録を遡る。タブを開いた時点では常に今日なので、

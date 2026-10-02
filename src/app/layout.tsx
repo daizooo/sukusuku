@@ -13,10 +13,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "すくすく手帳",
-  description: "夫婦で育児タスク・記録・スケジュールを共有するWebアプリ",
+  title: "かぞく手帳",
+  description: "家族の予定・リスト・育児をまとめて管理するアプリ",
   appleWebApp: {
-    title: "すくすく手帳",
+    title: "かぞく手帳",
   },
 };
 

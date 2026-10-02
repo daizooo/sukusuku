@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "すくすく手帳",
-    short_name: "すくすく手帳",
-    description: "夫婦で育児タスク・記録・スケジュールを共有するWebアプリ",
+    name: "かぞく手帳",
+    short_name: "かぞく手帳",
+    description: "家族の予定・リスト・育児をまとめて管理するアプリ",
     start_url: "/",
     display: "standalone",
     background_color: "#ffffff",

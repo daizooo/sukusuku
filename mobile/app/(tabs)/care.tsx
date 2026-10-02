@@ -12,6 +12,7 @@ import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import {
   CalendarDays,
   ChevronLeft,
+  ClipboardCheck,
   ChevronRight,
   Droplet,
   List,
@@ -44,6 +45,8 @@ import {
   setPumpedBatchDiscarded,
 } from '@/lib/api/careLogs';
 import { getChildMember } from '@/lib/api/members';
+import { getFeedingSettings } from '@/lib/api/feedingSettings';
+import { formatBabyAge } from '@/lib/memberUtils';
 import { ensureChildId } from '@/lib/api/children';
 import {
   deleteGrowthRecord,
@@ -73,8 +76,13 @@ import {
 import { OPEN_LOG_PARAM, parseLogType } from '@/lib/appLinks';
 import { useNursingTimer } from '@/lib/nursingTimer';
 import { listFamilyNursingState, type FamilyNursingState } from '@/lib/api/nursingAlarms';
-import { activePendingNursing, resolveLastFeeding } from '@/lib/feedingSchedule';
-import { useRefreshWhileFocused } from '@/lib/screenFocus';
+import {
+  DEFAULT_FEEDING_INTERVAL_MINUTES,
+  activePendingNursing,
+  resolveLastFeeding,
+  type NextFeedingInfo,
+} from '@/lib/feedingSchedule';
+import { useRefreshOnFocus, useRefreshWhileFocused } from '@/lib/screenFocus';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import {
   isNursingForegroundServiceAvailable,
@@ -90,6 +98,8 @@ import {
   syncCareLogsInRange,
 } from '@/lib/offline/careLogs';
 import BabyBottleIcon from '@/components/ui/BabyBottleIcon';
+import NextFeedingCard from '@/components/NextFeedingCard';
+import NurseryPanel from '@/components/care/NurseryPanel';
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import LogTimeline from '@/components/log/LogTimeline';
 import GrowthChart from '@/components/log/GrowthChart';
@@ -101,8 +111,11 @@ import TemperatureLogModal, {
   type TemperatureLogInput,
 } from '@/components/log/TemperatureLogModal';
 
-// 記録タブ。授乳・ミルク / 搾乳 / おむつ / 体温 と成長曲線を、PWA版の
-// `src/components/sukusuku/tabs/LogTab.tsx` に合わせて置き換えたもの。
+// 育児タブ（docs/family-app.md §4.2）。もとの記録タブに、ホームの「生後日数」「次の授乳」と
+// 保活タブをまとめたもの。上に子の月齢と次の授乳を固定し、その下で 記録／成長／保活 を切り替える。
+//
+// 記録は 授乳・ミルク / 搾乳 / おむつ / 体温、成長は成長曲線。PWA版の
+// `src/components/sukusuku/tabs/CareTab.tsx` に合わせてある。
 //
 // 体温は PWA版（src/）にも同じものが入っている（docs/what-to-record.md §4-1・§8）。
 //
@@ -114,12 +127,12 @@ import TemperatureLogModal, {
 const RECENT_MILK_LIMIT = 30;
 
 /**
- * 「いま授乳中・記録待ち」を読み直す間隔。ホーム（app/(tabs)/home.tsx）と同じ。
+ * 「いま授乳中・記録待ち」を読み直す間隔。
  * 授乳の始まり・終わりはパートナーの端末で起きるので、こちらからは待つしかない。
  */
 const NURSING_POLL_MS = 60_000;
 
-export default function LogScreen() {
+export default function CareScreen() {
   const { session, isLoading: isSessionLoading } = useSession();
   const userId = session?.user.id ?? null;
 
@@ -128,7 +141,7 @@ export default function LogScreen() {
   const [familyId, setFamilyId] = useState<string | null>(null);
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [logDate, setLogDate] = useState(() => startOfDay(new Date()));
-  // 予定タブの日表示から「記録タブで開く」で来たときは、その日を開く
+  // 予定タブの日表示から「育児タブで開く」で来たときは、その日を開く
   // （Web版が記録タブの日付を差し替えるのと同じ動き）。
   // お知らせのタップで来たときは、その用件の入力画面を開く（open）。
   const { date: requestedDate, open: requestedOpen } = useLocalSearchParams<{
@@ -162,8 +175,10 @@ export default function LogScreen() {
   // 開いている入力画面。log が null なら新規追加、入っていればその記録の編集。
   const [editing, setEditing] = useState<{ log: MilkLog | null } | null>(null);
   const [editingPumping, setEditingPumping] = useState<{ log: PumpingLog | null } | null>(null);
-  // タイムラインと成長曲線の切り替え。開いたときはタイムライン。
-  const [logView, setLogView] = useState<'timeline' | 'growth'>('timeline');
+  // 記録（タイムライン）・成長（成長曲線）・保活の切り替え。開いたときは記録。
+  const [logView, setLogView] = useState<'timeline' | 'growth' | 'nursery'>('timeline');
+  // 次の授乳の目安の間隔（設定タブの「通知」で変える）。
+  const [intervalMinutes, setIntervalMinutes] = useState(DEFAULT_FEEDING_INTERVAL_MINUTES);
   const [childId, setChildId] = useState<string | null>(null);
   const [growthData, setGrowthData] = useState<GrowthRecord[]>([]);
   const [isLoadingGrowth, setIsLoadingGrowth] = useState(true);
@@ -235,12 +250,16 @@ export default function LogScreen() {
         const familyMembers = await listFamilyMembers(supabase, membership.familyId);
         if (isMounted) setMembers(familyMembers);
         // 名前・誕生日は設定タブの「家族」の子（docs/family-app.md §3）。
-        const child = await getChildMember(supabase, membership.familyId);
+        const [child, feeding] = await Promise.all([
+          getChildMember(supabase, membership.familyId),
+          getFeedingSettings(supabase, membership.familyId),
+        ]);
         if (isMounted && child) {
           setBabyName(child.displayName);
-          // 成長曲線の生後ヶ月を自動で埋めるのに使う。
+          // 見出しの月齢と、成長曲線の生後ヶ月を自動で埋めるのに使う。
           setBirthDate(child.birthDate);
         }
+        if (isMounted) setIntervalMinutes(feeding.intervalMinutes);
         // 成長記録は日付の送りとは関わらないので、ここで1回だけ読む。
         const id = await ensureChildId(supabase, membership.familyId);
         if (!isMounted) return;
@@ -261,6 +280,22 @@ export default function LogScreen() {
       isMounted = false;
     };
   }, [userId]);
+
+  // 子の誕生日・名前と授乳の間隔は設定タブで変わるので、戻ってきたときに読み直す。
+  useRefreshOnFocus(() => {
+    if (!familyId) return;
+    void Promise.all([getChildMember(supabase, familyId), getFeedingSettings(supabase, familyId)])
+      .then(([child, feeding]) => {
+        if (child) {
+          setBabyName(child.displayName);
+          setBirthDate(child.birthDate);
+        }
+        setIntervalMinutes(feeding.intervalMinutes);
+      })
+      .catch(() => {
+        // 圏外なら前に読んだ分を出したままにする。
+      });
+  });
 
   /** 端末の控えを読んで画面を埋める。サーバーの返事を待たずに出せる分。 */
   const showCached = useCallback(async () => {
@@ -417,6 +452,15 @@ export default function LogScreen() {
     return times.length > 0 ? new Date(Math.max(...times)) : null;
   }, [logs, recentMilkLogs]);
   const lastFeeding = resolveLastFeeding(lastMilkAt, familyNursing);
+
+  // 見出しの「次の授乳」。記録に入る前の授乳（計測中・記録待ち）も前回の授乳として扱う。
+  const nextFeeding: NextFeedingInfo = {
+    lastFedAt: lastMilkAt,
+    pendingNursing: activePendingNursing(nursingStates, Date.now()),
+    intervalMinutes,
+    isLoading: isLoadingFamily,
+  };
+  const babyAge = formatBabyAge(birthDate);
 
   // 相手がまだ飲ませている最中は、次の側ではなくそれを出す（終わってから決まるため）。
   const nursingBy = lastFeeding.isNursing ? (familyNursing?.userId ?? null) : null;
@@ -640,19 +684,39 @@ export default function LogScreen() {
 
   return (
     <SafeAreaView style={styles.screen} {...swipeHandlers}>
+      {/* 見出し（子の月齢・次の授乳）と切り替えは固定し、スクロールは中身だけにする。 */}
+      <View style={styles.careHeader}>
+        {(babyName !== '' || babyAge !== '') && (
+          <View style={styles.ageRow}>
+            <Text style={styles.ageName}>{babyName}</Text>
+            <Text style={styles.ageText}>{babyAge}</Text>
+          </View>
+        )}
+        <NextFeedingCard
+          info={nextFeeding}
+          onOpen={() => {
+            setLogView('timeline');
+            setEditing({ log: null });
+          }}
+        />
+      </View>
+
       <View style={styles.viewSwitcher}>
         <SegmentedTabs
-          accessibilityLabel="育児記録の表示"
+          accessibilityLabel="育児の表示"
           value={logView}
           onChange={setLogView}
           options={[
-            { id: 'timeline', label: 'タイムライン', icon: <List size={15} color={logView === 'timeline' ? colors.navActiveText : colors.textSubtle} /> },
-            { id: 'growth', label: '成長曲線', icon: <TrendingUp size={15} color={logView === 'growth' ? colors.navActiveText : colors.textSubtle} /> },
+            { id: 'timeline', label: '記録', icon: <List size={15} color={logView === 'timeline' ? colors.navActiveText : colors.textSubtle} /> },
+            { id: 'growth', label: '成長', icon: <TrendingUp size={15} color={logView === 'growth' ? colors.navActiveText : colors.textSubtle} /> },
+            { id: 'nursery', label: '保活', icon: <ClipboardCheck size={15} color={logView === 'nursery' ? colors.navActiveText : colors.textSubtle} /> },
           ]}
         />
       </View>
 
-      {logView === 'growth' ? (
+      {logView === 'nursery' ? (
+        <NurseryPanel />
+      ) : logView === 'growth' ? (
         <ScrollView contentContainerStyle={styles.growth}>
           <Pressable
             accessibilityRole="button"
@@ -993,6 +1057,10 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   centeredText: { fontSize: 13, color: colors.textMuted, textAlign: 'center' },
 
+  careHeader: { paddingHorizontal: 12, paddingTop: 12, gap: 8 },
+  ageRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingHorizontal: 4 },
+  ageName: { fontSize: 16, fontWeight: '700', color: colors.text },
+  ageText: { fontSize: 14, fontWeight: '600', color: colors.textSubtle },
   viewSwitcher: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4 },
   growth: { padding: 16, gap: 24, paddingBottom: 32 },
   addGrowth: {

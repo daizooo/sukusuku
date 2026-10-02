@@ -11,13 +11,17 @@
 
 import type { LogType, TabId } from '@/types/app';
 
-/** 開いているタブ。'home' は既定なのでURLには載せない。 */
+/** 開いているタブ。無ければ設定タブで選んだ「最初に開くタブ」（users.start_tab）。 */
 export const TAB_PARAM = 'tab';
 
-/** 記録タブで開く入力画面の種類。開いたら消す（更新のたびに開き直さないため）。 */
+/** 育児タブで開く入力画面の種類。開いたら消す（更新のたびに開き直さないため）。 */
 export const OPEN_LOG_PARAM = 'open';
 
-const TAB_IDS: TabId[] = ['home', 'schedule', 'log', 'list', 'nursery', 'info'];
+const TAB_IDS: TabId[] = ['schedule', 'list', 'care', 'info'];
+
+// 4タブにまとめる前のタブ（docs/family-app.md §4.1）。前に届いた通知や、
+// 開いたままの画面のURLから来ても、まとめた先のタブを開く。
+const LEGACY_TAB_IDS: Record<string, TabId> = { log: 'care', nursery: 'care' };
 const LOG_TYPES: LogType[] = ['milk', 'diaper', 'pumping', 'temperature'];
 
 const firstValue = (value: string | string[] | undefined): string | undefined =>
@@ -25,8 +29,9 @@ const firstValue = (value: string | string[] | undefined): string | undefined =>
 
 /** URLのtabを解釈する。知らない値なら null（呼び出し側で既定のタブにする）。 */
 export const parseTabId = (value: string | string[] | undefined): TabId | null => {
-  const found = TAB_IDS.find((id) => id === firstValue(value));
-  return found ?? null;
+  const raw = firstValue(value);
+  const found = TAB_IDS.find((id) => id === raw);
+  return found ?? (raw ? LEGACY_TAB_IDS[raw] : undefined) ?? null;
 };
 
 /** URLのopenを解釈する。知らない値なら null（入力画面は開かない）。 */

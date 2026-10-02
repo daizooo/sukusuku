@@ -48,7 +48,7 @@ const remainingText = (schedule: FeedingSchedule): string => {
   return schedule.overdueMinutes === 0 ? 'そろそろ' : `${formatMinutesText(schedule.overdueMinutes)}すぎ`;
 };
 
-/** ホーム用。目安の時刻・残り時間・前回からの進み具合をまとめて出す。 */
+/** 育児タブの見出し用。目安の時刻・残り時間・前回からの進み具合をまとめて出す。 */
 export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
   const now = useNow();
   // 母乳は測り終えて保存するまで記録に入らない。その間も前回の授乳として数える

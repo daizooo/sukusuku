@@ -1,4 +1,4 @@
-// すくすく手帳のService Worker
+// かぞく手帳のService Worker
 //
 // 役割は4つ。
 // 1. 予定のリマインダー: Edge Function `send-reminders` から送られたWeb Pushを受け取り、通知を出す。
@@ -49,10 +49,10 @@ function buildNursingVibration(minutes) {
 //  従来のものが届き続けることもあるため、飛び先の判断はこちらの種類を見て行う。）
 const URL_BY_KIND = {
   // 授乳の経過時間・次の授乳の目安は、どちらも授乳の入力画面へ
-  nursing: '/?tab=log&open=milk',
-  feeding: '/?tab=log&open=milk',
+  nursing: '/?tab=care&open=milk',
+  feeding: '/?tab=care&open=milk',
   // 検温のお知らせは体温の入力画面へ
-  temperature: '/?tab=log&open=temperature',
+  temperature: '/?tab=care&open=temperature',
 };
 
 self.addEventListener('push', (event) => {
@@ -67,7 +67,7 @@ self.addEventListener('push', (event) => {
   const isNursing = payload.kind === 'nursing';
   const isFeeding = payload.kind === 'feeding';
   const isTemperature = payload.kind === 'temperature';
-  const title = payload.title || 'すくすく手帳';
+  const title = payload.title || 'かぞく手帳';
   const options = {
     body: payload.body || '',
     icon: '/icons/icon-192.png',
