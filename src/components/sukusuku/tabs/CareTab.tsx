@@ -232,42 +232,39 @@ export default function CareTab({
   };
 
   return (
-    <div className="p-4 h-full flex flex-col">
-      {/* 見出し（子の月齢・次の授乳）と切り替えは固定し、スクロールは中身だけにする。 */}
-      <div className="shrink-0 space-y-2 mb-3">
-        {(babyName || babyAge) && (
-          <p className="flex items-baseline gap-2 px-1">
-            <span className="font-bold text-gray-900">{babyName}</span>
-            <span className="text-sm font-semibold text-gray-700">{babyAge}</span>
-          </p>
-        )}
-        <NextFeedingCard
-          info={nextFeeding}
-          onOpen={() => {
-            setLogView('timeline');
-            setLogModal({ type: 'milk', log: null });
-          }}
+    // PC幅では左の列に 見出し・切り替え・（記録なら）日付送りと記録ボタン、右の列に中身を置く。
+    // スマホ幅では同じ順に縦へ並ぶ。
+    <div className="p-4 h-full flex flex-col gap-3 lg:grid lg:grid-cols-[20rem_1fr] lg:gap-6">
+      <div className="shrink-0 space-y-3 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
+        {/* 見出し（子の月齢・次の授乳）と切り替えは固定し、スクロールは中身だけにする。 */}
+        <div className="space-y-2">
+          {(babyName || babyAge) && (
+            <p className="flex items-baseline gap-2 px-1">
+              <span className="font-bold text-gray-900">{babyName}</span>
+              <span className="text-sm font-semibold text-gray-700">{babyAge}</span>
+            </p>
+          )}
+          <NextFeedingCard
+            info={nextFeeding}
+            onOpen={() => {
+              setLogView('timeline');
+              setLogModal({ type: 'milk', log: null });
+            }}
+          />
+        </div>
+
+        <SegmentedTabs
+          ariaLabel="育児の表示"
+          value={logView}
+          onChange={setLogView}
+          options={[
+            { id: 'timeline', label: '記録', icon: <List size={15} /> },
+            { id: 'growth', label: '成長', icon: <TrendingUp size={15} /> },
+            { id: 'nursery', label: '保活', icon: <ClipboardCheck size={15} /> },
+          ]}
         />
-      </div>
-
-      <SegmentedTabs
-        ariaLabel="育児の表示"
-        value={logView}
-        onChange={setLogView}
-        className="mb-3 shrink-0"
-        options={[
-          { id: 'timeline', label: '記録', icon: <List size={15} /> },
-          { id: 'growth', label: '成長', icon: <TrendingUp size={15} /> },
-          { id: 'nursery', label: '保活', icon: <ClipboardCheck size={15} /> },
-        ]}
-      />
-
-      {logView === 'nursery' ? (
-        // 保活の中身は自分の余白を持つので、こちらの余白と重ならないよう打ち消す。
-        <div className="flex-1 min-h-0 -mx-4 -mb-4">{nurseryPanel}</div>
-      ) : logView === 'timeline' ? (
-        <div className="flex-1 min-h-0 flex flex-col gap-4 lg:grid lg:grid-cols-[20rem_1fr] lg:gap-6">
-          <div className="shrink-0 space-y-3 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
+        {logView === 'timeline' && (
+          <>
             {/* 日付の送り: 1日区切りで過去の記録を遡る。タブを開いた時点では常に今日なので、
                 「今日」の表示は今日以外を見ているときに戻るボタンとしてだけ出す。 */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-1 flex items-center justify-between gap-1">
@@ -416,134 +413,141 @@ export default function CareTab({
                 過去の日を表示中です。記録を追加すると{dateLabel}に登録されます。
               </p>
             )}
-          </div>
+          </>
+        )}
+      </div>
 
+      <div className="flex-1 min-h-0 flex flex-col">
+        {logView === 'nursery' ? (
+          // 保活の中身は自分の余白を持つので、スマホ幅ではこちらの余白と重ならないよう打ち消す。
+          <div className="flex-1 min-h-0 -mx-4 -mb-4 lg:m-0">{nurseryPanel}</div>
+        ) : logView === 'timeline' ? (
           <div className="flex-1 min-h-0 overflow-y-auto lg:max-w-3xl">
-            <h3 className="text-sm font-bold text-gray-600 mb-2 px-1">{dateLabel}の記録 {visibleLogs.length}件</h3>
-            {isLoadingLogs && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
-            {!isLoadingLogs && visibleLogs.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-8">この日の記録はありません</p>
-            )}
-            <div className={`relative border-l-2 border-gray-200 ml-4 space-y-3.5 pb-6 ${visibleLogs.length === 0 ? 'hidden' : ''}`}>
-              {visibleLogs.map((log) => {
-                const badges = getLogBadges(log);
-                return (
-                  <div key={log.id} className="relative pl-6">
-                    <div className={`absolute -left-[17px] top-0 w-8 h-8 rounded-full border-4 border-gray-50 flex items-center justify-center ${getLogColor(log.type)}`}>
-                      {getLogIcon(log.type)}
-                    </div>
-                    <button
-                      onClick={() => setLogModal({ type: log.type, log })}
-                      className={`w-full text-left bg-white px-2.5 py-2 rounded-[10px] shadow-sm border hover:bg-gray-50 transition ${
-                        isAlertLog(log) ? 'border-red-300 border-l-4 border-l-red-500' : 'border-gray-100'
-                      }`}
-                    >
-                      {/* 見出し・バッジ・時刻を1段にまとめて、バッジ専用の行を無くす。
-                          これでバッジの有無によってカードの高さが変わらなくなる。 */}
-                      <div className="flex justify-between items-center gap-2">
-                        <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                          <span className="font-bold text-gray-800 text-sm">{getLogTitle(log)}</span>
-                          {badges.map((badge) => (
-                            <span
-                              key={badge.text}
-                              className={`text-[10px] px-1.5 py-px rounded flex items-center tabular-nums ${BADGE_TONE_CLASS[badge.tone]}`}
-                            >
-                              {badge.swatch && (
-                                <span
-                                  className="w-2 h-2 rounded-full border border-black/10 mr-0.5"
-                                  style={{ backgroundColor: badge.swatch }}
-                                />
-                              )}
-                              {badge.text}
-                            </span>
-                          ))}
+              <h3 className="text-sm font-bold text-gray-600 mb-2 px-1">{dateLabel}の記録 {visibleLogs.length}件</h3>
+              {isLoadingLogs && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
+              {!isLoadingLogs && visibleLogs.length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-8">この日の記録はありません</p>
+              )}
+              <div className={`relative border-l-2 border-gray-200 ml-4 space-y-3.5 pb-6 ${visibleLogs.length === 0 ? 'hidden' : ''}`}>
+                {visibleLogs.map((log) => {
+                  const badges = getLogBadges(log);
+                  return (
+                    <div key={log.id} className="relative pl-6">
+                      <div className={`absolute -left-[17px] top-0 w-8 h-8 rounded-full border-4 border-gray-50 flex items-center justify-center ${getLogColor(log.type)}`}>
+                        {getLogIcon(log.type)}
+                      </div>
+                      <button
+                        onClick={() => setLogModal({ type: log.type, log })}
+                        className={`w-full text-left bg-white px-2.5 py-2 rounded-[10px] shadow-sm border hover:bg-gray-50 transition ${
+                          isAlertLog(log) ? 'border-red-300 border-l-4 border-l-red-500' : 'border-gray-100'
+                        }`}
+                      >
+                        {/* 見出し・バッジ・時刻を1段にまとめて、バッジ専用の行を無くす。
+                            これでバッジの有無によってカードの高さが変わらなくなる。 */}
+                        <div className="flex justify-between items-center gap-2">
+                          <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                            <span className="font-bold text-gray-800 text-sm">{getLogTitle(log)}</span>
+                            {badges.map((badge) => (
+                              <span
+                                key={badge.text}
+                                className={`text-[10px] px-1.5 py-px rounded flex items-center tabular-nums ${BADGE_TONE_CLASS[badge.tone]}`}
+                              >
+                                {badge.swatch && (
+                                  <span
+                                    className="w-2 h-2 rounded-full border border-black/10 mr-0.5"
+                                    style={{ backgroundColor: badge.swatch }}
+                                  />
+                                )}
+                                {badge.text}
+                              </span>
+                            ))}
+                          </div>
+                          <span className="text-[11px] text-gray-500 font-medium tabular-nums shrink-0">
+                            {getLogTimeText(log)}
+                          </span>
                         </div>
-                        <span className="text-[11px] text-gray-500 font-medium tabular-nums shrink-0">
-                          {getLogTimeText(log)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center mt-0.5 gap-2">
-                        {/* メモは書いたときだけ出す。「メモなし」を並べても読むものが増えるだけなので出さない。
-                            他の項目（見出し・時刻・記録者）と書体をそろえると自由記述のメモだけが埋もれるので、
-                            ひと回り小さく薄い色にして、メモだと分かるようにする。 */}
-                        <p className="flex-1 min-w-0 truncate text-[11px] font-normal text-gray-500">{log.note}</p>
-                        <span className="text-[11px] text-gray-400 flex items-center shrink-0">
-                          <User size={11} className="mr-1" />
-                          {memberLabel(log.createdBy)}が記録
-                        </span>
-                      </div>
-                    </button>
+                        <div className="flex justify-between items-center mt-0.5 gap-2">
+                          {/* メモは書いたときだけ出す。「メモなし」を並べても読むものが増えるだけなので出さない。
+                              他の項目（見出し・時刻・記録者）と書体をそろえると自由記述のメモだけが埋もれるので、
+                              ひと回り小さく薄い色にして、メモだと分かるようにする。 */}
+                          <p className="flex-1 min-w-0 truncate text-[11px] font-normal text-gray-500">{log.note}</p>
+                          <span className="text-[11px] text-gray-400 flex items-center shrink-0">
+                            <User size={11} className="mr-1" />
+                            {memberLabel(log.createdBy)}が記録
+                          </span>
+                        </div>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto space-y-6 pb-6">
+            <button
+              onClick={() => setGrowthModal({ mode: 'add', record: null })}
+              className="w-full bg-blue-50 text-blue-600 font-medium py-3 rounded-xl shadow-sm border border-blue-200 transition flex items-center justify-center hover:bg-blue-100"
+            >
+              <Plus size={18} className="mr-1" /> 身長・体重を記録する
+            </button>
+
+            {isLoadingGrowth && <p className="text-sm text-gray-400 text-center py-4">読み込み中...</p>}
+
+            {!isLoadingGrowth && growthData.length > 0 && (
+              <div className="space-y-6 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                  <h3 className="font-bold text-gray-800 text-sm mb-4">身長の推移 (cm)</h3>
+                  <div className="h-48 w-full -ml-3">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={growthChartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="axisLabel" style={{ fontSize: '10px' }} />
+                        <YAxis style={{ fontSize: '10px' }} domain={['dataMin - 2', 'dataMax + 2']} />
+                        <Tooltip />
+                        <Line type="monotone" dataKey="height" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="身長(cm)" connectNulls />
+                      </LineChart>
+                    </ResponsiveContainer>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                  <h3 className="font-bold text-gray-800 text-sm mb-4">体重の推移 (kg)</h3>
+                  <div className="h-48 w-full -ml-3">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={growthChartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="axisLabel" style={{ fontSize: '10px' }} />
+                        <YAxis style={{ fontSize: '10px' }} domain={['dataMin - 1', 'dataMax + 1']} />
+                        <Tooltip />
+                        <Line type="monotone" dataKey="weight" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="体重(kg)" connectNulls />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-50 lg:col-span-2">
+                  {growthData.map((record) => (
+                    <button
+                      key={record.id}
+                      onClick={() => setGrowthModal({ mode: 'edit', record })}
+                      className="w-full text-left p-3 flex items-center justify-between hover:bg-gray-50 transition"
+                    >
+                      <span className="text-xs text-gray-500">{record.recordedDate}{record.month !== null ? ` (生後${record.month}ヶ月)` : ''}</span>
+                      <span className="text-sm text-gray-700 font-medium">
+                        {record.height !== null ? `${record.height}cm` : '-'} / {record.weight !== null ? `${record.weight}kg` : '-'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!isLoadingGrowth && growthData.length === 0 && (
+              <p className="text-sm text-gray-400 text-center py-8">記録はまだありません</p>
+            )}
           </div>
-        </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto space-y-6 pb-6">
-          <button
-            onClick={() => setGrowthModal({ mode: 'add', record: null })}
-            className="w-full bg-blue-50 text-blue-600 font-medium py-3 rounded-xl shadow-sm border border-blue-200 transition flex items-center justify-center hover:bg-blue-100"
-          >
-            <Plus size={18} className="mr-1" /> 身長・体重を記録する
-          </button>
-
-          {isLoadingGrowth && <p className="text-sm text-gray-400 text-center py-4">読み込み中...</p>}
-
-          {!isLoadingGrowth && growthData.length > 0 && (
-            <div className="space-y-6 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-800 text-sm mb-4">身長の推移 (cm)</h3>
-                <div className="h-48 w-full -ml-3">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={growthChartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="axisLabel" style={{ fontSize: '10px' }} />
-                      <YAxis style={{ fontSize: '10px' }} domain={['dataMin - 2', 'dataMax + 2']} />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="height" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="身長(cm)" connectNulls />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-800 text-sm mb-4">体重の推移 (kg)</h3>
-                <div className="h-48 w-full -ml-3">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={growthChartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="axisLabel" style={{ fontSize: '10px' }} />
-                      <YAxis style={{ fontSize: '10px' }} domain={['dataMin - 1', 'dataMax + 1']} />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="weight" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="体重(kg)" connectNulls />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-50 lg:col-span-2">
-                {growthData.map((record) => (
-                  <button
-                    key={record.id}
-                    onClick={() => setGrowthModal({ mode: 'edit', record })}
-                    className="w-full text-left p-3 flex items-center justify-between hover:bg-gray-50 transition"
-                  >
-                    <span className="text-xs text-gray-500">{record.recordedDate}{record.month !== null ? ` (生後${record.month}ヶ月)` : ''}</span>
-                    <span className="text-sm text-gray-700 font-medium">
-                      {record.height !== null ? `${record.height}cm` : '-'} / {record.weight !== null ? `${record.weight}kg` : '-'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {!isLoadingGrowth && growthData.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-8">記録はまだありません</p>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       <MilkLogModal
         show={logModal?.type === 'milk'}
