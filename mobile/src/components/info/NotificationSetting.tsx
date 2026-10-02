@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Switch, Text, View } from 'react-native';
 import { BellRing } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
@@ -28,9 +28,11 @@ import { colors } from '@/lib/theme';
 interface NotificationSettingProps {
   familyId: string;
   userId: string;
+  /** 同じ枠の中に続けて出す通知の設定（授乳の目安・検温のお知らせ）。 */
+  children?: ReactNode;
 }
 
-export default function NotificationSetting({ familyId, userId }: NotificationSettingProps) {
+export default function NotificationSetting({ familyId, userId, children }: NotificationSettingProps) {
   const [isEnabled, setIsEnabled] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
@@ -135,6 +137,7 @@ export default function NotificationSetting({ familyId, userId }: NotificationSe
 
       {unavailableReason && <Text style={styles.note}>{unavailableReason}</Text>}
       {error && <Text style={styles.error}>{error}</Text>}
+      {children}
     </View>
   );
 }

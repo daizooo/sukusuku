@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { BellRing, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -20,11 +20,13 @@ import {
 interface NotificationSettingProps {
   familyId: string;
   userId: string;
+  /** 同じ枠の中に続けて出す通知の設定（授乳の目安・検温のお知らせ）。 */
+  children?: ReactNode;
 }
 
 // 予定のリマインダーをこの端末で受け取るかどうかの設定。
 // 購読は端末ごとなので、スマホとPCそれぞれでオンにする必要がある。
-export default function NotificationSetting({ familyId, userId }: NotificationSettingProps) {
+export default function NotificationSetting({ familyId, userId, children }: NotificationSettingProps) {
   const supabase = useMemo(() => createClient(), []);
   const [isEnabled, setIsEnabled] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
@@ -152,6 +154,7 @@ export default function NotificationSetting({ familyId, userId }: NotificationSe
 
       {unavailableReason && <p className="text-xs text-gray-500 mt-3">{unavailableReason}</p>}
       {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
+      {children}
     </section>
   );
 }

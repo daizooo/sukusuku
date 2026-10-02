@@ -6,7 +6,7 @@ import type { Household, HouseholdDraft, Member, MemberDraft } from '@/types/app
 import { RELATION_LABEL } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { getHousehold, listMembers, updateHousehold, updateMember } from '@/lib/api/members';
-import { canEditMember, formatAge, formatFullName, formatFullNameKana } from '@/lib/memberUtils';
+import { canEditMember, formatAge, formatFullName } from '@/lib/memberUtils';
 import { formatDateString, parseDateString, toDateString } from '@/lib/dateUtils';
 import { LogModalShell } from '@/components/sukusuku/modals/logModalParts';
 
@@ -96,9 +96,9 @@ export default function FamilySection({ familyId, userId, onMembersChange }: Fam
             <div className="border border-gray-200 rounded-xl p-3 space-y-1.5">
               <div className="flex items-center gap-2 mb-1">
                 <Home size={16} className="text-gray-500" />
-                <span className="font-bold text-gray-900">{household.name || '世帯'}</span>
+                <span className="font-bold text-gray-900">自宅</span>
                 {isGuardian && (
-                  <EditButton label="世帯の情報を編集" onClick={() => setEditing({ kind: 'household' })} />
+                  <EditButton label="自宅の情報を編集" onClick={() => setEditing({ kind: 'household' })} />
                 )}
               </div>
               <InfoRow
@@ -107,7 +107,6 @@ export default function FamilySection({ familyId, userId, onMembersChange }: Fam
                   .filter(Boolean)
                   .join(' ')}
               />
-              <InfoRow label="固定電話" value={household.homePhone} />
             </div>
           )}
 
@@ -120,7 +119,7 @@ export default function FamilySection({ familyId, userId, onMembersChange }: Fam
             return (
               <div key={member.id} className="border border-gray-200 rounded-xl p-3 space-y-1.5">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="font-bold text-gray-900">{member.displayName}</span>
+                  <span className="font-bold text-gray-900">{formatFullName(member) || member.displayName}</span>
                   <span className="text-[11px] font-semibold text-gray-500 bg-gray-50 rounded-md px-1.5">
                     {RELATION_LABEL[member.relation]}
                   </span>
@@ -136,11 +135,8 @@ export default function FamilySection({ familyId, userId, onMembersChange }: Fam
                     />
                   )}
                 </div>
-                <InfoRow label="氏名" value={formatFullName(member)} />
-                <InfoRow label="ふりがな" value={formatFullNameKana(member)} />
                 <InfoRow label="生年月日" value={birth} />
                 <InfoRow label="携帯電話" value={member.phone} />
-                {!isChild && <InfoRow label="メール" value={member.email} />}
                 <InfoRow label={isChild ? '所属' : '勤務先'} value={member.workplace} />
                 <InfoRow label={isChild ? '所属の電話' : '勤務先の電話'} value={member.workplacePhone} />
               </div>
@@ -148,7 +144,7 @@ export default function FamilySection({ familyId, userId, onMembersChange }: Fam
           })}
 
           {!isGuardian && (
-            <p className="text-xs text-gray-500">世帯の情報と他の家族の情報は、保護者だけが編集できます。</p>
+            <p className="text-xs text-gray-500">自宅の情報と他の家族の情報は、保護者だけが編集できます。</p>
           )}
         </div>
       )}
@@ -210,8 +206,8 @@ interface FieldProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  type?: 'text' | 'tel' | 'email';
-  inputMode?: 'text' | 'tel' | 'email' | 'numeric';
+  type?: 'text' | 'tel';
+  inputMode?: 'text' | 'tel' | 'numeric';
 }
 
 function Field({ label, value, onChange, placeholder, type = 'text', inputMode }: FieldProps) {
@@ -301,8 +297,7 @@ function HouseholdEditModal({
   const update = (patch: Partial<HouseholdDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
 
   return (
-    <EditModal title="世帯の情報" onClose={onClose} onSave={() => onSave(draft)}>
-      <Field label="家名" value={draft.name} onChange={(name) => update({ name })} placeholder="例: 白石家" />
+    <EditModal title="自宅の情報" onClose={onClose} onSave={() => onSave(draft)}>
       <Field
         label="郵便番号"
         value={draft.postalCode}
@@ -311,13 +306,6 @@ function HouseholdEditModal({
         inputMode="numeric"
       />
       <Field label="住所" value={draft.address} onChange={(address) => update({ address })} />
-      <Field
-        label="固定電話"
-        value={draft.homePhone}
-        onChange={(homePhone) => update({ homePhone })}
-        type="tel"
-        inputMode="tel"
-      />
     </EditModal>
   );
 }
@@ -347,29 +335,14 @@ function MemberEditModal({
   const isChild = member.relation === 'child';
 
   return (
-    <EditModal title={`${member.displayName}の情報`} onClose={onClose} onSave={() => onSave(draft)}>
-      {/* 表示名は予定の参加者・主体と同じ値で突き合わせているため、予定を
-          メンバーのidで持つように切り替える（docs/family-app.md §5 の5）までは変えさせない。 */}
-      <div>
-        <span className="block text-xs font-medium text-gray-700 mb-1">表示名</span>
-        <p className="text-sm text-gray-700">{member.displayName}</p>
-        <p className="text-[10px] text-gray-400 mt-1">予定やリストに出る名前です。いまは変更できません。</p>
-      </div>
+    <EditModal
+      title={`${formatFullName(member) || member.displayName}の情報`}
+      onClose={onClose}
+      onSave={() => onSave(draft)}
+    >
       <div className="flex gap-3">
         <Field label="姓" value={draft.familyName} onChange={(familyName) => update({ familyName })} />
         <Field label="名" value={draft.givenName} onChange={(givenName) => update({ givenName })} />
-      </div>
-      <div className="flex gap-3">
-        <Field
-          label="せい"
-          value={draft.familyNameKana}
-          onChange={(familyNameKana) => update({ familyNameKana })}
-        />
-        <Field
-          label="めい"
-          value={draft.givenNameKana}
-          onChange={(givenNameKana) => update({ givenNameKana })}
-        />
       </div>
       <label className="block">
         <span className="block text-xs font-medium text-gray-700 mb-1">生年月日</span>
@@ -382,9 +355,6 @@ function MemberEditModal({
         />
       </label>
       <Field label="携帯電話" value={draft.phone} onChange={(phone) => update({ phone })} type="tel" inputMode="tel" />
-      {!isChild && (
-        <Field label="メール" value={draft.email} onChange={(email) => update({ email })} type="email" inputMode="email" />
-      )}
       <Field
         label={isChild ? '所属（保育園・学校）' : '勤務先'}
         value={draft.workplace}

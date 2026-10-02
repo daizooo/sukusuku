@@ -113,23 +113,19 @@ export default function TemperatureReminderSetting({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  // 「通知」の枠（NotificationSetting）の中に置く。上の項目とは線で区切る。
   section: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingBottom: 8,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: colors.textSubtle },
   toggleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   label: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
   note: { fontSize: 12, color: colors.textMuted, marginTop: 12, lineHeight: 18 },

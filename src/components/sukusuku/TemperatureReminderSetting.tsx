@@ -53,8 +53,9 @@ export default function TemperatureReminderSetting({
   };
 
   return (
-    <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-      <h3 className="font-bold text-gray-800 mb-4 flex items-center border-b pb-2">
+    // 「通知」の枠（NotificationSetting）の中に置く。上の項目とは線で区切る。
+    <section className="border-t border-gray-100 pt-4 mt-4">
+      <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center">
         <Thermometer size={18} className="mr-2 text-orange-600" /> 検温のお知らせ
       </h3>
 

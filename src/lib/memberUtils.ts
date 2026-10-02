@@ -15,11 +15,6 @@ export const formatAge = (birthDate: string, today: Date = new Date()): string =
 export const formatFullName = (member: Pick<Member, 'familyName' | 'givenName'>): string =>
   [member.familyName, member.givenName].filter((part) => part !== '').join(' ');
 
-/** ふりがな（せい めい）。どちらも未入力なら空文字。 */
-export const formatFullNameKana = (
-  member: Pick<Member, 'familyNameKana' | 'givenNameKana'>,
-): string => [member.familyNameKana, member.givenNameKana].filter((part) => part !== '').join(' ');
-
 /** 自分の行は自分で、保護者なら全員分を編集できる（RLSと同じ判定。0046）。 */
 export const canEditMember = (member: Member, me: Member | null): boolean =>
   me !== null && (me.isGuardian || member.id === me.id);

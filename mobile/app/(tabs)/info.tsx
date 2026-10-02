@@ -86,20 +86,19 @@ export default function InfoScreen() {
 
             <FamilySection familyId={familyId} userId={session.user.id} />
 
-            {/* 通知（育児の通知もここにまとめる。docs/family-app.md §7-5） */}
-            <NotificationSetting familyId={familyId} userId={session.user.id} />
-
-            <FeedingIntervalSetting
-              familyId={familyId}
-              settings={feedingSettings}
-              onChange={setFeedingSettings}
-            />
-
-            <TemperatureReminderSetting
-              familyId={familyId}
-              settings={temperatureReminderSettings}
-              onChange={setTemperatureReminderSettings}
-            />
+            {/* 通知。授乳の目安・検温のお知らせも同じ枠にまとめる（docs/family-app.md §7-5） */}
+            <NotificationSetting familyId={familyId} userId={session.user.id}>
+              <FeedingIntervalSetting
+                familyId={familyId}
+                settings={feedingSettings}
+                onChange={setFeedingSettings}
+              />
+              <TemperatureReminderSetting
+                familyId={familyId}
+                settings={temperatureReminderSettings}
+                onChange={setTemperatureReminderSettings}
+              />
+            </NotificationSetting>
           </>
         )}
 

@@ -6,7 +6,7 @@ import type { Household, HouseholdDraft, Member, MemberDraft } from '@/types/app
 import { RELATION_LABEL } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { getHousehold, listMembers, updateHousehold, updateMember } from '@/lib/api/members';
-import { canEditMember, formatAge, formatFullName, formatFullNameKana } from '@/lib/memberUtils';
+import { canEditMember, formatAge, formatFullName } from '@/lib/memberUtils';
 import { formatDateString, parseDateString, toDateString } from '@/lib/dateUtils';
 import { colors } from '@/lib/theme';
 import LogModalShell from '@/components/log/LogModalShell';
@@ -94,9 +94,9 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
             <View style={styles.card}>
               <View style={styles.cardHeader}>
                 <Home size={16} color={colors.textMuted} />
-                <Text style={styles.cardTitle}>{household.name || '世帯'}</Text>
+                <Text style={styles.cardTitle}>自宅</Text>
                 {isGuardian && (
-                  <EditButton label="世帯の情報を編集" onPress={() => setEditing({ kind: 'household' })} />
+                  <EditButton label="自宅の情報を編集" onPress={() => setEditing({ kind: 'household' })} />
                 )}
               </View>
               <InfoRow
@@ -105,7 +105,6 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
                   .filter(Boolean)
                   .join(' ')}
               />
-              <InfoRow label="固定電話" value={household.homePhone} />
             </View>
           )}
 
@@ -118,7 +117,7 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
             return (
               <View key={member.id} style={styles.card}>
                 <View style={styles.cardHeader}>
-                  <Text style={styles.cardTitle}>{member.displayName}</Text>
+                  <Text style={styles.cardTitle}>{formatFullName(member) || member.displayName}</Text>
                   <Text style={styles.badge}>{RELATION_LABEL[member.relation]}</Text>
                   {member.id === me?.id && <Text style={styles.badgeMe}>あなた</Text>}
                   {canEditMember(member, me) && (
@@ -128,11 +127,8 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
                     />
                   )}
                 </View>
-                <InfoRow label="氏名" value={formatFullName(member)} />
-                <InfoRow label="ふりがな" value={formatFullNameKana(member)} />
                 <InfoRow label="生年月日" value={birth} />
                 <InfoRow label="携帯電話" value={member.phone} />
-                {!isChild && <InfoRow label="メール" value={member.email} />}
                 <InfoRow label={isChild ? '所属' : '勤務先'} value={member.workplace} />
                 <InfoRow label={isChild ? '所属の電話' : '勤務先の電話'} value={member.workplacePhone} />
               </View>
@@ -140,7 +136,7 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
           })}
 
           {!isGuardian && (
-            <Text style={styles.note}>世帯の情報と他の家族の情報は、保護者だけが編集できます。</Text>
+            <Text style={styles.note}>自宅の情報と他の家族の情報は、保護者だけが編集できます。</Text>
           )}
         </View>
       )}
@@ -294,8 +290,7 @@ function HouseholdEditSheet({
   const update = (patch: Partial<HouseholdDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
 
   return (
-    <EditSheet title="世帯の情報" onClose={onClose} onSave={() => onSave(draft)}>
-      <Field label="家名" value={draft.name} onChange={(name) => update({ name })} placeholder="例: 白石家" />
+    <EditSheet title="自宅の情報" onClose={onClose} onSave={() => onSave(draft)}>
       <Field
         label="郵便番号"
         value={draft.postalCode}
@@ -304,12 +299,6 @@ function HouseholdEditSheet({
         keyboardType="number-pad"
       />
       <Field label="住所" value={draft.address} onChange={(address) => update({ address })} />
-      <Field
-        label="固定電話"
-        value={draft.homePhone}
-        onChange={(homePhone) => update({ homePhone })}
-        keyboardType="phone-pad"
-      />
     </EditSheet>
   );
 }
@@ -350,32 +339,13 @@ function MemberEditSheet({
 
   return (
     <EditSheet
-      title={`${member.displayName}の情報`}
+      title={`${formatFullName(member) || member.displayName}の情報`}
       onClose={onClose}
       onSave={() => onSave(draft)}
     >
-      {/* 表示名は予定の参加者・主体と同じ値で突き合わせているため、予定を
-          メンバーのidで持つように切り替える（docs/family-app.md §5 の5）までは変えさせない。 */}
-      <View>
-        <Text style={styles.label}>表示名</Text>
-        <Text style={styles.inputText}>{member.displayName}</Text>
-        <Text style={styles.hint}>予定やリストに出る名前です。いまは変更できません。</Text>
-      </View>
       <View style={styles.pair}>
         <Field label="姓" value={draft.familyName} onChange={(familyName) => update({ familyName })} />
         <Field label="名" value={draft.givenName} onChange={(givenName) => update({ givenName })} />
-      </View>
-      <View style={styles.pair}>
-        <Field
-          label="せい"
-          value={draft.familyNameKana}
-          onChange={(familyNameKana) => update({ familyNameKana })}
-        />
-        <Field
-          label="めい"
-          value={draft.givenNameKana}
-          onChange={(givenNameKana) => update({ givenNameKana })}
-        />
       </View>
       <View>
         <Text style={styles.label}>生年月日</Text>
@@ -391,14 +361,6 @@ function MemberEditSheet({
         onChange={(phone) => update({ phone })}
         keyboardType="phone-pad"
       />
-      {!isChild && (
-        <Field
-          label="メール"
-          value={draft.email}
-          onChange={(email) => update({ email })}
-          keyboardType="email-address"
-        />
-      )}
       <Field
         label={isChild ? '所属（保育園・学校）' : '勤務先'}
         value={draft.workplace}
@@ -481,7 +443,6 @@ const styles = StyleSheet.create({
 
   pair: { flexDirection: 'row', gap: 12 },
   label: { fontSize: 12, fontWeight: '500', color: colors.textSubtle, marginBottom: 4 },
-  hint: { fontSize: 10, fontWeight: '400', color: colors.textFaint, marginTop: 4 },
   input: {
     borderWidth: 1,
     borderColor: colors.borderStrong,
