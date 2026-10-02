@@ -201,12 +201,12 @@
 | # | 内容 | DB | 備考 |
 |---|---|---|---|
 | 1 | 本書 | – | 設計の合意 |
-| 2 | `families` 拡張・`family_members` 新設・`children.member_id`、既存データの移し替え（family_profiles → members） | migration | アプリはまだ旧データも読む（後方互換） |
+| 2 | `families` 拡張・`family_members` 新設・`children.member_id`、既存データの移し替え（family_profiles → members）。0046 | migration | アプリはまだ旧データも読む（後方互換）。氏名（姓・名）は旧データから分けられないので移さず、3で入れ直す |
 | 3 | 設定タブの作り直し（アカウント・家族・通知） | – | ここで家族情報を入力できるようになる |
 | 4 | 育児タブの新設、ホーム・記録・保活タブの削除（4タブ化） | – | 生後日数は子メンバーから |
 | 5 | 予定・リストの参加者/主体を member id へ切り替え、名前直書きと色分けの撤去 | migration（同時適用） | 一番影響が大きい |
 | 4b | アプリ名・アイコンの変更 | – | 4と同時に出す |
-| 7 | 子のアカウント招待（`member_invites`・`redeem_member_invite`） | migration | 子がスマホを持つまでに。それまでは不要 |
+| 7 | 子のアカウント招待（`member_invites`・`redeem_member_invite`） | migration | 子がスマホを持つまでに。あわせて `users_update_self` で `users.family_id` を本人が書き換えられる穴を塞ぐ（招待の関数だけが変える） |
 | 6 | `family_profiles`・`users.role` の参照撤去、不要テーブルのdrop | migration | 1リリース置いてから |
 
 各PRで `src/`（PWA版）も追従する。
