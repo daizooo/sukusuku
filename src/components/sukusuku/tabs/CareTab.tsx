@@ -435,12 +435,14 @@ export default function CareTab({
               {!isLoadingLogs && visibleLogs.length === 0 && (
                 <p className="text-sm text-gray-400 text-center py-8">この日の記録はありません</p>
               )}
-              <div className={`relative border-l-2 border-gray-200 ml-4 space-y-3.5 pb-6 ${visibleLogs.length === 0 ? 'hidden' : ''}`}>
+              {/* 一覧の地は画面より少しだけ色を変え、白いカードにメリハリを付ける。 */}
+              <div className={`bg-slate-100 rounded-2xl p-3 ${visibleLogs.length === 0 ? 'hidden' : ''}`}>
+              <div className="relative border-l-2 border-gray-200 ml-4 space-y-3.5">
                 {visibleLogs.map((log) => {
                   const badges = getLogBadges(log);
                   return (
                     <div key={log.id} className="relative pl-6">
-                      <div className={`absolute -left-[17px] top-0 w-8 h-8 rounded-full border-4 border-gray-50 flex items-center justify-center ${getLogColor(log.type)}`}>
+                      <div className={`absolute -left-[17px] top-0 w-8 h-8 rounded-full border-4 border-slate-100 flex items-center justify-center ${getLogColor(log.type)}`}>
                         {getLogIcon(log.type)}
                       </div>
                       <button
@@ -487,6 +489,7 @@ export default function CareTab({
                     </div>
                   );
                 })}
+              </div>
               </div>
             </div>
         )}

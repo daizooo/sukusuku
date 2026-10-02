@@ -22,6 +22,8 @@ import BabyBottleIcon from '@/components/ui/BabyBottleIcon';
 const DOT = 32;
 /** 丸を貫く縦線の位置。丸の中心に来るようにする。 */
 const RAIL = DOT;
+/** 一覧の地の内側の余白。 */
+const PANEL_PADDING = 12;
 
 const TYPE_ICON: Record<CareLog['type'], React.ReactNode> = {
   milk: <BabyBottleIcon size={16} color={colors.milk} />,
@@ -127,12 +129,13 @@ function Badges({ log }: { log: CareLog }) {
 }
 
 const styles = StyleSheet.create({
-  list: { gap: 14, paddingBottom: 24 },
+  // 一覧の地は画面より少しだけ色を変え、白いカードにメリハリを付ける。
+  list: { gap: 14, padding: PANEL_PADDING, backgroundColor: colors.listSurface, borderRadius: 16 },
   rail: {
     position: 'absolute',
-    top: 0,
-    bottom: 24,
-    left: RAIL / 2 - 1,
+    top: PANEL_PADDING,
+    bottom: PANEL_PADDING,
+    left: PANEL_PADDING + RAIL / 2 - 1,
     width: 2,
     backgroundColor: colors.border,
   },
@@ -147,7 +150,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     // 線を隠すための縁。地と同じ色にして、丸のところで線が途切れて見えるようにする。
     borderWidth: 4,
-    borderColor: colors.background,
+    borderColor: colors.listSurface,
   },
 
   card: {
