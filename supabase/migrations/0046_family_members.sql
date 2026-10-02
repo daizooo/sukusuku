@@ -60,13 +60,13 @@ language sql
 security definer
 set search_path = public
 stable
-as $$
+as $fn$
   select exists (
     select 1 from public.family_members
      where user_id = auth.uid() and is_guardian
        and family_id = public.current_family_id()
   );
-$$;
+$fn$;
 revoke execute on function public.is_family_guardian() from public, anon;
 grant execute on function public.is_family_guardian() to authenticated, service_role;
 
@@ -96,7 +96,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 begin
   if auth.uid() is null then
     return new;
@@ -110,7 +110,7 @@ begin
   end if;
   return new;
 end;
-$$;
+$fn$;
 revoke execute on function public.guard_family_member_columns() from public, anon, authenticated;
 
 drop trigger if exists guard_family_member_columns on public.family_members;
@@ -140,7 +140,7 @@ alter table public.users
 -- 対象はアカウントのある家族。表示名・色は、予定の参加者・主体と同じ値にする
 -- （tasks.participants / owner を後でidへ変換するときに、表示名で突き合わせる）。
 -- 氏名（姓・名）は旧データから確実に分けられないため移さず、設定画面で入れ直す。
-do $$
+do $migrate$
 declare
   fam record;
   child_member uuid;
@@ -209,4 +209,4 @@ begin
     end if;
   end loop;
 end;
-$$;
+$migrate$;
