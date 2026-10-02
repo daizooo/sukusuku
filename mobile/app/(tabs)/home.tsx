@@ -19,13 +19,14 @@ import {
   Phone,
   Stethoscope,
 } from 'lucide-react-native';
-import type { LoginRole, MilkLog, UserProfile } from '@/types/app';
+import type { LoginRole, Member, MilkLog, UserProfile } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { useRefreshOnFocus, useRefreshWhileFocused } from '@/lib/screenFocus';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
 import { getProfile } from '@/lib/api/profile';
+import { getChildMember } from '@/lib/api/members';
 import { listRecentMilkLogs } from '@/lib/api/careLogs';
 import { getFeedingSettings } from '@/lib/api/feedingSettings';
 import { listFamilyNursingState, type FamilyNursingState } from '@/lib/api/nursingAlarms';
@@ -73,6 +74,8 @@ export default function HomeScreen() {
   const [familyId, setFamilyId] = useState<string | null>(null);
   const [loginRole, setLoginRole] = useState<LoginRole>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  // 生後日数を出す子。誕生日・名前は設定タブの「家族」で変える（docs/family-app.md §3）。
+  const [child, setChild] = useState<Member | null>(null);
   const [isLoadingFamily, setIsLoadingFamily] = useState(true);
   const [recentMilkLogs, setRecentMilkLogs] = useState<MilkLog[]>([]);
   const [isLoadingRecentMilk, setIsLoadingRecentMilk] = useState(true);
@@ -88,13 +91,14 @@ export default function HomeScreen() {
    * ホームへ戻ってきたときにも同じものを読み直す（useRefreshOnFocus）。
    */
   const loadFamilyData = useCallback(async (id: string) => {
-    const [loadedProfile, loadedMilk, settings, nursing] = await Promise.all([
+    const [loadedProfile, loadedChild, loadedMilk, settings, nursing] = await Promise.all([
       getProfile(supabase, id),
+      getChildMember(supabase, id),
       listRecentMilkLogs(supabase, id),
       getFeedingSettings(supabase, id),
       loadNursingStates(),
     ]);
-    return { loadedProfile, loadedMilk, settings, nursing };
+    return { loadedProfile, loadedChild, loadedMilk, settings, nursing };
   }, []);
 
   useEffect(() => {
@@ -106,10 +110,11 @@ export default function HomeScreen() {
         if (!isMounted || !membership.familyId) return;
         setFamilyId(membership.familyId);
         setLoginRole(membership.role);
-        const { loadedProfile, loadedMilk, settings, nursing } =
+        const { loadedProfile, loadedChild, loadedMilk, settings, nursing } =
           await loadFamilyData(membership.familyId);
         if (!isMounted) return;
         setProfile(loadedProfile);
+        setChild(loadedChild);
         setRecentMilkLogs(loadedMilk);
         setIntervalMinutes(settings.intervalMinutes);
         setNursingStates(nursing);
@@ -131,8 +136,9 @@ export default function HomeScreen() {
   useRefreshOnFocus(() => {
     if (!familyId) return;
     void loadFamilyData(familyId)
-      .then(({ loadedProfile, loadedMilk, settings, nursing }) => {
+      .then(({ loadedProfile, loadedChild, loadedMilk, settings, nursing }) => {
         setProfile(loadedProfile);
+        setChild(loadedChild);
         setRecentMilkLogs(loadedMilk);
         setIntervalMinutes(settings.intervalMinutes);
         setNursingStates(nursing);
@@ -150,8 +156,8 @@ export default function HomeScreen() {
     void loadNursingStates().then(setNursingStates);
   }, NURSING_POLL_MS);
 
-  const birthDateValue = profile ? getProfileFieldValue(profile, 'birthDate') : '';
-  const babyName = profile ? getProfileFieldValue(profile, 'babyName') : '';
+  const birthDateValue = child?.birthDate ?? '';
+  const babyName = child?.displayName ?? '';
 
   const ageInDays = useMemo(() => {
     const birth = parseDateString(birthDateValue);

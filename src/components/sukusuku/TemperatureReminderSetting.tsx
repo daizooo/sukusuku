@@ -49,68 +49,35 @@ export default function TemperatureReminderSetting({
       onChange({ ...settings, [key]: value });
       return;
     }
-    void apply({ ...settings, [key]: value });
+    // お知らせは「通知」のトグル（端末ごと）で切り替えるので、ここでは常にオン。
+    void apply({ ...settings, enabled: true, [key]: value });
   };
 
   return (
-    <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-      <h3 className="font-bold text-gray-800 mb-4 flex items-center border-b pb-2">
-        <Thermometer size={18} className="mr-2 text-orange-600" /> 検温のお知らせ
-      </h3>
-
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-gray-800">決まった時刻にお知らせする</p>
-          <p className="text-xs text-gray-500 mt-1">
-            毎日同じ時刻に測ると平熱が分かり、「この子にしては高い」に気づけます。
-            通知をオンにしている家族の端末すべてに届きます（端末ごとの通知は上の「通知」でオンにしてください）。
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void apply({ ...settings, enabled: !settings.enabled })}
-          aria-label="検温のお知らせの切り替え"
-          aria-pressed={settings.enabled}
-          className={`w-11 h-6 rounded-full relative flex-none transition-colors ${
-            settings.enabled ? 'bg-blue-500' : 'bg-gray-300'
-          }`}
-        >
-          <div
-            className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-all ${
-              settings.enabled ? 'left-5.5' : 'left-0.5'
-            }`}
-          />
-        </button>
+    // 「通知」の枠（NotificationSetting）の中に置く。上の項目とは線で区切る。
+    <section className="border-t border-gray-100 pt-3 mt-3">
+      <div className="flex items-center gap-2">
+        <Thermometer size={16} className="text-orange-600" />
+        <span className="flex-1 text-sm font-medium text-gray-800">検温</span>
+        {(
+          [
+            { key: 'morningTime', label: '朝' },
+            { key: 'eveningTime', label: '夕' },
+          ] as const
+        ).map(({ key, label }) => (
+          <label key={key} className="flex items-center gap-1 border border-gray-300 rounded-lg px-2 py-1">
+            <span className="text-xs font-medium text-gray-500">{label}</span>
+            <input
+              type="time"
+              value={settings[key]}
+              onChange={(e) => changeTime(key, e.target.value)}
+              aria-label={`${label}の検温の時刻`}
+              className="text-sm text-gray-700 outline-none bg-transparent"
+            />
+          </label>
+        ))}
       </div>
-
-      <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className="block text-xs font-medium text-gray-500 mb-1">朝</span>
-          <input
-            type="time"
-            value={settings.morningTime}
-            onChange={(e) => changeTime('morningTime', e.target.value)}
-            disabled={!settings.enabled}
-            className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none disabled:bg-gray-50 disabled:text-gray-400"
-          />
-        </label>
-        <label className="block">
-          <span className="block text-xs font-medium text-gray-500 mb-1">夕方</span>
-          <input
-            type="time"
-            value={settings.eveningTime}
-            onChange={(e) => changeTime('eveningTime', e.target.value)}
-            disabled={!settings.enabled}
-            className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none disabled:bg-gray-50 disabled:text-gray-400"
-          />
-        </label>
-      </div>
-
-      <p className="text-xs text-gray-500 mt-3">
-        その時刻の1時間前までに測っていれば、その回のお知らせは届きません。
-      </p>
-
-      {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
+      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
     </section>
   );
 }

@@ -329,3 +329,67 @@ export const ROLE_TO_PARTICIPANT: Record<'papa' | 'mama', Participant> = {
   papa: '大造',
   mama: 'いづみ',
 };
+
+// ---- かぞく手帳: 家族メンバー・世帯情報（docs/family-app.md §3） ----
+
+/** 続柄。family_members.relation に対応。 */
+export type MemberRelation = 'husband' | 'wife' | 'child';
+
+/** 予定などの色分けに使う色の組の名前。family_members.color に対応。 */
+export type MemberColor = 'blue' | 'pink' | 'emerald' | 'gray';
+
+/** 家族1人1人。アカウントを持たない子もここにいる（userId が null）。 */
+export interface Member {
+  id: string;
+  userId: string | null;
+  relation: MemberRelation;
+  /** 保護者（家族全員の情報と世帯情報を編集できる）。 */
+  isGuardian: boolean;
+  /** 画面に出す短い名前（予定の参加者・主体と同じ値）。 */
+  displayName: string;
+  familyName: string;
+  givenName: string;
+  familyNameKana: string;
+  givenNameKana: string;
+  /** 'YYYY-MM-DD'。未設定なら空文字。年齢・生後日数はここから計算する。 */
+  birthDate: string;
+  phone: string;
+  email: string;
+  /** 勤務先。子は所属（保育園・学校）として使う。 */
+  workplace: string;
+  workplacePhone: string;
+  color: MemberColor;
+  sortOrder: number;
+}
+
+/** メンバーのうち、設定タブで編集できる項目。 */
+export type MemberDraft = Pick<
+  Member,
+  | 'displayName'
+  | 'familyName'
+  | 'givenName'
+  | 'familyNameKana'
+  | 'givenNameKana'
+  | 'birthDate'
+  | 'phone'
+  | 'email'
+  | 'workplace'
+  | 'workplacePhone'
+>;
+
+/** 世帯情報。families に対応。 */
+export interface Household {
+  id: string;
+  name: string;
+  postalCode: string;
+  address: string;
+  homePhone: string;
+}
+
+export type HouseholdDraft = Omit<Household, 'id'>;
+
+export const RELATION_LABEL: Record<MemberRelation, string> = {
+  husband: '夫',
+  wife: '妻',
+  child: '子',
+};

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Switch, Text, View } from 'react-native';
 import { BellRing } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
@@ -28,9 +28,11 @@ import { colors } from '@/lib/theme';
 interface NotificationSettingProps {
   familyId: string;
   userId: string;
+  /** 同じ枠の中に続けて出す通知の設定（授乳の目安・検温のお知らせ）。 */
+  children?: ReactNode;
 }
 
-export default function NotificationSetting({ familyId, userId }: NotificationSettingProps) {
+export default function NotificationSetting({ familyId, userId, children }: NotificationSettingProps) {
   const [isEnabled, setIsEnabled] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
@@ -104,20 +106,9 @@ export default function NotificationSetting({ familyId, userId }: NotificationSe
 
   return (
     <View style={styles.section}>
-      <View style={styles.sectionHeader}>
+      <View style={styles.header}>
         <BellRing size={18} color={colors.navActive} />
         <Text style={styles.sectionTitle}>通知</Text>
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.flex}>
-          <Text style={styles.label}>この端末で予定の通知を受け取る</Text>
-          <Text style={styles.note}>
-            予定に設定したリマインダーの時刻に通知が届きます。端末ごとの設定なので、
-            スマホとパソコンの両方で受け取るにはそれぞれでオンにしてください。
-          </Text>
-        </View>
-
         {!unavailableReason &&
           (isBusy ? (
             <ActivityIndicator color={colors.navActive} />
@@ -133,8 +124,9 @@ export default function NotificationSetting({ familyId, userId }: NotificationSe
           ))}
       </View>
 
-      {unavailableReason && <Text style={styles.note}>{unavailableReason}</Text>}
+      {unavailableReason && <Text style={styles.error}>{unavailableReason}</Text>}
       {error && <Text style={styles.error}>{error}</Text>}
+      {children}
     </View>
   );
 }
@@ -148,18 +140,8 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 12,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingBottom: 8,
-  },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle },
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  flex: { flex: 1 },
-  label: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
-  note: { fontSize: 12, color: colors.textMuted, lineHeight: 18, marginTop: 4 },
-  error: { fontSize: 12, color: colors.danger },
+  // この端末で受け取るかどうかのトグルが、授乳の目安・検温を含む通知すべての入り口。
+  header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sectionTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.textSubtle },
+  error: { fontSize: 12, fontWeight: '400', color: colors.danger },
 });

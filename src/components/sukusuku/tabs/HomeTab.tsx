@@ -23,6 +23,9 @@ interface HomeTabProps {
   nextFeeding: NextFeedingInfo;
   /** 記録タブへ移る（次の授乳のカードから）。 */
   onOpenLogTab: () => void;
+  /** 子の名前・誕生日（設定タブの「家族」の子。docs/family-app.md §3）。 */
+  babyName: string;
+  birthDate: string;
 }
 
 export default function HomeTab({
@@ -32,10 +35,10 @@ export default function HomeTab({
   ageInMonths,
   nextFeeding,
   onOpenLogTab,
+  babyName,
+  birthDate: birthDateValue,
 }: HomeTabProps) {
-  const birthDateValue = getProfileFieldValue(userProfile, 'birthDate');
   const birthDate = parseDateString(birthDateValue);
-  const babyName = getProfileFieldValue(userProfile, 'babyName');
 
   // ママがログイン中(または役割未設定)はパパの連絡先を、パパがログイン中はママの連絡先を表示する
   const showPapaContact = loginRole !== 'papa';

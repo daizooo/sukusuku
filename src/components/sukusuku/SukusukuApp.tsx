@@ -28,6 +28,7 @@ import type {
   ListItem,
   LogType,
   LoginRole,
+  Member,
   Nursery,
   Participant,
   ScheduleView,
@@ -37,7 +38,6 @@ import type {
 } from '@/types/app';
 import { ROLE_TO_PARTICIPANT } from '@/types/app';
 import { INITIAL_PROFILE } from '@/lib/seedData';
-import { getProfileFieldValue } from '@/lib/uiUtils';
 import {
   addDays,
   calculateTargetDate,
@@ -105,7 +105,8 @@ import {
   updateNursery as updateNurseryApi,
 } from '@/lib/api/nurseries';
 import { listFamilyMembers } from '@/lib/api/familyMembers';
-import { getProfile, saveProfile } from '@/lib/api/profile';
+import { getProfile } from '@/lib/api/profile';
+import { getChildMember } from '@/lib/api/members';
 import {
   deleteDoneItems,
   deleteGroup as deleteGroupApi,
@@ -374,8 +375,9 @@ export default function SukusukuApp({
   const [loadedScheduleLogRange, setLoadedScheduleLogRange] = useState<string | null>(null);
 
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [tempProfile, setTempProfile] = useState<UserProfile>(userProfile);
+  // 生後日数・出生日基準の予定に使う子。名前・誕生日は設定タブの「家族」で変える
+  // （docs/family-app.md §3）。userProfile はホームの連絡先ボタンだけが読む。
+  const [childMember, setChildMember] = useState<Member | null>(null);
 
   // 家族のタスクをSupabaseから取得
   // サーバー側(page.tsx)で取得済み(initialTasks)なら、hydration後の再取得はスキップする。
@@ -648,7 +650,21 @@ export default function SukusukuApp({
     };
   }, [supabase, familyId]);
 
-  // 設定タブ(お子様情報・パパママ情報)をSupabaseから取得
+  useEffect(() => {
+    let cancelled = false;
+    getChildMember(supabase, familyId)
+      .then((child) => {
+        if (!cancelled) setChildMember(child);
+      })
+      .catch((err) => {
+        console.error('Failed to load child member:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, familyId]);
+
+  // ホームの連絡先ボタン用（旧・設定タブの自由入力。docs/family-app.md §5 の4で消す）
   useEffect(() => {
     let cancelled = false;
     getProfile(supabase, familyId)
@@ -757,7 +773,7 @@ export default function SukusukuApp({
     return 'パートナー';
   };
 
-  const birthDateValue = getProfileFieldValue(userProfile, 'birthDate');
+  const birthDateValue = childMember?.birthDate ?? '';
 
   const dynamicTodos = useMemo<DynamicTask[]>(() => {
     return todos.map((todo) => {
@@ -851,28 +867,6 @@ export default function SukusukuApp({
       setTodos(previousTodos);
       alert('削除に失敗しました。もう一度お試しください。');
     }
-  };
-
-  const handleProfileSave = async () => {
-    const previousProfile = userProfile;
-    const updated = tempProfile;
-
-    setUserProfile(updated);
-    setIsEditingProfile(false);
-
-    try {
-      await saveProfile(supabase, familyId, updated);
-    } catch (err) {
-      console.error('Failed to save profile:', err);
-      // 失敗時はロールバック
-      setUserProfile(previousProfile);
-      alert('保存に失敗しました。もう一度お試しください。');
-    }
-  };
-
-  const startEditingProfile = () => {
-    setTempProfile(userProfile);
-    setIsEditingProfile(true);
   };
 
   const handleAddTask = async () => {
@@ -1401,6 +1395,8 @@ export default function SukusukuApp({
           {activeTab === 'home' && (
             <HomeTab
               userProfile={userProfile}
+              babyName={childMember?.displayName ?? ''}
+              birthDate={birthDateValue}
               loginRole={role}
               ageInDays={ageInDays}
               ageInMonths={ageInMonths}
@@ -1474,7 +1470,7 @@ export default function SukusukuApp({
               onSavePumpingLog={savePumpingLog}
               onSaveTemperatureLog={saveTemperatureLog}
               recentTemperatureLogs={recentTemperatureLogs}
-              babyName={getProfileFieldValue(userProfile, 'babyName')}
+              babyName={childMember?.displayName ?? ''}
               onDeleteLog={deleteLog}
               onAddGrowthRecord={addGrowthRecordHandler}
               onUpdateGrowthRecord={updateGrowthRecordHandler}
@@ -1495,12 +1491,9 @@ export default function SukusukuApp({
             <InfoTab
               familyId={familyId}
               userId={userId}
-              userProfile={userProfile}
-              tempProfile={tempProfile}
-              isEditingProfile={isEditingProfile}
-              onStartEditProfile={startEditingProfile}
-              onChangeTempProfile={setTempProfile}
-              onSaveProfile={handleProfileSave}
+              onMembersChange={(members) =>
+                setChildMember(members.find((member) => member.relation === 'child') ?? null)
+              }
               feedingSettings={feedingSettings}
               onChangeFeedingSettings={setFeedingSettings}
               temperatureReminderSettings={temperatureReminderSettings}

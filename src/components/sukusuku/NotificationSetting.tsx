@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { BellRing, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -20,11 +20,13 @@ import {
 interface NotificationSettingProps {
   familyId: string;
   userId: string;
+  /** 同じ枠の中に続けて出す通知の設定（授乳の目安・検温のお知らせ）。 */
+  children?: ReactNode;
 }
 
 // 予定のリマインダーをこの端末で受け取るかどうかの設定。
 // 購読は端末ごとなので、スマホとPCそれぞれでオンにする必要がある。
-export default function NotificationSetting({ familyId, userId }: NotificationSettingProps) {
+export default function NotificationSetting({ familyId, userId, children }: NotificationSettingProps) {
   const supabase = useMemo(() => createClient(), []);
   const [isEnabled, setIsEnabled] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
@@ -113,19 +115,10 @@ export default function NotificationSetting({ familyId, userId }: NotificationSe
 
   return (
     <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-      <h3 className="font-bold text-gray-800 mb-4 flex items-center border-b pb-2">
-        <BellRing size={18} className="mr-2 text-blue-500" /> 通知
-      </h3>
-
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-gray-800">この端末で予定の通知を受け取る</p>
-          <p className="text-xs text-gray-500 mt-1">
-            予定に設定したリマインダーの時刻に通知が届きます。端末ごとの設定なので、
-            スマホとパソコンの両方で受け取るにはそれぞれでオンにしてください。
-          </p>
-        </div>
-
+      {/* この端末で受け取るかどうかのトグルが、授乳の目安・検温を含む通知すべての入り口。 */}
+      <div className="flex items-center gap-2">
+        <BellRing size={18} className="text-blue-500" />
+        <h3 className="flex-1 font-bold text-gray-800">通知</h3>
         {!unavailableReason && (
           <button
             type="button"
@@ -150,8 +143,9 @@ export default function NotificationSetting({ familyId, userId }: NotificationSe
         )}
       </div>
 
-      {unavailableReason && <p className="text-xs text-gray-500 mt-3">{unavailableReason}</p>}
+      {unavailableReason && <p className="text-xs text-red-600 mt-3">{unavailableReason}</p>}
       {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
+      {children}
     </section>
   );
 }

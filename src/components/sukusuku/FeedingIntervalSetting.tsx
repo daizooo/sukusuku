@@ -39,25 +39,19 @@ export default function FeedingIntervalSetting({
   };
 
   return (
-    <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-      <h3 className="font-bold text-gray-800 mb-4 flex items-center border-b pb-2">
-        <BabyBottleIcon size={18} className="mr-2 text-amber-600" /> 次の授乳の目安
-      </h3>
-
-      <p className="text-sm font-medium text-gray-800">授乳の間隔</p>
-      <p className="text-xs text-gray-500 mt-1">
-        前回の授乳からこの時間が経った時刻を「次の目安」として、ホームと記録タブに出します。
-        夫婦で共通の設定です。
-      </p>
-
-      <div className="mt-3 grid grid-cols-5 gap-1.5">
+    // 「通知」の枠（NotificationSetting）の中に置く。上の項目とは線で区切る。
+    <section className="border-t border-gray-100 pt-3 mt-3">
+      <div className="flex items-center gap-2">
+        <BabyBottleIcon size={16} className="text-amber-600" />
+        <span className="flex-1 text-sm font-medium text-gray-800">授乳の間隔</span>
         {FEEDING_INTERVAL_OPTIONS.map((minutes) => (
           <button
             key={minutes}
             type="button"
             aria-pressed={settings.intervalMinutes === minutes}
-            onClick={() => apply({ ...settings, intervalMinutes: minutes })}
-            className={`py-2 rounded-lg text-xs font-bold transition ${
+            // 目安の通知は「通知」のトグル（端末ごと）で切り替えるので、ここでは常にオン。
+            onClick={() => apply({ intervalMinutes: minutes, notifyEnabled: true })}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition ${
               settings.intervalMinutes === minutes
                 ? 'bg-amber-500 text-white shadow-sm'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -67,33 +61,7 @@ export default function FeedingIntervalSetting({
           </button>
         ))}
       </div>
-
-      <div className="mt-4 pt-4 border-t border-gray-100 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-gray-800">目安の時刻に通知する</p>
-          <p className="text-xs text-gray-500 mt-1">
-            通知をオンにしている家族の端末すべてに届きます（端末ごとの通知は上の「通知」でオンにしてください）。
-            オフにしても画面の目安の表示は出ます。
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => apply({ ...settings, notifyEnabled: !settings.notifyEnabled })}
-          aria-label="授乳の目安の通知の切り替え"
-          aria-pressed={settings.notifyEnabled}
-          className={`w-11 h-6 rounded-full relative flex-none transition-colors ${
-            settings.notifyEnabled ? 'bg-blue-500' : 'bg-gray-300'
-          }`}
-        >
-          <div
-            className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-all ${
-              settings.notifyEnabled ? 'left-5.5' : 'left-0.5'
-            }`}
-          />
-        </button>
-      </div>
-
-      {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
+      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
     </section>
   );
 }
