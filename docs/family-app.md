@@ -65,13 +65,15 @@
 
 | 対象 | 現在 | 改修後 |
 |---|---|---|
-| `tasks.participants` | `text[]`（名前） | `uuid[]`（member id） |
-| `tasks.owner` | `text` + 名前直書きのcheck | `uuid`（FK family_members） |
-| 色分け | `uiUtils.ts` の switch | `family_members.color` |
+| `tasks.participants` | `text[]`（名前。直書きの3人だけ） | `text[]`（家族メンバーの表示名） |
+| `tasks.owner` | `text` + 名前直書きのcheck | `text`（家族メンバーの表示名。checkは外す） |
+| 選べる名前・色分け | `types/app.ts`・`uiUtils.ts` の直書き | `family_members` の並び・`color`（`lib/familyRoster.ts`） |
 | 生後日数 | `child_fields` の `birthDate` | 子メンバーの `birth_date` |
 
-名前→idの付け替えは、本番DBのmigration（名前で突き合わせて変換）とアプリの切り替えを
-**同時に**出す必要がある（docs/calendar.md §6 と同じ運用）。
+予定は **idではなく表示名のまま持つ**（0048）。端末に入っている前の版のアプリも名前で
+読み書きするため、型をidに変えると新しい版を入れるまで前の版が動かなくなる。
+そのかわり、表示名を変えたらDBのトリガーが予定の参加者・主体の名前も書き換える。
+表示名は空にせず、家族の中で重ねない（制約）。
 
 ### 3.3 家族情報の項目
 
@@ -203,7 +205,7 @@
 | 2 | `families` 拡張・`family_members` 新設・`children.member_id`、既存データの移し替え（family_profiles → members）。0046 | migration | アプリはまだ旧データも読む（後方互換）。氏名（姓・名）は旧データから分けられないので移さず、3で入れ直す |
 | 3 | 設定タブの作り直し（アカウント・家族・通知）。子の名前・誕生日の読み先を `family_members` へ（ホーム・記録・予定、リマインダーの `family_birth_date`。0047） | migration（追加のみ） | ここで家族情報を入力できるようになる。表示名は5まで変更不可 |
 | 4 | 育児タブの新設、ホーム・記録・保活タブの削除（4タブ化）。最初に開くタブ（設定>アカウント） | – | 生後日数は子メンバーから。育児タブを出すか（`show_care_tab`）の切り替えは、子のアカウントを作る7で足す |
-| 5 | 予定・リストの参加者/主体を member id へ切り替え、名前直書きと色分けの撤去 | migration（同時適用） | 一番影響が大きい |
+| 5 | 予定の参加者/主体の名前直書きと色分けを撤去し、家族メンバーから決める。表示名を編集できるように | migration（0048、SQL Editorで適用してからマージ） | 予定は表示名のまま持つ（§3.2） |
 | 4b | アプリ名・アイコンの変更 | – | 4と同じPR。パッケージ名・slugは変えない |
 | 7 | 子のアカウント招待（`member_invites`・`redeem_member_invite`） | migration | 子がスマホを持つまでに。あわせて `users_update_self` で `users.family_id` を本人が書き換えられる穴を塞ぐ（招待の関数だけが変える） |
 | 6 | `family_profiles`・`users.role` の参照撤去、不要テーブルのdrop | migration | 1リリース置いてから |

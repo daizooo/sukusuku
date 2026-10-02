@@ -1,5 +1,7 @@
 import type { ProfileFieldKey, UserProfile } from '@/types/app';
+import type { MemberColor } from '@/types/app';
 import { colors } from '@/lib/theme';
+import { participantColorName } from '@/lib/familyRoster';
 
 // Web版(`../../../src/lib/uiUtils.ts`)から、ネイティブ側で要るものだけを持ってきたもの。
 // 色やリンクの組み立てはWeb固有なので持ってきていない。
@@ -15,39 +17,21 @@ export const getProfileFieldValue = (profile: UserProfile, key: ProfileFieldKey)
   return field?.values.find((value) => value.trim() !== '') ?? '';
 };
 
-/**
- * 参加者1人の色分け（大造=青 / いづみ=桃 / 岳=翠 / それ以外=灰）。
- */
-export const getParticipantColor = (
-  participant: string,
-): { background: string; text: string; border: string } => {
-  switch (participant) {
-    case '大造':
-      return {
-        background: colors.labelDaizoSurface,
-        text: colors.labelDaizoText,
-        border: colors.labelDaizoBorder,
-      };
-    case 'いづみ':
-      return {
-        background: colors.labelIzumiSurface,
-        text: colors.labelIzumiText,
-        border: colors.labelIzumiBorder,
-      };
-    case '岳':
-      return {
-        background: colors.labelGakuSurface,
-        text: colors.labelGakuText,
-        border: colors.labelGakuBorder,
-      };
-    default:
-      return {
-        background: colors.neutralSurface,
-        text: colors.labelDefaultText,
-        border: colors.border,
-      };
-  }
+type Tone = { background: string; text: string; border: string };
+
+const TONE_BY_COLOR: Record<MemberColor, Tone> = {
+  blue: { background: colors.labelDaizoSurface, text: colors.labelDaizoText, border: colors.labelDaizoBorder },
+  pink: { background: colors.labelIzumiSurface, text: colors.labelIzumiText, border: colors.labelIzumiBorder },
+  emerald: { background: colors.labelGakuSurface, text: colors.labelGakuText, border: colors.labelGakuBorder },
+  gray: { background: colors.neutralSurface, text: colors.labelDefaultText, border: colors.border },
 };
+
+/**
+ * 参加者1人の色分け。色は家族メンバーの色（設定タブの「家族」。lib/familyRoster.ts）、
+ * 家族にいない名前は灰。
+ */
+export const getParticipantColor = (participant: string): Tone =>
+  TONE_BY_COLOR[participantColorName(participant)];
 
 /**
  * 予定・タスクの参加者の色分け。参加者がちょうど1人のときだけその人の色にし、

@@ -1,21 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json, Tables, TablesInsert } from '@/types/supabase';
 import type { AnchorType, Participant, Recurrence, Task, TaskKind } from '@/types/app';
-import { PARTICIPANTS } from '@/types/app';
 import { normalizeTime } from '@/lib/dateUtils';
 import { INITIAL_EVENTS, INITIAL_TODOS } from '@/lib/seedData';
 
 type TaskRow = Tables<'tasks'>;
 type SupabaseDb = SupabaseClient<Database>;
 
-// 保存されている値のうち PARTICIPANTS にある名前だけを参加者として扱う
-// （消えた参加者や壊れたデータが混ざっていても無視する）。
-const toParticipants = (value: string[] | null): Participant[] =>
-  (value ?? []).filter((v): v is Participant => (PARTICIPANTS as string[]).includes(v));
+// 参加者・主体は家族メンバーの表示名。家族の名前は変わりうるので、ここでは絞り込まない
+// （表示名を変えるとDBのトリガーが予定の名前も書き換える。0048）。
+const toParticipants = (value: string[] | null): Participant[] => value ?? [];
 
-// 消えた参加者名や壊れたデータが入っていても無視し、主体無し(null)として扱う。
-const toOwner = (value: string | null): Participant | null =>
-  value !== null && (PARTICIPANTS as string[]).includes(value) ? (value as Participant) : null;
+const toOwner = (value: string | null): Participant | null => value;
 
 const toKind = (value: string | null): TaskKind => (value === 'task' ? 'task' : 'event');
 

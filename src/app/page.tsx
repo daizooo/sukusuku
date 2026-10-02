@@ -25,7 +25,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('family_id, role, start_tab')
+    .select('family_id, start_tab')
     .eq('id', userId)
     .single();
 
@@ -58,7 +58,6 @@ export default async function Home({ searchParams }: HomeProps) {
       <SukusukuApp
         familyId={profile.family_id}
         userId={userId}
-        role={profile.role === 'papa' || profile.role === 'mama' ? profile.role : null}
         initialTasks={initialTasks}
         todayDateString={todayDateString}
         // URLにタブが無ければ、設定タブで選んだ「最初に開くタブ」から始める。

@@ -4,9 +4,9 @@
 // 予定・タスクの参加者（家族の各人）。以前は「パパ/ママ/家族」という
 // 役割ラベルの単一選択だったが、Googleカレンダーのゲストにならい、
 // 実際の名前を複数選択できる「参加者」に一本化した。
-export type Participant = '大造' | 'いづみ' | '岳';
-
-export const PARTICIPANTS: Participant[] = ['大造', 'いづみ', '岳'];
+// 名前は家族メンバーの表示名（family_members.display_name）。選べる名前の並びと色は
+// lib/familyRoster.ts が家族メンバーから決める（docs/family-app.md §3.2）。
+export type Participant = string;
 
 // 日付の決まり方。
 // - absolute:       start_date を直接指定する
@@ -324,12 +324,6 @@ export type ScheduleView = 'month' | 'day' | 'list';
 // ログイン中のユーザーの役割。users.role (Supabase) に対応。未設定の場合はnull。
 export type LoginRole = 'papa' | 'mama' | null;
 
-// 新規の予定・タスクを追加するとき、ログイン中の役割から主体・参加者を
-// 自動で決めるための対応表（パパ→大造 / ママ→いづみ）。
-export const ROLE_TO_PARTICIPANT: Record<'papa' | 'mama', Participant> = {
-  papa: '大造',
-  mama: 'いづみ',
-};
 
 // ---- かぞく手帳: 家族メンバー・世帯情報（docs/family-app.md §3） ----
 
