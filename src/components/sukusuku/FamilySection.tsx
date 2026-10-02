@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Edit2, Home, Users } from 'lucide-react';
+import { ChevronRight, Edit2, Home, Users } from 'lucide-react';
 import type { Household, HouseholdDraft, Member, MemberDraft } from '@/types/app';
 import { RELATION_LABEL } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
@@ -31,6 +31,7 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState<Editing>(null);
+  const [isPicking, setIsPicking] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -59,6 +60,27 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
   const me = members.find((member) => member.userId === userId) ?? null;
   const isGuardian = me?.isGuardian ?? false;
 
+  // 編集ボタンは見出しの右に1つだけ置く。押すと、直せる対象（自宅・家族それぞれ）を選ぶ。
+  const targets: { key: string; label: string; target: Exclude<Editing, null> }[] = [
+    ...(household && isGuardian
+      ? [{ key: 'household', label: '自宅', target: { kind: 'household' } as const }]
+      : []),
+    ...members
+      .filter((member) => canEditMember(member, me))
+      .map((member) => ({
+        key: member.id,
+        label: formatFullName(member) || member.displayName,
+        target: { kind: 'member', member } as const,
+      })),
+  ];
+  const showEdit = !isLoading && loadError === '' && targets.length > 0;
+
+  const startEdit = () => {
+    // 直せる対象が1つだけなら、選ばせずにそのまま編集画面を開く。
+    if (targets.length === 1) setEditing(targets[0].target);
+    else setIsPicking(true);
+  };
+
   const saveHousehold = async (draft: HouseholdDraft) => {
     setHousehold(await updateHousehold(supabase, familyId, draft));
   };
@@ -75,6 +97,7 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
     <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
       <h3 className="font-bold text-gray-800 mb-4 flex items-center border-b pb-2">
         <Users size={18} className="mr-2 text-blue-500" /> 家族
+        {showEdit && <EditButton label="家族の情報を編集" onClick={startEdit} />}
       </h3>
 
       {isLoading ? (
@@ -99,9 +122,6 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
               <div className="flex items-center gap-2 mb-1">
                 <Home size={16} className="text-gray-500" />
                 <span className="font-bold text-gray-900">自宅</span>
-                {isGuardian && (
-                  <EditButton label="自宅の情報を編集" onClick={() => setEditing({ kind: 'household' })} />
-                )}
               </div>
               <InfoRow
                 label="住所"
@@ -130,12 +150,6 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
                       あなた
                     </span>
                   )}
-                  {canEditMember(member, me) && (
-                    <EditButton
-                      label={`${member.displayName}の情報を編集`}
-                      onClick={() => setEditing({ kind: 'member', member })}
-                    />
-                  )}
                 </div>
                 <InfoRow label="生年月日" value={birth} />
                 <InfoRow label="携帯電話" value={member.phone} />
@@ -146,6 +160,26 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
           })}
 
         </div>
+      )}
+
+      {isPicking && (
+        <LogModalShell title="編集する項目" onClose={() => setIsPicking(false)}>
+          <div className="-my-2 divide-y divide-gray-100">
+            {targets.map((item) => (
+              <button
+                key={item.key}
+                onClick={() => {
+                  setIsPicking(false);
+                  setEditing(item.target);
+                }}
+                className="w-full flex items-center justify-between py-3 text-left text-gray-900"
+              >
+                {item.label}
+                <ChevronRight size={18} className="text-gray-400" />
+              </button>
+            ))}
+          </div>
+        </LogModalShell>
       )}
 
       {editing?.kind === 'household' && household && (

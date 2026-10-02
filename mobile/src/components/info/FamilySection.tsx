@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { Edit2, Home, Users } from 'lucide-react-native';
+import { ChevronRight, Edit2, Home, Users } from 'lucide-react-native';
 import type { Household, HouseholdDraft, Member, MemberDraft } from '@/types/app';
 import { RELATION_LABEL } from '@/types/app';
 import { supabase } from '@/lib/supabase';
@@ -32,6 +32,7 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState<Editing>(null);
+  const [isPicking, setIsPicking] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -58,6 +59,27 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
   const me = members.find((member) => member.userId === userId) ?? null;
   const isGuardian = me?.isGuardian ?? false;
 
+  // 編集ボタンは見出しの右に1つだけ置く。押すと、直せる対象（自宅・家族それぞれ）を選ぶ。
+  const targets: { key: string; label: string; target: Exclude<Editing, null> }[] = [
+    ...(household && isGuardian
+      ? [{ key: 'household', label: '自宅', target: { kind: 'household' } as const }]
+      : []),
+    ...members
+      .filter((member) => canEditMember(member, me))
+      .map((member) => ({
+        key: member.id,
+        label: formatFullName(member) || member.displayName,
+        target: { kind: 'member', member } as const,
+      })),
+  ];
+  const showEdit = !isLoading && loadError === '' && targets.length > 0;
+
+  const startEdit = () => {
+    // 直せる対象が1つだけなら、選ばせずにそのまま編集画面を開く。
+    if (targets.length === 1) setEditing(targets[0].target);
+    else setIsPicking(true);
+  };
+
   const saveHousehold = async (draft: HouseholdDraft) => {
     const saved = await updateHousehold(supabase, familyId, draft);
     setHousehold(saved);
@@ -76,6 +98,7 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
       <View style={styles.sectionHeader}>
         <Users size={18} color={colors.navActive} />
         <Text style={styles.sectionTitle}>家族</Text>
+        {showEdit && <EditButton label="家族の情報を編集" onPress={startEdit} />}
       </View>
 
       {isLoading ? (
@@ -100,9 +123,6 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
               <View style={styles.cardHeader}>
                 <Home size={16} color={colors.textMuted} />
                 <Text style={styles.cardTitle}>自宅</Text>
-                {isGuardian && (
-                  <EditButton label="自宅の情報を編集" onPress={() => setEditing({ kind: 'household' })} />
-                )}
               </View>
               <InfoRow
                 label="住所"
@@ -125,12 +145,6 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
                   <Text style={styles.cardTitle}>{formatFullName(member) || member.displayName}</Text>
                   <Text style={styles.badge}>{RELATION_LABEL[member.relation]}</Text>
                   {member.id === me?.id && <Text style={styles.badgeMe}>あなた</Text>}
-                  {canEditMember(member, me) && (
-                    <EditButton
-                      label={`${member.displayName}の情報を編集`}
-                      onPress={() => setEditing({ kind: 'member', member })}
-                    />
-                  )}
                 </View>
                 <InfoRow label="生年月日" value={birth} />
                 <InfoRow label="携帯電話" value={member.phone} />
@@ -141,6 +155,28 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
           })}
 
         </View>
+      )}
+
+      {isPicking && (
+        <SheetModal visible onClose={() => setIsPicking(false)}>
+          <View style={styles.pickHeader}>
+            <Text style={styles.pickTitle}>編集する項目</Text>
+          </View>
+          {targets.map((item) => (
+            <Pressable
+              key={item.key}
+              accessibilityRole="button"
+              onPress={() => {
+                setIsPicking(false);
+                setEditing(item.target);
+              }}
+              style={styles.pickRow}
+            >
+              <Text style={styles.pickLabel}>{item.label}</Text>
+              <ChevronRight size={18} color={colors.textFaint} />
+            </Pressable>
+          ))}
+        </SheetModal>
       )}
 
       {editing?.kind === 'household' && household && (
@@ -457,6 +493,23 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   editText: { fontSize: 13, fontWeight: '700', color: colors.navActiveText },
+  pickHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  pickTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  pickRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  pickLabel: { fontSize: 15, fontWeight: '500', color: colors.text },
   row: { flexDirection: 'row', gap: 12 },
   rowLabel: { width: 84, fontSize: 12, fontWeight: '500', color: colors.textMuted },
   rowValue: { flex: 1, fontSize: 13, fontWeight: '500', color: colors.textSubtle },

@@ -4,6 +4,8 @@ export const colors = {
   brand: '#ffffff',
   background: '#f9fafb', // gray-50
   surface: '#ffffff',
+  // 記録タブの一覧の地。カード（白）が浮いて見えるよう、画面の地より少しだけ青みを足す。
+  listSurface: '#f1f5f9', // slate-100
   border: '#e5e7eb', // gray-200
   borderStrong: '#d1d5db', // gray-300
   text: '#111827', // gray-900
