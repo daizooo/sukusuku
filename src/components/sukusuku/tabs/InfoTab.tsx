@@ -1,10 +1,12 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import NotificationSetting from '@/components/sukusuku/NotificationSetting';
 import FeedingIntervalSetting from '@/components/sukusuku/FeedingIntervalSetting';
 import TemperatureReminderSetting from '@/components/sukusuku/TemperatureReminderSetting';
 import AccountSection from '@/components/sukusuku/AccountSection';
 import FamilySection from '@/components/sukusuku/FamilySection';
+import HokatsuSetting from '@/components/sukusuku/HokatsuSetting';
 import type { FeedingSettings } from '@/lib/api/feedingSettings';
 import type { TemperatureReminderSettings } from '@/lib/api/temperatureReminderSettings';
 
@@ -21,6 +23,8 @@ interface InfoTabProps {
   /** 検温のお知らせの設定。こちらも家族で共通。 */
   temperatureReminderSettings: TemperatureReminderSettings;
   onChangeTemperatureReminderSettings: (settings: TemperatureReminderSettings) => void;
+  /** 保活（見学チェック）の中身（HokatsuTab）。見学のときしか開かないので、育児タブから移した。 */
+  hokatsuPanel: ReactNode;
 }
 
 export default function InfoTab({
@@ -30,6 +34,7 @@ export default function InfoTab({
   onChangeFeedingSettings,
   temperatureReminderSettings,
   onChangeTemperatureReminderSettings,
+  hokatsuPanel,
 }: InfoTabProps) {
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
@@ -50,6 +55,8 @@ export default function InfoTab({
               onChange={onChangeTemperatureReminderSettings}
             />
           </NotificationSetting>
+
+          <HokatsuSetting>{hokatsuPanel}</HokatsuSetting>
 
           <AccountSection familyId={familyId} userId={userId} />
         </div>

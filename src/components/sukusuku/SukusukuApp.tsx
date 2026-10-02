@@ -1392,16 +1392,6 @@ export default function SukusukuApp({
             <CareTab
               babyAge={babyAge}
               nextFeeding={nextFeeding}
-              nurseryPanel={
-                <HokatsuTab
-                  nurseries={nurseries}
-                  isLoadingNurseries={isLoadingNurseries}
-                  onAddNursery={addNurseryHandler}
-                  onUpdateNursery={updateNurseryHandler}
-                  onDeleteNursery={deleteNurseryHandler}
-                  onAddDefaultNurseries={addDefaultNurseriesHandler}
-                />
-              }
               logs={logs}
               logDate={logDate}
               initialLogType={pendingLogType}
@@ -1437,6 +1427,16 @@ export default function SukusukuApp({
               onChangeFeedingSettings={setFeedingSettings}
               temperatureReminderSettings={temperatureReminderSettings}
               onChangeTemperatureReminderSettings={setTemperatureReminderSettings}
+              hokatsuPanel={
+                <HokatsuTab
+                  nurseries={nurseries}
+                  isLoadingNurseries={isLoadingNurseries}
+                  onAddNursery={addNurseryHandler}
+                  onUpdateNursery={updateNurseryHandler}
+                  onDeleteNursery={deleteNurseryHandler}
+                  onAddDefaultNurseries={addDefaultNurseriesHandler}
+                />
+              }
             />
           )}
         </main>
