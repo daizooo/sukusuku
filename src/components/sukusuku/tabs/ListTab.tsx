@@ -522,7 +522,7 @@ export default function ListTab({
         onRename={(title) => onRenameItem(item, title)}
         onDelete={() => onDeleteItem(item.id)}
         attachRef={drag.dragRef(item.id)}
-        onGrab={arranged.length > 1 ? drag.gripProps(sectionKey, arranged, item.id).onPointerDown : undefined}
+        onGrab={drag.gripProps(sectionKey, arranged, item.id).onPointerDown}
         dragging={drag.isDragging(item.id)}
       />
     ));
@@ -682,7 +682,7 @@ export default function ListTab({
                     count={groupItems.length}
                     onRename={(name) => onRenameGroup(group.id, name)}
                     onDelete={() => deleteGroupWithConfirm(group)}
-                    handleProps={listGroups.length > 1 ? drag.gripProps(GROUPS, drag.arrange(GROUPS, listGroups), group.id) : undefined}
+                    handleProps={drag.gripProps(GROUPS, drag.arrange(GROUPS, listGroups), group.id)}
                   />
                   {itemRows(itemsSection(group.id), groupItems)}
                   <AddRow

@@ -502,7 +502,7 @@ export default function ListScreen() {
           <ItemRow
             item={item}
             divided={index > 0}
-            gripProps={rows.length > 1 ? drag.gripProps(sectionKey, rows, item.id) : undefined}
+            gripProps={drag.gripProps(sectionKey, rows, item.id)}
             onToggle={() => void toggleItem(item.id)}
             onRename={(title) => void renameItem(item, title)}
             onDelete={() => void removeItem(item.id)}
@@ -561,9 +561,7 @@ export default function ListScreen() {
                   {/* 枠ごと動かすときは、見出しの左端の持ち手を押したまま動かす。 */}
                   <GroupHeader
                     group={group}
-                    gripProps={
-                      listGroups.length > 1 ? drag.gripProps(GROUPS, listGroups, group.id) : undefined
-                    }
+                    gripProps={drag.gripProps(GROUPS, listGroups, group.id)}
                     count={groupItems.length}
                     onRename={(name) => void renameGroup(group.id, name)}
                     onDelete={() => deleteGroupWithConfirm(group)}

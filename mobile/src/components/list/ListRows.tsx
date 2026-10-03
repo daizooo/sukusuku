@@ -59,7 +59,7 @@ export function ItemRow({
   onDelete: () => void;
   /** 上に行があるときは、線を引いて区切る。 */
   divided?: boolean;
-  /** 並べ替えの持ち手。並べ替える相手がいないとき・完了した項目には渡さない。 */
+  /** 並べ替えの持ち手。完了した項目には渡さない（並びを持たない）。 */
   gripProps?: GripProps;
 }) {
   // null のあいだは読むだけの行。押すと書きかけを持って入力欄になる。
@@ -125,7 +125,7 @@ export function GroupHeader({
   count: number;
   onRename: (name: string) => void;
   onDelete: () => void;
-  /** 枠ごと動かすための持ち手。グループが1つしかないときは渡さない。 */
+  /** 枠ごと動かすための持ち手。 */
   gripProps?: GripProps;
 }) {
   // null のあいだは読むだけの見出し。押すと書きかけを持って入力欄になる。
