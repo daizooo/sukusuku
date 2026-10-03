@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Check, Plus, Trash2, X } from 'lucide-react-native';
+import { Check, GripVertical, Plus, Trash2, X } from 'lucide-react-native';
 import type { ListGroup, ListItem } from '@/types/app';
 import { colors } from '@/lib/theme';
 
@@ -30,6 +30,17 @@ export function ItemCheck({
   );
 }
 
+type GripProps = { onTouchStart: () => void; onTouchEnd: () => void; onTouchCancel: () => void };
+
+/** 並べ替えの持ち手（Keepと同じ左端の点々）。触れた瞬間に持ち上がるので、指で狙いやすいよう広めに取る。 */
+function Grip({ gripProps, label }: { gripProps: GripProps; label: string }) {
+  return (
+    <View accessibilityLabel={label} {...gripProps} style={styles.grip}>
+      <GripVertical size={18} color={colors.borderStrong} />
+    </View>
+  );
+}
+
 /**
  * 項目の行。押すとその場で入力欄になり、枠の中で書き換える
  * （Keepと同じで、項目のためだけの画面は出さない）。持っているのは内容だけ。
@@ -40,6 +51,7 @@ export function ItemRow({
   onRename,
   onDelete,
   divided,
+  gripProps,
 }: {
   item: ListItem;
   onToggle: () => void;
@@ -47,6 +59,8 @@ export function ItemRow({
   onDelete: () => void;
   /** 上に行があるときは、線を引いて区切る。 */
   divided?: boolean;
+  /** 並べ替えの持ち手。並べ替える相手がいないとき・完了した項目には渡さない。 */
+  gripProps?: GripProps;
 }) {
   // null のあいだは読むだけの行。押すと書きかけを持って入力欄になる。
   const [draft, setDraft] = useState<string | null>(null);
@@ -59,7 +73,8 @@ export function ItemRow({
   };
 
   return (
-    <View style={[styles.itemRow, divided && styles.divided]}>
+    <View style={[styles.itemRow, gripProps && styles.itemRowWithGrip, divided && styles.divided]}>
+      {gripProps && <Grip gripProps={gripProps} label={`${item.title}を並べ替え`} />}
       <ItemCheck
         done={item.done}
         onToggle={onToggle}
@@ -104,15 +119,14 @@ export function GroupHeader({
   count,
   onRename,
   onDelete,
-  holdProps,
+  gripProps,
 }: {
   group: ListGroup;
   count: number;
   onRename: (name: string) => void;
   onDelete: () => void;
-  /** 長押しで枠ごと動かすための持ち手。名前の部分は入れ子のPressableが押しを受け取り、
-   *  外側の長押しまで届かないので、名前にも同じものを付ける。 */
-  holdProps?: { onLongPress: () => void; delayLongPress: number };
+  /** 枠ごと動かすための持ち手。グループが1つしかないときは渡さない。 */
+  gripProps?: GripProps;
 }) {
   // null のあいだは読むだけの見出し。押すと書きかけを持って入力欄になる。
   const [draft, setDraft] = useState<string | null>(null);
@@ -124,14 +138,10 @@ export function GroupHeader({
   };
 
   return (
-    <View style={styles.groupHeader}>
+    <View style={[styles.groupHeader, gripProps && styles.groupHeaderWithGrip]}>
+      {gripProps && <Grip gripProps={gripProps} label={`${group.name}を並べ替え`} />}
       {draft === null ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setDraft(group.name)}
-          {...holdProps}
-          style={styles.flex}
-        >
+        <Pressable accessibilityRole="button" onPress={() => setDraft(group.name)} style={styles.flex}>
           <Text style={styles.groupName}>
             {group.name}
             {count > 0 ? <Text style={styles.groupCount}>{`  ${count}`}</Text> : null}
@@ -260,6 +270,8 @@ const styles = StyleSheet.create({
     paddingRight: 4,
     paddingVertical: 10,
   },
+  itemRowWithGrip: { paddingLeft: 0 },
+  grip: { width: 32, alignSelf: 'stretch', marginVertical: -10, alignItems: 'center', justifyContent: 'center' },
   itemTitle: { fontSize: 14, color: colors.textSubtle },
   itemTitleDone: { color: colors.textFaint, textDecorationLine: 'line-through' },
   iconButton: { padding: 6 },
@@ -274,6 +286,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  groupHeaderWithGrip: { paddingLeft: 0 },
   groupName: { fontSize: 13, fontWeight: '700', color: colors.text },
   groupCount: { fontWeight: '400', color: colors.textFaint },
   groupInput: { paddingVertical: 4 },

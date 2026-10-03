@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { Check, ChevronDown, ChevronRight, Lock, Pin, PinOff, Plus, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, GripVertical, Lock, Pin, PinOff, Plus, Trash2, X } from 'lucide-react';
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
 import { useDragReorder } from '../ui/useDragReorder';
 import ListEditorModal, { DEFAULT_GROUP_LABEL, type ListDraft } from '../modals/ListEditorModal';
@@ -25,7 +25,8 @@ import ListEditorModal, { DEFAULT_GROUP_LABEL, type ListDraft } from '../modals/
  * グループの名前も同じく見出しを押してその場で直す。
  *
  * 並べ替えとピン止めもKeepに合わせる。よく開くリストは一覧の先頭へ固定でき、
- * 並び順は**長押ししてそのまま動かす**（モードにも矢印にも入らない）。
+ * 並び順は、一覧のカードは**長押しして**、リストの中の項目・グループは**左端の持ち手を押して**
+ * そのまま動かす（モードにも矢印にも入らない）。
  * 仕組みは ui/useDragReorder.ts。動かせるのは同じ枠の中だけ。
  */
 interface ListTabProps {
@@ -90,7 +91,7 @@ function ItemRow({
   onToggle: () => void;
   onRename: (title: string) => void;
   onDelete: () => void;
-  /** 長押しで動かすための持ち手。完了した項目には渡さない（並びを持たない）。 */
+  /** 動かすための持ち手。完了した項目には渡さない（並びを持たない）。 */
   attachRef?: (el: HTMLElement | null) => void;
   onGrab?: (event: ReactPointerEvent<HTMLElement>) => void;
   dragging?: boolean;
@@ -108,11 +109,11 @@ function ItemRow({
   return (
     <div
       ref={draft === null ? attachRef : undefined}
-      onPointerDown={draft === null ? onGrab : undefined}
-      className={`flex items-center gap-2 pl-3 pr-1 py-2.5 border-b border-gray-100 last:border-b-0 ${
+      className={`flex items-center gap-2 ${onGrab ? 'pl-1' : 'pl-3'} pr-1 py-2.5 border-b border-gray-100 last:border-b-0 ${
         dragging ? 'relative z-20 bg-white rounded-lg shadow-lg' : ''
       }`}
     >
+      {onGrab && <Grip onGrab={onGrab} label={`${item.title}を並べ替え`} />}
       <ItemCheck done={item.done} onToggle={onToggle} label={`${item.title}を${item.done ? '戻す' : '完了にする'}`} />
       {draft === null ? (
         <button type="button" onClick={() => setDraft(item.title)} className="flex-1 min-w-0 text-left">
@@ -152,7 +153,7 @@ function ItemRow({
 
 /**
  * 枠（グループ）の見出し。名前を押すとその場で直せる（設定の画面を出さない）。
- * 枠ごと動かすときはこの見出しを長押しする（中の項目と取り合いにならない）。
+ * 枠ごと動かすときは、左端の持ち手を押したまま動かす。
  */
 function GroupHeader({
   group,
@@ -165,7 +166,7 @@ function GroupHeader({
   count: number;
   onRename: (name: string) => void;
   onDelete: () => void;
-  handleProps: { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void };
+  handleProps?: { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void };
 }) {
   // null のあいだは読むだけの見出し。押すと書きかけを持って入力欄になる。
   const [draft, setDraft] = useState<string | null>(null);
@@ -177,11 +178,8 @@ function GroupHeader({
   };
 
   return (
-    <div
-      // 書き換え中は長押しで動かさない（文字を選びたいだけのことが多い）。
-      {...(draft === null ? handleProps : {})}
-      className="flex items-center justify-between pl-3 pr-1.5 py-2 bg-gray-100 border-b border-gray-200 select-none"
-    >
+    <div className={`flex items-center justify-between ${handleProps ? 'pl-1' : 'pl-3'} pr-1.5 py-2 bg-gray-100 border-b border-gray-200 select-none`}>
+      {handleProps && <Grip onGrab={handleProps.onPointerDown} label={`${group.name}を並べ替え`} />}
       {draft === null ? (
         <button
           type="button"
@@ -216,6 +214,20 @@ function GroupHeader({
         <Trash2 size={16} />
       </button>
     </div>
+  );
+}
+
+/** 並べ替えの持ち手（Keepと同じ左端の点々）。触れた瞬間に持ち上がるので、指で狙いやすいよう広めに取る。 */
+function Grip({ onGrab, label }: { onGrab: (event: ReactPointerEvent<HTMLElement>) => void; label: string }) {
+  return (
+    <span
+      role="button"
+      aria-label={label}
+      onPointerDown={onGrab}
+      className="flex-none flex items-center justify-center w-7 self-stretch -my-2 text-gray-300 cursor-grab touch-none select-none"
+    >
+      <GripVertical size={16} />
+    </span>
   );
 }
 
@@ -499,7 +511,7 @@ export default function ListTab({
     ));
   };
 
-  /** 項目の行。長押しで動かせるよう、行そのものを持ち手にする。 */
+  /** 項目の行。左端の持ち手で動かす。 */
   const itemRows = (sectionKey: string, rows: ListItem[]) => {
     const arranged = drag.arrange(sectionKey, rows);
     return arranged.map((item) => (
@@ -510,7 +522,7 @@ export default function ListTab({
         onRename={(title) => onRenameItem(item, title)}
         onDelete={() => onDeleteItem(item.id)}
         attachRef={drag.dragRef(item.id)}
-        onGrab={drag.handleProps(sectionKey, arranged, item.id).onPointerDown}
+        onGrab={arranged.length > 1 ? drag.gripProps(sectionKey, arranged, item.id).onPointerDown : undefined}
         dragging={drag.isDragging(item.id)}
       />
     ));
@@ -670,7 +682,7 @@ export default function ListTab({
                     count={groupItems.length}
                     onRename={(name) => onRenameGroup(group.id, name)}
                     onDelete={() => deleteGroupWithConfirm(group)}
-                    handleProps={drag.handleProps(GROUPS, drag.arrange(GROUPS, listGroups), group.id)}
+                    handleProps={listGroups.length > 1 ? drag.gripProps(GROUPS, drag.arrange(GROUPS, listGroups), group.id) : undefined}
                   />
                   {itemRows(itemsSection(group.id), groupItems)}
                   <AddRow
@@ -748,10 +760,6 @@ export default function ListTab({
           </section>
         )}
 
-        {/* 長押しで動かせることは見ただけでは分からないので、小さく添える。 */}
-        {(undoneItems.length > 1 || listGroups.length > 1) && (
-          <p className="text-[10px] text-gray-300 text-center pt-3">長押しで並べ替え</p>
-        )}
         </ListEditorModal>
       )}
     </div>
