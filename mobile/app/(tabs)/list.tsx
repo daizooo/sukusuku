@@ -489,6 +489,8 @@ export default function ListScreen() {
     </View>
   );
 
+  const groupHold = (id: string) => drag.holdProps(GROUPS, listGroups, id);
+
   /** 項目の行。長押しで動かせるよう、行そのものを持ち手にする。 */
   const itemRows = (sectionKey: string, rows: ListItem[]) => (
     <View {...drag.panHandlers}>
@@ -559,9 +561,10 @@ export default function ListScreen() {
                   ]}
                 >
                   {/* 枠ごと動かすときはこの見出しを長押しする（中の項目と取り合いにならない）。 */}
-                  <Pressable {...drag.holdProps(GROUPS, listGroups, group.id)}>
+                  <Pressable {...groupHold(group.id)}>
                     <GroupHeader
                       group={group}
+                      holdProps={groupHold(group.id)}
                       count={groupItems.length}
                       onRename={(name) => void renameGroup(group.id, name)}
                       onDelete={() => deleteGroupWithConfirm(group)}

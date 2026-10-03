@@ -7,7 +7,6 @@ export type { TaskDraft };
 interface AddTaskModalProps {
   show: boolean;
   newTask: TaskDraft;
-  allowBirthRelative: boolean;
   onChange: (task: TaskDraft) => void;
   onClose: () => void;
   onSubmit: () => void;
@@ -16,7 +15,6 @@ interface AddTaskModalProps {
 export default function AddTaskModal({
   show,
   newTask,
-  allowBirthRelative,
   onChange,
   onClose,
   onSubmit,
@@ -41,7 +39,7 @@ export default function AddTaskModal({
         </button>
       }
     >
-      <TaskForm value={newTask} onChange={onChange} allowBirthRelative={allowBirthRelative} />
+      <TaskForm value={newTask} onChange={onChange} />
     </ModalShell>
   );
 }

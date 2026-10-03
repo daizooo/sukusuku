@@ -104,11 +104,15 @@ export function GroupHeader({
   count,
   onRename,
   onDelete,
+  holdProps,
 }: {
   group: ListGroup;
   count: number;
   onRename: (name: string) => void;
   onDelete: () => void;
+  /** 長押しで枠ごと動かすための持ち手。名前の部分は入れ子のPressableが押しを受け取り、
+   *  外側の長押しまで届かないので、名前にも同じものを付ける。 */
+  holdProps?: { onLongPress: () => void; delayLongPress: number };
 }) {
   // null のあいだは読むだけの見出し。押すと書きかけを持って入力欄になる。
   const [draft, setDraft] = useState<string | null>(null);
@@ -122,7 +126,12 @@ export function GroupHeader({
   return (
     <View style={styles.groupHeader}>
       {draft === null ? (
-        <Pressable accessibilityRole="button" onPress={() => setDraft(group.name)} style={styles.flex}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setDraft(group.name)}
+          {...holdProps}
+          style={styles.flex}
+        >
           <Text style={styles.groupName}>
             {group.name}
             {count > 0 ? <Text style={styles.groupCount}>{`  ${count}`}</Text> : null}

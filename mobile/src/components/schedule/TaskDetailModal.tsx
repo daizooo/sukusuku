@@ -28,7 +28,6 @@ interface TaskDetailModalProps {
   selectedTask: DynamicTask | null;
   isEditingTask: boolean;
   tempEditingTask: DynamicTask | null;
-  allowBirthRelative: boolean;
   onStartEdit: () => void;
   onChangeTempEditingTask: (task: DynamicTask) => void;
   onSaveEdit: () => void;
@@ -65,7 +64,6 @@ export default function TaskDetailModal({
   selectedTask,
   isEditingTask,
   tempEditingTask,
-  allowBirthRelative,
   onStartEdit,
   onChangeTempEditingTask,
   onSaveEdit,
@@ -104,7 +102,6 @@ export default function TaskDetailModal({
         <TaskForm
           value={tempEditingTask}
           onChange={(draft) => onChangeTempEditingTask({ ...tempEditingTask, ...draft })}
-          allowBirthRelative={allowBirthRelative}
         />
       </TaskModalShell>
     );

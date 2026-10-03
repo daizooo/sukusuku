@@ -1520,7 +1520,6 @@ export default function SukusukuApp({
       <AddTaskModal
         show={showAddModal}
         newTask={newTask}
-        allowBirthRelative={!birthDateValue}
         onChange={setNewTask}
         onClose={() => setShowAddModal(false)}
         onSubmit={handleAddTask}
@@ -1529,7 +1528,6 @@ export default function SukusukuApp({
         selectedTask={selectedTask}
         isEditingTask={isEditingTask}
         tempEditingTask={tempEditingTask}
-        allowBirthRelative={!birthDateValue}
         onStartEdit={() => setIsEditingTask(true)}
         onChangeTempEditingTask={setTempEditingTask}
         onSaveEdit={saveTaskEdit}
