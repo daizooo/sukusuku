@@ -56,7 +56,8 @@ import { useDragReorder } from '@/components/list/useDragReorder';
  * スクロールするのは一覧と、編集モードの中身だけ。見出しと下の道具列は固定する。
  *
  * 並べ替えとピン止めもKeepに合わせる。よく開くリストは一覧の先頭へ固定でき、
- * 並び順は**長押ししてそのまま動かす**。仕組みは components/list/useDragReorder.ts。
+ * 並び順は、一覧のカードは**長押し**、リストの中の項目・グループは**左端の持ち手を押して**
+ * そのまま動かす。仕組みは components/list/useDragReorder.ts。
  *
  * Web版はアプリ全体で持っている状態を受け取るが、こちらはタブごとの画面なので
  * リスト・グループ・項目をこの画面で読み書きする。
@@ -489,7 +490,7 @@ export default function ListScreen() {
     </View>
   );
 
-  /** 項目の行。長押しで動かせるよう、行そのものを持ち手にする。 */
+  /** 項目の行。左端の持ち手で動かす。 */
   const itemRows = (sectionKey: string, rows: ListItem[]) => (
     <View {...drag.panHandlers}>
       {rows.map((item, index) => (
@@ -498,15 +499,14 @@ export default function ListScreen() {
           {...drag.measureProps(item.id)}
           style={[drag.styleFor(item.id), drag.isDragging(item.id) && styles.lifted]}
         >
-          <Pressable {...drag.holdProps(sectionKey, rows, item.id)}>
-            <ItemRow
-              item={item}
-              divided={index > 0}
-              onToggle={() => void toggleItem(item.id)}
-              onRename={(title) => void renameItem(item, title)}
-              onDelete={() => void removeItem(item.id)}
-            />
-          </Pressable>
+          <ItemRow
+            item={item}
+            divided={index > 0}
+            gripProps={drag.gripProps(sectionKey, rows, item.id)}
+            onToggle={() => void toggleItem(item.id)}
+            onRename={(title) => void renameItem(item, title)}
+            onDelete={() => void removeItem(item.id)}
+          />
         </Animated.View>
       ))}
     </View>
@@ -558,15 +558,14 @@ export default function ListScreen() {
                     drag.isDragging(group.id) && styles.liftedCard,
                   ]}
                 >
-                  {/* 枠ごと動かすときはこの見出しを長押しする（中の項目と取り合いにならない）。 */}
-                  <Pressable {...drag.holdProps(GROUPS, listGroups, group.id)}>
-                    <GroupHeader
-                      group={group}
-                      count={groupItems.length}
-                      onRename={(name) => void renameGroup(group.id, name)}
-                      onDelete={() => deleteGroupWithConfirm(group)}
-                    />
-                  </Pressable>
+                  {/* 枠ごと動かすときは、見出しの左端の持ち手を押したまま動かす。 */}
+                  <GroupHeader
+                    group={group}
+                    gripProps={drag.gripProps(GROUPS, listGroups, group.id)}
+                    count={groupItems.length}
+                    onRename={(name) => void renameGroup(group.id, name)}
+                    onDelete={() => deleteGroupWithConfirm(group)}
+                  />
                   {itemRows(itemsSection(group.id), groupItems)}
                   <AddRow
                     divided={groupItems.length > 0}
@@ -640,11 +639,6 @@ export default function ListScreen() {
                 />
               ))}
           </View>
-        )}
-
-        {/* 長押しで動かせることは見ただけでは分からないので、小さく添える。 */}
-        {(undoneItems.length > 1 || listGroups.length > 1) && (
-          <Text style={styles.holdHint}>長押しで並べ替え</Text>
         )}
     </ListEditorModal>
   );

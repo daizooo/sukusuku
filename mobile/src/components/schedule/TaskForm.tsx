@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { Clock, Lock, MapPin, Repeat, Star, Users, Text as TextIcon } from 'lucide-react-native';
-import type { AnchorType, Participant, Task, TaskKind } from '@/types/app';
+import type { Participant, Task, TaskKind } from '@/types/app';
 import { participantNames, useFamilyRoster } from '@/lib/familyRoster';
 import {
   formatDateWithWeekday,
@@ -44,8 +44,6 @@ export type TaskDraft = Omit<Task, 'id' | 'done' | 'doneDates'>;
 interface TaskFormProps {
   value: TaskDraft;
   onChange: (draft: TaskDraft) => void;
-  /** 誕生日が未登録のときだけ「生後日数で指定」を選べるようにする */
-  allowBirthRelative: boolean;
 }
 
 const KIND_TABS: { value: TaskKind; label: string }[] = [
@@ -58,7 +56,7 @@ const SHARING_TABS: { value: boolean; label: string }[] = [
   { value: true, label: '自分だけ' },
 ];
 
-export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFormProps) {
+export default function TaskForm({ value, onChange }: TaskFormProps) {
   // 参加者として選べるのは家族メンバー（設定タブの「家族」の表示名の並び）。
   const roster = useFamilyRoster();
   // 予定に入っているが家族にいない名前（前の名前など）も、外せるように並べておく。
@@ -70,24 +68,16 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
 
   const isEvent = value.kind === 'event';
   const isAllDay = value.startTime === null;
-  // 生後日数での指定は、誕生日登録前でも作れるタスク（例:「生後14日: 出生届提出」）のためのもの。
-  // 予定はこの指定を持たない。
-  const showAnchorChoice = !isEvent && (allowBirthRelative || value.anchorType === 'birth_relative');
 
   const setKind = (kind: TaskKind) => {
     // タスクは場所・参加者・終わりの時刻を持たない。予定へ戻したときのために
     // 参加者は残し、タスクにするときは終わりの時刻だけ外す（始まりの時刻は残る）。
-    // 予定は生後日数指定を持たないため、予定に切り替えたときは日付指定へ戻す。
+    // 生後日数指定は新しく作れない（古いタスクに残るだけ）。予定に切り替えたときは日付指定へ戻す。
     if (kind === 'task') {
       set({ kind, endTime: null });
     } else {
       set(value.anchorType === 'birth_relative' ? { kind, anchorType: 'absolute' } : { kind });
     }
-  };
-
-  const setAnchorType = (anchorType: AnchorType) => {
-    // 繰り返しは開始日の曜日・日付から決まるため、日付が決まらない生後日数指定では持てない。
-    set(anchorType === 'birth_relative' ? { anchorType, recurrence: null } : { anchorType });
   };
 
   const toggleAllDay = () => {
@@ -139,7 +129,7 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
   // 繰り返し。null は「繰り返さない」。選択肢はGoogleカレンダーと同じ定番＋カスタム。
   const recurrence = value.recurrence;
   const [isCustomOpen, setIsCustomOpen] = useState(false);
-  // 日付が決まらない（生後日数指定）ときは繰り返しの欄そのものを出さない。
+  // 日付が決まらない（古い生後日数指定のタスクで、まだ日付を選んでいない）ときは繰り返しの欄を出さない。
   const baseDate = startDate;
   const presets = baseDate ? recurrencePresets(baseDate) : [];
   const currentPresetKey = baseDate ? findPresetKey(recurrence, baseDate) : null;
@@ -150,10 +140,11 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
     const nextDate = parseDateString(next);
     if (recurrence && baseDate && nextDate && currentPresetKey) {
       const preset = recurrencePresets(nextDate).find((p) => p.key === currentPresetKey);
-      set({ startDate: next, recurrence: preset?.recurrence ?? recurrence });
+      set({ startDate: next, anchorType: 'absolute', recurrence: preset?.recurrence ?? recurrence });
       return;
     }
-    set({ startDate: next });
+    // 古い生後日数指定のタスクも、日付を選び直したら日付指定になる。
+    set({ startDate: next, anchorType: 'absolute' });
   };
 
   // 選択欄には、定番に当たらないカスタムの設定も1行（現在の要約）として並べる。
@@ -207,68 +198,15 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
 
       {/* 日付 */}
       <View style={styles.block}>
-        {showAnchorChoice && (
-          <View style={styles.switcher}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: value.anchorType === 'absolute' }}
-              onPress={() => setAnchorType('absolute')}
-              style={[styles.switcherTab, value.anchorType === 'absolute' && styles.switcherTabOn]}
-            >
-              <Text
-                style={[
-                  styles.switcherText,
-                  value.anchorType === 'absolute' && styles.switcherTextOn,
-                ]}
-              >
-                日付を指定
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: value.anchorType === 'birth_relative' }}
-              onPress={() => setAnchorType('birth_relative')}
-              style={[
-                styles.switcherTab,
-                value.anchorType === 'birth_relative' && styles.switcherTabOn,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.switcherText,
-                  value.anchorType === 'birth_relative' && styles.switcherTextOn,
-                ]}
-              >
-                生後日数で指定
-              </Text>
-            </Pressable>
-          </View>
-        )}
-
-        {value.anchorType === 'absolute' ? (
-          <Pressable accessibilityRole="button" onPress={openDatePicker} style={styles.field}>
-            <Text style={startDate ? styles.fieldText : styles.fieldPlaceholder}>
-              {startDate ? formatDateWithWeekday(startDate) : '日付を選ぶ'}
-            </Text>
-          </Pressable>
-        ) : (
-          <View style={[styles.field, styles.inlineField]}>
-            <Text style={styles.inlineLabel}>生後</Text>
-            <TextInput
-              style={styles.inlineInput}
-              value={String(value.daysAfterBirth)}
-              onChangeText={(text) => set({ daysAfterBirth: Number(text) || 0 })}
-              keyboardType="number-pad"
-              inputMode="numeric"
-              accessibilityLabel="生後日数"
-            />
-            <Text style={styles.inlineLabel}>日</Text>
-          </View>
-        )}
+        <Pressable accessibilityRole="button" onPress={openDatePicker} style={styles.field}>
+          <Text style={startDate ? styles.fieldText : styles.fieldPlaceholder}>
+            {startDate ? formatDateWithWeekday(startDate) : '日付を選ぶ'}
+          </Text>
+        </Pressable>
       </View>
 
       {/* 繰り返し。予定・タスクどちらにも設定できる。Googleカレンダーと同じく、
-          定番の選択肢と「カスタム…」から選ぶ。日付が決まらない生後日数指定では出さない。 */}
+          定番の選択肢と「カスタム…」から選ぶ。日付が決まらないときは出さない。 */}
       {baseDate && (
         <View>
           <View style={styles.iconLabel}>
@@ -479,9 +417,6 @@ const styles = StyleSheet.create({
   },
   fieldText: { fontSize: 14, color: colors.textSubtle, fontWeight: '500' },
   fieldPlaceholder: { fontSize: 14, color: colors.textFaint },
-  inlineField: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  inlineLabel: { fontSize: 14, color: colors.textMuted },
-  inlineInput: { flex: 1, fontSize: 14, color: colors.textSubtle, paddingVertical: 0, fontWeight: '500' },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dash: { fontSize: 14, color: colors.textFaint, fontWeight: '500' },
   iconLabel: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },

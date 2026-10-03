@@ -622,7 +622,6 @@ export default function ScheduleScreen() {
         show={showAddModal}
         newTask={newTask}
         // 誕生日が未登録のときだけ「生後日数で指定」を選べるようにする。
-        allowBirthRelative={birthDate === ''}
         onChange={setNewTask}
         onClose={() => setShowAddModal(false)}
         onSubmit={handleAddTask}
@@ -632,7 +631,6 @@ export default function ScheduleScreen() {
         selectedTask={selectedTask}
         isEditingTask={isEditingTask}
         tempEditingTask={tempEditingTask}
-        allowBirthRelative={birthDate === ''}
         onStartEdit={() => setIsEditingTask(true)}
         onChangeTempEditingTask={setTempEditingTask}
         onSaveEdit={saveTaskEdit}

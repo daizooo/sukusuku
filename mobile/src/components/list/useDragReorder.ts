@@ -58,6 +58,12 @@ export interface DragReorder {
     rows: { id: string }[],
     id: string,
   ) => { onLongPress: () => void; delayLongPress: number };
+  /** 左端の持ち手アイコンに付ける。触れた瞬間に持ち上がる（長押しを待たない）。 */
+  gripProps: (
+    sectionKey: string,
+    rows: { id: string }[],
+    id: string,
+  ) => { onTouchStart: () => void; onTouchEnd: () => void; onTouchCancel: () => void };
   /** 指と、入れ替わったぶんの動き。枠に当てる。 */
   styleFor: (id: string) => ViewStyle;
   isDragging: (id: string) => boolean;
@@ -156,6 +162,19 @@ export function useDragReorder(
     [],
   );
 
+  const grab = (sectionKey: string, rows: { id: string }[], id: string) => {
+    // 1つしかないときは動かしても並びが変わらない。
+    if (rows.length < 2 || drag.current) return;
+    const ids = rows.map((row) => row.id);
+    const slots = ids.map((rowId) => layouts.get(rowId) ?? { x: 0, y: 0, width: 0, height: 0 });
+    drag.current = { sectionKey, id, initial: ids, slots };
+    delta.current = { x: 0, y: 0 };
+    pan.setValue({ x: 0, y: 0 });
+    setActive({ sectionKey, id, ids });
+    // 持ち上がったことを指に返す（Web版の navigator.vibrate(10) と同じ）。
+    Vibration.vibrate(10);
+  };
+
   return {
     arrange: (sectionKey, rows) => rows,
 
@@ -167,18 +186,17 @@ export function useDragReorder(
 
     holdProps: (sectionKey, rows, id) => ({
       delayLongPress: HOLD_MS,
-      onLongPress: () => {
-        // 1つしかないときは動かしても並びが変わらない。
-        if (rows.length < 2 || drag.current) return;
-        const ids = rows.map((row) => row.id);
-        const slots = ids.map((rowId) => layouts.get(rowId) ?? { x: 0, y: 0, width: 0, height: 0 });
-        drag.current = { sectionKey, id, initial: ids, slots };
-        delta.current = { x: 0, y: 0 };
-        pan.setValue({ x: 0, y: 0 });
-        setActive({ sectionKey, id, ids });
-        // 持ち上がったことを指に返す（Web版の navigator.vibrate(10) と同じ）。
-        Vibration.vibrate(10);
-      },
+      onLongPress: () => grab(sectionKey, rows, id),
+    }),
+
+    // 持ち手に触れた瞬間に持ち上げる。押しの仕組み（Pressable）は通さず、生のタッチだけを見る
+    // （持ち手を押している指が、そのまま親の PanResponder に引き継がれるように）。
+    // 動かさずに離したときは、ここで持ち上げを解く。動かしたあとの離しは、
+    // PanResponder 側でも解くが、finish は二重に呼んでも差し支えない。
+    gripProps: (sectionKey, rows, id) => ({
+      onTouchStart: () => grab(sectionKey, rows, id),
+      onTouchEnd: finish,
+      onTouchCancel: finish,
     }),
 
     styleFor: (id) => {

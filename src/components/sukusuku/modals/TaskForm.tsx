@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Clock, Lock, MapPin, Repeat, Star, Text, Users, X } from 'lucide-react';
-import type { AnchorType, Participant, Task, TaskKind } from '@/types/app';
+import type { Participant, Task, TaskKind } from '@/types/app';
 import { participantNames, useFamilyRoster } from '@/lib/familyRoster';
 import { useBackLayer } from '@/lib/browserHistory';
 import { parseDateString } from '@/lib/dateUtils';
@@ -34,8 +34,6 @@ export type TaskDraft = Omit<Task, 'id' | 'done' | 'doneDates'>;
 interface TaskFormProps {
   value: TaskDraft;
   onChange: (draft: TaskDraft) => void;
-  // 誕生日が未登録のときだけ「生後日数で指定」を選べるようにする
-  allowBirthRelative: boolean;
 }
 
 const KIND_TABS: { value: TaskKind; label: string }[] = [
@@ -56,7 +54,7 @@ const switcherTab = (selected: boolean) =>
 const FIELD =
   'w-full border border-gray-300 rounded-lg p-2.5 text-sm outline-none focus:border-blue-500 bg-white text-gray-800';
 
-export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFormProps) {
+export default function TaskForm({ value, onChange }: TaskFormProps) {
   // 参加者として選べるのは家族メンバー（設定タブの「家族」の表示名の並び）。
   const roster = useFamilyRoster();
   // 予定に入っているが家族にいない名前（前の名前など）も、外せるように並べておく。
@@ -68,24 +66,16 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
 
   const isEvent = value.kind === 'event';
   const isAllDay = value.startTime === null;
-  // 生後日数での指定は、誕生日登録前でも作れるタスク（例:「生後14日: 出生届提出」）のためのもの。
-  // 予定はこの指定を持たない。
-  const showAnchorChoice = !isEvent && (allowBirthRelative || value.anchorType === 'birth_relative');
 
   const setKind = (kind: TaskKind) => {
     // タスクは場所・参加者・終わりの時刻を持たない。予定へ戻したときのために
     // 参加者は残し、タスクにするときは終わりの時刻だけ外す（始まりの時刻は残る）。
-    // 予定は生後日数指定を持たないため、予定に切り替えたときは日付指定へ戻す。
+    // 生後日数指定は新しく作れない（古いタスクに残るだけ）。予定に切り替えたときは日付指定へ戻す。
     if (kind === 'task') {
       set({ kind, endTime: null });
     } else {
       set(value.anchorType === 'birth_relative' ? { kind, anchorType: 'absolute' } : { kind });
     }
-  };
-
-  const setAnchorType = (anchorType: AnchorType) => {
-    // 繰り返しは開始日の曜日・日付から決まるため、日付が決まらない生後日数指定では持てない。
-    set(anchorType === 'birth_relative' ? { anchorType, recurrence: null } : { anchorType });
   };
 
   const toggleAllDay = () => {
@@ -113,7 +103,7 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
   // 繰り返し。null は「繰り返さない」。選択肢はGoogleカレンダーと同じ定番＋カスタム。
   const recurrence = value.recurrence;
   const [isCustomOpen, setIsCustomOpen] = useState(false);
-  // 日付が決まらない（生後日数指定）ときは繰り返しの欄そのものを出さない。
+  // 日付が決まらない（古い生後日数指定のタスクで、まだ日付を選んでいない）ときは繰り返しの欄を出さない。
   const baseDate = startDate;
   const presets = baseDate ? recurrencePresets(baseDate) : [];
   const currentPresetKey = baseDate ? findPresetKey(recurrence, baseDate) : null;
@@ -124,10 +114,11 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
     const nextDate = parseDateString(next ?? '');
     if (recurrence && baseDate && nextDate && currentPresetKey) {
       const preset = recurrencePresets(nextDate).find((p) => p.key === currentPresetKey);
-      set({ startDate: next, recurrence: preset?.recurrence ?? recurrence });
+      set({ startDate: next, anchorType: 'absolute', recurrence: preset?.recurrence ?? recurrence });
       return;
     }
-    set({ startDate: next });
+    // 古い生後日数指定のタスクも、日付を選び直したら日付指定になる。
+    set({ startDate: next, anchorType: 'absolute' });
   };
 
   // 選択欄には、定番に当たらないカスタムの設定も1行（現在の要約）として並べる。
@@ -171,49 +162,16 @@ export default function TaskForm({ value, onChange, allowBirthRelative }: TaskFo
 
       {/* 日付 */}
       <div className="space-y-2">
-        {showAnchorChoice && (
-          <div className={SWITCHER}>
-            <button
-              type="button"
-              onClick={() => setAnchorType('absolute')}
-              className={switcherTab(value.anchorType === 'absolute')}
-            >
-              日付を指定
-            </button>
-            <button
-              type="button"
-              onClick={() => setAnchorType('birth_relative')}
-              className={switcherTab(value.anchorType === 'birth_relative')}
-            >
-              生後日数で指定
-            </button>
-          </div>
-        )}
-
-        {value.anchorType === 'absolute' ? (
-          <input
-            type="date"
-            value={value.startDate ?? ''}
-            onChange={(e) => setStartDate(e.target.value || null)}
-            className={FIELD}
-          />
-        ) : (
-          <div className="flex items-center border border-gray-300 rounded-lg p-2.5">
-            <span className="text-sm text-gray-500 mr-2">生後</span>
-            <input
-              type="number"
-              min={0}
-              value={value.daysAfterBirth}
-              onChange={(e) => set({ daysAfterBirth: Number(e.target.value) || 0 })}
-              className="flex-1 text-sm outline-none text-gray-800 bg-transparent"
-            />
-            <span className="text-sm text-gray-500 ml-2">日</span>
-          </div>
-        )}
+        <input
+          type="date"
+          value={value.startDate ?? ''}
+          onChange={(e) => setStartDate(e.target.value || null)}
+          className={FIELD}
+        />
       </div>
 
       {/* 繰り返し。予定・タスクどちらにも設定できる。Googleカレンダーと同じく、
-          定番の選択肢と「カスタム…」から選ぶ。日付が決まらない生後日数指定では出さない。 */}
+          定番の選択肢と「カスタム…」から選ぶ。日付が決まらないときは出さない。 */}
       {baseDate && (
         <div>
           <span className="flex items-center text-xs font-medium text-gray-700 mb-1.5">

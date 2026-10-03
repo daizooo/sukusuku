@@ -58,8 +58,14 @@ export interface DragReorder {
   arrange: <T extends { id: string }>(sectionKey: string, rows: T[]) => T[];
   /** 動かす要素そのものに付ける。 */
   dragRef: (id: string) => (el: HTMLElement | null) => void;
-  /** つかむ場所に付ける（要素全体でも、見出しだけでもよい）。 */
+  /** つかむ場所に付ける（要素全体でも、見出しだけでもよい）。長押しで持ち上がる。 */
   handleProps: (
+    sectionKey: string,
+    rows: { id: string }[],
+    id: string,
+  ) => { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void };
+  /** 左端の持ち手アイコンに付ける。触れた瞬間に持ち上がる（長押しを待たない）。 */
+  gripProps: (
     sectionKey: string,
     rows: { id: string }[],
     id: string,
@@ -233,6 +239,35 @@ function createController(setActive: (active: Active | null) => void) {
     finish();
   }
 
+  /** immediate が true なら、長押しを待たずにその場で持ち上げる（持ち手アイコン用）。 */
+  const press = (
+    event: ReactPointerEvent<HTMLElement>,
+    sectionKey: string,
+    rows: { id: string }[],
+    id: string,
+    immediate: boolean,
+  ) => {
+    if (event.button !== 0 || drag || pending) return;
+    if (rows.length < 2) return;
+    pointer.x = event.clientX;
+    pointer.y = event.clientY;
+    const ids = rows.map((row) => row.id);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+    if (immediate) {
+      begin(sectionKey, ids, id);
+      return;
+    }
+    pending = {
+      start: { x: event.clientX, y: event.clientY },
+      timer: window.setTimeout(() => {
+        pending = null;
+        begin(sectionKey, ids, id);
+      }, HOLD_MS),
+    };
+  };
+
   return {
     /** 保存先は毎回の描画で変わるので、外から差し替える。 */
     setOnReorder(next: (sectionKey: string, orderedIds: string[]) => void) {
@@ -249,26 +284,10 @@ function createController(setActive: (active: Active | null) => void) {
       return ref;
     },
     handleProps(sectionKey: string, rows: { id: string }[], id: string) {
-      return {
-        onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
-          if (event.button !== 0 || drag || pending) return;
-          if (rows.length < 2) return;
-          pointer.x = event.clientX;
-          pointer.y = event.clientY;
-          const start = { x: event.clientX, y: event.clientY };
-          const ids = rows.map((row) => row.id);
-          pending = {
-            start,
-            timer: window.setTimeout(() => {
-              pending = null;
-              begin(sectionKey, ids, id);
-            }, HOLD_MS),
-          };
-          window.addEventListener('pointermove', onPointerMove);
-          window.addEventListener('pointerup', onPointerUp);
-          window.addEventListener('pointercancel', onPointerUp);
-        },
-      };
+      return { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => press(event, sectionKey, rows, id, false) };
+    },
+    gripProps(sectionKey: string, rows: { id: string }[], id: string) {
+      return { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => press(event, sectionKey, rows, id, true) };
     },
     dispose() {
       clearPending();
@@ -302,6 +321,7 @@ export function useDragReorder(onReorder: (sectionKey: string, orderedIds: strin
     },
     dragRef: controller.dragRef,
     handleProps: controller.handleProps,
+    gripProps: controller.gripProps,
     isDragging: (id: string) => active?.id === id,
   };
 }
