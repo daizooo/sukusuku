@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { DynamicTask } from '@/types/app';
-import { getOwnerTone, getSplitSegments } from '@/lib/uiUtils';
+import { getOwnerTone } from '@/lib/uiUtils';
 import {
   WEEKDAY_LABELS,
   addDays,
@@ -202,37 +202,24 @@ export default function MonthView({
               )}
 
               <div className="mt-0.5 space-y-0.5">
-                {dayTasks.slice(0, shownChips).map((task) => {
-                  // 2人以上が参加する予定は、帯を参加者の色で等分する（完了したものは灰のまま）。
-                  const split = task.done ? null : getSplitSegments(task.participants);
-                  return (
-                    <button
-                      key={task.occurrenceKey}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenTask(task);
-                      }}
-                      // カーソルを指の形にし、合わせる・押している間は色を濃くして、触った感を出す。
-                      // （空きのマスは逆に、カーソルも色も変えない）
-                      className={`relative w-full text-left text-[9px] leading-tight px-1 py-0.5 rounded border truncate cursor-pointer transition hover:brightness-90 active:brightness-75 ${
-                        task.done
-                          ? 'bg-gray-100 text-gray-400 border-gray-200 line-through'
-                          : split
-                            ? 'overflow-hidden text-gray-800 border-gray-200'
-                            : getOwnerTone(task.owner, task.participants)
-                      } ${isOtherMonth ? 'opacity-50' : ''}`}
-                    >
-                      {split && (
-                        <span aria-hidden className="absolute inset-0 flex">
-                          {split.map((segment, i) => (
-                            <span key={i} className={`flex-1 ${segment}`} />
-                          ))}
-                        </span>
-                      )}
-                      <span className="relative">{task.title}</span>
-                    </button>
-                  );
-                })}
+                {dayTasks.slice(0, shownChips).map((task) => (
+                  <button
+                    key={task.occurrenceKey}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenTask(task);
+                    }}
+                    // カーソルを指の形にし、合わせる・押している間は色を濃くして、触った感を出す。
+    // （空きのマスは逆に、カーソルも色も変えない）
+                    className={`w-full text-left text-[9px] leading-tight px-1 py-0.5 rounded border truncate cursor-pointer transition hover:brightness-90 active:brightness-75 ${
+                      task.done
+                        ? 'bg-gray-100 text-gray-400 border-gray-200 line-through'
+                        : getOwnerTone(task.owner, task.participants)
+                    } ${isOtherMonth ? 'opacity-50' : ''}`}
+                  >
+                    {task.title}
+                  </button>
+                ))}
                 {dayTasks.length > shownChips && (
                   <p className="text-[9px] leading-tight text-gray-400 px-1">+{dayTasks.length - shownChips}件</p>
                 )}
