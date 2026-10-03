@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
   chipDone: { backgroundColor: colors.neutralSurface, borderColor: colors.border },
   chipDonePressed: { backgroundColor: colors.border },
   chipOtherMonth: { opacity: 0.5 },
-  chipText: { fontSize: 9, fontWeight: '500' },
+  chipText: { fontSize: 9, fontWeight: '500', textAlign: 'center' },
   chipTextDone: { color: colors.textFaint, textDecorationLine: 'line-through' },
   more: { fontSize: 9, color: colors.textFaint, paddingHorizontal: 3, fontWeight: '500' },
 });
