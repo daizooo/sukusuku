@@ -12,7 +12,7 @@ import {
 import { getHolidayName } from '@/lib/japaneseHolidays';
 import { getMilestoneLabel } from '@/lib/milestones';
 import { tasksOnDate } from '@/lib/scheduleUtils';
-import { getOwnerTone } from '@/lib/uiUtils';
+import { getOwnerTone, getSplitTones } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 
 // 月グリッド。Web版の `src/components/sukusuku/schedule/MonthView.tsx` を置き換えたもの。
@@ -190,6 +190,8 @@ export default function MonthView({
                   <View style={styles.chips}>
                     {dayTasks.slice(0, shownChips).map((task) => {
                       const label = getOwnerTone(task.owner, task.participants);
+                      // 2人以上が参加する予定は、帯を参加者の色で等分する（完了したものは灰のまま）。
+                      const split = task.done ? null : getSplitTones(task.participants);
                       return (
                         <Pressable
                           key={task.occurrenceKey}
@@ -200,22 +202,43 @@ export default function MonthView({
                             styles.chip,
                             task.done
                               ? [styles.chipDone, pressed && styles.chipDonePressed]
-                              : {
-                                  backgroundColor: pressed ? label.border : label.background,
-                                  borderColor: label.border,
-                                },
+                              : split
+                                ? styles.chipSplit
+                                : {
+                                    backgroundColor: pressed ? label.border : label.background,
+                                    borderColor: label.border,
+                                  },
                             isOtherMonth && styles.chipOtherMonth,
                           ]}
                         >
-                          <Text
-                            numberOfLines={1}
-                            style={[
-                              styles.chipText,
-                              task.done ? styles.chipTextDone : { color: label.text },
-                            ]}
-                          >
-                            {task.title}
-                          </Text>
+                          {({ pressed }) => (
+                            <>
+                              {split && (
+                                <View style={styles.chipSegments}>
+                                  {split.map((tone, i) => (
+                                    <View
+                                      key={i}
+                                      style={[
+                                        styles.chipSegment,
+                                        { backgroundColor: pressed ? tone.border : tone.background },
+                                      ]}
+                                    />
+                                  ))}
+                                </View>
+                              )}
+                              <Text
+                                numberOfLines={1}
+                                style={[
+                                  styles.chipText,
+                                  task.done
+                                    ? styles.chipTextDone
+                                    : { color: split ? colors.text : label.text },
+                                ]}
+                              >
+                                {task.title}
+                              </Text>
+                            </>
+                          )}
                         </Pressable>
                       );
                     })}
@@ -289,6 +312,10 @@ const styles = StyleSheet.create({
   holidayLabel: { color: colors.sunday },
   chips: { marginTop: CHIP_GAP, gap: CHIP_GAP },
   chip: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1 },
+  // 参加者の色で等分した帯。地は chipSegments が塗るので、枠だけ中立の色にする。
+  chipSplit: { borderColor: colors.border, overflow: 'hidden' },
+  chipSegments: { ...StyleSheet.absoluteFillObject, flexDirection: 'row' },
+  chipSegment: { flex: 1 },
   chipDone: { backgroundColor: colors.neutralSurface, borderColor: colors.border },
   chipDonePressed: { backgroundColor: colors.border },
   chipOtherMonth: { opacity: 0.5 },

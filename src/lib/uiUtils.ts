@@ -9,6 +9,14 @@ const TONE_BY_COLOR: Record<MemberColor, string> = {
   gray: 'bg-gray-100 text-gray-600 border-gray-200',
 };
 
+// 予定の帯を参加者の色で等分するときの、1人ぶんの塗り色。
+const SEGMENT_BY_COLOR: Record<MemberColor, string> = {
+  blue: 'bg-blue-100',
+  pink: 'bg-red-100',
+  emerald: 'bg-emerald-100',
+  gray: 'bg-gray-100',
+};
+
 const DOT_BY_COLOR: Record<MemberColor, string> = {
   blue: 'bg-blue-500',
   pink: 'bg-red-500',
@@ -35,6 +43,14 @@ export const getParticipantsTone = (participants: string[]): string =>
 // 主体が未設定の古いデータは今までどおり参加者の人数で決める。
 export const getOwnerTone = (owner: string | null, participants: string[]): string =>
   owner !== null ? getParticipantColor(owner) : getParticipantsTone(participants);
+
+// 予定の帯（月表示のチップ）を参加者の色で等分するための塗り色の並び。
+// 参加者が2人以上のときだけ返し（2人なら2色、3人なら3色）、それ以外は null
+// （=従来どおり getOwnerTone の1色）。並びは参加者の並びのまま。
+export const getSplitSegments = (participants: string[]): string[] | null =>
+  participants.length >= 2
+    ? participants.map((participant) => SEGMENT_BY_COLOR[participantColorName(participant)])
+    : null;
 
 // 全角数字を半角に変換
 const toHalfWidthDigits = (value: string): string =>

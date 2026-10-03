@@ -51,7 +51,8 @@ export default function UpcomingTasks({
   onShowAll,
 }: UpcomingTasksProps) {
   const startOfToday = startOfDay(today).getTime();
-  const pending = tasks.filter((t) => !t.done);
+  // 「予定」だけを出す。タスク（日付とタイトルだけの軽い項目）は一覧・カレンダー側で見る。
+  const pending = tasks.filter((t) => t.kind === 'event' && !t.done);
 
   // 期限切れは古いものほど先頭に来るため、そのまま並べると直近の予定を
   // 食いつぶしてしまう。件数だけ知らせて、中身はリスト表示に任せる。

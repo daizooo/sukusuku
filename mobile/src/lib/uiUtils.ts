@@ -53,6 +53,14 @@ export const getOwnerTone = (
 ): { background: string; text: string; border: string } =>
   owner !== null ? getParticipantColor(owner) : getParticipantsTone(participants);
 
+/**
+ * 予定の帯（月表示のチップ）を参加者の色で等分するための色の並び。
+ * 参加者が2人以上のときだけ返し（2人なら2色、3人なら3色）、それ以外は null
+ * （=従来どおり getOwnerTone の1色）。並びは参加者の並びのまま。
+ */
+export const getSplitTones = (participants: string[]): Tone[] | null =>
+  participants.length >= 2 ? participants.map(getParticipantColor) : null;
+
 // 全角数字を半角に変換
 const toHalfWidthDigits = (value: string): string =>
   value.replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0));
