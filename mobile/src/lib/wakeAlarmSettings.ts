@@ -10,13 +10,20 @@ import { DEFAULT_QUIET_HOURS, type QuietHours } from '@/lib/wakeAlarmPlan';
 export interface WakeAlarmSettings {
   /** 起床アラームを鳴らすか。 */
   enabled: boolean;
-  /** おやすみ時間。0:00からの分（日本時間）。 */
+  /** おやすみ時間。0:00からの分（日本時間）。起床アラームと通知を止める範囲の両方に使う。 */
   quiet: QuietHours;
+  /**
+   * おやすみ時間に目安が来る「次の授乳」の通知を、この端末には送らない
+   * （夜に授乳しない側の端末を起こさないため。docs/night-wake-alarm.md §6）。
+   * 起床アラームとは別の設定。サーバー側で止めるので、購読の行にも写す（feedingQuietSync.ts）。
+   */
+  muteFeedingNotifications: boolean;
 }
 
 export const DEFAULT_WAKE_ALARM_SETTINGS: WakeAlarmSettings = {
   enabled: false,
   quiet: DEFAULT_QUIET_HOURS,
+  muteFeedingNotifications: false,
 };
 
 const STORAGE_KEY = 'sukusuku.wakeAlarm.settings';
@@ -34,6 +41,7 @@ export async function loadWakeAlarmSettings(): Promise<WakeAlarmSettings> {
     const end = parsed?.quiet?.endMinutes;
     return {
       enabled: parsed?.enabled === true,
+      muteFeedingNotifications: parsed?.muteFeedingNotifications === true,
       quiet:
         isMinutes(start) && isMinutes(end)
           ? { startMinutes: start, endMinutes: end }

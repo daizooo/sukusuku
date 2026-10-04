@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { AlarmClock } from 'lucide-react-native';
+import { AlarmClock, Moon } from 'lucide-react-native';
 import { isNursingForegroundServiceAvailable, requestNursingNotificationPermission } from '@/lib/nursingAlarm';
 import { formatDateTimeJst, formatMinutesOfDay, WAKE_LEAD_MINUTES } from '@/lib/wakeAlarmPlan';
 import { useWakeAlarmStatus, type WakeAlarmStatus } from '@/lib/wakeAlarmStatus';
@@ -110,7 +110,23 @@ export default function WakeAlarmSetting() {
         />
       </View>
 
-      {settings.enabled && (
+      <View style={styles.row}>
+        <Moon size={16} color={colors.milk} />
+        <Text style={styles.label}>おやすみ時間は授乳の通知を止める</Text>
+        <Switch
+          accessibilityLabel="おやすみ時間は授乳の通知を止める"
+          value={settings.muteFeedingNotifications}
+          onValueChange={(value) =>
+            void update({ ...settings, muteFeedingNotifications: value }).catch(() =>
+              setError('設定を保存できませんでした。もう一度お試しください。'),
+            )
+          }
+          trackColor={{ true: colors.navActive, false: colors.borderStrong }}
+          thumbColor={colors.surface}
+        />
+      </View>
+
+      {(settings.enabled || settings.muteFeedingNotifications) && (
         <View style={styles.row}>
           <Text style={styles.label}>おやすみ時間</Text>
           {(
@@ -156,6 +172,8 @@ export default function WakeAlarmSetting() {
         {`次の授乳の目安がおやすみ時間のときだけ、${WAKE_LEAD_MINUTES}分前に起きるための音で知らせます。この端末だけの設定です。`}
         {'\n'}
         端末のおやすみモードで「アラームも止める」にしていると鳴りません。
+        {'\n'}
+        「通知を止める」は夜に授乳しない側の端末向けです（目安の時刻がおやすみ時間のとき、この端末には「そろそろ次の授乳」が届きません）。
       </Text>
       {error && <Text style={styles.error}>{error}</Text>}
     </View>

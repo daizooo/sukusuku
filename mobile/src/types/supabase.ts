@@ -669,6 +669,8 @@ export type Database = {
           endpoint: string
           failure_count: number
           family_id: string
+          feeding_quiet_end: number | null
+          feeding_quiet_start: number | null
           id: string
           kind: string
           last_success_at: string | null
@@ -682,6 +684,8 @@ export type Database = {
           endpoint: string
           failure_count?: number
           family_id: string
+          feeding_quiet_end?: number | null
+          feeding_quiet_start?: number | null
           id?: string
           kind?: string
           last_success_at?: string | null
@@ -695,6 +699,8 @@ export type Database = {
           endpoint?: string
           failure_count?: number
           family_id?: string
+          feeding_quiet_end?: number | null
+          feeding_quiet_start?: number | null
           id?: string
           kind?: string
           last_success_at?: string | null
