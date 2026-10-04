@@ -204,3 +204,47 @@ export async function sendFcmNotification(
     return { ok: false, gone: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
+
+/**
+ * 1台へデータだけを送る（画面には何も出ない）。
+ *
+ * notification を載せないと、アプリが閉じていても端末側の FirebaseMessagingService が
+ * 受け取って処理できる（notification があると、アプリが裏にいる間はOSが黙って出すだけで
+ * アプリのコードは動かない）。起床アラームの予約を端末へ伝えるのに使う。
+ * data は文字列しか載らない。
+ */
+export async function sendFcmData(
+  fcm: FcmContext,
+  token: string,
+  data: Record<string, string>,
+  ttlSeconds: number,
+): Promise<FcmResult> {
+  try {
+    const response = await fetch(
+      `https://fcm.googleapis.com/v1/projects/${fcm.projectId}/messages:send`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${fcm.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: {
+            token,
+            data,
+            // 端末が寝ていても届ける。省電力で後回しにされると、予約の入れ替えが間に合わない。
+            android: { priority: 'HIGH', ttl: `${ttlSeconds}s` },
+          },
+        }),
+      },
+    );
+
+    if (response.ok) return { ok: true, gone: false };
+
+    const body = await response.text();
+    const gone = response.status === 404 || body.includes('UNREGISTERED');
+    return { ok: false, gone, error: `${response.status} ${body}` };
+  } catch (error) {
+    return { ok: false, gone: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}

@@ -16,6 +16,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.2';
 import { DeliveryContext, type DeliveryTarget } from '../_shared/deliver.ts';
 import { isWithinQuietHours } from '../_shared/quietHours.ts';
+import { decideWakeSync, planWake } from '../_shared/wakePlan.ts';
 
 // 取りこぼしを拾うため、目安の時刻を過ぎたものも一定時間ぶんは対象にする。
 // 送信済み記録(feeding_reminder_deliveries)があるものは除外されるので二重には飛ばない。
@@ -44,6 +45,139 @@ interface SubscriptionRow extends DeliveryTarget {
 
 interface ActiveNursingRow {
   push_subscriptions: { family_id: string } | null;
+}
+
+interface WakeSubscriptionRow extends DeliveryTarget {
+  family_id: string;
+  wake_alarm_enabled: boolean;
+  wake_quiet_start: number | null;
+  wake_quiet_end: number | null;
+  wake_synced_trigger_at: string | null;
+}
+
+interface WakeScheduleRow {
+  family_id: string;
+  due_at: string;
+}
+
+// 端末へ伝えた予約が、途中で落ちても残らないよう、データ通知は短い期限で送る。
+// 取りこぼしても、次の実行（1分後）が同じ内容をもう一度伝える。
+const WAKE_SYNC_TTL_SECONDS = 60 * 60;
+
+/**
+ * 夜間の起床アラームの予約を、端末へ伝え直す（docs/night-wake-alarm.md §4）。
+ *
+ * 端末は自分で記録したときしか予約を組み直せない。PWAやパートナーの端末での記録にも
+ * 追従させるため、サーバーが毎分、端末ごとに「いま予約しているべき時刻」を求め
+ * （_shared/wakePlan.ts。アプリ側と同じ規則）、前回伝えた内容と違うときだけ、
+ * 画面に出ないデータ通知で伝える。受け取った端末はネイティブ側が目覚ましを入れ替える。
+ *
+ * 失敗してもお知らせの配信（このあとの処理）は止めない。伝えた内容は、送れたときだけ
+ * 控えるので、失敗したぶんは次の実行でもう一度試される。
+ */
+async function syncWakeAlarms(
+  supabase: ReturnType<typeof createClient>,
+  now: number,
+): Promise<{ scheduled: number; cancelled: number; failed: number }> {
+  const result = { scheduled: 0, cancelled: 0, failed: 0 };
+
+  // 使っている端末と、使うのをやめたが先の予約を伝えたままの端末（外すよう伝える）。
+  const { data: subscriptions, error } = await supabase
+    .from('push_subscriptions')
+    .select(
+      'id, kind, family_id, endpoint, wake_alarm_enabled, wake_quiet_start, wake_quiet_end, wake_synced_trigger_at',
+    )
+    .eq('kind', 'fcm')
+    .or('wake_alarm_enabled.eq.true,wake_synced_trigger_at.not.is.null')
+    .returns<WakeSubscriptionRow[]>();
+  if (error) throw error;
+  if (!subscriptions || subscriptions.length === 0) return result;
+
+  const familyIds = [...new Set(subscriptions.map((row) => row.family_id))];
+  const [schedules, nursing] = await Promise.all([
+    supabase
+      .from('next_feeding_schedule')
+      .select('family_id, due_at')
+      .in('family_id', familyIds)
+      .returns<WakeScheduleRow[]>(),
+    supabase.from('nursing_alarms').select('push_subscriptions(family_id)').returns<ActiveNursingRow[]>(),
+  ]);
+  if (schedules.error) throw schedules.error;
+  if (nursing.error) throw nursing.error;
+
+  const dueByFamily = new Map<string, number>();
+  for (const row of schedules.data ?? []) dueByFamily.set(row.family_id, new Date(row.due_at).getTime());
+  const nursingFamilies = new Set(
+    (nursing.data ?? []).map((row) => row.push_subscriptions?.family_id).filter(Boolean) as string[],
+  );
+
+  // 伝える必要のあるものだけ集める。
+  const toSend: { subscription: WakeSubscriptionRow; plan: ReturnType<typeof planWake> }[] = [];
+  const toClear: string[] = [];
+  for (const subscription of subscriptions) {
+    const plan = planWake({
+      enabled: subscription.wake_alarm_enabled,
+      dueAt: dueByFamily.get(subscription.family_id) ?? null,
+      nursing: nursingFamilies.has(subscription.family_id),
+      quietStart: subscription.wake_quiet_start,
+      quietEnd: subscription.wake_quiet_end,
+      now,
+    });
+    const synced = subscription.wake_synced_trigger_at
+      ? new Date(subscription.wake_synced_trigger_at).getTime()
+      : null;
+    const action = decideWakeSync(plan, synced, now);
+    if (action === 'schedule' || action === 'cancel') toSend.push({ subscription, plan });
+    if (action === 'clear') toClear.push(subscription.id);
+  }
+
+  // 鳴らす時刻を過ぎたぶんは、端末へは送らず控えだけ消す（端末が入れた再鳴動を取り消さないため）。
+  if (toClear.length > 0) {
+    await supabase
+      .from('push_subscriptions')
+      .update({ wake_synced_trigger_at: null, wake_synced_due_at: null })
+      .in('id', toClear);
+  }
+  if (toSend.length === 0) return result;
+
+  const delivery = new DeliveryContext();
+  const notReady = await delivery.ensureReady(toSend.map((item) => item.subscription));
+  if (notReady) throw new Error(notReady);
+
+  for (const { subscription, plan } of toSend) {
+    const sent = await delivery.deliverData(
+      subscription,
+      plan
+        ? {
+            kind: 'wake-sync',
+            op: 'schedule',
+            triggerAt: String(plan.triggerAt),
+            dueAt: String(plan.dueAt),
+          }
+        : { kind: 'wake-sync', op: 'cancel' },
+      WAKE_SYNC_TTL_SECONDS,
+    );
+
+    if (sent.ok) {
+      if (plan) result.scheduled++;
+      else result.cancelled++;
+      await supabase
+        .from('push_subscriptions')
+        .update({
+          wake_synced_trigger_at: plan ? new Date(plan.triggerAt).toISOString() : null,
+          wake_synced_due_at: plan ? new Date(plan.dueAt).toISOString() : null,
+        })
+        .eq('id', subscription.id);
+      continue;
+    }
+
+    result.failed++;
+    console.error('起床アラームの予約を伝えられませんでした', subscription.endpoint, sent.error);
+    if (sent.gone) {
+      await supabase.from('push_subscriptions').delete().eq('id', subscription.id);
+    }
+  }
+  return result;
 }
 
 // 家族全員が日本にいる前提。時刻は日本時間で出す。
@@ -80,6 +214,14 @@ Deno.serve(async (request) => {
   );
 
   const now = Date.now();
+
+  // 起床アラームの予約の伝え直し。ここで失敗しても、下のお知らせの配信は続ける。
+  const wake = await syncWakeAlarms(supabase, now).catch((error: unknown) => {
+    console.error('起床アラームの同期に失敗しました', error);
+    return null;
+  });
+  const respond = (body: Record<string, unknown>) => json({ ...body, wake });
+
   const from = new Date(now - LOOKBACK_MINUTES * 60_000).toISOString();
   const to = new Date(now).toISOString();
 
@@ -90,7 +232,7 @@ Deno.serve(async (request) => {
     .lte('due_at', to)
     .returns<ScheduleRow[]>();
   if (dueError) return json({ error: dueError.message }, 500);
-  if (!due || due.length === 0) return json({ due: 0, sent: 0, failed: 0, skipped: 0 });
+  if (!due || due.length === 0) return respond({ due: 0, sent: 0, failed: 0, skipped: 0 });
 
   // いま授乳中の家族には送らない。記録は授乳が終わってから保存されるので、
   // 飲ませている最中に「そろそろ次の授乳」が届いてしまうため。
@@ -109,7 +251,7 @@ Deno.serve(async (request) => {
 
   const targets = due.filter((row) => !nursingFamilyIds.has(row.family_id));
   if (targets.length === 0) {
-    return json({ due: due.length, sent: 0, failed: 0, skipped: due.length });
+    return respond({ due: due.length, sent: 0, failed: 0, skipped: due.length });
   }
 
   const familyIds = [...new Set(targets.map((row) => row.family_id))];
@@ -224,7 +366,7 @@ Deno.serve(async (request) => {
     }
   }
 
-  return json({ due: due.length, sent, failed, skipped });
+  return respond({ due: due.length, sent, failed, skipped });
 });
 
 function json(body: unknown, status = 200): Response {

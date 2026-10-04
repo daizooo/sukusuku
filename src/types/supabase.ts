@@ -677,6 +677,11 @@ export type Database = {
           p256dh: string
           user_agent: string
           user_id: string
+          wake_alarm_enabled: boolean
+          wake_quiet_end: number | null
+          wake_quiet_start: number | null
+          wake_synced_due_at: string | null
+          wake_synced_trigger_at: string | null
         }
         Insert: {
           auth?: string
@@ -692,6 +697,11 @@ export type Database = {
           p256dh?: string
           user_agent?: string
           user_id: string
+          wake_alarm_enabled?: boolean
+          wake_quiet_end?: number | null
+          wake_quiet_start?: number | null
+          wake_synced_due_at?: string | null
+          wake_synced_trigger_at?: string | null
         }
         Update: {
           auth?: string
@@ -707,6 +717,11 @@ export type Database = {
           p256dh?: string
           user_agent?: string
           user_id?: string
+          wake_alarm_enabled?: boolean
+          wake_quiet_end?: number | null
+          wake_quiet_start?: number | null
+          wake_synced_due_at?: string | null
+          wake_synced_trigger_at?: string | null
         }
         Relationships: [
           {

@@ -21,7 +21,7 @@ import { evaluateWakeAlarm } from '@/lib/wakeAlarmPlan';
 import { publishWakeAlarmStatus } from '@/lib/wakeAlarmStatus';
 import { loadWakeAlarmSettings, onWakeAlarmSettingsChange } from '@/lib/wakeAlarmSettings';
 import { getPushTokenIfAllowed } from '@/lib/push';
-import { saveFeedingQuietHours } from '@/lib/api/pushSubscriptions';
+import { saveFeedingQuietHours, saveWakeAlarmSubscription } from '@/lib/api/pushSubscriptions';
 
 // 夜間の起床アラームの予約を、いまのデータに合わせて組み直す（docs/night-wake-alarm.md §3・§4）。
 //
@@ -151,7 +151,7 @@ export async function syncWakeAlarm(userId: string): Promise<void> {
 }
 
 /**
- * 「おやすみ時間は次の授乳の通知を止める」を、この端末の宛先の行に写す。
+ * 「おやすみ時間は次の授乳の通知を止める」と起床アラームの設定を、この端末の宛先の行に写す。
  *
  * 止めるのはサーバー（send-feeding-reminders）なので、設定を変えたときだけでなく、
  * アプリを開くたびに合わせ直す（通知を入れ直して行が作り直されると、列が空に戻るため）。
@@ -162,6 +162,11 @@ export async function syncFeedingQuietHours(): Promise<void> {
   const token = await getPushTokenIfAllowed();
   if (!token) return;
   await saveFeedingQuietHours(supabase, token, settings.muteFeedingNotifications ? settings.quiet : null);
+  // 起床アラームの設定も写す。サーバーが、PWAなど別の端末での記録にも追従して予約を入れ替える。
+  await saveWakeAlarmSubscription(supabase, token, {
+    enabled: settings.enabled,
+    quiet: settings.quiet,
+  });
 }
 
 /**

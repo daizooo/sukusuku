@@ -16,3 +16,13 @@ android {
     abortOnError false
   }
 }
+
+dependencies {
+  // WakeSyncMessagingService が FirebaseMessagingService を継ぎ、FCMのメッセージ型を使う。
+  // 版は expo-notifications に合わせてある。
+  //
+  // expo-notifications そのものには依存しない。SDK 54 では事前ビルド済みの版が使われ、
+  // Gradleのプロジェクト(:expo-notifications)として参照できないため。起床アラーム以外の
+  // メッセージは、実行時に expo-notifications の FirebaseMessagingDelegate へ渡す。
+  implementation 'com.google.firebase:firebase-messaging:24.0.1'
+}
