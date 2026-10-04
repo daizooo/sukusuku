@@ -183,10 +183,13 @@ export function AddRow({
   onSubmit,
   tone = 'plain',
   divided = false,
+  allowEmpty = false,
 }: {
   label: string;
-  placeholder: string;
+  placeholder?: string;
   onSubmit: (value: string) => void;
+  /** 空のままでも追加できるようにする（項目の追加用。空行を挟んで見出しのように使える）。 */
+  allowEmpty?: boolean;
   /** 枠そのものを足す行は、項目の追加と見分けられるよう破線にする。 */
   tone?: 'plain' | 'outlined';
   /** 上に項目が並んでいるときは、線を引いて区切る。 */
@@ -212,7 +215,7 @@ export function AddRow({
 
   const submit = () => {
     const value = draft.trim();
-    if (!value) return;
+    if (!value && !allowEmpty) return;
     onSubmit(value);
     setDraft('');
   };
@@ -226,8 +229,11 @@ export function AddRow({
         value={draft}
         onChangeText={setDraft}
         onSubmitEditing={submit}
-        // 打ち終わって他へ触れたときは、書きかけが無ければ欄を畳む。
-        onBlur={() => setDraft((prev) => (prev && prev.trim() ? prev : null))}
+        // 打ち終わって他へ触れたときは、書きかけが無ければ欄を畳む。空でも足せる欄は、
+        // 畳むと「追加」を押す前にボタンごと消えてしまうので畳まない。
+        onBlur={() => {
+          if (!allowEmpty) setDraft((prev) => (prev && prev.trim() ? prev : null));
+        }}
         autoFocus
         blurOnSubmit={false}
         returnKeyType="done"
@@ -236,11 +242,16 @@ export function AddRow({
       />
       <Pressable
         accessibilityRole="button"
-        disabled={draft.trim() === ''}
+        disabled={!allowEmpty && draft.trim() === ''}
         onPress={submit}
         style={styles.addSubmit}
       >
-        <Text style={[styles.addSubmitText, draft.trim() === '' && styles.addSubmitDisabled]}>
+        <Text
+          style={[
+            styles.addSubmitText,
+            !allowEmpty && draft.trim() === '' && styles.addSubmitDisabled,
+          ]}
+        >
           追加
         </Text>
       </Pressable>
@@ -272,7 +283,7 @@ const styles = StyleSheet.create({
   },
   itemRowWithGrip: { paddingLeft: 0 },
   grip: { width: 32, alignSelf: 'stretch', marginVertical: -10, alignItems: 'center', justifyContent: 'center' },
-  itemTitle: { fontSize: 14, color: colors.textSubtle },
+  itemTitle: { fontSize: 14, color: colors.textSubtle, minHeight: 20 },
   itemTitleDone: { color: colors.textFaint, textDecorationLine: 'line-through' },
   iconButton: { padding: 6 },
 

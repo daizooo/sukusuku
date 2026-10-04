@@ -7,9 +7,6 @@ import { colors } from '@/lib/theme';
 // `ListTab.tsx` の中にある ListOverviewCard を置き換えたもの。
 // 中身は読むだけにして、チェックや追加は開いた先で行う（押し間違いを避ける）。
 
-/** 一覧のカードに出す行数。多すぎるとカードが伸びて1画面に収まらない。 */
-const OVERVIEW_ROWS = 6;
-
 type OverviewRow =
   | { type: 'group'; key: string; name: string }
   | { type: 'item'; key: string; item: ListItem };
@@ -55,9 +52,6 @@ export default function ListOverviewCard({
     }
   }
 
-  const shown = rows.slice(0, OVERVIEW_ROWS);
-  const rest = rows.length - shown.length;
-
   return (
     /* ピンは「開く」の中に入れられないため、カードを枠にして、開く部分と並べて置く。
        長押しはこの枠でつかむ。 */
@@ -71,7 +65,7 @@ export default function ListOverviewCard({
           {list.isPrivate && <Lock size={11} color={colors.textFaint} />}
         </View>
         <View style={styles.body}>
-          {shown.map((row, index) =>
+          {rows.map((row, index) =>
             row.type === 'group' ? (
               /* グループ名は下線で区切る。どこからどこまでが同じ枠かが線で分かる。 */
               <View key={row.key} style={[styles.groupRow, index > 0 && styles.groupRowSpaced]}>
@@ -90,7 +84,6 @@ export default function ListOverviewCard({
             ),
           )}
           {rows.length === 0 && <Text style={styles.empty}>項目なし</Text>}
-          {rest > 0 && <Text style={styles.rest}>+{rest}件</Text>}
         </View>
       </Pressable>
 
@@ -150,6 +143,5 @@ const styles = StyleSheet.create({
   },
   itemTitle: { flex: 1, fontSize: 12, color: colors.textSubtle, lineHeight: 17 },
   empty: { fontSize: 12, color: colors.borderStrong, paddingVertical: 4 },
-  rest: { fontSize: 11, color: colors.textFaint, paddingTop: 6, fontWeight: '500' },
   pin: { position: 'absolute', top: 4, right: 4, padding: 6, borderRadius: 999 },
 });
