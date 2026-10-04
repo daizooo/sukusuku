@@ -472,6 +472,20 @@ select status, return_message, start_time
 - Web Push は撤去済み（`send-feeding-reminders` は `kind = 'fcm'` だけに送る）ので、
   Web版（iPad）にはこの設定を置かない。
 
+### 起床アラームの予約を端末へ伝える（2026-10-04に追加）
+
+`send-feeding-reminders` は、目安の時刻の通知のほかに、**夜間の起床アラームの予約を端末へ
+伝え直す**仕事も毎分行う（詳細は `docs/night-wake-alarm.md` §4）。画面に出ないFCMの
+データ通知（`kind = "wake-sync"`）で、端末のネイティブ側が目覚ましを入れ替える。
+
+- 列は `push_subscriptions.wake_alarm_enabled` / `wake_quiet_start` / `wake_quiet_end`
+  （端末の設定）と `wake_synced_trigger_at` / `wake_synced_due_at`（前回伝えた内容）
+  （`supabase/migrations/0053_wake_alarm_sync.sql`）。
+- 規則は `_shared/wakePlan.ts`（アプリ側 `mobile/src/lib/wakeAlarmPlan.ts` と同じ。
+  テスト: `npm run test:wake-plan`）。
+- **デプロイの順序: 先に 0053 を適用し、そのあと `send-feeding-reminders` をデプロイする。**
+- この仕事が失敗しても、目安の時刻の通知の配信は止めない（結果は応答の `wake` に出る）。
+
 ### 画面の「次の授乳の目安」（ホーム。ネイティブ版とWeb版で同じ）
 
 通知と同じ隙間が**画面にもあった**。ホームのカードは保存済みの記録

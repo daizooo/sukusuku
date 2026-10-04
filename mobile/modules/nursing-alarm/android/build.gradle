@@ -16,3 +16,10 @@ android {
     abortOnError false
   }
 }
+
+dependencies {
+  // WakeSyncMessagingService が expo-notifications のサービスを継ぎ、FCMのメッセージ型を使う。
+  // firebase-messaging の版は expo-notifications に合わせてある。
+  implementation project(':expo-notifications')
+  implementation 'com.google.firebase:firebase-messaging:24.0.1'
+}

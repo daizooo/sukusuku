@@ -47,6 +47,17 @@
         android:value="夜の授乳の少し前に、起きるための音を鳴らす" />
     </service>
 
+    <!-- サーバーからの起床アラームの予約の入れ替えを受け取る（WakeSyncMessagingService）。
+         expo-notifications のサービス（優先度 -1）より先に受け取るため、既定の優先度（0）にする。
+         起床アラーム以外のメッセージは、そのサービスへ渡す。 -->
+    <service
+      android:name="com.sukusuku.nursingalarm.WakeSyncMessagingService"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="com.google.firebase.MESSAGING_EVENT" />
+      </intent-filter>
+    </service>
+
     <receiver
       android:name="com.sukusuku.nursingalarm.WakeAlarmReceiver"
       android:enabled="true"

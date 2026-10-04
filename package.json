@@ -18,7 +18,8 @@
     "test:feeding": "node --experimental-strip-types mobile/src/lib/feedingSchedule.test.ts",
     "test:feeding-web": "node --experimental-strip-types src/lib/feedingSchedule.test.ts",
     "test:wake-alarm": "node --experimental-strip-types mobile/src/lib/wakeAlarmPlan.test.ts",
-    "test:quiet-hours": "node --experimental-strip-types supabase/functions/_shared/quietHours.test.ts"
+    "test:quiet-hours": "node --experimental-strip-types supabase/functions/_shared/quietHours.test.ts",
+    "test:wake-plan": "node --experimental-strip-types supabase/functions/_shared/wakePlan.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

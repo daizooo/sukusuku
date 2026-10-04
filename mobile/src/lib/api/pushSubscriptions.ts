@@ -95,3 +95,25 @@ export async function saveFeedingQuietHours(
     .eq('endpoint', toPushEndpoint(token));
   if (error) throw error;
 }
+
+/**
+ * 起床アラームの設定（オンか・おやすみ時間）を、この端末の宛先の行に写す。
+ * サーバー（send-feeding-reminders）が、PWAなど別の端末での記録にも追従して
+ * この端末の予約を入れ替えるのに使う（supabase/migrations/0053）。
+ * 宛先がまだ無い（通知をオンにしていない）ときは何も更新されない。
+ */
+export async function saveWakeAlarmSubscription(
+  supabase: SupabaseDb,
+  token: string,
+  settings: { enabled: boolean; quiet: { startMinutes: number; endMinutes: number } },
+): Promise<void> {
+  const { error } = await supabase
+    .from('push_subscriptions')
+    .update({
+      wake_alarm_enabled: settings.enabled,
+      wake_quiet_start: settings.quiet.startMinutes,
+      wake_quiet_end: settings.quiet.endMinutes,
+    })
+    .eq('endpoint', toPushEndpoint(token));
+  if (error) throw error;
+}

@@ -15,6 +15,7 @@
 import {
   createFcmContext,
   fcmTokenOf,
+  sendFcmData,
   sendFcmNotification,
   type FcmContext,
   type FcmServiceAccount,
@@ -136,6 +137,27 @@ export class DeliveryContext {
     } catch (error) {
       // 鍵が無い・壊れているのは宛先の失効ではないので gone にはしない
       // （消してしまうと、設定を直したあとに各端末でオンにし直すことになる）。
+      return {
+        ok: false,
+        gone: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * 1台へデータだけを送る（画面には出ない）。起床アラームの予約を端末へ伝えるのに使う。
+   * data は文字列しか載らない。
+   */
+  async deliverData(
+    target: DeliveryTarget,
+    data: Record<string, string>,
+    ttlSeconds: number,
+  ): Promise<DeliveryResult> {
+    try {
+      const fcm = await this.getFcm();
+      return await sendFcmData(fcm, fcmTokenOf(target.endpoint), data, ttlSeconds);
+    } catch (error) {
       return {
         ok: false,
         gone: false,
