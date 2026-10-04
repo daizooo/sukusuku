@@ -16,7 +16,8 @@
     "test:date": "node --experimental-strip-types src/lib/dateUtils.test.ts",
     "test:holiday": "node --experimental-strip-types src/lib/japaneseHolidays.test.ts",
     "test:feeding": "node --experimental-strip-types mobile/src/lib/feedingSchedule.test.ts",
-    "test:feeding-web": "node --experimental-strip-types src/lib/feedingSchedule.test.ts"
+    "test:feeding-web": "node --experimental-strip-types src/lib/feedingSchedule.test.ts",
+    "test:wake-alarm": "node --experimental-strip-types mobile/src/lib/wakeAlarmPlan.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

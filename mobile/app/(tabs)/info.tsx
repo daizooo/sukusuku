@@ -20,6 +20,7 @@ import AccountSection from '@/components/info/AccountSection';
 import FamilySection from '@/components/info/FamilySection';
 import NotificationSetting from '@/components/info/NotificationSetting';
 import FeedingIntervalSetting from '@/components/info/FeedingIntervalSetting';
+import WakeAlarmSetting from '@/components/info/WakeAlarmSetting';
 import HokatsuSetting from '@/components/info/HokatsuSetting';
 import TemperatureReminderSetting from '@/components/info/TemperatureReminderSetting';
 import VersionInfo from '@/components/info/VersionInfo';
@@ -97,6 +98,8 @@ export default function InfoScreen() {
                 settings={temperatureReminderSettings}
                 onChange={setTemperatureReminderSettings}
               />
+              {/* 夜の授乳の起床アラーム。この端末だけの設定で、Androidのネイティブ版だけに出る。 */}
+              <WakeAlarmSetting />
             </NotificationSetting>
 
             {/* 保活（見学チェック）。見学のときしか開かないので、育児タブから移した。 */}
