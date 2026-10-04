@@ -3,7 +3,9 @@ import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { AlarmClock } from 'lucide-react-native';
 import { isNursingForegroundServiceAvailable, requestNursingNotificationPermission } from '@/lib/nursingAlarm';
-import { formatMinutesOfDay, WAKE_LEAD_MINUTES } from '@/lib/wakeAlarmPlan';
+import { formatDateTimeJst, formatMinutesOfDay, WAKE_LEAD_MINUTES } from '@/lib/wakeAlarmPlan';
+import { useWakeAlarmStatus, type WakeAlarmStatus } from '@/lib/wakeAlarmStatus';
+import { scheduleTestWakeAlarm } from '@/lib/wakeAlarm';
 import { useWakeAlarmSettings } from '@/lib/wakeAlarmSettings';
 import { colors } from '@/lib/theme';
 
@@ -18,8 +20,50 @@ const dateOfMinutes = (minutes: number): Date => {
   return date;
 };
 
+/** 予約の状態を、人が読む文にする。鳴らないときに理由が分かるようにするのが目的。 */
+const describeStatus = (status: WakeAlarmStatus): { text: string; warn: boolean } => {
+  switch (status.kind) {
+    case 'pending':
+      return { text: '予約の状態を確認しています…', warn: false };
+    case 'no-family':
+      return { text: '家族の情報が取れず、予約できません。通信できる状態で開き直してください。', warn: true };
+    case 'error':
+      return { text: `予約を組み直せませんでした（${status.message}）`, warn: true };
+    case 'test':
+      return { text: `テスト鳴動を ${formatDateTimeJst(status.triggerAt)} に予約しました`, warn: false };
+    case 'evaluated': {
+      const { evaluation, nativeTriggerAt } = status;
+      if (evaluation.kind === 'off') return { text: 'オフです', warn: false };
+      if (evaluation.kind === 'scheduled') {
+        const text = `次のアラーム: ${formatDateTimeJst(evaluation.triggerAt)}（目安 ${formatDateTimeJst(evaluation.dueAt)}）`;
+        // 予約したのに端末の目覚ましに入っていないときは、ここで気づけるようにする。
+        return nativeTriggerAt === evaluation.triggerAt
+          ? { text, warn: false }
+          : { text: `${text} — 端末に予約できていません`, warn: true };
+      }
+      switch (evaluation.reason) {
+        case 'nursing':
+          return { text: '予約なし: 授乳中です（記録すると次の目安から予約します）', warn: false };
+        case 'no-record':
+          return { text: '予約なし: 授乳の記録がまだありません', warn: false };
+        case 'outside-quiet':
+          return {
+            text: `予約なし: 次の目安 ${formatDateTimeJst(evaluation.dueAt)} はおやすみ時間の外です`,
+            warn: false,
+          };
+        case 'too-late':
+          return {
+            text: `予約なし: 次の目安 ${formatDateTimeJst(evaluation.dueAt)} の${WAKE_LEAD_MINUTES}分前を過ぎています`,
+            warn: false,
+          };
+      }
+    }
+  }
+};
+
 export default function WakeAlarmSetting() {
   const { settings, update } = useWakeAlarmSettings();
+  const status = useWakeAlarmStatus();
   const [error, setError] = useState<string | null>(null);
 
   // 前面サービスの無い環境（Expo Go など）では、予約そのものができないので出さない。
@@ -89,6 +133,25 @@ export default function WakeAlarmSetting() {
         </View>
       )}
 
+      {settings.enabled && (
+        <>
+          <Text style={[styles.status, describeStatus(status).warn && styles.statusWarn]}>
+            {describeStatus(status).text}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              void scheduleTestWakeAlarm().catch(() =>
+                setError('テスト鳴動を予約できませんでした。'),
+              )
+            }
+            style={styles.testButton}
+          >
+            <Text style={styles.testButtonText}>10秒後に鳴らして試す</Text>
+          </Pressable>
+        </>
+      )}
+
       <Text style={styles.note}>
         {`次の授乳の目安がおやすみ時間のときだけ、${WAKE_LEAD_MINUTES}分前に起きるための音で知らせます。この端末だけの設定です。`}
         {'\n'}
@@ -116,6 +179,17 @@ const styles = StyleSheet.create({
   },
   timeLabel: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
   timeText: { fontSize: 14, fontWeight: '500', color: colors.textSubtle },
+  status: { fontSize: 13, fontWeight: '500', color: colors.textSubtle, lineHeight: 19 },
+  statusWarn: { color: colors.danger },
+  testButton: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  testButtonText: { fontSize: 13, fontWeight: '500', color: colors.navActiveText },
   note: { fontSize: 12, fontWeight: '400', color: colors.textFaint, lineHeight: 18 },
   error: { fontSize: 12, fontWeight: '400', color: colors.danger },
 });

@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   cancelWakeAlarm,
   dismissWakeRing,
+  getScheduledWakeAlarm,
   isNursingAlarmAvailable,
   scheduleWakeAlarm,
 } from '../../modules/nursing-alarm';
@@ -16,7 +17,8 @@ import { readCachedLogsInRange } from '@/lib/offline/careLogs';
 import { activePendingNursing, resolveLastFeeding } from '@/lib/feedingSchedule';
 import { localPendingNursing } from '@/lib/nursingTimer';
 import { onNotificationCleanupRequest } from '@/lib/notificationCleanupTrigger';
-import { planWakeAlarm } from '@/lib/wakeAlarmPlan';
+import { evaluateWakeAlarm } from '@/lib/wakeAlarmPlan';
+import { publishWakeAlarmStatus } from '@/lib/wakeAlarmStatus';
 import { loadWakeAlarmSettings, onWakeAlarmSettingsChange } from '@/lib/wakeAlarmSettings';
 
 // 夜間の起床アラームの予約を、いまのデータに合わせて組み直す（docs/night-wake-alarm.md §3・§4）。
@@ -35,6 +37,10 @@ import { loadWakeAlarmSettings, onWakeAlarmSettingsChange } from '@/lib/wakeAlar
 
 const DAY_MS = 24 * 60 * 60_000;
 const BASICS_KEY = 'sukusuku.wakeAlarm.basics';
+const TEST_KEY = 'sukusuku.wakeAlarm.testAt';
+
+/** 設定画面の「テスト鳴動」までの待ち時間。 */
+const TEST_DELAY_MS = 10_000;
 
 /** 圏外でも組み直せるよう、前に取れた家族のidと間隔を控えておく。 */
 interface Basics {
@@ -60,18 +66,43 @@ async function loadBasics(userId: string): Promise<Basics | null> {
   }
 }
 
+/**
+ * 設定画面の「テスト鳴動」。10秒後に鳴らす予約を入れる（実際の予約と同じ仕組みを通る）。
+ * 音が出るか・マナーモードや通知の設定で消されていないか、を昼間のうちに確かめるためのもの。
+ * 鳴るまでのあいだは、組み直しがこの予約を取り消さないよう、時刻を控えておく。
+ */
+export async function scheduleTestWakeAlarm(): Promise<void> {
+  const now = Date.now();
+  const triggerAt = now + TEST_DELAY_MS;
+  await AsyncStorage.setItem(TEST_KEY, String(triggerAt));
+  // 目安の時刻は15分後に置く（止めなければ5分後にもう一度鳴る＝再鳴動の確認もできる）。
+  await scheduleWakeAlarm(triggerAt, now + 15 * 60_000);
+  publishWakeAlarmStatus({ kind: 'test', triggerAt });
+}
+
 /** 予約を組み直す。取れなかったら何もしない（いまの予約を残す）。 */
 export async function syncWakeAlarm(userId: string): Promise<void> {
   if (!isNursingAlarmAvailable()) return;
 
+  // テスト鳴動の予約が鳴る前なら、組み直して取り消さない。
+  const testAt = Number(await AsyncStorage.getItem(TEST_KEY).catch(() => null));
+  if (testAt > Date.now()) {
+    publishWakeAlarmStatus({ kind: 'test', triggerAt: testAt });
+    return;
+  }
+
   const settings = await loadWakeAlarmSettings();
   if (!settings.enabled) {
     await cancelWakeAlarm();
+    publishWakeAlarmStatus({ kind: 'evaluated', evaluation: { kind: 'off' }, nativeTriggerAt: null });
     return;
   }
 
   const basics = await loadBasics(userId);
-  if (!basics) return;
+  if (!basics) {
+    publishWakeAlarmStatus({ kind: 'no-family' });
+    return;
+  }
 
   const now = Date.now();
   // 記録した直後は圏外だとサーバーにまだ無いので、この端末の控え（送信待ちを含む）も見る
@@ -96,7 +127,7 @@ export async function syncWakeAlarm(userId: string): Promise<void> {
     localNursing ? [...familyNursing, localNursing] : familyNursing,
     now,
   );
-  const plan = planWakeAlarm({
+  const evaluation = evaluateWakeAlarm({
     enabled: true,
     quiet: settings.quiet,
     lastFeeding: resolveLastFeeding(lastMilkAt, pending),
@@ -104,11 +135,17 @@ export async function syncWakeAlarm(userId: string): Promise<void> {
     now,
   });
 
-  if (plan) {
-    await scheduleWakeAlarm(plan.triggerAt, plan.dueAt);
+  if (evaluation.kind === 'scheduled') {
+    await scheduleWakeAlarm(evaluation.triggerAt, evaluation.dueAt);
   } else {
     await cancelWakeAlarm();
   }
+  // 端末の目覚ましに本当に入ったかを読み戻して、設定画面に出す。
+  publishWakeAlarmStatus({
+    kind: 'evaluated',
+    evaluation,
+    nativeTriggerAt: await getScheduledWakeAlarm(),
+  });
 }
 
 /**
@@ -137,6 +174,10 @@ export function useWakeAlarmSync(userId: string | null): void {
       } catch (err) {
         // 予約を組み直せなくても、いまの予約は残るので止めない。
         console.error('Failed to sync wake alarm:', err);
+        publishWakeAlarmStatus({
+          kind: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        });
       } finally {
         running = false;
       }

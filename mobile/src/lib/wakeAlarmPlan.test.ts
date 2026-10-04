@@ -9,6 +9,7 @@ import {
   formatMinutesOfDay,
   isWithinQuietHours,
   minutesOfDayJst,
+  evaluateWakeAlarm,
   planWakeAlarm,
   type QuietHours,
 } from './wakeAlarmPlan.ts';
@@ -172,6 +173,41 @@ assert.equal(
   });
   assert.ok(plan);
   assert.equal(plan.triggerAt, jst('04:15'));
+}
+
+// --- evaluateWakeAlarm: 予約しない理由 ---
+{
+  const input = { ...base, lastFeeding: fed('2026-10-05T10:00:00+09:00'), now: jst('10:10') };
+  assert.deepEqual(evaluateWakeAlarm({ ...input, enabled: false }), { kind: 'off' });
+  assert.deepEqual(evaluateWakeAlarm(input), {
+    kind: 'skipped',
+    reason: 'outside-quiet',
+    dueAt: jst('13:00'),
+  });
+  assert.deepEqual(
+    evaluateWakeAlarm({
+      ...base,
+      lastFeeding: { lastFedAt: null, isNursing: false, isPendingRecord: false },
+      now: jst('10:10'),
+    }),
+    { kind: 'skipped', reason: 'no-record', dueAt: null },
+  );
+  assert.deepEqual(
+    evaluateWakeAlarm({
+      ...base,
+      lastFeeding: { lastFedAt: null, isNursing: true, isPendingRecord: false },
+      now: jst('00:30'),
+    }),
+    { kind: 'skipped', reason: 'nursing', dueAt: null },
+  );
+  assert.deepEqual(
+    evaluateWakeAlarm({ ...base, lastFeeding: fed('2026-10-05T00:30:00+09:00'), now: jst('03:20') }),
+    { kind: 'skipped', reason: 'too-late', dueAt: jst('03:30') },
+  );
+  assert.deepEqual(
+    evaluateWakeAlarm({ ...base, lastFeeding: fed('2026-10-05T00:30:00+09:00'), now: jst('00:40') }),
+    { kind: 'scheduled', triggerAt: jst('03:15'), dueAt: jst('03:30') },
+  );
 }
 
 console.log('wakeAlarmPlan: ok');
