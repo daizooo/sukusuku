@@ -113,11 +113,16 @@ function ItemRow({
         dragging ? 'relative z-20 bg-white rounded-lg shadow-lg' : ''
       }`}
     >
-      {onGrab && <Grip onGrab={onGrab} label={`${item.title}を並べ替え`} />}
-      <ItemCheck done={item.done} onToggle={onToggle} label={`${item.title}を${item.done ? '戻す' : '完了にする'}`} />
+      {onGrab && <Grip onGrab={onGrab} label={`${item.title || '空の項目'}を並べ替え`} />}
+      <ItemCheck done={item.done} onToggle={onToggle} label={`${item.title || '空の項目'}を${item.done ? '戻す' : '完了にする'}`} />
       {draft === null ? (
-        <button type="button" onClick={() => setDraft(item.title)} className="flex-1 min-w-0 text-left">
-          <span className={`block text-sm break-words ${item.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+        <button
+          type="button"
+          onClick={() => setDraft(item.title)}
+          aria-label={item.title ? undefined : '空の項目'}
+          className="flex-1 min-w-0 min-h-5 text-left"
+        >
+          <span className={`block min-h-5 text-sm break-words ${item.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
             {item.title}
           </span>
         </button>
@@ -142,7 +147,7 @@ function ItemRow({
         type="button"
         onMouseDown={(e) => e.preventDefault()}
         onClick={onDelete}
-        aria-label={`${item.title}を削除`}
+        aria-label={`${item.title || '空の項目'}を削除`}
         className="flex-none text-gray-300 hover:text-red-500 p-1.5"
       >
         <X size={16} />
@@ -242,10 +247,13 @@ function AddRow({
   onSubmit,
   tone = 'plain',
   divided = false,
+  allowEmpty = false,
 }: {
   label: string;
   placeholder: string;
   onSubmit: (value: string) => void;
+  /** 空のまま確定できるか。項目の追加だけ true（空行を区切りとして置ける。枠の名前は空にできない）。 */
+  allowEmpty?: boolean;
   /** 枠そのものを足す行は、項目の追加と見分けられるよう破線にする。 */
   tone?: 'plain' | 'outlined';
   /** 上に項目が並んでいるときは、線を引いて区切る。 */
@@ -271,7 +279,7 @@ function AddRow({
 
   const submit = () => {
     const value = draft.trim();
-    if (!value) return;
+    if (!value && !allowEmpty) return;
     onSubmit(value);
     setDraft('');
   };
@@ -300,7 +308,7 @@ function AddRow({
         type="button"
         onMouseDown={(e) => e.preventDefault()}
         onClick={submit}
-        disabled={!draft.trim()}
+        disabled={!allowEmpty && !draft.trim()}
         className="flex-none text-sm font-bold text-blue-600 px-2 py-2 disabled:text-gray-300"
       >
         追加
@@ -662,6 +670,7 @@ export default function ListTab({
               divided={undoneItems.length > 0}
               label="追加"
               placeholder="追加する項目"
+              allowEmpty
               onSubmit={(title) => selected && onAddItem(selected.id, null, title)}
             />
           </div>
@@ -689,6 +698,7 @@ export default function ListTab({
                     divided={groupItems.length > 0}
                     label="追加"
                     placeholder={`${group.name}に追加`}
+                    allowEmpty
                     onSubmit={(title) => selected && onAddItem(selected.id, group.id, title)}
                   />
                 </section>
@@ -708,6 +718,7 @@ export default function ListTab({
                   divided
                   label="追加"
                   placeholder="追加する項目"
+                  allowEmpty
                   onSubmit={(title) => selected && onAddItem(selected.id, null, title)}
                 />
               </section>
