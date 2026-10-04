@@ -46,5 +46,36 @@ class NursingAlarmModule : Module() {
         context.stopService(Intent(context, NursingAlarmService::class.java))
       }
     }
+
+    // --- 夜間の起床アラーム（docs/night-wake-alarm.md） ---
+
+    /**
+     * 起床アラームを予約する（既にあれば置き換える）。
+     *
+     * @param triggerAt 鳴らす時刻(epoch ms)。目安の時刻の15分前。
+     * @param dueAt 次の授乳の目安の時刻(epoch ms)。通知の文面と、再鳴動の打ち切りに使う。
+     */
+    AsyncFunction("scheduleWakeAlarm") { triggerAt: Double, dueAt: Double ->
+      appContext.reactContext?.let { context ->
+        WakeAlarmScheduler.schedule(context, triggerAt.toLong(), dueAt.toLong())
+      }
+    }
+
+    /** 予約を取り消す。 */
+    AsyncFunction("cancelWakeAlarm") {
+      appContext.reactContext?.let { context -> WakeAlarmScheduler.cancel(context) }
+    }
+
+    /** 鳴っている起床アラームを止める（アプリを開いたとき）。残してある通知も消す。 */
+    AsyncFunction("dismissWakeRing") {
+      appContext.reactContext?.let { context -> WakeAlarmService.dismissFrom(context) }
+    }
+
+    /** 控えてある予約の鳴らす時刻(epoch ms)。予約が無ければ 0。 */
+    AsyncFunction("getScheduledWakeAlarm") {
+      appContext.reactContext?.let { context ->
+        (WakeAlarmScheduler.scheduled(context)?.triggerAt ?: 0L).toDouble()
+      } ?: 0.0
+    }
   }
 }
