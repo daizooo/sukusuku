@@ -203,9 +203,12 @@ export async function queueDeleteCareLog(familyId: string, id: string): Promise<
   await db.runAsync('DELETE FROM care_logs WHERE id = ?', id);
   if (isLocalCareLogId(id)) {
     await db.runAsync('DELETE FROM outbox WHERE log_id = ?', id);
+    // 消した記録が前回の授乳だったなら、次の目安が前へ戻る（起床アラームの予約を組み直す）。
+    requestNotificationCleanup();
     return;
   }
   await enqueue('delete', familyId, id, '');
+  requestNotificationCleanup();
 }
 
 /** まだ送れていない書き込みの数。画面に出して、送り残しに気づけるようにする。 */

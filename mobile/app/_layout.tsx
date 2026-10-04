@@ -8,6 +8,7 @@ import { SessionProvider, useSession } from '@/lib/session';
 import { useNursingAlarmWatcher } from '@/lib/nursingTimer';
 import { useNursingStateSync } from '@/lib/nursingState';
 import { useSettledNotificationCleanup } from '@/lib/notificationCleanup';
+import { useWakeAlarmSync } from '@/lib/wakeAlarm';
 import { configureNotificationChannels } from '@/lib/push';
 import { notificationTarget, OPEN_LOG_PARAM } from '@/lib/appLinks';
 import { colors } from '@/lib/theme';
@@ -81,6 +82,8 @@ function AppEffects() {
   useNotificationTapHandler();
   // 用が済んだお知らせを端末から消す。
   useSettledNotificationCleanup(session?.user.id ?? null);
+  // 夜間の起床アラームの予約を、いまの授乳の目安に合わせて組み直す（Androidのネイティブ版だけ）。
+  useWakeAlarmSync(session?.user.id ?? null);
 
   return null;
 }
