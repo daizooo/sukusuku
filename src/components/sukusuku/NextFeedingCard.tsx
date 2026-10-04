@@ -65,7 +65,7 @@ export default function NextFeedingCard({ info, babyAge, onOpen }: NextFeedingPr
     <>
       {/* 生後日数。カードの見出しとして一番大きく出し、下の次の授乳とは罫線で区切る。 */}
       {babyAge && (
-        <p className="pb-2.5 mb-2.5 border-b border-amber-200 text-base font-bold text-gray-900">{babyAge}</p>
+        <p className="pb-2.5 mb-2.5 border-b border-amber-100 text-base font-bold text-gray-900">{babyAge}</p>
       )}
 
       <div className="flex items-center justify-between gap-2">
@@ -110,7 +110,7 @@ export default function NextFeedingCard({ info, babyAge, onOpen }: NextFeedingPr
           )}
 
           {/* 前回からいまへの進み具合。時刻を読まなくても目で分かるように。 */}
-          <div className="mt-2 h-1.5 rounded-full bg-amber-100 overflow-hidden">
+          <div className="mt-2 h-1.5 rounded-full bg-[#fef6dc] overflow-hidden">
             <div
               className={`h-full rounded-full transition-[width] duration-500 ${
                 schedule.isOverdue ? 'bg-rose-500' : 'bg-amber-400'
@@ -123,7 +123,7 @@ export default function NextFeedingCard({ info, babyAge, onOpen }: NextFeedingPr
     </>
   );
 
-  const className = 'w-full text-left bg-amber-50 rounded-[20px] border border-amber-200 px-4 py-3.5';
+  const className = 'w-full text-left bg-[#fffdf5] rounded-[20px] border border-amber-100 px-4 py-3.5';
 
   if (!onOpen) return <div className={className}>{content}</div>;
 
@@ -131,7 +131,7 @@ export default function NextFeedingCard({ info, babyAge, onOpen }: NextFeedingPr
     <button
       type="button"
       onClick={onOpen}
-      className={`${className} hover:bg-amber-100/60 transition active:scale-[0.99]`}
+      className={`${className} hover:bg-amber-50 transition active:scale-[0.99]`}
     >
       {content}
     </button>

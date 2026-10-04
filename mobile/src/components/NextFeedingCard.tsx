@@ -130,11 +130,17 @@ export default function NextFeedingCard({ info, babyAge, onOpen }: NextFeedingPr
   );
 }
 
+// カードの色。amber-50/200 よりもう一段薄くして、下の記録パネルを引き立てる。
+// このカードだけで使うのでテーマには足さない。
+const CARD_SURFACE = '#fffdf5';
+const CARD_BORDER = colors.milkBadge; // amber-100
+const TRACK_SURFACE = '#fef6dc';
+
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.milkSurface,
+    backgroundColor: CARD_SURFACE,
     borderWidth: 1,
-    borderColor: colors.milkBorder,
+    borderColor: CARD_BORDER,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -144,7 +150,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     marginBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: colors.milkBorder,
+    borderBottomColor: CARD_BORDER,
   },
   ageText: { fontSize: 16, fontWeight: '700', color: colors.text },
   headerRow: {
@@ -167,7 +173,7 @@ const styles = StyleSheet.create({
   track: {
     height: 6,
     borderRadius: 999,
-    backgroundColor: colors.milkBadge,
+    backgroundColor: TRACK_SURFACE,
     overflow: 'hidden',
     marginTop: 8,
   },
