@@ -9,9 +9,19 @@
   <uses-permission android:name="android.permission.VIBRATE" />
   <!-- 画面が消えている間もサービスが数え続けられるように。 -->
   <uses-permission android:name="android.permission.WAKE_LOCK" />
-  <!-- 夜間の起床アラーム（docs/night-wake-alarm.md）。再起動で消えた予約を掛け直すために要る。
-       setAlarmClock による予約そのものには権限が要らない。 -->
+  <!-- 夜間の起床アラーム（docs/night-wake-alarm.md）。再起動で消えた予約を掛け直すために要る。 -->
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <!-- AlarmManager.setAlarmClock で起床アラームを予約するために要る。無いと SecurityException で
+       予約できない（Android 12以降。実機で確認した）。
+       - Android 13以降: USE_EXACT_ALARM。インストール時に自動で許可され、利用者の操作は要らない。
+         ストアでは目覚まし・カレンダー用途のアプリに限られるが、このアプリはストアに出さず
+         .apk を自分たちの端末に直接入れる（docs/store-release.md）ので使える。
+       - Android 12/12L: SCHEDULE_EXACT_ALARM。この版では初期状態で許可されている。
+         13以降では利用者の設定が要るので maxSdkVersion で外す。 -->
+  <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+  <uses-permission
+    android:name="android.permission.SCHEDULE_EXACT_ALARM"
+    android:maxSdkVersion="32" />
 
   <application>
     <service
