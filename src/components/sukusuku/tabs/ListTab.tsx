@@ -602,19 +602,13 @@ export default function ListTab({
   return (
     <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       {/* 一覧: Keepと同じく全部のリストをカードで並べる。2列にして1画面に4〜5つ入れる。
-          固定したものは上にまとめ、並べ替えは長押ししてそのまま動かす。 */}
+          固定したものは上にまとめる（見出しは付けず、カードのピンの色で分かる）。
+          並べ替えは長押ししてそのまま動かす。 */}
         <div className="flex-1 overflow-y-auto">
           {pinnedLists.length > 0 && (
-            <>
-              <h3 className="flex items-center gap-1 text-[11px] font-bold text-gray-400 pb-1.5">
-                <Pin size={11} fill="currentColor" />
-                固定
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 items-start gap-3 content-start">
-                {overviewCards(LISTS_PINNED, pinnedLists)}
-              </div>
-              {otherLists.length > 0 && <h3 className="text-[11px] font-bold text-gray-400 pt-4 pb-1.5">その他</h3>}
-            </>
+            <div className="grid grid-cols-2 md:grid-cols-3 items-start gap-3 content-start mb-3">
+              {overviewCards(LISTS_PINNED, pinnedLists)}
+            </div>
           )}
           <div className="grid grid-cols-2 md:grid-cols-3 items-start gap-3 content-start">
             {overviewCards(LISTS_OTHER, otherLists)}

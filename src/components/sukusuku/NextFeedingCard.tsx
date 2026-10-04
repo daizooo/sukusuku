@@ -20,6 +20,8 @@ import BabyBottleIcon from './ui/BabyBottleIcon';
 
 interface NextFeedingProps {
   info: NextFeedingInfo;
+  /** 「生後48日目（1ヶ月17日）」。空なら出さない。次の授乳と1枚のカードにまとめて出す。 */
+  babyAge?: string;
   /** タップしたときの動き。渡さなければタップできない表示になる。 */
   onOpen?: () => void;
 }
@@ -48,8 +50,11 @@ const remainingText = (schedule: FeedingSchedule): string => {
   return schedule.overdueMinutes === 0 ? 'そろそろ' : `${formatMinutesText(schedule.overdueMinutes)}すぎ`;
 };
 
-/** 育児タブの見出し用。目安の時刻・残り時間・前回からの進み具合をまとめて出す。 */
-export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
+/**
+ * 育児タブの見出し用。生後日数と、次の授乳の目安（時刻・残り時間・前回からの進み具合）を
+ * 琥珀色の1枚にまとめて出す。下の「日付ごとの記録」のパネルと色で分ける。
+ */
+export default function NextFeedingCard({ info, babyAge, onOpen }: NextFeedingProps) {
   const now = useNow();
   // 母乳は測り終えて保存するまで記録に入らない。その間も前回の授乳として数える
   // （そうしないと、飲ませ終えた直後に「◯分すぎ」と赤く出てしまう）。
@@ -58,12 +63,17 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
 
   const content = (
     <>
+      {/* 生後日数。カードの見出しとして一番大きく出し、下の次の授乳とは罫線で区切る。 */}
+      {babyAge && (
+        <p className="pb-2.5 mb-2.5 border-b border-amber-200 text-base font-bold text-gray-900">{babyAge}</p>
+      )}
+
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-bold text-amber-700 flex items-center">
           <BabyBottleIcon size={13} className="mr-1" />
           次の授乳の目安
         </span>
-        <span className="text-[11px] text-gray-400 font-medium">
+        <span className="text-[11px] text-gray-500 font-medium">
           {formatMinutesText(info.intervalMinutes)}ごと
         </span>
       </div>
@@ -82,7 +92,7 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
         <>
           <div className="mt-0.5 flex items-baseline gap-2 flex-wrap">
             <span
-              className={`text-2xl font-bold tabular-nums tracking-tight ${
+              className={`text-[28px] leading-tight font-bold tabular-nums tracking-tight ${
                 schedule.isOverdue ? 'text-rose-600' : 'text-gray-900'
               }`}
             >
@@ -100,7 +110,7 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
           )}
 
           {/* 前回からいまへの進み具合。時刻を読まなくても目で分かるように。 */}
-          <div className="mt-1.5 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+          <div className="mt-2 h-1.5 rounded-full bg-amber-100 overflow-hidden">
             <div
               className={`h-full rounded-full transition-[width] duration-500 ${
                 schedule.isOverdue ? 'bg-rose-500' : 'bg-amber-400'
@@ -113,7 +123,7 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
     </>
   );
 
-  const className = 'w-full text-left bg-white rounded-2xl shadow-sm border border-gray-100 p-3.5';
+  const className = 'w-full text-left bg-amber-50 rounded-[20px] border border-amber-200 px-4 py-3.5';
 
   if (!onOpen) return <div className={className}>{content}</div>;
 
@@ -121,7 +131,7 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
     <button
       type="button"
       onClick={onOpen}
-      className={`${className} hover:bg-amber-50 transition active:scale-[0.99]`}
+      className={`${className} hover:bg-amber-100/60 transition active:scale-[0.99]`}
     >
       {content}
     </button>
