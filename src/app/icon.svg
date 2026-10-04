@@ -1,7 +1,11 @@
-<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108"><rect width="108" height="108" fill="#ffffff"/><g transform="translate(0 0) scale(1)">
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108"><rect width="108" height="108" fill="#ffffff"/>
   <g fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M24 44 L39 33" stroke="#3b82f6"/>
     <path d="M39 33 L54 22 L69 33" stroke="#10b981"/>
     <path d="M69 33 L84 44" stroke="#ec4899"/>
-    <path d="M37 54 V71 Q37 86 52 86 Q64 86 72 74" stroke="#33313d"/>
-  </g></g></svg>
+  </g>
+  <g fill="none" stroke="#33313d" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M55 35 L53 46"/>
+    <rect x="40" y="54" width="28" height="35" rx="6"/>
+    <path d="M40 71.500 H68"/>
+  </g></svg>
