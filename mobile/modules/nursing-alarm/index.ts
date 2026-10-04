@@ -24,6 +24,10 @@ export interface NursingAlarmTarget {
 interface NursingAlarmNativeModule {
   start(phase: string, baselineAt: number, phaseMinutes: number): Promise<void>;
   stop(): Promise<void>;
+  scheduleWakeAlarm(triggerAt: number, dueAt: number): Promise<void>;
+  cancelWakeAlarm(): Promise<void>;
+  dismissWakeRing(): Promise<void>;
+  getScheduledWakeAlarm(): Promise<number>;
 }
 
 const nativeModule = requireOptionalNativeModule<NursingAlarmNativeModule>('NursingAlarm');
@@ -37,4 +41,31 @@ export async function startNursingAlarm(target: NursingAlarmTarget): Promise<voi
 
 export async function stopNursingAlarm(): Promise<void> {
   await nativeModule?.stop();
+}
+
+// --- 夜間の起床アラーム（docs/night-wake-alarm.md） ---
+//
+// 次の授乳の目安の少し前に、端末の目覚まし（AlarmManager）で起床用の音を鳴らす。
+// 予約は端末に預けるだけで、いつ・どんなときに予約するかはアプリ側（mobile/src/lib/wakeAlarm.ts）が決める。
+// Expo Go などネイティブが無い環境では、どれも何もしない。
+
+/** 起床アラームを予約する（既にあれば置き換える）。時刻はどちらも epoch ms。 */
+export async function scheduleWakeAlarm(triggerAt: number, dueAt: number): Promise<void> {
+  await nativeModule?.scheduleWakeAlarm(triggerAt, dueAt);
+}
+
+/** 起床アラームの予約を取り消す。 */
+export async function cancelWakeAlarm(): Promise<void> {
+  await nativeModule?.cancelWakeAlarm();
+}
+
+/** 鳴っている起床アラームを止める。止められなかった自動停止のあとに残る通知も消える。 */
+export async function dismissWakeRing(): Promise<void> {
+  await nativeModule?.dismissWakeRing();
+}
+
+/** いま予約している鳴らす時刻(epoch ms)。予約が無い・ネイティブが無いときは null。 */
+export async function getScheduledWakeAlarm(): Promise<number | null> {
+  const triggerAt = (await nativeModule?.getScheduledWakeAlarm()) ?? 0;
+  return triggerAt > 0 ? triggerAt : null;
 }

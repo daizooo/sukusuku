@@ -9,6 +9,9 @@
   <uses-permission android:name="android.permission.VIBRATE" />
   <!-- 画面が消えている間もサービスが数え続けられるように。 -->
   <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <!-- 夜間の起床アラーム（docs/night-wake-alarm.md）。再起動で消えた予約を掛け直すために要る。
+       setAlarmClock による予約そのものには権限が要らない。 -->
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
   <application>
     <service
@@ -22,6 +25,32 @@
         android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
         android:value="授乳の経過時間を数え、区切りごとに音と振動で知らせる" />
     </service>
+
+    <!-- 夜間の起床アラーム。予約の発火で WakeAlarmReceiver が WakeAlarmService を始める。 -->
+    <service
+      android:name="com.sukusuku.nursingalarm.WakeAlarmService"
+      android:enabled="true"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="夜の授乳の少し前に、起きるための音を鳴らす" />
+    </service>
+
+    <receiver
+      android:name="com.sukusuku.nursingalarm.WakeAlarmReceiver"
+      android:enabled="true"
+      android:exported="false" />
+
+    <receiver
+      android:name="com.sukusuku.nursingalarm.WakeAlarmBootReceiver"
+      android:enabled="true"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+      </intent-filter>
+    </receiver>
   </application>
 
 </manifest>
