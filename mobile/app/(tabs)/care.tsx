@@ -707,15 +707,11 @@ export default function CareScreen() {
     <SafeAreaView style={styles.screen} {...swipeHandlers}>
       {!bodyOpen && (
         <>
-      {/* 見出し（子の月齢・次の授乳）は固定し、スクロールは中身だけにする。 */}
+      {/* グループ1: 生後日数と次の授乳の目安を琥珀色の1枚に。固定し、スクロールは下のパネルの中だけにする。 */}
       <View style={styles.careHeader}>
-        {babyAge !== '' && (
-          <View style={styles.ageRow}>
-            <Text style={styles.ageText}>{babyAge}</Text>
-          </View>
-        )}
         <NextFeedingCard
           info={nextFeeding}
+          babyAge={babyAge}
           onOpen={() => setEditing({ log: null })}
         />
       </View>
@@ -737,6 +733,8 @@ export default function CareScreen() {
         />
       ) : (
       <>
+      {/* グループ2: 日付・記録ボタン・その日の記録を、スレート色の1枚のパネルにまとめる。 */}
+      <View style={styles.dayPanel}>
       {/* 日付送り。タブを開いた時点では常に今日なので、「今日」は今日以外を見ているときだけ出す。 */}
       <View style={styles.header}>
         <Pressable
@@ -935,6 +933,7 @@ export default function CareScreen() {
           </ScrollView>
         </>
       )}
+      </View>
       </>
       )}
 
@@ -1029,27 +1028,39 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   centeredText: { fontSize: 13, color: colors.textMuted, textAlign: 'center' },
 
-  careHeader: { paddingHorizontal: 12, paddingTop: 12, gap: 8 },
-  ageRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingHorizontal: 4 },
-  ageText: { fontSize: 14, fontWeight: '600', color: colors.textSubtle },
+  // グループ1（生後日数＋次の授乳）。グループ2のパネルと同じ左右の余白・角丸にそろえる。
+  careHeader: { paddingHorizontal: 12, paddingTop: 12 },
 
+  // グループ2（日付以下）。画面の地より少し濃いスレート色の1枚にして、上の琥珀色の
+  // カードと見分ける。中の白いボタン・カードが浮いて見える。
+  dayPanel: {
+    flex: 1,
+    marginHorizontal: 12,
+    marginVertical: 12,
+    backgroundColor: colors.listSurface,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  // 日付送り。パネルの見出しとして、枠は付けず矢印だけを白い丸にする。
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginHorizontal: 12,
-    marginTop: 8,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+  },
+  arrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.surface,
   },
-  arrow: { padding: 8 },
   arrowDisabled: { opacity: 0.3 },
   dateGroup: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   dateButton: { paddingVertical: 4 },
-  date: { fontSize: 15, fontWeight: '700', color: colors.text, flexShrink: 1, fontVariant: ['tabular-nums'] },
+  date: { fontSize: 16, fontWeight: '700', color: colors.text, flexShrink: 1, fontVariant: ['tabular-nums'] },
   todayButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1061,7 +1072,7 @@ const styles = StyleSheet.create({
   },
   todayText: { fontSize: 12, fontWeight: '700', color: colors.navActiveText },
 
-  fixed: { padding: 12, gap: 8 },
+  fixed: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8, gap: 8 },
   nursingBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1123,9 +1134,15 @@ const styles = StyleSheet.create({
   unsent: { fontSize: 11, color: colors.milkText, fontWeight: '500' },
   error: { fontSize: 11, color: colors.danger },
 
-  list: { paddingHorizontal: 12, paddingBottom: 24, gap: 8 },
-  listHeading: { fontSize: 13, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  list: { paddingBottom: 16, gap: 4 },
+  listHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+    paddingHorizontal: 16,
+  },
   listLoading: { marginTop: 24 },
   empty: { fontSize: 13, color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
-  phaseNote: { fontSize: 11, color: colors.textFaint, lineHeight: 17, marginTop: 12 },
+  phaseNote: { fontSize: 11, color: colors.textFaint, lineHeight: 17, marginTop: 12, paddingHorizontal: 16 },
 });

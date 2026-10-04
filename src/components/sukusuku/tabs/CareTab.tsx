@@ -235,12 +235,13 @@ export default function CareTab({
   };
 
   return (
-    // PC幅では左の列に 見出し・日付送りと記録ボタン、右の列に中身を置く。
-    // スマホ幅では同じ順に縦へ並ぶ。「からだ」を開いている間は、この2列の代わりにそれを出す。
-    <div className="p-4 h-full flex flex-col gap-3 lg:grid lg:grid-cols-[20rem_1fr] lg:gap-6">
+    // 上から グループ1（生後日数＋次の授乳の琥珀色のカード）、グループ2（日付・記録ボタン・
+    // その日の記録をまとめたスレート色のパネル）の順に縦へ並べる。PC幅では中央の1列にする。
+    // 「からだ」を開いている間は、この2つの代わりにそれを出す。
+    <div className="p-4 h-full flex flex-col gap-3 lg:max-w-2xl lg:mx-auto lg:w-full">
       {bodyOpen && (
         // 「からだ」は自分の余白を持つので、こちらの余白と重ならないよう打ち消す。
-        <div className="flex-1 min-h-0 -m-4 lg:col-span-2 lg:m-0">
+        <div className="flex-1 min-h-0 -m-4">
           <BodyPanel
             temperatureLogs={recentTemperatureLogs}
             growthData={growthData}
@@ -257,34 +258,35 @@ export default function CareTab({
       )}
       {!bodyOpen && (
       <>
-      <div className="shrink-0 space-y-3 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
-        {/* 見出し（子の月齢・次の授乳）は固定し、スクロールは中身だけにする。 */}
-        <div className="space-y-2">
-          {babyAge && (
-            <p className="px-1 text-sm font-semibold text-gray-700">{babyAge}</p>
-          )}
-          <NextFeedingCard
-            info={nextFeeding}
-            onOpen={() => setLogModal({ type: 'milk', log: null })}
-          />
-        </div>
+      {/* グループ1: 生後日数と次の授乳の目安を琥珀色の1枚に。固定し、スクロールは下のパネルの中だけにする。 */}
+      <div className="shrink-0">
+        <NextFeedingCard
+          info={nextFeeding}
+          babyAge={babyAge}
+          onOpen={() => setLogModal({ type: 'milk', log: null })}
+        />
+      </div>
 
+      {/* グループ2: 日付・記録ボタン・その日の記録を、スレート色の1枚のパネルにまとめる。 */}
+      <div className="flex-1 min-h-0 flex flex-col bg-slate-100 rounded-[20px] overflow-hidden">
+      <div className="shrink-0 space-y-2 px-3 pt-2.5 pb-2">
         <>
             {/* 日付の送り: 1日区切りで過去の記録を遡る。タブを開いた時点では常に今日なので、
-                「今日」の表示は今日以外を見ているときに戻るボタンとしてだけ出す。 */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-1 flex items-center justify-between gap-1">
+                「今日」の表示は今日以外を見ているときに戻るボタンとしてだけ出す。
+                パネルの見出しとして枠は付けず、矢印だけを白い丸にする。 */}
+            <div className="flex items-center justify-between gap-1">
               <button
                 onClick={() => onChangeLogDate(addDays(logDate, -1))}
                 aria-label="前の日"
-                className="flex-none w-9 h-9 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 transition active:scale-95"
+                className="flex-none w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-500 hover:bg-gray-50 transition active:scale-95"
               >
                 <ChevronLeft size={20} />
               </button>
 
               <div className="flex items-center gap-1 min-w-0">
-                <span className="font-bold text-gray-800 text-[15px] truncate">{dateLabel}</span>
+                <span className="font-bold text-gray-800 text-base truncate">{dateLabel}</span>
                 {/* ネイティブの日付ピッカーで任意の日へジャンプできるようにする */}
-                <span className="relative flex-none w-8 h-8 inline-flex items-center justify-center rounded-full text-gray-400 hover:text-blue-500 hover:bg-gray-100 transition">
+                <span className="relative flex-none w-8 h-8 inline-flex items-center justify-center rounded-full text-gray-400 hover:text-blue-500 hover:bg-white transition">
                   <CalendarDays size={16} />
                   <input
                     type="date"
@@ -314,7 +316,7 @@ export default function CareTab({
                 onClick={() => onChangeLogDate(addDays(logDate, 1))}
                 disabled={isToday}
                 aria-label="次の日"
-                className="flex-none w-9 h-9 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 transition active:scale-95 disabled:opacity-30 disabled:hover:bg-transparent"
+                className="flex-none w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-500 hover:bg-gray-50 transition active:scale-95 disabled:opacity-30 disabled:hover:bg-white"
               >
                 <ChevronRight size={20} />
               </button>
@@ -427,16 +429,14 @@ export default function CareTab({
         </>
       </div>
 
-      <div className="flex-1 min-h-0 flex flex-col">
-        {(
-          <div className="flex-1 min-h-0 overflow-y-auto lg:max-w-3xl">
-              <h3 className="text-sm font-bold text-gray-600 mb-2 px-1">{dateLabel}の記録 {visibleLogs.length}件</h3>
-              {isLoadingLogs && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
-              {!isLoadingLogs && visibleLogs.length === 0 && (
-                <p className="text-sm text-gray-400 text-center py-8">この日の記録はありません</p>
-              )}
-              {/* 一覧の地は画面より少しだけ色を変え、白いカードにメリハリを付ける。 */}
-              <div className={`bg-slate-100 rounded-2xl p-3 ${visibleLogs.length === 0 ? 'hidden' : ''}`}>
+      <div className="flex-1 min-h-0 overflow-y-auto pb-3">
+        <h3 className="text-xs font-bold text-gray-500 mb-1.5 px-4">{dateLabel}の記録 {visibleLogs.length}件</h3>
+        {isLoadingLogs && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
+        {!isLoadingLogs && visibleLogs.length === 0 && (
+          <p className="text-sm text-gray-400 text-center py-8">この日の記録はありません</p>
+        )}
+        {/* 地の色は置かない。上のパネル（slate-100）の上にそのまま載せる。 */}
+        <div className={`px-3 ${visibleLogs.length === 0 ? 'hidden' : ''}`}>
               <div className="relative border-l-2 border-gray-200 ml-4 space-y-3.5">
                 {visibleLogs.map((log) => {
                   const badges = getLogBadges(log);
@@ -490,9 +490,8 @@ export default function CareTab({
                   );
                 })}
               </div>
-              </div>
-            </div>
-        )}
+        </div>
+      </div>
       </div>
       </>
       )}

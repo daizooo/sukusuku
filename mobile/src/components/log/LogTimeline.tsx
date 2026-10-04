@@ -129,8 +129,8 @@ function Badges({ log }: { log: CareLog }) {
 }
 
 const styles = StyleSheet.create({
-  // 一覧の地は画面より少しだけ色を変え、白いカードにメリハリを付ける。
-  list: { gap: 14, padding: PANEL_PADDING, backgroundColor: colors.listSurface, borderRadius: 16 },
+  // 地の色は置かない。育児タブの「日付ごとのパネル」（listSurface）の上にそのまま載せる。
+  list: { gap: 14, padding: PANEL_PADDING },
   rail: {
     position: 'absolute',
     top: PANEL_PADDING,

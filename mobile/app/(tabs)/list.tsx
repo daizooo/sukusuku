@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronDown, ChevronRight, Pin, Plus } from 'lucide-react-native';
+import { ChevronDown, ChevronRight, Plus } from 'lucide-react-native';
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
@@ -644,7 +644,8 @@ export default function ListScreen() {
   );
 
   /* 一覧: Keepと同じく全部のリストをカードで並べる。2列にして1画面に4〜5つ入れる。
-     固定したものは上にまとめ、並べ替えは長押ししてそのまま動かす。 */
+     固定したものは上にまとめる（見出しは付けず、カードのピンの色で分かる）。
+     並べ替えは長押ししてそのまま動かす。 */
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView
@@ -653,20 +654,7 @@ export default function ListScreen() {
         // 持ち上げているあいだは指で並べ替えるので、スクロールを止める。
         scrollEnabled={!drag.isActive}
       >
-        {pinnedLists.length > 0 && (
-          <>
-            <View style={styles.sectionHeading}>
-              <Pin size={11} color={colors.textFaint} fill={colors.textFaint} />
-              <Text style={styles.sectionHeadingText}>固定</Text>
-            </View>
-            {overviewCards(LISTS_PINNED, pinnedLists)}
-            {otherLists.length > 0 && (
-              <View style={[styles.sectionHeading, styles.sectionHeadingSpaced]}>
-                <Text style={styles.sectionHeadingText}>その他</Text>
-              </View>
-            )}
-          </>
-        )}
+        {pinnedLists.length > 0 && overviewCards(LISTS_PINNED, pinnedLists)}
         {overviewCards(LISTS_OTHER, otherLists)}
         {/* 長押しで動かせることは見ただけでは分からないので、小さく添える。 */}
         {sortedLists.length > 1 && <Text style={styles.holdHint}>長押しで並べ替え</Text>}
@@ -699,9 +687,6 @@ const styles = StyleSheet.create({
   seedOwnText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
 
   overviewContent: { paddingBottom: 24 },
-  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingBottom: 6 },
-  sectionHeadingSpaced: { paddingTop: 16 },
-  sectionHeadingText: { fontSize: 11, fontWeight: '700', color: colors.textFaint },
   grid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start' },
   gridCell: { width: '50%', padding: 6 },
   addList: {

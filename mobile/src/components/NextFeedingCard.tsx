@@ -18,6 +18,8 @@ import BabyBottleIcon from '@/components/ui/BabyBottleIcon';
 
 interface NextFeedingProps {
   info: NextFeedingInfo;
+  /** 「生後48日目（1ヶ月17日）」。空なら出さない。次の授乳と1枚のカードにまとめて出す。 */
+  babyAge?: string;
   /** タップしたときの動き。渡さなければタップできない表示になる。 */
   onOpen?: () => void;
 }
@@ -50,8 +52,11 @@ const remainingText = (schedule: FeedingSchedule): string => {
     : `${formatMinutesText(schedule.overdueMinutes)}すぎ`;
 };
 
-/** 育児タブの見出し用。目安の時刻・残り時間・前回からの進み具合をまとめて出す。 */
-export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
+/**
+ * 育児タブの見出し用。生後日数と、次の授乳の目安（時刻・残り時間・前回からの進み具合）を
+ * 琥珀色の1枚にまとめて出す。下の「日付ごとの記録」のパネルと色で分ける。
+ */
+export default function NextFeedingCard({ info, babyAge, onOpen }: NextFeedingProps) {
   const now = useNow();
   // 母乳は測り終えて保存するまで記録に入らない。その間も前回の授乳として数える
   // （そうしないと、飲ませ終えた直後に「◯分すぎ」と赤く出てしまう）。
@@ -60,6 +65,12 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
 
   const content = (
     <>
+      {!!babyAge && (
+        <View style={styles.ageRow}>
+          <Text style={styles.ageText}>{babyAge}</Text>
+        </View>
+      )}
+
       <View style={styles.headerRow}>
         <View style={styles.headerLabel}>
           <BabyBottleIcon size={13} color={colors.milkText} />
@@ -119,14 +130,29 @@ export default function NextFeedingCard({ info, onOpen }: NextFeedingProps) {
   );
 }
 
+// カードの色。amber-50/200 よりもう一段薄くして、下の記録パネルを引き立てる。
+// このカードだけで使うのでテーマには足さない。
+const CARD_SURFACE = '#fffdf5';
+const CARD_BORDER = colors.milkBadge; // amber-100
+const TRACK_SURFACE = '#fef6dc';
+
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: CARD_SURFACE,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    padding: 14,
+    borderColor: CARD_BORDER,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
+  // 生後日数。カードの見出しとして一番大きく出し、下の次の授乳とは罫線で区切る。
+  ageRow: {
+    paddingBottom: 10,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: CARD_BORDER,
+  },
+  ageText: { fontSize: 16, fontWeight: '700', color: colors.text },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -135,21 +161,21 @@ const styles = StyleSheet.create({
   },
   headerLabel: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   headerText: { fontSize: 12, fontWeight: '700', color: colors.milkText },
-  interval: { fontSize: 11, fontWeight: '500', color: colors.textFaint, fontVariant: ['tabular-nums'] },
+  interval: { fontSize: 11, fontWeight: '500', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   placeholder: { fontSize: 13, color: colors.textFaint, marginTop: 6, fontWeight: '500' },
   empty: { fontSize: 13, color: colors.textMuted, marginTop: 6, fontWeight: '500' },
   nursing: { fontSize: 20, fontWeight: '700', color: colors.milkText, marginTop: 2 },
   pending: { fontSize: 11, fontWeight: '500', color: colors.milkText, marginTop: 4 },
   dueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginTop: 2 },
-  dueTime: { fontSize: 24, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  dueTime: { fontSize: 28, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   remaining: { fontSize: 13, fontWeight: '700', color: colors.milk, fontVariant: ['tabular-nums'] },
   overdueText: { color: colors.pumping },
   track: {
     height: 6,
     borderRadius: 999,
-    backgroundColor: colors.neutralSurface,
+    backgroundColor: TRACK_SURFACE,
     overflow: 'hidden',
-    marginTop: 6,
+    marginTop: 8,
   },
   trackFill: { height: '100%', borderRadius: 999, backgroundColor: colors.milkProgress },
   trackFillOverdue: { backgroundColor: colors.pumping },
