@@ -59,29 +59,51 @@ export interface WakeAlarmInput {
   now: number;
 }
 
+/** 予約する／しない、の結果。しない理由は設定画面に出して、鳴らない理由を自分で確かめられるようにする。 */
+export type WakeAlarmEvaluation =
+  | { kind: 'off' }
+  | { kind: 'scheduled'; triggerAt: number; dueAt: number }
+  | { kind: 'skipped'; reason: 'nursing' | 'no-record'; dueAt: null }
+  | { kind: 'skipped'; reason: 'outside-quiet' | 'too-late'; dueAt: number };
+
 /**
- * 予約するべき起床アラーム。予約しないときは null（すでにある予約は取り消す）。
+ * 予約するべき起床アラームを判断する。予約しないときは理由を添える（すでにある予約は取り消す）。
  *
  * - 目安の時刻（dueAt）がおやすみ時間のなかにあるときだけ。鳴らす時刻が時間の外へはみ出ても鳴らす。
  * - 授乳中（母乳を計測中）は予約しない。記録待ちは止めた時刻から数える（resolveLastFeeding）。
  * - 記録が1件もなければ目安が出ないので予約しない。
  * - 鳴らす時刻がすでに過ぎているときは、いきなり鳴らさない。目安の時刻の通知が拾う。
  */
-export const planWakeAlarm = ({
+export const evaluateWakeAlarm = ({
   enabled,
   quiet,
   lastFeeding,
   intervalMinutes,
   now,
-}: WakeAlarmInput): WakeAlarmPlan | null => {
-  if (!enabled || lastFeeding.isNursing) return null;
+}: WakeAlarmInput): WakeAlarmEvaluation => {
+  if (!enabled) return { kind: 'off' };
+  if (lastFeeding.isNursing) return { kind: 'skipped', reason: 'nursing', dueAt: null };
   const schedule = nextFeedingSchedule(lastFeeding.lastFedAt, intervalMinutes, now);
-  if (!schedule) return null;
+  if (!schedule) return { kind: 'skipped', reason: 'no-record', dueAt: null };
 
   const dueAt = schedule.dueAt.getTime();
-  if (!isWithinQuietHours(dueAt, quiet)) return null;
+  if (!isWithinQuietHours(dueAt, quiet)) return { kind: 'skipped', reason: 'outside-quiet', dueAt };
 
   const triggerAt = dueAt - WAKE_LEAD_MINUTES * 60_000;
-  if (triggerAt <= now) return null;
-  return { triggerAt, dueAt };
+  if (triggerAt <= now) return { kind: 'skipped', reason: 'too-late', dueAt };
+  return { kind: 'scheduled', triggerAt, dueAt };
+};
+
+/** 予約するべき起床アラーム。予約しないときは null。 */
+export const planWakeAlarm = (input: WakeAlarmInput): WakeAlarmPlan | null => {
+  const result = evaluateWakeAlarm(input);
+  return result.kind === 'scheduled'
+    ? { triggerAt: result.triggerAt, dueAt: result.dueAt }
+    : null;
+};
+
+/** 日本時間の「10/5 3:15」。設定画面に予約の時刻を出すときに使う。 */
+export const formatDateTimeJst = (at: number): string => {
+  const shifted = new Date(at + JST_OFFSET_MS);
+  return `${shifted.getUTCMonth() + 1}/${shifted.getUTCDate()} ${shifted.getUTCHours()}:${String(shifted.getUTCMinutes()).padStart(2, '0')}`;
 };
