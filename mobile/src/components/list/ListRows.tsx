@@ -74,14 +74,19 @@ export function ItemRow({
 
   return (
     <View style={[styles.itemRow, gripProps && styles.itemRowWithGrip, divided && styles.divided]}>
-      {gripProps && <Grip gripProps={gripProps} label={`${item.title}を並べ替え`} />}
+      {gripProps && <Grip gripProps={gripProps} label={`${item.title || '空の項目'}を並べ替え`} />}
       <ItemCheck
         done={item.done}
         onToggle={onToggle}
-        label={`${item.title}を${item.done ? '戻す' : '完了にする'}`}
+        label={`${item.title || '空の項目'}を${item.done ? '戻す' : '完了にする'}`}
       />
       {draft === null ? (
-        <Pressable accessibilityRole="button" onPress={() => setDraft(item.title)} style={styles.flex}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={item.title ? undefined : '空の項目'}
+          onPress={() => setDraft(item.title)}
+          style={[styles.flex, styles.itemTitleBox]}
+        >
           <Text style={[styles.itemTitle, item.done && styles.itemTitleDone]}>{item.title}</Text>
         </Pressable>
       ) : (
@@ -100,7 +105,7 @@ export function ItemRow({
           いちいち書き換えに入るより手数が少ない。 */}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${item.title}を削除`}
+        accessibilityLabel={`${item.title || '空の項目'}を削除`}
         onPress={onDelete}
         hitSlop={6}
         style={styles.iconButton}
@@ -183,10 +188,13 @@ export function AddRow({
   onSubmit,
   tone = 'plain',
   divided = false,
+  allowEmpty = false,
 }: {
   label: string;
   placeholder: string;
   onSubmit: (value: string) => void;
+  /** 空のまま確定できるか。項目の追加だけ true（空行を区切りとして置ける。枠の名前は空にできない）。 */
+  allowEmpty?: boolean;
   /** 枠そのものを足す行は、項目の追加と見分けられるよう破線にする。 */
   tone?: 'plain' | 'outlined';
   /** 上に項目が並んでいるときは、線を引いて区切る。 */
@@ -212,7 +220,7 @@ export function AddRow({
 
   const submit = () => {
     const value = draft.trim();
-    if (!value) return;
+    if (!value && !allowEmpty) return;
     onSubmit(value);
     setDraft('');
   };
@@ -236,11 +244,16 @@ export function AddRow({
       />
       <Pressable
         accessibilityRole="button"
-        disabled={draft.trim() === ''}
+        disabled={!allowEmpty && draft.trim() === ''}
         onPress={submit}
         style={styles.addSubmit}
       >
-        <Text style={[styles.addSubmitText, draft.trim() === '' && styles.addSubmitDisabled]}>
+        <Text
+          style={[
+            styles.addSubmitText,
+            !allowEmpty && draft.trim() === '' && styles.addSubmitDisabled,
+          ]}
+        >
           追加
         </Text>
       </Pressable>
@@ -272,6 +285,8 @@ const styles = StyleSheet.create({
   },
   itemRowWithGrip: { paddingLeft: 0 },
   grip: { width: 32, alignSelf: 'stretch', marginVertical: -10, alignItems: 'center', justifyContent: 'center' },
+  // 空の項目でも押せる高さを残す（文字が無いと行が潰れて直せなくなる）。
+  itemTitleBox: { minHeight: 20, justifyContent: 'center' },
   itemTitle: { fontSize: 14, color: colors.textSubtle },
   itemTitleDone: { color: colors.textFaint, textDecorationLine: 'line-through' },
   iconButton: { padding: 6 },

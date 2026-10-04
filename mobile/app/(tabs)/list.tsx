@@ -540,6 +540,7 @@ export default function ListScreen() {
               divided={undoneItems.length > 0}
               label="追加"
               placeholder="追加する項目"
+              allowEmpty
               onSubmit={(title) => void addItem(selected.id, null, title)}
             />
           </View>
@@ -571,6 +572,7 @@ export default function ListScreen() {
                     divided={groupItems.length > 0}
                     label="追加"
                     placeholder={`${group.name}に追加`}
+                    allowEmpty
                     onSubmit={(title) => void addItem(selected.id, group.id, title)}
                   />
                 </Animated.View>
@@ -586,6 +588,7 @@ export default function ListScreen() {
                   divided
                   label="追加"
                   placeholder="追加する項目"
+                  allowEmpty
                   onSubmit={(title) => void addItem(selected.id, null, title)}
                 />
               </View>
