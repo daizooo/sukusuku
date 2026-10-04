@@ -15,6 +15,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.2';
 import { DeliveryContext, type DeliveryTarget } from '../_shared/deliver.ts';
+import { isWithinQuietHours } from '../_shared/quietHours.ts';
 
 // 取りこぼしを拾うため、目安の時刻を過ぎたものも一定時間ぶんは対象にする。
 // 送信済み記録(feeding_reminder_deliveries)があるものは除外されるので二重には飛ばない。
@@ -36,6 +37,9 @@ interface ScheduleRow {
 
 interface SubscriptionRow extends DeliveryTarget {
   family_id: string;
+  // この端末で「次の授乳」を止めるおやすみ時間（日本時間0:00からの分）。null = 止めない。
+  feeding_quiet_start: number | null;
+  feeding_quiet_end: number | null;
 }
 
 interface ActiveNursingRow {
@@ -114,7 +118,7 @@ Deno.serve(async (request) => {
   // ここで絞っているので送ろうとして失敗することはない（届かないだけ）。
   const { data: subscriptions, error: subscriptionError } = await supabase
     .from('push_subscriptions')
-    .select('id, kind, family_id, endpoint')
+    .select('id, kind, family_id, endpoint, feeding_quiet_start, feeding_quiet_end')
     .eq('kind', 'fcm')
     .in('family_id', familyIds)
     .returns<SubscriptionRow[]>();
@@ -141,6 +145,21 @@ Deno.serve(async (request) => {
   for (const row of targets) {
     // 「次はいつだっけ」は夫婦のどちらにも起きるので、家族の全端末へ送る。
     for (const subscription of subscriptionsByFamily.get(row.family_id) ?? []) {
+      // 端末ごとのおやすみ時間に目安の時刻が入っていれば、その端末には送らない
+      // （夜に授乳しない側の端末を起こさないため。docs/night-wake-alarm.md §6）。
+      // 記録は残さない：目安の時刻は変わらないので、次の実行でも同じ判断になるだけで
+      // 二重に送る心配がなく、止めた端末のぶんの行を増やす意味もない。
+      if (
+        isWithinQuietHours(
+          new Date(row.due_at).getTime(),
+          subscription.feeding_quiet_start,
+          subscription.feeding_quiet_end,
+        )
+      ) {
+        skipped++;
+        continue;
+      }
+
       // 先に記録を作って送信権を取る。(care_log_id, subscription_id, scheduled_for) の
       // 一意制約により、実行が重なっても送るのは片方だけになる。
       const { data: claim, error: claimError } = await supabase

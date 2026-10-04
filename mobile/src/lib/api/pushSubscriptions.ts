@@ -75,3 +75,23 @@ export async function findPushSubscriptionId(
   if (error) throw error;
   return data?.id ?? null;
 }
+
+/**
+ * この端末で「次の授乳」の通知を止めるおやすみ時間を、宛先の行に写す（サーバーが見て送らない）。
+ * null を渡すと止めない。時刻は日本時間の0:00からの分（supabase/migrations/0052）。
+ * 宛先がまだ無い（通知をオンにしていない）ときは何も更新されない。
+ */
+export async function saveFeedingQuietHours(
+  supabase: SupabaseDb,
+  token: string,
+  quiet: { startMinutes: number; endMinutes: number } | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('push_subscriptions')
+    .update({
+      feeding_quiet_start: quiet?.startMinutes ?? null,
+      feeding_quiet_end: quiet?.endMinutes ?? null,
+    })
+    .eq('endpoint', toPushEndpoint(token));
+  if (error) throw error;
+}

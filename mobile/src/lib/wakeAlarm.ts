@@ -18,6 +18,8 @@ import { localPendingNursing } from '@/lib/nursingTimer';
 import { onNotificationCleanupRequest } from '@/lib/notificationCleanupTrigger';
 import { planWakeAlarm } from '@/lib/wakeAlarmPlan';
 import { loadWakeAlarmSettings, onWakeAlarmSettingsChange } from '@/lib/wakeAlarmSettings';
+import { getPushTokenIfAllowed } from '@/lib/push';
+import { saveFeedingQuietHours } from '@/lib/api/pushSubscriptions';
 
 // 夜間の起床アラームの予約を、いまのデータに合わせて組み直す（docs/night-wake-alarm.md §3・§4）。
 //
@@ -112,6 +114,20 @@ export async function syncWakeAlarm(userId: string): Promise<void> {
 }
 
 /**
+ * 「おやすみ時間は次の授乳の通知を止める」を、この端末の宛先の行に写す。
+ *
+ * 止めるのはサーバー（send-feeding-reminders）なので、設定を変えたときだけでなく、
+ * アプリを開くたびに合わせ直す（通知を入れ直して行が作り直されると、列が空に戻るため）。
+ * 通知をオンにしていない端末には宛先がなく、何も起きない。
+ */
+export async function syncFeedingQuietHours(): Promise<void> {
+  const settings = await loadWakeAlarmSettings();
+  const token = await getPushTokenIfAllowed();
+  if (!token) return;
+  await saveFeedingQuietHours(supabase, token, settings.muteFeedingNotifications ? settings.quiet : null);
+}
+
+/**
  * 起床アラームの予約をアプリ全体で1つだけ見守る。ネイティブが無い環境では何もしない。
  *
  * 前面に戻ったときは、鳴っている起床アラームも止める（アプリを開く操作で止まる仕様）。
@@ -132,6 +148,10 @@ export function useWakeAlarmSync(userId: string | null): void {
       try {
         do {
           again = false;
+          // 通知を止める設定の反映が圏外で失敗しても、起床アラームの予約は組み直す。
+          await syncFeedingQuietHours().catch((err: unknown) =>
+            console.error('Failed to sync feeding quiet hours:', err),
+          );
           await syncWakeAlarm(userId);
         } while (again);
       } catch (err) {
