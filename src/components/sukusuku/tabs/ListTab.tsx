@@ -117,7 +117,7 @@ function ItemRow({
       <ItemCheck done={item.done} onToggle={onToggle} label={`${item.title}を${item.done ? '戻す' : '完了にする'}`} />
       {draft === null ? (
         <button type="button" onClick={() => setDraft(item.title)} className="flex-1 min-w-0 text-left">
-          <span className={`block text-sm break-words ${item.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+          <span className={`block min-h-5 text-sm break-words ${item.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
             {item.title}
           </span>
         </button>
@@ -242,10 +242,13 @@ function AddRow({
   onSubmit,
   tone = 'plain',
   divided = false,
+  allowEmpty = false,
 }: {
   label: string;
-  placeholder: string;
+  placeholder?: string;
   onSubmit: (value: string) => void;
+  /** 空のままでも追加できるようにする（項目の追加用。空行を挟んで見出しのように使える）。 */
+  allowEmpty?: boolean;
   /** 枠そのものを足す行は、項目の追加と見分けられるよう破線にする。 */
   tone?: 'plain' | 'outlined';
   /** 上に項目が並んでいるときは、線を引いて区切る。 */
@@ -271,7 +274,7 @@ function AddRow({
 
   const submit = () => {
     const value = draft.trim();
-    if (!value) return;
+    if (!value && !allowEmpty) return;
     onSubmit(value);
     setDraft('');
   };
@@ -300,7 +303,7 @@ function AddRow({
         type="button"
         onMouseDown={(e) => e.preventDefault()}
         onClick={submit}
-        disabled={!draft.trim()}
+        disabled={!allowEmpty && !draft.trim()}
         className="flex-none text-sm font-bold text-blue-600 px-2 py-2 disabled:text-gray-300"
       >
         追加
@@ -308,9 +311,6 @@ function AddRow({
     </div>
   );
 }
-
-/** 一覧のカードに出す行数。多すぎるとカードが伸びて1画面に収まらない。 */
-const OVERVIEW_ROWS = 6;
 
 /** 長押しで動かせる枠（セクション）。動かせるのは同じ枠の中だけ。 */
 const LISTS_PINNED = 'lists:pinned';
@@ -367,9 +367,6 @@ function ListOverviewCard({
     }
   }
 
-  const shown = rows.slice(0, OVERVIEW_ROWS);
-  const rest = rows.length - shown.length;
-
   return (
     /* ピンは「開く」の中に入れられない（ボタンの入れ子になる）ため、
        カードを枠にして、開く部分と並べて置く。長押しはこの枠でつかむ。 */
@@ -388,7 +385,7 @@ function ListOverviewCard({
         {list.isPrivate && <Lock size={11} className="flex-none text-gray-400" aria-label="自分だけ" />}
       </h3>
       <div className="px-3 py-2">
-        {shown.map((row, index) =>
+        {rows.map((row, index) =>
           row.type === 'group' ? (
             /* グループ名は下線で区切る。どこからどこまでが同じ枠かが線で分かる。 */
             <div
@@ -406,7 +403,6 @@ function ListOverviewCard({
           ),
         )}
         {rows.length === 0 && <p className="text-xs text-gray-300 py-1">項目なし</p>}
-        {rest > 0 && <p className="text-[11px] text-gray-400 pt-1.5">+{rest}件</p>}
       </div>
       </button>
       {/* よく開くリストを上に固定する（Keepのピン止め）。 */}
@@ -655,7 +651,7 @@ export default function ListTab({
             <AddRow
               divided={undoneItems.length > 0}
               label="追加"
-              placeholder="追加する項目"
+              allowEmpty
               onSubmit={(title) => selected && onAddItem(selected.id, null, title)}
             />
           </div>
@@ -682,7 +678,7 @@ export default function ListTab({
                   <AddRow
                     divided={groupItems.length > 0}
                     label="追加"
-                    placeholder={`${group.name}に追加`}
+                    allowEmpty
                     onSubmit={(title) => selected && onAddItem(selected.id, group.id, title)}
                   />
                 </section>
@@ -701,7 +697,7 @@ export default function ListTab({
                 <AddRow
                   divided
                   label="追加"
-                  placeholder="追加する項目"
+                  allowEmpty
                   onSubmit={(title) => selected && onAddItem(selected.id, null, title)}
                 />
               </section>
