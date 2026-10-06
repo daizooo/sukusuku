@@ -1,25 +1,40 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Gift } from 'lucide-react-native';
-import type { LotteryCoupon, SubsidyDraw } from '@/types/app';
+import type { LotteryCoupon, SubsidyBallId, SubsidyDraw } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { COUPON_INFO, ballOf, collectionProgress } from '@/lib/subsidyLotteryUtils';
 import { formatPrice } from '@/lib/shoppingUtils';
-import LotteryBall, { BALL_COLOR } from '@/components/living/LotteryBall';
+import { BALL_COLOR } from '@/components/living/LotteryBall';
+import GaraponMachine from '@/components/living/GaraponMachine';
+import LotteryCelebration, { PopIn } from '@/components/living/LotteryCelebration';
+import useReduceMotion from '@/components/living/useReduceMotion';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 
 // 補助くじの結果（docs/home.md §9）。PWA版の `src/components/sukusuku/living/LotteryResultModal.tsx` と
 // 同じ流れ・同じ文言。結果はこの枠を出す前にDBへ記録してある（見てから引き直せない）。
 //
-// 「ガラガラガラ…」と玉が揺れてから、出た玉が弾むように出る。
+// 「ガラガラガラ…」とガラポンが回り、受け皿に玉が転がり出てから、出た玉が弾むように出る
+// （後ろで光の筋が回り、紙吹雪が舞う。演出は GaraponMachine・LotteryCelebration）。
 // 25%か50%なら、補助率アップ券があれば「使う」で1段上げられる。
 // 100%なら、3つの箱から1つ選んで開ける（中身は図鑑でまだ集めていない特典）。
 
-/** 玉が揺れている時間（ミリ秒）。 */
+/** ガラポンが回っている時間と、玉が受け皿へ転がり出る時間（ミリ秒）。 */
 const SPIN_MS = 1400;
+const DROP_MS = 800;
+/** 回している・結果を見せている面の高さ。 */
+const STAGE_HEIGHT = 176;
 
 const BOX_TONES = [colors.milkMark, colors.diaper, colors.pumping];
+
+/** 補助率の札の文字の色（白玉・金玉は地が明るいので濃い色）。 */
+const RATE_TEXT: Record<SubsidyBallId, string> = {
+  white: colors.textSubtle,
+  blue: colors.primaryText,
+  red: colors.primaryText,
+  gold: '#78350f',
+};
 
 const formatLimit = (iso: string | null) => {
   if (!iso) return '期限なし';
@@ -53,37 +68,42 @@ export default function LotteryResultSheet({
   onClose,
 }: LotteryResultSheetProps) {
   const [draw, setDraw] = useState(initialDraw);
-  const [revealed, setRevealed] = useState(false);
+  const [phase, setPhase] = useState<'spin' | 'drop' | 'reveal'>('spin');
+  const revealed = phase === 'reveal';
+  const reduceMotion = useReduceMotion();
   const [busy, setBusy] = useState(false);
   const [rateUpDone, setRateUpDone] = useState(false);
   const [opened, setOpened] = useState<LotteryCoupon[] | null>(null);
-  const shake = useRef(new Animated.Value(0)).current;
-  const pop = useRef(new Animated.Value(0.4)).current;
+  const dots = useRef(new Animated.Value(0)).current;
+
+  // 回す → 玉が出る → 結果。アニメーションを減らす設定なら、すぐ結果を出す。
+  useEffect(() => {
+    if (reduceMotion) {
+      setPhase('reveal');
+      return;
+    }
+    const toDrop = setTimeout(() => setPhase((current) => (current === 'spin' ? 'drop' : current)), SPIN_MS);
+    const toReveal = setTimeout(() => setPhase('reveal'), SPIN_MS + DROP_MS);
+    return () => {
+      clearTimeout(toDrop);
+      clearTimeout(toReveal);
+    };
+  }, [reduceMotion]);
 
   useEffect(() => {
+    if (revealed) return;
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(shake, { toValue: 1, duration: 90, easing: Easing.linear, useNativeDriver: true }),
-        Animated.timing(shake, { toValue: -1, duration: 180, easing: Easing.linear, useNativeDriver: true }),
-        Animated.timing(shake, { toValue: 0, duration: 90, easing: Easing.linear, useNativeDriver: true }),
+        Animated.timing(dots, { toValue: 1, duration: 260, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(dots, { toValue: 0, duration: 260, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       ]),
     );
     loop.start();
-    const timer = setTimeout(() => {
-      loop.stop();
-      shake.setValue(0);
-      setRevealed(true);
-      Animated.spring(pop, { toValue: 1, friction: 4, tension: 120, useNativeDriver: true }).start();
-    }, SPIN_MS);
-    return () => {
-      clearTimeout(timer);
-      loop.stop();
-    };
-  }, [shake, pop]);
+    return () => loop.stop();
+  }, [revealed, dots]);
 
   const ball = ballOf(draw.ball);
   const tone = BALL_COLOR[draw.ball];
-  const rotate = shake.interpolate({ inputRange: [-1, 1], outputRange: ['-14deg', '14deg'] });
   const full = draw.rate === 100;
   const canRateUp = revealed && !rateUpDone && !draw.rateUpUsed && rateUpCoupon !== null && draw.rate <= 50;
 
@@ -140,22 +160,25 @@ export default function LotteryResultSheet({
 
         <View style={styles.stage}>
           {revealed ? (
-            <Animated.View style={{ transform: [{ scale: pop }] }}>
-              <LotteryBall ball={draw.ball} size={120} />
-            </Animated.View>
+            <LotteryCelebration ball={draw.ball} rate={draw.rate} height={STAGE_HEIGHT} />
           ) : (
-            <Animated.View style={{ transform: [{ rotate }] }}>
-              <LotteryBall ball={null} size={120} />
-            </Animated.View>
+            <GaraponMachine width={180} mode="spin" spinMs={SPIN_MS} ball={phase === 'drop' ? draw.ball : null} />
           )}
         </View>
 
         {revealed ? (
           <View style={styles.result}>
-            <Text style={[styles.prizeName, { color: tone.text }]}>
-              {ball.ball}！ {ball.name}
-            </Text>
-            <Text style={styles.rate}>補助率 {draw.rate}%</Text>
+            <PopIn delay={150}>
+              <Text style={[styles.prizeName, { color: tone.text }]}>
+                {ball.ball}！ {ball.name}
+              </Text>
+            </PopIn>
+            {/* 補助率アップ券で上がったら、札をもう一度弾ませる。 */}
+            <PopIn key={draw.rate} delay={300}>
+              <View style={[styles.ratePill, { backgroundColor: tone.fill, borderColor: tone.edge }]}>
+                <Text style={[styles.rate, { color: RATE_TEXT[draw.ball] }]}>補助率 {draw.rate}%</Text>
+              </View>
+            </PopIn>
             {luckyUp && !draw.rateUpUsed && (
               <Text style={styles.lucky}>
                 ラッキーカラー！ {ball.ball}が1段アップ（{ball.rate}% → {draw.rate}%）
@@ -192,38 +215,79 @@ export default function LotteryResultSheet({
                 <Text style={styles.boxTitle}>福の神の箱を1つ選んでください</Text>
                 <View style={styles.boxRow}>
                   {BOX_TONES.map((tint, index) => (
-                    <Pressable
-                      key={index}
-                      accessibilityRole="button"
-                      accessibilityLabel={`箱${index + 1}を開ける`}
-                      onPress={openBox}
-                      disabled={busy}
-                      style={[styles.box, { borderColor: tint }]}
-                    >
-                      {busy ? <ActivityIndicator color={tint} /> : <Gift size={30} color={tint} />}
-                    </Pressable>
+                    <WiggleBox key={index} index={index} still={busy}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`箱${index + 1}を開ける`}
+                        onPress={openBox}
+                        disabled={busy}
+                        style={[styles.box, { borderColor: tint }]}
+                      >
+                        {busy ? <ActivityIndicator color={tint} /> : <Gift size={30} color={tint} />}
+                      </Pressable>
+                    </WiggleBox>
                   ))}
                 </View>
               </View>
             )}
 
             {perk && (
-              <View style={styles.perk}>
-                <Text style={styles.perkHead}>箱の中身</Text>
-                <Text style={styles.perkName}>{COUPON_INFO[perk.kind].name}</Text>
-                <Text style={styles.perkLimit}>{formatLimit(perk.expiresAt)}</Text>
-                <Text style={styles.perkCount}>図鑑 {trip ? 6 : progress.collected.length} / 6</Text>
-                {trip && (
-                  <Text style={styles.trip}>6つそろいました！ {COUPON_INFO.trip.name}をゲット（券の画面にあります）</Text>
-                )}
-              </View>
+              <PopIn style={styles.stretch}>
+                <View style={styles.perk}>
+                  <Text style={styles.perkHead}>箱の中身</Text>
+                  <Text style={styles.perkName}>{COUPON_INFO[perk.kind].name}</Text>
+                  <Text style={styles.perkLimit}>{formatLimit(perk.expiresAt)}</Text>
+                  <Text style={styles.perkCount}>図鑑 {trip ? 6 : progress.collected.length} / 6</Text>
+                  {trip && (
+                    <Text style={styles.trip}>6つそろいました！ {COUPON_INFO.trip.name}をゲット（券の画面にあります）</Text>
+                  )}
+                </View>
+              </PopIn>
             )}
           </View>
         ) : (
-          <Text style={styles.spinning}>ガラガラガラ…</Text>
+          <Animated.Text
+            style={[
+              styles.spinning,
+              { transform: [{ translateY: dots.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }] },
+            ]}
+          >
+            ガラガラガラ…
+          </Animated.Text>
         )}
       </LogModalShell>
     </SheetModal>
+  );
+}
+
+/** 箱が「開けて」と言っているように、順番にぴょこぴょこ揺れる。 */
+function WiggleBox({ index, still, children }: { index: number; still: boolean; children: ReactNode }) {
+  const reduceMotion = useReduceMotion();
+  const wiggle = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (still || reduceMotion) {
+      wiggle.setValue(0);
+      return;
+    }
+    const step = (toValue: number) =>
+      Animated.timing(wiggle, { toValue, duration: 90, easing: Easing.inOut(Easing.quad), useNativeDriver: true });
+    const loop = Animated.loop(
+      Animated.sequence([Animated.delay(index * 350), step(1), step(-1), step(1), step(0), Animated.delay(1400 - index * 350)]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [index, still, reduceMotion, wiggle]);
+  return (
+    <Animated.View
+      style={{
+        transform: [
+          { rotate: wiggle.interpolate({ inputRange: [-1, 1], outputRange: ['-8deg', '8deg'] }) },
+          { translateY: wiggle.interpolate({ inputRange: [-1, 0, 1], outputRange: [-3, 0, -3] }) },
+        ],
+      }}
+    >
+      {children}
+    </Animated.View>
   );
 }
 
@@ -231,11 +295,12 @@ const styles = StyleSheet.create({
   item: { alignItems: 'center', gap: 2 },
   itemName: { fontSize: 15, fontWeight: '700', color: colors.text, textAlign: 'center' },
   itemPrice: { fontSize: 13, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  stage: { alignItems: 'center', justifyContent: 'center', height: 140 },
+  stage: { alignItems: 'center', justifyContent: 'center', height: STAGE_HEIGHT },
   spinning: { fontSize: 15, fontWeight: '700', color: colors.textMuted, textAlign: 'center', paddingBottom: 16 },
   result: { alignItems: 'center', gap: 8 },
-  prizeName: { fontSize: 20, fontWeight: '700', textAlign: 'center' },
-  rate: { fontSize: 15, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  prizeName: { fontSize: 22, fontWeight: '800', textAlign: 'center' },
+  ratePill: { borderRadius: 999, borderWidth: 2, paddingHorizontal: 18, paddingVertical: 6 },
+  rate: { fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] },
   lucky: { fontSize: 12, fontWeight: '700', color: colors.milkText, textAlign: 'center' },
   message: { fontSize: 13, fontWeight: '500', color: colors.textSubtle, textAlign: 'center' },
   breakdown: {
@@ -274,6 +339,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.surface,
   },
+  stretch: { alignSelf: 'stretch' },
   perk: {
     alignSelf: 'stretch',
     alignItems: 'center',

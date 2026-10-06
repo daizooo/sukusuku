@@ -2,23 +2,37 @@
 
 import { useEffect, useState } from 'react';
 import { Gift, Loader2 } from 'lucide-react';
-import type { LotteryCoupon, SubsidyDraw } from '@/types/app';
+import type { LotteryCoupon, SubsidyBallId, SubsidyDraw } from '@/types/app';
 import { COUPON_INFO, ballOf, collectionProgress } from '@/lib/subsidyLotteryUtils';
 import { formatPrice } from '@/lib/shoppingUtils';
 import { ModalShell } from '../modals/TaskForm';
-import LotteryBall, { BALL_COLOR } from './LotteryBall';
+import { BALL_COLOR } from './LotteryBall';
+import GaraponMachine from './GaraponMachine';
+import LotteryCelebration, { PopIn } from './LotteryCelebration';
 
 // 補助くじの結果（docs/home.md §9）。mobile版の `mobile/src/components/living/LotteryResultSheet.tsx` と
 // 同じ流れ・同じ文言。結果はこの枠を出す前にDBへ記録してある（見てから引き直せない）。
 //
-// 「ガラガラガラ…」と玉が揺れてから、出た玉が弾むように出る。
+// 「ガラガラガラ…」とガラポンが回り、受け皿に玉が転がり出てから、出た玉が弾むように出る
+// （後ろで光の筋が回り、紙吹雪が舞う。演出は GaraponMachine・LotteryCelebration）。
 // 25%か50%なら、補助率アップ券があれば「使う」で1段上げられる。
 // 100%なら、3つの箱から1つ選んで開ける（中身は図鑑でまだ集めていない特典）。
 
-/** 玉が揺れている時間（ミリ秒）。 */
+/** ガラポンが回っている時間と、玉が受け皿へ転がり出る時間（ミリ秒）。globals.css の動きと合わせる。 */
 const SPIN_MS = 1400;
+const DROP_MS = 800;
+/** 回している・結果を見せている面の高さ。 */
+const STAGE_HEIGHT = 176;
 
 const BOX_TONES = ['#f59e0b', '#3b82f6', '#f43f5e'];
+
+/** 補助率の札の文字の色（白玉・金玉は地が明るいので濃い色）。 */
+const RATE_TEXT: Record<SubsidyBallId, string> = {
+  white: '#374151',
+  blue: '#ffffff',
+  red: '#ffffff',
+  gold: '#78350f',
+};
 
 const formatLimit = (iso: string | null) => {
   if (!iso) return '期限なし';
@@ -52,15 +66,26 @@ export default function LotteryResultModal({
   onClose,
 }: LotteryResultModalProps) {
   const [draw, setDraw] = useState(initialDraw);
-  const [revealed, setRevealed] = useState(false);
+  // アニメーションを減らす設定なら、回さずにすぐ結果を出す。
+  const [reduceMotion] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+  const [phase, setPhase] = useState<'spin' | 'drop' | 'reveal'>(reduceMotion ? 'reveal' : 'spin');
+  const revealed = phase === 'reveal';
   const [busy, setBusy] = useState(false);
   const [rateUpDone, setRateUpDone] = useState(false);
   const [opened, setOpened] = useState<LotteryCoupon[] | null>(null);
 
+  // 回す → 玉が出る → 結果。
   useEffect(() => {
-    const timer = setTimeout(() => setRevealed(true), SPIN_MS);
-    return () => clearTimeout(timer);
-  }, []);
+    if (reduceMotion) return;
+    const toDrop = setTimeout(() => setPhase((current) => (current === 'spin' ? 'drop' : current)), SPIN_MS);
+    const toReveal = setTimeout(() => setPhase('reveal'), SPIN_MS + DROP_MS);
+    return () => {
+      clearTimeout(toDrop);
+      clearTimeout(toReveal);
+    };
+  }, [reduceMotion]);
 
   const ball = ballOf(draw.ball);
   const full = draw.rate === 100;
@@ -111,24 +136,36 @@ export default function LotteryResultModal({
         <p className="text-sm font-bold text-gray-500 tabular-nums">税込 {formatPrice(draw.price)}</p>
       </div>
 
-      <div className="flex items-center justify-center h-36">
+      <div className="flex items-center justify-center" style={{ height: STAGE_HEIGHT }}>
         {revealed ? (
-          <span className="lottery-pop">
-            <LotteryBall ball={draw.ball} size={120} />
-          </span>
+          <LotteryCelebration ball={draw.ball} rate={draw.rate} height={STAGE_HEIGHT} />
         ) : (
-          <span className="lottery-shake">
-            <LotteryBall ball={null} size={120} />
-          </span>
+          <GaraponMachine width={180} mode="spin" ball={phase === 'drop' ? draw.ball : null} />
         )}
       </div>
 
       {revealed ? (
         <div className="space-y-2 text-center">
-          <p className="text-xl font-bold" style={{ color: BALL_COLOR[draw.ball].text }}>
-            {ball.ball}！ {ball.name}
-          </p>
-          <p className="text-[15px] font-bold text-gray-900 tabular-nums">補助率 {draw.rate}%</p>
+          <PopIn delay={150}>
+            <p className="text-[22px] font-extrabold" style={{ color: BALL_COLOR[draw.ball].text }}>
+              {ball.ball}！ {ball.name}
+            </p>
+          </PopIn>
+          <div>
+            {/* 補助率アップ券で上がったら、札をもう一度弾ませる。 */}
+            <PopIn key={draw.rate} delay={300}>
+              <span
+                className="inline-block rounded-full border-2 px-[18px] py-1.5 text-xl font-extrabold tabular-nums"
+                style={{
+                  backgroundColor: BALL_COLOR[draw.ball].fill,
+                  borderColor: BALL_COLOR[draw.ball].edge,
+                  color: RATE_TEXT[draw.ball],
+                }}
+              >
+                補助率 {draw.rate}%
+              </span>
+            </PopIn>
+          </div>
           {luckyUp && !draw.rateUpUsed && (
             <p className="text-xs font-bold text-amber-700">
               ラッキーカラー！ {ball.ball}が1段アップ（{ball.rate}% → {draw.rate}%）
@@ -174,14 +211,15 @@ export default function LotteryResultModal({
               <p className="text-sm font-bold text-gray-900">福の神の箱を1つ選んでください</p>
               <div className="flex justify-center gap-3">
                 {BOX_TONES.map((tint, index) => (
+                  // 箱が「開けて」と言っているように、順番にぴょこぴょこ揺れる。
                   <button
                     key={tint}
                     type="button"
                     aria-label={`箱${index + 1}を開ける`}
                     onClick={openBox}
                     disabled={busy}
-                    className="flex h-20 w-20 items-center justify-center rounded-2xl border-2 bg-white transition hover:bg-gray-50 disabled:opacity-60"
-                    style={{ borderColor: tint, color: tint }}
+                    className={`flex h-20 w-20 items-center justify-center rounded-2xl border-2 bg-white transition hover:bg-gray-50 disabled:opacity-60 ${busy ? '' : 'lottery-wiggle'}`}
+                    style={{ borderColor: tint, color: tint, animationDelay: `${index * 350}ms` }}
                   >
                     {busy ? <Loader2 size={28} className="animate-spin" /> : <Gift size={30} />}
                   </button>
@@ -191,7 +229,7 @@ export default function LotteryResultModal({
           )}
 
           {perk && (
-            <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <div className="lottery-pop w-full space-y-1 rounded-xl border border-amber-200 bg-amber-50 p-3">
               <p className="text-[11px] font-bold text-amber-700">箱の中身</p>
               <p className="text-[17px] font-bold text-gray-900">{COUPON_INFO[perk.kind].name}</p>
               <p className="text-xs text-gray-500">{formatLimit(perk.expiresAt)}</p>
@@ -205,7 +243,9 @@ export default function LotteryResultModal({
           )}
         </div>
       ) : (
-        <p className="text-center text-[15px] font-bold text-gray-500 pb-4">ガラガラガラ…</p>
+        <p className="text-center pb-4">
+          <span className="lottery-bob inline-block text-[15px] font-bold text-gray-500">ガラガラガラ…</span>
+        </p>
       )}
     </ModalShell>
   );

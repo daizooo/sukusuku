@@ -38,41 +38,186 @@ body {
     'Noto Sans JP', 'Yu Gothic', Meiryo, sans-serif;
 }
 
-/* 補助くじ（暮らしタブ）。玉が揺れてから、出た玉が弾むように出る。 */
-@keyframes lottery-shake {
+/* 補助くじ（暮らしタブ。docs/home.md §9.5）。mobile版の Animated と同じ動き。
+   ガラポンが回り、受け皿に玉が転がり出てから、出た玉が弾むように出る（光の筋・紙吹雪）。 */
+.garapon-drum {
+  transform-box: view-box;
+  transform-origin: 80px 62px;
+}
+.garapon-idle {
+  animation: garapon-sway 4.4s ease-in-out infinite;
+}
+.garapon-spin {
+  animation: garapon-spin 1.4s cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+.garapon-drop {
+  transform-box: view-box;
+  transform-origin: 26px 109px;
+  animation: garapon-drop 0.8s ease-in both;
+}
+@keyframes garapon-sway {
   0%,
   100% {
     transform: rotate(0deg);
   }
   25% {
-    transform: rotate(-14deg);
+    transform: rotate(10deg);
   }
   75% {
-    transform: rotate(14deg);
+    transform: rotate(-10deg);
+  }
+}
+@keyframes garapon-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(1080deg);
+  }
+}
+@keyframes garapon-drop {
+  0% {
+    transform: translate(22px, -21px) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  55% {
+    transform: translate(0, 0) rotate(-300deg);
+  }
+  70% {
+    transform: translate(1px, -5px) rotate(-330deg);
+  }
+  85% {
+    transform: translate(0, 0) rotate(-350deg);
+  }
+  93% {
+    transform: translate(0, -1.5px) rotate(-357deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(-360deg);
+    opacity: 1;
   }
 }
 @keyframes lottery-pop {
   0% {
-    transform: scale(0.4);
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
   }
   60% {
     transform: scale(1.15);
   }
   100% {
     transform: scale(1);
+    opacity: 1;
   }
-}
-.lottery-shake {
-  display: inline-block;
-  animation: lottery-shake 0.35s linear infinite;
 }
 .lottery-pop {
   display: inline-block;
-  animation: lottery-pop 0.5s ease-out;
+  animation: lottery-pop 0.5s ease-out both;
+}
+@keyframes lottery-rays {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.lottery-rays {
+  animation: lottery-rays 14s linear infinite;
+}
+.lottery-rays-reverse {
+  animation: lottery-rays 9s linear infinite reverse;
+}
+@keyframes lottery-confetti {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  40% {
+    transform: translate(calc(var(--dx) * 0.8), calc(var(--dy) * 0.8)) rotate(calc(var(--turn) * 0.4));
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), calc(var(--dy) * 0.4 + 110px)) rotate(var(--turn));
+    opacity: 0;
+  }
+}
+.lottery-confetti {
+  animation: lottery-confetti 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+@keyframes lottery-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+.lottery-bob {
+  animation: lottery-bob 0.52s ease-in-out infinite;
+}
+@keyframes lottery-ring {
+  from {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+.lottery-ring {
+  animation: lottery-ring 1.6s ease-out infinite;
+}
+@keyframes lottery-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+}
+.lottery-beat {
+  animation: lottery-beat 1.4s ease-in-out infinite;
+}
+@keyframes lottery-wiggle {
+  0%,
+  26%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  5%,
+  15% {
+    transform: translateY(-3px) rotate(8deg);
+  }
+  10% {
+    transform: translateY(-3px) rotate(-8deg);
+  }
+}
+.lottery-wiggle {
+  animation: lottery-wiggle 1.75s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .lottery-shake,
-  .lottery-pop {
+  .garapon-idle,
+  .garapon-spin,
+  .garapon-drop,
+  .lottery-pop,
+  .lottery-rays,
+  .lottery-rays-reverse,
+  .lottery-bob,
+  .lottery-ring,
+  .lottery-beat,
+  .lottery-wiggle {
     animation: none;
+  }
+  .lottery-confetti {
+    display: none;
   }
 }
