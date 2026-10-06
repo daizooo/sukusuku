@@ -148,6 +148,8 @@ export type Database = {
           id: string
           name: string
           postal_code: string
+          stock_days: number
+          stock_people: number
           updated_at: string
         }
         Insert: {
@@ -157,6 +159,8 @@ export type Database = {
           id?: string
           name?: string
           postal_code?: string
+          stock_days?: number
+          stock_people?: number
           updated_at?: string
         }
         Update: {
@@ -166,6 +170,8 @@ export type Database = {
           id?: string
           name?: string
           postal_code?: string
+          stock_days?: number
+          stock_people?: number
           updated_at?: string
         }
         Relationships: []
@@ -794,6 +800,7 @@ export type Database = {
       }
       stock_items: {
         Row: {
+          amount_per_unit: number
           category: string
           created_at: string
           expires_month_only: boolean
@@ -804,10 +811,12 @@ export type Database = {
           note: string
           position: number
           quantity: number
+          target_id: string | null
           unit: string
           updated_at: string
         }
         Insert: {
+          amount_per_unit?: number
           category?: string
           created_at?: string
           expires_month_only?: boolean
@@ -818,10 +827,12 @@ export type Database = {
           note?: string
           position?: number
           quantity?: number
+          target_id?: string | null
           unit?: string
           updated_at?: string
         }
         Update: {
+          amount_per_unit?: number
           category?: string
           created_at?: string
           expires_month_only?: boolean
@@ -832,12 +843,70 @@ export type Database = {
           note?: string
           position?: number
           quantity?: number
+          target_id?: string | null
           unit?: string
           updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "stock_items_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_items_target_id_fkey"
+            columns: ["target_id"]
+            isOneToOne: false
+            referencedRelation: "stock_targets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_targets: {
+        Row: {
+          category: string
+          created_at: string
+          family_id: string
+          id: string
+          name: string
+          note: string
+          per_person_day: boolean
+          position: number
+          quantity: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          family_id: string
+          id?: string
+          name: string
+          note?: string
+          per_person_day?: boolean
+          position?: number
+          quantity?: number
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          family_id?: string
+          id?: string
+          name?: string
+          note?: string
+          per_person_day?: boolean
+          position?: number
+          quantity?: number
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_targets_family_id_fkey"
             columns: ["family_id"]
             isOneToOne: false
             referencedRelation: "families"

@@ -417,6 +417,25 @@ export interface StockItem {
   expiresMonthOnly: boolean;
   note: string;
   position: number;
+  /** 数える必要数（目標）。null なら数えない。 */
+  targetId: string | null;
+  /** 目標の単位に直した1つあたりの量（500mlの本を L の目標に数えるなら 0.5）。 */
+  amountPerUnit: number;
 }
 
 export type StockItemDraft = Omit<StockItem, 'id' | 'position'>;
+
+/** 防災備蓄の必要数（目標）。stock_targets に対応（docs/home.md §3.5）。 */
+export interface StockTarget {
+  id: string;
+  category: string;
+  name: string;
+  /** perPersonDay なら1人1日あたり、そうでなければ必要数そのもの。 */
+  quantity: number;
+  perPersonDay: boolean;
+  unit: string;
+  note: string;
+  position: number;
+}
+
+export type StockTargetDraft = Omit<StockTarget, 'id' | 'position'>;

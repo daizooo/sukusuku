@@ -2,24 +2,40 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Plus } from 'lucide-react-native';
-import type { StockItem, StockItemDraft } from '@/types/app';
+import { Minus, Plus } from 'lucide-react-native';
+import type { StockItem, StockItemDraft, StockTarget, StockTargetDraft } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { toDateString } from '@/lib/dateUtils';
 import { getMyMembership } from '@/lib/api/me';
-import { deleteStockItem, insertStockItem, loadStockItems, updateStockItem } from '@/lib/api/stockItems';
+import {
+  deleteStockItem,
+  deleteStockTarget,
+  insertStockItem,
+  insertStockTarget,
+  loadStockItems,
+  loadStockPlan,
+  loadStockTargets,
+  updateStockItem,
+  updateStockPlan,
+  updateStockTarget,
+} from '@/lib/api/stockItems';
 import {
   categoryOptions,
   countByLevel,
   expiryLevel,
   formatExpiry,
   formatQuantity,
+  DEFAULT_STOCK_PLAN,
   sortStockItems,
+  targetStatuses,
   type ExpiryLevel,
+  type StockPlan,
 } from '@/lib/stockUtils';
+import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import StockItemSheet from '@/components/living/StockItemSheet';
+import StockTargetSheet from '@/components/living/StockTargetSheet';
 
 /**
  * 暮らしタブ（docs/home.md）。いまは防災備蓄だけ（フェーズ1）。
@@ -29,7 +45,11 @@ import StockItemSheet from '@/components/living/StockItemSheet';
  * そこで**期限の近い順**に並べ、上に「期限切れ・3か月以内・1年以内」の件数を出す。
  * 1行＝品名×期限（ロット）。同じ品でも期限が違えば別の行になる。
  *
- * 見出し・要約・カテゴリの切り替えは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
+ * 「必要数」の面では、品目ごとに「家族の何日分」が要るかを決めておき（stock_targets）、
+ * 期限切れでないロットの合計と比べて**足りないものを赤で出す**（docs/home.md §3.5）。
+ * 必要数は「1人1日あたり × 人数 × 日数」か「決まった数」。人数・日数は家族で1つ。
+ *
+ * 見出し・要約・面の切り替え・カテゴリは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  */
 
 /** 「すべて」を表すカテゴリの絞り込み。 */
@@ -45,6 +65,18 @@ const LEVEL_STYLE: Record<ExpiryLevel, { color: string; surface?: string }> = {
 
 /** 編集の対象。null は閉じている、'new' は追加。 */
 type Editing = StockItem | 'new' | null;
+type EditingTarget = StockTarget | 'new' | null;
+
+/** 期限の近い順に並べる面と、必要数に足りているかを見る面。 */
+type StockView = 'expiry' | 'targets';
+
+const VIEW_OPTIONS: { id: StockView; label: string }[] = [
+  { id: 'expiry', label: '期限順' },
+  { id: 'targets', label: '必要数' },
+];
+
+/** 人数・日数の上限（DBの check と同じ）。 */
+const PLAN_LIMIT = { people: 20, days: 60 };
 
 export default function LivingScreen() {
   const { session, isLoading: isSessionLoading } = useSession();
@@ -55,6 +87,10 @@ export default function LivingScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [category, setCategory] = useState(ALL);
   const [editing, setEditing] = useState<Editing>(null);
+  const [targets, setTargets] = useState<StockTarget[]>([]);
+  const [plan, setPlan] = useState<StockPlan>(DEFAULT_STOCK_PLAN);
+  const [view, setView] = useState<StockView>('expiry');
+  const [editingTarget, setEditingTarget] = useState<EditingTarget>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -64,8 +100,15 @@ export default function LivingScreen() {
         const membership = await getMyMembership(supabase, userId);
         if (!isMounted || !membership.familyId) return;
         setFamilyId(membership.familyId);
-        const loaded = await loadStockItems(supabase, membership.familyId);
-        if (isMounted) setItems(loaded);
+        const [loadedItems, loadedTargets, loadedPlan] = await Promise.all([
+          loadStockItems(supabase, membership.familyId),
+          loadStockTargets(supabase, membership.familyId),
+          loadStockPlan(supabase, membership.familyId),
+        ]);
+        if (!isMounted) return;
+        setItems(loadedItems);
+        setTargets(loadedTargets);
+        setPlan(loadedPlan);
       } catch {
         // 圏外でも画面は出す。読めなかったぶんは空のままにする。
       } finally {
@@ -84,6 +127,9 @@ export default function LivingScreen() {
     () => sortStockItems(category === ALL ? items : items.filter((item) => item.category === category)),
     [items, category],
   );
+
+  const statuses = useMemo(() => targetStatuses(targets, items, plan, today), [targets, items, plan, today]);
+  const shortCount = statuses.filter((status) => status.shortage > 0).length;
 
   // 絞り込んでいたカテゴリが無くなったら「すべて」へ戻す。
   const activeCategory = category === ALL || categories.includes(category) ? category : ALL;
@@ -119,6 +165,54 @@ export default function LivingScreen() {
     }
   };
 
+  const saveTarget = async (draft: StockTargetDraft) => {
+    const target = editingTarget;
+    setEditingTarget(null);
+    if (!familyId || target === null) return;
+    try {
+      if (target === 'new') {
+        const position = targets.reduce((max, row) => Math.max(max, row.position + 1), 0);
+        const created = await insertStockTarget(supabase, familyId, draft, position);
+        setTargets((prev) => [...prev, created]);
+      } else {
+        const updated = await updateStockTarget(supabase, target.id, draft);
+        setTargets((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
+      }
+    } catch {
+      failed('保存');
+    }
+  };
+
+  const removeTarget = async (id: string) => {
+    setEditingTarget(null);
+    const previous = { targets, items };
+    setTargets((prev) => prev.filter((row) => row.id !== id));
+    // 数えていたロットは残し、どこにも数えない状態へ戻す（DBの on delete set null と同じ）。
+    setItems((prev) => prev.map((item) => (item.targetId === id ? { ...item, targetId: null } : item)));
+    try {
+      await deleteStockTarget(supabase, id);
+    } catch {
+      setTargets(previous.targets);
+      setItems(previous.items);
+      failed('削除');
+    }
+  };
+
+  /** 人数・日数を1つずつ変える。家族の設定なので、保存できなければ元に戻す。 */
+  const stepPlan = async (key: keyof StockPlan, delta: number) => {
+    if (!familyId) return;
+    const previous = plan;
+    const next = { ...plan, [key]: Math.min(PLAN_LIMIT[key], Math.max(1, plan[key] + delta)) };
+    if (next[key] === plan[key]) return;
+    setPlan(next);
+    try {
+      await updateStockPlan(supabase, familyId, next);
+    } catch {
+      setPlan(previous);
+      failed('保存');
+    }
+  };
+
   if (isSessionLoading) {
     return (
       <SafeAreaView style={[styles.screen, styles.centered]}>
@@ -129,10 +223,134 @@ export default function LivingScreen() {
   if (!session) return <Redirect href="/login" />;
 
   const summary = [
-    counts.expired > 0 && { level: 'expired' as const, text: `期限切れ ${counts.expired}件` },
-    counts.soon > 0 && { level: 'soon' as const, text: `3か月以内 ${counts.soon}件` },
-    counts.year > 0 && { level: 'year' as const, text: `1年以内 ${counts.year}件` },
+    shortCount > 0 && { key: 'short', tone: LEVEL_STYLE.soon, text: `不足 ${shortCount}品目` },
+    counts.expired > 0 && { key: 'expired', tone: LEVEL_STYLE.expired, text: `期限切れ ${counts.expired}件` },
+    counts.soon > 0 && { key: 'soon', tone: LEVEL_STYLE.soon, text: `3か月以内 ${counts.soon}件` },
+    counts.year > 0 && { key: 'year', tone: LEVEL_STYLE.year, text: `1年以内 ${counts.year}件` },
   ].filter((entry) => entry !== false);
+
+  const expiryList =
+    items.length === 0 ? (
+      <View style={[styles.centered, styles.flex]}>
+        <Text style={styles.message}>備蓄はまだありません</Text>
+      </View>
+    ) : (
+      <ScrollView style={styles.flex} contentContainerStyle={styles.listContent}>
+        <View style={styles.card}>
+          {visibleItems.map((item, index) => {
+            const level = expiryLevel(item.expiresOn, today);
+            const tone = LEVEL_STYLE[level];
+            const sub = [item.category, item.note].filter((text) => text !== '').join('・');
+            return (
+              <Pressable
+                key={item.id}
+                accessibilityRole="button"
+                onPress={() => setEditing(item)}
+                style={[styles.row, index > 0 && styles.rowDivided]}
+              >
+                <View style={styles.flex}>
+                  <Text style={styles.name}>{item.name}</Text>
+                  {sub !== '' && <Text style={styles.sub}>{sub}</Text>}
+                </View>
+                <View style={styles.rowRight}>
+                  <Text style={styles.quantity}>
+                    {formatQuantity(item.quantity)}
+                    {item.unit}
+                  </Text>
+                  {item.expiresOn ? (
+                    <Text style={[styles.expiry, { color: tone.color }]}>
+                      {level === 'expired' ? '切れ ' : ''}
+                      {formatExpiry(item)}
+                    </Text>
+                  ) : (
+                    <Text style={[styles.expiry, { color: tone.color }]}>期限なし</Text>
+                  )}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
+    );
+
+  const planStepper = (key: keyof StockPlan, label: string, suffix: string) => (
+    <View style={styles.planItem}>
+      <Text style={styles.planLabel}>{label}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${label}を減らす`}
+        onPress={() => void stepPlan(key, -1)}
+        style={styles.planButton}
+      >
+        <Minus size={14} color={colors.textSubtle} />
+      </Pressable>
+      <Text style={styles.planValue}>
+        {plan[key]}
+        {suffix}
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${label}を増やす`}
+        onPress={() => void stepPlan(key, 1)}
+        style={styles.planButton}
+      >
+        <Plus size={14} color={colors.textSubtle} />
+      </Pressable>
+    </View>
+  );
+
+  const targetList = (
+    <>
+      <View style={styles.plan}>
+        {planStepper('people', '人数', '人')}
+        {planStepper('days', '日数', '日')}
+      </View>
+      {statuses.length === 0 ? (
+        <View style={[styles.centered, styles.flex]}>
+          <Text style={styles.message}>必要数はまだありません</Text>
+        </View>
+      ) : (
+        <ScrollView style={styles.flex} contentContainerStyle={styles.listContent}>
+          <View style={styles.card}>
+            {statuses.map(({ target, required, have, shortage }, index) => {
+              const rule = target.perPersonDay
+                ? `1人1日 ${formatQuantity(target.quantity)}${target.unit}`
+                : '決まった数';
+              const sub = [rule, target.note].filter((text) => text !== '').join('・');
+              return (
+                <Pressable
+                  key={target.id}
+                  accessibilityRole="button"
+                  onPress={() => setEditingTarget(target)}
+                  style={[styles.row, index > 0 && styles.rowDivided, shortage > 0 && styles.rowShort]}
+                >
+                  <View style={styles.flex}>
+                    <Text style={styles.name}>{target.name}</Text>
+                    <Text style={styles.sub}>{sub}</Text>
+                  </View>
+                  <View style={styles.rowRight}>
+                    <Text style={styles.quantity}>
+                      {formatQuantity(have)} / {formatQuantity(required)}
+                      {target.unit}
+                    </Text>
+                    {shortage > 0 ? (
+                      <Text style={[styles.expiry, styles.shortText]}>
+                        あと{formatQuantity(shortage)}
+                        {target.unit} 不足
+                      </Text>
+                    ) : (
+                      <Text style={[styles.expiry, styles.enoughText]}>足りています</Text>
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={styles.footnote}>期限切れの備蓄は数えません</Text>
+        </ScrollView>
+      )}
+    </>
+  );
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -140,7 +358,7 @@ export default function LivingScreen() {
         <Text style={styles.title}>防災備蓄</Text>
         <Pressable
           accessibilityRole="button"
-          onPress={() => setEditing('new')}
+          onPress={() => (view === 'expiry' ? setEditing('new') : setEditingTarget('new'))}
           style={styles.addButton}
           disabled={!familyId}
         >
@@ -152,21 +370,26 @@ export default function LivingScreen() {
       {!isLoading && items.length > 0 && (
         <View style={styles.summary}>
           {summary.length === 0 ? (
-            <Text style={styles.summaryCalm}>1年以内に期限が来るものはありません</Text>
+            <Text style={styles.summaryCalm}>不足も、1年以内に期限が来るものもありません</Text>
           ) : (
             summary.map((entry) => (
-              <View
-                key={entry.level}
-                style={[styles.summaryBadge, { backgroundColor: LEVEL_STYLE[entry.level].surface }]}
-              >
-                <Text style={[styles.summaryText, { color: LEVEL_STYLE[entry.level].color }]}>{entry.text}</Text>
+              <View key={entry.key} style={[styles.summaryBadge, { backgroundColor: entry.tone.surface }]}>
+                <Text style={[styles.summaryText, { color: entry.tone.color }]}>{entry.text}</Text>
               </View>
             ))
           )}
         </View>
       )}
 
-      {categories.length > 1 && (
+      <SegmentedTabs
+        options={VIEW_OPTIONS}
+        value={view}
+        onChange={setView}
+        accessibilityLabel="防災備蓄の表示"
+        style={styles.views}
+      />
+
+      {view === 'expiry' && categories.length > 1 && (
         <View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
             {[ALL, ...categories].map((value) => {
@@ -187,50 +410,7 @@ export default function LivingScreen() {
         </View>
       )}
 
-      {isLoading ? (
-        <Text style={styles.message}>読み込み中...</Text>
-      ) : items.length === 0 ? (
-        <View style={[styles.centered, styles.flex]}>
-          <Text style={styles.message}>備蓄はまだありません</Text>
-        </View>
-      ) : (
-        <ScrollView style={styles.flex} contentContainerStyle={styles.listContent}>
-          <View style={styles.card}>
-            {visibleItems.map((item, index) => {
-              const level = expiryLevel(item.expiresOn, today);
-              const tone = LEVEL_STYLE[level];
-              const sub = [item.category, item.note].filter((text) => text !== '').join('・');
-              return (
-                <Pressable
-                  key={item.id}
-                  accessibilityRole="button"
-                  onPress={() => setEditing(item)}
-                  style={[styles.row, index > 0 && styles.rowDivided]}
-                >
-                  <View style={styles.flex}>
-                    <Text style={styles.name}>{item.name}</Text>
-                    {sub !== '' && <Text style={styles.sub}>{sub}</Text>}
-                  </View>
-                  <View style={styles.rowRight}>
-                    <Text style={styles.quantity}>
-                      {formatQuantity(item.quantity)}
-                      {item.unit}
-                    </Text>
-                    {item.expiresOn ? (
-                      <Text style={[styles.expiry, { color: tone.color }]}>
-                        {level === 'expired' ? '切れ ' : ''}
-                        {formatExpiry(item)}
-                      </Text>
-                    ) : (
-                      <Text style={[styles.expiry, { color: tone.color }]}>期限なし</Text>
-                    )}
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-        </ScrollView>
-      )}
+      {isLoading ? <Text style={styles.message}>読み込み中...</Text> : view === 'expiry' ? expiryList : targetList}
 
       {editing !== null && (
         <StockItemSheet
@@ -238,9 +418,21 @@ export default function LivingScreen() {
           key={editing === 'new' ? 'new' : editing.id}
           item={editing === 'new' ? null : editing}
           categories={categories}
+          targets={targets}
           onClose={() => setEditing(null)}
           onSubmit={(draft) => void save(draft)}
           onDelete={editing === 'new' ? undefined : () => void remove(editing.id)}
+        />
+      )}
+
+      {editingTarget !== null && (
+        <StockTargetSheet
+          key={editingTarget === 'new' ? 'new' : editingTarget.id}
+          target={editingTarget === 'new' ? null : editingTarget}
+          plan={plan}
+          onClose={() => setEditingTarget(null)}
+          onSubmit={(draft) => void saveTarget(draft)}
+          onDelete={editingTarget === 'new' ? undefined : () => void removeTarget(editingTarget.id)}
         />
       )}
     </SafeAreaView>
@@ -300,4 +492,28 @@ const styles = StyleSheet.create({
   rowRight: { alignItems: 'flex-end' },
   quantity: { fontSize: 13, fontWeight: '700', color: colors.textSubtle, fontVariant: ['tabular-nums'] },
   expiry: { fontSize: 11, fontWeight: '700', marginTop: 2, fontVariant: ['tabular-nums'] },
+  rowShort: { backgroundColor: colors.dangerSurface },
+  shortText: { color: colors.alertText },
+  enoughText: { color: colors.doneText },
+  footnote: { fontSize: 11, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingTop: 12 },
+  views: { marginHorizontal: 16, marginBottom: 8 },
+  plan: { flexDirection: 'row', gap: 16, paddingHorizontal: 16, paddingBottom: 8 },
+  planItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  planLabel: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  planButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.neutralSurface,
+  },
+  planValue: {
+    minWidth: 32,
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+    fontVariant: ['tabular-nums'],
+  },
 });
