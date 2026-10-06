@@ -482,3 +482,24 @@ export interface HouseholdProduct {
 }
 
 export type HouseholdProductDraft = Omit<HouseholdProduct, 'id' | 'lastAddedAt'>;
+
+/** 補助くじで出る玉。white＝0円、blue＝1,000円、red＝2,000円、gold＝全額（docs/home.md §9）。 */
+export type SubsidyPrizeId = 'white' | 'blue' | 'red' | 'gold';
+
+/** 補助くじを引いた記録の1回。subsidy_draws に対応。 */
+export interface SubsidyDraw {
+  id: string;
+  /** 引いた人のアカウントid。アカウントが無くなっていれば null。 */
+  drawnBy: string | null;
+  /** 買うもの。 */
+  itemName: string;
+  /** 商品の税込価格（円）。 */
+  price: number;
+  prize: SubsidyPrizeId;
+  /** 家族のお金から出る額（円）。 */
+  subsidy: number;
+  /** 引いた時刻（ISO）。 */
+  drawnAt: string;
+}
+
+export type SubsidyDrawDraft = Pick<SubsidyDraw, 'itemName' | 'price' | 'prize' | 'subsidy'>;

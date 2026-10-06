@@ -37,3 +37,42 @@ body {
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN',
     'Noto Sans JP', 'Yu Gothic', Meiryo, sans-serif;
 }
+
+/* 補助くじ（暮らしタブ）。玉が揺れてから、出た玉が弾むように出る。 */
+@keyframes lottery-shake {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-14deg);
+  }
+  75% {
+    transform: rotate(14deg);
+  }
+}
+@keyframes lottery-pop {
+  0% {
+    transform: scale(0.4);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.lottery-shake {
+  display: inline-block;
+  animation: lottery-shake 0.35s linear infinite;
+}
+.lottery-pop {
+  display: inline-block;
+  animation: lottery-pop 0.5s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lottery-shake,
+  .lottery-pop {
+    animation: none;
+  }
+}

@@ -1015,6 +1015,54 @@ export type Database = {
           },
         ]
       }
+      subsidy_draws: {
+        Row: {
+          drawn_at: string
+          drawn_by: string | null
+          family_id: string
+          id: string
+          item_name: string
+          price: number
+          prize: string
+          subsidy: number
+        }
+        Insert: {
+          drawn_at?: string
+          drawn_by?: string | null
+          family_id: string
+          id?: string
+          item_name?: string
+          price: number
+          prize: string
+          subsidy: number
+        }
+        Update: {
+          drawn_at?: string
+          drawn_by?: string | null
+          family_id?: string
+          id?: string
+          item_name?: string
+          price?: number
+          prize?: string
+          subsidy?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subsidy_draws_drawn_by_fkey"
+            columns: ["drawn_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subsidy_draws_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           anchor_type: string

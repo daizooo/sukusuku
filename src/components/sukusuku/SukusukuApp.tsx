@@ -1467,7 +1467,7 @@ export default function SukusukuApp({
               onDeleteGrowthRecord={deleteGrowthRecordHandler}
             />
           )}
-          {activeTab === 'living' && <LivingTab familyId={familyId} />}
+          {activeTab === 'living' && <LivingTab familyId={familyId} userId={userId} />}
           {activeTab === 'info' && (
             <InfoTab
               familyId={familyId}

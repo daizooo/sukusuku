@@ -41,6 +41,7 @@ import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import StockItemSheet from '@/components/living/StockItemSheet';
 import StockTargetSheet from '@/components/living/StockTargetSheet';
 import ProductsPanel, { type EditingProduct } from '@/components/living/ProductsPanel';
+import LotteryPanel from '@/components/living/LotteryPanel';
 import { useShoppingSender } from '@/components/living/useShoppingSender';
 import { shortageTitle } from '@/lib/shoppingUtils';
 
@@ -78,13 +79,22 @@ type Editing = StockItem | 'new' | null;
 type EditingTarget = StockTarget | 'new' | null;
 
 /** 期限の近い順に並べる面、必要数に足りているかを見る面、日用品の台帳。 */
-type StockView = 'expiry' | 'targets' | 'products';
+type StockView = 'expiry' | 'targets' | 'products' | 'lottery';
 
 const VIEW_OPTIONS: { id: StockView; label: string }[] = [
   { id: 'expiry', label: '期限順' },
   { id: 'targets', label: '必要数' },
   { id: 'products', label: '日用品' },
+  { id: 'lottery', label: '補助くじ' },
 ];
+
+/** 各面の見出し。 */
+const VIEW_TITLE: Record<StockView, string> = {
+  expiry: '防災備蓄',
+  targets: '防災備蓄',
+  products: '日用品',
+  lottery: '補助くじ',
+};
 
 /** 人数・日数の上限（DBの check と同じ）。 */
 const PLAN_LIMIT: StockPlan = { people: 20, days: 60, carryDays: 7 };
@@ -429,25 +439,27 @@ export default function LivingScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>{view === 'products' ? '日用品' : '防災備蓄'}</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() =>
-            view === 'expiry'
-              ? setEditing('new')
-              : view === 'targets'
-                ? setEditingTarget('new')
-                : setEditingProduct('new')
-          }
-          style={styles.addButton}
-          disabled={!familyId}
-        >
-          <Plus size={16} color={colors.primaryText} />
-          <Text style={styles.addButtonText}>追加</Text>
-        </Pressable>
+        <Text style={styles.title}>{VIEW_TITLE[view]}</Text>
+        {view !== 'lottery' && (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              view === 'expiry'
+                ? setEditing('new')
+                : view === 'targets'
+                  ? setEditingTarget('new')
+                  : setEditingProduct('new')
+            }
+            style={styles.addButton}
+            disabled={!familyId}
+          >
+            <Plus size={16} color={colors.primaryText} />
+            <Text style={styles.addButtonText}>追加</Text>
+          </Pressable>
+        )}
       </View>
 
-      {view !== 'products' && !isLoading && items.length > 0 && (
+      {(view === 'expiry' || view === 'targets') && !isLoading && items.length > 0 && (
         <View style={styles.summary}>
           {summary.length === 0 ? (
             <Text style={styles.summaryCalm}>不足も、1年以内に期限が来るものもありません</Text>
@@ -498,6 +510,8 @@ export default function LivingScreen() {
 
       {view === 'products' ? (
         <ProductsPanel familyId={familyId} sender={sender} editing={editingProduct} onEdit={setEditingProduct} />
+      ) : view === 'lottery' ? (
+        <LotteryPanel familyId={familyId} userId={session.user.id} />
       ) : isLoading ? (
         <Text style={styles.message}>読み込み中...</Text>
       ) : view === 'expiry' ? (
