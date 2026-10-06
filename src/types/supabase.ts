@@ -623,6 +623,80 @@ export type Database = {
           },
         ]
       }
+      lottery_coupons: {
+        Row: {
+          cycle: number | null
+          expires_at: string | null
+          family_id: string
+          id: string
+          is_test: boolean
+          kind: string
+          obtained_at: string
+          owner_id: string
+          slot: number | null
+          source_draw_id: string | null
+          used_at: string | null
+          used_draw_id: string | null
+        }
+        Insert: {
+          cycle?: number | null
+          expires_at?: string | null
+          family_id: string
+          id?: string
+          is_test?: boolean
+          kind: string
+          obtained_at?: string
+          owner_id: string
+          slot?: number | null
+          source_draw_id?: string | null
+          used_at?: string | null
+          used_draw_id?: string | null
+        }
+        Update: {
+          cycle?: number | null
+          expires_at?: string | null
+          family_id?: string
+          id?: string
+          is_test?: boolean
+          kind?: string
+          obtained_at?: string
+          owner_id?: string
+          slot?: number | null
+          source_draw_id?: string | null
+          used_at?: string | null
+          used_draw_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lottery_coupons_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lottery_coupons_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lottery_coupons_source_draw_id_fkey"
+            columns: ["source_draw_id"]
+            isOneToOne: false
+            referencedRelation: "subsidy_draws"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lottery_coupons_used_draw_id_fkey"
+            columns: ["used_draw_id"]
+            isOneToOne: false
+            referencedRelation: "subsidy_draws"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nurseries: {
         Row: {
           address: string | null
@@ -1017,33 +1091,45 @@ export type Database = {
       }
       subsidy_draws: {
         Row: {
+          ball: string
           drawn_at: string
           drawn_by: string | null
           family_id: string
           id: string
+          is_test: boolean
           item_name: string
           price: number
-          prize: string
+          push_coupon_id: string | null
+          rate: number
+          rate_up_used: boolean
           subsidy: number
         }
         Insert: {
+          ball: string
           drawn_at?: string
           drawn_by?: string | null
           family_id: string
           id?: string
+          is_test?: boolean
           item_name?: string
           price: number
-          prize: string
+          push_coupon_id?: string | null
+          rate: number
+          rate_up_used?: boolean
           subsidy: number
         }
         Update: {
+          ball?: string
           drawn_at?: string
           drawn_by?: string | null
           family_id?: string
           id?: string
+          is_test?: boolean
           item_name?: string
           price?: number
-          prize?: string
+          push_coupon_id?: string | null
+          rate?: number
+          rate_up_used?: boolean
           subsidy?: number
         }
         Relationships: [
@@ -1348,6 +1434,19 @@ export type Database = {
         Returns: undefined
       }
       is_family_guardian: { Args: never; Returns: boolean }
+      lottery_delete_my_test_data: { Args: never; Returns: number }
+      lottery_open_box: {
+        Args: { p_draw_id: string }
+        Returns: Database["public"]["Tables"]["lottery_coupons"]["Row"][]
+      }
+      lottery_use_coupon: {
+        Args: { p_coupon_id: string }
+        Returns: Database["public"]["Tables"]["lottery_coupons"]["Row"]
+      }
+      lottery_use_rate_up: {
+        Args: { p_draw_id: string; p_coupon_id: string }
+        Returns: Database["public"]["Tables"]["subsidy_draws"]["Row"]
+      }
     }
     Enums: {
       [_ in never]: never
