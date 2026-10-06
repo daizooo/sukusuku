@@ -15,6 +15,7 @@ import {
   insertStockItem,
   insertStockTarget,
   loadStockItems,
+  moveStockItem,
   loadStockPlan,
   loadStockTargets,
   updateStockItem,
@@ -28,10 +29,13 @@ import {
   formatExpiry,
   formatQuantity,
   DEFAULT_STOCK_PLAN,
+  isShort,
+  STORAGE_LABEL,
   sortStockItems,
   targetStatuses,
   type ExpiryLevel,
   type StockPlan,
+  type StockStorage,
 } from '@/lib/stockUtils';
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import StockItemSheet from '@/components/living/StockItemSheet';
@@ -76,7 +80,11 @@ const VIEW_OPTIONS: { id: StockView; label: string }[] = [
 ];
 
 /** 人数・日数の上限（DBの check と同じ）。 */
-const PLAN_LIMIT = { people: 20, days: 60 };
+const PLAN_LIMIT: StockPlan = { people: 20, days: 60, carryDays: 7 };
+
+/** 絞り込みのチップ。保管場所（持ち出し・寝室）とカテゴリを1列に並べる。 */
+const storageFilter = (storage: StockStorage) => `storage:${storage}`;
+const STORAGE_FILTERS = (['carry', 'home'] as StockStorage[]).map(storageFilter);
 
 export default function LivingScreen() {
   const { session, isLoading: isSessionLoading } = useSession();
@@ -123,16 +131,26 @@ export default function LivingScreen() {
   const today = toDateString(new Date());
   const categories = useMemo(() => categoryOptions(items), [items]);
   const counts = useMemo(() => countByLevel(items, today), [items, today]);
-  const visibleItems = useMemo(
-    () => sortStockItems(category === ALL ? items : items.filter((item) => item.category === category)),
-    [items, category],
-  );
-
   const statuses = useMemo(() => targetStatuses(targets, items, plan, today), [targets, items, plan, today]);
-  const shortCount = statuses.filter((status) => status.shortage > 0).length;
+  const shortCount = statuses.filter(isShort).length;
 
   // 絞り込んでいたカテゴリが無くなったら「すべて」へ戻す。
-  const activeCategory = category === ALL || categories.includes(category) ? category : ALL;
+  const activeCategory =
+    category === ALL || STORAGE_FILTERS.includes(category) || categories.includes(category) ? category : ALL;
+  const filterStorage = STORAGE_FILTERS.includes(activeCategory)
+    ? (activeCategory.slice('storage:'.length) as StockStorage)
+    : null;
+  const visibleItems = useMemo(
+    () =>
+      sortStockItems(
+        activeCategory === ALL
+          ? items
+          : filterStorage
+            ? items.filter((item) => item.storage === filterStorage)
+            : items.filter((item) => item.category === activeCategory),
+      ),
+    [items, activeCategory, filterStorage],
+  );
 
   const failed = (what: string) => Alert.alert(`${what}できませんでした`, 'もう一度お試しください。');
 
@@ -162,6 +180,26 @@ export default function LivingScreen() {
     } catch {
       setItems(previous);
       failed('削除');
+    }
+  };
+
+  /** 一部（count個）をもう一方の保管場所へ移す。 */
+  const move = async (item: StockItem, count: number) => {
+    setEditing(null);
+    if (!familyId) return;
+    try {
+      const to: StockStorage = item.storage === 'carry' ? 'home' : 'carry';
+      const { updated, removedIds } = await moveStockItem(supabase, familyId, item, count, to, items);
+      setItems((prev) => {
+        const kept = prev.filter((row) => !removedIds.includes(row.id));
+        const known = new Set(kept.map((row) => row.id));
+        return [
+          ...kept.map((row) => updated.find((next) => next.id === row.id) ?? row),
+          ...updated.filter((next) => !known.has(next.id)),
+        ];
+      });
+    } catch {
+      failed('移動');
     }
   };
 
@@ -250,7 +288,14 @@ export default function LivingScreen() {
               >
                 <View style={styles.flex}>
                   <Text style={styles.name}>{item.name}</Text>
-                  {sub !== '' && <Text style={styles.sub}>{sub}</Text>}
+                  <View style={styles.subRow}>
+                    {item.storage === 'carry' && (
+                      <View style={styles.carryTag}>
+                        <Text style={styles.carryTagText}>{STORAGE_LABEL.carry}</Text>
+                      </View>
+                    )}
+                    {sub !== '' && <Text style={styles.sub}>{sub}</Text>}
+                  </View>
                 </View>
                 <View style={styles.rowRight}>
                   <Text style={styles.quantity}>
@@ -304,6 +349,7 @@ export default function LivingScreen() {
       <View style={styles.plan}>
         {planStepper('people', '人数', '人')}
         {planStepper('days', '日数', '日')}
+        {planStepper('carryDays', '持ち出し', '日')}
       </View>
       {statuses.length === 0 ? (
         <View style={[styles.centered, styles.flex]}>
@@ -312,7 +358,8 @@ export default function LivingScreen() {
       ) : (
         <ScrollView style={styles.flex} contentContainerStyle={styles.listContent}>
           <View style={styles.card}>
-            {statuses.map(({ target, required, have, shortage }, index) => {
+            {statuses.map((status, index) => {
+              const { target, required, have, shortage, carry } = status;
               const rule = target.perPersonDay
                 ? `1人1日 ${formatQuantity(target.quantity)}${target.unit}`
                 : '決まった数';
@@ -322,7 +369,7 @@ export default function LivingScreen() {
                   key={target.id}
                   accessibilityRole="button"
                   onPress={() => setEditingTarget(target)}
-                  style={[styles.row, index > 0 && styles.rowDivided, shortage > 0 && styles.rowShort]}
+                  style={[styles.row, index > 0 && styles.rowDivided, isShort(status) && styles.rowShort]}
                 >
                   <View style={styles.flex}>
                     <Text style={styles.name}>{target.name}</Text>
@@ -340,6 +387,13 @@ export default function LivingScreen() {
                       </Text>
                     ) : (
                       <Text style={[styles.expiry, styles.enoughText]}>足りています</Text>
+                    )}
+                    {carry && (
+                      <Text style={[styles.expiry, carry.shortage > 0 ? styles.shortText : styles.carryOk]}>
+                        持ち出し {formatQuantity(carry.have)} / {formatQuantity(carry.required)}
+                        {target.unit}
+                        {carry.shortage > 0 ? ' 不足' : ''}
+                      </Text>
                     )}
                   </View>
                 </Pressable>
@@ -389,10 +443,10 @@ export default function LivingScreen() {
         style={styles.views}
       />
 
-      {view === 'expiry' && categories.length > 1 && (
+      {view === 'expiry' && items.length > 0 && (
         <View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-            {[ALL, ...categories].map((value) => {
+            {[ALL, ...STORAGE_FILTERS, ...categories].map((value) => {
               const selected = value === activeCategory;
               return (
                 <Pressable
@@ -402,7 +456,13 @@ export default function LivingScreen() {
                   onPress={() => setCategory(value)}
                   style={[styles.chip, selected && styles.chipSelected]}
                 >
-                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{value || 'すべて'}</Text>
+                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                    {value === ALL
+                      ? 'すべて'
+                      : STORAGE_FILTERS.includes(value)
+                        ? STORAGE_LABEL[value.slice('storage:'.length) as StockStorage]
+                        : value}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -422,6 +482,8 @@ export default function LivingScreen() {
           onClose={() => setEditing(null)}
           onSubmit={(draft) => void save(draft)}
           onDelete={editing === 'new' ? undefined : () => void remove(editing.id)}
+          defaultStorage={filterStorage ?? 'home'}
+          onMove={editing === 'new' ? undefined : (count) => void move(editing, count)}
         />
       )}
 
@@ -497,7 +559,11 @@ const styles = StyleSheet.create({
   enoughText: { color: colors.doneText },
   footnote: { fontSize: 11, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingTop: 12 },
   views: { marginHorizontal: 16, marginBottom: 8 },
-  plan: { flexDirection: 'row', gap: 16, paddingHorizontal: 16, paddingBottom: 8 },
+  plan: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, rowGap: 6, paddingHorizontal: 16, paddingBottom: 8 },
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  carryTag: { borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, backgroundColor: colors.diaperSurface },
+  carryTagText: { fontSize: 10, fontWeight: '700', color: colors.diaperText },
+  carryOk: { color: colors.textMuted },
   planItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   planLabel: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   planButton: {

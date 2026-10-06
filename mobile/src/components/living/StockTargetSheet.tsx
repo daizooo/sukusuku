@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import type { StockTarget, StockTargetDraft } from '@/types/app';
 import { formatQuantity, requiredQuantity, type StockPlan } from '@/lib/stockUtils';
 import { colors } from '@/lib/theme';
@@ -16,6 +16,7 @@ interface FormState {
   name: string;
   quantity: string;
   perPersonDay: boolean;
+  carry: boolean;
   unit: string;
   note: string;
 }
@@ -26,10 +27,11 @@ const initialState = (target: StockTarget | null): FormState =>
         name: target.name,
         quantity: formatQuantity(target.quantity),
         perPersonDay: target.perPersonDay,
+        carry: target.carry,
         unit: target.unit,
         note: target.note,
       }
-    : { name: '', quantity: '1', perPersonDay: true, unit: '', note: '' };
+    : { name: '', quantity: '1', perPersonDay: true, carry: false, unit: '', note: '' };
 
 function toTargetDraft(form: FormState, category: string): StockTargetDraft | string {
   if (form.name.trim() === '') return '名前を入れてください';
@@ -42,6 +44,7 @@ function toTargetDraft(form: FormState, category: string): StockTargetDraft | st
     category,
     quantity,
     perPersonDay: form.perPersonDay,
+    carry: form.carry,
     unit: form.unit,
     note: form.note,
   };
@@ -166,6 +169,20 @@ export default function StockTargetSheet({ target, plan, onClose, onSubmit, onDe
           </Text>
         )}
 
+        <View style={styles.switchRow}>
+          <View style={styles.flex}>
+            <Text style={styles.label}>持ち出しにも入れる</Text>
+            <Text style={styles.hint}>
+              {form.perPersonDay
+                ? `持ち出しに${plan.carryDays}日分（${formatQuantity(
+                    Number.isFinite(quantity) ? Math.round(quantity * plan.people * plan.carryDays * 100) / 100 : 0,
+                  )}${form.unit}）あるかも確かめる`
+                : '決まった数を全部、持ち出しに入れる'}
+            </Text>
+          </View>
+          <Switch value={form.carry} onValueChange={(carry) => update({ carry })} />
+        </View>
+
         <View style={styles.field}>
           <Text style={styles.label}>メモ</Text>
           <TextInput
@@ -212,6 +229,8 @@ const styles = StyleSheet.create({
   segmentSelected: { backgroundColor: colors.surface },
   segmentText: { fontSize: 13, color: colors.textMuted, fontWeight: '500' },
   segmentTextSelected: { color: colors.text, fontWeight: '700' },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  hint: { fontSize: 11, fontWeight: '500', color: colors.textFaint, marginTop: 2 },
   required: { fontSize: 13, fontWeight: '700', color: colors.navActiveText, fontVariant: ['tabular-nums'] },
   error: { fontSize: 12, fontWeight: '500', color: colors.danger },
   submit: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.navActive },

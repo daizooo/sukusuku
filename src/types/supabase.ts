@@ -148,6 +148,7 @@ export type Database = {
           id: string
           name: string
           postal_code: string
+          stock_carry_days: number
           stock_days: number
           stock_people: number
           updated_at: string
@@ -159,6 +160,7 @@ export type Database = {
           id?: string
           name?: string
           postal_code?: string
+          stock_carry_days?: number
           stock_days?: number
           stock_people?: number
           updated_at?: string
@@ -170,6 +172,7 @@ export type Database = {
           id?: string
           name?: string
           postal_code?: string
+          stock_carry_days?: number
           stock_days?: number
           stock_people?: number
           updated_at?: string
@@ -811,6 +814,7 @@ export type Database = {
           note: string
           position: number
           quantity: number
+          storage: string
           target_id: string | null
           unit: string
           updated_at: string
@@ -827,6 +831,7 @@ export type Database = {
           note?: string
           position?: number
           quantity?: number
+          storage?: string
           target_id?: string | null
           unit?: string
           updated_at?: string
@@ -843,6 +848,7 @@ export type Database = {
           note?: string
           position?: number
           quantity?: number
+          storage?: string
           target_id?: string | null
           unit?: string
           updated_at?: string
@@ -866,6 +872,7 @@ export type Database = {
       }
       stock_targets: {
         Row: {
+          carry: boolean
           category: string
           created_at: string
           family_id: string
@@ -879,6 +886,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          carry?: boolean
           category?: string
           created_at?: string
           family_id: string
@@ -892,6 +900,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          carry?: boolean
           category?: string
           created_at?: string
           family_id?: string

@@ -444,6 +444,8 @@ export interface StockItem {
   targetId: string | null;
   /** 目標の単位に直した1つあたりの量（500mlの本を L の目標に数えるなら 0.5）。 */
   amountPerUnit: number;
+  /** 保管場所。home＝寝室、carry＝持ち出し用バックパック（docs/home.md §3.6）。 */
+  storage: 'home' | 'carry';
 }
 
 export type StockItemDraft = Omit<StockItem, 'id' | 'position'>;
@@ -456,6 +458,8 @@ export interface StockTarget {
   /** perPersonDay なら1人1日あたり、そうでなければ必要数そのもの。 */
   quantity: number;
   perPersonDay: boolean;
+  /** 持ち出し用バックパックにも入れる品目か。 */
+  carry: boolean;
   unit: string;
   note: string;
   position: number;

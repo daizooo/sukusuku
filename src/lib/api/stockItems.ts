@@ -21,6 +21,7 @@ const rowToStockItem = (row: StockItemRow): StockItem => ({
   position: row.position,
   targetId: row.target_id,
   amountPerUnit: Number(row.amount_per_unit),
+  storage: row.storage === 'carry' ? 'carry' : 'home',
 });
 
 const draftToRow = (draft: StockItemDraft): TablesUpdate<'stock_items'> => ({
@@ -33,6 +34,7 @@ const draftToRow = (draft: StockItemDraft): TablesUpdate<'stock_items'> => ({
   note: draft.note.trim(),
   target_id: draft.targetId,
   amount_per_unit: draft.amountPerUnit,
+  storage: draft.storage,
 });
 
 /** 備蓄は数十行なので、一度に読んで並べ替え・絞り込みは画面側で行う。 */
@@ -76,6 +78,63 @@ export async function updateStockItem(
   return rowToStockItem(data);
 }
 
+/** 行から、保存に渡す形（id・並び順を除いたもの）を作る。 */
+const toDraft = (item: StockItem): StockItemDraft => ({
+  category: item.category,
+  name: item.name,
+  quantity: item.quantity,
+  unit: item.unit,
+  expiresOn: item.expiresOn,
+  expiresMonthOnly: item.expiresMonthOnly,
+  note: item.note,
+  targetId: item.targetId,
+  amountPerUnit: item.amountPerUnit,
+  storage: item.storage,
+});
+
+/**
+ * ロットの一部（count個）を別の保管場所へ移す（docs/home.md §3.6）。全部なら場所を書き換えるだけ。
+ * 一部なら元の数を減らし、移した先に同じ品名・期限・数え先のロットがあればそこへ足し、
+ * 無ければ新しいロットを作る。返すのは書き換えたあとの行（消えた行は含まない）。
+ */
+export async function moveStockItem(
+  supabase: SupabaseDb,
+  familyId: string,
+  item: StockItem,
+  count: number,
+  to: StockItem['storage'],
+  items: StockItem[],
+): Promise<{ updated: StockItem[]; removedIds: string[] }> {
+  const draft = toDraft(item);
+  const moveAll = count >= item.quantity;
+  const merge = items.find(
+    (other) =>
+      other.id !== item.id &&
+      other.storage === to &&
+      other.name === item.name &&
+      other.expiresOn === item.expiresOn &&
+      other.targetId === item.targetId &&
+      other.amountPerUnit === item.amountPerUnit &&
+      other.unit === item.unit,
+  );
+  if (merge) {
+    const merged = await updateStockItem(supabase, merge.id, { ...toDraft(merge), quantity: merge.quantity + count });
+    if (moveAll) {
+      await deleteStockItem(supabase, item.id);
+      return { updated: [merged], removedIds: [item.id] };
+    }
+    const rest = await updateStockItem(supabase, item.id, { ...draft, quantity: item.quantity - count });
+    return { updated: [merged, rest], removedIds: [] };
+  }
+  if (moveAll) {
+    const moved = await updateStockItem(supabase, item.id, { ...draft, storage: to });
+    return { updated: [moved], removedIds: [] };
+  }
+  const rest = await updateStockItem(supabase, item.id, { ...draft, quantity: item.quantity - count });
+  const created = await insertStockItem(supabase, familyId, { ...draft, quantity: count, storage: to });
+  return { updated: [rest, created], removedIds: [] };
+}
+
 export async function deleteStockItem(supabase: SupabaseDb, id: string): Promise<void> {
   const { error } = await supabase.from('stock_items').delete().eq('id', id);
   if (error) throw error;
@@ -89,6 +148,7 @@ const rowToStockTarget = (row: StockTargetRow): StockTarget => ({
   name: row.name,
   quantity: Number(row.quantity),
   perPersonDay: row.per_person_day,
+  carry: row.carry,
   unit: row.unit,
   note: row.note,
   position: row.position,
@@ -99,6 +159,7 @@ const targetDraftToRow = (draft: StockTargetDraft): TablesUpdate<'stock_targets'
   name: draft.name.trim(),
   quantity: draft.quantity,
   per_person_day: draft.perPersonDay,
+  carry: draft.carry,
   unit: draft.unit.trim(),
   note: draft.note.trim(),
 });
@@ -150,21 +211,23 @@ export async function deleteStockTarget(supabase: SupabaseDb, id: string): Promi
   if (error) throw error;
 }
 
-/** 何人の何日分を備えるか（families.stock_people / stock_days）。 */
+/** 何人の何日分を備えるか（families.stock_people / stock_days）と、持ち出しの日数（stock_carry_days）。 */
 export async function loadStockPlan(supabase: SupabaseDb, familyId: string): Promise<StockPlan> {
   const { data, error } = await supabase
     .from('families')
-    .select('stock_people, stock_days')
+    .select('stock_people, stock_days, stock_carry_days')
     .eq('id', familyId)
     .single();
   if (error) throw error;
-  return data ? { people: data.stock_people, days: data.stock_days } : DEFAULT_STOCK_PLAN;
+  return data
+    ? { people: data.stock_people, days: data.stock_days, carryDays: data.stock_carry_days }
+    : DEFAULT_STOCK_PLAN;
 }
 
 export async function updateStockPlan(supabase: SupabaseDb, familyId: string, plan: StockPlan): Promise<void> {
   const { error } = await supabase
     .from('families')
-    .update({ stock_people: plan.people, stock_days: plan.days })
+    .update({ stock_people: plan.people, stock_days: plan.days, stock_carry_days: plan.carryDays })
     .eq('id', familyId);
   if (error) throw error;
 }

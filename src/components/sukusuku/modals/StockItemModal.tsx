@@ -3,7 +3,14 @@
 import { useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import type { StockItem, StockItemDraft, StockTarget } from '@/types/app';
-import { formatExpiry, formatQuantity, parseExpiryInput } from '@/lib/stockUtils';
+import {
+  formatExpiry,
+  formatQuantity,
+  parseExpiryInput,
+  STORAGE_LABEL,
+  type StockStorage,
+} from '@/lib/stockUtils';
+import { Segmented } from './logModalParts';
 import { ModalShell } from './TaskForm';
 
 // 防災備蓄の1行を足す・直す（docs/home.md §3.2）。mobile版の
@@ -21,9 +28,15 @@ interface FormState {
   note: string;
   targetId: string | null;
   amountPerUnit: string;
+  storage: StockStorage;
 }
 
-const initialState = (item: StockItem | null): FormState =>
+const STORAGE_OPTIONS: { value: StockStorage; label: string }[] = [
+  { value: 'home', label: STORAGE_LABEL.home },
+  { value: 'carry', label: STORAGE_LABEL.carry },
+];
+
+const initialState = (item: StockItem | null, defaultStorage: StockStorage): FormState =>
   item
     ? {
         name: item.name,
@@ -34,8 +47,19 @@ const initialState = (item: StockItem | null): FormState =>
         note: item.note,
         targetId: item.targetId,
         amountPerUnit: formatQuantity(item.amountPerUnit),
+        storage: item.storage,
       }
-    : { name: '', category: '', quantity: '1', unit: '', expiry: '', note: '', targetId: null, amountPerUnit: '1' };
+    : {
+        name: '',
+        category: '',
+        quantity: '1',
+        unit: '',
+        expiry: '',
+        note: '',
+        targetId: null,
+        amountPerUnit: '1',
+        storage: defaultStorage,
+      };
 
 /** 入力を確かめて保存する形にする。だめなら突き返す文言。 */
 function toStockDraft(form: FormState): StockItemDraft | string {
@@ -60,6 +84,7 @@ function toStockDraft(form: FormState): StockItemDraft | string {
     note: form.note,
     targetId: form.targetId,
     amountPerUnit,
+    storage: form.storage,
   };
 }
 
@@ -73,6 +98,10 @@ interface StockItemModalProps {
   onClose: () => void;
   onSubmit: (draft: StockItemDraft) => void;
   onDelete?: () => void;
+  /** 追加のときの保管場所（持ち出しで絞っているときは持ち出し）。 */
+  defaultStorage?: StockStorage;
+  /** 一部（count個）をもう一方の保管場所へ移す。編集のときだけ。 */
+  onMove?: (count: number) => void;
 }
 
 const inputClass =
@@ -86,8 +115,11 @@ export default function StockItemModal({
   onClose,
   onSubmit,
   onDelete,
+  defaultStorage = 'home',
+  onMove,
 }: StockItemModalProps) {
-  const [form, setForm] = useState<FormState>(() => initialState(item));
+  const [form, setForm] = useState<FormState>(() => initialState(item, defaultStorage));
+  const [moveCount, setMoveCount] = useState('1');
   const [error, setError] = useState<string | null>(null);
 
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
@@ -107,6 +139,17 @@ export default function StockItemModal({
       return;
     }
     onSubmit(draft);
+  };
+
+  /** 一部を移す。移せるのは1以上、今の数まで（全部なら場所ごと変わる）。 */
+  const otherStorage: StockStorage = item?.storage === 'carry' ? 'home' : 'carry';
+  const handleMove = () => {
+    const count = Number(moveCount.trim());
+    if (!item || !Number.isFinite(count) || count <= 0 || count > item.quantity) {
+      setError(`移す数は1〜${item ? formatQuantity(item.quantity) : ''}で入れてください`);
+      return;
+    }
+    onMove?.(count);
   };
 
   const handleDelete = () => {
@@ -215,6 +258,31 @@ export default function StockItemModal({
               placeholder="本"
             />
           </label>
+        </div>
+
+        <div>
+          <span className={labelClass}>保管場所</span>
+          <Segmented options={STORAGE_OPTIONS} value={form.storage} onChange={(storage) => update({ storage })} />
+          {item && onMove && item.quantity > 1 && (
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-sm text-gray-700">一部を{STORAGE_LABEL[otherStorage]}へ</span>
+              <input
+                className="w-22 border border-gray-300 rounded-lg px-3 py-2 text-sm tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
+                value={moveCount}
+                onChange={(event) => setMoveCount(event.target.value)}
+                inputMode="decimal"
+                aria-label="移す数"
+              />
+              <span className="text-sm text-gray-700">{item.unit}</span>
+              <button
+                type="button"
+                onClick={handleMove}
+                className="px-3 py-2 rounded-lg bg-gray-100 text-sm font-bold text-blue-600 hover:bg-gray-200"
+              >
+                移す
+              </button>
+            </div>
+          )}
         </div>
 
         <label className="block">

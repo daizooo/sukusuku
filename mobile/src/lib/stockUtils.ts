@@ -124,20 +124,31 @@ export function categoryOptions(items: { category: string }[]): string[] {
   return [...seen];
 }
 
-// ---- 必要数（docs/home.md §3.5） ----
+// ---- 必要数（docs/home.md §3.5）・保管場所（§3.6） ----
 
-/** 何人の何日分を備えるか。families.stock_people / stock_days。 */
+/** 何人の何日分を備えるか（families.stock_people / stock_days）と、持ち出しを何日分にするか（stock_carry_days）。 */
 export interface StockPlan {
   people: number;
   days: number;
+  carryDays: number;
 }
 
-export const DEFAULT_STOCK_PLAN: StockPlan = { people: 3, days: 7 };
+export const DEFAULT_STOCK_PLAN: StockPlan = { people: 3, days: 7, carryDays: 1 };
+
+/** ロットの保管場所。home＝寝室（家に置く分）、carry＝持ち出し用バックパック。 */
+export type StockStorage = 'home' | 'carry';
+
+export const STORAGE_LABEL: Record<StockStorage, string> = {
+  home: '寝室',
+  carry: '持ち出し',
+};
 
 interface TargetLike {
   id: string;
   quantity: number;
   perPersonDay: boolean;
+  /** 持ち出しにも入れる品目か。 */
+  carry?: boolean;
 }
 
 interface CountableStock {
@@ -145,10 +156,11 @@ interface CountableStock {
   quantity: number;
   amountPerUnit: number;
   expiresOn: string | null;
+  storage?: StockStorage;
 }
 
 /** 必要数。1人1日あたりなら人数×日数を掛ける。 */
-export const requiredQuantity = (target: TargetLike, plan: StockPlan) =>
+export const requiredQuantity = (target: TargetLike, plan: Pick<StockPlan, 'people' | 'days'>) =>
   target.perPersonDay ? target.quantity * plan.people * plan.days : target.quantity;
 
 /** 端数を出さないための丸め（0.5L × 48本 などの浮動小数の誤差を消す）。 */
@@ -157,13 +169,19 @@ const round2 = (value: number) => Math.round(value * 100) / 100;
 export interface TargetStatus<T extends TargetLike> {
   target: T;
   required: number;
-  /** 期限切れでないロットの「数 × 1つあたりの量」の合計。 */
+  /** 期限切れでないロットの「数 × 1つあたりの量」の合計（寝室と持ち出しの両方）。 */
   have: number;
   /** 足りない量。足りていれば0。 */
   shortage: number;
+  /** 持ち出しの確かめ。持ち出しに入れない品目なら null。 */
+  carry: { required: number; have: number; shortage: number } | null;
 }
 
-/** 目標ごとの必要数・持っている量・不足。期限切れのロットは数えない（使えないため）。 */
+/**
+ * 目標ごとの必要数・持っている量・不足。期限切れのロットは数えない（使えないため）。
+ * 持ち出しに入れる品目は、持ち出しにあるロットだけで「持ち出しの日数」分あるかも出す
+ * （決まった数の品目は、その数を全部持ち出しに入れる）。
+ */
 export function targetStatuses<T extends TargetLike>(
   targets: T[],
   items: CountableStock[],
@@ -171,12 +189,23 @@ export function targetStatuses<T extends TargetLike>(
   today: string,
 ): TargetStatus<T>[] {
   return targets.map((target) => {
-    const required = round2(requiredQuantity(target, plan));
-    const have = round2(
-      items
-        .filter((item) => item.targetId === target.id && expiryLevel(item.expiresOn, today) !== 'expired')
-        .reduce((sum, item) => sum + item.quantity * item.amountPerUnit, 0),
+    const usable = items.filter(
+      (item) => item.targetId === target.id && expiryLevel(item.expiresOn, today) !== 'expired',
     );
-    return { target, required, have, shortage: round2(Math.max(0, required - have)) };
+    const sum = (rows: CountableStock[]) =>
+      round2(rows.reduce((total, item) => total + item.quantity * item.amountPerUnit, 0));
+    const required = round2(requiredQuantity(target, plan));
+    const have = sum(usable);
+    let carry: TargetStatus<T>['carry'] = null;
+    if (target.carry) {
+      const carryRequired = round2(requiredQuantity(target, { people: plan.people, days: plan.carryDays }));
+      const carryHave = sum(usable.filter((item) => item.storage === 'carry'));
+      carry = { required: carryRequired, have: carryHave, shortage: round2(Math.max(0, carryRequired - carryHave)) };
+    }
+    return { target, required, have, shortage: round2(Math.max(0, required - have)), carry };
   });
 }
+
+/** 全体か持ち出しのどちらかが足りていない。 */
+export const isShort = (status: { shortage: number; carry: { shortage: number } | null }) =>
+  status.shortage > 0 || (status.carry?.shortage ?? 0) > 0;

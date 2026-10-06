@@ -16,6 +16,7 @@ interface FormState {
   name: string;
   quantity: string;
   perPersonDay: boolean;
+  carry: boolean;
   unit: string;
   note: string;
 }
@@ -26,10 +27,11 @@ const initialState = (target: StockTarget | null): FormState =>
         name: target.name,
         quantity: formatQuantity(target.quantity),
         perPersonDay: target.perPersonDay,
+        carry: target.carry,
         unit: target.unit,
         note: target.note,
       }
-    : { name: '', quantity: '1', perPersonDay: true, unit: '', note: '' };
+    : { name: '', quantity: '1', perPersonDay: true, carry: false, unit: '', note: '' };
 
 function toTargetDraft(form: FormState, category: string): StockTargetDraft | string {
   if (form.name.trim() === '') return '名前を入れてください';
@@ -42,6 +44,7 @@ function toTargetDraft(form: FormState, category: string): StockTargetDraft | st
     category,
     quantity,
     perPersonDay: form.perPersonDay,
+    carry: form.carry,
     unit: form.unit,
     note: form.note,
   };
@@ -159,6 +162,25 @@ export default function StockTargetModal({ target, plan, onClose, onSubmit, onDe
             {form.unit}（{plan.people}人×{plan.days}日）
           </p>
         )}
+
+        <label className="flex items-center gap-3">
+          <span className="flex-1">
+            <span className="block text-xs font-bold text-gray-700">持ち出しにも入れる</span>
+            <span className="block text-[11px] text-gray-400 mt-0.5">
+              {form.perPersonDay
+                ? `持ち出しに${plan.carryDays}日分（${formatQuantity(
+                    Number.isFinite(quantity) ? Math.round(quantity * plan.people * plan.carryDays * 100) / 100 : 0,
+                  )}${form.unit}）あるかも確かめる`
+                : '決まった数を全部、持ち出しに入れる'}
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="w-5 h-5 accent-blue-500"
+            checked={form.carry}
+            onChange={(event) => update({ carry: event.target.checked })}
+          />
+        </label>
 
         <label className="block">
           <span className={labelClass}>メモ</span>
