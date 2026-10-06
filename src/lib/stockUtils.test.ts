@@ -8,7 +8,9 @@ import {
   formatExpiry,
   formatQuantity,
   parseExpiryInput,
+  requiredQuantity,
   sortStockItems,
+  targetStatuses,
 } from './stockUtils.ts';
 
 // 元の一覧の書き方（日まで・月まで）をそのまま読めること。
@@ -62,3 +64,39 @@ assert.equal(formatQuantity(48), '48');
 assert.equal(formatQuantity(1.5), '1.5');
 
 console.log('stockUtils: OK');
+
+// ---- 必要数 ----
+
+const plan = { people: 3, days: 7 };
+// 水は1人1日3L → 63L。ラジオは決まった数。
+assert.equal(requiredQuantity({ id: 'w', quantity: 3, perPersonDay: true }, plan), 63);
+assert.equal(requiredQuantity({ id: 'r', quantity: 1, perPersonDay: false }, plan), 1);
+
+const statuses = targetStatuses(
+  [
+    { id: 'water', quantity: 3, perPersonDay: true },
+    { id: 'meat', quantity: 3, perPersonDay: true },
+    { id: 'rice', quantity: 0.225, perPersonDay: true },
+  ],
+  [
+    // 500ml × 48本 = 24L、1.8L × 46本 = 82.8L
+    { targetId: 'water', quantity: 48, amountPerUnit: 0.5, expiresOn: '2036-12-06' },
+    { targetId: 'water', quantity: 46, amountPerUnit: 1.8, expiresOn: '2037-02-23' },
+    { targetId: 'meat', quantity: 60, amountPerUnit: 1, expiresOn: '2028-06-13' },
+    // 期限切れは数えない
+    { targetId: 'meat', quantity: 10, amountPerUnit: 1, expiresOn: '2026-01-01' },
+    { targetId: null, quantity: 5, amountPerUnit: 1, expiresOn: null },
+  ],
+  plan,
+  today,
+);
+assert.deepEqual(
+  statuses.map(({ required, have, shortage }) => ({ required, have, shortage })),
+  [
+    { required: 63, have: 106.8, shortage: 0 },
+    { required: 63, have: 60, shortage: 3 },
+    { required: 4.73, have: 0, shortage: 4.73 },
+  ],
+);
+
+console.log('stockUtils targets: OK');

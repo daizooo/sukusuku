@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
-import type { StockItem, StockItemDraft } from '@/types/app';
+import type { StockItem, StockItemDraft, StockTarget } from '@/types/app';
 import { formatExpiry, formatQuantity, parseExpiryInput } from '@/lib/stockUtils';
 import { ModalShell } from './TaskForm';
 
@@ -19,6 +19,8 @@ interface FormState {
   unit: string;
   expiry: string;
   note: string;
+  targetId: string | null;
+  amountPerUnit: string;
 }
 
 const initialState = (item: StockItem | null): FormState =>
@@ -30,8 +32,10 @@ const initialState = (item: StockItem | null): FormState =>
         unit: item.unit,
         expiry: formatExpiry(item),
         note: item.note,
+        targetId: item.targetId,
+        amountPerUnit: formatQuantity(item.amountPerUnit),
       }
-    : { name: '', category: '', quantity: '1', unit: '', expiry: '', note: '' };
+    : { name: '', category: '', quantity: '1', unit: '', expiry: '', note: '', targetId: null, amountPerUnit: '1' };
 
 /** 入力を確かめて保存する形にする。だめなら突き返す文言。 */
 function toStockDraft(form: FormState): StockItemDraft | string {
@@ -42,6 +46,10 @@ function toStockDraft(form: FormState): StockItemDraft | string {
   }
   const expiry = parseExpiryInput(form.expiry);
   if (!expiry) return '期限は「2031.08.25」か「2027.06」の形で入れてください';
+  const amountPerUnit = form.targetId === null ? 1 : Number(form.amountPerUnit.trim());
+  if (!Number.isFinite(amountPerUnit) || amountPerUnit <= 0) {
+    return '1つあたりの量は0より大きい数字で入れてください';
+  }
   return {
     name: form.name,
     category: form.category,
@@ -50,6 +58,8 @@ function toStockDraft(form: FormState): StockItemDraft | string {
     expiresOn: expiry.expiresOn,
     expiresMonthOnly: expiry.expiresMonthOnly,
     note: form.note,
+    targetId: form.targetId,
+    amountPerUnit,
   };
 }
 
@@ -58,6 +68,8 @@ interface StockItemModalProps {
   item: StockItem | null;
   /** カテゴリの候補（既にある値）。 */
   categories: string[];
+  /** 数える先の候補（必要数）。 */
+  targets: StockTarget[];
   onClose: () => void;
   onSubmit: (draft: StockItemDraft) => void;
   onDelete?: () => void;
@@ -67,11 +79,19 @@ const inputClass =
   'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-400';
 const labelClass = 'block text-xs font-bold text-gray-700 mb-1.5';
 
-export default function StockItemModal({ item, categories, onClose, onSubmit, onDelete }: StockItemModalProps) {
+export default function StockItemModal({
+  item,
+  categories,
+  targets,
+  onClose,
+  onSubmit,
+  onDelete,
+}: StockItemModalProps) {
   const [form, setForm] = useState<FormState>(() => initialState(item));
   const [error, setError] = useState<string | null>(null);
 
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
+  const selectedTarget = targets.find((target) => target.id === form.targetId) ?? null;
 
   /** 「使った」「足した」を1つずつ。数の欄が読めないときは0から数える。 */
   const step = (delta: number) => {
@@ -210,6 +230,49 @@ export default function StockItemModal({ item, categories, onClose, onSubmit, on
             月までのものは「2027.06」。期限が無いものは空のまま
           </span>
         </label>
+
+        {targets.length > 0 && (
+          <div>
+            <span className={labelClass}>必要数に数える</span>
+            <div className="flex flex-wrap gap-1.5">
+              {[null, ...targets].map((target) => {
+                const id = target?.id ?? null;
+                const selected = form.targetId === id;
+                return (
+                  <button
+                    key={id ?? 'none'}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => update({ targetId: id })}
+                    className={`px-2.5 py-1 rounded-full text-xs font-bold transition ${
+                      selected ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {target?.name ?? '数えない'}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedTarget && (
+              <>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-sm text-gray-700">1つあたり</span>
+                  <input
+                    className="w-22 border border-gray-300 rounded-lg px-3 py-2 text-sm tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    value={form.amountPerUnit}
+                    onChange={(event) => update({ amountPerUnit: event.target.value })}
+                    inputMode="decimal"
+                    aria-label="1つあたりの量"
+                  />
+                  <span className="text-sm text-gray-700">{selectedTarget.unit}</span>
+                </div>
+                <span className="block text-[11px] text-gray-400 mt-1">
+                  単位が同じなら1のまま。水 500ml の本を L で数えるなら 0.5
+                </span>
+              </>
+            )}
+          </div>
+        )}
 
         <label className="block">
           <span className={labelClass}>メモ</span>

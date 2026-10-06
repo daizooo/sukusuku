@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Minus, Plus } from 'lucide-react-native';
-import type { StockItem, StockItemDraft } from '@/types/app';
+import type { StockItem, StockItemDraft, StockTarget } from '@/types/app';
 import { formatExpiry, formatQuantity, parseExpiryInput } from '@/lib/stockUtils';
 import { colors } from '@/lib/theme';
 import LogModalShell from '@/components/log/LogModalShell';
@@ -20,6 +20,8 @@ interface FormState {
   unit: string;
   expiry: string;
   note: string;
+  targetId: string | null;
+  amountPerUnit: string;
 }
 
 const initialState = (item: StockItem | null): FormState =>
@@ -31,8 +33,10 @@ const initialState = (item: StockItem | null): FormState =>
         unit: item.unit,
         expiry: formatExpiry(item),
         note: item.note,
+        targetId: item.targetId,
+        amountPerUnit: formatQuantity(item.amountPerUnit),
       }
-    : { name: '', category: '', quantity: '1', unit: '', expiry: '', note: '' };
+    : { name: '', category: '', quantity: '1', unit: '', expiry: '', note: '', targetId: null, amountPerUnit: '1' };
 
 /** 入力を確かめて保存する形にする。だめなら突き返す文言。 */
 function toStockDraft(form: FormState): StockItemDraft | string {
@@ -43,6 +47,10 @@ function toStockDraft(form: FormState): StockItemDraft | string {
   }
   const expiry = parseExpiryInput(form.expiry);
   if (!expiry) return '期限は「2031.08.25」か「2027.06」の形で入れてください';
+  const amountPerUnit = form.targetId === null ? 1 : Number(form.amountPerUnit.trim());
+  if (!Number.isFinite(amountPerUnit) || amountPerUnit <= 0) {
+    return '1つあたりの量は0より大きい数字で入れてください';
+  }
   return {
     name: form.name,
     category: form.category,
@@ -51,6 +59,8 @@ function toStockDraft(form: FormState): StockItemDraft | string {
     expiresOn: expiry.expiresOn,
     expiresMonthOnly: expiry.expiresMonthOnly,
     note: form.note,
+    targetId: form.targetId,
+    amountPerUnit,
   };
 }
 
@@ -59,16 +69,26 @@ interface StockItemSheetProps {
   item: StockItem | null;
   /** カテゴリの候補（既にある値）。 */
   categories: string[];
+  /** 数える先の候補（必要数）。 */
+  targets: StockTarget[];
   onClose: () => void;
   onSubmit: (draft: StockItemDraft) => void;
   onDelete?: () => void;
 }
 
-export default function StockItemSheet({ item, categories, onClose, onSubmit, onDelete }: StockItemSheetProps) {
+export default function StockItemSheet({
+  item,
+  categories,
+  targets,
+  onClose,
+  onSubmit,
+  onDelete,
+}: StockItemSheetProps) {
   const [form, setForm] = useState<FormState>(() => initialState(item));
   const [error, setError] = useState<string | null>(null);
 
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
+  const selectedTarget = targets.find((target) => target.id === form.targetId) ?? null;
 
   /** 「使った」「足した」を1つずつ。数の欄が読めないときは0から数える。 */
   const step = (delta: number) => {
@@ -210,6 +230,48 @@ export default function StockItemSheet({ item, categories, onClose, onSubmit, on
           <Text style={styles.hint}>月までのものは「2027.06」。期限が無いものは空のまま</Text>
         </View>
 
+        {targets.length > 0 && (
+          <View style={styles.field}>
+            <Text style={styles.label}>必要数に数える</Text>
+            <View style={styles.wrapChips}>
+              {[null, ...targets].map((target) => {
+                const id = target?.id ?? null;
+                const selected = form.targetId === id;
+                return (
+                  <Pressable
+                    key={id ?? 'none'}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => update({ targetId: id })}
+                    style={[styles.chip, selected && styles.chipSelected]}
+                  >
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                      {target?.name ?? '数えない'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {selectedTarget && (
+              <View style={styles.perUnitRow}>
+                <Text style={styles.perUnitLabel}>1つあたり</Text>
+                <TextInput
+                  style={[styles.input, styles.perUnitInput]}
+                  value={form.amountPerUnit}
+                  onChangeText={(amountPerUnit) => update({ amountPerUnit })}
+                  keyboardType="decimal-pad"
+                  inputMode="decimal"
+                  accessibilityLabel="1つあたりの量"
+                />
+                <Text style={styles.perUnitLabel}>{selectedTarget.unit}</Text>
+              </View>
+            )}
+            {selectedTarget && (
+              <Text style={styles.hint}>単位が同じなら1のまま。水 500ml の本を L で数えるなら 0.5</Text>
+            )}
+          </View>
+        )}
+
         <View style={styles.field}>
           <Text style={styles.label}>メモ</Text>
           <TextInput
@@ -247,6 +309,10 @@ const styles = StyleSheet.create({
   },
   hint: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
   chips: { gap: 6, paddingTop: 2 },
+  wrapChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  perUnitRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  perUnitLabel: { fontSize: 13, fontWeight: '500', color: colors.textSubtle },
+  perUnitInput: { width: 88, textAlign: 'center' },
   chip: {
     borderRadius: 999,
     paddingHorizontal: 10,
