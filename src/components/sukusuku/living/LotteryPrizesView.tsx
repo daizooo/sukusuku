@@ -5,7 +5,7 @@ import LotteryBall, { BALL_COLOR } from './LotteryBall';
 
 // 補助くじの「賞品一覧」（ホームのボタンから中央の枠で開く。docs/home.md §9.5）。mobile版の
 // `mobile/src/components/living/LotteryPrizesView.tsx` と同じ項目・並び・文言。
-// 玉・賞の名前・補助率だけを出す（確率は出さない）。今月のラッキーカラーの玉には印を付け、
+// 玉・賞の名前・補助率だけを出す（確率は出さない。％が確率に見えないよう「補助率」と添える）。今月のラッキーカラーの玉には印を付け、
 // いま効いている救済があれば下に並べる。
 
 export default function LotteryPrizesView({ plan }: { plan: DrawPlan }) {
@@ -27,10 +27,13 @@ export default function LotteryPrizesView({ plan }: { plan: DrawPlan }) {
               </p>
               <p className="text-[11px] font-bold text-gray-500">
                 {ball.ball}
-                {lucky ? `・ラッキー！今月は${upRate(ball.rate)}%` : ''}
+                {lucky ? `・ラッキー！今月は補助率${upRate(ball.rate)}%` : ''}
               </p>
             </div>
-            <p className="text-xl font-extrabold tabular-nums text-gray-900">{ball.rate}%</p>
+            <div className="text-right">
+              <p className="text-[10px] font-bold text-gray-500">補助率</p>
+              <p className="text-xl font-extrabold tabular-nums text-gray-900">{ball.rate}%</p>
+            </div>
           </div>
         );
       })}

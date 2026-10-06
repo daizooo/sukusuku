@@ -117,6 +117,7 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
     () => shownCoupons.filter((coupon) => coupon.kind === 'push' && isCouponUsable(coupon, new Date())),
     [shownCoupons],
   );
+  const usableCoupons = shownCoupons.filter((coupon) => isCouponUsable(coupon, now));
   const rateUpCoupon = shownCoupons.find((coupon) => coupon.kind === 'rate_up' && isCouponUsable(coupon, now)) ?? null;
   const luckyBall = luckyBallFor(`${familyId ?? ''}:${monthKey(now)}`);
   const effectiveUsePush = usePush && pushCoupons.length > 0;
@@ -241,12 +242,12 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
       <LotteryDrawView
         plan={plan}
         isLoading={isLoading}
-        allowance={allowance}
         remaining={remaining}
         testMode={testMode}
         pushCount={pushCoupons.length}
         usePush={effectiveUsePush}
         onUsePush={setUsePush}
+        couponCount={usableCoupons.length}
         itemName={itemName}
         priceText={priceText}
         onItemName={setItemName}
@@ -265,8 +266,13 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
         </LotteryDialog>
       )}
       {dialog === 'coupons' && (
-        <LotteryDialog title="券" onClose={() => setDialog(null)} fill>
-          <LotteryCouponsView coupons={shownCoupons} isLoading={isLoading} now={now} onUse={useCoupon} />
+        <LotteryDialog title="持っている券" onClose={() => setDialog(null)} fill>
+          <LotteryCouponsView section="coupons" coupons={shownCoupons} isLoading={isLoading} now={now} onUse={useCoupon} />
+        </LotteryDialog>
+      )}
+      {dialog === 'collection' && (
+        <LotteryDialog title="図鑑" onClose={() => setDialog(null)} fill>
+          <LotteryCouponsView section="collection" coupons={shownCoupons} isLoading={isLoading} now={now} onUse={useCoupon} />
         </LotteryDialog>
       )}
       {dialog === 'history' && (

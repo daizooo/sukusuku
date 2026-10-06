@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
-import { Check, CircleQuestionMark, Gift, History, Ticket, type LucideIcon } from 'lucide-react-native';
+import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { BookOpen, Check, ChevronRight, CircleQuestionMark, Gift, History, Ticket, type LucideIcon } from 'lucide-react-native';
 import type { SubsidyBallId } from '@/types/app';
 import { ballOf, type DrawPlan } from '@/lib/subsidyLotteryUtils';
 import GaraponMachine from '@/components/living/GaraponMachine';
@@ -10,11 +10,11 @@ import LotteryBall from '@/components/living/LotteryBall';
 // 補助くじのホーム（docs/home.md §9.5）。PWA版の
 // `src/components/sukusuku/living/LotteryDrawView.tsx` と同じ項目・並び・文言。
 //
-// 福引所の1枚の面にまとめる: 福引券・ガラポン・今月のラッキーカラーなど・買うものと税込価格・「ガラポン！」。
-// 賞品一覧・券・履歴・ヘルプは下のボタンから、画面の中央の枠で開く。
+// 福引所の1枚の面にまとめる: 福引券（残り回数）・ガラポン・今月のラッキーカラーなど・買うものと金額・「ガラポン！」。
+// 賞品一覧・図鑑・履歴・ヘルプは下のボタンから、画面の中央の枠で開く。持っている券は、あるときだけ右上のボタンから開く。
 // 「ガラポン！」を押すと、この面のガラポンが回り、受け皿に玉が出てから結果の枠が開く。
 
-export type LotteryDialogKind = 'prizes' | 'coupons' | 'history' | 'help';
+export type LotteryDialogKind = 'prizes' | 'coupons' | 'collection' | 'history' | 'help';
 
 /** 面の地の色（左上→右下）。 */
 const HERO_FROM = '#dc2626';
@@ -24,28 +24,10 @@ const GOLD_LIGHT = '#fde68a';
 
 const MENU: { id: LotteryDialogKind; label: string; icon: LucideIcon }[] = [
   { id: 'prizes', label: '賞品一覧', icon: Gift },
-  { id: 'coupons', label: '券', icon: Ticket },
+  { id: 'collection', label: '図鑑', icon: BookOpen },
   { id: 'history', label: '履歴', icon: History },
   { id: 'help', label: 'ヘルプ', icon: CircleQuestionMark },
 ];
-
-/** 福引券1枚（左右に切り欠きのある券）。残っている券は金色、使った券は薄く。 */
-function FukubikiTicket({ active }: { active: boolean }) {
-  return (
-    <View style={styles.ticket}>
-      <Svg width={40} height={26} viewBox="0 0 40 26" style={StyleSheet.absoluteFill}>
-        <Path
-          d="M0,0 H40 V8 A5,5 0 0 0 40,18 V26 H0 V18 A5,5 0 0 0 0,8 Z"
-          fill={active ? GOLD_LIGHT : 'rgba(255,255,255,0.18)'}
-          stroke={active ? '#b45309' : 'rgba(255,255,255,0.5)'}
-          strokeWidth={1.5}
-          strokeDasharray={active ? undefined : '3,2'}
-        />
-      </Svg>
-      <Text style={[styles.ticketMark, !active && styles.ticketMarkUsed]}>福</Text>
-    </View>
-  );
-}
 
 /** 押せるあいだ、ゆっくり脈打つ「ガラポン！」。回しているあいだは「ガラガラガラ…」。 */
 function SpinButton({ canDraw, spinning, onPress }: { canDraw: boolean; spinning: boolean; onPress: () => void }) {
@@ -88,14 +70,15 @@ function SpinButton({ canDraw, spinning, onPress }: { canDraw: boolean; spinning
 interface LotteryDrawViewProps {
   plan: DrawPlan;
   isLoading: boolean;
-  /** 今月引ける回数（誕生月は3回）と、あと何回か。 */
-  allowance: number;
+  /** 今月あと何回引けるか。 */
   remaining: number;
   /** テストモード中か（回数が減らないので、枚数の表示を変える）。 */
   testMode: boolean;
   /** 使えるひと押し券の枚数と、使うか。 */
   pushCount: number;
   usePush: boolean;
+  /** 使える券の枚数（1枚以上のときだけ「持っている券」のボタンを出す）。 */
+  couponCount: number;
   onUsePush: (value: boolean) => void;
   itemName: string;
   priceText: string;
@@ -114,12 +97,12 @@ interface LotteryDrawViewProps {
 export default function LotteryDrawView({
   plan,
   isLoading,
-  allowance,
   remaining,
   testMode,
   pushCount,
   usePush,
   onUsePush,
+  couponCount,
   itemName,
   priceText,
   onItemName,
@@ -148,15 +131,30 @@ export default function LotteryDrawView({
         <Circle cx="80%" cy="62%" r={30} fill={GOLD_LIGHT} opacity={0.14} />
       </Svg>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.ticketRow}>
-          <View style={styles.tickets}>
-            {Array.from({ length: allowance }, (_, index) => (
-              <FukubikiTicket key={index} active={index < remaining} />
-            ))}
+        <View style={styles.topRow}>
+          <View style={[styles.ticketBadge, remaining <= 0 && !isLoading && styles.ticketBadgeEmpty]}>
+            <Ticket size={18} color={remaining > 0 || isLoading ? '#7f1d1d' : '#ffffff'} />
+            <Text style={[styles.ticketText, remaining <= 0 && !isLoading && styles.ticketTextEmpty]}>
+              {isLoading
+                ? '福引券 …'
+                : testMode
+                  ? '福引券 テスト中'
+                  : remaining > 0
+                    ? `福引券 あと${remaining}回`
+                    : '今月の福引券は使い切りました'}
+            </Text>
           </View>
-          <Text style={styles.ticketCount}>
-            {isLoading ? '…' : testMode ? 'テスト中' : remaining > 0 ? `あと${remaining}回` : '使い切りました'}
-          </Text>
+          {couponCount > 0 && (
+            <Pressable
+              accessibilityRole="button"
+              disabled={spinning}
+              onPress={() => onOpen('coupons')}
+              style={({ pressed }) => [styles.couponButton, pressed && styles.menuItemPressed]}
+            >
+              <Text style={styles.couponText}>持っている券 {couponCount}</Text>
+              <ChevronRight size={14} color="#ffffff" />
+            </Pressable>
+          )}
         </View>
 
         <View style={styles.machine}>
@@ -165,8 +163,9 @@ export default function LotteryDrawView({
 
         <View style={styles.chips}>
           <View style={styles.chip}>
+            <Text style={styles.chipText}>今月のラッキーカラー</Text>
             <LotteryBall ball={plan.luckyBall} size={14} />
-            <Text style={styles.chipText}>ラッキーカラー {lucky.ball}</Text>
+            <Text style={styles.chipText}>{lucky.ball}</Text>
           </View>
           {plan.floor > 25 && (
             <View style={[styles.chip, styles.chipGold]}>
@@ -194,7 +193,7 @@ export default function LotteryDrawView({
             style={styles.input}
             value={itemName}
             onChangeText={onItemName}
-            placeholder="買うもの（例: 洗濯ネット）"
+            placeholder="買うもの"
             placeholderTextColor="#9ca3af"
             editable={editable}
           />
@@ -204,7 +203,7 @@ export default function LotteryDrawView({
             onChangeText={onPriceText}
             keyboardType="number-pad"
             inputMode="numeric"
-            placeholder="税込の価格（円）"
+            placeholder="金額（例：2000）"
             placeholderTextColor="#9ca3af"
             editable={editable}
           />
@@ -240,12 +239,32 @@ export default function LotteryDrawView({
 const styles = StyleSheet.create({
   surface: { flex: 1, marginHorizontal: 16, marginBottom: 12, borderRadius: 20, overflow: 'hidden' },
   content: { flexGrow: 1, justifyContent: 'space-between', padding: 16, gap: 12 },
-  ticketRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  tickets: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  ticket: { width: 40, height: 26, alignItems: 'center', justifyContent: 'center' },
-  ticketMark: { fontSize: 13, fontWeight: '800', color: '#b45309' },
-  ticketMarkUsed: { color: 'rgba(255,255,255,0.55)' },
-  ticketCount: { fontSize: 18, fontWeight: '800', color: '#ffffff', fontVariant: ['tabular-nums'] },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  ticketBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: GOLD_LIGHT,
+    borderWidth: 2,
+    borderColor: GOLD,
+  },
+  ticketBadgeEmpty: { backgroundColor: 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.35)' },
+  ticketText: { fontSize: 15, fontWeight: '800', color: '#7f1d1d', fontVariant: ['tabular-nums'] },
+  ticketTextEmpty: { fontSize: 13, color: '#ffffff' },
+  couponButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    borderRadius: 999,
+    paddingLeft: 12,
+    paddingRight: 8,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  couponText: { fontSize: 12, fontWeight: '700', color: '#ffffff', fontVariant: ['tabular-nums'] },
   machine: { alignItems: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6 },
   chip: {

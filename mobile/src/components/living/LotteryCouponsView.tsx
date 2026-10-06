@@ -10,11 +10,14 @@ import {
   isLotteryCoupon,
 } from '@/lib/subsidyLotteryUtils';
 
-// 補助くじの「券」の面（docs/home.md §9）。PWA版の
+// 補助くじの「券」と「図鑑」の枠（docs/home.md §9.5）。PWA版の
 // `src/components/sukusuku/living/LotteryCouponsView.tsx` と同じ項目・並び・文言。
-// 100%の箱の図鑑（6つ）と、自分の券（アカウントごと）。使った券・期限切れの券も図鑑には残る。
+// - 券: 自分の使える券（アカウントごと）。持っているときだけホームにボタンが出る
+// - 図鑑: 100%の箱の図鑑（6つ）と、使った券・期限切れの券
 
 interface LotteryCouponsViewProps {
+  /** どちらを出すか（券＝使える券、図鑑＝図鑑と使った・期限切れの券）。 */
+  section: 'coupons' | 'collection';
   coupons: LotteryCoupon[];
   isLoading: boolean;
   now: Date;
@@ -29,7 +32,7 @@ const limitText = (coupon: LotteryCoupon, now: Date) => {
   return `${date.getMonth() + 1}/${date.getDate()}まで（あと${days}日）`;
 };
 
-export default function LotteryCouponsView({ coupons, isLoading, now, onUse }: LotteryCouponsViewProps) {
+export default function LotteryCouponsView({ section, coupons, isLoading, now, onUse }: LotteryCouponsViewProps) {
   const progress = collectionProgress(coupons);
   const usable = coupons.filter((coupon) => isCouponUsable(coupon, now));
   const past = coupons.filter((coupon) => !isCouponUsable(coupon, now)).slice(0, 10);
@@ -42,31 +45,32 @@ export default function LotteryCouponsView({ coupons, isLoading, now, onUse }: L
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
-      <View style={styles.card}>
-        <View style={styles.head}>
-          <Text style={styles.title}>福の神の図鑑</Text>
-          <Text style={styles.count}>
-            {progress.cycle}周目 {progress.collected.length} / 6
-          </Text>
+      {section === 'collection' && (
+        <View style={styles.card}>
+          <View style={styles.head}>
+            <Text style={styles.title}>福の神の図鑑</Text>
+            <Text style={styles.count}>
+              {progress.cycle}周目 {progress.collected.length} / 6
+            </Text>
+          </View>
+          <Text style={styles.sub}>100%が出ると、箱から特典が1つ出ます。6つ集めると日帰り旅行券！</Text>
+          <View style={styles.grid}>
+            {COLLECTION_SLOTS.map((entry) => {
+              const got = progress.collected.includes(entry.slot);
+              return (
+                <View key={entry.slot} style={[styles.slot, got && styles.slotGot]}>
+                  <Text style={[styles.slotNumber, got && styles.slotTextGot]}>{entry.slot}</Text>
+                  <Text style={[styles.slotName, got && styles.slotTextGot]} numberOfLines={2}>
+                    {got ? COUPON_INFO[entry.kind].name : '？'}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
-        <Text style={styles.sub}>100%が出ると、箱から特典が1つ出ます。6つ集めると日帰り旅行券！</Text>
-        <View style={styles.grid}>
-          {COLLECTION_SLOTS.map((entry) => {
-            const got = progress.collected.includes(entry.slot);
-            return (
-              <View key={entry.slot} style={[styles.slot, got && styles.slotGot]}>
-                <Text style={[styles.slotNumber, got && styles.slotTextGot]}>{entry.slot}</Text>
-                <Text style={[styles.slotName, got && styles.slotTextGot]} numberOfLines={2}>
-                  {got ? COUPON_INFO[entry.kind].name : '？'}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      </View>
+      )}
 
-      <Text style={styles.heading}>使える券</Text>
-      {isLoading ? (
+      {section === 'coupons' && (isLoading ? (
         <Text style={styles.empty}>読み込み中...</Text>
       ) : usable.length === 0 ? (
         <Text style={styles.empty}>使える券はありません。25%が出るとひと押し券、100%が出ると箱がもらえます</Text>
@@ -89,9 +93,9 @@ export default function LotteryCouponsView({ coupons, isLoading, now, onUse }: L
             </View>
           ))}
         </View>
-      )}
+      ))}
 
-      {past.length > 0 && (
+      {section === 'collection' && past.length > 0 && (
         <>
           <Text style={styles.heading}>使用済み・期限切れ</Text>
           <View style={styles.list}>

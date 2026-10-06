@@ -1,7 +1,7 @@
 'use client';
 
 import { useId } from 'react';
-import { Check, CircleQuestionMark, Gift, History, Ticket, type LucideIcon } from 'lucide-react';
+import { BookOpen, Check, ChevronRight, CircleQuestionMark, Gift, History, Ticket, type LucideIcon } from 'lucide-react';
 import type { SubsidyBallId } from '@/types/app';
 import { ballOf, type DrawPlan } from '@/lib/subsidyLotteryUtils';
 import GaraponMachine from './GaraponMachine';
@@ -10,11 +10,11 @@ import LotteryBall from './LotteryBall';
 // 補助くじのホーム（docs/home.md §9.5）。mobile版の
 // `mobile/src/components/living/LotteryDrawView.tsx` と同じ項目・並び・文言。
 //
-// 福引所の1枚の面にまとめる: 福引券・ガラポン・今月のラッキーカラーなど・買うものと税込価格・「ガラポン！」。
-// 賞品一覧・券・履歴・ヘルプは下のボタンから、画面の中央の枠で開く。
+// 福引所の1枚の面にまとめる: 福引券（残り回数）・ガラポン・今月のラッキーカラーなど・買うものと金額・「ガラポン！」。
+// 賞品一覧・図鑑・履歴・ヘルプは下のボタンから、画面の中央の枠で開く。持っている券は、あるときだけ右上のボタンから開く。
 // 「ガラポン！」を押すと、この面のガラポンが回り、受け皿に玉が出てから結果の枠が開く。
 
-export type LotteryDialogKind = 'prizes' | 'coupons' | 'history' | 'help';
+export type LotteryDialogKind = 'prizes' | 'coupons' | 'collection' | 'history' | 'help';
 
 /** 面の地の色（左上→右下）。 */
 const HERO_FROM = '#dc2626';
@@ -22,7 +22,7 @@ const HERO_TO = '#f97316';
 
 const MENU: { id: LotteryDialogKind; label: string; icon: LucideIcon }[] = [
   { id: 'prizes', label: '賞品一覧', icon: Gift },
-  { id: 'coupons', label: '券', icon: Ticket },
+  { id: 'collection', label: '図鑑', icon: BookOpen },
   { id: 'history', label: '履歴', icon: History },
   { id: 'help', label: 'ヘルプ', icon: CircleQuestionMark },
 ];
@@ -31,35 +31,18 @@ const inputClass =
   'w-full rounded-xl bg-white/95 px-3.5 py-2.5 text-[15px] tabular-nums text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-300 disabled:opacity-70';
 const chipClass = 'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold';
 
-/** 福引券1枚（左右に切り欠きのある券）。残っている券は金色、使った券は薄く。 */
-function FukubikiTicket({ active }: { active: boolean }) {
-  return (
-    <span className="relative flex h-[26px] w-10 items-center justify-center">
-      <svg aria-hidden width={40} height={26} viewBox="0 0 40 26" className="absolute inset-0">
-        <path
-          d="M0,0 H40 V8 A5,5 0 0 0 40,18 V26 H0 V18 A5,5 0 0 0 0,8 Z"
-          fill={active ? '#fde68a' : 'rgba(255,255,255,0.18)'}
-          stroke={active ? '#b45309' : 'rgba(255,255,255,0.5)'}
-          strokeWidth={1.5}
-          strokeDasharray={active ? undefined : '3,2'}
-        />
-      </svg>
-      <span className={`relative text-[13px] font-extrabold ${active ? 'text-amber-700' : 'text-white/55'}`}>福</span>
-    </span>
-  );
-}
-
 interface LotteryDrawViewProps {
   plan: DrawPlan;
   isLoading: boolean;
-  /** 今月引ける回数（誕生月は3回）と、あと何回か。 */
-  allowance: number;
+  /** 今月あと何回引けるか。 */
   remaining: number;
   /** テストモード中か（回数が減らないので、枚数の表示を変える）。 */
   testMode: boolean;
   /** 使えるひと押し券の枚数と、使うか。 */
   pushCount: number;
   usePush: boolean;
+  /** 使える券の枚数（1枚以上のときだけ「持っている券」のボタンを出す）。 */
+  couponCount: number;
   onUsePush: (value: boolean) => void;
   itemName: string;
   priceText: string;
@@ -78,12 +61,12 @@ interface LotteryDrawViewProps {
 export default function LotteryDrawView({
   plan,
   isLoading,
-  allowance,
   remaining,
   testMode,
   pushCount,
   usePush,
   onUsePush,
+  couponCount,
   itemName,
   priceText,
   onItemName,
@@ -115,14 +98,33 @@ export default function LotteryDrawView({
       </svg>
       <div className="relative flex h-full flex-col justify-between gap-3 overflow-y-auto p-4">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex flex-wrap gap-1.5">
-            {Array.from({ length: allowance }, (_, index) => (
-              <FukubikiTicket key={index} active={index < remaining} />
-            ))}
-          </div>
-          <p className="text-lg font-extrabold tabular-nums text-white">
-            {isLoading ? '…' : testMode ? 'テスト中' : remaining > 0 ? `あと${remaining}回` : '使い切りました'}
+          <p
+            className={`inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 font-extrabold tabular-nums ${
+              remaining > 0 || isLoading
+                ? 'border-amber-400 bg-amber-200 text-[15px] text-red-900'
+                : 'border-white/35 bg-white/20 text-[13px] text-white'
+            }`}
+          >
+            <Ticket size={18} />
+            {isLoading
+              ? '福引券 …'
+              : testMode
+                ? '福引券 テスト中'
+                : remaining > 0
+                  ? `福引券 あと${remaining}回`
+                  : '今月の福引券は使い切りました'}
           </p>
+          {couponCount > 0 && (
+            <button
+              type="button"
+              disabled={spinning}
+              onClick={() => onOpen('coupons')}
+              className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-white/20 py-1.5 pl-3 pr-2 text-xs font-bold tabular-nums text-white transition hover:bg-white/30"
+            >
+              持っている券 {couponCount}
+              <ChevronRight size={14} />
+            </button>
+          )}
         </div>
 
         <div className="flex justify-center">
@@ -131,8 +133,9 @@ export default function LotteryDrawView({
 
         <div className="flex flex-wrap justify-center gap-1.5">
           <span className={`${chipClass} bg-white/20 text-white`}>
+            今月のラッキーカラー
             <LotteryBall ball={plan.luckyBall} size={14} />
-            ラッキーカラー {lucky.ball}
+            {lucky.ball}
           </span>
           {plan.floor > 25 && (
             <span className={`${chipClass} bg-amber-400 text-red-900`}>
@@ -161,7 +164,7 @@ export default function LotteryDrawView({
             className={inputClass}
             value={itemName}
             onChange={(event) => onItemName(event.target.value)}
-            placeholder="買うもの（例: 洗濯ネット）"
+            placeholder="買うもの"
             disabled={!editable}
           />
           <input
@@ -169,7 +172,7 @@ export default function LotteryDrawView({
             value={priceText}
             onChange={(event) => onPriceText(event.target.value)}
             inputMode="numeric"
-            placeholder="税込の価格（円）"
+            placeholder="金額（例：2000）"
             disabled={!editable}
           />
           {error && <p className="text-center text-xs font-bold text-amber-200">{error}</p>}
