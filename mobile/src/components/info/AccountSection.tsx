@@ -248,7 +248,15 @@ const styles = StyleSheet.create({
   retryText: { fontSize: 12, color: colors.navActiveText },
 
 
-  tabOptions: { flexDirection: 'row', gap: 4 },
+  // 5つ並ぶと狭い端末では入りきらないので、折り返して右へ寄せる。
+  tabOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 4,
+    flexShrink: 1,
+    marginLeft: 8,
+  },
   tabOption: {
     borderRadius: 8,
     paddingVertical: 5,

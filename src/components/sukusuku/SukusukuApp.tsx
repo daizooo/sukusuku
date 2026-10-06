@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import dynamic from 'next/dynamic';
-import { Baby, CalendarDays, ListTodo, Plus, Settings } from 'lucide-react';
+import { Baby, CalendarDays, House, ListTodo, Plus, Settings } from 'lucide-react';
 
 import type {
   BreastSide,
@@ -144,12 +144,14 @@ const CareTab = dynamic(() => import('./tabs/CareTab'), { loading: TabFallback }
 const ListTab = dynamic(() => import('./tabs/ListTab'), { loading: TabFallback });
 const HokatsuTab = dynamic(() => import('./tabs/HokatsuTab'), { loading: TabFallback });
 const InfoTab = dynamic(() => import('./tabs/InfoTab'), { loading: TabFallback });
+const LivingTab = dynamic(() => import('./tabs/LivingTab'), { loading: TabFallback });
 
-// 予定・リスト・育児・設定の4つ（docs/family-app.md §4.1）。mobile版の app/(tabs)/_layout.tsx と同じ。
+// 予定・リスト・育児・暮らし・設定の5つ（docs/family-app.md §4.1・docs/home.md §2）。mobile版の app/(tabs)/_layout.tsx と同じ。
 const NAV_ITEMS: { id: TabId; icon: typeof Baby; label: string }[] = [
   { id: 'schedule', icon: CalendarDays, label: '予定' },
   { id: 'list', icon: ListTodo, label: 'リスト' },
   { id: 'care', icon: Baby, label: '育児' },
+  { id: 'living', icon: House, label: '暮らし' },
   { id: 'info', icon: Settings, label: '設定' },
 ];
 
@@ -1465,6 +1467,7 @@ export default function SukusukuApp({
               onDeleteGrowthRecord={deleteGrowthRecordHandler}
             />
           )}
+          {activeTab === 'living' && <LivingTab familyId={familyId} />}
           {activeTab === 'info' && (
             <InfoTab
               familyId={familyId}

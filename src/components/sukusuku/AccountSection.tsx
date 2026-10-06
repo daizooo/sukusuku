@@ -139,7 +139,7 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
 
           <div className="flex justify-between items-center gap-2 py-1">
             <span className="text-gray-500 text-xs">最初に開くタブ</span>
-            <div className="flex gap-1">
+            <div className="flex flex-wrap justify-end gap-1">
               {START_TABS.map((tab) => (
                 <button
                   key={tab}
