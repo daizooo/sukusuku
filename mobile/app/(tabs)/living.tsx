@@ -40,6 +40,7 @@ import {
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import StockItemSheet from '@/components/living/StockItemSheet';
 import StockTargetSheet from '@/components/living/StockTargetSheet';
+import LivingSectionTabs, { LIVING_SECTIONS, type LivingSection } from '@/components/living/LivingSectionTabs';
 import ProductsPanel, { type EditingProduct } from '@/components/living/ProductsPanel';
 import { useShoppingSender } from '@/components/living/useShoppingSender';
 import { shortageTitle } from '@/lib/shoppingUtils';
@@ -56,7 +57,10 @@ import { shortageTitle } from '@/lib/shoppingUtils';
  * 期限切れでないロットの合計と比べて**足りないものを赤で出す**（docs/home.md §3.5）。
  * 必要数は「1人1日あたり × 人数 × 日数」か「決まった数」。人数・日数は家族で1つ。
  *
- * 「日用品」の面は、よく買うものの台帳（docs/home.md §4）。行の「＋」で買い出しリストへ送る。
+ * 「防災備蓄」と「日用品」は持つデータも見方も別物なので、一番上の区分の切り替えで分け、
+ * 区分ごとの色・見出し・追加ボタンにする（期限順/必要数の切り替えは防災備蓄の中だけ）。
+ *
+ * 「日用品」の区分は、よく買うものの台帳（docs/home.md §4）。行の「＋」で買い出しリストへ送る。
  * 備蓄の不足も「リストへ」で同じリストへ送れる（送る仕組みは useShoppingSender）。
  *
  * 見出し・要約・面の切り替え・カテゴリは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
@@ -77,13 +81,12 @@ const LEVEL_STYLE: Record<ExpiryLevel, { color: string; surface?: string }> = {
 type Editing = StockItem | 'new' | null;
 type EditingTarget = StockTarget | 'new' | null;
 
-/** 期限の近い順に並べる面、必要数に足りているかを見る面、日用品の台帳。 */
-type StockView = 'expiry' | 'targets' | 'products';
+/** 防災備蓄の中の面。期限の近い順に並べる面と、必要数に足りているかを見る面。 */
+type StockView = 'expiry' | 'targets';
 
 const VIEW_OPTIONS: { id: StockView; label: string }[] = [
   { id: 'expiry', label: '期限順' },
   { id: 'targets', label: '必要数' },
-  { id: 'products', label: '日用品' },
 ];
 
 /** 人数・日数の上限（DBの check と同じ）。 */
@@ -104,6 +107,7 @@ export default function LivingScreen() {
   const [editing, setEditing] = useState<Editing>(null);
   const [targets, setTargets] = useState<StockTarget[]>([]);
   const [plan, setPlan] = useState<StockPlan>(DEFAULT_STOCK_PLAN);
+  const [section, setSection] = useState<LivingSection>('stock');
   const [view, setView] = useState<StockView>('expiry');
   const [editingTarget, setEditingTarget] = useState<EditingTarget>(null);
   const [editingProduct, setEditingProduct] = useState<EditingProduct>(null);
@@ -269,6 +273,8 @@ export default function LivingScreen() {
   }
   if (!session) return <Redirect href="/login" />;
 
+  const current = LIVING_SECTIONS.find((entry) => entry.id === section) ?? LIVING_SECTIONS[0];
+
   const summary = [
     shortCount > 0 && { key: 'short', tone: LEVEL_STYLE.soon, text: `不足 ${shortCount}品目` },
     counts.expired > 0 && { key: 'expired', tone: LEVEL_STYLE.expired, text: `期限切れ ${counts.expired}件` },
@@ -428,18 +434,21 @@ export default function LivingScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <LivingSectionTabs value={section} onChange={setSection} />
       <View style={styles.header}>
-        <Text style={styles.title}>{view === 'products' ? '日用品' : '防災備蓄'}</Text>
+        <Text numberOfLines={1} style={styles.hint}>
+          {current.hint}
+        </Text>
         <Pressable
           accessibilityRole="button"
           onPress={() =>
-            view === 'expiry'
-              ? setEditing('new')
-              : view === 'targets'
-                ? setEditingTarget('new')
-                : setEditingProduct('new')
+            section === 'products'
+              ? setEditingProduct('new')
+              : view === 'expiry'
+                ? setEditing('new')
+                : setEditingTarget('new')
           }
-          style={styles.addButton}
+          style={[styles.addButton, { backgroundColor: current.color }]}
           disabled={!familyId}
         >
           <Plus size={16} color={colors.primaryText} />
@@ -447,7 +456,7 @@ export default function LivingScreen() {
         </Pressable>
       </View>
 
-      {view !== 'products' && !isLoading && items.length > 0 && (
+      {section === 'stock' && !isLoading && items.length > 0 && (
         <View style={styles.summary}>
           {summary.length === 0 ? (
             <Text style={styles.summaryCalm}>不足も、1年以内に期限が来るものもありません</Text>
@@ -461,15 +470,17 @@ export default function LivingScreen() {
         </View>
       )}
 
-      <SegmentedTabs
-        options={VIEW_OPTIONS}
-        value={view}
-        onChange={setView}
-        accessibilityLabel="防災備蓄の表示"
-        style={styles.views}
-      />
+      {section === 'stock' && (
+        <SegmentedTabs
+          options={VIEW_OPTIONS}
+          value={view}
+          onChange={setView}
+          accessibilityLabel="防災備蓄の表示"
+          style={styles.views}
+        />
+      )}
 
-      {view === 'expiry' && items.length > 0 && (
+      {section === 'stock' && view === 'expiry' && items.length > 0 && (
         <View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
             {[ALL, ...STORAGE_FILTERS, ...categories].map((value) => {
@@ -480,7 +491,7 @@ export default function LivingScreen() {
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
                   onPress={() => setCategory(value)}
-                  style={[styles.chip, selected && styles.chipSelected]}
+                  style={[styles.chip, selected && { backgroundColor: current.color }]}
                 >
                   <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
                     {value === ALL
@@ -496,7 +507,7 @@ export default function LivingScreen() {
         </View>
       )}
 
-      {view === 'products' ? (
+      {section === 'products' ? (
         <ProductsPanel familyId={familyId} sender={sender} editing={editingProduct} onEdit={setEditingProduct} />
       ) : isLoading ? (
         <Text style={styles.message}>読み込み中...</Text>
@@ -546,15 +557,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 8,
     paddingBottom: 8,
   },
-  title: { fontSize: 18, fontWeight: '700', color: colors.text },
+  hint: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.textMuted, marginRight: 12 },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.navActive,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -571,7 +581,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     backgroundColor: colors.neutralSurface,
   },
-  chipSelected: { backgroundColor: colors.navActive },
   chipText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   chipTextSelected: { color: colors.primaryText },
   message: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },

@@ -145,7 +145,7 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
                 aria-pressed={selected}
                 onClick={() => setStore(value)}
                 className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-bold transition ${
-                  selected ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  selected ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }`}
               >
                 {value || 'すべて'}
@@ -181,7 +181,7 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
                     type="button"
                     aria-label={`${product.name}を買い出しリストへ`}
                     onClick={() => sendProduct(product)}
-                    className="shrink-0 w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600"
+                    className="shrink-0 w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-700"
                   >
                     <Plus size={18} />
                   </button>
