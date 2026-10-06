@@ -12,6 +12,7 @@ import {
   openLotteryBox,
   markCouponUsed,
   applyRateUpCoupon,
+  deleteMyTestLotteryData,
 } from '@/lib/api/subsidyDraws';
 import {
   allowanceFor,
@@ -30,6 +31,7 @@ import LotteryCouponsView from './LotteryCouponsView';
 import LotteryDrawView from './LotteryDrawView';
 import LotteryHistoryView from './LotteryHistoryView';
 import LotteryResultModal from './LotteryResultModal';
+import LotteryTestBar from './LotteryTestBar';
 
 // 暮らしタブの「補助くじ」の面（docs/home.md §9）。mobile版の
 // `mobile/src/components/living/LotteryPanel.tsx` と同じ項目・並び・文言。
@@ -72,6 +74,8 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
   const [usePush, setUsePush] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [result, setResult] = useState<ResultState | null>(null);
+  const [testMode, setTestMode] = useState(false);
+  const [isDeletingTest, setIsDeletingTest] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -99,14 +103,19 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
     };
   }, [supabase, familyId, userId]);
 
+  // テストモードでは、本物と別のくじ・券だけを見せて数える（月の回数は減らない）。
+  const shownDraws = draws.filter((draw) => draw.isTest === testMode);
+  const shownCoupons = coupons.filter((coupon) => coupon.isTest === testMode);
+  const testCount = draws.filter((draw) => draw.isTest).length + coupons.filter((coupon) => coupon.isTest).length;
+
   const now = new Date();
   const allowance = allowanceFor(birthMonth, now);
-  const remaining = remainingDraws(draws, userId, now, birthMonth);
-  const pushCoupons = coupons.filter((coupon) => coupon.kind === 'push' && isCouponUsable(coupon, now));
-  const rateUpCoupon = coupons.find((coupon) => coupon.kind === 'rate_up' && isCouponUsable(coupon, now)) ?? null;
+  const remaining = testMode ? allowance : remainingDraws(shownDraws, userId, now, birthMonth);
+  const pushCoupons = shownCoupons.filter((coupon) => coupon.kind === 'push' && isCouponUsable(coupon, now));
+  const rateUpCoupon = shownCoupons.find((coupon) => coupon.kind === 'rate_up' && isCouponUsable(coupon, now)) ?? null;
   const luckyBall = luckyBallFor(`${familyId}:${monthKey(now)}`);
   const effectiveUsePush = usePush && pushCoupons.length > 0;
-  const plan = planDraw({ draws, userId, now, birthMonth, luckyBall, usePush: effectiveUsePush });
+  const plan = planDraw({ draws: shownDraws, userId, now, birthMonth, luckyBall, usePush: effectiveUsePush });
 
   const reloadCoupons = useCallback(async () => {
     try {
@@ -127,6 +136,7 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
         ball: candidate.ball.id,
         rate: candidate.rate,
         pushCouponId: effectiveUsePush ? pushCoupons[0].id : null,
+        isTest: testMode,
       });
       setDraws((prev) => [created, ...prev]);
       setItemName('');
@@ -151,7 +161,9 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
     const name = itemName.trim();
     if (
       window.confirm(
-        `ガラポンを回しますか？\n${name}（税込 ${formatPrice(price)}）\n回すと今月の福引券を1回使います。引き直しはできません。`,
+        testMode
+          ? `ガラポンを回しますか？\n${name}（税込 ${formatPrice(price)}）\nテストです。今月の福引券は減りません。あとで消せます。`
+          : `ガラポンを回しますか？\n${name}（税込 ${formatPrice(price)}）\n回すと今月の福引券を1回使います。引き直しはできません。`,
       )
     ) {
       void spin(name, price);
@@ -177,11 +189,42 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
       .catch(() => window.alert('使えませんでした\nもう一度お試しください。'));
   };
 
+  const toggleTestMode = (value: boolean) => {
+    setTestMode(value);
+    setUsePush(false);
+    setError(null);
+  };
+
+  const deleteTestData = () => {
+    if (
+      !window.confirm(
+        `テストデータを削除しますか？\nテストで引いたくじ・券（${testCount}件）を消します。本物の履歴・券は消えません。`,
+      )
+    ) {
+      return;
+    }
+    setIsDeletingTest(true);
+    deleteMyTestLotteryData(supabase)
+      .then(() => {
+        setDraws((prev) => prev.filter((draw) => !draw.isTest));
+        setCoupons((prev) => prev.filter((coupon) => !coupon.isTest));
+      })
+      .catch(() => window.alert('削除できませんでした\n電波のあるところでもう一度お試しください。'))
+      .finally(() => setIsDeletingTest(false));
+  };
+
   const canDraw = !isLoading && remaining > 0 && !isDrawing;
 
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       <SegmentedTabs ariaLabel="補助くじの表示" value={view} onChange={setView} options={VIEW_OPTIONS} className="shrink-0 mb-2" />
+      <LotteryTestBar
+        testMode={testMode}
+        onToggle={toggleTestMode}
+        testCount={testCount}
+        onDelete={deleteTestData}
+        isDeleting={isDeletingTest}
+      />
 
       {view === 'draw' && (
         <LotteryDrawView
@@ -189,6 +232,7 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
           isLoading={isLoading}
           allowance={allowance}
           remaining={remaining}
+          testMode={testMode}
           pushCount={pushCoupons.length}
           usePush={effectiveUsePush}
           onUsePush={setUsePush}
@@ -201,9 +245,9 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
           onSubmit={confirmSpin}
         />
       )}
-      {view === 'coupons' && <LotteryCouponsView coupons={coupons} isLoading={isLoading} now={now} onUse={useCoupon} />}
+      {view === 'coupons' && <LotteryCouponsView coupons={shownCoupons} isLoading={isLoading} now={now} onUse={useCoupon} />}
       {view === 'history' && (
-        <LotteryHistoryView draws={draws} members={members} myId={userId} isLoading={isLoading} now={now} />
+        <LotteryHistoryView draws={shownDraws} members={members} myId={userId} isLoading={isLoading} now={now} />
       )}
 
       {result !== null && (
@@ -212,7 +256,7 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
           luckyUp={result.luckyUp}
           earnedPush={result.earnedPush}
           rateUpCoupon={rateUpCoupon}
-          coupons={coupons}
+          coupons={shownCoupons}
           onRateUp={rateUp}
           onOpenBox={openBox}
           onClose={() => setResult(null)}

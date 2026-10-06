@@ -629,6 +629,7 @@ export type Database = {
           expires_at: string | null
           family_id: string
           id: string
+          is_test: boolean
           kind: string
           obtained_at: string
           owner_id: string
@@ -642,6 +643,7 @@ export type Database = {
           expires_at?: string | null
           family_id: string
           id?: string
+          is_test?: boolean
           kind: string
           obtained_at?: string
           owner_id: string
@@ -655,6 +657,7 @@ export type Database = {
           expires_at?: string | null
           family_id?: string
           id?: string
+          is_test?: boolean
           kind?: string
           obtained_at?: string
           owner_id?: string
@@ -1093,6 +1096,7 @@ export type Database = {
           drawn_by: string | null
           family_id: string
           id: string
+          is_test: boolean
           item_name: string
           price: number
           push_coupon_id: string | null
@@ -1106,6 +1110,7 @@ export type Database = {
           drawn_by?: string | null
           family_id: string
           id?: string
+          is_test?: boolean
           item_name?: string
           price: number
           push_coupon_id?: string | null
@@ -1119,6 +1124,7 @@ export type Database = {
           drawn_by?: string | null
           family_id?: string
           id?: string
+          is_test?: boolean
           item_name?: string
           price?: number
           push_coupon_id?: string | null
@@ -1428,6 +1434,7 @@ export type Database = {
         Returns: undefined
       }
       is_family_guardian: { Args: never; Returns: boolean }
+      lottery_delete_my_test_data: { Args: never; Returns: number }
       lottery_open_box: {
         Args: { p_draw_id: string }
         Returns: Database["public"]["Tables"]["lottery_coupons"]["Row"][]

@@ -27,6 +27,7 @@ const rowToDraw = (row: DrawRow): SubsidyDraw => ({
   rateUpUsed: row.rate_up_used,
   subsidy: row.subsidy,
   drawnAt: row.drawn_at,
+  isTest: row.is_test,
 });
 
 const rowToCoupon = (row: CouponRow): LotteryCoupon => ({
@@ -38,6 +39,7 @@ const rowToCoupon = (row: CouponRow): LotteryCoupon => ({
   obtainedAt: row.obtained_at,
   expiresAt: row.expires_at,
   usedAt: row.used_at,
+  isTest: row.is_test,
 });
 
 /** 履歴に出す件数の上限。月2〜3回×家族なら、数年分。 */
@@ -76,6 +78,7 @@ export async function insertSubsidyDraw(
       ball: draft.ball,
       rate: draft.rate,
       push_coupon_id: draft.pushCouponId,
+      is_test: draft.isTest,
       subsidy: subsidyFor(draft.rate, draft.price),
     })
     .select('*')
@@ -123,4 +126,14 @@ export async function loadMyBirthMonth(supabase: SupabaseDb, userId: string): Pr
   if (!data?.birth_date) return null;
   const month = Number(data.birth_date.split('-')[1]);
   return month >= 1 && month <= 12 ? month : null;
+}
+
+/**
+ * 自分のテストのくじと券をまとめて消す（本物には触らない）。消したくじの数を返す。
+ * テストモードで確認し終えたあとに使う（docs/home.md §9）。
+ */
+export async function deleteMyTestLotteryData(supabase: SupabaseDb): Promise<number> {
+  const { data, error } = await supabase.rpc('lottery_delete_my_test_data');
+  if (error) throw error;
+  return data ?? 0;
 }

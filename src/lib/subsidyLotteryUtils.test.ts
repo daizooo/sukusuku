@@ -213,6 +213,7 @@ assert.equal(remainingDraws([draw('a', at(2027, 2, 28, 23), 50), draw('b', at(20
     obtainedAt: at(2027, 3, 1),
     expiresAt: at(2027, 4, 1),
     usedAt: null,
+    isTest: false,
     ...overrides,
   });
   assert.equal(isCouponUsable(coupon(), NOW), true);

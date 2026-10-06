@@ -24,6 +24,8 @@ interface LotteryDrawViewProps {
   /** 今月引ける回数（誕生月は3回）と、あと何回か。 */
   allowance: number;
   remaining: number;
+  /** テストモード中か（回数が減らないので、枚数の表示を変える）。 */
+  testMode: boolean;
   /** 使えるひと押し券の枚数と、使うか。 */
   pushCount: number;
   usePush: boolean;
@@ -42,6 +44,7 @@ export default function LotteryDrawView({
   isLoading,
   allowance,
   remaining,
+  testMode,
   pushCount,
   usePush,
   onUsePush,
@@ -86,7 +89,7 @@ export default function LotteryDrawView({
             ))}
           </View>
           <Text style={styles.ticketCount}>
-            {isLoading ? '…' : remaining > 0 ? `あと${remaining}回` : '使い切りました'}
+            {isLoading ? '…' : testMode ? 'テスト中（減りません）' : remaining > 0 ? `あと${remaining}回` : '使い切りました'}
           </Text>
         </View>
       </View>

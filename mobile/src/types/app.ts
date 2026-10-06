@@ -508,6 +508,8 @@ export interface SubsidyDraw {
   subsidy: number;
   /** 引いた時刻（ISO）。 */
   drawnAt: string;
+  /** 確認用のテストのくじ。月の回数・集計に入らず、引いた本人にだけ見える。 */
+  isTest: boolean;
 }
 
 export interface SubsidyDrawDraft {
@@ -517,6 +519,8 @@ export interface SubsidyDrawDraft {
   rate: SubsidyRate;
   /** 使うひと押し券（引く前に使う）。 */
   pushCouponId: string | null;
+  /** テストモードで引くか。 */
+  isTest: boolean;
 }
 
 /**
@@ -538,4 +542,6 @@ export interface LotteryCoupon {
   /** 期限（ISO）。ひと押し券・日帰り旅行券は null（期限なし）。 */
   expiresAt: string | null;
   usedAt: string | null;
+  /** 確認用のテストで出た券。本物のくじには使えない。 */
+  isTest: boolean;
 }

@@ -11,6 +11,7 @@ import {
   openLotteryBox,
   markCouponUsed,
   applyRateUpCoupon,
+  deleteMyTestLotteryData,
 } from '@/lib/api/subsidyDraws';
 import {
   allowanceFor,
@@ -29,6 +30,7 @@ import LotteryCouponsView from '@/components/living/LotteryCouponsView';
 import LotteryDrawView from '@/components/living/LotteryDrawView';
 import LotteryHistoryView from '@/components/living/LotteryHistoryView';
 import LotteryResultSheet from '@/components/living/LotteryResultSheet';
+import LotteryTestBar from '@/components/living/LotteryTestBar';
 
 // 暮らしタブの「補助くじ」の面（docs/home.md §9）。PWA版の
 // `src/components/sukusuku/living/LotteryPanel.tsx` と同じ項目・並び・文言。
@@ -70,6 +72,8 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
   const [usePush, setUsePush] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [result, setResult] = useState<ResultState | null>(null);
+  const [testMode, setTestMode] = useState(false);
+  const [isDeletingTest, setIsDeletingTest] = useState(false);
 
   useEffect(() => {
     if (!familyId) return;
@@ -98,17 +102,22 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
     };
   }, [familyId, userId]);
 
+  // テストモードでは、本物と別のくじ・券だけを見せて数える（月の回数は減らない）。
+  const shownDraws = useMemo(() => draws.filter((draw) => draw.isTest === testMode), [draws, testMode]);
+  const shownCoupons = useMemo(() => coupons.filter((coupon) => coupon.isTest === testMode), [coupons, testMode]);
+  const testCount = draws.filter((draw) => draw.isTest).length + coupons.filter((coupon) => coupon.isTest).length;
+
   const now = new Date();
   const allowance = allowanceFor(birthMonth, now);
-  const remaining = remainingDraws(draws, userId, now, birthMonth);
+  const remaining = testMode ? allowance : remainingDraws(shownDraws, userId, now, birthMonth);
   const pushCoupons = useMemo(
-    () => coupons.filter((coupon) => coupon.kind === 'push' && isCouponUsable(coupon, new Date())),
-    [coupons],
+    () => shownCoupons.filter((coupon) => coupon.kind === 'push' && isCouponUsable(coupon, new Date())),
+    [shownCoupons],
   );
-  const rateUpCoupon = coupons.find((coupon) => coupon.kind === 'rate_up' && isCouponUsable(coupon, now)) ?? null;
+  const rateUpCoupon = shownCoupons.find((coupon) => coupon.kind === 'rate_up' && isCouponUsable(coupon, now)) ?? null;
   const luckyBall = luckyBallFor(`${familyId ?? ''}:${monthKey(now)}`);
   const effectiveUsePush = usePush && pushCoupons.length > 0;
-  const plan = planDraw({ draws, userId, now, birthMonth, luckyBall, usePush: effectiveUsePush });
+  const plan = planDraw({ draws: shownDraws, userId, now, birthMonth, luckyBall, usePush: effectiveUsePush });
 
   const reloadCoupons = useCallback(async () => {
     try {
@@ -129,6 +138,7 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
         ball: candidate.ball.id,
         rate: candidate.rate,
         pushCouponId: effectiveUsePush ? pushCoupons[0].id : null,
+        isTest: testMode,
       });
       setDraws((prev) => [created, ...prev]);
       setItemName('');
@@ -154,7 +164,9 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
     const name = itemName.trim();
     Alert.alert(
       'ガラポンを回しますか？',
-      `${name}（税込 ${formatPrice(price)}）\n回すと今月の福引券を1回使います。引き直しはできません。`,
+      testMode
+        ? `${name}（税込 ${formatPrice(price)}）\nテストです。今月の福引券は減りません。あとで消せます。`
+        : `${name}（税込 ${formatPrice(price)}）\n回すと今月の福引券を1回使います。引き直しはできません。`,
       [
         { text: 'やめる', style: 'cancel' },
         { text: '回す', onPress: () => void spin(name, price) },
@@ -181,6 +193,36 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
       .catch(() => Alert.alert('使えませんでした', 'もう一度お試しください。'));
   };
 
+  const toggleTestMode = (value: boolean) => {
+    setTestMode(value);
+    setUsePush(false);
+    setError(null);
+  };
+
+  const deleteTestData = () => {
+    Alert.alert(
+      'テストデータを削除しますか？',
+      `テストで引いたくじ・券（${testCount}件）を消します。本物の履歴・券は消えません。`,
+      [
+        { text: 'やめる', style: 'cancel' },
+        {
+          text: '削除する',
+          style: 'destructive',
+          onPress: () => {
+            setIsDeletingTest(true);
+            deleteMyTestLotteryData(supabase)
+              .then(() => {
+                setDraws((prev) => prev.filter((draw) => !draw.isTest));
+                setCoupons((prev) => prev.filter((coupon) => !coupon.isTest));
+              })
+              .catch(() => Alert.alert('削除できませんでした', '電波のあるところでもう一度お試しください。'))
+              .finally(() => setIsDeletingTest(false));
+          },
+        },
+      ],
+    );
+  };
+
   const canDraw = !isLoading && remaining > 0 && !isDrawing && familyId !== null;
 
   return (
@@ -192,6 +234,13 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
         accessibilityLabel="補助くじの表示"
         style={styles.views}
       />
+      <LotteryTestBar
+        testMode={testMode}
+        onToggle={toggleTestMode}
+        testCount={testCount}
+        onDelete={deleteTestData}
+        isDeleting={isDeletingTest}
+      />
 
       {view === 'draw' && (
         <LotteryDrawView
@@ -199,6 +248,7 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
           isLoading={isLoading}
           allowance={allowance}
           remaining={remaining}
+          testMode={testMode}
           pushCount={pushCoupons.length}
           usePush={effectiveUsePush}
           onUsePush={setUsePush}
@@ -211,9 +261,9 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
           onSubmit={confirmSpin}
         />
       )}
-      {view === 'coupons' && <LotteryCouponsView coupons={coupons} isLoading={isLoading} now={now} onUse={useCoupon} />}
+      {view === 'coupons' && <LotteryCouponsView coupons={shownCoupons} isLoading={isLoading} now={now} onUse={useCoupon} />}
       {view === 'history' && (
-        <LotteryHistoryView draws={draws} members={members} myId={userId} isLoading={isLoading} now={now} />
+        <LotteryHistoryView draws={shownDraws} members={members} myId={userId} isLoading={isLoading} now={now} />
       )}
 
       {result !== null && (
@@ -222,7 +272,7 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
           luckyUp={result.luckyUp}
           earnedPush={result.earnedPush}
           rateUpCoupon={rateUpCoupon}
-          coupons={coupons}
+          coupons={shownCoupons}
           onRateUp={rateUp}
           onOpenBox={openBox}
           onClose={() => setResult(null)}
