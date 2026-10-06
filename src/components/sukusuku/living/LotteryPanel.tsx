@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { LotteryCoupon, SubsidyDraw } from '@/types/app';
+import type { LotteryCoupon, SubsidyBallId, SubsidyDraw } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { listFamilyMembers } from '@/lib/api/familyMembers';
 import {
@@ -26,27 +26,28 @@ import {
   remainingDraws,
 } from '@/lib/subsidyLotteryUtils';
 import { formatPrice } from '@/lib/shoppingUtils';
-import SegmentedTabs from '../ui/SegmentedTabs';
 import LotteryCouponsView from './LotteryCouponsView';
-import LotteryDrawView from './LotteryDrawView';
+import LotteryDialog from './LotteryDialog';
+import LotteryDrawView, { type LotteryDialogKind } from './LotteryDrawView';
+import LotteryHelpModal from './LotteryHelpModal';
 import LotteryHistoryView from './LotteryHistoryView';
+import LotteryPrizesView from './LotteryPrizesView';
 import LotteryResultModal from './LotteryResultModal';
-import LotteryTestBar from './LotteryTestBar';
 
 // 暮らしタブの「補助くじ」の面（docs/home.md §9）。mobile版の
 // `mobile/src/components/living/LotteryPanel.tsx` と同じ項目・並び・文言。
 //
 // 家のルール: 趣味以外で必要なものを税込500〜3,000円で買うとき、1人あたり月2回（誕生月は3回）まで、
 // 家族のお金から補助を出す。補助率はくじ（ガラポン）で決める（25%・50%・75%・100%）。
-// 「くじ」「券」「履歴」の3面。結果はDBへ記録してから見せる（引き直しができない）。
+// 面はくじのホーム1枚。賞品一覧・券・履歴・ヘルプはホームのボタンから中央の枠で開く。
+// 「ガラポン！」→ ホームのガラポンが回る（そのあいだにDBへ記録する）→ 受け皿に玉が出る → 結果の枠。
+// 結果はDBへ記録してから見せる（引き直しができない）。
 
-type LotteryView = 'draw' | 'coupons' | 'history';
+/** ガラポンを回す最短の時間と、玉が受け皿へ転がり出る時間（ミリ秒）。 */
+const SPIN_MS = 1600;
+const DROP_MS = 900;
 
-const VIEW_OPTIONS: { id: LotteryView; label: string }[] = [
-  { id: 'draw', label: 'くじ' },
-  { id: 'coupons', label: '券' },
-  { id: 'history', label: '履歴' },
-];
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 interface LotteryPanelProps {
   familyId: string;
@@ -62,7 +63,9 @@ interface ResultState {
 
 export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
   const supabase = useMemo(() => createClient(), []);
-  const [view, setView] = useState<LotteryView>('draw');
+  const [dialog, setDialog] = useState<LotteryDialogKind | null>(null);
+  const [spinning, setSpinning] = useState(false);
+  const [dropBall, setDropBall] = useState<SubsidyBallId | null>(null);
   const [draws, setDraws] = useState<SubsidyDraw[]>([]);
   const [coupons, setCoupons] = useState<LotteryCoupon[]>([]);
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
@@ -112,6 +115,7 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
   const allowance = allowanceFor(birthMonth, now);
   const remaining = testMode ? allowance : remainingDraws(shownDraws, userId, now, birthMonth);
   const pushCoupons = shownCoupons.filter((coupon) => coupon.kind === 'push' && isCouponUsable(coupon, now));
+  const usableCoupons = shownCoupons.filter((coupon) => isCouponUsable(coupon, now));
   const rateUpCoupon = shownCoupons.find((coupon) => coupon.kind === 'rate_up' && isCouponUsable(coupon, now)) ?? null;
   const luckyBall = luckyBallFor(`${familyId}:${monthKey(now)}`);
   const effectiveUsePush = usePush && pushCoupons.length > 0;
@@ -128,6 +132,8 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
   const spin = async (name: string, price: number) => {
     if (isDrawing) return;
     setIsDrawing(true);
+    setSpinning(true);
+    const startedAt = Date.now();
     try {
       const candidate = pickCandidate(plan, Math.random);
       const created = await insertSubsidyDraw(supabase, familyId, userId, {
@@ -142,13 +148,19 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
       setItemName('');
       setPriceText('');
       setUsePush(false);
-      setResult({ draw: created, luckyUp: candidate.luckyUp, earnedPush: created.rate === 25 });
       void reloadCoupons();
+      // 記録できてから、回し足りない分だけ回し、玉を受け皿へ出してから結果を開く。
+      await wait(Math.max(0, SPIN_MS - (Date.now() - startedAt)));
+      setDropBall(created.ball);
+      await wait(DROP_MS);
+      setResult({ draw: created, luckyUp: candidate.luckyUp, earnedPush: created.rate === 25 });
     } catch {
       window.alert(
         'くじを引けませんでした\n電波のあるところでもう一度お試しください。今月の回数を使い切っているときも引けません。',
       );
     } finally {
+      setSpinning(false);
+      setDropBall(null);
       setIsDrawing(false);
     }
   };
@@ -217,37 +229,56 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
 
   return (
     <div className="flex flex-1 min-h-0 flex-col">
-      <SegmentedTabs ariaLabel="補助くじの表示" value={view} onChange={setView} options={VIEW_OPTIONS} className="shrink-0 mb-2" />
-      <LotteryTestBar
+      <LotteryDrawView
+        plan={plan}
+        isLoading={isLoading}
+        remaining={remaining}
         testMode={testMode}
-        onToggle={toggleTestMode}
-        testCount={testCount}
-        onDelete={deleteTestData}
-        isDeleting={isDeletingTest}
+        pushCount={pushCoupons.length}
+        usePush={effectiveUsePush}
+        onUsePush={setUsePush}
+        couponCount={usableCoupons.length}
+        itemName={itemName}
+        priceText={priceText}
+        onItemName={setItemName}
+        onPriceText={setPriceText}
+        error={error}
+        canDraw={canDraw}
+        onSubmit={confirmSpin}
+        spinning={spinning}
+        dropBall={dropBall}
+        onOpen={setDialog}
       />
 
-      {view === 'draw' && (
-        <LotteryDrawView
-          plan={plan}
-          isLoading={isLoading}
-          allowance={allowance}
-          remaining={remaining}
-          testMode={testMode}
-          pushCount={pushCoupons.length}
-          usePush={effectiveUsePush}
-          onUsePush={setUsePush}
-          itemName={itemName}
-          priceText={priceText}
-          onItemName={setItemName}
-          onPriceText={setPriceText}
-          error={error}
-          canDraw={canDraw}
-          onSubmit={confirmSpin}
-        />
+      {dialog === 'prizes' && (
+        <LotteryDialog title="賞品一覧" onClose={() => setDialog(null)}>
+          <LotteryPrizesView plan={plan} />
+        </LotteryDialog>
       )}
-      {view === 'coupons' && <LotteryCouponsView coupons={shownCoupons} isLoading={isLoading} now={now} onUse={useCoupon} />}
-      {view === 'history' && (
-        <LotteryHistoryView draws={shownDraws} members={members} myId={userId} isLoading={isLoading} now={now} />
+      {dialog === 'coupons' && (
+        <LotteryDialog title="持っている券" onClose={() => setDialog(null)} fill>
+          <LotteryCouponsView section="coupons" coupons={shownCoupons} isLoading={isLoading} now={now} onUse={useCoupon} />
+        </LotteryDialog>
+      )}
+      {dialog === 'collection' && (
+        <LotteryDialog title="金コレ" onClose={() => setDialog(null)} fill>
+          <LotteryCouponsView section="collection" coupons={shownCoupons} isLoading={isLoading} now={now} onUse={useCoupon} />
+        </LotteryDialog>
+      )}
+      {dialog === 'history' && (
+        <LotteryDialog title="履歴" onClose={() => setDialog(null)} fill>
+          <LotteryHistoryView draws={shownDraws} members={members} myId={userId} isLoading={isLoading} now={now} />
+        </LotteryDialog>
+      )}
+      {dialog === 'help' && (
+        <LotteryHelpModal
+          onClose={() => setDialog(null)}
+          testMode={testMode}
+          onToggleTest={toggleTestMode}
+          testCount={testCount}
+          onDeleteTest={deleteTestData}
+          isDeletingTest={isDeletingTest}
+        />
       )}
 
       {result !== null && (

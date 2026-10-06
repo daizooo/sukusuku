@@ -3,7 +3,7 @@ import { colors } from '@/lib/theme';
 
 // 補助くじの「テストモード」の切り替えと、テストデータの削除（docs/home.md §9）。PWA版の
 // `src/components/sukusuku/living/LotteryTestBar.tsx` と同じ項目・文言。
-// 動作確認のために引いたくじ・券を、本物と分けて持ち、確認が済んだらまとめて消す。
+// 動作確認のために引いたくじ・券を、本物と分けて持ち、確認が済んだらまとめて消す。ヘルプの枠の下に置く。
 
 interface LotteryTestBarProps {
   testMode: boolean;
@@ -48,8 +48,6 @@ export default function LotteryTestBar({ testMode, onToggle, testCount, onDelete
 
 const styles = StyleSheet.create({
   bar: {
-    marginHorizontal: 16,
-    marginBottom: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     gap: 8,
