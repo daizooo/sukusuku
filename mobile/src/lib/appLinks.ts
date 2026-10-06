@@ -37,6 +37,9 @@ export const notificationTarget = (kind: unknown): NotificationTarget => {
     // 検温のお知らせは体温の入力画面へ
     case 'temperature':
       return { tab: 'care', openLog: 'temperature' };
+    // 備蓄の期限のお知らせは暮らしタブ（備蓄の期限順の一覧）へ
+    case 'stock':
+      return { tab: 'living' };
     default:
       return { tab: 'schedule' };
   }

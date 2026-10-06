@@ -16,3 +16,7 @@ verify_jwt = false
 [functions.send-temperature-reminders]
 # 同上。予定のリマインダーと同じ REMINDER_CRON_SECRET を検証する。
 verify_jwt = false
+
+[functions.send-stock-expiry-reminders]
+# 同上。予定のリマインダーと同じ REMINDER_CRON_SECRET を検証する。
+verify_jwt = false
