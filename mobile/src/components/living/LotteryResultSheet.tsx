@@ -9,7 +9,7 @@ import { BALL_COLOR } from '@/components/living/LotteryBall';
 import LotteryCelebration, { LotteryComplete, PopIn } from '@/components/living/LotteryCelebration';
 import LotteryDialog from '@/components/living/LotteryDialog';
 
-// 補助くじの結果（docs/home.md §9.5）。PWA版の `src/components/sukusuku/living/LotteryResultModal.tsx` と
+// 福引チャンスの結果（docs/home.md §9.5）。PWA版の `src/components/sukusuku/living/LotteryResultModal.tsx` と
 // 同じ流れ・同じ文言。結果はこの枠を出す前にDBへ記録してある（見てから引き直せない）。
 //
 // ガラポンはホームの面で回し、玉が受け皿に出てからこの枠を開く。ここでは出た玉が弾むように出て、
@@ -157,7 +157,7 @@ export default function LotteryResultSheet({
 
         <PopIn delay={150}>
           <Text style={[styles.prizeName, { color: tone.text }]}>
-            {ball.ball}！ {ball.name}
+            {ball.name}！
           </Text>
         </PopIn>
         {/* 補助率アップ券で上がったら、札をもう一度弾ませる。 */}
@@ -223,7 +223,7 @@ export default function LotteryResultSheet({
               <Text style={styles.perkHead}>箱の中身</Text>
               <Text style={styles.perkName}>{COUPON_INFO[perk.kind].name}</Text>
               <Text style={styles.perkLimit}>{formatLimit(perk.expiresAt)}</Text>
-              <Text style={styles.perkCount}>金コレ {trip ? 6 : progress.collected.length} / 6</Text>
+              <Text style={styles.perkCount}>金賞コレクション {trip ? 6 : progress.collected.length} / 6</Text>
             </View>
           </PopIn>
         )}

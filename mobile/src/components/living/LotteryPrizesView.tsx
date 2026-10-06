@@ -3,9 +3,9 @@ import { colors } from '@/lib/theme';
 import { BALLS, NOTE_TEXT, upRate, type DrawPlan } from '@/lib/subsidyLotteryUtils';
 import LotteryBall, { BALL_COLOR } from '@/components/living/LotteryBall';
 
-// 補助くじの「賞品一覧」（ホームのボタンから中央の枠で開く。docs/home.md §9.5）。PWA版の
+// 福引チャンスの「賞品一覧」（ホームのボタンから中央の枠で開く。docs/home.md §9.5）。PWA版の
 // `src/components/sukusuku/living/LotteryPrizesView.tsx` と同じ項目・並び・文言。
-// 玉・賞の名前・補助率だけを出す（確率は出さない。％が確率に見えないよう「補助率」と添える）。今月のラッキーカラーの玉には印を付け、
+// 玉の絵・賞の名前・補助率だけを出す（玉の色の名前は文字にしない。確率は出さない。％が確率に見えないよう「補助率」と添える）。今月のラッキーカラーの玉には印を付け、
 // いま効いている救済があれば下に並べる。
 
 export default function LotteryPrizesView({ plan }: { plan: DrawPlan }) {
@@ -18,10 +18,7 @@ export default function LotteryPrizesView({ plan }: { plan: DrawPlan }) {
             <LotteryBall ball={ball.id} size={32} />
             <View style={styles.names}>
               <Text style={[styles.name, { color: BALL_COLOR[ball.id].text }]}>{ball.name}</Text>
-              <Text style={styles.ball}>
-                {ball.ball}
-                {lucky ? `・ラッキー！今月は補助率${upRate(ball.rate)}%` : ''}
-              </Text>
+              {lucky && <Text style={styles.lucky}>ラッキー！今月は補助率{upRate(ball.rate)}%</Text>}
             </View>
             <View style={styles.rateBox}>
               <Text style={styles.rateLabel}>補助率</Text>
@@ -58,7 +55,7 @@ const styles = StyleSheet.create({
   rowLucky: { backgroundColor: colors.milkSurface, borderWidth: 1, borderColor: colors.milkBorder },
   names: { flex: 1, gap: 2 },
   name: { fontSize: 15, fontWeight: '800' },
-  ball: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
+  lucky: { fontSize: 11, fontWeight: '700', color: colors.milkText },
   rateBox: { alignItems: 'flex-end' },
   rateLabel: { fontSize: 10, fontWeight: '700', color: colors.textMuted },
   rate: { fontSize: 20, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },

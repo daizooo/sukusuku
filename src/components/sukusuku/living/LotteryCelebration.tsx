@@ -98,7 +98,7 @@ export function PopIn({ children, delay = 0, className = '' }: { children: React
 }
 
 /**
- * 金コレが6つそろったときの演出。6つの枠が順に金色に光り、「金コレ コンプリート！」と、
+ * 金コレが6つそろったときの演出。6つの枠が順に金色に光り、「金賞コレクション コンプリート！」と、
  * そろえたごほうびの券が弾んで出る（ごほうびの中身はここで初めて見せる）。
  */
 export function LotteryComplete({ rewardName }: { rewardName: string }) {
@@ -119,8 +119,9 @@ export function LotteryComplete({ rewardName }: { rewardName: string }) {
         ))}
       </div>
       <PopIn delay={1200} className="relative">
-        <span className="text-[22px] font-extrabold tracking-wide text-amber-200 [text-shadow:0_2px_4px_rgba(0,0,0,0.45)]">
-          金コレ コンプリート！
+        <span className="block text-[13px] font-extrabold tracking-[2px] text-amber-200">金賞コレクション</span>
+        <span className="block text-[22px] font-extrabold tracking-wide text-amber-200 [text-shadow:0_2px_4px_rgba(0,0,0,0.45)]">
+          コンプリート！
         </span>
       </PopIn>
       <PopIn delay={1500} className="relative">

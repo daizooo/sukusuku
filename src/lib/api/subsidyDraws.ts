@@ -119,13 +119,26 @@ export async function applyRateUpCoupon(supabase: SupabaseDb, drawId: string, co
   return rowToDraw(data);
 }
 
-/** 自分の誕生月（1〜12）。誕生月は引ける回数が+1回になる。分からなければ null。 */
-export async function loadMyBirthMonth(supabase: SupabaseDb, userId: string): Promise<number | null> {
-  const { data, error } = await supabase.from('family_members').select('birth_date').eq('user_id', userId).maybeSingle();
+export interface MyLotteryProfile {
+  /** 誕生月（1〜12）。誕生月は引ける回数が+1回になる。分からなければ null。 */
+  birthMonth: number | null;
+  /** テストモードを出してよいか。開発をしている夫だけ（docs/home.md §9.6）。 */
+  canTest: boolean;
+}
+
+/** 自分の家族の情報のうち、くじに使うもの（誕生月・テストモードを使えるか）。 */
+export async function loadMyLotteryProfile(supabase: SupabaseDb, userId: string): Promise<MyLotteryProfile> {
+  const { data, error } = await supabase
+    .from('family_members')
+    .select('birth_date, relation')
+    .eq('user_id', userId)
+    .maybeSingle();
   if (error) throw error;
-  if (!data?.birth_date) return null;
-  const month = Number(data.birth_date.split('-')[1]);
-  return month >= 1 && month <= 12 ? month : null;
+  const month = data?.birth_date ? Number(data.birth_date.split('-')[1]) : NaN;
+  return {
+    birthMonth: month >= 1 && month <= 12 ? month : null,
+    canTest: data?.relation === 'husband',
+  };
 }
 
 /**

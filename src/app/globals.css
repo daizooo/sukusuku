@@ -183,3 +183,54 @@ body {
 .lottery-wiggle {
   animation: lottery-wiggle 1.75s ease-in-out infinite;
 }
+/* 金賞コレクション: 集めたメダルがきらりと光る・鍵のメダルと宝箱が震える・宝箱が揺れる（--angle で揺れの大きさ） */
+@keyframes lottery-twinkle {
+  0%,
+  34%,
+  100% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  14% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+.lottery-twinkle {
+  animation: lottery-twinkle 3.6s ease-in-out infinite both;
+}
+@keyframes lottery-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(5px);
+  }
+  40%,
+  80% {
+    transform: translateX(-5px);
+  }
+}
+.lottery-shake {
+  animation: lottery-shake 0.3s linear;
+}
+@keyframes lottery-treasure {
+  0%,
+  20%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  4%,
+  12% {
+    transform: translateY(-2px) rotate(var(--angle));
+  }
+  8%,
+  16% {
+    transform: translateY(-2px) rotate(calc(var(--angle) * -1));
+  }
+}
+.lottery-treasure {
+  animation: lottery-treasure 2.8s ease-in-out infinite;
+}

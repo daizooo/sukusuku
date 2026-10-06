@@ -1,22 +1,17 @@
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { LotteryCoupon } from '@/types/app';
 import { colors } from '@/lib/theme';
-import {
-  COLLECTION_SLOTS,
-  COUPON_INFO,
-  collectionProgress,
-  daysLeft,
-  isCouponUsable,
-  isLotteryCoupon,
-} from '@/lib/subsidyLotteryUtils';
+import { COUPON_INFO, collectionProgress, daysLeft, isCouponUsable, isLotteryCoupon } from '@/lib/subsidyLotteryUtils';
+import LotteryCollectionBoard from '@/components/living/LotteryCollectionBoard';
 
-// 補助くじの「券」と「金コレ」（金賞コレクション）の枠（docs/home.md §9.5）。PWA版の
+// 福引チャンスの「券」と「金賞コレクション」（ホームのボタンは「金コレ」）の枠（docs/home.md §9.5）。PWA版の
 // `src/components/sukusuku/living/LotteryCouponsView.tsx` と同じ項目・並び・文言。
 // - 券: 自分の使える券（アカウントごと）。持っているときだけホームにボタンが出る
-// - 金コレ: 金玉の箱から出た特典の6枠と、使った券・期限切れの券。そろえたごほうびは書かない（出たときのお楽しみ）
+// - 金賞コレクション: 金賞の箱から出た特典の台紙（LotteryCollectionBoard）と、使った券・期限切れの券。
+//   そろえたごほうびは書かない（出たときのお楽しみ）
 
 interface LotteryCouponsViewProps {
-  /** どちらを出すか（券＝使える券、金コレ＝6枠と使った・期限切れの券）。 */
+  /** どちらを出すか（券＝使える券、金賞コレクション＝台紙と使った・期限切れの券）。 */
   section: 'coupons' | 'collection';
   coupons: LotteryCoupon[];
   isLoading: boolean;
@@ -45,29 +40,7 @@ export default function LotteryCouponsView({ section, coupons, isLoading, now, o
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
-      {section === 'collection' && (
-        <View style={styles.card}>
-          <View style={styles.head}>
-            <Text style={[styles.sub, styles.flex]}>金玉の箱から出た特典を集めよう。6つそろうと…？</Text>
-            <Text style={styles.count}>
-              {progress.cycle}周目 {progress.collected.length} / 6
-            </Text>
-          </View>
-          <View style={styles.grid}>
-            {COLLECTION_SLOTS.map((entry) => {
-              const got = progress.collected.includes(entry.slot);
-              return (
-                <View key={entry.slot} style={[styles.slot, got && styles.slotGot]}>
-                  <Text style={[styles.slotNumber, got && styles.slotTextGot]}>{entry.slot}</Text>
-                  <Text style={[styles.slotName, got && styles.slotTextGot]} numberOfLines={2}>
-                    {got ? COUPON_INFO[entry.kind].name : '？'}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-      )}
+      {section === 'collection' && <LotteryCollectionBoard cycle={progress.cycle} collected={progress.collected} />}
 
       {section === 'coupons' && (isLoading ? (
         <Text style={styles.empty}>読み込み中...</Text>
@@ -114,30 +87,6 @@ export default function LotteryCouponsView({ section, coupons, isLoading, now, o
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 24, gap: 8 },
-  card: {
-    padding: 12,
-    gap: 8,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  count: { fontSize: 13, fontWeight: '700', color: colors.milkText, fontVariant: ['tabular-nums'] },
-  sub: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  slot: {
-    width: '31.5%',
-    minHeight: 64,
-    padding: 8,
-    gap: 2,
-    borderRadius: 10,
-    backgroundColor: colors.neutralSurface,
-  },
-  slotGot: { backgroundColor: colors.milkSurface, borderWidth: 1, borderColor: colors.milkBorder },
-  slotNumber: { fontSize: 10, fontWeight: '700', color: colors.textFaint },
-  slotName: { fontSize: 12, fontWeight: '700', color: colors.textFaint },
-  slotTextGot: { color: colors.milkText },
   heading: { fontSize: 12, fontWeight: '700', color: colors.textMuted, paddingTop: 4, paddingHorizontal: 4 },
   empty: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
   list: {
