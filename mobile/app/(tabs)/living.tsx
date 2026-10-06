@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Minus, Plus } from 'lucide-react-native';
+import { ListPlus, Minus, Plus } from 'lucide-react-native';
 import type { StockItem, StockItemDraft, StockTarget, StockTargetDraft } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
@@ -40,9 +40,12 @@ import {
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import StockItemSheet from '@/components/living/StockItemSheet';
 import StockTargetSheet from '@/components/living/StockTargetSheet';
+import ProductsPanel, { type EditingProduct } from '@/components/living/ProductsPanel';
+import { useShoppingSender } from '@/components/living/useShoppingSender';
+import { shortageTitle } from '@/lib/shoppingUtils';
 
 /**
- * 暮らしタブ（docs/home.md）。いまは防災備蓄だけ（フェーズ1）。
+ * 暮らしタブ（docs/home.md）。防災備蓄（期限順・必要数）と日用品の台帳。
  * Web版の `src/components/sukusuku/tabs/LivingTab.tsx` と同じ項目・並び・文言にしてある。
  *
  * 防災備蓄の困りごとは数を数えることではなく、期限切れに気づかないこと。
@@ -52,6 +55,9 @@ import StockTargetSheet from '@/components/living/StockTargetSheet';
  * 「必要数」の面では、品目ごとに「家族の何日分」が要るかを決めておき（stock_targets）、
  * 期限切れでないロットの合計と比べて**足りないものを赤で出す**（docs/home.md §3.5）。
  * 必要数は「1人1日あたり × 人数 × 日数」か「決まった数」。人数・日数は家族で1つ。
+ *
+ * 「日用品」の面は、よく買うものの台帳（docs/home.md §4）。行の「＋」で買い出しリストへ送る。
+ * 備蓄の不足も「リストへ」で同じリストへ送れる（送る仕組みは useShoppingSender）。
  *
  * 見出し・要約・面の切り替え・カテゴリは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  */
@@ -71,12 +77,13 @@ const LEVEL_STYLE: Record<ExpiryLevel, { color: string; surface?: string }> = {
 type Editing = StockItem | 'new' | null;
 type EditingTarget = StockTarget | 'new' | null;
 
-/** 期限の近い順に並べる面と、必要数に足りているかを見る面。 */
-type StockView = 'expiry' | 'targets';
+/** 期限の近い順に並べる面、必要数に足りているかを見る面、日用品の台帳。 */
+type StockView = 'expiry' | 'targets' | 'products';
 
 const VIEW_OPTIONS: { id: StockView; label: string }[] = [
   { id: 'expiry', label: '期限順' },
   { id: 'targets', label: '必要数' },
+  { id: 'products', label: '日用品' },
 ];
 
 /** 人数・日数の上限（DBの check と同じ）。 */
@@ -99,6 +106,8 @@ export default function LivingScreen() {
   const [plan, setPlan] = useState<StockPlan>(DEFAULT_STOCK_PLAN);
   const [view, setView] = useState<StockView>('expiry');
   const [editingTarget, setEditingTarget] = useState<EditingTarget>(null);
+  const [editingProduct, setEditingProduct] = useState<EditingProduct>(null);
+  const sender = useShoppingSender(familyId);
 
   useEffect(() => {
     if (!userId) return;
@@ -396,6 +405,17 @@ export default function LivingScreen() {
                       </Text>
                     )}
                   </View>
+                  {shortage > 0 && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`${target.name}の不足を買い出しリストへ`}
+                      onPress={() => sender.send(shortageTitle(target.name, shortage, target.unit), '')}
+                      hitSlop={8}
+                      style={styles.toListButton}
+                    >
+                      <ListPlus size={16} color={colors.alertText} />
+                    </Pressable>
+                  )}
                 </Pressable>
               );
             })}
@@ -409,10 +429,16 @@ export default function LivingScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>防災備蓄</Text>
+        <Text style={styles.title}>{view === 'products' ? '日用品' : '防災備蓄'}</Text>
         <Pressable
           accessibilityRole="button"
-          onPress={() => (view === 'expiry' ? setEditing('new') : setEditingTarget('new'))}
+          onPress={() =>
+            view === 'expiry'
+              ? setEditing('new')
+              : view === 'targets'
+                ? setEditingTarget('new')
+                : setEditingProduct('new')
+          }
           style={styles.addButton}
           disabled={!familyId}
         >
@@ -421,7 +447,7 @@ export default function LivingScreen() {
         </Pressable>
       </View>
 
-      {!isLoading && items.length > 0 && (
+      {view !== 'products' && !isLoading && items.length > 0 && (
         <View style={styles.summary}>
           {summary.length === 0 ? (
             <Text style={styles.summaryCalm}>不足も、1年以内に期限が来るものもありません</Text>
@@ -470,7 +496,15 @@ export default function LivingScreen() {
         </View>
       )}
 
-      {isLoading ? <Text style={styles.message}>読み込み中...</Text> : view === 'expiry' ? expiryList : targetList}
+      {view === 'products' ? (
+        <ProductsPanel familyId={familyId} sender={sender} editing={editingProduct} onEdit={setEditingProduct} />
+      ) : isLoading ? (
+        <Text style={styles.message}>読み込み中...</Text>
+      ) : view === 'expiry' ? (
+        expiryList
+      ) : (
+        targetList
+      )}
 
       {editing !== null && (
         <StockItemSheet
@@ -497,6 +531,8 @@ export default function LivingScreen() {
           onDelete={editingTarget === 'new' ? undefined : () => void removeTarget(editingTarget.id)}
         />
       )}
+      {sender.picker}
+      {sender.banner}
     </SafeAreaView>
   );
 }
@@ -555,6 +591,14 @@ const styles = StyleSheet.create({
   quantity: { fontSize: 13, fontWeight: '700', color: colors.textSubtle, fontVariant: ['tabular-nums'] },
   expiry: { fontSize: 11, fontWeight: '700', marginTop: 2, fontVariant: ['tabular-nums'] },
   rowShort: { backgroundColor: colors.dangerSurface },
+  toListButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.alertSurface,
+  },
   shortText: { color: colors.alertText },
   enoughText: { color: colors.doneText },
   footnote: { fontSize: 11, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingTop: 12 },

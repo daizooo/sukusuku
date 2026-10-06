@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Minus, Plus } from 'lucide-react';
+import { ListPlus, Minus, Plus } from 'lucide-react';
 import type { StockItem, StockItemDraft, StockTarget, StockTargetDraft } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
@@ -36,9 +36,12 @@ import {
 import SegmentedTabs from '../ui/SegmentedTabs';
 import StockItemModal from '../modals/StockItemModal';
 import StockTargetModal from '../modals/StockTargetModal';
+import ProductsPanel, { type EditingProduct } from '../living/ProductsPanel';
+import { useShoppingSender } from '../living/useShoppingSender';
+import { shortageTitle } from '@/lib/shoppingUtils';
 
 /**
- * 暮らしタブ（docs/home.md）。いまは防災備蓄だけ。
+ * 暮らしタブ（docs/home.md）。防災備蓄（期限順・必要数）と日用品の台帳。
  * mobile版の `mobile/app/(tabs)/living.tsx` と同じ項目・並び・文言にしてある。
  *
  * 防災備蓄の困りごとは数を数えることではなく、期限切れに気づかないこと。
@@ -48,6 +51,9 @@ import StockTargetModal from '../modals/StockTargetModal';
  * 「必要数」の面では、品目ごとに「家族の何日分」が要るかを決めておき（stock_targets）、
  * 期限切れでないロットの合計と比べて**足りないものを赤で出す**（docs/home.md §3.5）。
  * 必要数は「1人1日あたり × 人数 × 日数」か「決まった数」。人数・日数は家族で1つ。
+ *
+ * 「日用品」の面は、よく買うものの台帳（docs/home.md §4）。行の「＋」で買い出しリストへ送る。
+ * 備蓄の不足も「リストへ」で同じリストへ送れる（送る仕組みは living/useShoppingSender）。
  *
  * 見出し・要約・面の切り替え・カテゴリは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  * 他のタブと違い、読み書きはこのタブの中で完結させる（アプリ全体の状態に持たない）。
@@ -69,11 +75,12 @@ type Editing = StockItem | 'new' | null;
 type EditingTarget = StockTarget | 'new' | null;
 
 /** 期限の近い順に並べる面と、必要数に足りているかを見る面。 */
-type StockView = 'expiry' | 'targets';
+type StockView = 'expiry' | 'targets' | 'products';
 
 const VIEW_OPTIONS: { id: StockView; label: string }[] = [
   { id: 'expiry', label: '期限順' },
   { id: 'targets', label: '必要数' },
+  { id: 'products', label: '日用品' },
 ];
 
 /** 人数・日数の上限（DBの check と同じ）。 */
@@ -93,6 +100,8 @@ export default function LivingTab({ familyId }: { familyId: string }) {
   const [view, setView] = useState<StockView>('expiry');
   const [editing, setEditing] = useState<Editing>(null);
   const [editingTarget, setEditingTarget] = useState<EditingTarget>(null);
+  const [editingProduct, setEditingProduct] = useState<EditingProduct>(null);
+  const sender = useShoppingSender(familyId);
 
   useEffect(() => {
     let isMounted = true;
@@ -336,12 +345,15 @@ export default function LivingTab({ familyId }: { familyId: string }) {
                 : '決まった数';
               const sub = [rule, target.note].filter((text) => text !== '').join('・');
               return (
-                <li key={target.id}>
+                <li
+                  key={target.id}
+                  className={`flex items-center gap-2 pr-3 ${isShort(status) ? 'bg-red-50' : ''}`}
+                >
                   <button
                     type="button"
                     onClick={() => setEditingTarget(target)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-left ${
-                      isShort(status) ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'
+                    className={`flex-1 min-w-0 flex items-center gap-3 pl-3 py-2.5 text-left ${
+                      isShort(status) ? 'hover:bg-red-100' : 'hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex-1 min-w-0">
@@ -374,6 +386,16 @@ export default function LivingTab({ familyId }: { familyId: string }) {
                       )}
                     </div>
                   </button>
+                  {shortage > 0 && (
+                    <button
+                      type="button"
+                      aria-label={`${target.name}の不足を買い出しリストへ`}
+                      onClick={() => sender.send(shortageTitle(target.name, shortage, target.unit), '')}
+                      className="shrink-0 w-8 h-8 rounded-full bg-red-100 text-red-700 flex items-center justify-center hover:bg-red-200"
+                    >
+                      <ListPlus size={16} />
+                    </button>
+                  )}
                 </li>
               );
             })}
@@ -385,12 +407,18 @@ export default function LivingTab({ familyId }: { familyId: string }) {
   );
 
   return (
-    <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
+    <div className="relative p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <div className="shrink-0 flex items-center justify-between pb-2">
-        <h2 className="text-lg font-bold text-gray-900">防災備蓄</h2>
+        <h2 className="text-lg font-bold text-gray-900">{view === 'products' ? '日用品' : '防災備蓄'}</h2>
         <button
           type="button"
-          onClick={() => (view === 'expiry' ? setEditing('new') : setEditingTarget('new'))}
+          onClick={() =>
+            view === 'expiry'
+              ? setEditing('new')
+              : view === 'targets'
+                ? setEditingTarget('new')
+                : setEditingProduct('new')
+          }
           className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-500 text-white text-sm font-bold hover:bg-blue-600 transition"
         >
           <Plus size={16} />
@@ -398,7 +426,7 @@ export default function LivingTab({ familyId }: { familyId: string }) {
         </button>
       </div>
 
-      {!isLoading && items.length > 0 && (
+      {view !== 'products' && !isLoading && items.length > 0 && (
         <div className="shrink-0 flex flex-wrap gap-1.5 pb-2">
           {summary.length === 0 ? (
             <span className="text-xs text-gray-500">不足も、1年以内に期限が来るものもありません</span>
@@ -445,7 +473,9 @@ export default function LivingTab({ familyId }: { familyId: string }) {
         </div>
       )}
 
-      {isLoading ? (
+      {view === 'products' ? (
+        <ProductsPanel familyId={familyId} sender={sender} editing={editingProduct} onEdit={setEditingProduct} />
+      ) : isLoading ? (
         <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>
       ) : view === 'expiry' ? (
         expiryList
@@ -478,6 +508,9 @@ export default function LivingTab({ familyId }: { familyId: string }) {
           onDelete={editingTarget === 'new' ? undefined : () => void removeTarget(editingTarget.id)}
         />
       )}
+
+      {sender.picker}
+      {sender.banner}
     </div>
   );
 }

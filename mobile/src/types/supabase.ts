@@ -445,6 +445,53 @@ export type Database = {
           },
         ]
       }
+      household_products: {
+        Row: {
+          category: string
+          created_at: string
+          family_id: string
+          id: string
+          last_added_at: string | null
+          name: string
+          note: string
+          price: number | null
+          store: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          family_id: string
+          id?: string
+          last_added_at?: string | null
+          name: string
+          note?: string
+          price?: number | null
+          store?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          family_id?: string
+          id?: string
+          last_added_at?: string | null
+          name?: string
+          note?: string
+          price?: number | null
+          store?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_products_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       list_groups: {
         Row: {
           created_at: string

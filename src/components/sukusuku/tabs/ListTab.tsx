@@ -1,9 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { Check, ChevronDown, ChevronRight, GripVertical, Lock, Pin, PinOff, Plus, Trash2, X } from 'lucide-react';
-import type { ListBoard, ListGroup, ListItem } from '@/types/app';
+import type { HouseholdProduct, ListBoard, ListGroup, ListItem } from '@/types/app';
+import { createClient } from '@/lib/supabase/client';
+import { loadVisibleHouseholdProducts } from '@/lib/api/householdProducts';
+import { suggestProducts } from '@/lib/shoppingUtils';
 import { useDragReorder } from '../ui/useDragReorder';
 import ListEditorModal, { DEFAULT_GROUP_LABEL, type ListDraft } from '../modals/ListEditorModal';
 
@@ -243,10 +246,13 @@ function AddRow({
   tone = 'plain',
   divided = false,
   allowEmpty = false,
+  suggest,
 }: {
   label: string;
   placeholder?: string;
   onSubmit: (value: string) => void;
+  /** 打っている文字から候補を出す（日用品の台帳。docs/home.md §4.2）。押すとその内容で追加する。 */
+  suggest?: (typed: string) => string[];
   /** 空のままでも追加できるようにする（項目の追加用。空行を挟んで見出しのように使える）。 */
   allowEmpty?: boolean;
   /** 枠そのものを足す行は、項目の追加と見分けられるよう破線にする。 */
@@ -279,35 +285,55 @@ function AddRow({
     setDraft('');
   };
 
+  const suggestions = suggest ? suggest(draft) : [];
+
   return (
-    <div
-      className={`flex items-center gap-2 pl-3 pr-1 py-1.5 ${
-        tone === 'outlined' ? 'border border-dashed border-gray-300 rounded-xl' : divider
-      }`}
-    >
-      <input
-        type="text"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') submit();
-          if (e.key === 'Escape') setDraft(null);
-        }}
-        // 打ち終わって他へ触れたときは、書きかけが無ければ欄を畳む。
-        onBlur={() => setDraft((prev) => (prev && prev.trim() ? prev : null))}
-        autoFocus
-        placeholder={placeholder}
-        className="flex-1 min-w-0 border border-gray-300 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-blue-500"
-      />
-      <button
-        type="button"
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={submit}
-        disabled={!allowEmpty && !draft.trim()}
-        className="flex-none text-sm font-bold text-blue-600 px-2 py-2 disabled:text-gray-300"
-      >
-        追加
-      </button>
+    <div className={tone === 'outlined' ? 'border border-dashed border-gray-300 rounded-xl' : divider}>
+      <div className="flex items-center gap-2 pl-3 pr-1 py-1.5">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit();
+            if (e.key === 'Escape') setDraft(null);
+          }}
+          // 打ち終わって他へ触れたときは、書きかけが無ければ欄を畳む。
+          onBlur={() => setDraft((prev) => (prev && prev.trim() ? prev : null))}
+          autoFocus
+          placeholder={placeholder}
+          className="flex-1 min-w-0 border border-gray-300 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-blue-500"
+        />
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={submit}
+          disabled={!allowEmpty && !draft.trim()}
+          className="flex-none text-sm font-bold text-blue-600 px-2 py-2 disabled:text-gray-300"
+        >
+          追加
+        </button>
+      </div>
+      {suggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-3 pb-2">
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              // 押した瞬間に入力欄から外れて欄が畳まれないように。
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onSubmit(suggestion);
+                setDraft('');
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-xs font-bold text-blue-600 hover:bg-blue-100"
+            >
+              <Plus size={12} />
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -448,6 +474,21 @@ export default function ListTab({
   // 今の編集が「新しく作ったリスト」か。見出しへ入力を移し、何も書かずに閉じたら消す。
   const [isNewList, setIsNewList] = useState(false);
   const [showDone, setShowDone] = useState(false);
+
+  // 項目の追加欄の候補に出す日用品の台帳（docs/home.md §4.2）。読めなくてもリストは出す。
+  const [products, setProducts] = useState<HouseholdProduct[]>([]);
+  useEffect(() => {
+    let isMounted = true;
+    loadVisibleHouseholdProducts(createClient())
+      .then((loaded) => {
+        if (isMounted) setProducts(loaded);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+  const suggestFromProducts = (typed: string) => suggestProducts(products, typed).map((product) => product.name);
 
   // 固定したリストが先。中は並び順（position）で、同じなら読み込んだ順のまま。
   const sortedLists = useMemo(
@@ -652,6 +693,7 @@ export default function ListTab({
               divided={undoneItems.length > 0}
               label="追加"
               allowEmpty
+              suggest={suggestFromProducts}
               onSubmit={(title) => selected && onAddItem(selected.id, null, title)}
             />
           </div>
@@ -679,6 +721,7 @@ export default function ListTab({
                     divided={groupItems.length > 0}
                     label="追加"
                     allowEmpty
+                    suggest={suggestFromProducts}
                     onSubmit={(title) => selected && onAddItem(selected.id, group.id, title)}
                   />
                 </section>
@@ -698,6 +741,7 @@ export default function ListTab({
                   divided
                   label="追加"
                   allowEmpty
+                  suggest={suggestFromProducts}
                   onSubmit={(title) => selected && onAddItem(selected.id, null, title)}
                 />
               </section>
