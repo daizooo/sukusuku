@@ -37,6 +37,7 @@ import SegmentedTabs from '../ui/SegmentedTabs';
 import StockItemModal from '../modals/StockItemModal';
 import StockTargetModal from '../modals/StockTargetModal';
 import ProductsPanel, { type EditingProduct } from '../living/ProductsPanel';
+import LotteryPanel from '../living/LotteryPanel';
 import { useShoppingSender } from '../living/useShoppingSender';
 import { shortageTitle } from '@/lib/shoppingUtils';
 
@@ -75,13 +76,22 @@ type Editing = StockItem | 'new' | null;
 type EditingTarget = StockTarget | 'new' | null;
 
 /** 期限の近い順に並べる面と、必要数に足りているかを見る面。 */
-type StockView = 'expiry' | 'targets' | 'products';
+type StockView = 'expiry' | 'targets' | 'products' | 'lottery';
 
 const VIEW_OPTIONS: { id: StockView; label: string }[] = [
   { id: 'expiry', label: '期限順' },
   { id: 'targets', label: '必要数' },
   { id: 'products', label: '日用品' },
+  { id: 'lottery', label: '補助くじ' },
 ];
+
+/** 各面の見出し。 */
+const VIEW_TITLE: Record<StockView, string> = {
+  expiry: '防災備蓄',
+  targets: '防災備蓄',
+  products: '日用品',
+  lottery: '補助くじ',
+};
 
 /** 人数・日数の上限（DBの check と同じ）。 */
 const PLAN_LIMIT: StockPlan = { people: 20, days: 60, carryDays: 7 };
@@ -90,7 +100,7 @@ const PLAN_LIMIT: StockPlan = { people: 20, days: 60, carryDays: 7 };
 const storageFilter = (storage: StockStorage) => `storage:${storage}`;
 const STORAGE_FILTERS = (['carry', 'home'] as StockStorage[]).map(storageFilter);
 
-export default function LivingTab({ familyId }: { familyId: string }) {
+export default function LivingTab({ familyId, userId }: { familyId: string; userId: string }) {
   const supabase = useMemo(() => createClient(), []);
   const [items, setItems] = useState<StockItem[]>([]);
   const [targets, setTargets] = useState<StockTarget[]>([]);
@@ -409,24 +419,26 @@ export default function LivingTab({ familyId }: { familyId: string }) {
   return (
     <div className="relative p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <div className="shrink-0 flex items-center justify-between pb-2">
-        <h2 className="text-lg font-bold text-gray-900">{view === 'products' ? '日用品' : '防災備蓄'}</h2>
-        <button
-          type="button"
-          onClick={() =>
-            view === 'expiry'
-              ? setEditing('new')
-              : view === 'targets'
-                ? setEditingTarget('new')
-                : setEditingProduct('new')
-          }
-          className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-500 text-white text-sm font-bold hover:bg-blue-600 transition"
-        >
-          <Plus size={16} />
-          追加
-        </button>
+        <h2 className="text-lg font-bold text-gray-900">{VIEW_TITLE[view]}</h2>
+        {view !== 'lottery' && (
+          <button
+            type="button"
+            onClick={() =>
+              view === 'expiry'
+                ? setEditing('new')
+                : view === 'targets'
+                  ? setEditingTarget('new')
+                  : setEditingProduct('new')
+            }
+            className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-500 text-white text-sm font-bold hover:bg-blue-600 transition"
+          >
+            <Plus size={16} />
+            追加
+          </button>
+        )}
       </div>
 
-      {view !== 'products' && !isLoading && items.length > 0 && (
+      {(view === 'expiry' || view === 'targets') && !isLoading && items.length > 0 && (
         <div className="shrink-0 flex flex-wrap gap-1.5 pb-2">
           {summary.length === 0 ? (
             <span className="text-xs text-gray-500">不足も、1年以内に期限が来るものもありません</span>
@@ -475,6 +487,8 @@ export default function LivingTab({ familyId }: { familyId: string }) {
 
       {view === 'products' ? (
         <ProductsPanel familyId={familyId} sender={sender} editing={editingProduct} onEdit={setEditingProduct} />
+      ) : view === 'lottery' ? (
+        <LotteryPanel familyId={familyId} userId={userId} />
       ) : isLoading ? (
         <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>
       ) : view === 'expiry' ? (

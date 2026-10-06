@@ -459,3 +459,66 @@ export interface HouseholdProduct {
 }
 
 export type HouseholdProductDraft = Omit<HouseholdProduct, 'id' | 'lastAddedAt'>;
+
+/** 補助くじの玉。white＝25%、blue＝50%、red＝75%、gold＝100%（docs/home.md §9）。 */
+export type SubsidyBallId = 'white' | 'blue' | 'red' | 'gold';
+
+/** 補助率（％）。 */
+export type SubsidyRate = 25 | 50 | 75 | 100;
+
+/** 補助くじを引いた記録の1回。subsidy_draws に対応。 */
+export interface SubsidyDraw {
+  id: string;
+  /** 引いた人のアカウントid。アカウントが無くなっていれば null。 */
+  drawnBy: string | null;
+  /** 買うもの。 */
+  itemName: string;
+  /** 商品の税込価格（円）。 */
+  price: number;
+  /** 出た玉。 */
+  ball: SubsidyBallId;
+  /** 補助率。玉の率から、ラッキーカラー・補助率アップ券で上がっていることがある。 */
+  rate: SubsidyRate;
+  /** 補助率アップ券を使ったか。 */
+  rateUpUsed: boolean;
+  /** 家族のお金から出る額（円）。 */
+  subsidy: number;
+  /** 引いた時刻（ISO）。 */
+  drawnAt: string;
+  /** 確認用のテストのくじ。月の回数・集計に入らず、引いた本人にだけ見える。 */
+  isTest: boolean;
+}
+
+export interface SubsidyDrawDraft {
+  itemName: string;
+  price: number;
+  ball: SubsidyBallId;
+  rate: SubsidyRate;
+  /** 使うひと押し券（引く前に使う）。 */
+  pushCouponId: string | null;
+  /** テストモードで引くか。 */
+  isTest: boolean;
+}
+
+/**
+ * 補助くじで手に入る券の種類。push＝ひと押し券、rate_up＝補助率アップ券、
+ * snack・movie・cafe・picnic＝100%の箱の小さな特典、trip＝6つ集めたときの日帰り旅行券。
+ */
+export type LotteryCouponKind = 'push' | 'rate_up' | 'snack' | 'movie' | 'cafe' | 'picnic' | 'trip';
+
+/** 補助くじで手に入る券。lottery_coupons に対応。アカウントごとに持つ。 */
+export interface LotteryCoupon {
+  id: string;
+  ownerId: string;
+  kind: LotteryCouponKind;
+  /** 100%の箱で出た券だけ。何周目か。 */
+  cycle: number | null;
+  /** 100%の箱で出た券だけ。図鑑の枠（1〜6）。 */
+  slot: number | null;
+  obtainedAt: string;
+  /** 期限（ISO）。ひと押し券・日帰り旅行券は null（期限なし）。 */
+  expiresAt: string | null;
+  usedAt: string | null;
+  /** 確認用のテストで出た券。本物のくじには使えない。 */
+  isTest: boolean;
+}
