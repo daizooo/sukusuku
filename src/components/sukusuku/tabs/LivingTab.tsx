@@ -36,8 +36,8 @@ import {
 import SegmentedTabs from '../ui/SegmentedTabs';
 import StockItemModal from '../modals/StockItemModal';
 import StockTargetModal from '../modals/StockTargetModal';
-import LivingSectionTabs, { LIVING_SECTIONS, type LivingSection } from '../living/LivingSectionTabs';
 import ProductsPanel, { type EditingProduct } from '../living/ProductsPanel';
+import LotteryPanel from '../living/LotteryPanel';
 import { useShoppingSender } from '../living/useShoppingSender';
 import { shortageTitle } from '@/lib/shoppingUtils';
 
@@ -53,10 +53,7 @@ import { shortageTitle } from '@/lib/shoppingUtils';
  * 期限切れでないロットの合計と比べて**足りないものを赤で出す**（docs/home.md §3.5）。
  * 必要数は「1人1日あたり × 人数 × 日数」か「決まった数」。人数・日数は家族で1つ。
  *
- * 「防災備蓄」と「日用品」は持つデータも見方も別物なので、一番上の区分の切り替えで分け、
- * 区分ごとの色・見出し・追加ボタンにする（期限順/必要数の切り替えは防災備蓄の中だけ）。
- *
- * 「日用品」の区分は、よく買うものの台帳（docs/home.md §4）。行の「＋」で買い出しリストへ送る。
+ * 「日用品」の面は、よく買うものの台帳（docs/home.md §4）。行の「＋」で買い出しリストへ送る。
  * 備蓄の不足も「リストへ」で同じリストへ送れる（送る仕組みは living/useShoppingSender）。
  *
  * 見出し・要約・面の切り替え・カテゴリは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
@@ -78,13 +75,23 @@ const LEVEL_CLASS: Record<ExpiryLevel, { text: string; badge: string }> = {
 type Editing = StockItem | 'new' | null;
 type EditingTarget = StockTarget | 'new' | null;
 
-/** 防災備蓄の中の面。期限の近い順に並べる面と、必要数に足りているかを見る面。 */
-type StockView = 'expiry' | 'targets';
+/** 期限の近い順に並べる面と、必要数に足りているかを見る面。 */
+type StockView = 'expiry' | 'targets' | 'products' | 'lottery';
 
 const VIEW_OPTIONS: { id: StockView; label: string }[] = [
   { id: 'expiry', label: '期限順' },
   { id: 'targets', label: '必要数' },
+  { id: 'products', label: '日用品' },
+  { id: 'lottery', label: '補助くじ' },
 ];
+
+/** 各面の見出し。 */
+const VIEW_TITLE: Record<StockView, string> = {
+  expiry: '防災備蓄',
+  targets: '防災備蓄',
+  products: '日用品',
+  lottery: '補助くじ',
+};
 
 /** 人数・日数の上限（DBの check と同じ）。 */
 const PLAN_LIMIT: StockPlan = { people: 20, days: 60, carryDays: 7 };
@@ -93,14 +100,13 @@ const PLAN_LIMIT: StockPlan = { people: 20, days: 60, carryDays: 7 };
 const storageFilter = (storage: StockStorage) => `storage:${storage}`;
 const STORAGE_FILTERS = (['carry', 'home'] as StockStorage[]).map(storageFilter);
 
-export default function LivingTab({ familyId }: { familyId: string }) {
+export default function LivingTab({ familyId, userId }: { familyId: string; userId: string }) {
   const supabase = useMemo(() => createClient(), []);
   const [items, setItems] = useState<StockItem[]>([]);
   const [targets, setTargets] = useState<StockTarget[]>([]);
   const [plan, setPlan] = useState<StockPlan>(DEFAULT_STOCK_PLAN);
   const [isLoading, setIsLoading] = useState(true);
   const [category, setCategory] = useState(ALL);
-  const [section, setSection] = useState<LivingSection>('stock');
   const [view, setView] = useState<StockView>('expiry');
   const [editing, setEditing] = useState<Editing>(null);
   const [editingTarget, setEditingTarget] = useState<EditingTarget>(null);
@@ -410,31 +416,29 @@ export default function LivingTab({ familyId }: { familyId: string }) {
     </>
   );
 
-  const current = LIVING_SECTIONS.find((entry) => entry.id === section) ?? LIVING_SECTIONS[0];
-
   return (
     <div className="relative p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
-      <LivingSectionTabs value={section} onChange={setSection} />
-
-      <div className="shrink-0 flex items-center justify-between gap-3 pb-2">
-        <p className="min-w-0 truncate text-[13px] font-bold text-gray-500">{current.hint}</p>
-        <button
-          type="button"
-          onClick={() =>
-            section === 'products'
-              ? setEditingProduct('new')
-              : view === 'expiry'
+      <div className="shrink-0 flex items-center justify-between pb-2">
+        <h2 className="text-lg font-bold text-gray-900">{VIEW_TITLE[view]}</h2>
+        {view !== 'lottery' && (
+          <button
+            type="button"
+            onClick={() =>
+              view === 'expiry'
                 ? setEditing('new')
-                : setEditingTarget('new')
-          }
-          className={`shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-sm font-bold transition ${current.accent}`}
-        >
-          <Plus size={16} />
-          追加
-        </button>
+                : view === 'targets'
+                  ? setEditingTarget('new')
+                  : setEditingProduct('new')
+            }
+            className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-500 text-white text-sm font-bold hover:bg-blue-600 transition"
+          >
+            <Plus size={16} />
+            追加
+          </button>
+        )}
       </div>
 
-      {section === 'stock' && !isLoading && items.length > 0 && (
+      {(view === 'expiry' || view === 'targets') && !isLoading && items.length > 0 && (
         <div className="shrink-0 flex flex-wrap gap-1.5 pb-2">
           {summary.length === 0 ? (
             <span className="text-xs text-gray-500">不足も、1年以内に期限が来るものもありません</span>
@@ -448,17 +452,15 @@ export default function LivingTab({ familyId }: { familyId: string }) {
         </div>
       )}
 
-      {section === 'stock' && (
-        <SegmentedTabs
-          ariaLabel="防災備蓄の表示"
-          value={view}
-          onChange={setView}
-          options={VIEW_OPTIONS}
-          className="shrink-0 mb-2"
-        />
-      )}
+      <SegmentedTabs
+        ariaLabel="防災備蓄の表示"
+        value={view}
+        onChange={setView}
+        options={VIEW_OPTIONS}
+        className="shrink-0 mb-2"
+      />
 
-      {section === 'stock' && view === 'expiry' && items.length > 0 && (
+      {view === 'expiry' && items.length > 0 && (
         <div className="shrink-0 flex gap-1.5 overflow-x-auto pb-2">
           {[ALL, ...STORAGE_FILTERS, ...categories].map((value) => {
             const selected = value === activeCategory;
@@ -469,7 +471,7 @@ export default function LivingTab({ familyId }: { familyId: string }) {
                 aria-pressed={selected}
                 onClick={() => setCategory(value)}
                 className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-bold transition ${
-                  selected ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  selected ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }`}
               >
                 {value === ALL
@@ -483,8 +485,10 @@ export default function LivingTab({ familyId }: { familyId: string }) {
         </div>
       )}
 
-      {section === 'products' ? (
+      {view === 'products' ? (
         <ProductsPanel familyId={familyId} sender={sender} editing={editingProduct} onEdit={setEditingProduct} />
+      ) : view === 'lottery' ? (
+        <LotteryPanel familyId={familyId} userId={userId} />
       ) : isLoading ? (
         <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>
       ) : view === 'expiry' ? (
