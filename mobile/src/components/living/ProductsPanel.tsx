@@ -140,7 +140,7 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
                   onPress={() => setStore(value)}
-                  style={[styles.chip, selected && styles.chipSelected]}
+                  style={[styles.chip, selected && { backgroundColor: colors.livingProducts }]}
                 >
                   <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{value || 'すべて'}</Text>
                 </Pressable>
@@ -224,7 +224,6 @@ const styles = StyleSheet.create({
   destinationName: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.text },
   chips: { gap: 6, paddingHorizontal: 16, paddingBottom: 8 },
   chip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: colors.neutralSurface },
-  chipSelected: { backgroundColor: colors.navActive },
   chipText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   chipTextSelected: { color: colors.primaryText },
   message: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
@@ -247,6 +246,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.navActive,
+    backgroundColor: colors.livingProducts,
   },
 });
