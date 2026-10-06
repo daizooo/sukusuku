@@ -2,7 +2,7 @@
 
 // 補助くじの「テストモード」の切り替えと、テストデータの削除（docs/home.md §9）。mobile版の
 // `mobile/src/components/living/LotteryTestBar.tsx` と同じ項目・文言。
-// 動作確認のために引いたくじ・券を、本物と分けて持ち、確認が済んだらまとめて消す。
+// 動作確認のために引いたくじ・券を、本物と分けて持ち、確認が済んだらまとめて消す。ヘルプの枠の下に置く。
 
 interface LotteryTestBarProps {
   testMode: boolean;
@@ -17,7 +17,7 @@ export default function LotteryTestBar({ testMode, onToggle, testCount, onDelete
   const canDelete = testCount > 0 && !isDeleting;
   return (
     <div
-      className={`shrink-0 mb-2 space-y-2 rounded-xl border px-3 py-2 ${
+      className={`space-y-2 rounded-xl border px-3 py-2 ${
         testMode ? 'border-amber-500 bg-amber-100' : 'border-gray-200 bg-white'
       }`}
     >

@@ -39,7 +39,8 @@ body {
 }
 
 /* 補助くじ（暮らしタブ。docs/home.md §9.5）。mobile版の Animated と同じ動き。
-   ガラポンが回り、受け皿に玉が転がり出てから、出た玉が弾むように出る（光の筋・紙吹雪）。 */
+   ガラポンが回り、受け皿に玉が転がり出てから、出た玉が弾むように出る（光の筋・紙吹雪）。
+   くじの演出そのものなので、端末の「アニメーションを減らす」設定でも止めない。 */
 .garapon-drum {
   transform-box: view-box;
   transform-origin: 80px 62px;
@@ -48,7 +49,7 @@ body {
   animation: garapon-sway 4.4s ease-in-out infinite;
 }
 .garapon-spin {
-  animation: garapon-spin 1.4s cubic-bezier(0.65, 0, 0.35, 1) both;
+  animation: garapon-spin 0.48s linear infinite;
 }
 .garapon-drop {
   transform-box: view-box;
@@ -72,7 +73,7 @@ body {
     transform: rotate(0deg);
   }
   to {
-    transform: rotate(1080deg);
+    transform: rotate(360deg);
   }
 }
 @keyframes garapon-drop {
@@ -150,31 +151,6 @@ body {
 .lottery-confetti {
   animation: lottery-confetti 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }
-@keyframes lottery-bob {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-4px);
-  }
-}
-.lottery-bob {
-  animation: lottery-bob 0.52s ease-in-out infinite;
-}
-@keyframes lottery-ring {
-  from {
-    transform: scale(1);
-    opacity: 0.7;
-  }
-  to {
-    transform: scale(1.8);
-    opacity: 0;
-  }
-}
-.lottery-ring {
-  animation: lottery-ring 1.6s ease-out infinite;
-}
 @keyframes lottery-beat {
   0%,
   100% {
@@ -203,21 +179,4 @@ body {
 }
 .lottery-wiggle {
   animation: lottery-wiggle 1.75s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .garapon-idle,
-  .garapon-spin,
-  .garapon-drop,
-  .lottery-pop,
-  .lottery-rays,
-  .lottery-rays-reverse,
-  .lottery-bob,
-  .lottery-ring,
-  .lottery-beat,
-  .lottery-wiggle {
-    animation: none;
-  }
-  .lottery-confetti {
-    display: none;
-  }
 }

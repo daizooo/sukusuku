@@ -1,27 +1,33 @@
 'use client';
 
 import { lotteryHelp } from '@/lib/subsidyLotteryUtils';
-import { ModalShell } from '../modals/TaskForm';
+import LotteryDialog from './LotteryDialog';
+import LotteryTestBar from './LotteryTestBar';
 
-// 補助くじのルール説明（くじ画面の「？」。docs/home.md §9）。mobile版の
+// 補助くじの「ヘルプ」（ホームのボタンから中央の枠で開く。docs/home.md §9.5）。mobile版の
 // `mobile/src/components/living/LotteryHelpSheet.tsx` と同じ文言（文言は subsidyLotteryUtils の lotteryHelp）。
+// 動作確認用のテストモードも、ホームをすっきりさせるためここに置く。
 
-export default function LotteryHelpModal({ onClose }: { onClose: () => void }) {
+interface LotteryHelpModalProps {
+  onClose: () => void;
+  testMode: boolean;
+  onToggleTest: (value: boolean) => void;
+  testCount: number;
+  onDeleteTest: () => void;
+  isDeletingTest: boolean;
+}
+
+export default function LotteryHelpModal({
+  onClose,
+  testMode,
+  onToggleTest,
+  testCount,
+  onDeleteTest,
+  isDeletingTest,
+}: LotteryHelpModalProps) {
   return (
-    <ModalShell
-      title="補助くじのルール"
-      onClose={onClose}
-      footer={
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-full py-3 rounded-xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition"
-        >
-          とじる
-        </button>
-      }
-    >
-      <div className="space-y-4">
+    <LotteryDialog title="ヘルプ" onClose={onClose}>
+      <div className="space-y-4 p-5">
         {lotteryHelp().map((section) => (
           <section key={section.heading} className="space-y-1.5">
             <h4 className="text-sm font-bold text-gray-900">{section.heading}</h4>
@@ -32,7 +38,14 @@ export default function LotteryHelpModal({ onClose }: { onClose: () => void }) {
             ))}
           </section>
         ))}
+        <LotteryTestBar
+          testMode={testMode}
+          onToggle={onToggleTest}
+          testCount={testCount}
+          onDelete={onDeleteTest}
+          isDeleting={isDeletingTest}
+        />
       </div>
-    </ModalShell>
+    </LotteryDialog>
   );
 }

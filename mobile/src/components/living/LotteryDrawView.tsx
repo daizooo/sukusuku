@@ -1,33 +1,33 @@
-import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
-import { CircleQuestionMark, Sparkles } from 'lucide-react-native';
+import { Check, CircleQuestionMark, Gift, History, Ticket, type LucideIcon } from 'lucide-react-native';
 import type { SubsidyBallId } from '@/types/app';
-import { colors } from '@/lib/theme';
-import {
-  BALLS,
-  MONTHLY_LIMIT,
-  NOTE_TEXT,
-  PRICE_MAX,
-  PRICE_MIN,
-  ballOf,
-  type DrawPlan,
-} from '@/lib/subsidyLotteryUtils';
+import { ballOf, type DrawPlan } from '@/lib/subsidyLotteryUtils';
 import GaraponMachine from '@/components/living/GaraponMachine';
-import LotteryBall, { BALL_COLOR } from '@/components/living/LotteryBall';
-import LotteryHelpSheet from '@/components/living/LotteryHelpSheet';
-import useReduceMotion from '@/components/living/useReduceMotion';
+import LotteryBall from '@/components/living/LotteryBall';
 
-// 補助くじの「くじ」の面（docs/home.md §9）。PWA版の
+// 補助くじのホーム（docs/home.md §9.5）。PWA版の
 // `src/components/sukusuku/living/LotteryDrawView.tsx` と同じ項目・並び・文言。
-// ルール・今月の福引券・今回の救済・入力・補助率ごとの確率。
 //
-// 福引所らしく見せる: 上は紅白ののれん色の看板（ガラポンの絵・福引券）、ラッキーカラーの玉は光り、
-// 「ガラポン！」は脈打つ大きなボタン、確率は賞品一覧（玉・賞の名前・補助率・確率の棒）にする。
+// 福引所の1枚の面にまとめる: 福引券・ガラポン・今月のラッキーカラーなど・買うものと税込価格・「ガラポン！」。
+// 賞品一覧・券・履歴・ヘルプは下のボタンから、画面の中央の枠で開く。
+// 「ガラポン！」を押すと、この面のガラポンが回り、受け皿に玉が出てから結果の枠が開く。
 
-/** 看板の地の色（左上→右下）。 */
+export type LotteryDialogKind = 'prizes' | 'coupons' | 'history' | 'help';
+
+/** 面の地の色（左上→右下）。 */
 const HERO_FROM = '#dc2626';
 const HERO_TO = '#f97316';
+const GOLD = '#fbbf24';
+const GOLD_LIGHT = '#fde68a';
+
+const MENU: { id: LotteryDialogKind; label: string; icon: LucideIcon }[] = [
+  { id: 'prizes', label: '賞品一覧', icon: Gift },
+  { id: 'coupons', label: '券', icon: Ticket },
+  { id: 'history', label: '履歴', icon: History },
+  { id: 'help', label: 'ヘルプ', icon: CircleQuestionMark },
+];
 
 /** 福引券1枚（左右に切り欠きのある券）。残っている券は金色、使った券は薄く。 */
 function FukubikiTicket({ active }: { active: boolean }) {
@@ -36,7 +36,7 @@ function FukubikiTicket({ active }: { active: boolean }) {
       <Svg width={40} height={26} viewBox="0 0 40 26" style={StyleSheet.absoluteFill}>
         <Path
           d="M0,0 H40 V8 A5,5 0 0 0 40,18 V26 H0 V18 A5,5 0 0 0 0,8 Z"
-          fill={active ? '#fde68a' : 'rgba(255,255,255,0.18)'}
+          fill={active ? GOLD_LIGHT : 'rgba(255,255,255,0.18)'}
           stroke={active ? '#b45309' : 'rgba(255,255,255,0.5)'}
           strokeWidth={1.5}
           strokeDasharray={active ? undefined : '3,2'}
@@ -47,43 +47,11 @@ function FukubikiTicket({ active }: { active: boolean }) {
   );
 }
 
-/** ラッキーカラーの玉。まわりに光の輪が広がる。 */
-function GlowingBall({ ball }: { ball: SubsidyBallId }) {
-  const reduceMotion = useReduceMotion();
-  const ring = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (reduceMotion) return;
-    const loop = Animated.loop(
-      Animated.timing(ring, { toValue: 1, duration: 1600, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [reduceMotion, ring]);
-  return (
-    <View style={styles.glowingBall}>
-      {!reduceMotion && (
-        <Animated.View
-          style={[
-            styles.glowRing,
-            {
-              borderColor: BALL_COLOR[ball].edge,
-              opacity: ring.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] }),
-              transform: [{ scale: ring.interpolate({ inputRange: [0, 1], outputRange: [1, 1.8] }) }],
-            },
-          ]}
-        />
-      )}
-      <LotteryBall ball={ball} size={26} />
-    </View>
-  );
-}
-
-/** 押せるあいだ、ゆっくり脈打つ「ガラポン！」。 */
-function SpinButton({ canDraw, onPress }: { canDraw: boolean; onPress: () => void }) {
-  const reduceMotion = useReduceMotion();
+/** 押せるあいだ、ゆっくり脈打つ「ガラポン！」。回しているあいだは「ガラガラガラ…」。 */
+function SpinButton({ canDraw, spinning, onPress }: { canDraw: boolean; spinning: boolean; onPress: () => void }) {
   const beat = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (!canDraw || reduceMotion) {
+    if (!canDraw) {
       beat.setValue(0);
       return;
     }
@@ -95,24 +63,27 @@ function SpinButton({ canDraw, onPress }: { canDraw: boolean; onPress: () => voi
     );
     loop.start();
     return () => loop.stop();
-  }, [canDraw, reduceMotion, beat]);
+  }, [canDraw, beat]);
   return (
-    <Animated.View style={{ transform: [{ scale: beat.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] }) }] }}>
+    <Animated.View style={{ transform: [{ scale: beat.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) }] }}>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ disabled: !canDraw }}
         disabled={!canDraw}
         onPress={onPress}
-        style={({ pressed }) => [styles.spinButton, !canDraw && styles.spinButtonDisabled, pressed && styles.spinButtonPressed]}
+        style={({ pressed }) => [
+          styles.spinButton,
+          !canDraw && !spinning && styles.spinButtonDisabled,
+          pressed && styles.spinButtonPressed,
+        ]}
       >
-        <Sparkles size={20} color={canDraw ? '#fde68a' : colors.surface} />
-        <Text style={styles.spinButtonText}>ガラポン！</Text>
-        <Sparkles size={20} color={canDraw ? '#fde68a' : colors.surface} />
+        <Text style={[styles.spinButtonText, !canDraw && !spinning && styles.spinButtonTextDisabled]}>
+          {spinning ? 'ガラガラガラ…' : 'ガラポン！'}
+        </Text>
       </Pressable>
     </Animated.View>
   );
 }
-
 
 interface LotteryDrawViewProps {
   plan: DrawPlan;
@@ -133,6 +104,11 @@ interface LotteryDrawViewProps {
   error: string | null;
   canDraw: boolean;
   onSubmit: () => void;
+  /** ガラポンを回しているか。 */
+  spinning: boolean;
+  /** 受け皿に出た玉（回し終わる直前だけ）。 */
+  dropBall: SubsidyBallId | null;
+  onOpen: (dialog: LotteryDialogKind) => void;
 }
 
 export default function LotteryDrawView({
@@ -151,217 +127,174 @@ export default function LotteryDrawView({
   error,
   canDraw,
   onSubmit,
+  spinning,
+  dropBall,
+  onOpen,
 }: LotteryDrawViewProps) {
   const lucky = ballOf(plan.luckyBall);
-  const [helpOpen, setHelpOpen] = useState(false);
+  const editable = remaining > 0 && !spinning;
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <View style={styles.hero}>
-        <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
-          <Defs>
-            <LinearGradient id="lotteryHero" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor={HERO_FROM} />
-              <Stop offset="1" stopColor={HERO_TO} />
-            </LinearGradient>
-          </Defs>
-          <Rect width="100%" height="100%" fill="url(#lotteryHero)" />
-          <Circle cx="88%" cy="18%" r={46} fill="#ffffff" opacity={0.08} />
-          <Circle cx="8%" cy="92%" r={34} fill="#ffffff" opacity={0.08} />
-          <Circle cx="60%" cy="105%" r={22} fill="#fde68a" opacity={0.18} />
-        </Svg>
-        <View style={styles.heroTitleRow}>
-          <Text style={styles.heroTitle}>✦ ガラポン福引所 ✦</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="補助くじのルールを見る"
-            onPress={() => setHelpOpen(true)}
-            hitSlop={8}
-            style={styles.helpButton}
-          >
-            <CircleQuestionMark size={22} color={colors.surface} />
-          </Pressable>
-        </View>
-        <Text style={styles.rule}>
-          趣味以外で必要なもの・税込{PRICE_MIN.toLocaleString('ja-JP')}〜{PRICE_MAX.toLocaleString('ja-JP')}円なら、
-          月{MONTHLY_LIMIT}回（誕生月は{MONTHLY_LIMIT + 1}回）まで、家族のお金から補助が出ます
-        </Text>
-        <View style={styles.heroBody}>
-          <GaraponMachine width={116} mode="idle" />
-          <View style={styles.ticketBox}>
-            <Text style={styles.ticketLabel}>今月の福引券</Text>
-            <View style={styles.tickets}>
-              {Array.from({ length: allowance }, (_, index) => (
-                <FukubikiTicket key={index} active={index < remaining} />
-              ))}
-            </View>
-            <Text style={styles.ticketCount}>
-              {isLoading ? '…' : testMode ? 'テスト中（減りません）' : remaining > 0 ? `あと${remaining}回` : '使い切りました'}
-            </Text>
+    <View style={styles.surface}>
+      <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+        <Defs>
+          <LinearGradient id="lotteryHome" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={HERO_FROM} />
+            <Stop offset="1" stopColor={HERO_TO} />
+          </LinearGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill="url(#lotteryHome)" />
+        <Circle cx="92%" cy="8%" r={70} fill="#ffffff" opacity={0.08} />
+        <Circle cx="4%" cy="46%" r={48} fill="#ffffff" opacity={0.07} />
+        <Circle cx="80%" cy="62%" r={30} fill={GOLD_LIGHT} opacity={0.14} />
+      </Svg>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={styles.ticketRow}>
+          <View style={styles.tickets}>
+            {Array.from({ length: allowance }, (_, index) => (
+              <FukubikiTicket key={index} active={index < remaining} />
+            ))}
           </View>
-        </View>
-      </View>
-
-      <View style={[styles.card, styles.luckyCard]}>
-        <View style={styles.luckyRow}>
-          <GlowingBall ball={plan.luckyBall} />
-          <Text style={styles.luckyText}>
-            今月のラッキーカラーは{lucky.ball}。出たら補助率が1段アップ
+          <Text style={styles.ticketCount}>
+            {isLoading ? '…' : testMode ? 'テスト中' : remaining > 0 ? `あと${remaining}回` : '使い切りました'}
           </Text>
         </View>
-        {plan.notes.map((note) => (
-          <Text key={note} style={styles.note}>
-            {NOTE_TEXT[note]}
-          </Text>
-        ))}
-        {plan.floor > 25 && (
-          <View style={styles.floorBadge}>
-            <Sparkles size={16} color={colors.doneText} />
-            <Text style={styles.floor}>
-              今回は{plan.floor === 100 ? '100%が確定！' : `${plan.floor}%以上が確定！`}
-            </Text>
-          </View>
-        )}
-        {pushCount > 0 && (
-          <View style={styles.pushRow}>
-            <Text style={styles.pushText}>ひと押し券を使う（{pushCount}枚）</Text>
-            <Switch value={usePush} onValueChange={onUsePush} disabled={remaining <= 0} />
-          </View>
-        )}
-      </View>
 
-      <View style={styles.card}>
-        <TextInput
-          style={styles.input}
-          value={itemName}
-          onChangeText={onItemName}
-          placeholder="買うもの（例: 洗濯ネット）"
-          placeholderTextColor={colors.textFaint}
-          editable={remaining > 0}
-        />
-        <TextInput
-          style={styles.input}
-          value={priceText}
-          onChangeText={onPriceText}
-          keyboardType="number-pad"
-          inputMode="numeric"
-          placeholder="税込の価格（円）"
-          placeholderTextColor={colors.textFaint}
-          editable={remaining > 0}
-        />
-        {error && <Text style={styles.error}>{error}</Text>}
-        <SpinButton canDraw={canDraw} onPress={onSubmit} />
-      </View>
+        <View style={styles.machine}>
+          <GaraponMachine width={180} mode={spinning ? 'spin' : 'idle'} ball={dropBall} />
+        </View>
 
-      <View style={[styles.card, styles.prizeCard]}>
-        <Text style={styles.prizeTitle}>賞品一覧</Text>
-        {plan.odds.map((entry) => {
-          const ball = BALLS.find((item) => item.rate === entry.rate) ?? BALLS[0];
-          return (
-            <View key={entry.rate} style={[styles.prizeRow, entry.percent === 0 && styles.prizeRowOff]}>
-              <LotteryBall ball={ball.id} size={20} />
-              <Text style={styles.prizeName} numberOfLines={1}>
-                {ball.name}
+        <View style={styles.chips}>
+          <View style={styles.chip}>
+            <LotteryBall ball={plan.luckyBall} size={14} />
+            <Text style={styles.chipText}>ラッキーカラー {lucky.ball}</Text>
+          </View>
+          {plan.floor > 25 && (
+            <View style={[styles.chip, styles.chipGold]}>
+              <Text style={[styles.chipText, styles.chipTextGold]}>
+                {plan.floor === 100 ? '100%確定！' : `${plan.floor}%以上確定！`}
               </Text>
-              <Text style={styles.prizeRate}>{entry.rate}%</Text>
-              <View style={styles.oddsTrack}>
-                <View style={[styles.oddsFill, { width: `${entry.percent}%`, backgroundColor: BALL_COLOR[ball.id].edge }]} />
-              </View>
-              <Text style={styles.oddsText}>{entry.percent}%</Text>
             </View>
-          );
-        })}
-        <Text style={styles.oddsNote}>棒と右の数字は今回の出る確率（救済を含む）</Text>
-      </View>
-      {helpOpen && <LotteryHelpSheet onClose={() => setHelpOpen(false)} />}
-    </ScrollView>
+          )}
+          {pushCount > 0 && (
+            <Pressable
+              accessibilityRole="switch"
+              accessibilityState={{ checked: usePush, disabled: !editable }}
+              disabled={!editable}
+              onPress={() => onUsePush(!usePush)}
+              style={[styles.chip, usePush && styles.chipGold]}
+            >
+              {usePush && <Check size={14} color="#7f1d1d" />}
+              <Text style={[styles.chipText, usePush && styles.chipTextGold]}>ひと押し券を使う（{pushCount}）</Text>
+            </Pressable>
+          )}
+        </View>
+
+        <View style={styles.form}>
+          <TextInput
+            style={styles.input}
+            value={itemName}
+            onChangeText={onItemName}
+            placeholder="買うもの（例: 洗濯ネット）"
+            placeholderTextColor="#9ca3af"
+            editable={editable}
+          />
+          <TextInput
+            style={styles.input}
+            value={priceText}
+            onChangeText={onPriceText}
+            keyboardType="number-pad"
+            inputMode="numeric"
+            placeholder="税込の価格（円）"
+            placeholderTextColor="#9ca3af"
+            editable={editable}
+          />
+          {error && <Text style={styles.error}>{error}</Text>}
+          <SpinButton canDraw={canDraw} spinning={spinning} onPress={onSubmit} />
+        </View>
+
+        <View style={styles.menu}>
+          {MENU.map((entry) => {
+            const Icon = entry.icon;
+            return (
+              <Pressable
+                key={entry.id}
+                accessibilityRole="button"
+                accessibilityLabel={entry.label}
+                disabled={spinning}
+                onPress={() => onOpen(entry.id)}
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+              >
+                <View style={styles.menuIcon}>
+                  <Icon size={20} color="#ffffff" />
+                </View>
+                <Text style={styles.menuText}>{entry.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingBottom: 24, gap: 10 },
-  hero: { borderRadius: 16, overflow: 'hidden', padding: 14, gap: 6 },
-  heroTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  heroTitle: { fontSize: 19, fontWeight: '800', color: colors.surface, letterSpacing: 1 },
-  helpButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-  rule: { fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.92)' },
-  heroBody: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 2 },
-  ticketBox: { flex: 1, gap: 6 },
-  ticketLabel: { fontSize: 12, fontWeight: '700', color: '#fde68a' },
+  surface: { flex: 1, marginHorizontal: 16, marginBottom: 12, borderRadius: 20, overflow: 'hidden' },
+  content: { flexGrow: 1, justifyContent: 'space-between', padding: 16, gap: 12 },
+  ticketRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   tickets: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   ticket: { width: 40, height: 26, alignItems: 'center', justifyContent: 'center' },
   ticketMark: { fontSize: 13, fontWeight: '800', color: '#b45309' },
   ticketMarkUsed: { color: 'rgba(255,255,255,0.55)' },
-  ticketCount: { fontSize: 18, fontWeight: '800', color: colors.surface, fontVariant: ['tabular-nums'] },
-  card: {
-    padding: 12,
-    gap: 8,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  luckyCard: { backgroundColor: colors.milkSurface, borderColor: colors.milkBorder },
-  luckyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  glowingBall: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
-  glowRing: { position: 'absolute', width: 26, height: 26, borderRadius: 13, borderWidth: 3 },
-  luckyText: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.milkText },
-  note: { fontSize: 12, fontWeight: '500', color: colors.textSubtle },
-  floorBadge: {
+  ticketCount: { fontSize: 18, fontWeight: '800', color: '#ffffff', fontVariant: ['tabular-nums'] },
+  machine: { alignItems: 'center' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6 },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 6,
+    gap: 4,
+    borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: '#dcfce7',
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
-  floor: { fontSize: 14, fontWeight: '700', color: colors.doneText },
-  pushRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  pushText: { fontSize: 13, fontWeight: '700', color: colors.text },
+  chipGold: { backgroundColor: GOLD },
+  chipText: { fontSize: 12, fontWeight: '700', color: '#ffffff' },
+  chipTextGold: { color: '#7f1d1d' },
+  form: { gap: 8 },
   input: {
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     fontSize: 15,
     fontWeight: '500',
-    color: colors.text,
-    backgroundColor: colors.surface,
+    color: '#111827',
+    backgroundColor: 'rgba(255,255,255,0.96)',
     fontVariant: ['tabular-nums'],
   },
+  error: { fontSize: 12, fontWeight: '700', color: GOLD_LIGHT, textAlign: 'center' },
   spinButton: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    borderRadius: 14,
+    borderRadius: 16,
     paddingVertical: 14,
-    backgroundColor: HERO_FROM,
+    backgroundColor: GOLD,
     borderWidth: 2,
-    borderColor: '#fbbf24',
+    borderColor: GOLD_LIGHT,
   },
-  spinButtonDisabled: { backgroundColor: colors.borderStrong, borderColor: colors.borderStrong },
+  spinButtonDisabled: { backgroundColor: 'rgba(255,255,255,0.25)', borderColor: 'rgba(255,255,255,0.35)' },
   spinButtonPressed: { opacity: 0.85 },
-  spinButtonText: { fontSize: 19, fontWeight: '800', color: colors.primaryText, letterSpacing: 2 },
-  error: { fontSize: 12, fontWeight: '500', color: colors.danger },
-  prizeCard: { gap: 6 },
-  prizeTitle: { fontSize: 13, fontWeight: '800', color: colors.text },
-  prizeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  prizeRowOff: { opacity: 0.4 },
-  prizeName: { width: 84, fontSize: 12, fontWeight: '700', color: colors.textSubtle },
-  prizeRate: { width: 38, fontSize: 13, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
-  oddsTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.neutralSurface, overflow: 'hidden' },
-  oddsFill: { height: '100%', borderRadius: 4 },
-  oddsText: {
-    width: 36,
-    textAlign: 'right',
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textMuted,
-    fontVariant: ['tabular-nums'],
+  spinButtonText: { fontSize: 20, fontWeight: '800', color: '#7f1d1d', letterSpacing: 2 },
+  spinButtonTextDisabled: { color: 'rgba(255,255,255,0.8)' },
+  menu: { flexDirection: 'row', justifyContent: 'space-around' },
+  menuItem: { alignItems: 'center', gap: 4, minWidth: 60 },
+  menuItemPressed: { opacity: 0.7 },
+  menuIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
-  oddsNote: { fontSize: 10, fontWeight: '500', color: colors.textFaint },
+  menuText: { fontSize: 11, fontWeight: '700', color: '#ffffff' },
 });

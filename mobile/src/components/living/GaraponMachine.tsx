@@ -3,14 +3,13 @@ import { Animated, Easing, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Line, Polygon, Rect } from 'react-native-svg';
 import type { SubsidyBallId } from '@/types/app';
 import LotteryBall from '@/components/living/LotteryBall';
-import useReduceMotion from '@/components/living/useReduceMotion';
 
 // 補助くじのガラポン（福引の八角形の抽選器）の絵（docs/home.md §9.5）。PWA版の
 // `src/components/sukusuku/living/GaraponMachine.tsx` と同じ形・同じ動き。
 //
-// - idle: くじの面の飾り。胴がゆらゆら揺れる
-// - spin: 結果の画面。胴が3回転してから止まる
-// - ball を渡すと、その玉が出口から受け皿へ転がり出る
+// - idle: 回す前。胴がゆらゆら揺れる
+// - spin: 「ガラポン！」を押してから結果が出るまで。胴が回り続ける
+// - ball を渡すと、その玉が出口から受け皿へ転がり出る（回しているあいだに渡す）
 //
 // 座標は横160×縦150の枠で決め、width に合わせて拡大する。回る胴だけ別の絵にして回している。
 
@@ -41,21 +40,17 @@ const octagon = (cx: number, cy: number, r: number) =>
 interface GaraponMachineProps {
   width: number;
   mode: 'idle' | 'spin';
-  /** 回す時間（ミリ秒）。mode が spin のとき使う。 */
-  spinMs?: number;
   /** 受け皿に出た玉。null なら出ていない。 */
   ball?: SubsidyBallId | null;
 }
 
-export default function GaraponMachine({ width, mode, spinMs = 1400, ball = null }: GaraponMachineProps) {
-  const reduceMotion = useReduceMotion();
+export default function GaraponMachine({ width, mode, ball = null }: GaraponMachineProps) {
   const sway = useRef(new Animated.Value(0)).current;
   const spin = useRef(new Animated.Value(0)).current;
   const drop = useRef(new Animated.Value(0)).current;
   const scale = width / VIEW_W;
 
   useEffect(() => {
-    if (reduceMotion) return;
     if (mode === 'idle') {
       const loop = Animated.loop(
         Animated.sequence([
@@ -68,34 +63,27 @@ export default function GaraponMachine({ width, mode, spinMs = 1400, ball = null
       return () => loop.stop();
     }
     spin.setValue(0);
-    const run = Animated.timing(spin, {
-      toValue: 1,
-      duration: spinMs,
-      easing: Easing.inOut(Easing.cubic),
-      useNativeDriver: true,
-    });
-    run.start();
-    return () => run.stop();
-  }, [mode, spinMs, reduceMotion, sway, spin]);
+    const loop = Animated.loop(
+      Animated.timing(spin, { toValue: 1, duration: 480, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [mode, sway, spin]);
 
   useEffect(() => {
     if (ball === null) {
       drop.setValue(0);
       return;
     }
-    if (reduceMotion) {
-      drop.setValue(1);
-      return;
-    }
     const run = Animated.timing(drop, { toValue: 1, duration: 650, easing: Easing.bounce, useNativeDriver: true });
     run.start();
     return () => run.stop();
-  }, [ball, reduceMotion, drop]);
+  }, [ball, drop]);
 
   const rotate =
     mode === 'idle'
       ? sway.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] })
-      : spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '1080deg'] });
+      : spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
   const center = DRUM_BOX / 2;
   const points = octagon(center, center, DRUM_R);

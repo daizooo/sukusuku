@@ -3,7 +3,6 @@ import { Animated, Easing, StyleSheet, View, type StyleProp, type ViewStyle } fr
 import Svg, { Defs, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
 import type { SubsidyBallId, SubsidyRate } from '@/types/app';
 import LotteryBall from '@/components/living/LotteryBall';
-import useReduceMotion from '@/components/living/useReduceMotion';
 import { colors } from '@/lib/theme';
 
 // 補助くじの当たりの演出（docs/home.md §9.5）。PWA版の
@@ -42,16 +41,14 @@ const rayPoints = () => {
 const RAYS = rayPoints();
 
 function Rays({ color, durationMs, reverse }: { color: string; durationMs: number; reverse?: boolean }) {
-  const reduceMotion = useReduceMotion();
   const turn = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (reduceMotion) return;
     const loop = Animated.loop(
       Animated.timing(turn, { toValue: 1, duration: durationMs, easing: Easing.linear, useNativeDriver: true }),
     );
     loop.start();
     return () => loop.stop();
-  }, [reduceMotion, durationMs, turn]);
+  }, [durationMs, turn]);
   const rotate = turn.interpolate({ inputRange: [0, 1], outputRange: reverse ? ['360deg', '0deg'] : ['0deg', '360deg'] });
   return (
     <Animated.View style={[styles.rays, { transform: [{ rotate }] }]} pointerEvents="none">
@@ -87,11 +84,9 @@ const makePieces = (count: number): Piece[] =>
   });
 
 function Confetti({ count }: { count: number }) {
-  const reduceMotion = useReduceMotion();
   const progress = useRef(new Animated.Value(0)).current;
   const pieces = useMemo(() => makePieces(count), [count]);
   useEffect(() => {
-    if (reduceMotion) return;
     progress.setValue(0);
     const run = Animated.timing(progress, {
       toValue: 1,
@@ -101,8 +96,7 @@ function Confetti({ count }: { count: number }) {
     });
     run.start();
     return () => run.stop();
-  }, [reduceMotion, progress]);
-  if (reduceMotion) return null;
+  }, [progress]);
   return (
     <View style={styles.confetti} pointerEvents="none">
       {pieces.map((piece, index) => (
@@ -141,22 +135,16 @@ export function PopIn({
   delay?: number;
   style?: StyleProp<ViewStyle>;
 }) {
-  const reduceMotion = useReduceMotion();
-  const scale = useRef(new Animated.Value(reduceMotion ? 1 : 0.3)).current;
-  const opacity = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  const scale = useRef(new Animated.Value(0.3)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (reduceMotion) {
-      scale.setValue(1);
-      opacity.setValue(1);
-      return;
-    }
     const run = Animated.parallel([
       Animated.spring(scale, { toValue: 1, friction: 4, tension: 120, delay, useNativeDriver: true }),
       Animated.timing(opacity, { toValue: 1, duration: 150, delay, useNativeDriver: true }),
     ]);
     run.start();
     return () => run.stop();
-  }, [reduceMotion, delay, scale, opacity]);
+  }, [delay, scale, opacity]);
   return <Animated.View style={[style, { opacity, transform: [{ scale }] }]}>{children}</Animated.View>;
 }
 

@@ -4,9 +4,9 @@ import { BALL_COLOR } from './LotteryBall';
 // 補助くじのガラポン（福引の八角形の抽選器）の絵（docs/home.md §9.5）。mobile版の
 // `mobile/src/components/living/GaraponMachine.tsx` と同じ形・同じ動き（動きは globals.css）。
 //
-// - idle: くじの面の飾り。胴がゆらゆら揺れる
-// - spin: 結果の画面。胴が3回転してから止まる
-// - ball を渡すと、その玉が出口から受け皿へ転がり出る
+// - idle: 回す前。胴がゆらゆら揺れる
+// - spin: 「ガラポン！」を押してから結果が出るまで。胴が回り続ける
+// - ball を渡すと、その玉が出口から受け皿へ転がり出る（回しているあいだに渡す）
 //
 // 座標は横160×縦150の枠で決め、width に合わせて拡大する。
 
