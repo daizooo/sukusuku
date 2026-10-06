@@ -8,6 +8,7 @@ import {
   formatExpiry,
   formatQuantity,
   parseExpiryInput,
+  isShort,
   requiredQuantity,
   sortStockItems,
   targetStatuses,
@@ -67,7 +68,7 @@ console.log('stockUtils: OK');
 
 // ---- 必要数 ----
 
-const plan = { people: 3, days: 7 };
+const plan = { people: 3, days: 7, carryDays: 1 };
 // 水は1人1日3L → 63L。ラジオは決まった数。
 assert.equal(requiredQuantity({ id: 'w', quantity: 3, perPersonDay: true }, plan), 63);
 assert.equal(requiredQuantity({ id: 'r', quantity: 1, perPersonDay: false }, plan), 1);
@@ -100,3 +101,36 @@ assert.deepEqual(
 );
 
 console.log('stockUtils targets: OK');
+
+// ---- 保管場所（持ち出し） ----
+// 水は1人1日3L。持ち出しは1日分（9L）。持ち出しにあるのは 500ml × 6本 = 3L だけ。
+const [water] = targetStatuses(
+  [{ id: 'water', quantity: 3, perPersonDay: true, carry: true }],
+  [
+    { targetId: 'water', quantity: 42, amountPerUnit: 0.5, expiresOn: '2036-12-06', storage: 'home' },
+    { targetId: 'water', quantity: 6, amountPerUnit: 0.5, expiresOn: '2036-12-06', storage: 'carry' },
+    { targetId: 'water', quantity: 46, amountPerUnit: 1.8, expiresOn: '2037-02-23', storage: 'home' },
+  ],
+  plan,
+  today,
+);
+// 全体は両方の場所を数える（24L + 82.8L）。持ち出しは持ち出しの分だけ。
+assert.equal(water.have, 106.8);
+assert.deepEqual(water.carry, { required: 9, have: 3, shortage: 6 });
+assert.equal(isShort(water), true);
+
+// 持ち出しに入れない品目は carry が null。決まった数の品目は全部を持ち出しで確かめる。
+const [rice, light] = targetStatuses(
+  [
+    { id: 'rice', quantity: 0.25, perPersonDay: true, carry: false },
+    { id: 'light', quantity: 1, perPersonDay: false, carry: true },
+  ],
+  [{ targetId: 'light', quantity: 1, amountPerUnit: 1, expiresOn: null, storage: 'carry' }],
+  plan,
+  today,
+);
+assert.equal(rice.carry, null);
+assert.deepEqual(light.carry, { required: 1, have: 1, shortage: 0 });
+assert.equal(isShort(light), false);
+
+console.log('stockUtils storage: OK');

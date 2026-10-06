@@ -11,6 +11,7 @@ import {
   insertStockItem,
   insertStockTarget,
   loadStockItems,
+  moveStockItem,
   loadStockPlan,
   loadStockTargets,
   updateStockItem,
@@ -24,10 +25,13 @@ import {
   expiryLevel,
   formatExpiry,
   formatQuantity,
+  isShort,
   sortStockItems,
+  STORAGE_LABEL,
   targetStatuses,
   type ExpiryLevel,
   type StockPlan,
+  type StockStorage,
 } from '@/lib/stockUtils';
 import SegmentedTabs from '../ui/SegmentedTabs';
 import StockItemModal from '../modals/StockItemModal';
@@ -73,7 +77,11 @@ const VIEW_OPTIONS: { id: StockView; label: string }[] = [
 ];
 
 /** 人数・日数の上限（DBの check と同じ）。 */
-const PLAN_LIMIT = { people: 20, days: 60 };
+const PLAN_LIMIT: StockPlan = { people: 20, days: 60, carryDays: 7 };
+
+/** 絞り込みのチップ。保管場所（持ち出し・寝室）とカテゴリを1列に並べる。 */
+const storageFilter = (storage: StockStorage) => `storage:${storage}`;
+const STORAGE_FILTERS = (['carry', 'home'] as StockStorage[]).map(storageFilter);
 
 export default function LivingTab({ familyId }: { familyId: string }) {
   const supabase = useMemo(() => createClient(), []);
@@ -114,13 +122,23 @@ export default function LivingTab({ familyId }: { familyId: string }) {
   const categories = useMemo(() => categoryOptions(items), [items]);
   const counts = useMemo(() => countByLevel(items, today), [items, today]);
   const statuses = useMemo(() => targetStatuses(targets, items, plan, today), [targets, items, plan, today]);
-  const shortCount = statuses.filter((status) => status.shortage > 0).length;
+  const shortCount = statuses.filter(isShort).length;
   // 絞り込んでいたカテゴリが無くなったら「すべて」へ戻す。
-  const activeCategory = category === ALL || categories.includes(category) ? category : ALL;
+  const activeCategory =
+    category === ALL || STORAGE_FILTERS.includes(category) || categories.includes(category) ? category : ALL;
+  const filterStorage = STORAGE_FILTERS.includes(activeCategory)
+    ? (activeCategory.slice('storage:'.length) as StockStorage)
+    : null;
   const visibleItems = useMemo(
     () =>
-      sortStockItems(activeCategory === ALL ? items : items.filter((item) => item.category === activeCategory)),
-    [items, activeCategory],
+      sortStockItems(
+        activeCategory === ALL
+          ? items
+          : filterStorage
+            ? items.filter((item) => item.storage === filterStorage)
+            : items.filter((item) => item.category === activeCategory),
+      ),
+    [items, activeCategory, filterStorage],
   );
 
   const failed = (what: string) => window.alert(`${what}できませんでした。もう一度お試しください。`);
@@ -151,6 +169,25 @@ export default function LivingTab({ familyId }: { familyId: string }) {
     } catch {
       setItems(previous);
       failed('削除');
+    }
+  };
+
+  /** 一部（count個）をもう一方の保管場所へ移す。 */
+  const move = async (item: StockItem, count: number) => {
+    setEditing(null);
+    try {
+      const to: StockStorage = item.storage === 'carry' ? 'home' : 'carry';
+      const { updated, removedIds } = await moveStockItem(supabase, familyId, item, count, to, items);
+      setItems((prev) => {
+        const kept = prev.filter((row) => !removedIds.includes(row.id));
+        const known = new Set(kept.map((row) => row.id));
+        return [
+          ...kept.map((row) => updated.find((next) => next.id === row.id) ?? row),
+          ...updated.filter((next) => !known.has(next.id)),
+        ];
+      });
+    } catch {
+      failed('移動');
     }
   };
 
@@ -226,7 +263,16 @@ export default function LivingTab({ familyId }: { familyId: string }) {
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-gray-900">{item.name}</p>
-                    {sub !== '' && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}
+                    {(item.storage === 'carry' || sub !== '') && (
+                      <p className="flex items-center gap-1.5 text-[11px] text-gray-400 mt-0.5">
+                        {item.storage === 'carry' && (
+                          <span className="px-1.5 rounded bg-blue-50 text-[10px] font-bold text-blue-700">
+                            {STORAGE_LABEL.carry}
+                          </span>
+                        )}
+                        {sub}
+                      </p>
+                    )}
                   </div>
                   <div className="shrink-0 text-right tabular-nums">
                     <p className="text-[13px] font-bold text-gray-700">
@@ -273,16 +319,18 @@ export default function LivingTab({ familyId }: { familyId: string }) {
 
   const targetList = (
     <>
-      <div className="shrink-0 flex gap-4 pb-2">
+      <div className="shrink-0 flex flex-wrap gap-x-4 gap-y-1.5 pb-2">
         {planStepper('people', '人数', '人')}
         {planStepper('days', '日数', '日')}
+        {planStepper('carryDays', '持ち出し', '日')}
       </div>
       {statuses.length === 0 ? (
         <p className="text-sm text-gray-400 text-center py-8">必要数はまだありません</p>
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto">
           <ul className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-200 overflow-hidden">
-            {statuses.map(({ target, required, have, shortage }) => {
+            {statuses.map((status) => {
+              const { target, required, have, shortage, carry } = status;
               const rule = target.perPersonDay
                 ? `1人1日 ${formatQuantity(target.quantity)}${target.unit}`
                 : '決まった数';
@@ -293,7 +341,7 @@ export default function LivingTab({ familyId }: { familyId: string }) {
                     type="button"
                     onClick={() => setEditingTarget(target)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 text-left ${
-                      shortage > 0 ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'
+                      isShort(status) ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex-1 min-w-0">
@@ -312,6 +360,17 @@ export default function LivingTab({ familyId }: { familyId: string }) {
                         </p>
                       ) : (
                         <p className="text-[11px] font-bold mt-0.5 text-green-700">足りています</p>
+                      )}
+                      {carry && (
+                        <p
+                          className={`text-[11px] font-bold mt-0.5 ${
+                            carry.shortage > 0 ? 'text-red-700' : 'text-gray-500'
+                          }`}
+                        >
+                          持ち出し {formatQuantity(carry.have)} / {formatQuantity(carry.required)}
+                          {target.unit}
+                          {carry.shortage > 0 ? ' 不足' : ''}
+                        </p>
                       )}
                     </div>
                   </button>
@@ -361,9 +420,9 @@ export default function LivingTab({ familyId }: { familyId: string }) {
         className="shrink-0 mb-2"
       />
 
-      {view === 'expiry' && categories.length > 1 && (
+      {view === 'expiry' && items.length > 0 && (
         <div className="shrink-0 flex gap-1.5 overflow-x-auto pb-2">
-          {[ALL, ...categories].map((value) => {
+          {[ALL, ...STORAGE_FILTERS, ...categories].map((value) => {
             const selected = value === activeCategory;
             return (
               <button
@@ -375,7 +434,11 @@ export default function LivingTab({ familyId }: { familyId: string }) {
                   selected ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }`}
               >
-                {value || 'すべて'}
+                {value === ALL
+                  ? 'すべて'
+                  : STORAGE_FILTERS.includes(value)
+                    ? STORAGE_LABEL[value.slice('storage:'.length) as StockStorage]
+                    : value}
               </button>
             );
           })}
@@ -400,6 +463,8 @@ export default function LivingTab({ familyId }: { familyId: string }) {
           onClose={() => setEditing(null)}
           onSubmit={(draft) => void save(draft)}
           onDelete={editing === 'new' ? undefined : () => void remove(editing.id)}
+          defaultStorage={filterStorage ?? 'home'}
+          onMove={editing === 'new' ? undefined : (count) => void move(editing, count)}
         />
       )}
 

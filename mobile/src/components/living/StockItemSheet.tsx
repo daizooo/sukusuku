@@ -2,7 +2,13 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Minus, Plus } from 'lucide-react-native';
 import type { StockItem, StockItemDraft, StockTarget } from '@/types/app';
-import { formatExpiry, formatQuantity, parseExpiryInput } from '@/lib/stockUtils';
+import {
+  formatExpiry,
+  formatQuantity,
+  parseExpiryInput,
+  STORAGE_LABEL,
+  type StockStorage,
+} from '@/lib/stockUtils';
 import { colors } from '@/lib/theme';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
@@ -22,9 +28,12 @@ interface FormState {
   note: string;
   targetId: string | null;
   amountPerUnit: string;
+  storage: StockStorage;
 }
 
-const initialState = (item: StockItem | null): FormState =>
+const STORAGES: StockStorage[] = ['home', 'carry'];
+
+const initialState = (item: StockItem | null, defaultStorage: StockStorage): FormState =>
   item
     ? {
         name: item.name,
@@ -35,8 +44,19 @@ const initialState = (item: StockItem | null): FormState =>
         note: item.note,
         targetId: item.targetId,
         amountPerUnit: formatQuantity(item.amountPerUnit),
+        storage: item.storage,
       }
-    : { name: '', category: '', quantity: '1', unit: '', expiry: '', note: '', targetId: null, amountPerUnit: '1' };
+    : {
+        name: '',
+        category: '',
+        quantity: '1',
+        unit: '',
+        expiry: '',
+        note: '',
+        targetId: null,
+        amountPerUnit: '1',
+        storage: defaultStorage,
+      };
 
 /** 入力を確かめて保存する形にする。だめなら突き返す文言。 */
 function toStockDraft(form: FormState): StockItemDraft | string {
@@ -61,6 +81,7 @@ function toStockDraft(form: FormState): StockItemDraft | string {
     note: form.note,
     targetId: form.targetId,
     amountPerUnit,
+    storage: form.storage,
   };
 }
 
@@ -74,6 +95,10 @@ interface StockItemSheetProps {
   onClose: () => void;
   onSubmit: (draft: StockItemDraft) => void;
   onDelete?: () => void;
+  /** 追加のときの保管場所（持ち出しで絞っているときは持ち出し）。 */
+  defaultStorage?: StockStorage;
+  /** 一部（count個）をもう一方の保管場所へ移す。編集のときだけ。 */
+  onMove?: (count: number) => void;
 }
 
 export default function StockItemSheet({
@@ -83,8 +108,11 @@ export default function StockItemSheet({
   onClose,
   onSubmit,
   onDelete,
+  defaultStorage = 'home',
+  onMove,
 }: StockItemSheetProps) {
-  const [form, setForm] = useState<FormState>(() => initialState(item));
+  const [form, setForm] = useState<FormState>(() => initialState(item, defaultStorage));
+  const [moveCount, setMoveCount] = useState('1');
   const [error, setError] = useState<string | null>(null);
 
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
@@ -104,6 +132,17 @@ export default function StockItemSheet({
       return;
     }
     onSubmit(draft);
+  };
+
+  /** 一部を移す。移せるのは1以上、今の数まで（全部なら場所ごと変わる）。 */
+  const otherStorage: StockStorage = item?.storage === 'carry' ? 'home' : 'carry';
+  const handleMove = () => {
+    const count = Number(moveCount.trim());
+    if (!item || !Number.isFinite(count) || count <= 0 || count > item.quantity) {
+      setError(`移す数は1〜${item ? formatQuantity(item.quantity) : ''}で入れてください`);
+      return;
+    }
+    onMove?.(count);
   };
 
   const handleDelete = () =>
@@ -218,6 +257,45 @@ export default function StockItemSheet({
         </View>
 
         <View style={styles.field}>
+          <Text style={styles.label}>保管場所</Text>
+          <View style={styles.segmented}>
+            {STORAGES.map((storage) => {
+              const selected = storage === form.storage;
+              return (
+                <Pressable
+                  key={storage}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => update({ storage })}
+                  style={[styles.segment, selected && styles.segmentSelected]}
+                >
+                  <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
+                    {STORAGE_LABEL[storage]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {item && onMove && item.quantity > 1 && (
+            <View style={styles.perUnitRow}>
+              <Text style={styles.perUnitLabel}>一部を{STORAGE_LABEL[otherStorage]}へ</Text>
+              <TextInput
+                style={[styles.input, styles.perUnitInput]}
+                value={moveCount}
+                onChangeText={setMoveCount}
+                keyboardType="decimal-pad"
+                inputMode="decimal"
+                accessibilityLabel="移す数"
+              />
+              <Text style={styles.perUnitLabel}>{item.unit}</Text>
+              <Pressable accessibilityRole="button" onPress={handleMove} style={styles.moveButton}>
+                <Text style={styles.moveButtonText}>移す</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.field}>
           <Text style={styles.label}>期限</Text>
           <TextInput
             style={styles.input}
@@ -310,6 +388,19 @@ const styles = StyleSheet.create({
   hint: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
   chips: { gap: 6, paddingTop: 2 },
   wrapChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  segmented: {
+    flexDirection: 'row',
+    backgroundColor: colors.neutralSurface,
+    borderRadius: 10,
+    padding: 3,
+    gap: 3,
+  },
+  segment: { flex: 1, borderRadius: 8, paddingVertical: 9, alignItems: 'center' },
+  segmentSelected: { backgroundColor: colors.surface },
+  segmentText: { fontSize: 13, color: colors.textMuted, fontWeight: '500' },
+  segmentTextSelected: { color: colors.text, fontWeight: '700' },
+  moveButton: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: colors.neutralSurface },
+  moveButtonText: { fontSize: 13, fontWeight: '700', color: colors.navActiveText },
   perUnitRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   perUnitLabel: { fontSize: 13, fontWeight: '500', color: colors.textSubtle },
   perUnitInput: { width: 88, textAlign: 'center' },
