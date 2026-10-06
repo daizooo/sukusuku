@@ -7,10 +7,10 @@ import { ballOf, type DrawPlan } from '@/lib/subsidyLotteryUtils';
 import GaraponMachine from './GaraponMachine';
 import LotteryBall from './LotteryBall';
 
-// 補助くじのホーム（docs/home.md §9.5）。mobile版の
+// お買いもの福引のホーム（docs/home.md §9.5）。mobile版の
 // `mobile/src/components/living/LotteryDrawView.tsx` と同じ項目・並び・文言。
 //
-// 福引所の1枚の面にまとめる: 福引券（残り回数）・ガラポン・今月のラッキーカラーなど・買うものと金額・「ガラポン！」。
+// 福引所の1枚の面にまとめる: 福引券（残り回数）・ガラポン・今月のラッキーカラーなど・買いたいものと金額・「ガラポン！」。
 // 賞品一覧・金コレ（金賞コレクション）・履歴・ヘルプは下のボタンから、画面の中央の枠で開く。持っている券は、あるときだけ右上のボタンから開く。
 // 「ガラポン！」を押すと、この面のガラポンが回り、受け皿に玉が出てから結果の枠が開く。
 
@@ -164,7 +164,7 @@ export default function LotteryDrawView({
             className={inputClass}
             value={itemName}
             onChange={(event) => onItemName(event.target.value)}
-            placeholder="買うもの"
+            placeholder="買いたいもの"
             disabled={!editable}
           />
           <input

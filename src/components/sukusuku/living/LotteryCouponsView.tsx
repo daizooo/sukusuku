@@ -1,22 +1,17 @@
 'use client';
 
 import type { LotteryCoupon } from '@/types/app';
-import {
-  COLLECTION_SLOTS,
-  COUPON_INFO,
-  collectionProgress,
-  daysLeft,
-  isCouponUsable,
-  isLotteryCoupon,
-} from '@/lib/subsidyLotteryUtils';
+import { COUPON_INFO, collectionProgress, daysLeft, isCouponUsable, isLotteryCoupon } from '@/lib/subsidyLotteryUtils';
+import LotteryCollectionBoard from './LotteryCollectionBoard';
 
-// 補助くじの「券」と「金コレ」（金賞コレクション）の枠（docs/home.md §9.5）。mobile版の
+// お買いもの福引の「券」と「金賞コレクション」（ホームのボタンは「金コレ」）の枠（docs/home.md §9.5）。mobile版の
 // `mobile/src/components/living/LotteryCouponsView.tsx` と同じ項目・並び・文言。
 // - 券: 自分の使える券（アカウントごと）。持っているときだけホームにボタンが出る
-// - 金コレ: 金玉の箱から出た特典の6枠と、使った券・期限切れの券。そろえたごほうびは書かない（出たときのお楽しみ）
+// - 金賞コレクション: 金賞の箱から出た特典の台紙（LotteryCollectionBoard）と、使った券・期限切れの券。
+//   そろえたごほうびは書かない（出たときのお楽しみ）
 
 interface LotteryCouponsViewProps {
-  /** どちらを出すか（券＝使える券、金コレ＝6枠と使った・期限切れの券）。 */
+  /** どちらを出すか（券＝使える券、金賞コレクション＝台紙と使った・期限切れの券）。 */
   section: 'coupons' | 'collection';
   coupons: LotteryCoupon[];
   isLoading: boolean;
@@ -45,32 +40,7 @@ export default function LotteryCouponsView({ section, coupons, isLoading, now, o
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pb-6">
-      {section === 'collection' && (
-        <div className="space-y-2 rounded-xl border border-gray-200 bg-white p-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="flex-1 text-[11px] text-gray-400">金玉の箱から出た特典を集めよう。6つそろうと…？</p>
-            <span className="shrink-0 text-[13px] font-bold tabular-nums text-amber-700">
-              {progress.cycle}周目 {progress.collected.length} / 6
-            </span>
-          </div>
-          <div className="grid grid-cols-3 gap-1.5">
-            {COLLECTION_SLOTS.map((entry) => {
-              const got = progress.collected.includes(entry.slot);
-              return (
-                <div
-                  key={entry.slot}
-                  className={`min-h-16 space-y-0.5 rounded-lg p-2 ${
-                    got ? 'border border-amber-200 bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-400'
-                  }`}
-                >
-                  <p className="text-[10px] font-bold">{entry.slot}</p>
-                  <p className="text-xs font-bold">{got ? COUPON_INFO[entry.kind].name : '？'}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {section === 'collection' && <LotteryCollectionBoard cycle={progress.cycle} collected={progress.collected} />}
 
       {section === 'coupons' && (isLoading ? (
         <p className="py-4 text-center text-[13px] text-gray-400">読み込み中...</p>

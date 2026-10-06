@@ -180,7 +180,7 @@ export default function LotteryCelebration({ ball, rate, height }: LotteryCelebr
 }
 
 /**
- * 金コレが6つそろったときの演出。6つの枠が順に金色に光り、「金コレ コンプリート！」と、
+ * 金コレが6つそろったときの演出。6つの枠が順に金色に光り、「金賞コレクション コンプリート！」と、
  * そろえたごほうびの券が弾んで出る（ごほうびの中身はここで初めて見せる）。
  */
 export function LotteryComplete({ rewardName }: { rewardName: string }) {
@@ -201,7 +201,10 @@ export function LotteryComplete({ rewardName }: { rewardName: string }) {
         ))}
       </View>
       <PopIn delay={1200}>
-        <Text style={styles.completeTitle}>金コレ コンプリート！</Text>
+        <View style={styles.completeTitleBox}>
+          <Text style={styles.completeSub}>金賞コレクション</Text>
+          <Text style={styles.completeTitle}>コンプリート！</Text>
+        </View>
       </PopIn>
       <PopIn delay={1500}>
         <View style={styles.reward}>
@@ -279,5 +282,7 @@ const styles = StyleSheet.create({
   },
   rewardHead: { fontSize: 11, fontWeight: '700', color: '#b45309' },
   rewardName: { fontSize: 18, fontWeight: '800', color: '#7f1d1d', textAlign: 'center' },
+  completeTitleBox: { alignItems: 'center' },
+  completeSub: { fontSize: 13, fontWeight: '800', color: '#fde68a', letterSpacing: 2 },
   completeNote: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.85)' },
 });

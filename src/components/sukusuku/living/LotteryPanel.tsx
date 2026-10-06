@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { listFamilyMembers } from '@/lib/api/familyMembers';
 import {
   insertSubsidyDraw,
-  loadMyBirthMonth,
+  loadMyLotteryProfile,
   loadMyCoupons,
   loadSubsidyDraws,
   openLotteryBox,
@@ -34,7 +34,7 @@ import LotteryHistoryView from './LotteryHistoryView';
 import LotteryPrizesView from './LotteryPrizesView';
 import LotteryResultModal from './LotteryResultModal';
 
-// 暮らしタブの「補助くじ」の面（docs/home.md §9）。mobile版の
+// 暮らしタブの「お買いもの福引」（旧称「補助くじ」）の面（docs/home.md §9）。mobile版の
 // `mobile/src/components/living/LotteryPanel.tsx` と同じ項目・並び・文言。
 //
 // 家のルール: 趣味以外で必要なものを税込500〜3,000円で買うとき、1人あたり月2回（誕生月は3回）まで、
@@ -70,6 +70,8 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
   const [coupons, setCoupons] = useState<LotteryCoupon[]>([]);
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
   const [birthMonth, setBirthMonth] = useState<number | null>(null);
+  /** テストモードを出すか（夫だけ）。 */
+  const [canTest, setCanTest] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [itemName, setItemName] = useState('');
   const [priceText, setPriceText] = useState('');
@@ -77,24 +79,25 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
   const [usePush, setUsePush] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [result, setResult] = useState<ResultState | null>(null);
-  const [testMode, setTestMode] = useState(false);
+  const [testModeOn, setTestMode] = useState(false);
   const [isDeletingTest, setIsDeletingTest] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
     void (async () => {
       try {
-        const [loadedDraws, loadedCoupons, loadedMembers, month] = await Promise.all([
+        const [loadedDraws, loadedCoupons, loadedMembers, profile] = await Promise.all([
           loadSubsidyDraws(supabase, familyId),
           loadMyCoupons(supabase, userId),
           listFamilyMembers(supabase, familyId),
-          loadMyBirthMonth(supabase, userId),
+          loadMyLotteryProfile(supabase, userId),
         ]);
         if (!isMounted) return;
         setDraws(loadedDraws);
         setCoupons(loadedCoupons);
         setMembers(loadedMembers.map((member) => ({ id: member.id, name: member.name })));
-        setBirthMonth(month);
+        setBirthMonth(profile.birthMonth);
+        setCanTest(profile.canTest);
       } catch {
         // 読めなかったぶんは空のままにする。
       } finally {
@@ -106,7 +109,8 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
     };
   }, [supabase, familyId, userId]);
 
-  // テストモードでは、本物と別のくじ・券だけを見せて数える（月の回数は減らない）。
+  // テストモードでは、本物と別のくじ・券だけを見せて数える（月の回数は減らない）。夫のほかは使えない。
+  const testMode = canTest && testModeOn;
   const shownDraws = draws.filter((draw) => draw.isTest === testMode);
   const shownCoupons = coupons.filter((coupon) => coupon.isTest === testMode);
   const testCount = draws.filter((draw) => draw.isTest).length + coupons.filter((coupon) => coupon.isTest).length;
@@ -167,7 +171,7 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
 
   const confirmSpin = () => {
     const price = parsePrice(priceText);
-    const problem = itemName.trim() === '' ? '買うものを入れてください' : priceError(price);
+    const problem = itemName.trim() === '' ? '買いたいものを入れてください' : priceError(price);
     setError(problem);
     if (problem !== null || price === null) return;
     const name = itemName.trim();
@@ -261,7 +265,7 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
         </LotteryDialog>
       )}
       {dialog === 'collection' && (
-        <LotteryDialog title="金コレ" onClose={() => setDialog(null)} fill>
+        <LotteryDialog title="金賞コレクション" onClose={() => setDialog(null)} fill>
           <LotteryCouponsView section="collection" coupons={shownCoupons} isLoading={isLoading} now={now} onUse={useCoupon} />
         </LotteryDialog>
       )}
@@ -273,6 +277,7 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
       {dialog === 'help' && (
         <LotteryHelpModal
           onClose={() => setDialog(null)}
+          canTest={canTest}
           testMode={testMode}
           onToggleTest={toggleTestMode}
           testCount={testCount}

@@ -1,10 +1,10 @@
-// 補助くじ（暮らしタブ。docs/home.md §9）の決まりごと。
+// お買いもの福引（旧称「補助くじ」。暮らしタブ。docs/home.md §9）の決まりごと。
 // mobile版の `mobile/src/lib/subsidyLotteryUtils.ts` と同じ中身にしてある（片方を直したらもう片方も直す）。
 //
 // 家のルール: 趣味以外で必要なものを税込500〜3,000円で買うとき、1人あたり月2回（誕生月は3回）まで、
 // 家族のお金から補助を出す。補助率はくじ（ガラポン）で決める。はずれはなし。
 //
-// 玉: 白玉25%（40）／青玉50%（30）／赤玉75%（20）／金玉100%（10）。かっこは出やすさの重み。
+// 玉: 白25%（40）／青50%（30）／赤75%（20）／金100%（10。画面では「金賞」と呼ぶ）。かっこは出やすさの重み。
 // 補助額は、100%は商品代そのもの。それ以外は補助率をかけて100円単位（49円以下は切り下げ、50円以上は切り上げ）。
 //
 // 救済（どれも自動。確率の重みは変えず、引く前に玉の候補を絞る・補助率を上げることで調整する）
@@ -49,7 +49,7 @@ export const BALLS: Ball[] = [
   { id: 'white', ball: '白玉', name: 'ちょこっと賞', rate: 25, weight: 40, message: 'ちょこっと助かります。次はきっといいことが' },
   { id: 'blue', ball: '青玉', name: 'はんぶん賞', rate: 50, weight: 30, message: '半分は家族のお金から。ありがたい' },
   { id: 'red', ball: '赤玉', name: 'たっぷり賞', rate: 75, weight: 20, message: '大当たり！ ほとんど家族のお金です' },
-  { id: 'gold', ball: '金玉', name: 'まんがく賞', rate: 100, weight: 10, message: '金玉！ 福の神が満額払ってくれます' },
+  { id: 'gold', ball: '金の玉', name: 'まんがく賞', rate: 100, weight: 10, message: '金賞！ 福の神が満額払ってくれます' },
 ];
 
 export const ballOf = (id: SubsidyBallId): Ball => BALLS.find((ball) => ball.id === id) ?? BALLS[0];
@@ -314,6 +314,19 @@ export const collectionProgress = (coupons: LotteryCoupon[]): { cycle: number; c
   return { cycle, collected: [...new Set(collected)].sort((a, b) => a - b) };
 };
 
+/** 金賞コレクションの、宝箱の下に出す一言（そろうまでの残りで変わる）。 */
+export const collectionTeaser = (collected: number): string => {
+  const left = COLLECTION_SLOTS.length - collected;
+  if (collected === 0) return '金賞が出たら、箱から特典が1つもらえる';
+  if (left === 1) return 'あと1つ！ 宝箱がガタガタ言っている…！';
+  return `あと${left}つそろうと…？`;
+};
+
+/** 宝箱を押したときの一言（押すたびに順に変わる。中身は言わない）。 */
+const TREASURE_WHISPERS = ['まだ開かない…', '中で何かが動いた気がする', '耳を当てると、何か聞こえる…', '6つそろえば開くらしい'];
+
+export const treasureWhisper = (taps: number): string => TREASURE_WHISPERS[taps % TREASURE_WHISPERS.length];
+
 // ---------------------------------------------------------------------------
 // 履歴・画面の文言
 // ---------------------------------------------------------------------------
@@ -364,7 +377,7 @@ const yen = (value: number) => value.toLocaleString('ja-JP');
 
 /**
  * 「ヘルプ」の枠で読めるルール説明。mobile・PWAで同じ文言を使う（数字は決まりごとの定数から作る）。
- * 短く、要点だけ。行の「：」の前は太字で出す。確率・金玉の特典の中身・金コレをそろえたごほうびなど、
+ * 短く、要点だけ。行の「：」の前は太字で出す。確率・金賞の特典の中身・金コレをそろえたごほうびなど、
  * 知ってしまうと面白くないものは書かない。
  */
 export const lotteryHelp = (): HelpSection[] => [
@@ -378,9 +391,8 @@ export const lotteryHelp = (): HelpSection[] => [
   {
     heading: '補助',
     lines: [
-      '補助率：出た玉で決まる（25%〜100%。はずれなし）',
+      '補助率：出た玉の色で決まる。白＝25%・青＝50%・赤＝75%・金＝100%（はずれなし）',
       '補助額：100円単位に四捨五入。100%は全額',
-      '残り：自分のお小遣いから',
     ],
   },
   {
@@ -389,7 +401,7 @@ export const lotteryHelp = (): HelpSection[] => [
       'ラッキーカラー：毎月1色。その玉が出たら補助率が1段アップ',
       'ひと押し券：25%が出るともらえる。次回以降、使うと25%が出なくなる',
       '貯福：引かなかった回数があると、翌月の最初の1回が良くなる',
-      '金玉：箱から特典が出る。集めて金コレをそろえよう',
+      '金賞：ちょっと嬉しい特典がもらえる。特典を6つ集めると…',
     ],
   },
   {

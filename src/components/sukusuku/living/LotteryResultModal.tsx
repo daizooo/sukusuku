@@ -9,7 +9,7 @@ import { BALL_COLOR } from './LotteryBall';
 import LotteryCelebration, { LotteryComplete, PopIn } from './LotteryCelebration';
 import LotteryDialog from './LotteryDialog';
 
-// 補助くじの結果（docs/home.md §9.5）。mobile版の `mobile/src/components/living/LotteryResultSheet.tsx` と
+// お買いもの福引の結果（docs/home.md §9.5）。mobile版の `mobile/src/components/living/LotteryResultSheet.tsx` と
 // 同じ流れ・同じ文言。結果はこの枠を出す前にDBへ記録してある（見てから引き直せない）。
 //
 // ガラポンはホームの面で回し、玉が受け皿に出てからこの枠を開く。ここでは出た玉が弾むように出て、
@@ -128,7 +128,7 @@ export default function LotteryResultModal({
 
         <PopIn delay={150}>
           <p className="text-[22px] font-extrabold" style={{ color: tone.text }}>
-            {ball.ball}！ {ball.name}
+            {ball.name}！
           </p>
         </PopIn>
         {/* 補助率アップ券で上がったら、札をもう一度弾ませる。 */}
@@ -204,7 +204,7 @@ export default function LotteryResultModal({
             <p className="text-[11px] font-bold text-amber-700">箱の中身</p>
             <p className="text-[17px] font-bold text-gray-900">{COUPON_INFO[perk.kind].name}</p>
             <p className="text-xs text-gray-500">{formatLimit(perk.expiresAt)}</p>
-            <p className="text-xs font-bold tabular-nums text-gray-700">金コレ {trip ? 6 : progress.collected.length} / 6</p>
+            <p className="text-xs font-bold tabular-nums text-gray-700">金賞コレクション {trip ? 6 : progress.collected.length} / 6</p>
           </div>
         )}
         {/* 6つそろったら、ごほうびの演出（見えるところまで送る）。 */}
