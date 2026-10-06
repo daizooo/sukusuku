@@ -12,7 +12,7 @@ import {
 import { Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react-native';
-import type { ListBoard, ListGroup, ListItem } from '@/types/app';
+import type { HouseholdProduct, ListBoard, ListGroup, ListItem } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
@@ -37,6 +37,8 @@ import {
   updateListPositions,
 } from '@/lib/api/lists';
 import ListEditorModal from '@/components/list/ListEditorModal';
+import { loadHouseholdProducts } from '@/lib/api/householdProducts';
+import { suggestProducts } from '@/lib/shoppingUtils';
 import ListOverviewCard from '@/components/list/ListOverviewCard';
 import { AddRow, GroupHeader, ItemRow } from '@/components/list/ListRows';
 import { useDragReorder } from '@/components/list/useDragReorder';
@@ -81,6 +83,7 @@ export default function ListScreen() {
   const [groups, setGroups] = useState<ListGroup[]>([]);
   const [items, setItems] = useState<ListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [products, setProducts] = useState<HouseholdProduct[]>([]);
 
   // nullのあいだはリストを並べた一覧だけを出す。カードを押すとそのリストを編集モードで開く。
   const [openListId, setOpenListId] = useState<string | null>(null);
@@ -96,6 +99,12 @@ export default function ListScreen() {
         const membership = await getMyMembership(supabase, userId);
         if (!isMounted || !membership.familyId) return;
         setFamilyId(membership.familyId);
+        // 追加欄の候補に出す日用品の台帳（docs/home.md §4.2）。読めなくてもリストは出す。
+        void loadHouseholdProducts(supabase, membership.familyId)
+          .then((loaded) => {
+            if (isMounted) setProducts(loaded);
+          })
+          .catch(() => {});
         const snapshot = await loadLists(supabase, membership.familyId);
         if (!isMounted) return;
         setLists(snapshot.lists);
@@ -136,6 +145,9 @@ export default function ListScreen() {
         : [],
     [items, selected],
   );
+
+  /** 項目の追加欄で打っている文字から、日用品の台帳の候補を出す（docs/home.md §4.2）。 */
+  const suggestFromProducts = (typed: string) => suggestProducts(products, typed).map((product) => product.name);
 
   const undoneItems = listItems.filter((item) => !item.done);
   const doneItems = listItems.filter((item) => item.done);
@@ -540,6 +552,7 @@ export default function ListScreen() {
               divided={undoneItems.length > 0}
               label="追加"
               allowEmpty
+              suggest={suggestFromProducts}
               onSubmit={(title) => void addItem(selected.id, null, title)}
             />
           </View>
@@ -571,6 +584,7 @@ export default function ListScreen() {
                     divided={groupItems.length > 0}
                     label="追加"
                     allowEmpty
+                    suggest={suggestFromProducts}
                     onSubmit={(title) => void addItem(selected.id, group.id, title)}
                   />
                 </Animated.View>
@@ -586,6 +600,7 @@ export default function ListScreen() {
                   divided
                   label="追加"
                   allowEmpty
+                  suggest={suggestFromProducts}
                   onSubmit={(title) => void addItem(selected.id, null, title)}
                 />
               </View>

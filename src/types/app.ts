@@ -443,3 +443,19 @@ export interface StockTarget {
 }
 
 export type StockTargetDraft = Omit<StockTarget, 'id' | 'position'>;
+
+/** 日用品の台帳（よく買うもの）の1品。household_products に対応（docs/home.md §4）。 */
+export interface HouseholdProduct {
+  id: string;
+  name: string;
+  category: string;
+  /** いつも買うお店。買い出しリストに同じ名前のグループがあればそこへ入れる。 */
+  store: string;
+  /** いつもの値段（円・税込）。 */
+  price: number | null;
+  note: string;
+  /** 最後に買い出しリストへ送った時刻（ISO）。 */
+  lastAddedAt: string | null;
+}
+
+export type HouseholdProductDraft = Omit<HouseholdProduct, 'id' | 'lastAddedAt'>;

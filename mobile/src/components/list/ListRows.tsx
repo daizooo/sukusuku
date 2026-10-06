@@ -184,10 +184,13 @@ export function AddRow({
   tone = 'plain',
   divided = false,
   allowEmpty = false,
+  suggest,
 }: {
   label: string;
   placeholder?: string;
   onSubmit: (value: string) => void;
+  /** 打っている文字から候補を出す（日用品の台帳。docs/home.md §4.2）。押すとその内容で追加する。 */
+  suggest?: (typed: string) => string[];
   /** 空のままでも追加できるようにする（項目の追加用。空行を挟んで見出しのように使える）。 */
   allowEmpty?: boolean;
   /** 枠そのものを足す行は、項目の追加と見分けられるよう破線にする。 */
@@ -220,41 +223,62 @@ export function AddRow({
     setDraft('');
   };
 
+  const suggestions = suggest ? suggest(draft) : [];
+
   return (
-    <View
-      style={[styles.addRow, tone === 'outlined' ? styles.outlined : divided && styles.divided]}
-    >
-      <TextInput
-        style={[styles.input, styles.flex]}
-        value={draft}
-        onChangeText={setDraft}
-        onSubmitEditing={submit}
-        // 打ち終わって他へ触れたときは、書きかけが無ければ欄を畳む。空でも足せる欄は、
-        // 畳むと「追加」を押す前にボタンごと消えてしまうので畳まない。
-        onBlur={() => {
-          if (!allowEmpty) setDraft((prev) => (prev && prev.trim() ? prev : null));
-        }}
-        autoFocus
-        blurOnSubmit={false}
-        returnKeyType="done"
-        placeholder={placeholder}
-        placeholderTextColor={colors.textFaint}
-      />
-      <Pressable
-        accessibilityRole="button"
-        disabled={!allowEmpty && draft.trim() === ''}
-        onPress={submit}
-        style={styles.addSubmit}
-      >
-        <Text
-          style={[
-            styles.addSubmitText,
-            !allowEmpty && draft.trim() === '' && styles.addSubmitDisabled,
-          ]}
+    <View style={tone === 'outlined' ? styles.outlined : divided && styles.divided}>
+      <View style={styles.addRow}>
+        <TextInput
+          style={[styles.input, styles.flex]}
+          value={draft}
+          onChangeText={setDraft}
+          onSubmitEditing={submit}
+          // 打ち終わって他へ触れたときは、書きかけが無ければ欄を畳む。空でも足せる欄は、
+          // 畳むと「追加」を押す前にボタンごと消えてしまうので畳まない。
+          onBlur={() => {
+            if (!allowEmpty) setDraft((prev) => (prev && prev.trim() ? prev : null));
+          }}
+          autoFocus
+          blurOnSubmit={false}
+          returnKeyType="done"
+          placeholder={placeholder}
+          placeholderTextColor={colors.textFaint}
+        />
+        <Pressable
+          accessibilityRole="button"
+          disabled={!allowEmpty && draft.trim() === ''}
+          onPress={submit}
+          style={styles.addSubmit}
         >
-          追加
-        </Text>
-      </Pressable>
+          <Text
+            style={[
+              styles.addSubmitText,
+              !allowEmpty && draft.trim() === '' && styles.addSubmitDisabled,
+            ]}
+          >
+            追加
+          </Text>
+        </Pressable>
+      </View>
+      {suggestions.length > 0 && (
+        <View style={styles.suggestions}>
+          {suggestions.map((suggestion) => (
+            <Pressable
+              key={suggestion}
+              accessibilityRole="button"
+              accessibilityLabel={`${suggestion}を追加`}
+              onPress={() => {
+                onSubmit(suggestion);
+                setDraft('');
+              }}
+              style={styles.suggestion}
+            >
+              <Plus size={12} color={colors.navActiveText} />
+              <Text style={styles.suggestionText}>{suggestion}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -331,6 +355,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addSubmit: { paddingHorizontal: 8, paddingVertical: 8 },
+  suggestions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 12, paddingBottom: 8 },
+  suggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: colors.diaperSurface,
+  },
+  suggestionText: { fontSize: 12, fontWeight: '700', color: colors.navActiveText },
   addSubmitText: { fontSize: 14, fontWeight: '700', color: colors.navActiveText },
   addSubmitDisabled: { color: colors.borderStrong },
 });
