@@ -37,7 +37,7 @@ export const LIVING_SECTIONS: {
   {
     id: 'lottery',
     label: '福引チャンス',
-    hint: '家族のお金からの補助をくじで決める',
+    hint: '家族のお金で買ってもらえるかも・・・',
     color: colors.livingLottery,
     surface: colors.livingLotterySurface,
     Icon: Ticket,

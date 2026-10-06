@@ -49,7 +49,7 @@ export const LIVING_SECTIONS: {
   {
     id: 'lottery',
     label: '福引チャンス',
-    hint: '家族のお金からの補助をくじで決める',
+    hint: '家族のお金で買ってもらえるかも・・・',
     icon: 'text-purple-600',
     surface: 'bg-purple-50 group-hover:bg-purple-100',
     accent: 'bg-purple-600 hover:bg-purple-700',
