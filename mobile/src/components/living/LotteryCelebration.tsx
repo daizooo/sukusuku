@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { Animated, Easing, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Defs, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
 import type { SubsidyBallId, SubsidyRate } from '@/types/app';
 import LotteryBall from '@/components/living/LotteryBall';
@@ -83,7 +83,7 @@ const makePieces = (count: number): Piece[] =>
     };
   });
 
-function Confetti({ count }: { count: number }) {
+function Confetti({ count, delay = 0 }: { count: number; delay?: number }) {
   const progress = useRef(new Animated.Value(0)).current;
   const pieces = useMemo(() => makePieces(count), [count]);
   useEffect(() => {
@@ -91,12 +91,13 @@ function Confetti({ count }: { count: number }) {
     const run = Animated.timing(progress, {
       toValue: 1,
       duration: 1600,
+      delay,
       easing: Easing.out(Easing.quad),
       useNativeDriver: true,
     });
     run.start();
     return () => run.stop();
-  }, [progress]);
+  }, [delay, progress]);
   return (
     <View style={styles.confetti} pointerEvents="none">
       {pieces.map((piece, index) => (
@@ -106,7 +107,7 @@ function Confetti({ count }: { count: number }) {
             piece.round ? styles.dot : styles.strip,
             {
               backgroundColor: piece.color,
-              opacity: progress.interpolate({ inputRange: [0, 0.7, 1], outputRange: [1, 1, 0] }),
+              opacity: progress.interpolate({ inputRange: [0, 0.02, 0.7, 1], outputRange: [0, 1, 1, 0] }),
               transform: [
                 { translateX: progress.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, piece.dx * 0.8, piece.dx] }) },
                 {
@@ -178,6 +179,44 @@ export default function LotteryCelebration({ ball, rate, height }: LotteryCelebr
   );
 }
 
+/**
+ * 金コレが6つそろったときの演出。6つの枠が順に金色に光り、「金コレ コンプリート！」と、
+ * そろえたごほうびの券が弾んで出る（ごほうびの中身はここで初めて見せる）。
+ */
+export function LotteryComplete({ rewardName }: { rewardName: string }) {
+  return (
+    <View style={styles.complete}>
+      {/* 文字が読めるよう、光の筋は薄めにする。 */}
+      <View style={styles.dimRays} pointerEvents="none">
+        <Rays color="#fbbf24" durationMs={10000} />
+        <Rays color="#fde68a" durationMs={7000} reverse />
+      </View>
+      <View style={styles.slots}>
+        {Array.from({ length: 6 }, (_, index) => (
+          <PopIn key={index} delay={200 + index * 150}>
+            <View style={styles.slot}>
+              <Text style={styles.slotText}>{index + 1}</Text>
+            </View>
+          </PopIn>
+        ))}
+      </View>
+      <PopIn delay={1200}>
+        <Text style={styles.completeTitle}>金コレ コンプリート！</Text>
+      </PopIn>
+      <PopIn delay={1500}>
+        <View style={styles.reward}>
+          <Text style={styles.rewardHead}>ごほうび</Text>
+          <Text style={styles.rewardName}>{rewardName}</Text>
+        </View>
+      </PopIn>
+      <PopIn delay={1800}>
+        <Text style={styles.completeNote}>「持っている券」に入っています</Text>
+      </PopIn>
+      <Confetti count={60} delay={1200} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   stage: { alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 16 },
   rays: { position: 'absolute', width: RAY_BOX, height: RAY_BOX, top: '50%', left: '50%', marginTop: -RAY_BOX / 2, marginLeft: -RAY_BOX / 2 },
@@ -195,4 +234,50 @@ const styles = StyleSheet.create({
   confetti: { position: 'absolute', top: '50%', left: '50%', width: 0, height: 0 },
   strip: { position: 'absolute', width: 6, height: 11, borderRadius: 1 },
   dot: { position: 'absolute', width: 8, height: 8, borderRadius: 4 },
+  complete: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    overflow: 'hidden',
+    borderRadius: 16,
+    backgroundColor: '#991b1b',
+  },
+  slots: { flexDirection: 'row', gap: 6 },
+  slot: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fbbf24',
+    borderWidth: 2,
+    borderColor: '#fde68a',
+  },
+  slotText: { fontSize: 13, fontWeight: '800', color: '#78350f' },
+  dimRays: { ...StyleSheet.absoluteFillObject, opacity: 0.4 },
+  completeTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#fde68a',
+    letterSpacing: 1,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  reward: {
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: '#fffbeb',
+    borderWidth: 2,
+    borderColor: '#fbbf24',
+  },
+  rewardHead: { fontSize: 11, fontWeight: '700', color: '#b45309' },
+  rewardName: { fontSize: 18, fontWeight: '800', color: '#7f1d1d', textAlign: 'center' },
+  completeNote: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.85)' },
 });

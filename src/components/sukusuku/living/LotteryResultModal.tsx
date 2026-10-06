@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Gift, Loader2 } from 'lucide-react';
 import type { LotteryCoupon, SubsidyBallId, SubsidyDraw } from '@/types/app';
 import { COUPON_INFO, ballOf, collectionProgress } from '@/lib/subsidyLotteryUtils';
 import { formatPrice } from '@/lib/shoppingUtils';
 import { BALL_COLOR } from './LotteryBall';
-import LotteryCelebration, { PopIn } from './LotteryCelebration';
+import LotteryCelebration, { LotteryComplete, PopIn } from './LotteryCelebration';
 import LotteryDialog from './LotteryDialog';
 
 // 補助くじの結果（docs/home.md §9.5）。mobile版の `mobile/src/components/living/LotteryResultSheet.tsx` と
@@ -44,7 +44,7 @@ interface LotteryResultModalProps {
   earnedPush: boolean;
   /** 使える補助率アップ券（なければ null）。 */
   rateUpCoupon: LotteryCoupon | null;
-  /** 今までの券（図鑑の進み具合を出すのに使う）。 */
+  /** 今までの券（金コレの進み具合を出すのに使う）。 */
   coupons: LotteryCoupon[];
   onRateUp: (draw: SubsidyDraw, coupon: LotteryCoupon) => Promise<SubsidyDraw>;
   onOpenBox: (draw: SubsidyDraw) => Promise<LotteryCoupon[]>;
@@ -65,6 +65,7 @@ export default function LotteryResultModal({
   const [busy, setBusy] = useState(false);
   const [rateUpDone, setRateUpDone] = useState(false);
   const [opened, setOpened] = useState<LotteryCoupon[] | null>(null);
+  const completeRef = useRef<HTMLDivElement>(null);
 
   const ball = ballOf(draw.ball);
   const tone = BALL_COLOR[draw.ball];
@@ -96,6 +97,17 @@ export default function LotteryResultModal({
   const perk = opened?.find((coupon) => coupon.slot !== null) ?? null;
   const trip = opened?.find((coupon) => coupon.kind === 'trip') ?? null;
   const progress = collectionProgress([...(opened ?? []), ...coupons.filter((coupon) => !opened?.some((o) => o.id === coupon.id))]);
+  // 金コレが6つそろったら、下に出る演出まで送る。
+  useEffect(() => {
+    if (!trip) return;
+    // scrollIntoView は枠（overflow-hidden）ごと動かしてしまうので、中身のスクロールだけを送る。
+    const timer = setTimeout(() => {
+      const body = completeRef.current?.closest('.overflow-y-auto');
+      body?.scrollTo({ top: body.scrollHeight, behavior: 'smooth' });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [trip]);
+
   const bonus = draw.rateUpUsed ? '補助率アップ券で1段アップ！' : luckyUp ? 'ラッキーカラーで1段アップ！' : null;
 
   return (
@@ -152,7 +164,7 @@ export default function LotteryResultModal({
           </p>
         </div>
 
-        {earnedPush && <p className="text-[11px] text-gray-500">ひと押し券をもらいました（使うと25%が出なくなります）</p>}
+        {earnedPush && <p className="text-[11px] text-gray-500">ひと押し券をもらいました（次回以降、使うと25%が出なくなります）</p>}
 
         {canRateUp && (
           <button
@@ -192,12 +204,13 @@ export default function LotteryResultModal({
             <p className="text-[11px] font-bold text-amber-700">箱の中身</p>
             <p className="text-[17px] font-bold text-gray-900">{COUPON_INFO[perk.kind].name}</p>
             <p className="text-xs text-gray-500">{formatLimit(perk.expiresAt)}</p>
-            <p className="text-xs font-bold tabular-nums text-gray-700">図鑑 {trip ? 6 : progress.collected.length} / 6</p>
-            {trip && (
-              <p className="text-[13px] font-bold text-green-700">
-                6つそろいました！ {COUPON_INFO.trip.name}をゲット（券の画面にあります）
-              </p>
-            )}
+            <p className="text-xs font-bold tabular-nums text-gray-700">金コレ {trip ? 6 : progress.collected.length} / 6</p>
+          </div>
+        )}
+        {/* 6つそろったら、ごほうびの演出（見えるところまで送る）。 */}
+        {trip && (
+          <div ref={completeRef} className="w-full">
+            <LotteryComplete rewardName={COUPON_INFO.trip.name} />
           </div>
         )}
       </div>

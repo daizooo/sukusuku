@@ -261,7 +261,7 @@ export default function LotteryPanel({ familyId, userId }: LotteryPanelProps) {
         </LotteryDialog>
       )}
       {dialog === 'collection' && (
-        <LotteryDialog title="図鑑" onClose={() => setDialog(null)} fill>
+        <LotteryDialog title="金コレ" onClose={() => setDialog(null)} fill>
           <LotteryCouponsView section="collection" coupons={shownCoupons} isLoading={isLoading} now={now} onUse={useCoupon} />
         </LotteryDialog>
       )}

@@ -10,13 +10,13 @@ import {
   isLotteryCoupon,
 } from '@/lib/subsidyLotteryUtils';
 
-// 補助くじの「券」と「図鑑」の枠（docs/home.md §9.5）。mobile版の
+// 補助くじの「券」と「金コレ」（金賞コレクション）の枠（docs/home.md §9.5）。mobile版の
 // `mobile/src/components/living/LotteryCouponsView.tsx` と同じ項目・並び・文言。
 // - 券: 自分の使える券（アカウントごと）。持っているときだけホームにボタンが出る
-// - 図鑑: 100%の箱の図鑑（6つ）と、使った券・期限切れの券
+// - 金コレ: 金玉の箱から出た特典の6枠と、使った券・期限切れの券。そろえたごほうびは書かない（出たときのお楽しみ）
 
 interface LotteryCouponsViewProps {
-  /** どちらを出すか（券＝使える券、図鑑＝図鑑と使った・期限切れの券）。 */
+  /** どちらを出すか（券＝使える券、金コレ＝6枠と使った・期限切れの券）。 */
   section: 'coupons' | 'collection';
   coupons: LotteryCoupon[];
   isLoading: boolean;
@@ -47,13 +47,12 @@ export default function LotteryCouponsView({ section, coupons, isLoading, now, o
     <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pb-6">
       {section === 'collection' && (
         <div className="space-y-2 rounded-xl border border-gray-200 bg-white p-3">
-          <div className="flex items-baseline justify-between">
-            <h3 className="text-sm font-bold text-gray-900">福の神の図鑑</h3>
-            <span className="text-[13px] font-bold tabular-nums text-amber-700">
+          <div className="flex items-center justify-between gap-2">
+            <p className="flex-1 text-[11px] text-gray-400">金玉の箱から出た特典を集めよう。6つそろうと…？</p>
+            <span className="shrink-0 text-[13px] font-bold tabular-nums text-amber-700">
               {progress.cycle}周目 {progress.collected.length} / 6
             </span>
           </div>
-          <p className="text-[11px] text-gray-400">100%が出ると、箱から特典が1つ出ます。6つ集めると日帰り旅行券！</p>
           <div className="grid grid-cols-3 gap-1.5">
             {COLLECTION_SLOTS.map((entry) => {
               const got = progress.collected.includes(entry.slot);
@@ -77,7 +76,7 @@ export default function LotteryCouponsView({ section, coupons, isLoading, now, o
         <p className="py-4 text-center text-[13px] text-gray-400">読み込み中...</p>
       ) : usable.length === 0 ? (
         <p className="py-4 text-center text-[13px] text-gray-400">
-          使える券はありません。25%が出るとひと押し券、100%が出ると箱がもらえます
+          使える券はありません
         </p>
       ) : (
         <ul className="divide-y divide-gray-200 overflow-hidden rounded-xl border border-gray-200 bg-white">

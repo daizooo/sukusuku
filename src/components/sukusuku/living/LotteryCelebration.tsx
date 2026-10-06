@@ -65,7 +65,7 @@ const makePieces = (count: number) =>
     };
   });
 
-function Confetti({ count }: { count: number }) {
+function Confetti({ count, delay = 0 }: { count: number; delay?: number }) {
   const pieces = useMemo(() => makePieces(count), [count]);
   return (
     <span aria-hidden className="pointer-events-none absolute left-1/2 top-1/2">
@@ -76,6 +76,7 @@ function Confetti({ count }: { count: number }) {
           style={
             {
               backgroundColor: piece.color,
+              animationDelay: `${delay}ms`,
               '--dx': `${piece.dx}px`,
               '--dy': `${piece.dy}px`,
               '--turn': `${piece.turn}deg`,
@@ -93,6 +94,46 @@ export function PopIn({ children, delay = 0, className = '' }: { children: React
     <span className={`lottery-pop ${className}`} style={{ animationDelay: `${delay}ms` }}>
       {children}
     </span>
+  );
+}
+
+/**
+ * 金コレが6つそろったときの演出。6つの枠が順に金色に光り、「金コレ コンプリート！」と、
+ * そろえたごほうびの券が弾んで出る（ごほうびの中身はここで初めて見せる）。
+ */
+export function LotteryComplete({ rewardName }: { rewardName: string }) {
+  return (
+    <div className="relative flex w-full flex-col items-center gap-3 overflow-hidden rounded-2xl bg-red-800 px-3 py-5 text-center">
+      {/* 文字が読めるよう、光の筋は薄めにする。 */}
+      <div className="absolute inset-0 opacity-40">
+        <Rays color="#fbbf24" />
+        <Rays color="#fde68a" reverse />
+      </div>
+      <div className="relative flex gap-1.5">
+        {Array.from({ length: 6 }, (_, index) => (
+          <PopIn key={index} delay={200 + index * 150}>
+            <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full border-2 border-amber-200 bg-amber-400 text-[13px] font-extrabold text-amber-900">
+              {index + 1}
+            </span>
+          </PopIn>
+        ))}
+      </div>
+      <PopIn delay={1200} className="relative">
+        <span className="text-[22px] font-extrabold tracking-wide text-amber-200 [text-shadow:0_2px_4px_rgba(0,0,0,0.45)]">
+          金コレ コンプリート！
+        </span>
+      </PopIn>
+      <PopIn delay={1500} className="relative">
+        <span className="block rounded-[14px] border-2 border-amber-400 bg-amber-50 px-5 py-2.5">
+          <span className="block text-[11px] font-bold text-amber-700">ごほうび</span>
+          <span className="block text-lg font-extrabold text-red-900">{rewardName}</span>
+        </span>
+      </PopIn>
+      <PopIn delay={1800} className="relative">
+        <span className="text-[11px] font-bold text-white/85">「持っている券」に入っています</span>
+      </PopIn>
+      <Confetti count={60} delay={1200} />
+    </div>
   );
 }
 

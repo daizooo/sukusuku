@@ -6,7 +6,7 @@ import { colors } from '@/lib/theme';
 import { COUPON_INFO, ballOf, collectionProgress } from '@/lib/subsidyLotteryUtils';
 import { formatPrice } from '@/lib/shoppingUtils';
 import { BALL_COLOR } from '@/components/living/LotteryBall';
-import LotteryCelebration, { PopIn } from '@/components/living/LotteryCelebration';
+import LotteryCelebration, { LotteryComplete, PopIn } from '@/components/living/LotteryCelebration';
 import LotteryDialog from '@/components/living/LotteryDialog';
 
 // 補助くじの結果（docs/home.md §9.5）。PWA版の `src/components/sukusuku/living/LotteryResultModal.tsx` と
@@ -74,7 +74,7 @@ interface LotteryResultSheetProps {
   earnedPush: boolean;
   /** 使える補助率アップ券（なければ null）。 */
   rateUpCoupon: LotteryCoupon | null;
-  /** 今までの券（図鑑の進み具合を出すのに使う）。 */
+  /** 今までの券（金コレの進み具合を出すのに使う）。 */
   coupons: LotteryCoupon[];
   onRateUp: (draw: SubsidyDraw, coupon: LotteryCoupon) => Promise<SubsidyDraw>;
   onOpenBox: (draw: SubsidyDraw) => Promise<LotteryCoupon[]>;
@@ -95,6 +95,7 @@ export default function LotteryResultSheet({
   const [busy, setBusy] = useState(false);
   const [rateUpDone, setRateUpDone] = useState(false);
   const [opened, setOpened] = useState<LotteryCoupon[] | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
   const ball = ballOf(draw.ball);
   const tone = BALL_COLOR[draw.ball];
@@ -133,6 +134,13 @@ export default function LotteryResultSheet({
   const perk = opened?.find((coupon) => coupon.slot !== null) ?? null;
   const trip = opened?.find((coupon) => coupon.kind === 'trip') ?? null;
   const progress = collectionProgress([...(opened ?? []), ...coupons.filter((coupon) => !opened?.some((o) => o.id === coupon.id))]);
+  // 金コレが6つそろったら、下に出る演出まで送る。
+  useEffect(() => {
+    if (!trip) return;
+    const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300);
+    return () => clearTimeout(timer);
+  }, [trip]);
+
   const bonus = draw.rateUpUsed ? '補助率アップ券で1段アップ！' : luckyUp ? 'ラッキーカラーで1段アップ！' : null;
 
   return (
@@ -144,7 +152,7 @@ export default function LotteryResultSheet({
         </Pressable>
       }
     >
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.body}>
         <LotteryCelebration ball={draw.ball} rate={draw.rate} height={STAGE_HEIGHT} />
 
         <PopIn delay={150}>
@@ -180,7 +188,7 @@ export default function LotteryResultSheet({
           </Text>
         </View>
 
-        {earnedPush && <Text style={styles.note}>ひと押し券をもらいました（使うと25%が出なくなります）</Text>}
+        {earnedPush && <Text style={styles.note}>ひと押し券をもらいました（次回以降、使うと25%が出なくなります）</Text>}
 
         {canRateUp && (
           <Pressable accessibilityRole="button" onPress={rateUp} disabled={busy} style={styles.rateUp}>
@@ -215,13 +223,12 @@ export default function LotteryResultSheet({
               <Text style={styles.perkHead}>箱の中身</Text>
               <Text style={styles.perkName}>{COUPON_INFO[perk.kind].name}</Text>
               <Text style={styles.perkLimit}>{formatLimit(perk.expiresAt)}</Text>
-              <Text style={styles.perkCount}>図鑑 {trip ? 6 : progress.collected.length} / 6</Text>
-              {trip && (
-                <Text style={styles.trip}>6つそろいました！ {COUPON_INFO.trip.name}をゲット（券の画面にあります）</Text>
-              )}
+              <Text style={styles.perkCount}>金コレ {trip ? 6 : progress.collected.length} / 6</Text>
             </View>
           </PopIn>
         )}
+        {/* 6つそろったら、ごほうびの演出（見えるところまで送る）。 */}
+        {trip && <LotteryComplete rewardName={COUPON_INFO.trip.name} />}
       </ScrollView>
     </LotteryDialog>
   );
@@ -284,7 +291,6 @@ const styles = StyleSheet.create({
   perkName: { fontSize: 17, fontWeight: '700', color: colors.text, textAlign: 'center' },
   perkLimit: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
   perkCount: { fontSize: 12, fontWeight: '700', color: colors.textSubtle, fontVariant: ['tabular-nums'] },
-  trip: { fontSize: 13, fontWeight: '700', color: colors.doneText, textAlign: 'center' },
   close: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: '#dc2626' },
   closeText: { color: colors.primaryText, fontSize: 15, fontWeight: '700' },
 });

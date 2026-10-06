@@ -11,7 +11,7 @@ import LotteryBall from '@/components/living/LotteryBall';
 // `src/components/sukusuku/living/LotteryDrawView.tsx` と同じ項目・並び・文言。
 //
 // 福引所の1枚の面にまとめる: 福引券（残り回数）・ガラポン・今月のラッキーカラーなど・買うものと金額・「ガラポン！」。
-// 賞品一覧・図鑑・履歴・ヘルプは下のボタンから、画面の中央の枠で開く。持っている券は、あるときだけ右上のボタンから開く。
+// 賞品一覧・金コレ（金賞コレクション）・履歴・ヘルプは下のボタンから、画面の中央の枠で開く。持っている券は、あるときだけ右上のボタンから開く。
 // 「ガラポン！」を押すと、この面のガラポンが回り、受け皿に玉が出てから結果の枠が開く。
 
 export type LotteryDialogKind = 'prizes' | 'coupons' | 'collection' | 'history' | 'help';
@@ -24,7 +24,7 @@ const GOLD_LIGHT = '#fde68a';
 
 const MENU: { id: LotteryDialogKind; label: string; icon: LucideIcon }[] = [
   { id: 'prizes', label: '賞品一覧', icon: Gift },
-  { id: 'collection', label: '図鑑', icon: BookOpen },
+  { id: 'collection', label: '金コレ', icon: BookOpen },
   { id: 'history', label: '履歴', icon: History },
   { id: 'help', label: 'ヘルプ', icon: CircleQuestionMark },
 ];

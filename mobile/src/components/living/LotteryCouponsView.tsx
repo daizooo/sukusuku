@@ -10,13 +10,13 @@ import {
   isLotteryCoupon,
 } from '@/lib/subsidyLotteryUtils';
 
-// 補助くじの「券」と「図鑑」の枠（docs/home.md §9.5）。PWA版の
+// 補助くじの「券」と「金コレ」（金賞コレクション）の枠（docs/home.md §9.5）。PWA版の
 // `src/components/sukusuku/living/LotteryCouponsView.tsx` と同じ項目・並び・文言。
 // - 券: 自分の使える券（アカウントごと）。持っているときだけホームにボタンが出る
-// - 図鑑: 100%の箱の図鑑（6つ）と、使った券・期限切れの券
+// - 金コレ: 金玉の箱から出た特典の6枠と、使った券・期限切れの券。そろえたごほうびは書かない（出たときのお楽しみ）
 
 interface LotteryCouponsViewProps {
-  /** どちらを出すか（券＝使える券、図鑑＝図鑑と使った・期限切れの券）。 */
+  /** どちらを出すか（券＝使える券、金コレ＝6枠と使った・期限切れの券）。 */
   section: 'coupons' | 'collection';
   coupons: LotteryCoupon[];
   isLoading: boolean;
@@ -48,12 +48,11 @@ export default function LotteryCouponsView({ section, coupons, isLoading, now, o
       {section === 'collection' && (
         <View style={styles.card}>
           <View style={styles.head}>
-            <Text style={styles.title}>福の神の図鑑</Text>
+            <Text style={[styles.sub, styles.flex]}>金玉の箱から出た特典を集めよう。6つそろうと…？</Text>
             <Text style={styles.count}>
               {progress.cycle}周目 {progress.collected.length} / 6
             </Text>
           </View>
-          <Text style={styles.sub}>100%が出ると、箱から特典が1つ出ます。6つ集めると日帰り旅行券！</Text>
           <View style={styles.grid}>
             {COLLECTION_SLOTS.map((entry) => {
               const got = progress.collected.includes(entry.slot);
@@ -73,7 +72,7 @@ export default function LotteryCouponsView({ section, coupons, isLoading, now, o
       {section === 'coupons' && (isLoading ? (
         <Text style={styles.empty}>読み込み中...</Text>
       ) : usable.length === 0 ? (
-        <Text style={styles.empty}>使える券はありません。25%が出るとひと押し券、100%が出ると箱がもらえます</Text>
+        <Text style={styles.empty}>使える券はありません</Text>
       ) : (
         <View style={styles.list}>
           {usable.map((coupon, index) => (
@@ -123,8 +122,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  head: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  title: { fontSize: 14, fontWeight: '700', color: colors.text },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   count: { fontSize: 13, fontWeight: '700', color: colors.milkText, fontVariant: ['tabular-nums'] },
   sub: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
