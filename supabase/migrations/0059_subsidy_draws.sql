@@ -68,7 +68,7 @@ create table if not exists public.lottery_coupons (
   family_id uuid not null references public.families (id) on delete cascade,
   owner_id uuid not null references public.users (id) on delete cascade,
   -- push＝ひと押し券（25%が出るたびに1枚。次のガラポンで25%が出なくなる。期限なし）
-  -- rate_up＝補助率アップ券（25%・50%の結果を1段上げる）
+  -- rate_up＝補助率アップ券（25%・50%の結果を1段上げる。期限なし）
   -- snack・movie・cafe・picnic＝100%の箱の小さな特典
   -- trip＝6つ集めたときの日帰り旅行券
   kind text not null check (kind in ('push', 'rate_up', 'snack', 'movie', 'cafe', 'picnic', 'trip')),
@@ -78,12 +78,12 @@ create table if not exists public.lottery_coupons (
   -- この券のもとになった、くじ（ひと押し券は25%の回、箱の券は100%の回）。
   source_draw_id uuid references public.subsidy_draws (id) on delete set null,
   obtained_at timestamptz not null default now(),
-  -- 手に入れた日から1か月。ひと押し券（使うために買い物を探すことになるため）と、
+  -- 手に入れた日から1か月。ひと押し券・補助率アップ券（使うために買い物を探すことになるため）と、
   -- 日帰り旅行券は期限なし。
   expires_at timestamptz,
   used_at timestamptz,
   used_draw_id uuid references public.subsidy_draws (id) on delete set null,
-  constraint lottery_coupons_expiry check ((kind in ('push', 'trip')) = (expires_at is null)),
+  constraint lottery_coupons_expiry check ((kind in ('push', 'rate_up', 'trip')) = (expires_at is null)),
   constraint lottery_coupons_slot_cycle check (slot is null or cycle is not null),
   constraint lottery_coupons_slot_kind check (
     slot is null
@@ -244,7 +244,7 @@ begin
   values (
     draw.family_id, me,
     case picked when 1 then 'snack' when 2 then 'movie' when 3 then 'cafe' when 4 then 'picnic' else 'rate_up' end,
-    cur_cycle, picked, p_draw_id, now() + interval '1 month'
+    cur_cycle, picked, p_draw_id, case when picked >= 5 then null else now() + interval '1 month' end
   )
   returning * into created;
   return next created;
@@ -317,7 +317,7 @@ begin
     raise exception 'この結果には補助率アップ券を使えません' using errcode = 'check_violation';
   end if;
   perform 1 from public.lottery_coupons
-   where id = p_coupon_id and owner_id = me and kind = 'rate_up' and used_at is null and expires_at > now()
+   where id = p_coupon_id and owner_id = me and kind = 'rate_up' and used_at is null
    for update;
   if not found then
     raise exception '補助率アップ券が使えません' using errcode = 'check_violation';

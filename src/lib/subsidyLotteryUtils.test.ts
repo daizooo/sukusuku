@@ -12,6 +12,7 @@ import {
   daysLeft,
   groupByMonth,
   isCouponUsable,
+  lotteryHelp,
   luckyBallFor,
   monthKey,
   parsePrice,
@@ -233,6 +234,15 @@ assert.equal(remainingDraws([draw('a', at(2027, 2, 28, 23), 50), draw('b', at(20
   const groups = groupByMonth([draw('a', at(2027, 2, 3), 25), draw('a', at(2027, 3, 2), 50), draw('a', at(2027, 3, 5), 75)]);
   assert.deepEqual(groups.map((group) => [group.month, group.draws.length]), [['2027-03', 2], ['2027-02', 1]]);
   assert.equal(groups[0].draws[0].drawnAt, at(2027, 3, 5));
+}
+
+// --- くじ画面の「？」: 数字は決まりごとの定数から作る ---
+{
+  const text = lotteryHelp().flatMap((section) => [section.heading, ...section.lines]).join('\n');
+  assert.ok(text.includes('税込500〜3,000円'));
+  assert.ok(text.includes('月2回まで（誕生月は3回）'));
+  assert.ok(text.includes('まんがく賞'));
+  assert.ok(lotteryHelp().every((section) => section.lines.length > 0));
 }
 
 // --- 年間の100%が、1人あたり5〜6回になる（確率の重みは変えず、救済で調整する） ---

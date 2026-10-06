@@ -1,6 +1,7 @@
 'use client';
 
-import { Ticket } from 'lucide-react';
+import { useState } from 'react';
+import { CircleQuestionMark, Ticket } from 'lucide-react';
 import {
   BALLS,
   MONTHLY_LIMIT,
@@ -11,6 +12,7 @@ import {
   type DrawPlan,
 } from '@/lib/subsidyLotteryUtils';
 import LotteryBall from './LotteryBall';
+import LotteryHelpModal from './LotteryHelpModal';
 
 // 補助くじの「くじ」の面（docs/home.md §9）。mobile版の
 // `mobile/src/components/living/LotteryDrawView.tsx` と同じ項目・並び・文言。
@@ -56,13 +58,24 @@ export default function LotteryDrawView({
   onSubmit,
 }: LotteryDrawViewProps) {
   const lucky = ballOf(plan.luckyBall);
+  const [helpOpen, setHelpOpen] = useState(false);
   return (
     <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pb-6">
       <div className={cardClass}>
-        <p className="text-xs text-gray-700">
-          趣味以外で必要なもの・税込{PRICE_MIN.toLocaleString('ja-JP')}〜{PRICE_MAX.toLocaleString('ja-JP')}円なら、
-          月{MONTHLY_LIMIT}回（誕生月は{MONTHLY_LIMIT + 1}回）まで、家族のお金から補助が出ます
-        </p>
+        <div className="flex items-start gap-2">
+          <p className="flex-1 text-xs text-gray-700">
+            趣味以外で必要なもの・税込{PRICE_MIN.toLocaleString('ja-JP')}〜{PRICE_MAX.toLocaleString('ja-JP')}円なら、
+            月{MONTHLY_LIMIT}回（誕生月は{MONTHLY_LIMIT + 1}回）まで、家族のお金から補助が出ます
+          </p>
+          <button
+            type="button"
+            aria-label="補助くじのルールを見る"
+            onClick={() => setHelpOpen(true)}
+            className="shrink-0 rounded-full text-blue-500 hover:text-blue-600 transition"
+          >
+            <CircleQuestionMark size={22} />
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-gray-500">今月の福引券</span>
           <span className="flex gap-1">
@@ -150,6 +163,7 @@ export default function LotteryDrawView({
         </div>
         <p className="text-[10px] text-gray-400">左が補助率、右が今回の出る確率（救済を含む）</p>
       </div>
+      {helpOpen && <LotteryHelpModal onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

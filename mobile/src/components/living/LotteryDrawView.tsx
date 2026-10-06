@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
-import { Ticket } from 'lucide-react-native';
+import { CircleQuestionMark, Ticket } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 import {
   BALLS,
@@ -11,6 +12,7 @@ import {
   type DrawPlan,
 } from '@/lib/subsidyLotteryUtils';
 import LotteryBall from '@/components/living/LotteryBall';
+import LotteryHelpSheet from '@/components/living/LotteryHelpSheet';
 
 // 補助くじの「くじ」の面（docs/home.md §9）。PWA版の
 // `src/components/sukusuku/living/LotteryDrawView.tsx` と同じ項目・並び・文言。
@@ -52,13 +54,25 @@ export default function LotteryDrawView({
   onSubmit,
 }: LotteryDrawViewProps) {
   const lucky = ballOf(plan.luckyBall);
+  const [helpOpen, setHelpOpen] = useState(false);
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
-        <Text style={styles.rule}>
-          趣味以外で必要なもの・税込{PRICE_MIN.toLocaleString('ja-JP')}〜{PRICE_MAX.toLocaleString('ja-JP')}円なら、
-          月{MONTHLY_LIMIT}回（誕生月は{MONTHLY_LIMIT + 1}回）まで、家族のお金から補助が出ます
-        </Text>
+        <View style={styles.ruleRow}>
+          <Text style={[styles.rule, styles.flex]}>
+            趣味以外で必要なもの・税込{PRICE_MIN.toLocaleString('ja-JP')}〜{PRICE_MAX.toLocaleString('ja-JP')}円なら、
+            月{MONTHLY_LIMIT}回（誕生月は{MONTHLY_LIMIT + 1}回）まで、家族のお金から補助が出ます
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="補助くじのルールを見る"
+            onPress={() => setHelpOpen(true)}
+            hitSlop={8}
+            style={styles.helpButton}
+          >
+            <CircleQuestionMark size={22} color={colors.navActive} />
+          </Pressable>
+        </View>
         <View style={styles.ticketRow}>
           <Text style={styles.ticketLabel}>今月の福引券</Text>
           <View style={styles.tickets}>
@@ -148,6 +162,7 @@ export default function LotteryDrawView({
         </View>
         <Text style={styles.oddsNote}>左が補助率、右が今回の出る確率（救済を含む）</Text>
       </View>
+      {helpOpen && <LotteryHelpSheet onClose={() => setHelpOpen(false)} />}
     </ScrollView>
   );
 }
@@ -163,7 +178,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  ruleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   rule: { fontSize: 12, fontWeight: '500', color: colors.textSubtle },
+  helpButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   ticketRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ticketLabel: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   tickets: { flexDirection: 'row', gap: 4 },
