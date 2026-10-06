@@ -2,7 +2,7 @@
 //
 // 宛先は push_subscriptions の kind = 'fcm' の行（ネイティブ版のAndroid）。
 // 配信するEdge Function（send-reminders / send-feeding-reminders /
-// send-temperature-reminders）は、送り方を気にせず中身をここへ渡す。
+// send-temperature-reminders / send-stock-expiry-reminders）は、送り方を気にせず中身をここへ渡す。
 //
 // **かつてはブラウザ向けの Web Push もここで振り分けていた**（kind = 'webpush'）。
 // 家族全員がネイティブ版へ移ったので撤去した（フェーズ4の条件D。
@@ -32,7 +32,7 @@ export interface DeliveryTarget {
 /** お知らせの中身。 */
 export interface NotificationContent {
   /** お知らせの種類。予定のリマインダーだけは持たない（従来の形のまま）。 */
-  kind?: 'nursing' | 'feeding' | 'temperature';
+  kind?: 'nursing' | 'feeding' | 'temperature' | 'stock';
   title: string;
   body: string;
   /** 飛び先。種類を持つお知らせでは受け取り側が種類から決めるので、既定のままでよい。 */
@@ -53,6 +53,7 @@ const tagOf = (content: NotificationContent): string => {
   if (content.kind === 'nursing') return 'nursing-alarm';
   if (content.kind === 'feeding') return 'feeding-reminder';
   if (content.kind === 'temperature') return 'temperature-reminder';
+  if (content.kind === 'stock') return 'stock-expiry';
   return content.taskId ? `task-${content.taskId}` : 'sukusuku';
 };
 
@@ -63,6 +64,7 @@ const tagOf = (content: NotificationContent): string => {
 const channelOf = (content: NotificationContent): string => {
   if (content.kind === 'feeding') return 'feeding-reminder';
   if (content.kind === 'temperature') return 'temperature-reminder';
+  if (content.kind === 'stock') return 'stock-expiry';
   // 授乳の経過時間お知らせはネイティブ版では前面サービスが鳴らすのでここへは来ないが、
   // 万一届いたときに無いチャンネルへ送って落とさないよう、予定と同じ扱いにしておく。
   return 'task-reminder';

@@ -848,6 +848,51 @@ export type Database = {
           },
         ]
       }
+      stock_expiry_deliveries: {
+        Row: {
+          error: string | null
+          family_id: string
+          id: string
+          notify_on: string
+          sent_at: string
+          status: string
+          subscription_id: string
+        }
+        Insert: {
+          error?: string | null
+          family_id: string
+          id?: string
+          notify_on: string
+          sent_at?: string
+          status?: string
+          subscription_id: string
+        }
+        Update: {
+          error?: string | null
+          family_id?: string
+          id?: string
+          notify_on?: string
+          sent_at?: string
+          status?: string
+          subscription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_expiry_deliveries_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_expiry_deliveries_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "push_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_items: {
         Row: {
           amount_per_unit: number

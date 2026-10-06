@@ -233,6 +233,9 @@ select status, return_message, start_time
 | `src/components/sukusuku/TemperatureReminderSetting.tsx` | 設定タブの時刻の設定 |
 | `supabase/migrations/0030_temperature_reminders.sql` | テーブル・ビュー |
 | `supabase/migrations/0031_temperature_reminder_cron.sql` | 定期実行の登録 |
+| `supabase/functions/send-stock-expiry-reminders/index.ts` | 備蓄の期限のお知らせの配信（§13） |
+| `supabase/functions/_shared/stockExpiry.ts` | 何を知らせるか・文面の決めごと（`npm run test:stock-expiry`） |
+| `supabase/migrations/0058_stock_expiry_notifications.sql` | 送信済み記録・定期実行の登録 |
 | `src/lib/appLinks.ts` | 開く画面をURLで表す決まりごと（§9） |
 | `src/lib/notificationCleanup.ts` | 用が済んだ通知を消す判断と実行（§10） |
 | `supabase/functions/_shared/deliver.ts` | 宛先の種類で送り方を振り分ける（§11） |
@@ -937,6 +940,7 @@ Androidは鳴り方・振動を**チャンネルに固定する**（作ったあ
 | `task-reminder` | 予定のリマインダー（§2） |
 | `feeding-reminder` | 次の授乳の目安（§7） |
 | `temperature-reminder` | 検温（§8） |
+| `stock-expiry` | 備蓄の期限（§13） |
 
 ---
 
@@ -979,3 +983,53 @@ Androidは鳴り方・振動を**チャンネルに固定する**（作ったあ
 2時間を過ぎたものは送らない（朝の検温のお知らせが昼に届いても意味がないため）。
 二重に飛ばないのは、送信済み記録（`reminder_deliveries` ほか）が
 (予定, 宛先, 通知時刻) で一意になっているから。
+
+---
+
+## 13. 備蓄の期限のお知らせ（2026-10-06に追加）
+
+暮らしタブの防災備蓄（[home.md §3.3](./home.md)）。期限の3か月前・1か月前に、毎朝9時（日本時間）に
+**1通へまとめて**家族の全端末（`kind = 'fcm'`）へ送る。受け取れるのはネイティブ版だけ。
+
+```
+pg_cron（毎日 0:00 UTC = 9:00 JST）
+  └ Edge Function: send-stock-expiry-reminders
+       ├ stock_items から期限のある備蓄を取る
+       ├ 端末ごとに、前回送った日（stock_expiry_deliveries の sent の最後の notify_on）を調べる
+       ├ _shared/stockExpiry.ts の collectNotices で
+       │  「3か月前・1か月前の日が、前回の翌日〜今日に来た備蓄」を拾う
+       ├ 拾えた端末へ、stock_expiry_deliveries に記録を作って送信権を取り、1通送る
+       └ 送れたら sent、失敗なら failed（失効した宛先は消す。ほかのお知らせと同じ）
+```
+
+- **行ごとの「知らせた」印は持たない。** 日付で決めるので、備蓄の行を直したり持ち出しへ移したり
+  （同じ期限の新しい行ができる）しても繰り返さない。1か月前と3か月前の両方の日が窓に入ったもの
+  （実行が長く飛んだとき）は1か月前として1回だけ出す
+- **取りこぼしの拾い直しは3日前まで**（`CATCH_UP_DAYS`）。これより古い節目は知らせない
+- 二重送信は `(subscription_id, notify_on)` の一意制約で防ぐ（同じ朝に実行が重なっても片方だけ）
+- 飛び先は暮らしタブ（`kind = 'stock'`。`mobile/src/lib/appLinks.ts`）。用が済んだ通知を消す
+  仕組み（§10）の対象にはしない（備蓄は直すまで済んだことにならず、翌朝にまた届くわけでもないため）
+
+### セットアップ
+
+```bash
+supabase functions deploy send-stock-expiry-reminders
+```
+
+そのうえで `0058_stock_expiry_notifications.sql` を適用する（Vaultの `reminder_cron_secret` と
+`FCM_SERVICE_ACCOUNT` は他のお知らせと共通）。**Functionを先にデプロイしてから適用する**
+（定期実行が先に動くと存在しないFunctionを叩く）。
+
+### 動かないときの確認
+
+```sql
+-- 直近の送信記録
+select * from stock_expiry_deliveries order by sent_at desc limit 10;
+-- 定期実行の結果
+select status, return_message, start_time from cron.job_run_details
+ where jobid = (select jobid from cron.job where jobname = 'send-stock-expiry-reminders')
+ order by start_time desc limit 5;
+```
+
+届かない朝の多くは「その日に当たる節目が無かった」だけ。節目の日付は
+期限の3か月前・1か月前の日（`2027-06-30` なら `2027-03-30`・`2027-05-30`）で確かめられる。

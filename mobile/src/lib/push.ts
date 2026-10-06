@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 
-// 予定・次の授乳の目安・検温のお知らせを、この端末で受け取るための層。
+// 予定・次の授乳の目安・検温・備蓄の期限のお知らせを、この端末で受け取るための層。
 //
 // PWA版はブラウザのWeb Push購読（src/lib/push.ts）だが、ネイティブ版はService Workerを
 // 持たないのでFCMの登録トークンで受け取る。宛先は同じ push_subscriptions に
@@ -55,6 +55,11 @@ const CHANNELS: {
     name: '検温のお知らせ',
     description: '設定した朝・夕の時刻に届きます。',
     vibrationPattern: [0, 400, 200, 400],
+  },
+  {
+    id: 'stock-expiry',
+    name: '備蓄の期限',
+    description: '備蓄の期限の3か月前・1か月前に、朝まとめて届きます。',
   },
 ];
 
