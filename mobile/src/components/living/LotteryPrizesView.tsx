@@ -3,7 +3,7 @@ import { colors } from '@/lib/theme';
 import { BALLS, NOTE_TEXT, upRate, type DrawPlan } from '@/lib/subsidyLotteryUtils';
 import LotteryBall, { BALL_COLOR } from '@/components/living/LotteryBall';
 
-// お買いもの福引の「賞品一覧」（ホームのボタンから中央の枠で開く。docs/home.md §9.5）。PWA版の
+// 福引チャンスの「賞品一覧」（ホームのボタンから中央の枠で開く。docs/home.md §9.5）。PWA版の
 // `src/components/sukusuku/living/LotteryPrizesView.tsx` と同じ項目・並び・文言。
 // 玉の絵・賞の名前・補助率だけを出す（玉の色の名前は文字にしない。確率は出さない。％が確率に見えないよう「補助率」と添える）。今月のラッキーカラーの玉には印を付け、
 // いま効いている救済があれば下に並べる。

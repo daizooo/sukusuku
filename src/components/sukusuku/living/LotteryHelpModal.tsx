@@ -4,7 +4,7 @@ import { lotteryHelp } from '@/lib/subsidyLotteryUtils';
 import LotteryDialog from './LotteryDialog';
 import LotteryTestBar from './LotteryTestBar';
 
-// お買いもの福引の「ヘルプ」（ホームのボタンから中央の枠で開く。docs/home.md §9.5）。mobile版の
+// 福引チャンスの「ヘルプ」（ホームのボタンから中央の枠で開く。docs/home.md §9.5）。mobile版の
 // `mobile/src/components/living/LotteryHelpSheet.tsx` と同じ文言（文言は subsidyLotteryUtils の lotteryHelp）。
 // 動作確認用のテストモードも、ホームをすっきりさせるためここに置く（開発をしている夫にだけ出す）。
 // 見出しは赤い印で目立たせ、各行は「・」付きの短い1行。「：」の前は太字にする。

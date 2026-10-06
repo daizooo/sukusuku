@@ -7,7 +7,7 @@ import { ballOf, type DrawPlan } from '@/lib/subsidyLotteryUtils';
 import GaraponMachine from '@/components/living/GaraponMachine';
 import LotteryBall from '@/components/living/LotteryBall';
 
-// お買いもの福引のホーム（docs/home.md §9.5）。PWA版の
+// 福引チャンスのホーム（docs/home.md §9.5）。PWA版の
 // `src/components/sukusuku/living/LotteryDrawView.tsx` と同じ項目・並び・文言。
 //
 // 福引所の1枚の面にまとめる: 福引券（残り回数）・ガラポン・今月のラッキーカラーなど・買いたいものと金額・「ガラポン！」。

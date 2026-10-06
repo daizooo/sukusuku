@@ -4,7 +4,7 @@ import { colors } from '@/lib/theme';
 import { COUPON_INFO, collectionProgress, daysLeft, isCouponUsable, isLotteryCoupon } from '@/lib/subsidyLotteryUtils';
 import LotteryCollectionBoard from '@/components/living/LotteryCollectionBoard';
 
-// お買いもの福引の「券」と「金賞コレクション」（ホームのボタンは「金コレ」）の枠（docs/home.md §9.5）。PWA版の
+// 福引チャンスの「券」と「金賞コレクション」（ホームのボタンは「金コレ」）の枠（docs/home.md §9.5）。PWA版の
 // `src/components/sukusuku/living/LotteryCouponsView.tsx` と同じ項目・並び・文言。
 // - 券: 自分の使える券（アカウントごと）。持っているときだけホームにボタンが出る
 // - 金賞コレクション: 金賞の箱から出た特典の台紙（LotteryCollectionBoard）と、使った券・期限切れの券。

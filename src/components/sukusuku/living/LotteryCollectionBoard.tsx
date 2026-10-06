@@ -16,7 +16,7 @@ import {
 import type { LotteryCouponKind } from '@/types/app';
 import { COLLECTION_SLOTS, COUPON_INFO, collectionTeaser, treasureWhisper } from '@/lib/subsidyLotteryUtils';
 
-// お買いもの福引の「金賞コレクション」の台紙（docs/home.md §9.5）。mobile版の
+// 福引チャンスの「金賞コレクション」の台紙（docs/home.md §9.5）。mobile版の
 // `mobile/src/components/living/LotteryCollectionBoard.tsx` と同じ項目・並び・文言・動き（動きは globals.css）。
 //
 // 金色の帯（何周目・いくつ集めたか・6つの目盛り）→ 6枚のメダル → 宝箱。

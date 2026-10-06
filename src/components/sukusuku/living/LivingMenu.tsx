@@ -48,7 +48,7 @@ export const LIVING_SECTIONS: {
   },
   {
     id: 'lottery',
-    label: 'お買いもの福引',
+    label: '福引チャンス',
     hint: '家族のお金からの補助をくじで決める',
     icon: 'text-purple-600',
     surface: 'bg-purple-50 group-hover:bg-purple-100',

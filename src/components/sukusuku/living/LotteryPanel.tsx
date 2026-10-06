@@ -34,7 +34,7 @@ import LotteryHistoryView from './LotteryHistoryView';
 import LotteryPrizesView from './LotteryPrizesView';
 import LotteryResultModal from './LotteryResultModal';
 
-// 暮らしタブの「お買いもの福引」（旧称「補助くじ」）の面（docs/home.md §9）。mobile版の
+// 暮らしタブの「福引チャンス」（旧称「補助くじ」）の面（docs/home.md §9）。mobile版の
 // `mobile/src/components/living/LotteryPanel.tsx` と同じ項目・並び・文言。
 //
 // 家のルール: 趣味以外で必要なものを税込500〜3,000円で買うとき、1人あたり月2回（誕生月は3回）まで、

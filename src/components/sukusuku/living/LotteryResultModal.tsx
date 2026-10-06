@@ -9,7 +9,7 @@ import { BALL_COLOR } from './LotteryBall';
 import LotteryCelebration, { LotteryComplete, PopIn } from './LotteryCelebration';
 import LotteryDialog from './LotteryDialog';
 
-// お買いもの福引の結果（docs/home.md §9.5）。mobile版の `mobile/src/components/living/LotteryResultSheet.tsx` と
+// 福引チャンスの結果（docs/home.md §9.5）。mobile版の `mobile/src/components/living/LotteryResultSheet.tsx` と
 // 同じ流れ・同じ文言。結果はこの枠を出す前にDBへ記録してある（見てから引き直せない）。
 //
 // ガラポンはホームの面で回し、玉が受け皿に出てからこの枠を開く。ここでは出た玉が弾むように出て、
