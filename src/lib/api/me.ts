@@ -7,14 +7,15 @@ type SupabaseDb = SupabaseClient<Database>;
 // ログインしている本人の設定。mobile版の `mobile/src/lib/api/me.ts` と同じ値を扱う。
 
 /** アプリを開いたときに最初に出すタブ。users.start_tab に対応（docs/family-app.md §3.4）。 */
-export type StartTab = 'schedule' | 'list' | 'care' | 'settings';
+export type StartTab = 'schedule' | 'list' | 'care' | 'living' | 'settings';
 
-export const START_TABS: StartTab[] = ['schedule', 'list', 'care', 'settings'];
+export const START_TABS: StartTab[] = ['schedule', 'list', 'care', 'living', 'settings'];
 
 export const START_TAB_LABEL: Record<StartTab, string> = {
   schedule: '予定',
   list: 'リスト',
   care: '育児',
+  living: '暮らし',
   settings: '設定',
 };
 
@@ -23,6 +24,7 @@ export const START_TAB_TO_TAB_ID: Record<StartTab, TabId> = {
   schedule: 'schedule',
   list: 'list',
   care: 'care',
+  living: 'living',
   settings: 'info',
 };
 

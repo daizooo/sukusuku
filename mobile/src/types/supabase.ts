@@ -792,6 +792,59 @@ export type Database = {
           },
         ]
       }
+      stock_items: {
+        Row: {
+          category: string
+          created_at: string
+          expires_month_only: boolean
+          expires_on: string | null
+          family_id: string
+          id: string
+          name: string
+          note: string
+          position: number
+          quantity: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          expires_month_only?: boolean
+          expires_on?: string | null
+          family_id: string
+          id?: string
+          name: string
+          note?: string
+          position?: number
+          quantity?: number
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          expires_month_only?: boolean
+          expires_on?: string | null
+          family_id?: string
+          id?: string
+          name?: string
+          note?: string
+          position?: number
+          quantity?: number
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_items_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           anchor_type: string

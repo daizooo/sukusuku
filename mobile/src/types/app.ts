@@ -303,7 +303,7 @@ export interface UserProfile {
 export type FeedingEntryMode = 'feed' | 'pump';
 
 // 予定・リスト・育児・設定の4つ（docs/family-app.md §4.1）。
-export type TabId = 'schedule' | 'list' | 'care' | 'info';
+export type TabId = 'schedule' | 'list' | 'care' | 'living' | 'info';
 
 // スケジュールタブの表示切り替え。既定は月（カレンダー）。
 /**
@@ -427,3 +427,19 @@ export const RELATION_LABEL: Record<MemberRelation, string> = {
   wife: '妻',
   child: '子',
 };
+
+/** 防災備蓄の1行（品名×期限）。stock_items に対応（docs/home.md §3）。 */
+export interface StockItem {
+  id: string;
+  category: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  /** YYYY-MM-DD。期限なしは null。月までのものはその月の末日。 */
+  expiresOn: string | null;
+  expiresMonthOnly: boolean;
+  note: string;
+  position: number;
+}
+
+export type StockItemDraft = Omit<StockItem, 'id' | 'position'>;
