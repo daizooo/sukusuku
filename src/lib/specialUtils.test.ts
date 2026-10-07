@@ -72,6 +72,7 @@ const item = (patch: Partial<SpecialItem> & Pick<SpecialItem, 'id' | 'name'>): S
   ...patch,
 });
 const actual = (patch: Partial<SpecialActual> & Pick<SpecialActual, 'id' | 'itemId' | 'occurredOn' | 'amount'>): SpecialActual => ({
+  recordId: `record-${patch.id}`,
   planId: null,
   note: '',
   ...patch,

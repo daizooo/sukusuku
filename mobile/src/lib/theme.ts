@@ -110,4 +110,16 @@ export const colors = {
   livingLotterySurface: '#faf5ff', // purple-50
   livingSpecial: '#2563eb', // blue-600
   livingSpecialSurface: '#eff6ff', // blue-50
+
+  // 家計タブ（docs/kakei.md）。差し色は青、予算を超えたものは淡い赤。
+  money: '#2563eb', // blue-600
+  moneyText: '#1e40af', // blue-800（淡い丸ボタン・押せる文字）
+  moneySoft: '#dbeafe', // blue-100（淡い丸ボタン・選んだチップ）
+  moneySurface: '#eff6ff', // blue-50（選んだ行）
+  moneyRing: '#93c5fd', // blue-300（予算の内の輪）
+  moneyOver: '#dc2626', // red-600（超えた額）
+  moneyOverRing: '#fca5a5', // red-300（超えた輪）
+  moneyOverBorder: '#fecaca', // red-200（超えたタイルの枠）
+  moneyOverSurface: '#fef2f2', // red-50
+  moneyIncome: '#0284c7', // sky-600（収入の額）
 } as const;

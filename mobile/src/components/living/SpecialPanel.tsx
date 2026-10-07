@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Check, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { Check, Plus } from 'lucide-react-native';
 import type { SpecialActual, SpecialActualDraft, SpecialItem, SpecialKind } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
@@ -20,52 +20,54 @@ import {
   calendarYearOf,
   formatFiscalYear,
   fiscalYearOf,
-  fiscalYearOfDate,
   groupByMonth,
   isOverBudget,
   yearTotals,
   type SpecialRow,
 } from '@/lib/specialUtils';
 import { categoryOptions } from '@/lib/stockUtils';
-import { formatPrice } from '@/lib/shoppingUtils';
+import { formatYen } from '@/lib/moneyUtils';
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import SpecialItemSheet, { type SpecialItemSheetResult } from '@/components/living/SpecialItemSheet';
 import SpecialActualSheet from '@/components/living/SpecialActualSheet';
+import { Hero, ProgressBar, SectionHeader, YearBar, type } from '@/components/money/moneyVisual';
 
-// 暮らしタブの「特別費」の面（docs/home.md §5.4）。PWA版の
-// `src/components/sukusuku/living/SpecialPanel.tsx` と同じ項目・並び・文言。
+// 家計タブの「特別費」（docs/home.md §5.4・docs/kakei.md §4.3）。年度の予定と実績。
+// PWA版の `src/components/sukusuku/living/SpecialPanel.tsx` と同じ項目・並び・文言。
 //
-// 年度（4月〜翌3月）ごとに、特別費（支出）と特別収入（賞与など）の「予算・実績・差異」を見る。
-// 一覧は月ごと（4月→3月）で、1行＝予定1回ぶん（または予定外の出費1件）。
-// 予定の行の右の「済」を1回押すと、予算の額・今日の日付で実績になる（額が違えば行を押して直す）。
-// 上（年度・支出/収入・合計）は固定で、スクロールするのは月ごとの一覧だけ。
+// 年度の送りと「特別費 / 特別収入」の切り替えは固定し、下をスクロールする。
+// 結論は年度に払った額（特別収入は入った額）と、予算に対する進み具合・残り。
+// その下に予定と実績を月ごと（4月→3月）に。1行＝予定1回ぶん（または予定外の出費1件）。
+// 行の左の丸を1回押すと、予算の額・今日の日付で実績になる（額が違えば行を押して直す）。
+// 実績は家計の記録の品目（docs/kakei.md §3.2）。「済」は品目1つの記録を作り、「記録」にも出る。
 
 const KIND_OPTIONS: { id: SpecialKind; label: string }[] = [
-  { id: 'expense', label: '特別費（支出）' },
+  { id: 'expense', label: '特別費' },
   { id: 'income', label: '特別収入' },
 ];
-
-/** 年度の合計に出す「差異」。支出は予算−実績（あと使える額）、収入は予算−実績（まだ入っていない額）。 */
-const signed = (value: number) => `${value < 0 ? '−' : ''}${formatPrice(Math.abs(value))}`;
 
 type EditingRow = { row: SpecialRow } | null;
 type EditingItem = SpecialItem | null;
 
 interface SpecialPanelProps {
   familyId: string | null;
-  /** ヘッダーの「追加」が押された。 */
-  adding: boolean;
-  onAddClose: () => void;
+  /** 年度（4月始まり）。「年」と同じ年度を見る。 */
+  fiscalYear: number;
+  /** 予定外の出費を足したとき、その年度へ移る。 */
+  onFiscalYear: (fiscalYear: number) => void;
+  /** 実績（家計の記録）を足した・直した・消した。家計タブの記録を読み直す。 */
+  onRecordsChanged?: () => void;
 }
 
-export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPanelProps) {
+export default function SpecialPanel({ familyId, fiscalYear, onFiscalYear, onRecordsChanged }: SpecialPanelProps) {
   const [items, setItems] = useState<SpecialItem[]>([]);
   const [actuals, setActuals] = useState<SpecialActual[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [fiscalYear, setFiscalYear] = useState(() => fiscalYearOfDate(new Date()));
   const [kind, setKind] = useState<SpecialKind>('expense');
   const [editingRow, setEditingRow] = useState<EditingRow>(null);
   const [editingItem, setEditingItem] = useState<EditingItem>(null);
+  const [adding, setAdding] = useState(false);
+  const onAddClose = () => setAdding(false);
 
   useEffect(() => {
     if (!familyId) return;
@@ -90,24 +92,23 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
   const rows = useMemo(() => buildYearRows(items, actuals, fiscalYear, kind), [items, actuals, fiscalYear, kind]);
   const groups = useMemo(() => groupByMonth(rows), [rows]);
   const totals = useMemo(() => yearTotals(rows), [rows]);
-  // 収入と支出の差引（予算どおり・実績どおり）。
-  const balance = useMemo(() => {
-    const income = yearTotals(buildYearRows(items, actuals, fiscalYear, 'income'));
-    const expense = yearTotals(buildYearRows(items, actuals, fiscalYear, 'expense'));
-    return { budget: income.budget - expense.budget, actual: income.actual - expense.actual };
-  }, [items, actuals, fiscalYear]);
+  // まだ済にしていない予定の件数。
+  const pending = useMemo(() => rows.filter((row) => row.planId !== null && row.actual === null).length, [rows]);
   const categories = useMemo(() => categoryOptions(items), [items]);
   const hasAnything = items.length > 0;
 
   const failed = (what: string) => Alert.alert(`${what}できませんでした`, 'もう一度お試しください。');
   const nextPosition = () => items.reduce((max, item) => Math.max(max, item.position + 1), 0);
-  const withActual = (actual: SpecialActual) => setActuals((prev) => [...prev.filter((a) => a.id !== actual.id), actual]);
+  const withActual = (actual: SpecialActual) => {
+    setActuals((prev) => [...prev.filter((a) => a.id !== actual.id), actual]);
+    onRecordsChanged?.();
+  };
 
   /** 「済」: 予算の額・今日の日付で実績にする。 */
   const markPaid = async (row: SpecialRow) => {
     if (!familyId || row.planId === null) return;
     try {
-      const created = await insertSpecialActual(supabase, familyId, row.item.id, row.planId, {
+      const created = await insertSpecialActual(supabase, row.item.kind, row.item.id, row.planId, {
         occurredOn: toDateString(new Date()),
         amount: row.budget,
         note: '',
@@ -125,8 +126,8 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
       const existing = row.actuals[0];
       withActual(
         existing
-          ? await updateSpecialActual(supabase, existing.id, draft)
-          : await insertSpecialActual(supabase, familyId, row.item.id, row.planId, draft),
+          ? await updateSpecialActual(supabase, existing, draft)
+          : await insertSpecialActual(supabase, row.item.kind, row.item.id, row.planId, draft),
       );
     } catch {
       failed('保存');
@@ -135,7 +136,8 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
 
   const clearActual = async (row: SpecialRow) => {
     setEditingRow(null);
-    const removedIds = row.actuals.map((actual) => actual.id);
+    const removed = row.actuals;
+    const removedIds = removed.map((actual) => actual.id);
     const previous = { items, actuals };
     setActuals((prev) => prev.filter((actual) => !removedIds.includes(actual.id)));
     // 予定の無い項目の唯一の実績を消したら、項目も残さない。
@@ -144,7 +146,8 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
     if (orphan) setItems((prev) => prev.filter((item) => item.id !== row.item.id));
     try {
       if (orphan) await deleteSpecialItem(supabase, row.item.id);
-      else await Promise.all(removedIds.map((id) => deleteSpecialActual(supabase, id)));
+      else await Promise.all(removed.map((actual) => deleteSpecialActual(supabase, actual)));
+      onRecordsChanged?.();
     } catch {
       setItems(previous.items);
       setActuals(previous.actuals);
@@ -170,7 +173,7 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
         setItems((prev) => [...prev, created.item]);
         withActual(created.actual);
         setKind(created.item.kind);
-        setFiscalYear(fiscalYearOf(result.actual.occurredOn));
+        onFiscalYear(fiscalYearOf(result.actual.occurredOn));
       } else if (target === null) {
         const created = await insertSpecialItem(supabase, familyId, result.draft, nextPosition());
         setItems((prev) => [...prev, created]);
@@ -200,6 +203,7 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
     setActuals((prev) => prev.filter((actual) => actual.itemId !== id));
     try {
       await deleteSpecialItem(supabase, id);
+      onRecordsChanged?.();
     } catch {
       setItems(previous.items);
       setActuals(previous.actuals);
@@ -210,33 +214,12 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
   const monthLabel = (month: number | null) =>
     month === null ? '月未定' : `${calendarYearOf(fiscalYear, month)}年${month}月`;
 
-  return (
-    <>
-      <View style={styles.yearBar}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="前の年度"
-          onPress={() => setFiscalYear((year) => year - 1)}
-          hitSlop={8}
-          style={styles.yearButton}
-        >
-          <ChevronLeft size={18} color={colors.textSubtle} />
-        </Pressable>
-        <Text style={styles.yearLabel}>{formatFiscalYear(fiscalYear)}</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="次の年度"
-          onPress={() => setFiscalYear((year) => year + 1)}
-          hitSlop={8}
-          style={styles.yearButton}
-        >
-          <ChevronRight size={18} color={colors.textSubtle} />
-        </Pressable>
-        <Text style={styles.yearRange}>
-          {fiscalYear}年4月〜{fiscalYear + 1}年3月
-        </Text>
-      </View>
+  const income = kind === 'income';
+  const remaining = totals.budget - totals.actual;
 
+  return (
+    <View style={styles.flex}>
+      <YearBar fiscalYear={fiscalYear} onChange={onFiscalYear} />
       <SegmentedTabs
         options={KIND_OPTIONS}
         value={kind}
@@ -245,46 +228,50 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
         style={styles.kinds}
       />
 
-      <View style={styles.totals}>
-        <View style={styles.totalCell}>
-          <Text style={styles.totalLabel}>予算</Text>
-          <Text style={styles.totalValue}>{formatPrice(totals.budget)}</Text>
-        </View>
-        <View style={styles.totalCell}>
-          <Text style={styles.totalLabel}>実績</Text>
-          <Text style={styles.totalValue}>{formatPrice(totals.actual)}</Text>
-        </View>
-        <View style={styles.totalCell}>
-          <Text style={styles.totalLabel}>差異</Text>
-          <Text style={[styles.totalValue, totals.diff < 0 && kind === 'expense' && styles.over]}>
-            {signed(totals.diff)}
-          </Text>
-        </View>
-      </View>
-      {hasAnything && (
-        <Text style={styles.balance}>
-          収入 − 支出　予算 {signed(balance.budget)} ／ 実績 {signed(balance.actual)}
-        </Text>
-      )}
+      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+        <Hero
+          label={income ? '年度に入った特別収入' : '年度に払った特別費'}
+          value={formatYen(totals.actual)}
+          note={
+            remaining < 0
+              ? `予算 ${formatYen(totals.budget)}・${formatYen(remaining)} 超過`
+              : income
+                ? `予定 ${formatYen(totals.budget)}・まだ ${formatYen(remaining)}`
+                : `予算 ${formatYen(totals.budget)}・残り ${formatYen(remaining)}`
+          }
+        >
+          <View style={styles.progress}>
+            <ProgressBar ratio={totals.budget > 0 ? totals.actual / totals.budget : 0} over={!income && remaining < 0} />
+            {pending > 0 && <Text style={type.faint}>まだ済にしていない予定 {pending}件</Text>}
+          </View>
+        </Hero>
 
-      {isLoading ? (
-        <Text style={styles.message}>読み込み中...</Text>
-      ) : groups.length === 0 ? (
-        <View style={[styles.centered, styles.flex]}>
+        <SectionHeader
+          title="予定と実績"
+          hint="月ごと"
+          right={
+            <Pressable accessibilityRole="button" onPress={() => setAdding(true)} disabled={!familyId} hitSlop={8} style={styles.add}>
+              <Plus size={14} color={colors.money} />
+              <Text style={type.link}>項目を追加</Text>
+            </Pressable>
+          }
+        />
+
+        {isLoading ? (
+          <Text style={styles.message}>読み込み中...</Text>
+        ) : groups.length === 0 ? (
           <Text style={styles.message}>
             {hasAnything
-              ? `${formatFiscalYear(fiscalYear)}の${kind === 'expense' ? '特別費' : '特別収入'}はありません`
-              : '年に数回の大きな出費や賞与を「追加」で登録すると、年度ごとの予算と実績を見られます'}
+              ? `${formatFiscalYear(fiscalYear)}の${income ? '特別収入' : '特別費'}はありません`
+              : '年に数回の大きな出費や賞与を「項目を追加」で登録すると、年度ごとの予算と実績を見られます'}
           </Text>
-        </View>
-      ) : (
-        <ScrollView style={styles.flex} contentContainerStyle={styles.listContent}>
-          {groups.map((group) => (
+        ) : (
+          groups.map((group) => (
             <View key={group.month ?? 'none'} style={styles.group}>
               <View style={styles.groupHead}>
                 <Text style={styles.groupTitle}>{monthLabel(group.month)}</Text>
-                <Text style={styles.groupSum}>
-                  予算 {formatPrice(group.budget)} ／ 実績 {formatPrice(group.actual)}
+                <Text style={type.faint}>
+                  {formatYen(group.actual)} / {formatYen(group.budget)}
                 </Text>
               </View>
               <View style={styles.card}>
@@ -299,7 +286,7 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
                       key={row.key}
                       accessibilityRole="button"
                       onPress={() => setEditingRow({ row })}
-                      style={[styles.row, index > 0 && styles.rowDivided, !paid && styles.rowPending]}
+                      style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.pressed]}
                     >
                       {row.planId !== null ? (
                         <Pressable
@@ -317,25 +304,29 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
                         </View>
                       )}
                       <View style={styles.flex}>
-                        <Text style={styles.name}>{row.item.name}</Text>
-                        {sub !== '' && <Text style={styles.sub}>{sub}</Text>}
+                        <Text style={[type.row, !paid && styles.pendingText]} numberOfLines={1}>
+                          {row.item.name}
+                        </Text>
+                        {sub !== '' && <Text style={type.faint}>{sub}</Text>}
                       </View>
                       <View style={styles.rowRight}>
-                        {row.planId !== null && <Text style={styles.budget}>予算 {formatPrice(row.budget)}</Text>}
                         {paid ? (
-                          <Text style={[styles.actual, over && styles.over]}>実績 {formatPrice(row.actual!)}</Text>
+                          <Text style={[type.amount, over && type.minus]}>{formatYen(row.actual!)}</Text>
                         ) : (
-                          <Text style={styles.unpaid}>未</Text>
+                          <Text style={[type.amount, styles.pendingText]}>{formatYen(row.budget)}</Text>
                         )}
+                        <Text style={type.faint}>
+                          {paid ? (row.planId !== null ? `予算 ${formatYen(row.budget)}` : '予定外') : 'まだ'}
+                        </Text>
                       </View>
                     </Pressable>
                   );
                 })}
               </View>
             </View>
-          ))}
-        </ScrollView>
-      )}
+          ))
+        )}
+      </ScrollView>
 
       {editingRow !== null && (
         <SpecialActualSheet
@@ -367,77 +358,41 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
           onDelete={editingItem === null ? undefined : () => void removeItem(editingItem.id)}
         />
       )}
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  centered: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  yearBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
-  yearButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.neutralSurface,
-  },
-  yearLabel: { fontSize: 16, fontWeight: '700', color: colors.text },
-  yearRange: { flex: 1, textAlign: 'right', fontSize: 11, fontWeight: '500', color: colors.textFaint },
-  kinds: { marginHorizontal: 16, marginBottom: 8 },
-  totals: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingVertical: 8,
-  },
-  totalCell: { flex: 1, alignItems: 'center' },
-  totalLabel: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
-  totalValue: { fontSize: 15, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'], marginTop: 2 },
-  balance: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textMuted,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    fontVariant: ['tabular-nums'],
-  },
-  message: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
-  listContent: { paddingHorizontal: 16, paddingBottom: 24 },
-  group: { marginBottom: 12 },
-  groupHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: 4 },
+  kinds: { marginHorizontal: 16, marginBottom: 6 },
+  // 右下の「＋」に一覧の最後が隠れないよう、下を空ける。
+  content: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 96 },
+  progress: { gap: 6, paddingTop: 8 },
+  add: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
+  group: { marginBottom: 16 },
+  groupHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: 6 },
   groupTitle: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },
-  groupSum: { fontSize: 11, fontWeight: '500', color: colors.textFaint, fontVariant: ['tabular-nums'] },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
-  rowPending: { opacity: 0.85 },
+  pressed: { backgroundColor: colors.background },
   check: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     borderWidth: 2,
     borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkDone: { borderColor: colors.livingSpecial, backgroundColor: colors.livingSpecial },
-  name: { fontSize: 14, fontWeight: '700', color: colors.text },
-  sub: { fontSize: 11, fontWeight: '500', color: colors.textFaint, marginTop: 2 },
+  checkDone: { borderColor: colors.money, backgroundColor: colors.money },
+  pendingText: { color: colors.textMuted },
   rowRight: { alignItems: 'flex-end' },
-  budget: { fontSize: 11, fontWeight: '500', color: colors.textFaint, fontVariant: ['tabular-nums'] },
-  actual: { fontSize: 13, fontWeight: '700', color: colors.textSubtle, fontVariant: ['tabular-nums'], marginTop: 2 },
-  unpaid: { fontSize: 12, fontWeight: '700', color: colors.textFaint, marginTop: 2 },
-  over: { color: colors.alertText },
 });

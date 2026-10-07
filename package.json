@@ -24,7 +24,8 @@
     "test:shopping": "node --experimental-strip-types src/lib/shoppingUtils.test.ts",
     "test:lottery": "node --experimental-strip-types src/lib/subsidyLotteryUtils.test.ts",
     "test:stock-expiry": "node --experimental-strip-types supabase/functions/_shared/stockExpiry.test.ts",
-    "test:special": "node --experimental-strip-types src/lib/specialUtils.test.ts"
+    "test:special": "node --experimental-strip-types src/lib/specialUtils.test.ts",
+    "test:money": "node --experimental-strip-types src/lib/moneyUtils.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
