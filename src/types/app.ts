@@ -423,9 +423,15 @@ export interface StockItem {
   amountPerUnit: number;
   /** 保管場所。home＝寝室、carry＝持ち出し用バックパック（docs/home.md §3.6）。 */
   storage: 'home' | 'carry';
+  /** 最後に点検した日（YYYY-MM-DD）。未点検は null。期限の無い備品が対象（§10.2）。 */
+  inspectedOn: string | null;
+  /** 点検の間隔（月）。null は点検しない。 */
+  inspectIntervalMonths: number | null;
+  /** 追加した日（日本時間のYYYY-MM-DD）。点検日が無い備品は、ここから数える。保存はしない。 */
+  createdOn: string;
 }
 
-export type StockItemDraft = Omit<StockItem, 'id' | 'position'>;
+export type StockItemDraft = Omit<StockItem, 'id' | 'position' | 'createdOn'>;
 
 /** 防災備蓄の必要数（目標）。stock_targets に対応（docs/home.md §3.5）。 */
 export interface StockTarget {

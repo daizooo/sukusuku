@@ -3,14 +3,25 @@
 import assert from 'node:assert/strict';
 
 import {
+  buildStockBoard,
+  carryInspection,
   countByLevel,
+  daysBetween,
+  expiryCountdown,
+  spanText,
+  stockIconKey,
   expiryLevel,
   formatExpiry,
   formatQuantity,
+  inspectionDue,
+  jstDateOf,
+  nextInspectionOn,
   parseExpiryInput,
+  replacementLots,
   isShort,
   requiredQuantity,
   sortStockItems,
+  storageShares,
   targetStatuses,
 } from './stockUtils.ts';
 
@@ -134,3 +145,235 @@ assert.deepEqual(light.carry, { required: 1, have: 1, shortage: 0 });
 assert.equal(isShort(light), false);
 
 console.log('stockUtils storage: OK');
+
+// ---- 値段・点検・要対応（docs/home.md §10.2） ----
+
+
+// created_at（UTC）を日本時間の日付にする。UTC 15:00 以降は翌日。
+assert.equal(jstDateOf('2026-10-06T14:59:59Z'), '2026-10-06');
+assert.equal(jstDateOf('2026-10-06T15:00:00Z'), '2026-10-07');
+
+// 点検。期限のある品・間隔の無い品・数が0の品は対象外。点検日が無ければ追加日から数える。
+const radio = { expiresOn: null, quantity: 1, inspectedOn: null, inspectIntervalMonths: 6, createdOn: '2026-10-07' };
+assert.equal(nextInspectionOn(radio), '2027-04-07');
+assert.equal(inspectionDue(radio, '2027-04-06'), false);
+assert.equal(inspectionDue(radio, '2027-04-07'), true);
+assert.equal(nextInspectionOn({ ...radio, inspectedOn: '2027-04-07' }), '2027-10-07');
+assert.equal(nextInspectionOn({ ...radio, inspectIntervalMonths: 3 }), '2027-01-07');
+assert.equal(nextInspectionOn({ ...radio, inspectIntervalMonths: null }), null);
+assert.equal(nextInspectionOn({ ...radio, expiresOn: '2030-01-01' }), null);
+assert.equal(nextInspectionOn({ ...radio, quantity: 0 }), null);
+// 月末の追加日から半年後が存在しない日でも、その月の末日にそろう。
+assert.equal(nextInspectionOn({ ...radio, createdOn: '2026-08-31' }), '2027-02-28');
+
+// 持ち出しバッグ。空なら null。一度も点検していなければ、一番古い追加日から半年。
+const bagItem = (storage: 'home' | 'carry', inspectedOn: string | null, createdOn: string) => ({
+  storage,
+  quantity: 1,
+  inspectedOn,
+  createdOn,
+});
+assert.equal(carryInspection([bagItem('home', null, '2026-01-01')], today), null);
+assert.deepEqual(carryInspection([bagItem('carry', null, '2026-04-06'), bagItem('carry', null, '2026-09-01')], today), {
+  lastOn: null,
+  nextOn: '2026-10-06',
+  due: true,
+});
+assert.deepEqual(carryInspection([bagItem('carry', '2026-09-01', '2026-01-01'), bagItem('carry', null, '2026-01-01')], today), {
+  lastOn: '2026-09-01',
+  nextOn: '2027-03-01',
+  due: false,
+});
+
+// 要対応: 期限切れ・3か月以内のロットだけ。数が0・1年以内は出さない。
+const lot = (name: string, expiresOn: string | null, quantity: number) => ({ name, expiresOn, quantity });
+const replacement = replacementLots(
+  [
+    lot('スープ', '2026-12-01', 4),
+    lot('水', '2026-09-30', 10),
+    lot('えいようかん', '2026-11-01', 5),
+    lot('缶', '2027-06-30', 3),
+    lot('ラジオ', null, 1),
+    lot('空', '2026-10-10', 0),
+  ],
+  today,
+);
+assert.deepEqual(
+  replacement.map((row) => [row.item.name, row.level]),
+  [
+    ['水', 'expired'],
+    ['えいようかん', 'soon'],
+    ['スープ', 'soon'],
+  ],
+);
+
+console.log('stockUtils inspection: OK');
+
+// ---- 点検盤のまとめ ----
+const boardItem = (patch: Record<string, unknown>) => ({
+  id: String(patch.name),
+  name: 'x',
+  category: '',
+  position: 0,
+  quantity: 1,
+  unit: '',
+  amountPerUnit: 1,
+  targetId: null,
+  expiresOn: null,
+  storage: 'home' as const,
+  inspectedOn: null,
+  inspectIntervalMonths: null,
+  createdOn: '2026-01-01',
+  ...patch,
+});
+const board = buildStockBoard(
+  [
+    boardItem({ name: '水500', targetId: 'water', amountPerUnit: 0.5, quantity: 6, expiresOn: '2026-11-30' }),
+    boardItem({ name: '水1.8', targetId: 'water', amountPerUnit: 1.8, quantity: 2, expiresOn: '2030-01-01', storage: 'carry' }),
+    boardItem({ name: 'クッキー', expiresOn: '2027-03-01' }),
+    boardItem({ name: 'ラジオ', inspectIntervalMonths: 6, createdOn: '2026-04-01' }),
+    boardItem({ name: 'ランタン', inspectIntervalMonths: 6, inspectedOn: '2026-09-01' }),
+    boardItem({ name: '衛生用品' }),
+  ],
+  [{ id: 'water', quantity: 3, perPersonDay: true, carry: true, category: '飲料・水', name: '水', position: 0, unit: 'L' }],
+  plan,
+  today,
+);
+assert.equal(board.blocks.length, 1);
+assert.deepEqual(
+  board.blocks[0].lots.map((lot) => lot.name),
+  ['水500', '水1.8'],
+);
+assert.deepEqual(
+  board.others.map((lot) => lot.name),
+  ['クッキー'],
+);
+assert.deepEqual(
+  board.equipment.map((lot) => lot.name).sort(),
+  ['ラジオ', 'ランタン', '衛生用品'],
+);
+// 点検の時期はラジオだけ（追加から半年経った）。ランタンは先月点検済み、衛生用品は間隔なし。
+assert.deepEqual(
+  board.attention.inspect.map((lot) => lot.name),
+  ['ラジオ'],
+);
+assert.deepEqual(
+  board.attention.replacement.map((row) => row.item.name),
+  ['水500'],
+);
+assert.equal(board.attention.short.length, 1);
+assert.equal(board.counts.soon, 1);
+assert.equal(board.counts.inspect, 1);
+assert.equal(board.attention.bag?.lastOn, null);
+
+console.log('stockUtils board: OK');
+
+// ---- 見た目の小さな計算 ----
+assert.equal(daysBetween('2026-10-07', '2026-10-17'), 10);
+assert.equal(daysBetween('2026-10-07', '2026-09-30'), -7);
+assert.equal(daysBetween('2027-02-28', '2027-03-01'), 1);
+assert.equal(spanText(18), '18日');
+assert.equal(spanText(-100), '3か月');
+assert.equal(spanText(800), '2年');
+assert.equal(expiryCountdown('2026-10-25', '2026-10-07'), 'あと18日');
+assert.equal(expiryCountdown('2026-09-25', '2026-10-07'), '切れて12日');
+assert.equal(expiryCountdown('2026-10-07', '2026-10-07'), '今日まで');
+assert.equal(expiryCountdown('2027-03-07', '2026-10-07'), 'あと5か月');
+
+assert.equal(stockIconKey('水 500ml'), 'water');
+assert.equal(stockIconKey('ウォーターバッグ（10L）'), 'bag');
+assert.equal(stockIconKey('BOS非常用トイレ'), 'toilet');
+assert.equal(stockIconKey('BOS防臭袋'), 'trash');
+assert.equal(stockIconKey('アクエリアスパウダー'), 'drink');
+assert.equal(stockIconKey('やきとり缶'), 'meat');
+assert.equal(stockIconKey('LEDランタン'), 'light');
+assert.equal(stockIconKey('クッキー缶'), 'snack');
+assert.equal(stockIconKey('なぞの品', '照明・情報・電池類'), 'light');
+assert.equal(stockIconKey('なぞの品'), 'other');
+
+assert.equal(board.readiness, Math.round((Math.min(1, 6.6 / 63)) * 100));
+assert.equal(board.counts.ok, 1);
+assert.equal(board.counts.year, 1);
+
+console.log('stockUtils look: OK');
+
+// ---- カテゴリ別・品目別 ----
+const catItem = (patch: Record<string, unknown>) => boardItem({ category: '食料品', unit: '個', ...patch });
+const catBoard = buildStockBoard(
+  [
+    catItem({ name: 'スープ', targetId: 'soup', quantity: 10, expiresOn: '2026-12-01', storage: 'home', category: '食料品' }),
+    catItem({ name: 'スープ', targetId: 'soup', quantity: 4, expiresOn: '2028-01-01', storage: 'carry', category: '食料品' }),
+    catItem({ name: '水', targetId: 'water', quantity: 20, amountPerUnit: 0.5, unit: '本', expiresOn: '2030-01-01', category: '飲料・水' }),
+    catItem({ name: 'ラジオ', quantity: 1, unit: '台', category: '照明・情報', inspectIntervalMonths: 6, createdOn: '2026-04-01' }),
+    catItem({ name: 'クッキー', quantity: 3, expiresOn: '2027-03-01' }),
+    catItem({ name: 'クッキー', quantity: 2, expiresOn: '2026-11-01' }),
+    catItem({ name: '名無し', quantity: 1, category: '' }),
+  ],
+  [
+    { id: 'soup', quantity: 3, perPersonDay: true, carry: true, category: '食料品', name: '野菜スープ', position: 1, unit: '食' },
+    { id: 'water', quantity: 3, perPersonDay: true, carry: false, category: '飲料・水', name: '水', position: 0, unit: 'L' },
+  ],
+  plan,
+  today,
+);
+assert.deepEqual(
+  catBoard.categories.map((row) => row.category),
+  ['飲料・水', '食料品', '照明・情報', 'その他'],
+);
+const foods = catBoard.categories[1].products;
+assert.deepEqual(
+  foods.map((product) => product.name),
+  ['野菜スープ', 'クッキー'],
+);
+// 目標のある品は目標の単位の量（寝室・持ち出しの合計）。持ち出しの分も別に持つ。
+assert.equal(foods[0].total, 14);
+assert.equal(foods[0].unit, '食');
+assert.equal(foods[0].carryTotal, 4);
+assert.deepEqual(foods[0].nearest, { on: '2026-12-01', level: 'soon' });
+// 目標の無い同名のロットは1品目にまとめ、数を足す。いちばん近い期限を出す。
+assert.equal(foods[1].total, 5);
+assert.equal(foods[1].lots.length, 2);
+assert.deepEqual(foods[1].nearest, { on: '2026-11-01', level: 'soon' });
+// 水 500ml × 20本 = 10L。
+assert.equal(catBoard.categories[0].products[0].total, 10);
+// 点検が要る備品。
+const radioProduct = catBoard.categories[2].products[0];
+assert.deepEqual(radioProduct.inspect, { next: '2026-10-01', due: true });
+assert.equal(radioProduct.nearest, null);
+
+// 寝室・持ち出し用の内訳。持ち出しに入れる目標は、持ち出し用に「人数×バッグの日数」分、寝室に残りを要るとする。
+assert.deepEqual(storageShares(foods[0], today), {
+  home: { have: 10, required: 54, shortage: 44, surplus: 0 },
+  carry: { have: 4, required: 9, shortage: 5, surplus: 0 },
+});
+// 持ち出しに入れない目標は、寝室に全部が要る。持ち出し用の要る量は無い。
+assert.deepEqual(storageShares(catBoard.categories[0].products[0], today), {
+  home: { have: 10, required: 63, shortage: 53, surplus: 0 },
+  carry: { have: 0, required: null, shortage: 0, surplus: 0 },
+});
+// 目標の無い品目は、ロットの数だけ。
+assert.deepEqual(storageShares(foods[1], today).home, { have: 5, required: null, shortage: 0, surplus: 0 });
+// 寝室が多く、持ち出し用が足りない（分ければ揃う）。期限切れは数えない。
+const shareTarget = { id: 's', quantity: 1, perPersonDay: true, carry: true, category: '', name: '', position: 0, unit: '本' };
+const shareProduct = buildStockBoard(
+  [
+    catItem({ name: '水', targetId: 's', quantity: 25, expiresOn: '2030-01-01' }),
+    catItem({ name: '水', targetId: 's', quantity: 1, expiresOn: '2030-01-01', storage: 'carry' }),
+    catItem({ name: '水', targetId: 's', quantity: 5, expiresOn: '2026-01-01', storage: 'carry' }),
+  ],
+  [shareTarget],
+  plan,
+  today,
+).categories[0].products[0];
+assert.deepEqual(storageShares(shareProduct, today), {
+  home: { have: 25, required: 18, shortage: 0, surplus: 7 },
+  carry: { have: 1, required: 3, shortage: 2, surplus: 0 },
+});
+
+console.log('stockUtils categories: OK');
+
+// migration 0062 の適用前は、点検の列が undefined で来ても壊れない。
+const legacy = { ...radio, inspectIntervalMonths: undefined as unknown as null };
+assert.equal(nextInspectionOn(legacy), null);
+
+console.log('stockUtils legacy: OK');

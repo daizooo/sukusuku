@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Tables, TablesUpdate } from '@/types/supabase';
 import type { StockItem, StockItemDraft, StockTarget, StockTargetDraft } from '@/types/app';
-import { DEFAULT_STOCK_PLAN, type StockPlan } from '@/lib/stockUtils';
+import { DEFAULT_STOCK_PLAN, jstDateOf, type StockPlan } from '@/lib/stockUtils';
 
 type StockItemRow = Tables<'stock_items'>;
 type StockTargetRow = Tables<'stock_targets'>;
@@ -22,6 +22,10 @@ const rowToStockItem = (row: StockItemRow): StockItem => ({
   targetId: row.target_id,
   amountPerUnit: Number(row.amount_per_unit),
   storage: row.storage === 'carry' ? 'carry' : 'home',
+  // migration 0062 の適用前は、これらの列が返らない（undefined）。null として扱って壊れないようにする。
+  inspectedOn: row.inspected_on ?? null,
+  inspectIntervalMonths: row.inspect_interval_months ?? null,
+  createdOn: jstDateOf(row.created_at),
 });
 
 const draftToRow = (draft: StockItemDraft): TablesUpdate<'stock_items'> => ({
@@ -35,6 +39,8 @@ const draftToRow = (draft: StockItemDraft): TablesUpdate<'stock_items'> => ({
   target_id: draft.targetId,
   amount_per_unit: draft.amountPerUnit,
   storage: draft.storage,
+  inspected_on: draft.inspectedOn,
+  inspect_interval_months: draft.inspectIntervalMonths,
 });
 
 /** 備蓄は数十行なので、一度に読んで並べ替え・絞り込みは画面側で行う。 */
@@ -79,7 +85,7 @@ export async function updateStockItem(
 }
 
 /** 行から、保存に渡す形（id・並び順を除いたもの）を作る。 */
-const toDraft = (item: StockItem): StockItemDraft => ({
+export const toDraft = (item: StockItem): StockItemDraft => ({
   category: item.category,
   name: item.name,
   quantity: item.quantity,
@@ -90,6 +96,8 @@ const toDraft = (item: StockItem): StockItemDraft => ({
   targetId: item.targetId,
   amountPerUnit: item.amountPerUnit,
   storage: item.storage,
+  inspectedOn: item.inspectedOn,
+  inspectIntervalMonths: item.inspectIntervalMonths,
 });
 
 /**
@@ -133,6 +141,19 @@ export async function moveStockItem(
   const rest = await updateStockItem(supabase, item.id, { ...draft, quantity: item.quantity - count });
   const created = await insertStockItem(supabase, familyId, { ...draft, quantity: count, storage: to });
   return { updated: [rest, created], removedIds: [] };
+}
+
+/** 数だけを書き換える（「食べた・使った」の −1）。 */
+export async function setStockQuantity(supabase: SupabaseDb, id: string, quantity: number): Promise<void> {
+  const { error } = await supabase.from('stock_items').update({ quantity }).eq('id', id);
+  if (error) throw error;
+}
+
+/** 点検した日をまとめて記録する（持ち出しバッグ・備品の一括点検。docs/home.md §10.2）。 */
+export async function markStockInspected(supabase: SupabaseDb, ids: string[], on: string): Promise<void> {
+  if (ids.length === 0) return;
+  const { error } = await supabase.from('stock_items').update({ inspected_on: on }).in('id', ids);
+  if (error) throw error;
 }
 
 export async function deleteStockItem(supabase: SupabaseDb, id: string): Promise<void> {

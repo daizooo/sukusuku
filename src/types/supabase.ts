@@ -1112,6 +1112,8 @@ export type Database = {
           expires_on: string | null
           family_id: string
           id: string
+          inspect_interval_months: number | null
+          inspected_on: string | null
           name: string
           note: string
           position: number
@@ -1129,6 +1131,8 @@ export type Database = {
           expires_on?: string | null
           family_id: string
           id?: string
+          inspect_interval_months?: number | null
+          inspected_on?: string | null
           name: string
           note?: string
           position?: number
@@ -1146,6 +1150,8 @@ export type Database = {
           expires_on?: string | null
           family_id?: string
           id?: string
+          inspect_interval_months?: number | null
+          inspected_on?: string | null
           name?: string
           note?: string
           position?: number
