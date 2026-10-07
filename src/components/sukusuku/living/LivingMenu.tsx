@@ -1,9 +1,9 @@
 'use client';
 
-import { ShieldCheck, ShoppingBasket, Ticket, type LucideIcon } from 'lucide-react';
+import { ShieldCheck, ShoppingBasket, Ticket, Wallet, type LucideIcon } from 'lucide-react';
 
 /**
- * 暮らしタブのメニュー（docs/home.md §2）。防災備蓄・日用品・補助くじ（・のちに特別費）は
+ * 暮らしタブのメニュー（docs/home.md §2）。防災備蓄・日用品・特別費・補助くじは
  * 持つデータも見方も別物で、頻繁に開くタブでもないため、切り替えではなく
  * アイコンを並べたメニューにして、押すとその画面へ入る。
  * mobile版の `mobile/src/components/living/LivingMenu.tsx` と同じ項目・並び・文言。
@@ -11,7 +11,7 @@ import { ShieldCheck, ShoppingBasket, Ticket, type LucideIcon } from 'lucide-rea
  * Tailwind が拾えるよう、色のクラスは区分ごとに全文で書く。
  */
 
-export type LivingSection = 'stock' | 'products' | 'lottery';
+export type LivingSection = 'stock' | 'products' | 'special' | 'lottery';
 
 export const LIVING_SECTIONS: {
   id: LivingSection;
@@ -45,6 +45,16 @@ export const LIVING_SECTIONS: {
     accent: 'bg-emerald-600 hover:bg-emerald-700',
     chip: 'bg-emerald-600 text-white',
     Icon: ShoppingBasket,
+  },
+  {
+    id: 'special',
+    label: '特別費',
+    hint: '年に数回の出費と賞与の予算・実績',
+    icon: 'text-blue-600',
+    surface: 'bg-blue-50 group-hover:bg-blue-100',
+    accent: 'bg-blue-600 hover:bg-blue-700',
+    chip: 'bg-blue-600 text-white',
+    Icon: Wallet,
   },
   {
     id: 'lottery',
