@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Check, GripVertical, Plus, Trash2, X } from 'lucide-react-native';
 import type { ListGroup, ListItem } from '@/types/app';
 import { colors } from '@/lib/theme';
+import type { GripProps } from '@/components/list/useDragReorder';
 
 // リストの中の行。Web版の `src/components/sukusuku/tabs/ListTab.tsx` の中にある
 // ItemCheck / ItemRow / GroupHeader / AddRow を、そのまま置き換えたもの。
@@ -29,8 +30,6 @@ export function ItemCheck({
     </Pressable>
   );
 }
-
-type GripProps = { onTouchStart: () => void; onTouchEnd: () => void; onTouchCancel: () => void };
 
 /** 並べ替えの持ち手（Keepと同じ左端の点々）。触れた瞬間に持ち上がるので、指で狙いやすいよう広めに取る。 */
 function Grip({ gripProps, label }: { gripProps: GripProps; label: string }) {

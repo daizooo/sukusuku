@@ -3,6 +3,7 @@ import {
   Animated,
   PanResponder,
   Vibration,
+  type GestureResponderEvent,
   type LayoutChangeEvent,
   type PanResponderInstance,
   type ViewStyle,
@@ -47,6 +48,16 @@ interface DragState {
   slots: Rect[];
 }
 
+/** 持ち手に付ける受け口。持ち手自身がタッチの持ち主になって、指の動きも自分で受ける。 */
+export interface GripProps {
+  onStartShouldSetResponder: () => boolean;
+  onResponderGrant: (event: GestureResponderEvent) => boolean;
+  onResponderMove: (event: GestureResponderEvent) => void;
+  onResponderRelease: () => void;
+  onResponderTerminate: () => void;
+  onResponderTerminationRequest: () => boolean;
+}
+
 export interface DragReorder {
   /** 表示用の並び。動かしている最中も並べ替えずに返す（動かすのは位置だけ）。 */
   arrange: <T extends { id: string }>(sectionKey: string, rows: T[]) => T[];
@@ -59,11 +70,7 @@ export interface DragReorder {
     id: string,
   ) => { onLongPress: () => void; delayLongPress: number };
   /** 左端の持ち手アイコンに付ける。触れた瞬間に持ち上がる（長押しを待たない）。 */
-  gripProps: (
-    sectionKey: string,
-    rows: { id: string }[],
-    id: string,
-  ) => { onTouchStart: () => void; onTouchEnd: () => void; onTouchCancel: () => void };
+  gripProps: (sectionKey: string, rows: { id: string }[], id: string) => GripProps;
   /** 指と、入れ替わったぶんの動き。枠に当てる。 */
   styleFor: (id: string) => ViewStyle;
   isDragging: (id: string) => boolean;
@@ -85,6 +92,8 @@ export function useDragReorder(
   const drag = useRef<DragState | null>(null);
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const delta = useRef({ x: 0, y: 0 });
+  /** 持ち手に触れた指の画面上の位置。ここからの差が動かした量になる。 */
+  const gripOrigin = useRef({ x: 0, y: 0 });
 
   // 描き直しが要るのは「持ち上げた枠」と「入れ替わった並び」だけ。
   const [active, setActive] = useState<{ sectionKey: string; id: string; ids: string[] } | null>(
@@ -111,48 +120,51 @@ export function useDragReorder(
     }
   };
 
+  /** つかんだ場所から指を dx, dy だけ動かしたときの反映。長押しも持ち手もここを通る。 */
+  const move = (dx: number, dy: number) => {
+    const current = drag.current;
+    if (!current) return;
+    delta.current = { x: dx, y: dy };
+    pan.setValue({ x: dx, y: dy });
+
+    setActive((prev) => {
+      if (!prev) return prev;
+      // 次の指の動きでも読めるよう、ref にも同じものを残す。
+      const index = prev.ids.indexOf(current.id);
+      if (index < 0) return prev;
+
+      // 指の居場所。つかんだ枠の真ん中から、動かしたぶんだけずらす。
+      const home = current.slots[current.initial.indexOf(current.id)];
+      if (!home) return prev;
+      const finger = centerOf(home);
+      const x = finger.x + dx;
+      const y = finger.y + dy;
+
+      // 指の下にある相手の置き場所へ差し込む。
+      let target = index;
+      prev.ids.forEach((id, i) => {
+        if (id === current.id) return;
+        const slot = current.slots[i];
+        if (slot && contains(slot, x, y)) target = i;
+      });
+      if (target === index) return prev;
+
+      const ids = [...prev.ids];
+      ids.splice(index, 1);
+      ids.splice(target, 0, current.id);
+      const next = { ...prev, ids };
+      activeRef.current = next;
+      return next;
+    });
+  };
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         // 長押しで持ち上がったあとだけ、指の動きを受け取る（それまではスクロールに任せる）。
         onMoveShouldSetPanResponder: () => drag.current !== null,
         onMoveShouldSetPanResponderCapture: () => drag.current !== null,
-        onPanResponderMove: (_event, gesture) => {
-          const current = drag.current;
-          if (!current) return;
-          delta.current = { x: gesture.dx, y: gesture.dy };
-          pan.setValue({ x: gesture.dx, y: gesture.dy });
-
-          setActive((prev) => {
-            if (!prev) return prev;
-            // 次の指の動きでも読めるよう、ref にも同じものを残す。
-            const index = prev.ids.indexOf(current.id);
-            if (index < 0) return prev;
-
-            // 指の居場所。つかんだ枠の真ん中から、動かしたぶんだけずらす。
-            const home = current.slots[current.initial.indexOf(current.id)];
-            if (!home) return prev;
-            const finger = centerOf(home);
-            const x = finger.x + gesture.dx;
-            const y = finger.y + gesture.dy;
-
-            // 指の下にある相手の置き場所へ差し込む。
-            let target = index;
-            prev.ids.forEach((id, i) => {
-              if (id === current.id) return;
-              const slot = current.slots[i];
-              if (slot && contains(slot, x, y)) target = i;
-            });
-            if (target === index) return prev;
-
-            const ids = [...prev.ids];
-            ids.splice(index, 1);
-            ids.splice(target, 0, current.id);
-            const next = { ...prev, ids };
-            activeRef.current = next;
-            return next;
-          });
-        },
+        onPanResponderMove: (_event, gesture) => move(gesture.dx, gesture.dy),
         onPanResponderRelease: finish,
         onPanResponderTerminate: finish,
         onPanResponderTerminationRequest: () => false,
@@ -189,14 +201,25 @@ export function useDragReorder(
       onLongPress: () => grab(sectionKey, rows, id),
     }),
 
-    // 持ち手に触れた瞬間に持ち上げる。押しの仕組み（Pressable）は通さず、生のタッチだけを見る
-    // （持ち手を押している指が、そのまま親の PanResponder に引き継がれるように）。
-    // 動かさずに離したときは、ここで持ち上げを解く。動かしたあとの離しは、
-    // PanResponder 側でも解くが、finish は二重に呼んでも差し支えない。
+    // 持ち手に触れた瞬間に、持ち手自身がタッチの持ち主になって持ち上げる。
+    // 生の onTouchStart だけだと持ち主が誰もおらず、動かし始めた瞬間にAndroidの
+    // ScrollView（編集モードの中身）がスクロールとして奪い、持ち上げが解けて動かせない。
+    // onResponderGrant で true を返すと、親のネイティブのスクロールが横取りしなくなる。
+    // 指の動きも親の PanResponder には渡さず、持ち手が自分で受ける（pageX/pageY は
+    // 枠に当てた移動量の影響を受けないので、つかんだ場所との差をそのまま使える）。
     gripProps: (sectionKey, rows, id) => ({
-      onTouchStart: () => grab(sectionKey, rows, id),
-      onTouchEnd: finish,
-      onTouchCancel: finish,
+      onStartShouldSetResponder: () => rows.length >= 2 && drag.current === null,
+      onResponderGrant: (event) => {
+        gripOrigin.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
+        grab(sectionKey, rows, id);
+        return true;
+      },
+      onResponderMove: (event) =>
+        move(event.nativeEvent.pageX - gripOrigin.current.x, event.nativeEvent.pageY - gripOrigin.current.y),
+      onResponderRelease: finish,
+      onResponderTerminate: finish,
+      // 持ち上げたあとは、親のスクロールなどに持ち主を渡さない。
+      onResponderTerminationRequest: () => false,
     }),
 
     styleFor: (id) => {
