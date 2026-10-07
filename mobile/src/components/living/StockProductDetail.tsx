@@ -9,27 +9,25 @@ import {
   STORAGE_LABEL,
   unitPriceOf,
   type StockPlan,
+  type StockProduct,
   type StockStorage,
-  type TargetCost,
-  type TargetStatus,
 } from '@/lib/stockUtils';
 import { colors } from '@/lib/theme';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import { Ring, StockIcon, TONE } from './stockVisual';
 
-// 目標（水・ご飯など）1つの詳しい画面（docs/home.md §10.2）。PWA版の
-// `src/components/sukusuku/living/StockTargetDetail.tsx` と同じ項目・文言。
-// 一覧のタイルには出さない費用と、その目標に数えるロットを期限順に並べる。
+// 品目1つの詳しい画面（docs/home.md §10.2）。PWA版の
+// `src/components/sukusuku/living/StockProductDetail.tsx` と同じ項目・文言。
+// 一覧のタイルには出さない費用と、その品目に数えるロットを期限順に並べる。
+// 目標（必要数）がある品目は、必要数・不足・費用も出す。
 
-interface StockTargetDetailProps {
-  status: TargetStatus<StockTarget>;
-  cost: TargetCost;
-  lots: StockItem[];
+interface StockProductDetailProps {
+  product: StockProduct<StockItem, StockTarget>;
   plan: StockPlan;
   today: string;
   onClose: () => void;
-  onEditTarget: () => void;
+  onEditTarget: (target: StockTarget) => void;
   onEditItem: (item: StockItem) => void;
 }
 
@@ -43,71 +41,88 @@ const LEVEL_COLOR = {
 
 const STORAGE_ORDER: StockStorage[] = ['home', 'carry'];
 
-export default function StockTargetDetail({
-  status,
-  cost,
-  lots,
+export default function StockProductDetail({
+  product,
   plan,
   today,
   onClose,
   onEditTarget,
   onEditItem,
-}: StockTargetDetailProps) {
-  const { target, required, have, shortage, carry } = status;
-  const ratio = required > 0 ? have / required : 1;
-  const color = shortage > 0 ? TONE.alert : TONE.ok;
-  const facts: [string, string][] = [
-    ['1日あたり', cost.daily === null ? '決まった数' : `${formatQuantity(cost.daily)}${target.unit}`],
-    [`${plan.days}日分の費用`, cost.total === null ? '値段未登録' : formatYen(cost.total)],
-    ['買い足し', cost.shortageCost === null ? '—' : shortage > 0 ? formatYen(cost.shortageCost) : '不要'],
-    [`1${target.unit}あたり`, cost.unitPrice === null ? '—' : formatYen(cost.unitPrice)],
-  ];
-  const ordered = STORAGE_ORDER.flatMap((storage) => lots.filter((item) => item.storage === storage));
+}: StockProductDetailProps) {
+  const target = product.target;
+  const status = target?.status ?? null;
+  const cost = target?.cost ?? null;
+  const shortage = status?.shortage ?? 0;
+  const required = status?.required ?? 0;
+  const ratio = status && required > 0 ? status.have / required : 1;
+  const ringColor = shortage > 0 ? TONE.alert : TONE.ok;
+  const unitLabel = status?.target.unit ?? product.unit;
+  const facts: [string, string][] =
+    status && cost
+      ? [
+          ['必要数', `${formatQuantity(required)}${unitLabel}`],
+          [`${plan.days}日分の費用`, cost.total === null ? '値段未登録' : formatYen(cost.total)],
+          ['買い足し', cost.shortageCost === null ? '—' : shortage > 0 ? formatYen(cost.shortageCost) : '不要'],
+          [`1${unitLabel}あたり`, cost.unitPrice === null ? '—' : formatYen(cost.unitPrice)],
+        ]
+      : [];
+  const ordered = STORAGE_ORDER.flatMap((storage) => product.lots.filter((item) => item.storage === storage));
 
   return (
     <SheetModal visible onClose={onClose}>
       <LogModalShell
-        title={target.name}
+        title={product.name}
         onClose={onClose}
         footer={
-          <Pressable accessibilityRole="button" onPress={onEditTarget} style={styles.footerButton}>
-            <Text style={styles.footerButtonText}>必要数を直す</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => (status ? onEditTarget(status.target) : onClose())}
+            style={styles.footerButton}
+          >
+            <Text style={styles.footerButtonText}>{status ? '必要数を直す' : '閉じる'}</Text>
           </Pressable>
         }
       >
         <View style={styles.hero}>
-          <Ring size={88} stroke={9} ratio={ratio} color={color}>
-            <StockIcon name={target.name} category={target.category} size={30} color={color} />
+          <Ring size={88} stroke={9} ratio={ratio} color={ringColor}>
+            <StockIcon name={product.name} category={product.category} size={30} color={ringColor} />
           </Ring>
           <View style={styles.flex}>
             <Text style={styles.big}>
-              {formatQuantity(have)}
-              <Text style={styles.bigSub}>
-                {' '}
-                / {formatQuantity(required)}
-                {target.unit}
+              {formatQuantity(product.total)}
+              <Text style={styles.bigSub}> {unitLabel}</Text>
+            </Text>
+            {shortage > 0 && (
+              <Text style={[styles.state, { color: colors.alertText }]}>
+                あと{formatQuantity(shortage)}
+                {unitLabel}
               </Text>
-            </Text>
-            <Text style={[styles.state, { color: shortage > 0 ? colors.alertText : colors.textMuted }]}>
-              {shortage > 0 ? `あと${formatQuantity(shortage)}${target.unit}` : '足りています'}
-            </Text>
-            {carry && (
-              <Text style={[styles.carry, { color: carry.shortage > 0 ? colors.alertText : colors.textMuted }]}>
-                持ち出し {formatQuantity(carry.have)} / {formatQuantity(carry.required)}
-                {target.unit}
+            )}
+            {status?.carry && (
+              <Text style={[styles.carry, { color: status.carry.shortage > 0 ? colors.alertText : colors.textMuted }]}>
+                持ち出し {formatQuantity(status.carry.have)} / {formatQuantity(status.carry.required)}
+                {unitLabel}
+              </Text>
+            )}
+            {!status && product.carryTotal > 0 && (
+              <Text style={[styles.carry, { color: colors.textMuted }]}>
+                持ち出し {formatQuantity(product.carryTotal)}
+                {unitLabel}
               </Text>
             )}
           </View>
         </View>
 
-        <View style={styles.facts}>
-          {facts.map(([label, value]) => (
-            <View key={label} style={styles.fact}>
-              <Text style={styles.factLabel}>{label}</Text>
-              <Text style={styles.factValue}>{value}</Text>
-            </View>
-          ))}
-        </View>
+        {facts.length > 0 && (
+          <View style={styles.facts}>
+            {facts.map(([label, value]) => (
+              <View key={label} style={styles.fact}>
+                <Text style={styles.factLabel}>{label}</Text>
+                <Text style={styles.factValue}>{value}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         <View style={styles.lots}>
           <Text style={styles.lotsTitle}>ロット（期限の近い順）</Text>
@@ -137,8 +152,8 @@ export default function StockTargetDetail({
                       {item.price !== null && (
                         <Text style={styles.lotSub}>
                           {formatYen(item.price)}/{item.unit || '個'}
-                          {unit !== null && (item.unit !== target.unit || item.amountPerUnit !== 1)
-                            ? `（${formatYen(unit)}/${target.unit}）`
+                          {unit !== null && status && (item.unit !== status.target.unit || item.amountPerUnit !== 1)
+                            ? `（${formatYen(unit)}/${status.target.unit}）`
                             : ''}
                         </Text>
                       )}
@@ -167,7 +182,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   hero: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  big: { fontSize: 26, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  big: { fontSize: 30, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   bigSub: { fontSize: 14, fontWeight: '700', color: colors.textFaint },
   state: { fontSize: 14, fontWeight: '700' },
   carry: { fontSize: 12, fontWeight: '700', marginTop: 2, fontVariant: ['tabular-nums'] },

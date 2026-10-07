@@ -398,10 +398,10 @@ const ICON_RULES: [StockIconKey, RegExp][] = [
   ['bag', /ウォーターバッグ|給水|リュック|バッグ/],
   ['water', /水|ウォーター/],
   ['drink', /アクエリ|飲料|ジュース|お茶|茶|スポーツドリンク|コーヒー/],
-  ['rice', /米|ご飯|ごはん|アルファ|おかゆ|パスタ|麺|パン/],
+  ['rice', /米|ご飯|ごはん|アルファ|おかゆ|パスタ|麺|パン|食料|食品/],
   ['soup', /スープ|味噌汁|みそ汁/],
-  ['meat', /缶|肉|魚|やきとり|焼き鳥|サバ|さば|ツナ|レトルト|カレー/],
   ['snack', /ようかん|羊羹|ビスケット|クッキー|おやつ|お菓子|チョコ|飴|あめ|ゼリー|栄養/],
+  ['meat', /缶|肉|魚|やきとり|焼き鳥|サバ|さば|ツナ|レトルト|カレー/],
   ['radio', /ラジオ/],
   ['light', /ライト|ランタン|懐中|照明|ろうそく|ヘッド/],
   ['battery', /電池|バッテリー|電源|充電|ソーラー|発電/],
@@ -422,9 +422,12 @@ export function stockIconKey(name: string, category = ''): StockIconKey {
 type BoardItem = CountableStock &
   SortableStock &
   CostedStock &
-  InspectableStock & { id: string; storage: StockStorage; amountPerUnit: number; targetId: string | null };
+  InspectableStock & { id: string; storage: StockStorage; amountPerUnit: number; targetId: string | null; unit: string };
 
-export interface StockBoard<I extends BoardItem, T extends TargetLike> {
+/** 画面で使う目標（必要数）。 */
+type BoardTarget = TargetLike & { category: string; name: string; position: number; unit: string };
+
+export interface StockBoard<I extends BoardItem, T extends BoardTarget> {
   /** 目標ごとの塊。lots は、その目標に数えるロット（寝室・持ち出しの両方）を期限の近い順に並べたもの。 */
   blocks: { status: TargetStatus<T>; cost: TargetCost; lots: I[] }[];
   /** 目標に数えていない、期限のあるロット（「その他の備品」）。 */
@@ -453,11 +456,13 @@ export interface StockBoard<I extends BoardItem, T extends TargetLike> {
     ok: number;
     inspect: number;
   };
+  /** カテゴリごと・品目ごとのまとめ（画面の主役）。 */
+  categories: StockCategory<I, T>[];
   /** 備え度（0〜100）。目標ごとの「持っている / 必要」（最大1）の平均。目標が無ければ100。 */
   readiness: number;
 }
 
-export function buildStockBoard<I extends BoardItem, T extends TargetLike>(
+export function buildStockBoard<I extends BoardItem, T extends BoardTarget>(
   items: I[],
   targets: T[],
   plan: StockPlan,
@@ -505,6 +510,113 @@ export function buildStockBoard<I extends BoardItem, T extends TargetLike>(
       ok,
       inspect: inspect.length,
     },
+    categories: groupStockProducts(items, blocks, today),
     readiness,
   };
+}
+
+// ---- カテゴリ別・品目別のまとめ（画面の主役。docs/home.md §10.2） ----
+
+/** 画面に出す1品目。同じ目標に数えるロット、または同じ品名のロットをまとめたもの。 */
+export interface StockProduct<I, T extends TargetLike> {
+  key: string;
+  name: string;
+  category: string;
+  /** 目標（必要数）に数えている品目なら、その進み具合と費用。 */
+  target: { status: TargetStatus<T>; cost: TargetCost } | null;
+  /** 期限の近い順のロット。 */
+  lots: I[];
+  /** どれぐらいあるか。目標があれば目標の単位の「持っている量」（期限切れを除く）、無ければロットの数の合計。 */
+  total: number;
+  unit: string;
+  /** うち持ち出しバッグにある量（同じ単位）。無ければ 0。 */
+  carryTotal: number;
+  /** いちばん近い期限と、その近さ。期限のあるロットが無ければ null。 */
+  nearest: { on: string; level: ExpiryLevel } | null;
+  /** 点検が要る備品なら、次の点検の日と、時期が来ているか。 */
+  inspect: { next: string; due: boolean } | null;
+}
+
+export interface StockCategory<I, T extends TargetLike> {
+  category: string;
+  products: StockProduct<I, T>[];
+}
+
+/** 空のカテゴリ名の呼び方。 */
+export const NO_CATEGORY = 'その他';
+
+/**
+ * カテゴリごと・品目ごとにまとめる。カテゴリは、目標→ロットの順に最初に出てきた順。
+ * 品目は、目標のある品（目標の並び順）→目標の無い品（品名順）。
+ */
+export function groupStockProducts<I extends BoardItem, T extends BoardTarget>(
+  items: I[],
+  blocks: { status: TargetStatus<T>; cost: TargetCost }[],
+  today: string,
+): StockCategory<I, T>[] {
+  const products: StockProduct<I, T>[] = [];
+  const toProduct = (
+    key: string,
+    name: string,
+    category: string,
+    lots: I[],
+    target: StockProduct<I, T>['target'],
+  ): StockProduct<I, T> => {
+    const sorted = sortStockItems(lots);
+    const stocked = sorted.filter((lot) => lot.quantity > 0);
+    const dated = stocked.filter((lot) => lot.expiresOn !== null);
+    const next = stocked.map((lot) => nextInspectionOn(lot)).filter((on): on is string => on !== null);
+    const usable = stocked.filter((lot) => expiryLevel(lot.expiresOn, today) !== 'expired');
+    const unit = target ? target.status.target.unit : (sorted.find((lot) => lot.unit !== '')?.unit ?? '');
+    const sum = (rows: I[]) => round2(rows.reduce((total, lot) => total + lot.quantity * (target ? lot.amountPerUnit : 1), 0));
+    return {
+      key,
+      name,
+      category: category.trim() || NO_CATEGORY,
+      target,
+      lots: sorted,
+      total: target ? target.status.have : sum(stocked),
+      unit,
+      carryTotal: sum(usable.filter((lot) => lot.storage === 'carry')),
+      nearest: dated.length > 0 ? { on: dated[0].expiresOn as string, level: expiryLevel(dated[0].expiresOn, today) } : null,
+      inspect:
+        next.length > 0
+          ? (() => {
+              const first = next.reduce((a, b) => (a < b ? a : b));
+              return { next: first, due: first <= today };
+            })()
+          : null,
+    };
+  };
+
+  const targetIds = new Set(blocks.map((block) => block.status.target.id));
+  const ordered = [...blocks].sort((a, b) => a.status.target.position - b.status.target.position);
+  for (const block of ordered) {
+    const { target } = block.status;
+    const lots = items.filter((item) => item.targetId === target.id);
+    const category = target.category.trim() || lots[0]?.category || '';
+    products.push(toProduct(`target:${target.id}`, target.name, category, lots, block));
+  }
+  const loose = items.filter((item) => item.targetId === null || !targetIds.has(item.targetId));
+  const byName = new Map<string, I[]>();
+  for (const item of loose) {
+    const key = `${item.category.trim()}\u0000${item.name.trim()}`;
+    byName.set(key, [...(byName.get(key) ?? []), item]);
+  }
+  const looseProducts = [...byName.values()]
+    .map((lots) => toProduct(`name:${lots[0].category.trim()}:${lots[0].name.trim()}`, lots[0].name.trim(), lots[0].category, lots, null))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  products.push(...looseProducts);
+
+  const categories: StockCategory<I, T>[] = [];
+  for (const product of products) {
+    let entry = categories.find((row) => row.category === product.category);
+    if (!entry) {
+      entry = { category: product.category, products: [] };
+      categories.push(entry);
+    }
+    entry.products.push(product);
+  }
+  // 「その他」は最後に。
+  return [...categories.filter((row) => row.category !== NO_CATEGORY), ...categories.filter((row) => row.category === NO_CATEGORY)];
 }

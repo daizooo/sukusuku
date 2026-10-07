@@ -292,7 +292,7 @@ const board = buildStockBoard(
     boardItem({ name: 'ランタン', inspectIntervalMonths: 6, inspectedOn: '2026-09-01' }),
     boardItem({ name: '衛生用品' }),
   ],
-  [{ id: 'water', quantity: 3, perPersonDay: true, carry: true }],
+  [{ id: 'water', quantity: 3, perPersonDay: true, carry: true, category: '飲料・水', name: '水', position: 0, unit: 'L' }],
   plan,
   today,
 );
@@ -344,6 +344,7 @@ assert.equal(stockIconKey('BOS防臭袋'), 'trash');
 assert.equal(stockIconKey('アクエリアスパウダー'), 'drink');
 assert.equal(stockIconKey('やきとり缶'), 'meat');
 assert.equal(stockIconKey('LEDランタン'), 'light');
+assert.equal(stockIconKey('クッキー缶'), 'snack');
 assert.equal(stockIconKey('なぞの品', '照明・情報・電池類'), 'light');
 assert.equal(stockIconKey('なぞの品'), 'other');
 
@@ -352,3 +353,49 @@ assert.equal(board.counts.ok, 1);
 assert.equal(board.counts.year, 1);
 
 console.log('stockUtils look: OK');
+
+// ---- カテゴリ別・品目別 ----
+const catItem = (patch: Record<string, unknown>) => boardItem({ category: '食料品', unit: '個', ...patch });
+const catBoard = buildStockBoard(
+  [
+    catItem({ name: 'スープ', targetId: 'soup', quantity: 10, expiresOn: '2026-12-01', storage: 'home', category: '食料品' }),
+    catItem({ name: 'スープ', targetId: 'soup', quantity: 4, expiresOn: '2028-01-01', storage: 'carry', category: '食料品' }),
+    catItem({ name: '水', targetId: 'water', quantity: 20, amountPerUnit: 0.5, unit: '本', expiresOn: '2030-01-01', category: '飲料・水' }),
+    catItem({ name: 'ラジオ', quantity: 1, unit: '台', category: '照明・情報', inspectIntervalMonths: 6, createdOn: '2026-04-01' }),
+    catItem({ name: 'クッキー', quantity: 3, expiresOn: '2027-03-01' }),
+    catItem({ name: 'クッキー', quantity: 2, expiresOn: '2026-11-01' }),
+    catItem({ name: '名無し', quantity: 1, category: '' }),
+  ],
+  [
+    { id: 'soup', quantity: 3, perPersonDay: true, carry: true, category: '食料品', name: '野菜スープ', position: 1, unit: '食' },
+    { id: 'water', quantity: 3, perPersonDay: true, carry: false, category: '飲料・水', name: '水', position: 0, unit: 'L' },
+  ],
+  plan,
+  today,
+);
+assert.deepEqual(
+  catBoard.categories.map((row) => row.category),
+  ['飲料・水', '食料品', '照明・情報', 'その他'],
+);
+const foods = catBoard.categories[1].products;
+assert.deepEqual(
+  foods.map((product) => product.name),
+  ['野菜スープ', 'クッキー'],
+);
+// 目標のある品は目標の単位の量（寝室・持ち出しの合計）。持ち出しの分も別に持つ。
+assert.equal(foods[0].total, 14);
+assert.equal(foods[0].unit, '食');
+assert.equal(foods[0].carryTotal, 4);
+assert.deepEqual(foods[0].nearest, { on: '2026-12-01', level: 'soon' });
+// 目標の無い同名のロットは1品目にまとめ、数を足す。いちばん近い期限を出す。
+assert.equal(foods[1].total, 5);
+assert.equal(foods[1].lots.length, 2);
+assert.deepEqual(foods[1].nearest, { on: '2026-11-01', level: 'soon' });
+// 水 500ml × 20本 = 10L。
+assert.equal(catBoard.categories[0].products[0].total, 10);
+// 点検が要る備品。
+const radioProduct = catBoard.categories[2].products[0];
+assert.deepEqual(radioProduct.inspect, { next: '2026-10-01', due: true });
+assert.equal(radioProduct.nearest, null);
+
+console.log('stockUtils categories: OK');
