@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Redirect, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, Plus } from 'lucide-react-native';
+import { Backpack, ChevronLeft, Plus } from 'lucide-react-native';
 import type { StockItem, StockItemDraft, StockTarget, StockTargetDraft } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
@@ -22,7 +22,6 @@ import {
   loadStockPlan,
   loadStockTargets,
   updateStockItem,
-  updateStockPlan,
   updateStockTarget,
 } from '@/lib/api/stockItems';
 import {
@@ -33,6 +32,7 @@ import {
   type StockStorage,
 } from '@/lib/stockUtils';
 import StockBoard from '@/components/living/StockBoard';
+import { SOFT, TONE } from '@/components/living/stockVisual';
 import StockRestockSheet, { type RestockInput } from '@/components/living/StockRestockSheet';
 import StockItemSheet from '@/components/living/StockItemSheet';
 import StockTargetSheet from '@/components/living/StockTargetSheet';
@@ -67,7 +67,6 @@ type Editing = StockItem | 'new' | null;
 type EditingTarget = StockTarget | 'new' | null;
 
 /** 人数・日数の上限（DBの check と同じ）。 */
-const PLAN_LIMIT: StockPlan = { people: 20, days: 60, carryDays: 7 };
 
 export default function LivingScreen() {
   const { session, isLoading: isSessionLoading } = useSession();
@@ -84,6 +83,7 @@ export default function LivingScreen() {
   // 防災備蓄の保管場所の切り替え。追加するロットの保管場所の初期値にもなる。
   const [restocking, setRestocking] = useState<StockItem | null>(null);
   const [editingTarget, setEditingTarget] = useState<EditingTarget>(null);
+  const [bagOpen, setBagOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<EditingProduct>(null);
   const [addingSpecial, setAddingSpecial] = useState(false);
   const sender = useShoppingSender(familyId);
@@ -118,15 +118,25 @@ export default function LivingScreen() {
 
   const today = toDateString(new Date());
   const categories = useMemo(() => categoryOptions(items), [items]);
-  const counts = useMemo(() => buildStockBoard(items, targets, plan, today).counts, [items, targets, plan, today]);
+  const stockBoard = useMemo(() => buildStockBoard(items, targets, plan, today), [items, targets, plan, today]);
+  const { counts } = stockBoard;
+  const bagDue = stockBoard.attention.bag?.due === true;
 
   const failed = (what: string) => Alert.alert(`${what}できませんでした`, 'もう一度お試しください。');
 
-  const save = async (draft: StockItemDraft) => {
+  /** 備蓄を保存する。必要数を新しく決めたときは、先に必要数を作ってから、それに数える（docs/home.md §10.2.2）。 */
+  const save = async (input: StockItemDraft, newTarget?: StockTargetDraft) => {
     const target = editing;
     setEditing(null);
     if (!familyId || target === null) return;
     try {
+      let draft = input;
+      if (newTarget) {
+        const position = targets.reduce((max, row) => Math.max(max, row.position + 1), 0);
+        const createdTarget = await insertStockTarget(supabase, familyId, newTarget, position);
+        setTargets((prev) => [...prev, createdTarget]);
+        draft = { ...draft, targetId: createdTarget.id };
+      }
       if (target === 'new') {
         const created = await insertStockItem(supabase, familyId, draft);
         setItems((prev) => [...prev, created]);
@@ -254,21 +264,6 @@ export default function LivingScreen() {
     }
   };
 
-  /** 人数・日数を1つずつ変える。家族の設定なので、保存できなければ元に戻す。 */
-  const stepPlan = async (key: keyof StockPlan, delta: number) => {
-    if (!familyId) return;
-    const previous = plan;
-    const next = { ...plan, [key]: Math.min(PLAN_LIMIT[key], Math.max(1, plan[key] + delta)) };
-    if (next[key] === plan[key]) return;
-    setPlan(next);
-    try {
-      await updateStockPlan(supabase, familyId, next);
-    } catch {
-      setPlan(previous);
-      failed('保存');
-    }
-  };
-
   // 戻る操作は、開いている画面からメニューへ戻す（メニューのときは何もしない＝1つ前のタブへ）。
   useFocusEffect(
     useCallback(() => {
@@ -320,7 +315,30 @@ export default function LivingScreen() {
           <current.Icon size={20} color={current.color} />
           <Text style={styles.title}>{current.label}</Text>
         </Pressable>
-        {section !== 'lottery' && (
+        {section === 'stock' ? (
+          // 防災備蓄は、持ち出しバッグの点検と追加だけ（淡い橙の丸。点検の時期はバッグに赤い点）。
+          <View style={styles.headerActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={bagDue ? '持ち出しバッグを点検する（点検の時期です）' : '持ち出しバッグを点検する'}
+              onPress={() => setBagOpen(true)}
+              disabled={isLoading}
+              style={styles.roundButton}
+            >
+              <Backpack size={17} color={SOFT.buttonText} />
+              {bagDue && <View style={styles.roundDot} />}
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="備蓄を追加"
+              onPress={() => setEditing('new')}
+              disabled={!familyId}
+              style={styles.roundButton}
+            >
+              <Plus size={18} color={SOFT.buttonText} />
+            </Pressable>
+          </View>
+        ) : section !== 'lottery' && (
           <Pressable
             accessibilityRole="button"
             onPress={() =>
@@ -355,8 +373,8 @@ export default function LivingScreen() {
           today={today}
           onEditItem={setEditing}
           onEditTarget={setEditingTarget}
-          onAddTarget={() => setEditingTarget('new')}
-          onStepPlan={(key, delta) => void stepPlan(key, delta)}
+          bagOpen={bagOpen}
+          onBagOpenChange={setBagOpen}
           onSendShortage={(target, shortage) => sender.send(shortageTitle(target.name, shortage, target.unit), '')}
           onRestock={setRestocking}
           onUse={(item) => void consumeOne(item)}
@@ -372,8 +390,9 @@ export default function LivingScreen() {
           item={editing === 'new' ? null : editing}
           categories={categories}
           targets={targets}
+          plan={plan}
           onClose={() => setEditing(null)}
-          onSubmit={(draft) => void save(draft)}
+          onSubmit={(draft, newTarget) => void save(draft, newTarget)}
           onDelete={editing === 'new' ? undefined : () => void remove(editing.id)}
           onMove={editing === 'new' ? undefined : (count) => void move(editing, count)}
         />
@@ -427,5 +446,18 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   addButtonText: { fontSize: 13, fontWeight: '700', color: colors.primaryText },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  roundButton: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.button },
+  roundDot: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: colors.background,
+    backgroundColor: TONE.alert,
+  },
   message: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
 });

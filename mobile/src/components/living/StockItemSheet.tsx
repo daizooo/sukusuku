@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Minus, Plus } from 'lucide-react-native';
-import type { StockItem, StockItemDraft, StockTarget } from '@/types/app';
+import { Check, Minus, Plus } from 'lucide-react-native';
+import type { StockItem, StockItemDraft, StockTarget, StockTargetDraft } from '@/types/app';
 import {
   DEFAULT_INSPECT_MONTHS,
   formatExpiry,
   formatQuantity,
   INSPECT_INTERVAL_OPTIONS,
   parseExpiryInput,
+  requiredQuantity,
   STORAGE_LABEL,
+  type StockPlan,
   type StockStorage,
 } from '@/lib/stockUtils';
 import { colors } from '@/lib/theme';
@@ -18,6 +20,8 @@ import { SOFT } from './stockVisual';
 
 // 防災備蓄の1行を足す・直す（docs/home.md §3.2）。PWA版の
 // `src/components/sukusuku/modals/StockItemModal.tsx` と同じ項目・同じ文言。
+//
+// 必要数は、既にあるものを選ぶか、「＋ 新しく決める」でこの画面の中で作る（docs/home.md §10.2.2）。
 //
 // 期限は元の一覧と同じ書き方（「2031.08.25」「2027.06」）で打つ。日付の選択画面にしないのは、
 // 月までしか無い期限があるのと、袋に書いてある数字をそのまま打つほうが早いため。
@@ -34,7 +38,22 @@ interface FormState {
   storage: StockStorage;
   inspectedOn: string;
   inspectInterval: number | null;
+  /** 「＋ 新しく決める」で作る必要数。 */
+  newQuantity: string;
+  newUnit: string;
+  newPerPersonDay: boolean;
+  newCarry: boolean;
 }
+
+/** 必要数の選び方で「＋ 新しく決める」を選んだときの印。 */
+const NEW_TARGET = '__new__';
+
+const NEW_TARGET_FIELDS = { newQuantity: '1', newUnit: '', newPerPersonDay: true, newCarry: false };
+
+const MODES: { value: boolean; label: string }[] = [
+  { value: true, label: '1人1日あたり' },
+  { value: false, label: '全体で決まった数' },
+];
 
 const STORAGES: StockStorage[] = ['home', 'carry'];
 
@@ -52,6 +71,7 @@ const initialState = (item: StockItem | null, defaultStorage: StockStorage): For
         storage: item.storage,
         inspectedOn: formatExpiry({ expiresOn: item.inspectedOn, expiresMonthOnly: false }),
         inspectInterval: item.inspectIntervalMonths,
+        ...NEW_TARGET_FIELDS,
       }
     : {
         name: '',
@@ -65,10 +85,11 @@ const initialState = (item: StockItem | null, defaultStorage: StockStorage): For
         storage: defaultStorage,
         inspectedOn: '',
         inspectInterval: DEFAULT_INSPECT_MONTHS,
+        ...NEW_TARGET_FIELDS,
       };
 
-/** 入力を確かめて保存する形にする。だめなら突き返す文言。 */
-function toStockDraft(form: FormState): StockItemDraft | string {
+/** 入力を確かめて保存する形にする。だめなら突き返す文言。必要数を新しく決めたときは、その必要数も返す。 */
+function toStockDraft(form: FormState): { draft: StockItemDraft; newTarget?: StockTargetDraft } | string {
   if (form.name.trim() === '') return '品名を入れてください';
   const quantity = Number(form.quantity.trim());
   if (form.quantity.trim() === '' || !Number.isFinite(quantity) || quantity < 0) {
@@ -82,7 +103,12 @@ function toStockDraft(form: FormState): StockItemDraft | string {
   }
   const inspected = parseExpiryInput(form.inspectedOn);
   if (!inspected || inspected.expiresMonthOnly) return '点検日は「2026.10.07」の形で入れてください';
-  return {
+  const isNew = form.targetId === NEW_TARGET;
+  const newQuantity = Number(form.newQuantity.trim());
+  if (isNew && (form.newQuantity.trim() === '' || !Number.isFinite(newQuantity) || newQuantity <= 0)) {
+    return '必要数は0より大きい数字で入れてください';
+  }
+  const draft: StockItemDraft = {
     name: form.name,
     category: form.category,
     quantity,
@@ -90,12 +116,26 @@ function toStockDraft(form: FormState): StockItemDraft | string {
     expiresOn: expiry.expiresOn,
     expiresMonthOnly: expiry.expiresMonthOnly,
     note: form.note,
-    targetId: form.targetId,
+    // 新しく決める必要数は、保存のときに作ってから数える（呼び出し側）。
+    targetId: isNew ? null : form.targetId,
     amountPerUnit,
     storage: form.storage,
     inspectedOn: inspected.expiresOn,
     // 点検の間隔は期限の無い備品だけ（期限のあるものは期限で見る）。
     inspectIntervalMonths: expiry.expiresOn === null ? form.inspectInterval : null,
+  };
+  if (!isNew) return { draft };
+  return {
+    draft,
+    newTarget: {
+      name: form.name,
+      category: form.category,
+      quantity: newQuantity,
+      perPersonDay: form.newPerPersonDay,
+      carry: form.newCarry,
+      unit: form.newUnit.trim() || form.unit.trim(),
+      note: '',
+    },
   };
 }
 
@@ -106,8 +146,11 @@ interface StockItemSheetProps {
   categories: string[];
   /** 数える先の候補（必要数）。 */
   targets: StockTarget[];
+  /** 新しく決める必要数の目安（○人×○日分）に使う。 */
+  plan: StockPlan;
   onClose: () => void;
-  onSubmit: (draft: StockItemDraft) => void;
+  /** newTarget があれば、先にその必要数を作ってから、それに数える。 */
+  onSubmit: (draft: StockItemDraft, newTarget?: StockTargetDraft) => void;
   onDelete?: () => void;
   /** 追加のときの保管場所（持ち出しで絞っているときは持ち出し）。 */
   defaultStorage?: StockStorage;
@@ -119,6 +162,7 @@ export default function StockItemSheet({
   item,
   categories,
   targets,
+  plan,
   onClose,
   onSubmit,
   onDelete,
@@ -131,6 +175,20 @@ export default function StockItemSheet({
 
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
   const selectedTarget = targets.find((target) => target.id === form.targetId) ?? null;
+  const isNewTarget = form.targetId === NEW_TARGET;
+  // 新しく決める必要数の単位（空なら品の単位）と、○人×○日分の目安。
+  const newUnit = form.newUnit.trim() || form.unit.trim();
+  const newQuantity = Number(form.newQuantity.trim());
+  const newHint =
+    isNewTarget && Number.isFinite(newQuantity) && newQuantity > 0
+      ? (() => {
+          const shape = { id: '', quantity: newQuantity, perPersonDay: form.newPerPersonDay };
+          const total = requiredQuantity(shape, plan);
+          const bag = requiredQuantity(shape, { people: plan.people, days: plan.carryDays });
+          const head = form.newPerPersonDay ? `${plan.people}人×${plan.days}日分＝` : '全体で';
+          return `${head}${formatQuantity(total)}${newUnit}${form.newCarry ? `（バッグに ${formatQuantity(bag)}${newUnit}）` : ''}`;
+        })()
+      : null;
   // 点検は期限の無い備品だけ。期限の欄が空のあいだ出す。
   const isInspectable = form.expiry.trim() === '';
 
@@ -142,12 +200,12 @@ export default function StockItemSheet({
   };
 
   const handleSubmit = () => {
-    const draft = toStockDraft(form);
-    if (typeof draft === 'string') {
-      setError(draft);
+    const result = toStockDraft(form);
+    if (typeof result === 'string') {
+      setError(result);
       return;
     }
-    onSubmit(draft);
+    onSubmit(result.draft, result.newTarget);
   };
 
   /**
@@ -336,47 +394,96 @@ export default function StockItemSheet({
           <Text style={styles.hint}>月までのものは「2027.06」。期限が無いものは空のまま</Text>
         </View>
 
-        {targets.length > 0 && (
-          <View style={styles.field}>
-            <Text style={styles.label}>必要数に数える</Text>
-            <View style={styles.wrapChips}>
-              {[null, ...targets].map((target) => {
-                const id = target?.id ?? null;
-                const selected = form.targetId === id;
-                return (
-                  <Pressable
-                    key={id ?? 'none'}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    onPress={() => update({ targetId: id })}
-                    style={[styles.chip, selected && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                      {target?.name ?? '数えない'}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {selectedTarget && (
+        <View style={styles.field}>
+          <Text style={styles.label}>必要数</Text>
+          <View style={styles.wrapChips}>
+            {[
+              { id: null, name: 'なし' },
+              ...targets.map((target) => ({ id: target.id, name: target.name })),
+              { id: NEW_TARGET, name: '＋ 新しく決める' },
+            ].map(({ id, name }) => {
+              const selected = form.targetId === id;
+              return (
+                <Pressable
+                  key={id ?? 'none'}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => update({ targetId: id })}
+                  style={[styles.chip, selected && styles.chipSelected]}
+                >
+                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{name}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {isNewTarget && (
+            <View style={styles.newTarget}>
               <View style={styles.perUnitRow}>
-                <Text style={styles.perUnitLabel}>1つあたり</Text>
+                <Text style={styles.newLabel}>必要数</Text>
                 <TextInput
-                  style={[styles.input, styles.perUnitInput]}
-                  value={form.amountPerUnit}
-                  onChangeText={(amountPerUnit) => update({ amountPerUnit })}
+                  style={[styles.input, styles.newInput]}
+                  value={form.newQuantity}
+                  onChangeText={(newQuantity) => update({ newQuantity })}
                   keyboardType="decimal-pad"
                   inputMode="decimal"
-                  accessibilityLabel="1つあたりの量"
+                  accessibilityLabel="必要数"
                 />
-                <Text style={styles.perUnitLabel}>{selectedTarget.unit}</Text>
+                <TextInput
+                  style={[styles.input, styles.newInput]}
+                  value={form.newUnit}
+                  onChangeText={(value) => update({ newUnit: value })}
+                  placeholder={form.unit || '単位'}
+                  placeholderTextColor={colors.textFaint}
+                  accessibilityLabel="必要数の単位"
+                />
               </View>
-            )}
-            {selectedTarget && (
-              <Text style={styles.hint}>単位が同じなら1のまま。水 500ml の本を L で数えるなら 0.5</Text>
-            )}
-          </View>
-        )}
+              <View style={styles.segmented}>
+                {MODES.map((mode) => {
+                  const selected = form.newPerPersonDay === mode.value;
+                  return (
+                    <Pressable
+                      key={mode.label}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      onPress={() => update({ newPerPersonDay: mode.value })}
+                      style={[styles.segment, selected && styles.segmentSelected]}
+                    >
+                      <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>{mode.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: form.newCarry }}
+                onPress={() => update({ newCarry: !form.newCarry })}
+                style={styles.checkRow}
+              >
+                <View style={[styles.checkBox, form.newCarry && styles.checkBoxOn]}>
+                  {form.newCarry && <Check size={12} color={SOFT.buttonText} strokeWidth={3} />}
+                </View>
+                <Text style={styles.newLabel}>持ち出しバッグにも入れる</Text>
+              </Pressable>
+            </View>
+          )}
+          {(selectedTarget || isNewTarget) && (
+            <View style={styles.perUnitRow}>
+              <Text style={styles.perUnitLabel}>この品1{form.unit || 'つ'}あたり</Text>
+              <TextInput
+                style={[styles.input, styles.perUnitInput]}
+                value={form.amountPerUnit}
+                onChangeText={(amountPerUnit) => update({ amountPerUnit })}
+                keyboardType="decimal-pad"
+                inputMode="decimal"
+                accessibilityLabel="1つあたりの量"
+              />
+              <Text style={styles.perUnitLabel}>{selectedTarget ? selectedTarget.unit : newUnit}</Text>
+            </View>
+          )}
+          {(selectedTarget || isNewTarget) && (
+            <Text style={styles.hint}>{newHint ?? '単位が同じなら1のまま。水 500ml の本を L で数えるなら 0.5'}</Text>
+          )}
+        </View>
 
         {isInspectable && (
           <View style={styles.field}>
@@ -492,9 +599,24 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     backgroundColor: colors.neutralSurface,
   },
-  chipSelected: { backgroundColor: colors.navActive },
+  chipSelected: { backgroundColor: SOFT.button },
   chipText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  chipTextSelected: { color: colors.primaryText },
+  chipTextSelected: { color: SOFT.buttonText },
+  newTarget: { gap: 8, borderRadius: 12, backgroundColor: SOFT.bg, padding: 10 },
+  newLabel: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },
+  newInput: { width: 72, textAlign: 'center' },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  checkBox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  checkBoxOn: { borderColor: SOFT.border, backgroundColor: SOFT.button },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stepButton: {
     width: 40,

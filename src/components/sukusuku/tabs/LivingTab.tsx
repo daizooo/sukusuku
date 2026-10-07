@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, Plus } from 'lucide-react';
+import { Backpack, ChevronLeft, Plus } from 'lucide-react';
 import type { StockItem, StockItemDraft, StockTarget, StockTargetDraft } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
@@ -19,7 +19,6 @@ import {
   loadStockPlan,
   loadStockTargets,
   updateStockItem,
-  updateStockPlan,
   updateStockTarget,
 } from '@/lib/api/stockItems';
 import {
@@ -65,7 +64,6 @@ type Editing = StockItem | 'new' | null;
 type EditingTarget = StockTarget | 'new' | null;
 
 /** 人数・日数の上限（DBの check と同じ）。 */
-const PLAN_LIMIT: StockPlan = { people: 20, days: 60, carryDays: 7 };
 
 export default function LivingTab({ familyId, userId }: { familyId: string; userId: string }) {
   const supabase = useMemo(() => createClient(), []);
@@ -81,6 +79,7 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
   useBackLayer(() => setSection(null), section !== null);
   const [editing, setEditing] = useState<Editing>(null);
   const [editingTarget, setEditingTarget] = useState<EditingTarget>(null);
+  const [bagOpen, setBagOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<EditingProduct>(null);
   const [addingSpecial, setAddingSpecial] = useState(false);
   const sender = useShoppingSender(familyId);
@@ -111,15 +110,25 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
 
   const today = toDateStringInTimeZone(new Date());
   const categories = useMemo(() => categoryOptions(items), [items]);
-  const counts = useMemo(() => buildStockBoard(items, targets, plan, today).counts, [items, targets, plan, today]);
+  const stockBoard = useMemo(() => buildStockBoard(items, targets, plan, today), [items, targets, plan, today]);
+  const { counts } = stockBoard;
+  const bagDue = stockBoard.attention.bag?.due === true;
 
   const failed = (what: string) => window.alert(`${what}できませんでした。もう一度お試しください。`);
 
-  const save = async (draft: StockItemDraft) => {
+  /** 備蓄を保存する。必要数を新しく決めたときは、先に必要数を作ってから、それに数える（docs/home.md §10.2.2）。 */
+  const save = async (input: StockItemDraft, newTarget?: StockTargetDraft) => {
     const target = editing;
     setEditing(null);
     if (target === null) return;
     try {
+      let draft = input;
+      if (newTarget) {
+        const position = targets.reduce((max, row) => Math.max(max, row.position + 1), 0);
+        const createdTarget = await insertStockTarget(supabase, familyId, newTarget, position);
+        setTargets((prev) => [...prev, createdTarget]);
+        draft = { ...draft, targetId: createdTarget.id };
+      }
       if (target === 'new') {
         const created = await insertStockItem(supabase, familyId, draft);
         setItems((prev) => [...prev, created]);
@@ -246,20 +255,6 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
     }
   };
 
-  /** 人数・日数を1つずつ変える。家族の設定なので、保存できなければ元に戻す。 */
-  const stepPlan = async (key: keyof StockPlan, delta: number) => {
-    const previous = plan;
-    const next = { ...plan, [key]: Math.min(PLAN_LIMIT[key], Math.max(1, plan[key] + delta)) };
-    if (next[key] === plan[key]) return;
-    setPlan(next);
-    try {
-      await updateStockPlan(supabase, familyId, next);
-    } catch {
-      setPlan(previous);
-      failed('保存');
-    }
-  };
-
   if (section === null) {
     return (
       <div className="relative p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
@@ -287,7 +282,29 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
           <current.Icon size={20} className={current.icon} />
           <h2 className="text-lg font-bold text-gray-900">{current.label}</h2>
         </button>
-        {section !== 'lottery' && (
+        {section === 'stock' ? (
+          // 防災備蓄は、持ち出しバッグの点検と追加だけ（淡い橙の丸。点検の時期はバッグに赤い点）。
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-label={bagDue ? '持ち出しバッグを点検する（点検の時期です）' : '持ち出しバッグを点検する'}
+              onClick={() => setBagOpen(true)}
+              disabled={isLoading}
+              className="relative flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-orange-800 hover:bg-orange-200"
+            >
+              <Backpack size={17} />
+              {bagDue && <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-gray-50 bg-red-400" />}
+            </button>
+            <button
+              type="button"
+              aria-label="備蓄を追加"
+              onClick={() => setEditing('new')}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-orange-800 hover:bg-orange-200"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
+        ) : section !== 'lottery' && (
           <button
             type="button"
             onClick={() =>
@@ -321,8 +338,8 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
           today={today}
           onEditItem={setEditing}
           onEditTarget={setEditingTarget}
-          onAddTarget={() => setEditingTarget('new')}
-          onStepPlan={(key, delta) => void stepPlan(key, delta)}
+          bagOpen={bagOpen}
+          onBagOpenChange={setBagOpen}
           onSendShortage={(target, shortage) => sender.send(shortageTitle(target.name, shortage, target.unit), '')}
           onRestock={setRestocking}
           onUse={(item) => void consumeOne(item)}
@@ -338,8 +355,9 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
           item={editing === 'new' ? null : editing}
           categories={categories}
           targets={targets}
+          plan={plan}
           onClose={() => setEditing(null)}
-          onSubmit={(draft) => void save(draft)}
+          onSubmit={(draft, newTarget) => void save(draft, newTarget)}
           onDelete={editing === 'new' ? undefined : () => void remove(editing.id)}
           onMove={editing === 'new' ? undefined : (count) => void move(editing, count)}
         />
