@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Settings } from 'lucide-react';
 import type {
   HouseholdProduct,
   MoneyBudget,
   MoneyCategory,
   MoneyRecord,
   MoneyRecordDraft,
+  MoneyStore,
   MoneyWallet,
   MoneyWalletDraft,
   SpecialItem,
@@ -18,6 +19,7 @@ import {
   deleteMoneyRecord,
   insertMoneyWallet,
   loadMoney,
+  loadMoneyStores,
   saveMoneyRecord,
   updateMoneyWallet,
   type MoneyData,
@@ -26,34 +28,34 @@ import { loadHouseholdProducts } from '@/lib/api/householdProducts';
 import { loadSpecialExpenses } from '@/lib/api/specialExpenses';
 import { fiscalYearOfMonth, monthKeyOf, monthKeyOfDate, specialActualsFromRecords } from '@/lib/moneyUtils';
 import MoneyRecordsView from '../money/MoneyRecordsView';
-import MoneyMonthView from '../money/MoneyMonthView';
+import MoneyReviewView from '../money/MoneyReviewView';
 import RecordEditor from '../money/RecordEditor';
 import CategoryEditor from '../money/CategoryEditor';
-import MoneyYearView from '../money/MoneyYearView';
+import MoneySettings from '../money/MoneySettings';
+import { type ReviewPeriod } from '../money/moneyVisual';
 import SpecialPanel from '../living/SpecialPanel';
 
 /**
  * 家計タブ（docs/kakei.md）。日々の収支の記録と、月・年の振り返り。
  * mobile版の `mobile/app/(tabs)/money.tsx` と同じ項目・並び・文言にしてある。
  *
- * 中は「記録 / 月 / 年 / 特別費」の4つ。記録の追加は右下の丸いボタン「＋」（Zaim と同じ。§2）。
+ * 中は「記録 / 振り返り / 特別費」の3つ。記録の追加は右下の丸いボタン「＋」（Zaim と同じ。§2）。
  * どの面も「送り → 結論（数字を1つ大きく）→ 内訳 → 明細」の順（見た目の決まりは §2.1・moneyVisual）。
  * - 記録: その月に使った額（特別費を除く）と、記録を日ごとに。押すと記録の詳細（RecordEditor。Zaim と同じ流れ）
- * - 月: 月の収支（収入 − 生活費 − 貯金）と内訳、生活費の大分類の小さな一覧（特別費は出さない）。
- *   種類と予算はここから直す
- * - 年: 年度の収支と内訳、月ごとの収支（押すとその月へ）
- * - 特別費: 年度の予定と実績（「年」と同じ年度を見る）。特別費の数字はこの面だけに出す
+ * - 振り返り: 月と年は同じ面で、送りの右「月 / 年」で期間を切り替える（§4）。結論は2つ:
+ *   生活費の収支（収入 − 特別費以外の支出。貯金は入れない）と、特別費（その期間に払った額と年度の予算の残り）
+ * - 特別費: 年度の予定と実績の一覧・設定（「振り返り」の年と同じ年度を見る）
+ * - 見出しの右の歯車は「家計の設定」（予算・種類・出金元・お店。docs/kakei.md §3.5）
  *
  * 見出し・切り替え・月の送りは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  * 他のタブと違い、読み書きはこのタブの中で完結させる（アプリ全体の状態に持たない）。
  */
 
-type MoneyView = 'records' | 'month' | 'year' | 'special';
+type MoneyView = 'records' | 'review' | 'special';
 
 const VIEWS: { id: MoneyView; label: string }[] = [
   { id: 'records', label: '記録' },
-  { id: 'month', label: '月' },
-  { id: 'year', label: '年' },
+  { id: 'review', label: '振り返り' },
   { id: 'special', label: '特別費' },
 ];
 
@@ -65,6 +67,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [categories, setCategories] = useState<MoneyCategory[]>([]);
   const [budgets, setBudgets] = useState<MoneyBudget[]>([]);
   const [wallets, setWallets] = useState<MoneyWallet[]>([]);
+  const [stores, setStores] = useState<MoneyStore[]>([]);
   const [records, setRecords] = useState<MoneyRecord[]>([]);
   const [products, setProducts] = useState<HouseholdProduct[]>([]);
   const [specialItems, setSpecialItems] = useState<SpecialItem[]>([]);
@@ -72,8 +75,10 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [view, setView] = useState<MoneyView>('records');
   const [monthKey, setMonthKey] = useState(() => monthKeyOfDate(new Date()));
   const [fiscalYear, setFiscalYear] = useState(() => fiscalYearOfMonth(monthKeyOfDate(new Date())));
+  const [period, setPeriod] = useState<ReviewPeriod>('month');
   const [editing, setEditing] = useState<Editing>(null);
   const [editingCategories, setEditingCategories] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   /** 読んだものを画面に入れる。 */
   const apply = useCallback(
@@ -81,6 +86,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       setCategories(money.categories);
       setBudgets(money.budgets);
       setWallets(money.wallets);
+      setStores(money.stores);
       setRecords(money.records);
       setProducts(loadedProducts);
       setSpecialItems(special.items);
@@ -116,6 +122,17 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   }, [fetchAll, apply]);
 
   const specialActuals = useMemo(() => specialActualsFromRecords(records), [records]);
+
+  /** 振り返りの月 ↔ 年。年へ行くときは今見ている月の年度を、月へ戻るときは見ている年度の月を開く。 */
+  const changePeriod = (next: ReviewPeriod) => {
+    if (next === 'year') {
+      setFiscalYear(fiscalYearOfMonth(monthKey));
+    } else if (fiscalYearOfMonth(monthKey) !== fiscalYear) {
+      const current = monthKeyOfDate(new Date());
+      setMonthKey(fiscalYearOfMonth(current) === fiscalYear ? current : `${fiscalYear}-04`);
+    }
+    setPeriod(next);
+  };
   const failed = (what: string) => window.alert(`${what}できませんでした。もう一度お試しください。`);
 
   const saveRecord = async (draft: MoneyRecordDraft) => {
@@ -127,6 +144,10 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       // 日用品の台帳の「いつもの値段」が変わるので読み直す（DBの save_money_record が直す）。
       if (saved.items.some((item) => item.productId !== null)) {
         setProducts(await loadHouseholdProducts(supabase, familyId));
+      }
+      // 新しいお店の名前は、DBの save_money_record がお店の設定に登録する。
+      if (saved.store !== '' && !stores.some((entry) => entry.name === saved.store)) {
+        setStores(await loadMoneyStores(supabase, familyId));
       }
     } catch {
       failed('保存');
@@ -175,7 +196,18 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
 
   return (
     <div className="relative p-4 pb-0 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
-      <h2 className="shrink-0 pb-1 text-lg font-bold text-gray-900">家計</h2>
+      <div className="shrink-0 flex items-center pb-1">
+        <h2 className="text-lg font-bold text-gray-900">家計</h2>
+        <span className="flex-1" />
+        <button
+          type="button"
+          aria-label="家計の設定"
+          onClick={() => setSettingsOpen(true)}
+          className="p-0.5 text-gray-700 hover:text-gray-900"
+        >
+          <Settings size={22} />
+        </button>
+      </div>
       {/* 4つの面の切り替え。等幅に並べ、選んでいる面は濃い文字と青い下線。 */}
       <div role="tablist" className="shrink-0 flex border-b border-gray-200">
         {VIEWS.map((entry) => {
@@ -209,28 +241,24 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           isLoading={isLoading}
           onOpen={setEditing}
         />
-      ) : view === 'month' ? (
-        <MoneyMonthView
+      ) : view === 'review' ? (
+        <MoneyReviewView
+          period={period}
+          onPeriod={changePeriod}
           monthKey={monthKey}
           onMonth={setMonthKey}
-          records={records}
-          categories={categories}
-          budgets={budgets}
-          wallets={wallets}
-          onEditCategories={() => setEditingCategories(true)}
-        />
-      ) : view === 'year' ? (
-        <MoneyYearView
           fiscalYear={fiscalYear}
           onFiscalYear={setFiscalYear}
           records={records}
           categories={categories}
           budgets={budgets}
-          wallets={wallets}
+          specialItems={specialItems}
+          specialActuals={specialActuals}
           onSelectMonth={(next) => {
             setMonthKey(next);
-            setView('month');
+            setPeriod('month');
           }}
+          onEditCategories={() => setEditingCategories(true)}
         />
       ) : (
         <SpecialPanel
@@ -258,6 +286,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           categories={categories}
           budgets={budgets}
           wallets={wallets}
+          stores={stores}
           records={records}
           products={products}
           specialItems={specialItems}
@@ -268,6 +297,22 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           onSaveWallet={saveWallet}
           onArchiveWallet={(wallet) => void archiveWallet(wallet)}
           onEditCategories={() => setEditingCategories(true)}
+        />
+      )}
+
+      {settingsOpen && (
+        <MoneySettings
+          familyId={familyId}
+          fiscalYear={fiscalYearOfMonth(monthKey)}
+          categories={categories}
+          budgets={budgets}
+          wallets={wallets}
+          stores={stores}
+          onCategories={setCategories}
+          onBudgets={setBudgets}
+          onWallets={setWallets}
+          onStores={setStores}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
 

@@ -4,8 +4,8 @@
 // 年度は特別費と同じ4月始まり（2026年4月〜2027年3月＝2026年度）。予算は大分類・年度ごとの月額で、
 // その年度の予算が無ければ前の年度の額を使う（毎年入れ直さなくてよいように）。
 //
-// 月の収支＝収入 − 生活費 − 貯金。特別費（特別費の項目を持つ品目）は月の収支に入れず、別枠で数える
-// （docs/kakei.md §4.1）。貯金は、貯金用の出金元への振替。ほかの振替は集計に入れない。
+// 生活費の収支＝収入 − 生活費（特別費以外の支出）。特別費（特別費の項目を持つ品目）は収支に入れず、別枠で数える
+// （docs/kakei.md §4.1）。振替は集計に入れない。貯金は記録なので、収支の式にも表示にも入れない。
 
 import type {
   MoneyBudget,
@@ -15,6 +15,7 @@ import type {
   MoneyItemDraft,
   MoneyRecord,
   MoneyRecordKind,
+  MoneyStore,
   MoneyWallet,
   MoneyWalletType,
   SpecialActual,
@@ -396,6 +397,27 @@ export function recentStores(records: readonly MoneyRecord[], limit = 12): strin
   return stores;
 }
 
+/**
+ * お店の選択肢（docs/kakei.md §3.5）。まず最近使ったお店（新しい順。登録の有無は問わない）、
+ * 続けて登録したお店のうち残りを名前順に。使わなくしたお店は、記録で使っていても候補に出さない。
+ */
+export function storeChoices(
+  stores: readonly MoneyStore[],
+  records: readonly MoneyRecord[],
+  recentLimit = 12,
+): { registered: string[]; recent: string[] } {
+  const archived = new Set(stores.filter((store) => store.archived).map((store) => store.name));
+  const recent = recentStores(records, Number.MAX_SAFE_INTEGER)
+    .filter((name) => !archived.has(name))
+    .slice(0, recentLimit);
+  const shown = new Set(recent);
+  const registered = stores
+    .filter((store) => !store.archived && !shown.has(store.name))
+    .map((store) => store.name)
+    .sort((a, b) => a.localeCompare(b, 'ja'));
+  return { registered, recent };
+}
+
 /** 前回の出金元（その種類の記録でいちばん新しいもの）。使わなくした出金元は使わない。 */
 export function lastWalletId(
   records: readonly MoneyRecord[],
@@ -474,19 +496,15 @@ export function buildBudgetTiles(
 export interface MonthSummary {
   /** 収入（特別収入を除く）。 */
   income: number;
-  /** 生活費の実績。 */
+  /** 生活費の実績（特別費以外の支出）。 */
   living: number;
   /** 生活費の予算の合計。 */
   livingBudget: number;
-  /** 貯金（貯金用の出金元への振替）。 */
-  saving: number;
-  /** 貯金の目標の合計。 */
-  savingTarget: number;
-  /** 特別費（支出）の実績。月の収支には入れない。 */
+  /** 特別費（支出）の実績。生活費の収支には入れず、別に出す。 */
   special: number;
-  /** 月の収支＝収入 − 生活費 − 貯金。 */
+  /** 生活費の収支＝収入 − 生活費（特別費以外の支出）。貯金は記録なので式に入れない。 */
   balance: number;
-  /** 生活費が予算どおりなら残る予定だった額＝収入 − 生活費の予算 − 貯金。 */
+  /** 生活費が予算どおりなら残る予定だった額＝収入 − 生活費の予算。 */
   plannedBalance: number;
 }
 
@@ -494,19 +512,14 @@ export function buildMonthSummary(
   records: readonly MoneyRecord[],
   categories: readonly MoneyCategory[],
   budgets: readonly MoneyBudget[],
-  wallets: readonly MoneyWallet[],
   monthKey: string,
 ): MonthSummary {
-  const savingWallets = new Set(wallets.filter((wallet) => wallet.isSaving).map((wallet) => wallet.id));
   let income = 0;
   let living = 0;
-  let saving = 0;
   let special = 0;
   for (const record of recordsInMonth(records, monthKey)) {
-    if (record.kind === 'transfer') {
-      if (record.toWalletId !== null && savingWallets.has(record.toWalletId)) saving += recordTotal(record);
-      continue;
-    }
+    // 振替（貯金への振替を含む）は集計に入れない。
+    if (record.kind === 'transfer') continue;
     for (const item of record.items) {
       if (record.kind === 'income') {
         if (item.specialItemId === null) income += item.amount;
@@ -522,18 +535,13 @@ export function buildMonthSummary(
     (sum, category) => sum + (budgetFor(budgets, category.id, fiscalYear) ?? 0),
     0,
   );
-  const savingTarget = wallets
-    .filter((wallet) => wallet.isSaving && !wallet.archived)
-    .reduce((sum, wallet) => sum + (wallet.savingTarget ?? 0), 0);
   return {
     income,
     living,
     livingBudget,
-    saving,
-    savingTarget,
     special,
-    balance: income - living - saving,
-    plannedBalance: income - livingBudget - saving,
+    balance: income - living,
+    plannedBalance: income - livingBudget,
   };
 }
 
@@ -548,8 +556,9 @@ export interface YearMonthRow {
   recorded: boolean;
   income: number;
   living: number;
-  saving: number;
-  /** 月の収支（収入 − 生活費 − 貯金）。 */
+  /** 特別費（支出）。生活費の収支には入れない。 */
+  special: number;
+  /** 生活費の収支（収入 − 生活費）。 */
   balance: number;
   /** 生活費の予算 − 実績。 */
   livingDiff: number;
@@ -564,7 +573,7 @@ export interface YearSummary {
 }
 
 /**
- * 年度の収支（docs/kakei.md §4.2）。月ごとの 収入・生活費・貯金・収支 と年間の合計。特別費は入れない。
+ * 年度の生活費の収支（docs/kakei.md §4.2）。月ごとの 収入・生活費・収支 と年間の合計。特別費は収支に入れず、別に数える。
  * 記録（特別費を除く）の無い月は数えない（使い始める前の月まで予算が残ったように見えないように）。
  * upTo（YYYY-MM）より後の月は、まだ来ていないので数えない。
  */
@@ -572,31 +581,33 @@ export function buildYearSummary(
   records: readonly MoneyRecord[],
   categories: readonly MoneyCategory[],
   budgets: readonly MoneyBudget[],
-  wallets: readonly MoneyWallet[],
   fiscalYear: number,
   upTo: string,
 ): YearSummary {
-  const total = { income: 0, living: 0, saving: 0, balance: 0, livingDiff: 0 };
+  const total = { income: 0, living: 0, special: 0, balance: 0, livingDiff: 0 };
   let recordedMonths = 0;
   const months = fiscalMonthKeys(fiscalYear).map((monthKey) => {
     const recorded =
       monthKey <= upTo &&
       recordsInMonth(records, monthKey).some((record) => record.items.some((item) => item.specialItemId === null));
-    if (!recorded) return { monthKey, recorded, income: 0, living: 0, saving: 0, balance: 0, livingDiff: 0 };
-    const summary = buildMonthSummary(records, categories, budgets, wallets, monthKey);
+    // 特別費だけの月（生活費の記録が無い月）も、特別費は年に数える。
+    const hasAny = monthKey <= upTo && recordsInMonth(records, monthKey).length > 0;
+    if (!recorded && !hasAny) return { monthKey, recorded, income: 0, living: 0, special: 0, balance: 0, livingDiff: 0 };
+    const summary = buildMonthSummary(records, categories, budgets, monthKey);
+    total.special += summary.special;
+    if (!recorded) return { monthKey, recorded, income: 0, living: 0, special: summary.special, balance: 0, livingDiff: 0 };
     const row = {
       monthKey,
       recorded,
       income: summary.income,
       living: summary.living,
-      saving: summary.saving,
+      special: summary.special,
       balance: summary.balance,
       livingDiff: summary.livingBudget - summary.living,
     };
     recordedMonths += 1;
     total.income += row.income;
     total.living += row.living;
-    total.saving += row.saving;
     total.balance += row.balance;
     total.livingDiff += row.livingDiff;
     return row;
@@ -637,6 +648,36 @@ export function buildSpecialProgress(rows: readonly SpecialRow[], monthKey: stri
     if (row.planId !== null && row.actual === null && row.month === month) pendingThisMonth += 1;
   }
   return { yearBudget, spentThisMonth, spentToDate, remaining: yearBudget - spentToDate, pendingThisMonth };
+}
+
+export interface SpecialReview {
+  /** 年度の特別費の予算（予定の合計）。 */
+  yearBudget: number;
+  /** 見ている期間（月、または年度ぜんたい）に払った特別費。 */
+  spent: number;
+  /** 年度の初めから、見ている期間の終わりまでに払った額。 */
+  spentToDate: number;
+  /** 年度の予算の残り＝予算 − ここまで払った額（マイナスは超えた額）。 */
+  remaining: number;
+}
+
+/**
+ * 振り返りの特別費（docs/kakei.md §4.1・§4.2）。monthKey があればその月に払った額と、その月までの累計での予算の残り。
+ * null なら年度ぜんたい。rows は specialUtils の buildYearRows(…, 年度, 'expense')。
+ */
+export function buildSpecialReview(rows: readonly SpecialRow[], monthKey: string | null): SpecialReview {
+  if (monthKey !== null) {
+    const progress = buildSpecialProgress(rows, monthKey);
+    return {
+      yearBudget: progress.yearBudget,
+      spent: progress.spentThisMonth,
+      spentToDate: progress.spentToDate,
+      remaining: progress.remaining,
+    };
+  }
+  const yearBudget = rows.reduce((sum, row) => sum + row.budget, 0);
+  const spent = rows.reduce((sum, row) => sum + row.actuals.reduce((inner, actual) => inner + actual.amount, 0), 0);
+  return { yearBudget, spent, spentToDate: spent, remaining: yearBudget - spent };
 }
 
 // ---- 記録の入力（記録の詳細・品目の画面）の形 ----

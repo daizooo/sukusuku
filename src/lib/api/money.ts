@@ -7,6 +7,7 @@ import type {
   MoneyItem,
   MoneyRecord,
   MoneyRecordDraft,
+  MoneyStore,
   MoneyWallet,
   MoneyWalletDraft,
 } from '@/types/app';
@@ -15,6 +16,7 @@ import { DEFAULT_CATEGORIES } from '@/lib/moneyUtils';
 type CategoryRow = Tables<'money_categories'>;
 type BudgetRow = Tables<'money_budgets'>;
 type WalletRow = Tables<'money_wallets'>;
+type StoreRow = Tables<'money_stores'>;
 type RecordRow = Tables<'money_records'>;
 type ItemRow = Tables<'money_items'>;
 type SupabaseDb = SupabaseClient<Database>;
@@ -48,6 +50,12 @@ const rowToWallet = (row: WalletRow): MoneyWallet => ({
   isSaving: row.is_saving,
   savingTarget: row.saving_target,
   position: row.position,
+  archived: row.archived_at !== null,
+});
+
+const rowToStore = (row: StoreRow): MoneyStore => ({
+  id: row.id,
+  name: row.name,
   archived: row.archived_at !== null,
 });
 
@@ -99,23 +107,27 @@ export interface MoneyData {
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   wallets: MoneyWallet[];
+  stores: MoneyStore[];
   records: MoneyRecord[];
 }
 
 export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise<MoneyData> {
-  const [categoryResult, budgetResult, walletResult, records] = await Promise.all([
+  const [categoryResult, budgetResult, walletResult, storeResult, records] = await Promise.all([
     supabase.from('money_categories').select('*').eq('family_id', familyId),
     supabase.from('money_budgets').select('*').eq('family_id', familyId),
     supabase.from('money_wallets').select('*').eq('family_id', familyId).order('position', { ascending: true }),
+    supabase.from('money_stores').select('*').eq('family_id', familyId),
     loadRecords(supabase, familyId),
   ]);
   if (categoryResult.error) throw categoryResult.error;
   if (budgetResult.error) throw budgetResult.error;
   if (walletResult.error) throw walletResult.error;
+  if (storeResult.error) throw storeResult.error;
   return {
     categories: (categoryResult.data ?? []).map(rowToCategory),
     budgets: (budgetResult.data ?? []).map(rowToBudget),
     wallets: (walletResult.data ?? []).map(rowToWallet),
+    stores: (storeResult.data ?? []).map(rowToStore),
     records,
   };
 }
@@ -295,4 +307,50 @@ export async function archiveMoneyWallet(supabase: SupabaseDb, id: string): Prom
     .single();
   if (error) throw error;
   return rowToWallet(data);
+}
+
+/** 使わなくした出金元をまた使う。 */
+export async function restoreMoneyWallet(supabase: SupabaseDb, id: string): Promise<MoneyWallet> {
+  const { data, error } = await supabase.from('money_wallets').update({ archived_at: null }).eq('id', id).select('*').single();
+  if (error) throw error;
+  return rowToWallet(data);
+}
+
+// ---- お店（設定データ。docs/kakei.md §3.5） ----
+
+/** お店の設定を読み直す（記録の保存で新しいお店が自動で登録されたあとなど）。 */
+export async function loadMoneyStores(supabase: SupabaseDb, familyId: string): Promise<MoneyStore[]> {
+  const { data, error } = await supabase.from('money_stores').select('*').eq('family_id', familyId);
+  if (error) throw error;
+  return (data ?? []).map(rowToStore);
+}
+
+/** お店を足す。同じ名前が使わなくなっていれば、また使えるようにする。 */
+export async function insertMoneyStore(supabase: SupabaseDb, familyId: string, name: string): Promise<MoneyStore> {
+  const { data, error } = await supabase
+    .from('money_stores')
+    .upsert({ family_id: familyId, name: name.trim(), archived_at: null }, { onConflict: 'family_id,name' })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return rowToStore(data);
+}
+
+/** お店の名前を直す。記録のお店の名前は変わらない（設定だけ直す）。 */
+export async function renameMoneyStore(supabase: SupabaseDb, id: string, name: string): Promise<MoneyStore> {
+  const { data, error } = await supabase.from('money_stores').update({ name: name.trim() }).eq('id', id).select('*').single();
+  if (error) throw error;
+  return rowToStore(data);
+}
+
+/** お店を使わなくする／また使う（記録には残る）。 */
+export async function setMoneyStoreArchived(supabase: SupabaseDb, id: string, archived: boolean): Promise<MoneyStore> {
+  const { data, error } = await supabase
+    .from('money_stores')
+    .update({ archived_at: archived ? new Date().toISOString() : null })
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return rowToStore(data);
 }

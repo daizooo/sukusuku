@@ -630,6 +630,14 @@ export interface MoneyWallet {
 
 export type MoneyWalletDraft = Omit<MoneyWallet, 'id' | 'position' | 'archived'>;
 
+/** 家計のお店（設定データ）。money_stores に対応。記録は名前の文字列で持つので、直しても過去の記録は変わらない。 */
+export interface MoneyStore {
+  id: string;
+  name: string;
+  /** 使わなくした（選択画面に出さないが、記録には残る）。 */
+  archived: boolean;
+}
+
 /** 記録の種類。支出・収入・振替。 */
 export type MoneyRecordKind = 'expense' | 'income' | 'transfer';
 
