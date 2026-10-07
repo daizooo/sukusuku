@@ -8,7 +8,6 @@ import {
   daysBetween,
   expiryCountdown,
   formatQuantity,
-  formatYen,
   spanText,
   type StockPlan,
   type StockProduct,
@@ -71,7 +70,7 @@ export default function StockBoard({
   onInspect,
 }: StockBoardProps) {
   const board = useMemo(() => buildStockBoard(items, targets, plan, today), [items, targets, plan, today]);
-  const { counts, overview, attention, readiness, categories } = board;
+  const { counts, attention, readiness, categories } = board;
   const [showPlan, setShowPlan] = useState(false);
   const [category, setCategory] = useState(ALL);
   const [detailKey, setDetailKey] = useState<string | null>(null);
@@ -145,11 +144,7 @@ export default function StockBoard({
         <p className="flex-1 min-w-0 truncate text-[12px] font-bold text-gray-900">
           {plan.people}人×{plan.days}日分
           <span className="ml-2 font-medium text-gray-400 tabular-nums">
-            {overview.shortageTotal > 0
-              ? `あと ${formatYen(overview.shortageTotal)}${overview.unpricedTargets > 0 ? '＋' : ''} で揃う`
-              : overview.unpricedTargets > 0
-                ? '値段を入れると費用が出ます'
-                : '必要な量が揃っています'}
+            {shortCount > 0 ? `足りないもの ${shortCount}品目` : '必要な量が揃っています'}
           </span>
         </p>
         <button
@@ -208,8 +203,6 @@ export default function StockBoard({
   const productRow = (product: StockProduct<StockItem, StockTarget>) => {
     const status = product.target?.status ?? null;
     const shortage = status?.shortage ?? 0;
-    const required = status?.required ?? 0;
-    const ratio = status && required > 0 ? Math.min(1, status.have / required) : null;
     const nearestLevel = product.nearest?.level;
     const nearestAlert = nearestLevel === 'expired' || nearestLevel === 'soon';
     const hasNotes = shortage > 0 || product.nearest !== null || product.inspect !== null;
@@ -218,7 +211,7 @@ export default function StockBoard({
         <button
           type="button"
           onClick={() => setDetailKey(product.key)}
-          className="relative flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-gray-50"
+          className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-gray-50"
         >
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-50 text-orange-500">
             <StockIcon name={product.name} category={product.category} size={13} />
@@ -252,14 +245,6 @@ export default function StockBoard({
             <span className="text-base font-bold text-gray-900">{formatQuantity(product.total)}</span>
             <span className="ml-0.5 text-[10px] font-bold text-gray-400">{product.unit}</span>
           </span>
-          {ratio !== null && (
-            <span className="absolute inset-x-2.5 bottom-0 block h-[2px] overflow-hidden rounded-full bg-gray-100">
-              <span
-                className={`block h-full ${shortage > 0 ? 'bg-red-400' : 'bg-orange-300'}`}
-                style={{ width: `${Math.round(ratio * 100)}%` }}
-              />
-            </span>
-          )}
         </button>
       </li>
     );
@@ -332,7 +317,6 @@ export default function StockBoard({
       {detail && (
         <StockProductDetail
           product={detail}
-          plan={plan}
           today={today}
           onClose={() => setDetailKey(null)}
           onEditTarget={(target) => {

@@ -7,13 +7,12 @@ import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 
 // 「買い替えた」（防災備蓄の要対応。docs/home.md §10.2）。同じ品の新しいロットを、
-// 新しい期限・数・値段で作る。PWA版の `src/components/sukusuku/modals/StockRestockModal.tsx` と同じ項目・文言。
+// 新しい期限・数で作る。PWA版の `src/components/sukusuku/modals/StockRestockModal.tsx` と同じ項目・文言。
 
 export interface RestockInput {
   expiresOn: string | null;
   expiresMonthOnly: boolean;
   quantity: number;
-  price: number | null;
   /** 古いロットを処分（削除）する。 */
   discardOld: boolean;
 }
@@ -30,7 +29,6 @@ interface StockRestockSheetProps {
 export default function StockRestockSheet({ item, expired, onClose, onSubmit }: StockRestockSheetProps) {
   const [expiry, setExpiry] = useState('');
   const [quantity, setQuantity] = useState(formatQuantity(item.quantity));
-  const [price, setPrice] = useState(item.price === null ? '' : formatQuantity(item.price));
   const [discardOld, setDiscardOld] = useState(expired);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,12 +43,7 @@ export default function StockRestockSheet({ item, expired, onClose, onSubmit }: 
       setError('数は0より大きい数字で入れてください');
       return;
     }
-    const amount = price.trim() === '' ? null : Number(price.trim());
-    if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
-      setError('値段は0以上の数字で入れてください');
-      return;
-    }
-    onSubmit({ ...parsed, quantity: count, price: amount, discardOld });
+    onSubmit({ ...parsed, quantity: count, discardOld });
   };
 
   return (
@@ -94,19 +87,6 @@ export default function StockRestockSheet({ item, expired, onClose, onSubmit }: 
               keyboardType="decimal-pad"
               inputMode="decimal"
               accessibilityLabel="数"
-            />
-          </View>
-          <View style={[styles.field, styles.flex]}>
-            <Text style={styles.label}>値段（1つあたり・円）</Text>
-            <TextInput
-              style={styles.input}
-              value={price}
-              onChangeText={setPrice}
-              placeholder="未登録"
-              placeholderTextColor={colors.textFaint}
-              keyboardType="decimal-pad"
-              inputMode="decimal"
-              accessibilityLabel="値段"
             />
           </View>
         </View>

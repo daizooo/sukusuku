@@ -5,7 +5,6 @@ import {
   daysBetween,
   expiryCountdown,
   formatQuantity,
-  formatYen,
   spanText,
   STORAGE_LABEL,
   type buildStockBoard,
@@ -80,7 +79,7 @@ export default function StockAttention({
     ]);
 
   const empty =
-    attention.replacement.lots.length === 0 && attention.short.length === 0 && attention.inspect.length === 0 && !bagDue;
+    attention.replacement.length === 0 && attention.short.length === 0 && attention.inspect.length === 0 && !bagDue;
 
   return (
     <SheetModal visible onClose={onClose}>
@@ -95,21 +94,16 @@ export default function StockAttention({
       >
         {empty && <Text style={styles.empty}>いまのところ、ありません</Text>}
 
-        {attention.replacement.lots.length > 0 && (
+        {attention.replacement.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              期限が近い・切れた
-              {attention.replacement.total > 0 && (
-                <Text style={styles.sectionSub}>　見込み {formatYen(attention.replacement.total)}</Text>
-              )}
-            </Text>
-            {attention.replacement.lots.map(({ item, amount }) => (
+            <Text style={styles.sectionTitle}>期限が近い・切れた</Text>
+            {attention.replacement.map(({ item }) => (
               <View key={item.id} style={styles.card}>
                 <Pressable accessibilityRole="button" onPress={() => onEditItem(item)} style={styles.cardTop}>
                   {bubble(item.name, item.category)}
                   <View style={styles.flex}>
                     <View style={styles.inline}>
-                      <Text style={styles.cardName} numberOfLines={1}>
+                      <Text style={styles.cardName}>
                         {item.name}
                       </Text>
                       {item.storage === 'carry' && (
@@ -130,11 +124,6 @@ export default function StockAttention({
                       </Text>
                     </View>
                   </View>
-                  {amount === null ? (
-                    <Text style={styles.unpriced}>値段未登録</Text>
-                  ) : (
-                    <Text style={styles.amount}>{formatYen(amount)}</Text>
-                  )}
                 </Pressable>
                 <View style={styles.actions}>
                   {button('買い替え', () => onRestock(item), PackageCheck, 'main')}
@@ -149,14 +138,14 @@ export default function StockAttention({
         {attention.short.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>足りないもの</Text>
-            {attention.short.map(({ status, cost }) => {
+            {attention.short.map(({ status }) => {
               const { target, required, have, shortage, carry } = status;
               const ratio = required > 0 ? have / required : 1;
               return (
                 <View key={target.id} style={[styles.card, styles.cardTop]}>
                   {bubble(target.name, target.category)}
                   <View style={styles.flex}>
-                    <Text style={styles.cardName} numberOfLines={1}>
+                    <Text style={styles.cardName}>
                       {target.name}
                     </Text>
                     <View style={styles.miniBar}>
@@ -168,7 +157,6 @@ export default function StockAttention({
                         : carry
                           ? `バッグにあと${formatQuantity(carry.shortage)}${target.unit}`
                           : ''}
-                      {cost.shortageCost !== null && shortage > 0 ? `　${formatYen(cost.shortageCost)}` : ''}
                     </Text>
                   </View>
                   {shortage > 0 && (
@@ -214,7 +202,7 @@ export default function StockAttention({
                 <Pressable accessibilityRole="button" onPress={() => onEditItem(item)} style={[styles.inline, styles.flex, { gap: 12 }]}>
                   {bubble(item.name, item.category)}
                   <View style={styles.flex}>
-                    <Text style={styles.cardName} numberOfLines={1}>
+                    <Text style={styles.cardName}>
                       {item.name}
                     </Text>
                     <Text style={styles.subText}>
@@ -239,7 +227,6 @@ const styles = StyleSheet.create({
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
   section: { gap: 8 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
-  sectionSub: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 16,
@@ -260,8 +247,6 @@ const styles = StyleSheet.create({
   chip: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   chipText: { fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] },
   qty: { fontSize: 11, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  amount: { fontSize: 14, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
-  unpriced: { fontSize: 11, fontWeight: '700', color: colors.textFaint },
   subText: { fontSize: 11, fontWeight: '700', color: colors.textMuted, marginTop: 2 },
   tag: { borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, backgroundColor: colors.neutralSurface },
   tagText: { fontSize: 10, fontWeight: '700', color: colors.textSubtle },

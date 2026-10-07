@@ -210,30 +210,15 @@ export function targetStatuses<T extends TargetLike>(
 export const isShort = (status: { shortage: number; carry: { shortage: number } | null }) =>
   status.shortage > 0 || (status.carry?.shortage ?? 0) > 0;
 
-// ---- 値段・点検・要対応（docs/home.md §10.2・§10.2.1） ----
+// ---- 点検・要対応（docs/home.md §10.2） ----
 
 /** 点検の間隔の既定（月）と、画面で選べる間隔。間隔が null の備品は点検しない。 */
 export const DEFAULT_INSPECT_MONTHS = 6;
 export const INSPECT_INTERVAL_OPTIONS = [3, 6, 12] as const;
 
-/** 円の表示。「¥1,234」。 */
-export const formatYen = (amount: number) => `¥${String(Math.round(amount)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
-
 /** timestamptz（ISO文字列）を日本時間の YYYY-MM-DD にする。 */
 export function jstDateOf(iso: string): string {
   return new Date(Date.parse(iso) + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
-
-interface PricedStock {
-  price: number | null;
-  amountPerUnit: number;
-  targetId: string | null;
-}
-
-/** ロットの1つあたりの値段を、目標の最小単位（L・食・個など）あたりに直す。目標に数えていない・値段未登録なら null。 */
-export function unitPriceOf(item: PricedStock): number | null {
-  if (item.price == null || item.targetId === null || item.amountPerUnit <= 0) return null;
-  return item.price / item.amountPerUnit;
 }
 
 interface InspectableStock {
@@ -274,76 +259,26 @@ export function carryInspection(
   return { lastOn, nextOn, due: nextOn <= today };
 }
 
-interface CostedStock extends PricedStock {
+interface ExpiringStock {
   quantity: number;
   expiresOn: string | null;
 }
 
-/** 買い替えの見込み額の1行。amount は 数×1つあたりの値段。値段未登録なら null（合計に含めない）。 */
-export interface ReplacementLot<T extends CostedStock> {
+/** 「確認が必要なもの」に出す、期限切れ・3か月以内のロットの1行。 */
+export interface ReplacementLot<T extends ExpiringStock> {
   item: T;
   level: 'expired' | 'soon';
-  amount: number | null;
 }
 
-/**
- * 「要対応」に出す、期限切れ・3か月以内のロット（数が0のものは除く）。期限の近い順。
- * 合計は値段のあるものだけ足し、未登録の件数を別に数える（含めると合計が嘘になる）。
- */
-export function replacementLots<T extends CostedStock>(
-  items: T[],
-  today: string,
-): { lots: ReplacementLot<T>[]; total: number; unpriced: number } {
+/** 期限切れ・3か月以内のロット（数が0のものは除く）。期限の近い順。 */
+export function replacementLots<T extends ExpiringStock>(items: T[], today: string): ReplacementLot<T>[] {
   const lots: ReplacementLot<T>[] = [];
   for (const item of [...items].sort((a, b) => (a.expiresOn ?? '').localeCompare(b.expiresOn ?? ''))) {
     if (item.quantity <= 0) continue;
     const level = expiryLevel(item.expiresOn, today);
-    if (level !== 'expired' && level !== 'soon') continue;
-    lots.push({ item, level, amount: item.price == null ? null : item.price * item.quantity });
+    if (level === 'expired' || level === 'soon') lots.push({ item, level });
   }
-  const total = lots.reduce((sum, lot) => sum + (lot.amount ?? 0), 0);
-  return { lots, total, unpriced: lots.filter((lot) => lot.amount === null).length };
-}
-
-/** 目標1つの費用。値段が1つも登録されていなければ unitPrice 以下は null。 */
-export interface TargetCost {
-  /** 最小単位（目標の単位）あたりの値段。値段のあるロットの、持っている量で重みを付けた平均。 */
-  unitPrice: number | null;
-  /** 1日あたりの必要量（1人1日 × 人数）。決まった数の品目は null。 */
-  daily: number | null;
-  /** 必要数を揃える額。 */
-  total: number | null;
-  /** いま足りない分を買い足す額。 */
-  shortageCost: number | null;
-}
-
-export function targetCost(
-  status: Pick<TargetStatus<TargetLike>, 'target' | 'required' | 'shortage'>,
-  items: (PricedStock & { quantity: number })[],
-  plan: Pick<StockPlan, 'people'>,
-): TargetCost {
-  const { target } = status;
-  const priced = items
-    .filter((item) => item.targetId === target.id)
-    .map((item) => ({ price: unitPriceOf(item), weight: Math.max(item.quantity * item.amountPerUnit, 0.0001) }))
-    .filter((row): row is { price: number; weight: number } => row.price !== null);
-  const weight = priced.reduce((sum, row) => sum + row.weight, 0);
-  const unitPrice = weight > 0 ? priced.reduce((sum, row) => sum + row.price * row.weight, 0) / weight : null;
-  return {
-    unitPrice,
-    daily: target.perPersonDay ? round2(target.quantity * plan.people) : null,
-    total: unitPrice === null ? null : status.required * unitPrice,
-    shortageCost: unitPrice === null ? null : status.shortage * unitPrice,
-  };
-}
-
-/** 上の「備えの状況」に出す、必要数を揃える合計額と、いま足りない分を買い足す額。値段未登録の目標は含めない。 */
-export function costOverview(costs: TargetCost[]): { total: number; shortageTotal: number; unpricedTargets: number } {
-  return {
-    total: costs.reduce((sum, cost) => sum + (cost.total ?? 0), 0),
-    shortageTotal: costs.reduce((sum, cost) => sum + (cost.shortageCost ?? 0), 0),
-    unpricedTargets: costs.filter((cost) => cost.unitPrice === null).length,
-  };
+  return lots;
 }
 
 // ---- 点検盤の見た目に使う小さな計算（docs/home.md §10.2） ----
@@ -421,7 +356,7 @@ export function stockIconKey(name: string, category = ''): StockIconKey {
 
 type BoardItem = CountableStock &
   SortableStock &
-  CostedStock &
+  ExpiringStock &
   InspectableStock & { id: string; storage: StockStorage; amountPerUnit: number; targetId: string | null; unit: string };
 
 /** 画面で使う目標（必要数）。 */
@@ -429,7 +364,7 @@ type BoardTarget = TargetLike & { category: string; name: string; position: numb
 
 export interface StockBoard<I extends BoardItem, T extends BoardTarget> {
   /** 目標ごとの塊。lots は、その目標に数えるロット（寝室・持ち出しの両方）を期限の近い順に並べたもの。 */
-  blocks: { status: TargetStatus<T>; cost: TargetCost; lots: I[] }[];
+  blocks: { status: TargetStatus<T>; lots: I[] }[];
   /** 目標に数えていない、期限のあるロット（「その他の備品」）。 */
   others: I[];
   /** 目標に数えていない、期限の無いロット（「備品（期限なし）」）。 */
@@ -437,15 +372,14 @@ export interface StockBoard<I extends BoardItem, T extends BoardTarget> {
   /** 「要対応」。 */
   attention: {
     /** 全体か持ち出しが足りない目標。 */
-    short: { status: TargetStatus<T>; cost: TargetCost }[];
-    /** 期限切れ・3か月以内のロット（見込み額つき）。 */
+    short: { status: TargetStatus<T> }[];
+    /** 期限切れ・3か月以内のロット。 */
     replacement: ReturnType<typeof replacementLots<I>>;
     /** 点検の時期が来ている備品。 */
     inspect: I[];
     /** 持ち出しバッグ全体の点検。バッグが空なら null。 */
     bag: ReturnType<typeof carryInspection>;
   };
-  overview: ReturnType<typeof costOverview>;
   /** 「備えの状況」の件数。year は3か月より先〜1年以内、ok は1年より先（数が0のロットは数えない）。 */
   counts: {
     short: number;
@@ -469,10 +403,8 @@ export function buildStockBoard<I extends BoardItem, T extends BoardTarget>(
   today: string,
 ): StockBoard<I, T> {
   const statuses = targetStatuses(targets, items, plan, today);
-  const costs = statuses.map((status) => targetCost(status, items, plan));
-  const blocks = statuses.map((status, index) => ({
+  const blocks = statuses.map((status) => ({
     status,
-    cost: costs[index],
     lots: sortStockItems(items.filter((item) => item.targetId === status.target.id)),
   }));
   const targetIds = new Set(targets.map((target) => target.id));
@@ -500,7 +432,6 @@ export function buildStockBoard<I extends BoardItem, T extends BoardTarget>(
       inspect: sortStockItems(inspect),
       bag: carryInspection(items, today),
     },
-    overview: costOverview(costs),
     counts: {
       short: statuses.filter((status) => status.shortage > 0).length,
       carryShort: statuses.filter((status) => (status.carry?.shortage ?? 0) > 0).length,
@@ -522,8 +453,8 @@ export interface StockProduct<I, T extends TargetLike> {
   key: string;
   name: string;
   category: string;
-  /** 目標（必要数）に数えている品目なら、その進み具合と費用。 */
-  target: { status: TargetStatus<T>; cost: TargetCost } | null;
+  /** 目標（必要数）に数えている品目なら、その進み具合。 */
+  target: { status: TargetStatus<T> } | null;
   /** 期限の近い順のロット。 */
   lots: I[];
   /** どれぐらいあるか。目標があれば目標の単位の「持っている量」（期限切れを除く）、無ければロットの数の合計。 */
@@ -551,7 +482,7 @@ export const NO_CATEGORY = 'その他';
  */
 export function groupStockProducts<I extends BoardItem, T extends BoardTarget>(
   items: I[],
-  blocks: { status: TargetStatus<T>; cost: TargetCost }[],
+  blocks: { status: TargetStatus<T> }[],
   today: string,
 ): StockCategory<I, T>[] {
   const products: StockProduct<I, T>[] = [];

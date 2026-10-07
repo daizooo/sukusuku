@@ -5,7 +5,6 @@ import assert from 'node:assert/strict';
 import {
   buildStockBoard,
   carryInspection,
-  costOverview,
   countByLevel,
   daysBetween,
   expiryCountdown,
@@ -14,14 +13,11 @@ import {
   expiryLevel,
   formatExpiry,
   formatQuantity,
-  formatYen,
   inspectionDue,
   jstDateOf,
   nextInspectionOn,
   parseExpiryInput,
   replacementLots,
-  targetCost,
-  unitPriceOf,
   isShort,
   requiredQuantity,
   sortStockItems,
@@ -152,18 +148,10 @@ console.log('stockUtils storage: OK');
 
 // ---- 値段・点検・要対応（docs/home.md §10.2） ----
 
-assert.equal(formatYen(1234567), '¥1,234,567');
-assert.equal(formatYen(980.4), '¥980');
-assert.equal(formatYen(0), '¥0');
 
 // created_at（UTC）を日本時間の日付にする。UTC 15:00 以降は翌日。
 assert.equal(jstDateOf('2026-10-06T14:59:59Z'), '2026-10-06');
 assert.equal(jstDateOf('2026-10-06T15:00:00Z'), '2026-10-07');
-
-// 最小単位あたり。500mlの本（0.5L）が120円なら 240円/L。目標に数えていない・値段未登録は null。
-assert.equal(unitPriceOf({ price: 120, amountPerUnit: 0.5, targetId: 'water' }), 240);
-assert.equal(unitPriceOf({ price: 120, amountPerUnit: 0.5, targetId: null }), null);
-assert.equal(unitPriceOf({ price: null, amountPerUnit: 0.5, targetId: 'water' }), null);
 
 // 点検。期限のある品・間隔の無い品・数が0の品は対象外。点検日が無ければ追加日から数える。
 const radio = { expiresOn: null, quantity: 1, inspectedOn: null, inspectIntervalMonths: 6, createdOn: '2026-10-07' };
@@ -197,74 +185,29 @@ assert.deepEqual(carryInspection([bagItem('carry', '2026-09-01', '2026-01-01'), 
   due: false,
 });
 
-// 要対応: 期限切れ・3か月以内のロットだけ。数が0・1年以内は出さない。値段未登録は合計に含めない。
-const lot = (name: string, expiresOn: string | null, quantity: number, price: number | null) => ({
-  name,
-  expiresOn,
-  quantity,
-  price,
-  amountPerUnit: 1,
-  targetId: null,
-});
+// 要対応: 期限切れ・3か月以内のロットだけ。数が0・1年以内は出さない。
+const lot = (name: string, expiresOn: string | null, quantity: number) => ({ name, expiresOn, quantity });
 const replacement = replacementLots(
   [
-    lot('スープ', '2026-12-01', 4, 200),
-    lot('水', '2026-09-30', 10, 100),
-    lot('えいようかん', '2026-11-01', 5, null),
-    lot('缶', '2027-06-30', 3, 300),
-    lot('ラジオ', null, 1, 5000),
-    lot('空', '2026-10-10', 0, 100),
+    lot('スープ', '2026-12-01', 4),
+    lot('水', '2026-09-30', 10),
+    lot('えいようかん', '2026-11-01', 5),
+    lot('缶', '2027-06-30', 3),
+    lot('ラジオ', null, 1),
+    lot('空', '2026-10-10', 0),
   ],
   today,
 );
 assert.deepEqual(
-  replacement.lots.map((row) => [row.item.name, row.level, row.amount]),
+  replacement.map((row) => [row.item.name, row.level]),
   [
-    ['水', 'expired', 1000],
-    ['えいようかん', 'soon', null],
-    ['スープ', 'soon', 800],
+    ['水', 'expired'],
+    ['えいようかん', 'soon'],
+    ['スープ', 'soon'],
   ],
 );
-assert.equal(replacement.total, 1800);
-assert.equal(replacement.unpriced, 1);
 
-// 目標の費用。水500ml（0.5L・120円）と1.8L（300円）を、持っている量で重みを付けて平均する。
-// 500ml: 240円/L・持っているのは 4L。1.8L: 約166.7円/L・持っているのは 3.6L。
-const costTarget = { id: 'water', quantity: 3, perPersonDay: true };
-const [costStatus] = targetStatuses(
-  [costTarget],
-  [
-    { targetId: 'water', quantity: 8, amountPerUnit: 0.5, expiresOn: '2036-12-06' },
-    { targetId: 'water', quantity: 2, amountPerUnit: 1.8, expiresOn: '2037-02-23' },
-  ],
-  plan,
-  today,
-);
-const cost = targetCost(
-  costStatus,
-  [
-    { targetId: 'water', quantity: 8, amountPerUnit: 0.5, price: 120 },
-    { targetId: 'water', quantity: 2, amountPerUnit: 1.8, price: 300 },
-  ],
-  plan,
-);
-assert.equal(cost.daily, 9);
-assert.ok(cost.unitPrice !== null && Math.abs(cost.unitPrice - (240 * 4 + (300 / 1.8) * 3.6) / 7.6) < 1e-9);
-assert.equal(cost.total, cost.unitPrice! * 63);
-assert.equal(cost.shortageCost, cost.unitPrice! * costStatus.shortage);
-
-// 値段が未登録の目標は費用を出さず、合計にも含めず、件数だけ数える。決まった数の品目は1日あたりが null。
-const noPrice = targetCost(costStatus, [{ targetId: 'water', quantity: 8, amountPerUnit: 0.5, price: null }], plan);
-assert.deepEqual(noPrice, { unitPrice: null, daily: 9, total: null, shortageCost: null });
-const fixed = targetCost({ ...costStatus, target: { id: 'r', quantity: 1, perPersonDay: false }, required: 1, shortage: 1 }, [], plan);
-assert.equal(fixed.daily, null);
-assert.deepEqual(costOverview([cost, noPrice]), {
-  total: cost.total!,
-  shortageTotal: cost.shortageCost!,
-  unpricedTargets: 1,
-});
-
-console.log('stockUtils cost/inspection: OK');
+console.log('stockUtils inspection: OK');
 
 // ---- 点検盤のまとめ ----
 const boardItem = (patch: Record<string, unknown>) => ({
@@ -276,7 +219,6 @@ const boardItem = (patch: Record<string, unknown>) => ({
   unit: '',
   amountPerUnit: 1,
   targetId: null,
-  price: null,
   expiresOn: null,
   storage: 'home' as const,
   inspectedOn: null,
@@ -286,9 +228,9 @@ const boardItem = (patch: Record<string, unknown>) => ({
 });
 const board = buildStockBoard(
   [
-    boardItem({ name: '水500', targetId: 'water', amountPerUnit: 0.5, quantity: 6, price: 100, expiresOn: '2026-11-30' }),
+    boardItem({ name: '水500', targetId: 'water', amountPerUnit: 0.5, quantity: 6, expiresOn: '2026-11-30' }),
     boardItem({ name: '水1.8', targetId: 'water', amountPerUnit: 1.8, quantity: 2, expiresOn: '2030-01-01', storage: 'carry' }),
-    boardItem({ name: 'クッキー', expiresOn: '2027-03-01', price: 200 }),
+    boardItem({ name: 'クッキー', expiresOn: '2027-03-01' }),
     boardItem({ name: 'ラジオ', inspectIntervalMonths: 6, createdOn: '2026-04-01' }),
     boardItem({ name: 'ランタン', inspectIntervalMonths: 6, inspectedOn: '2026-09-01' }),
     boardItem({ name: '衛生用品' }),
@@ -316,7 +258,7 @@ assert.deepEqual(
   ['ラジオ'],
 );
 assert.deepEqual(
-  board.attention.replacement.lots.map((row) => row.item.name),
+  board.attention.replacement.map((row) => row.item.name),
   ['水500'],
 );
 assert.equal(board.attention.short.length, 1);
@@ -430,10 +372,8 @@ assert.deepEqual(storageShares(shareProduct, today), {
 
 console.log('stockUtils categories: OK');
 
-// migration 0062 の適用前は、値段・点検の列が undefined で来ても壊れない（NaN を出さない）。
-const legacy = { ...radio, inspectIntervalMonths: undefined as unknown as null, price: undefined as unknown as null };
+// migration 0062 の適用前は、点検の列が undefined で来ても壊れない。
+const legacy = { ...radio, inspectIntervalMonths: undefined as unknown as null };
 assert.equal(nextInspectionOn(legacy), null);
-assert.equal(unitPriceOf({ price: undefined as unknown as null, amountPerUnit: 1, targetId: 'w' }), null);
-assert.equal(replacementLots([{ ...lot('水', '2026-09-30', 2, null), price: undefined as unknown as null }], today).lots[0].amount, null);
 
 console.log('stockUtils legacy: OK');

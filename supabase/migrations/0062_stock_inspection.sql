@@ -1,10 +1,9 @@
--- かぞく手帳: 防災備蓄の値段と点検（暮らしタブの画面の作り直し。docs/home.md §10.2）
+-- かぞく手帳: 防災備蓄の点検（暮らしタブの画面の作り直し。docs/home.md §10.2）
 --
--- 1. price: ロットの値段。**1つあたり**（ロットの単位。1本・1袋など）の円。未登録は null。
---    数を変えても合計が自動で合う。最小単位（L・食・個）あたりは amount_per_unit で割って画面で出す。
---    買い替えの見込み額（数×値段）と、必要数を揃える費用の元データ（費用の表示だけで、家計の記録にはしない）
--- 2. inspected_on: 最後に点検した日（動作・中身を確かめた日）。未点検は null
--- 3. inspect_interval_months: 点検の間隔（月）。null は点検しない。
+-- 値段は持たない（2026-10-07に決定。数年おきの買い物で、金額は当てにならないため。§10.2.1）
+--
+-- 1. inspected_on: 最後に点検した日（動作・中身を確かめた日）。未点検は null
+-- 2. inspect_interval_months: 点検の間隔（月）。null は点検しない。
 --    期限の無い備品（ラジオ・ランタン・ポータブル電源など）が対象で、間隔を過ぎると画面の「要対応」に出る
 --    （通知は出さない）。点検日が未入力のものは、追加した日（created_at）から数える
 --
@@ -13,13 +12,7 @@
 -- 期限のあるロットは触らない
 --
 -- 適用の順序: 先にこれを適用し、そのあとにアプリ（PWA・mobile）を出す。
---   - 古いアプリは足した列を読まないだけ。値段・点検は空のまま、今までどおり動く
-
-alter table public.stock_items
-  add column if not exists price numeric check (price is null or price >= 0);
-
-comment on column public.stock_items.price is
-  '1つあたり（ロットの単位）の値段（円）。未登録は null。docs/home.md §10.2.1。';
+--   - 古いアプリは足した列を読まないだけ。点検は空のまま、今までどおり動く
 
 alter table public.stock_items
   add column if not exists inspected_on date;

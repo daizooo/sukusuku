@@ -1117,7 +1117,6 @@ export type Database = {
           name: string
           note: string
           position: number
-          price: number | null
           quantity: number
           storage: string
           target_id: string | null
@@ -1137,7 +1136,6 @@ export type Database = {
           name: string
           note?: string
           position?: number
-          price?: number | null
           quantity?: number
           storage?: string
           target_id?: string | null
@@ -1157,7 +1155,6 @@ export type Database = {
           name?: string
           note?: string
           position?: number
-          price?: number | null
           quantity?: number
           storage?: string
           target_id?: string | null

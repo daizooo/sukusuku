@@ -7,12 +7,9 @@ import {
   expiryLevel,
   formatExpiry,
   formatQuantity,
-  formatYen,
   nextInspectionOn,
   spanText,
   storageShares,
-  unitPriceOf,
-  type StockPlan,
   type StockProduct,
   type StockStorage,
   type StorageShare,
@@ -30,7 +27,6 @@ import { SOFT } from './stockVisual';
 
 interface StockProductDetailProps {
   product: StockProduct<StockItem, StockTarget>;
-  plan: StockPlan;
   today: string;
   onClose: () => void;
   onEditTarget: (target: StockTarget) => void;
@@ -59,14 +55,12 @@ const dateText = (on: string) => formatExpiry({ expiresOn: on, expiresMonthOnly:
 
 export default function StockProductDetail({
   product,
-  plan,
   today,
   onClose,
   onEditTarget,
   onEditItem,
 }: StockProductDetailProps) {
   const status = product.target?.status ?? null;
-  const cost = product.target?.cost ?? null;
   const unit = product.unit;
   const shares = storageShares(product, today);
   const q = (value: number) => `${formatQuantity(value)}${unit}`;
@@ -90,21 +84,11 @@ export default function StockProductDetail({
     return share.required > 0 ? { text: '揃っています', alert: false } : null;
   };
 
-  const facts: [string, string][] =
-    status && cost
-      ? [
-          [`${plan.days}日分の費用`, cost.total === null ? '値段未登録' : formatYen(cost.total)],
-          ['買い足し', cost.shortageCost === null ? '—' : status.shortage > 0 ? formatYen(cost.shortageCost) : '不要'],
-          [`1${unit}あたり`, cost.unitPrice === null ? '—' : formatYen(cost.unitPrice)],
-        ]
-      : [];
-
   // ロットの1行。期限の無い備品は、期限の代わりに点検した日・次の点検。
   const lotRow = (item: StockItem, index: number) => {
     const level = expiryLevel(item.expiresOn, today);
     const next = nextInspectionOn(item);
     const due = next !== null && next <= today;
-    const perUnit = unitPriceOf(item);
     const main = item.expiresOn
       ? `${formatExpiry(item)} まで`
       : next !== null
@@ -119,18 +103,8 @@ export default function StockProductDetail({
           ? { text: '点検の時期です', color: colors.alertText }
           : { text: `次は ${dateText(next)} ごろ・あと${spanText(daysBetween(today, next))}`, color: colors.textMuted }
         : null;
-    const extra = [
-      item.name !== product.name ? item.name : '',
-      item.price !== null
-        ? `${formatYen(item.price)}/${item.unit || '個'}${
-            perUnit !== null && status && (item.unit !== status.target.unit || item.amountPerUnit !== 1)
-              ? `（${formatYen(perUnit)}/${status.target.unit}）`
-              : ''
-          }`
-        : '',
-    ]
-      .filter(Boolean)
-      .join('・');
+    // 同じ品目にまとめた、品名の違うロット（500mlと2Lなど）は品名を添える。
+    const extra = item.name !== product.name ? item.name : '';
     return (
       <Pressable
         key={item.id}
@@ -224,16 +198,6 @@ export default function StockProductDetail({
           </View>
         </View>
 
-        {facts.length > 0 && (
-          <View style={styles.facts}>
-            {facts.map(([label, value]) => (
-              <View key={label} style={styles.fact}>
-                <Text style={styles.factLabel}>{label}</Text>
-                <Text style={styles.factValue}>{value}</Text>
-              </View>
-            ))}
-          </View>
-        )}
 
         {product.lots.length === 0 ? (
           <Text style={styles.empty}>まだありません</Text>
@@ -281,10 +245,6 @@ const styles = StyleSheet.create({
   legendValue: { fontSize: 14, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'], marginLeft: 4 },
   legendUnit: { fontSize: 11, fontWeight: '700', color: colors.textFaint, fontVariant: ['tabular-nums'] },
   legendNote: { flex: 1, textAlign: 'right', fontSize: 11, fontWeight: '700', color: colors.textFaint, fontVariant: ['tabular-nums'] },
-  facts: { flexDirection: 'row', gap: 6 },
-  fact: { flex: 1, borderRadius: 10, backgroundColor: colors.neutralSurface, paddingHorizontal: 8, paddingVertical: 6 },
-  factLabel: { fontSize: 10, fontWeight: '700', color: colors.textFaint },
-  factValue: { fontSize: 13, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
   place: { gap: 4 },
   placeHeader: { flexDirection: 'row', alignItems: 'baseline', gap: 6, paddingHorizontal: 2 },

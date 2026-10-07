@@ -6,13 +6,12 @@ import { formatExpiry, formatQuantity, parseExpiryInput } from '@/lib/stockUtils
 import { ModalShell } from './TaskForm';
 
 // 「買い替えた」（防災備蓄の要対応。docs/home.md §10.2）。同じ品の新しいロットを、
-// 新しい期限・数・値段で作る。mobile版の `mobile/src/components/living/StockRestockSheet.tsx` と同じ項目・文言。
+// 新しい期限・数で作る。mobile版の `mobile/src/components/living/StockRestockSheet.tsx` と同じ項目・文言。
 
 export interface RestockInput {
   expiresOn: string | null;
   expiresMonthOnly: boolean;
   quantity: number;
-  price: number | null;
   /** 古いロットを処分（削除）する。 */
   discardOld: boolean;
 }
@@ -33,7 +32,6 @@ const labelClass = 'block text-xs font-bold text-gray-700 mb-1.5';
 export default function StockRestockModal({ item, expired, onClose, onSubmit }: StockRestockModalProps) {
   const [expiry, setExpiry] = useState('');
   const [quantity, setQuantity] = useState(formatQuantity(item.quantity));
-  const [price, setPrice] = useState(item.price === null ? '' : formatQuantity(item.price));
   const [discardOld, setDiscardOld] = useState(expired);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,12 +46,7 @@ export default function StockRestockModal({ item, expired, onClose, onSubmit }: 
       setError('数は0より大きい数字で入れてください');
       return;
     }
-    const amount = price.trim() === '' ? null : Number(price.trim());
-    if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
-      setError('値段は0以上の数字で入れてください');
-      return;
-    }
-    onSubmit({ ...parsed, quantity: count, price: amount, discardOld });
+    onSubmit({ ...parsed, quantity: count, discardOld });
   };
 
   return (
@@ -97,17 +90,6 @@ export default function StockRestockModal({ item, expired, onClose, onSubmit }: 
               onChange={(event) => setQuantity(event.target.value)}
               inputMode="decimal"
               aria-label="数"
-            />
-          </label>
-          <label className="block flex-1">
-            <span className={labelClass}>値段（1つあたり・円）</span>
-            <input
-              className={inputClass}
-              value={price}
-              onChange={(event) => setPrice(event.target.value)}
-              placeholder="未登録"
-              inputMode="decimal"
-              aria-label="値段"
             />
           </label>
         </div>

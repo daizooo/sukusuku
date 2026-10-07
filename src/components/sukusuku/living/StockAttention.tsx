@@ -6,7 +6,6 @@ import {
   daysBetween,
   expiryCountdown,
   formatQuantity,
-  formatYen,
   spanText,
   STORAGE_LABEL,
   type buildStockBoard,
@@ -89,7 +88,7 @@ export default function StockAttention({
   };
 
   const empty =
-    attention.replacement.lots.length === 0 && attention.short.length === 0 && attention.inspect.length === 0 && !bagDue;
+    attention.replacement.length === 0 && attention.short.length === 0 && attention.inspect.length === 0 && !bagDue;
 
   return (
     <ModalShell
@@ -108,15 +107,10 @@ export default function StockAttention({
       <div className="space-y-5">
         {empty && <p className="py-6 text-center text-sm text-gray-400">いまのところ、ありません</p>}
 
-        {attention.replacement.lots.length > 0 && (
+        {attention.replacement.length > 0 && (
           <section className="space-y-2">
-            <h3 className="text-sm font-bold text-gray-900">
-              期限が近い・切れた
-              {attention.replacement.total > 0 && (
-                <span className="ml-2 text-xs font-bold text-gray-500">見込み {formatYen(attention.replacement.total)}</span>
-              )}
-            </h3>
-            {attention.replacement.lots.map(({ item, level, amount }) => (
+            <h3 className="text-sm font-bold text-gray-900">期限が近い・切れた</h3>
+            {attention.replacement.map(({ item, level }) => (
               <div key={item.id} className={`${cardClass} overflow-hidden`}>
                 <button
                   type="button"
@@ -126,7 +120,7 @@ export default function StockAttention({
                   {bubble(item.name, item.category)}
                   <span className="flex-1 min-w-0">
                     <span className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-bold text-gray-900">{item.name}</span>
+                      <span className="text-sm font-bold text-gray-900">{item.name}</span>
                       {item.storage === 'carry' && (
                         <span className="shrink-0 rounded bg-gray-100 px-1.5 text-[10px] font-bold text-gray-600">
                           {STORAGE_LABEL.carry}
@@ -145,9 +139,6 @@ export default function StockAttention({
                       </span>
                     </span>
                   </span>
-                  <span className="shrink-0 text-right text-[11px] font-bold tabular-nums text-gray-400">
-                    {amount === null ? '値段未登録' : <span className="text-sm text-gray-800">{formatYen(amount)}</span>}
-                  </span>
                 </button>
                 <div className="flex gap-2 px-3 pb-3">
                   {button('買い替え', () => onRestock(item), PackageCheck, 'main')}
@@ -162,14 +153,14 @@ export default function StockAttention({
         {attention.short.length > 0 && (
           <section className="space-y-2">
             <h3 className="text-sm font-bold text-gray-900">足りないもの</h3>
-            {attention.short.map(({ status, cost }) => {
+            {attention.short.map(({ status }) => {
               const { target, required, have, shortage, carry } = status;
               const ratio = required > 0 ? have / required : 1;
               return (
                 <div key={target.id} className={`${cardClass} flex items-center gap-3 px-3 py-3`}>
                   {bubble(target.name, target.category)}
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-bold text-gray-900">{target.name}</p>
+                    <p className="text-sm font-bold text-gray-900">{target.name}</p>
                     <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
                       <div className="h-full rounded-full bg-red-400" style={{ width: `${Math.round(Math.min(1, ratio) * 100)}%` }} />
                     </div>
@@ -179,7 +170,6 @@ export default function StockAttention({
                         : carry
                           ? `バッグにあと${formatQuantity(carry.shortage)}${target.unit}`
                           : ''}
-                      {cost.shortageCost !== null && shortage > 0 ? `　${formatYen(cost.shortageCost)}` : ''}
                     </p>
                   </div>
                   {shortage > 0 && (
@@ -229,7 +219,7 @@ export default function StockAttention({
                 <button type="button" onClick={() => onEditItem(item)} className="flex flex-1 min-w-0 items-center gap-3 text-left">
                   {bubble(item.name, item.category)}
                   <span className="flex-1 min-w-0">
-                    <span className="block truncate text-sm font-bold text-gray-900">{item.name}</span>
+                    <span className="block text-sm font-bold text-gray-900">{item.name}</span>
                     <span className="block text-[11px] font-bold text-gray-500">
                       {item.inspectedOn ? `${spanText(daysBetween(item.inspectedOn, today))}前に点検` : '未点検'}
                     </span>

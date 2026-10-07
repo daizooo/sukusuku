@@ -8,7 +8,6 @@ import {
   daysBetween,
   expiryCountdown,
   formatQuantity,
-  formatYen,
   spanText,
   type StockPlan,
   type StockProduct,
@@ -69,7 +68,7 @@ export default function StockBoard({
   onInspect,
 }: StockBoardProps) {
   const board = useMemo(() => buildStockBoard(items, targets, plan, today), [items, targets, plan, today]);
-  const { counts, overview, attention, readiness, categories } = board;
+  const { counts, attention, readiness, categories } = board;
   const [showPlan, setShowPlan] = useState(false);
   const [category, setCategory] = useState(ALL);
   const [detailKey, setDetailKey] = useState<string | null>(null);
@@ -138,11 +137,7 @@ export default function StockBoard({
           {plan.people}人×{plan.days}日分
           <Text style={styles.summarySub}>
             {'  '}
-            {overview.shortageTotal > 0
-              ? `あと ${formatYen(overview.shortageTotal)}${overview.unpricedTargets > 0 ? '＋' : ''} で揃う`
-              : overview.unpricedTargets > 0
-                ? '値段を入れると費用が出ます'
-                : '必要な量が揃っています'}
+            {shortCount > 0 ? `足りないもの ${shortCount}品目` : '必要な量が揃っています'}
           </Text>
         </Text>
         <Pressable
@@ -199,8 +194,6 @@ export default function StockBoard({
   const productRow = (product: StockProduct<StockItem, StockTarget>, index: number) => {
     const status = product.target?.status ?? null;
     const shortage = status?.shortage ?? 0;
-    const required = status?.required ?? 0;
-    const ratio = status && required > 0 ? Math.min(1, status.have / required) : null;
     const nearestLevel = product.nearest?.level;
     const nearestAlert = nearestLevel === 'expired' || nearestLevel === 'soon';
     const hasNotes = shortage > 0 || product.nearest !== null || product.inspect !== null;
@@ -250,16 +243,6 @@ export default function StockBoard({
             <Text style={styles.tileUnit}> {product.unit}</Text>
           </Text>
         </View>
-        {ratio !== null && (
-          <View style={styles.rowBar}>
-            <View
-              style={[
-                styles.barFill,
-                { width: `${Math.round(ratio * 100)}%`, backgroundColor: shortage > 0 ? TONE.alert : SOFT.border },
-              ]}
-            />
-          </View>
-        )}
       </Pressable>
     );
   };
@@ -331,7 +314,6 @@ export default function StockBoard({
       {detail && (
         <StockProductDetail
           product={detail}
-          plan={plan}
           today={today}
           onClose={() => setDetailKey(null)}
           onEditTarget={(target) => {
@@ -468,10 +450,8 @@ const styles = StyleSheet.create({
   rowName: { fontSize: 13, fontWeight: '700', color: colors.text, lineHeight: 17 },
   rowTotal: { fontSize: 16, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'], textAlign: 'right' },
   rowRight: { alignItems: 'flex-end' },
-  rowBar: { position: 'absolute', left: 10, right: 10, bottom: 0, height: 2, backgroundColor: colors.neutralSurface, overflow: 'hidden' },
   tileIcon: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.bg },
   tileUnit: { fontSize: 10, fontWeight: '700', color: colors.textFaint },
-  barFill: { height: 2 },
   notes: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 6 },
   tileNote: { fontSize: 10, fontWeight: '700', color: colors.textFaint, fontVariant: ['tabular-nums'] },
   noteRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },

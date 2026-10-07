@@ -195,7 +195,6 @@ export default function LivingScreen() {
         expiresOn: input.expiresOn,
         expiresMonthOnly: input.expiresMonthOnly,
         quantity: input.quantity,
-        price: input.price,
         inspectedOn: null,
       });
       setItems((prev) => [...prev, created]);

@@ -8,12 +8,9 @@ import {
   expiryLevel,
   formatExpiry,
   formatQuantity,
-  formatYen,
   nextInspectionOn,
   spanText,
   storageShares,
-  unitPriceOf,
-  type StockPlan,
   type StockProduct,
   type StockStorage,
   type StorageShare,
@@ -28,7 +25,6 @@ import { ModalShell } from '../modals/TaskForm';
 
 interface StockProductDetailProps {
   product: StockProduct<StockItem, StockTarget>;
-  plan: StockPlan;
   today: string;
   onClose: () => void;
   onEditTarget: (target: StockTarget) => void;
@@ -51,14 +47,12 @@ const dateText = (on: string) => formatExpiry({ expiresOn: on, expiresMonthOnly:
 
 export default function StockProductDetail({
   product,
-  plan,
   today,
   onClose,
   onEditTarget,
   onEditItem,
 }: StockProductDetailProps) {
   const status = product.target?.status ?? null;
-  const cost = product.target?.cost ?? null;
   const unit = product.unit;
   const shares = storageShares(product, today);
   const q = (value: number) => `${formatQuantity(value)}${unit}`;
@@ -82,21 +76,11 @@ export default function StockProductDetail({
     return share.required > 0 ? { text: '揃っています', alert: false } : null;
   };
 
-  const facts: [string, string][] =
-    status && cost
-      ? [
-          [`${plan.days}日分の費用`, cost.total === null ? '値段未登録' : formatYen(cost.total)],
-          ['買い足し', cost.shortageCost === null ? '—' : status.shortage > 0 ? formatYen(cost.shortageCost) : '不要'],
-          [`1${unit}あたり`, cost.unitPrice === null ? '—' : formatYen(cost.unitPrice)],
-        ]
-      : [];
-
   // ロットの1行。期限の無い備品は、期限の代わりに点検した日・次の点検。
   const lotRow = (item: StockItem) => {
     const level = expiryLevel(item.expiresOn, today);
     const next = nextInspectionOn(item);
     const due = next !== null && next <= today;
-    const perUnit = unitPriceOf(item);
     const main = item.expiresOn
       ? `${formatExpiry(item)} まで`
       : next !== null
@@ -111,18 +95,8 @@ export default function StockProductDetail({
           ? { text: '点検の時期です', className: 'text-red-700' }
           : { text: `次は ${dateText(next)} ごろ・あと${spanText(daysBetween(today, next))}`, className: 'text-gray-500' }
         : null;
-    const extra = [
-      item.name !== product.name ? item.name : '',
-      item.price !== null
-        ? `${formatYen(item.price)}/${item.unit || '個'}${
-            perUnit !== null && status && (item.unit !== status.target.unit || item.amountPerUnit !== 1)
-              ? `（${formatYen(perUnit)}/${status.target.unit}）`
-              : ''
-          }`
-        : '',
-    ]
-      .filter(Boolean)
-      .join('・');
+    // 同じ品目にまとめた、品名の違うロット（500mlと2Lなど）は品名を添える。
+    const extra = item.name !== product.name ? item.name : '';
     return (
       <li key={item.id}>
         <button
@@ -224,16 +198,6 @@ export default function StockProductDetail({
           </div>
         </section>
 
-        {facts.length > 0 && (
-          <div className="grid grid-cols-3 gap-1.5">
-            {facts.map(([label, value]) => (
-              <div key={label} className="rounded-lg bg-gray-100 px-2 py-1.5">
-                <p className="text-[10px] font-bold text-gray-400">{label}</p>
-                <p className="text-[13px] font-bold text-gray-900 tabular-nums">{value}</p>
-              </div>
-            ))}
-          </div>
-        )}
 
         {product.lots.length === 0 ? (
           <p className="py-4 text-center text-sm text-gray-400">まだありません</p>

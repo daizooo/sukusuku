@@ -187,7 +187,6 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
         expiresOn: input.expiresOn,
         expiresMonthOnly: input.expiresMonthOnly,
         quantity: input.quantity,
-        price: input.price,
         inspectedOn: null,
       });
       setItems((prev) => [...prev, created]);

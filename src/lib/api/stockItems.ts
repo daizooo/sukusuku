@@ -23,7 +23,6 @@ const rowToStockItem = (row: StockItemRow): StockItem => ({
   amountPerUnit: Number(row.amount_per_unit),
   storage: row.storage === 'carry' ? 'carry' : 'home',
   // migration 0062 の適用前は、これらの列が返らない（undefined）。null として扱って壊れないようにする。
-  price: row.price == null ? null : Number(row.price),
   inspectedOn: row.inspected_on ?? null,
   inspectIntervalMonths: row.inspect_interval_months ?? null,
   createdOn: jstDateOf(row.created_at),
@@ -40,7 +39,6 @@ const draftToRow = (draft: StockItemDraft): TablesUpdate<'stock_items'> => ({
   target_id: draft.targetId,
   amount_per_unit: draft.amountPerUnit,
   storage: draft.storage,
-  price: draft.price,
   inspected_on: draft.inspectedOn,
   inspect_interval_months: draft.inspectIntervalMonths,
 });
@@ -98,7 +96,6 @@ export const toDraft = (item: StockItem): StockItemDraft => ({
   targetId: item.targetId,
   amountPerUnit: item.amountPerUnit,
   storage: item.storage,
-  price: item.price,
   inspectedOn: item.inspectedOn,
   inspectIntervalMonths: item.inspectIntervalMonths,
 });
@@ -126,7 +123,6 @@ export async function moveStockItem(
       other.expiresOn === item.expiresOn &&
       other.targetId === item.targetId &&
       other.amountPerUnit === item.amountPerUnit &&
-      other.price === item.price &&
       other.unit === item.unit,
   );
   if (merge) {

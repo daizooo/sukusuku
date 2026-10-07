@@ -446,8 +446,6 @@ export interface StockItem {
   amountPerUnit: number;
   /** 保管場所。home＝寝室、carry＝持ち出し用バックパック（docs/home.md §3.6）。 */
   storage: 'home' | 'carry';
-  /** 1つあたり（ロットの単位）の値段（円）。未登録は null（docs/home.md §10.2.1）。 */
-  price: number | null;
   /** 最後に点検した日（YYYY-MM-DD）。未点検は null。期限の無い備品が対象（§10.2）。 */
   inspectedOn: string | null;
   /** 点検の間隔（月）。null は点検しない。 */
