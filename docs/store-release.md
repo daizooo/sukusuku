@@ -10,7 +10,7 @@
 | | 家族用（このリポジトリ） | ストア用（将来の新しいアプリ） |
 | --- | --- | --- |
 | 置き場所 | このリポジトリのまま | **別リポジトリで新しく作る**（家族の個人データと混ぜない） |
-| ビルド | GitHub Actions（毎日18時の定時実行）＋手元 | EAS Build（無料枠 Android 15本/月）。Actionsの枠を食わない |
+| ビルド | GitHub Actions（毎日夕方の定時実行）＋手元 | EAS Build（無料枠 Android 15本/月）。Actionsの枠を食わない |
 | 署名 | **自分たちのkeystore**（§3） | **Play App Signing**（アップロード鍵はEASに預けるか自分で持つ） |
 | 配布 | Firebase App Distribution | Google Play |
 | 口座 | **限定配布アカウント（無料・ID不要・20台まで）**（§2） | Play Console（$25・1回・本人確認あり） |
