@@ -46,10 +46,11 @@ const ICONS: Record<StockIconKey, LucideIcon> = {
 
 /** 状態の色。リングの線・数字に使う。 */
 export const TONE = {
-  ok: '#16a34a',
-  warn: '#d97706',
+  // 色は「赤＝いま対応が要る」だけ。それ以外は濃いグレーと薄いグレーで描く。
+  ok: '#374151',
+  warn: '#374151',
   alert: '#dc2626',
-  accent: '#ea580c',
+  accent: '#111827',
   track: '#e5e7eb',
   mute: '#9ca3af',
 } as const;
@@ -110,4 +111,4 @@ export function Ring({
 }
 
 /** 備え度の色。 */
-export const readinessColor = (percent: number) => (percent >= 100 ? TONE.ok : percent >= 60 ? TONE.warn : TONE.alert);
+export const readinessColor = (percent: number) => (percent >= 60 ? TONE.ok : TONE.alert);

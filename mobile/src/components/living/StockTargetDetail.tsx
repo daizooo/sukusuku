@@ -36,7 +36,7 @@ interface StockTargetDetailProps {
 const LEVEL_COLOR = {
   expired: colors.alertText,
   soon: colors.alertText,
-  year: colors.temperatureText,
+  year: colors.textSubtle,
   ok: colors.textMuted,
   none: colors.textFaint,
 };
@@ -88,7 +88,7 @@ export default function StockTargetDetail({
                 {target.unit}
               </Text>
             </Text>
-            <Text style={[styles.state, { color: shortage > 0 ? colors.alertText : colors.doneText }]}>
+            <Text style={[styles.state, { color: shortage > 0 ? colors.alertText : colors.textMuted }]}>
               {shortage > 0 ? `あと${formatQuantity(shortage)}${target.unit}` : '足りています'}
             </Text>
             {carry && (
@@ -186,8 +186,8 @@ const styles = StyleSheet.create({
   right: { alignItems: 'flex-end' },
   quantity: { fontSize: 13, fontWeight: '700', color: colors.textSubtle, fontVariant: ['tabular-nums'] },
   expiry: { fontSize: 11, fontWeight: '700', marginTop: 2, fontVariant: ['tabular-nums'] },
-  tag: { borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, backgroundColor: colors.diaperSurface },
-  tagText: { fontSize: 10, fontWeight: '700', color: colors.diaperText },
+  tag: { borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, backgroundColor: colors.neutralSurface },
+  tagText: { fontSize: 10, fontWeight: '700', color: colors.textSubtle },
   footerButton: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.neutralSurface },
   footerButtonText: { fontSize: 14, fontWeight: '700', color: colors.textSubtle },
 });

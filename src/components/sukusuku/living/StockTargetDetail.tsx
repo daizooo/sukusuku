@@ -32,7 +32,7 @@ interface StockTargetDetailProps {
   onEditItem: (item: StockItem) => void;
 }
 
-const LEVEL_TEXT = { expired: 'text-red-700', soon: 'text-red-700', year: 'text-orange-700', ok: 'text-gray-500', none: 'text-gray-400' };
+const LEVEL_TEXT = { expired: 'text-red-700', soon: 'text-red-700', year: 'text-gray-600', ok: 'text-gray-500', none: 'text-gray-400' };
 
 const STORAGE_ORDER: StockStorage[] = ['home', 'carry'];
 
@@ -79,7 +79,7 @@ export default function StockTargetDetail({
               {formatQuantity(have)}
               <span className="text-sm font-bold text-gray-400"> / {formatQuantity(required)}{target.unit}</span>
             </p>
-            <p className={`text-sm font-bold ${shortage > 0 ? 'text-red-700' : 'text-green-700'}`}>
+            <p className={`text-sm font-bold ${shortage > 0 ? 'text-red-700' : 'text-gray-500'}`}>
               {shortage > 0 ? `あと${formatQuantity(shortage)}${target.unit}` : '足りています'}
             </p>
             {carry && (
@@ -119,7 +119,7 @@ export default function StockTargetDetail({
                       <div className="flex-1 min-w-0">
                         <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900">
                           {item.storage === 'carry' && (
-                            <span className="px-1.5 rounded bg-blue-50 text-[10px] font-bold text-blue-700">
+                            <span className="px-1.5 rounded bg-gray-100 text-[10px] font-bold text-gray-600">
                               {STORAGE_LABEL.carry}
                             </span>
                           )}

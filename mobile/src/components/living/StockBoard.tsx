@@ -83,9 +83,9 @@ const dateText = (on: string) => formatExpiry({ expiresOn: on, expiresMonthOnly:
 
 /** 期限の言い方の色。 */
 const COUNTDOWN: Record<ExpiryLevel, { bg: string; fg: string }> = {
-  expired: { bg: colors.alertSurface, fg: colors.alertText },
+  expired: { bg: colors.dangerSurface, fg: colors.alertText },
   soon: { bg: colors.dangerSurface, fg: colors.alertText },
-  year: { bg: colors.temperatureSurface, fg: colors.temperatureText },
+  year: { bg: colors.neutralSurface, fg: colors.textSubtle },
   ok: { bg: colors.neutralSurface, fg: colors.textMuted },
   none: { bg: colors.neutralSurface, fg: colors.textFaint },
 };
@@ -139,10 +139,10 @@ export default function StockBoard({
   const statusTile = (anchor: Anchor, label: string, count: number, tone: 'alert' | 'warn', Icon: LucideIcon) => {
     const active = count > 0;
     const palette = !active
-      ? { bg: '#f0fdf4', border: '#dcfce7', fg: colors.doneText }
+      ? { bg: colors.surface, border: colors.border, fg: colors.borderStrong }
       : tone === 'alert'
-        ? { bg: colors.dangerSurface, border: '#fecaca', fg: colors.alertText }
-        : { bg: colors.temperatureSurface, border: colors.temperatureBorder, fg: colors.temperatureText };
+        ? { bg: colors.surface, border: '#fca5a5', fg: colors.alertText }
+        : { bg: colors.surface, border: colors.borderStrong, fg: colors.text };
     return (
       <Pressable
         accessibilityRole="button"
@@ -246,9 +246,9 @@ export default function StockBoard({
   // ---- 期限の見通し（1本の帯） ----
   const mix = [
     { key: 'expired', label: '切れ', count: counts.expired, color: '#dc2626' },
-    { key: 'soon', label: '3か月内', count: counts.soon, color: '#f97316' },
-    { key: 'year', label: '1年内', count: counts.year, color: '#fbbf24' },
-    { key: 'ok', label: 'それ以降', count: counts.ok, color: '#16a34a' },
+    { key: 'soon', label: '3か月内', count: counts.soon, color: '#374151' },
+    { key: 'year', label: '1年内', count: counts.year, color: '#9ca3af' },
+    { key: 'ok', label: 'それ以降', count: counts.ok, color: '#d1d5db' },
   ].filter((entry) => entry.count > 0);
   const mixTotal = mix.reduce((sum, entry) => sum + entry.count, 0);
   const outlook = mixTotal > 0 && (
@@ -322,11 +322,11 @@ export default function StockBoard({
       onPress={onPress}
       style={[styles.action, kind === 'main' ? styles.actionMain : styles.actionSub]}
     >
-      <Icon size={14} color={kind === 'main' ? colors.primaryText : kind === 'danger' ? colors.danger : colors.textSubtle} />
+      <Icon size={14} color={kind === 'main' ? colors.primaryText : colors.textSubtle} />
       <Text
         style={[
           styles.actionText,
-          { color: kind === 'main' ? colors.primaryText : kind === 'danger' ? colors.danger : colors.textSubtle },
+          { color: kind === 'main' ? colors.primaryText : colors.textSubtle },
         ]}
       >
         {label}
@@ -349,18 +349,14 @@ export default function StockBoard({
         attentionBlock(
           'replacement',
           `期限が近い・切れた${attention.replacement.total > 0 ? `　見込み ${formatYen(attention.replacement.total)}` : ''}`,
-          colors.alertText,
-          attention.replacement.lots.map(({ item, level, amount }) => (
+          colors.text,
+          attention.replacement.lots.map(({ item, amount }) => (
             <View
               key={item.id}
-              style={[styles.card, { borderColor: level === 'expired' ? '#fecaca' : colors.temperatureBorder }]}
+              style={styles.card}
             >
               <Pressable accessibilityRole="button" onPress={() => onEditItem(item)} style={styles.cardTop}>
-                {bubble(
-                  item,
-                  level === 'expired' ? TONE.alert : TONE.accent,
-                  level === 'expired' ? colors.alertSurface : colors.temperatureBadge,
-                )}
+                {bubble(item, colors.textSubtle, colors.neutralSurface)}
                 <View style={styles.flex}>
                   <View style={styles.inline}>
                     <Text style={styles.cardName} numberOfLines={1}>
@@ -399,13 +395,13 @@ export default function StockBoard({
         attentionBlock(
           'short',
           '足りないもの',
-          colors.alertText,
+          colors.text,
           attention.short.map(({ status, cost }) => {
             const { target, required, have, shortage, carry } = status;
             const ratio = required > 0 ? have / required : 1;
             return (
-              <View key={target.id} style={[styles.card, styles.cardTop, { borderColor: '#fecaca' }]}>
-                {bubble(target, TONE.alert, colors.alertSurface)}
+              <View key={target.id} style={[styles.card, styles.cardTop]}>
+                {bubble(target, colors.textSubtle, colors.neutralSurface)}
                 <View style={styles.flex}>
                   <Text style={styles.cardName} numberOfLines={1}>
                     {target.name}
@@ -439,11 +435,11 @@ export default function StockBoard({
         )}
 
       {(attention.inspect.length > 0 || bagDue) &&
-        attentionBlock('inspect', '点検の時期', colors.temperatureText, [
+        attentionBlock('inspect', '点検の時期', colors.text, [
           ...(attention.bag?.due
             ? [
-                <View key="bag" style={[styles.card, styles.cardTop, { borderColor: colors.temperatureBorder }]}>
-                  {bubble({ name: 'バッグ', category: '' }, TONE.accent, colors.temperatureBadge)}
+                <View key="bag" style={[styles.card, styles.cardTop]}>
+                  {bubble({ name: 'バッグ', category: '' }, colors.textSubtle, colors.neutralSurface)}
                   <View style={styles.flex}>
                     <Text style={styles.cardName}>持ち出しバッグ</Text>
                     <Text style={styles.warnText}>{bagInspectionAge}</Text>
@@ -453,9 +449,9 @@ export default function StockBoard({
               ]
             : []),
           ...attention.inspect.map((item) => (
-            <View key={item.id} style={[styles.card, styles.cardTop, { borderColor: colors.temperatureBorder }]}>
+            <View key={item.id} style={[styles.card, styles.cardTop]}>
               <Pressable accessibilityRole="button" onPress={() => onEditItem(item)} style={[styles.inline, styles.flex, { gap: 12 }]}>
-                {bubble(item, TONE.accent, colors.temperatureBadge)}
+                {bubble(item, colors.textSubtle, colors.neutralSurface)}
                 <View style={styles.flex}>
                   <Text style={styles.cardName} numberOfLines={1}>
                     {item.name}
@@ -476,7 +472,6 @@ export default function StockBoard({
   const targetTile = ({ status }: (typeof board.blocks)[number]) => {
     const { target, required, have, shortage, carry } = status;
     const ratio = required > 0 ? have / required : 1;
-    const short = shortage > 0 || (carry?.shortage ?? 0) > 0;
     const color = shortage > 0 ? TONE.alert : carry && carry.shortage > 0 ? TONE.warn : TONE.ok;
     return (
       <Pressable
@@ -484,7 +479,7 @@ export default function StockBoard({
         accessibilityRole="button"
         accessibilityLabel={`${target.name}の詳しい画面を開く`}
         onPress={() => setDetailId(target.id)}
-        style={[styles.tile2, short && styles.tileShort]}
+        style={styles.tile2}
       >
         <Ring size={64} stroke={7} ratio={ratio} color={color}>
           <StockIcon name={target.name} category={target.category} size={26} color={color} />
@@ -496,8 +491,8 @@ export default function StockBoard({
           {formatQuantity(have)} / {formatQuantity(required)}
           {target.unit}
         </Text>
-        <View style={[styles.chip, { backgroundColor: shortage > 0 ? colors.alertSurface : '#dcfce7' }]}>
-          <Text style={[styles.chipText, { color: shortage > 0 ? colors.alertText : colors.doneText }]}>
+        <View style={[styles.chip, { backgroundColor: shortage > 0 ? colors.dangerSurface : colors.neutralSurface }]}>
+          <Text style={[styles.chipText, { color: shortage > 0 ? colors.alertText : colors.textMuted }]}>
             {shortage > 0 ? `あと${formatQuantity(shortage)}${target.unit}` : '足りてる'}
           </Text>
         </View>
@@ -530,8 +525,8 @@ export default function StockBoard({
     if (item.inspectIntervalMonths === null) return none;
     const next = nextInspectionOn(item);
     if (next === null) return none;
-    if (next <= today) return { text: '点検の時期', bg: colors.temperatureBadge, fg: colors.temperatureText };
-    return { text: `点検まで${spanText(daysBetween(today, next))}`, bg: '#f0fdf4', fg: colors.doneText };
+    if (next <= today) return { text: '点検の時期', bg: colors.dangerSurface, fg: colors.alertText };
+    return { text: `点検まで${spanText(daysBetween(today, next))}`, bg: colors.neutralSurface, fg: colors.textMuted };
   };
 
   const homeOthers = board.others.filter((item) => item.storage === 'home');
@@ -546,7 +541,7 @@ export default function StockBoard({
         <Text style={styles.sectionTitle}>目標ごとの備え</Text>
         <View style={styles.grid}>{board.blocks.map(targetTile)}</View>
         <Pressable accessibilityRole="button" onPress={onAddTarget} style={styles.addTarget}>
-          <Plus size={14} color={TONE.accent} />
+          <Plus size={14} color={colors.textSubtle} />
           <Text style={styles.addTargetText}>目標（必要数）を追加</Text>
         </Pressable>
       </View>
@@ -604,7 +599,7 @@ export default function StockBoard({
 
   const carryView = (
     <>
-      <View style={[styles.card, styles.heroRow, { borderColor: attention.bag?.due ? colors.temperatureBorder : colors.border }]}>
+      <View style={[styles.card, styles.heroRow, { borderColor: colors.border }]}>
         <Ring
           size={88}
           stroke={10}
@@ -621,7 +616,7 @@ export default function StockBoard({
         </Ring>
         <View style={styles.flex}>
           <Text style={styles.cardName}>{plan.carryDays}日分のバッグ</Text>
-          <Text style={[styles.bagAge, attention.bag?.due && { color: colors.temperatureText }]}>
+          <Text style={[styles.bagAge, attention.bag?.due && { color: colors.alertText }]}>
             {attention.bag ? bagInspectionAge : 'バッグは空です'}
           </Text>
           {attention.bag && (
@@ -664,7 +659,7 @@ export default function StockBoard({
                   onPress={() => toggle(item.id)}
                   style={styles.bagBody}
                 >
-                  <View style={[styles.tileIcon, on && { backgroundColor: TONE.ok }]}>
+                  <View style={[styles.tileIcon, on && { backgroundColor: TONE.accent }]}>
                     {on ? (
                       <Check size={26} color={colors.primaryText} strokeWidth={3} />
                     ) : (
@@ -852,8 +847,8 @@ const styles = StyleSheet.create({
   qty: { fontSize: 11, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   amount: { fontSize: 14, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   unpriced: { fontSize: 11, fontWeight: '700', color: colors.textFaint },
-  tag: { borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, backgroundColor: colors.diaperSurface },
-  tagText: { fontSize: 10, fontWeight: '700', color: colors.diaperText },
+  tag: { borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, backgroundColor: colors.neutralSurface },
+  tagText: { fontSize: 10, fontWeight: '700', color: colors.textSubtle },
   actions: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingBottom: 12 },
   action: {
     flex: 1,
@@ -871,8 +866,8 @@ const styles = StyleSheet.create({
   miniBar: { height: 6, borderRadius: 3, backgroundColor: colors.neutralSurface, overflow: 'hidden', marginTop: 6 },
   miniFill: { height: 6, borderRadius: 3, backgroundColor: TONE.alert },
   shortText: { fontSize: 11, fontWeight: '700', color: colors.alertText, marginTop: 4, fontVariant: ['tabular-nums'] },
-  warnText: { fontSize: 11, fontWeight: '700', color: colors.temperatureText, marginTop: 2 },
-  toList: { alignItems: 'center', gap: 2, borderRadius: 12, backgroundColor: TONE.alert, paddingHorizontal: 12, paddingVertical: 8 },
+  warnText: { fontSize: 11, fontWeight: '700', color: colors.textMuted, marginTop: 2 },
+  toList: { alignItems: 'center', gap: 2, borderRadius: 12, backgroundColor: TONE.accent, paddingHorizontal: 12, paddingVertical: 8 },
   toListText: { fontSize: 10, fontWeight: '700', color: colors.primaryText },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   tile2: {
@@ -886,8 +881,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 12,
   },
-  tileShort: { borderColor: '#fecaca' },
-  tileName: { fontSize: 14, fontWeight: '700', color: colors.text, alignSelf: 'stretch', textAlign: 'center' },
+    tileName: { fontSize: 14, fontWeight: '700', color: colors.text, alignSelf: 'stretch', textAlign: 'center' },
   tileQty: { fontSize: 11, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   tileBag: { fontSize: 10, fontWeight: '700', color: colors.textFaint, fontVariant: ['tabular-nums'] },
   tile3: {
@@ -911,7 +905,7 @@ const styles = StyleSheet.create({
   },
   itemName: { fontSize: 13, fontWeight: '700', color: colors.text, textAlign: 'center', minHeight: 32, lineHeight: 16 },
   addTarget: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8 },
-  addTargetText: { fontSize: 12, fontWeight: '700', color: TONE.accent },
+  addTargetText: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
   bulk: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -925,9 +919,9 @@ const styles = StyleSheet.create({
   bagValue: { fontSize: 22, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   bagTotal: { fontSize: 12, fontWeight: '700', color: colors.textFaint },
   bagAge: { fontSize: 11, fontWeight: '700', color: colors.textFaint, marginTop: 2 },
-  shortBox: { borderRadius: 16, borderWidth: 1, borderColor: '#fecaca', backgroundColor: colors.dangerSurface, padding: 12, gap: 6 },
-  shortBoxTitle: { fontSize: 12, fontWeight: '700', color: colors.alertText },
-  shortPill: { borderRadius: 999, backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 4 },
+  shortBox: { borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: 12, gap: 6 },
+  shortBoxTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  shortPill: { borderRadius: 999, backgroundColor: colors.dangerSurface, paddingHorizontal: 10, paddingVertical: 4 },
   shortPillText: { fontSize: 11, fontWeight: '700', color: colors.alertText, fontVariant: ['tabular-nums'] },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
   bagTile: {
@@ -937,7 +931,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  bagTileOn: { borderColor: TONE.ok, backgroundColor: '#f0fdf4' },
+  bagTileOn: { borderColor: TONE.accent, backgroundColor: colors.background },
   bagBody: { alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingTop: 16, paddingBottom: 12 },
   bagQty: { fontSize: 12, fontWeight: '700', color: colors.textSubtle, fontVariant: ['tabular-nums'] },
   bagEdit: { position: 'absolute', top: 8, right: 8 },

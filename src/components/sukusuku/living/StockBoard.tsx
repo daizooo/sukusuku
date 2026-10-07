@@ -78,9 +78,9 @@ const dateText = (on: string) => formatExpiry({ expiresOn: on, expiresMonthOnly:
 
 /** 期限の言い方の色。 */
 const COUNTDOWN_CLASS = {
-  expired: 'bg-red-100 text-red-700',
+  expired: 'bg-red-50 text-red-700',
   soon: 'bg-red-50 text-red-700',
-  year: 'bg-orange-50 text-orange-700',
+  year: 'bg-gray-100 text-gray-600',
   ok: 'bg-gray-100 text-gray-500',
   none: 'bg-gray-100 text-gray-400',
 } as const;
@@ -140,10 +140,10 @@ export default function StockBoard({
   ) => {
     const active = count > 0;
     const surface = !active
-      ? 'bg-green-50 border-green-100 text-green-700'
+      ? 'bg-white border-gray-200 text-gray-300'
       : tone === 'alert'
-        ? 'bg-red-50 border-red-200 text-red-700'
-        : 'bg-orange-50 border-orange-200 text-orange-700';
+        ? 'bg-white border-red-300 text-red-700'
+        : 'bg-white border-gray-400 text-gray-900';
     return (
       <button
         type="button"
@@ -247,9 +247,9 @@ export default function StockBoard({
   // ---- 期限の見通し（1本の帯） ----
   const mix = [
     { key: 'expired', label: '切れ', count: counts.expired, color: '#dc2626' },
-    { key: 'soon', label: '3か月内', count: counts.soon, color: '#f97316' },
-    { key: 'year', label: '1年内', count: counts.year, color: '#fbbf24' },
-    { key: 'ok', label: 'それ以降', count: counts.ok, color: '#16a34a' },
+    { key: 'soon', label: '3か月内', count: counts.soon, color: '#374151' },
+    { key: 'year', label: '1年内', count: counts.year, color: '#9ca3af' },
+    { key: 'ok', label: 'それ以降', count: counts.ok, color: '#d1d5db' },
   ].filter((entry) => entry.count > 0);
   const mixTotal = mix.reduce((sum, entry) => sum + entry.count, 0);
   const outlook = mixTotal > 0 && (
@@ -321,9 +321,9 @@ export default function StockBoard({
       onClick={onClick}
       className={`flex flex-1 items-center justify-center gap-1 rounded-xl py-2 text-xs font-bold ${
         kind === 'main'
-          ? 'bg-orange-600 text-white hover:bg-orange-700'
+          ? 'bg-gray-900 text-white hover:bg-gray-800'
           : kind === 'danger'
-            ? 'bg-gray-100 text-red-500 hover:bg-gray-200'
+            ? 'bg-gray-100 text-gray-500 hover:bg-gray-200'
             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
       }`}
     >
@@ -340,23 +340,23 @@ export default function StockBoard({
         attentionBlock(
           'replacement',
           `期限が近い・切れた${attention.replacement.total > 0 ? `　見込み ${formatYen(attention.replacement.total)}` : ''}`,
-          'text-red-700',
-          attention.replacement.lots.map(({ item, level, amount }) => (
+          'text-gray-900',
+          attention.replacement.lots.map(({ item, amount }) => (
             <div
               key={item.id}
-              className={`${tileClass} overflow-hidden ${level === 'expired' ? 'border-red-200' : 'border-orange-200'}`}
+              className={`${tileClass} overflow-hidden ${'border-gray-200'}`}
             >
               <button
                 type="button"
                 onClick={() => onEditItem(item)}
                 className="flex w-full items-center gap-3 px-3 pt-3 pb-2 text-left"
               >
-                {iconBubble(item, level === 'expired' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600')}
+                {iconBubble(item, 'bg-gray-100 text-gray-600')}
                 <span className="flex-1 min-w-0">
                   <span className="flex items-center gap-1.5">
                     <span className="truncate text-sm font-bold text-gray-900">{item.name}</span>
                     {item.storage === 'carry' && (
-                      <span className="shrink-0 rounded bg-blue-50 px-1.5 text-[10px] font-bold text-blue-700">
+                      <span className="shrink-0 rounded bg-gray-100 px-1.5 text-[10px] font-bold text-gray-600">
                         {STORAGE_LABEL.carry}
                       </span>
                     )}
@@ -386,14 +386,14 @@ export default function StockBoard({
         attentionBlock(
           'short',
           '足りないもの',
-          'text-red-700',
+          'text-gray-900',
           attention.short.map(({ status, cost }) => {
             const { target, required, have, shortage, carry } = status;
             const ratio = required > 0 ? have / required : 1;
             return (
-              <div key={target.id} className={`${tileClass} border-red-200 px-3 py-3`}>
+              <div key={target.id} className={`${tileClass} border-gray-200 px-3 py-3`}>
                 <div className="flex items-center gap-3">
-                  {iconBubble(target, 'bg-red-100 text-red-600')}
+                  {iconBubble(target, 'bg-gray-100 text-gray-600')}
                   <div className="flex-1 min-w-0">
                     <p className="truncate text-sm font-bold text-gray-900">{target.name}</p>
                     <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
@@ -413,7 +413,7 @@ export default function StockBoard({
                       type="button"
                       aria-label={`${target.name}の不足を買い出しリストへ`}
                       onClick={() => onSendShortage(target, shortage)}
-                      className="flex shrink-0 flex-col items-center gap-0.5 rounded-xl bg-red-600 px-3 py-2 text-white hover:bg-red-700"
+                      className="flex shrink-0 flex-col items-center gap-0.5 rounded-xl bg-gray-900 px-3 py-2 text-white hover:bg-gray-800"
                     >
                       <ListPlus size={18} />
                       <span className="text-[10px] font-bold">リストへ</span>
@@ -429,27 +429,27 @@ export default function StockBoard({
         attentionBlock(
           'inspect',
           '点検の時期',
-          'text-orange-700',
+          'text-gray-900',
           [
             ...(attention.bag?.due
               ? [
-              <div key="bag" className={`${tileClass} flex items-center gap-3 border-orange-200 px-3 py-3`}>
-                {iconBubble({ name: 'バッグ', category: '' }, 'bg-orange-100 text-orange-600')}
+              <div key="bag" className={`${tileClass} flex items-center gap-3 border-gray-200 px-3 py-3`}>
+                {iconBubble({ name: 'バッグ', category: '' }, 'bg-gray-100 text-gray-600')}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-gray-900">持ち出しバッグ</p>
-                  <p className="text-[11px] font-bold text-orange-700">{bagInspectionAge}</p>
+                  <p className="text-[11px] font-bold text-gray-500">{bagInspectionAge}</p>
                 </div>
                 {actionButton('確かめる', () => onStorageChange('carry'), ClipboardCheck, 'main')}
               </div>,
                 ]
               : []),
             ...attention.inspect.map((item) => (
-              <div key={item.id} className={`${tileClass} flex items-center gap-3 border-orange-200 px-3 py-3`}>
+              <div key={item.id} className={`${tileClass} flex items-center gap-3 border-gray-200 px-3 py-3`}>
                 <button type="button" onClick={() => onEditItem(item)} className="flex flex-1 min-w-0 items-center gap-3 text-left">
-                  {iconBubble(item, 'bg-orange-100 text-orange-600')}
+                  {iconBubble(item, 'bg-gray-100 text-gray-600')}
                   <span className="flex-1 min-w-0">
                     <span className="block truncate text-sm font-bold text-gray-900">{item.name}</span>
-                    <span className="block text-[11px] font-bold text-orange-700">
+                    <span className="block text-[11px] font-bold text-gray-500">
                       {item.inspectedOn ? `${spanText(daysBetween(item.inspectedOn, today))}前に点検` : '未点検'}
                     </span>
                   </span>
@@ -466,7 +466,6 @@ export default function StockBoard({
   const targetTile = ({ status }: (typeof board.blocks)[number]) => {
     const { target, required, have, shortage, carry } = status;
     const ratio = required > 0 ? have / required : 1;
-    const short = shortage > 0 || (carry?.shortage ?? 0) > 0;
     const color = shortage > 0 ? TONE.alert : carry && carry.shortage > 0 ? TONE.warn : TONE.ok;
     return (
       <button
@@ -475,7 +474,7 @@ export default function StockBoard({
         aria-label={`${target.name}の詳しい画面を開く`}
         onClick={() => setDetailId(target.id)}
         className={`${tileClass} flex flex-col items-center gap-1.5 px-2 py-3 text-center ${
-          short ? 'border-red-200' : 'border-gray-200'
+          'border-gray-200'
         } hover:bg-gray-50`}
       >
         <Ring size={64} stroke={7} ratio={ratio} color={color}>
@@ -488,7 +487,7 @@ export default function StockBoard({
         </span>
         <span
           className={`rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${
-            shortage > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+            shortage > 0 ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-500'
           }`}
         >
           {shortage > 0 ? `あと${formatQuantity(shortage)}${target.unit}` : '足りてる'}
@@ -526,8 +525,8 @@ export default function StockBoard({
     if (item.inspectIntervalMonths === null) return { text: '点検なし', className: 'bg-gray-100 text-gray-400' };
     const next = nextInspectionOn(item);
     if (next === null) return { text: '点検なし', className: 'bg-gray-100 text-gray-400' };
-    if (next <= today) return { text: '点検の時期', className: 'bg-orange-100 text-orange-700' };
-    return { text: `点検まで${spanText(daysBetween(today, next))}`, className: 'bg-green-50 text-green-700' };
+    if (next <= today) return { text: '点検の時期', className: 'bg-red-50 text-red-700' };
+    return { text: `点検まで${spanText(daysBetween(today, next))}`, className: 'bg-gray-100 text-gray-500' };
   };
 
   const homeOthers = board.others.filter((item) => item.storage === 'home');
@@ -549,7 +548,7 @@ export default function StockBoard({
         <button
           type="button"
           onClick={onAddTarget}
-          className="mt-1 flex w-full items-center justify-center gap-1 py-2.5 text-xs font-bold text-orange-600"
+          className="mt-1 flex w-full items-center justify-center gap-1 py-2.5 text-xs font-bold text-gray-600"
         >
           <Plus size={14} />
           目標（必要数）を追加
@@ -607,7 +606,7 @@ export default function StockBoard({
 
   const carryView = (
     <>
-      <section className={`${tileClass} flex items-center gap-4 p-4 ${attention.bag?.due ? 'border-orange-200' : 'border-gray-200'}`}>
+      <section className={`${tileClass} flex items-center gap-4 p-4 ${attention.bag?.due ? 'border-gray-200' : 'border-gray-200'}`}>
         <Ring
           size={88}
           stroke={10}
@@ -624,7 +623,7 @@ export default function StockBoard({
         </Ring>
         <div className="flex-1 min-w-0 space-y-1">
           <p className="text-sm font-bold text-gray-900">{plan.carryDays}日分のバッグ</p>
-          <p className={`text-[11px] font-bold ${attention.bag?.due ? 'text-orange-700' : 'text-gray-400'}`}>
+          <p className={`text-[11px] font-bold ${attention.bag?.due ? 'text-red-700' : 'text-gray-400'}`}>
             {attention.bag ? bagInspectionAge : 'バッグは空です'}
           </p>
           {attention.bag && (
@@ -636,13 +635,13 @@ export default function StockBoard({
       </section>
 
       {carryShortages.length > 0 && (
-        <section className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
-          <p className="mb-1.5 text-xs font-bold text-red-700">足りないもの</p>
+        <section className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+          <p className="mb-1.5 text-xs font-bold text-gray-500">足りないもの</p>
           <div className="flex flex-wrap gap-1.5">
             {carryShortages.map(({ status }) => (
               <span
                 key={status.target.id}
-                className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-red-700 tabular-nums"
+                className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700 tabular-nums"
               >
                 {status.target.name} あと{formatQuantity(status.carry?.shortage ?? 0)}
                 {status.target.unit}
@@ -663,7 +662,7 @@ export default function StockBoard({
               <div
                 key={item.id}
                 className={`relative rounded-2xl border-2 transition ${
-                  on ? 'border-green-600 bg-green-50' : 'border-gray-200 bg-white'
+                  on ? 'border-gray-900 bg-gray-50' : 'border-gray-200 bg-white'
                 }`}
               >
                 <button
@@ -676,7 +675,7 @@ export default function StockBoard({
                 >
                   <span
                     className={`flex h-12 w-12 items-center justify-center rounded-full ${
-                      on ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600'
+                      on ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
                     }`}
                   >
                     {on ? <Check size={26} strokeWidth={3} /> : <StockIcon name={item.name} category={item.category} size={24} />}
@@ -738,7 +737,7 @@ export default function StockBoard({
                 setChecked(new Set());
               }}
               className={`w-full rounded-2xl py-3.5 text-sm font-bold transition ${
-                allChecked ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-gray-200 text-gray-400'
+                allChecked ? 'bg-gray-900 text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-400'
               }`}
             >
               {allChecked ? '点検完了（今日の日付を残す）' : `あと${bagLots.length - doneCount}つ確かめましょう`}
