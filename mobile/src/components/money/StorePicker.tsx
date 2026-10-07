@@ -6,23 +6,28 @@ import { normalizeName } from '@/lib/shoppingUtils';
 import { ScreenHeader } from '@/components/money/moneyVisual';
 
 // お店の選択（docs/kakei.md §3.2）。PWA版の `src/components/sukusuku/money/StorePicker.tsx` と同じ。
-// 探す欄と「最近使ったお店」（前に入れたお店から）。位置からの候補は出さない。打った名前をそのまま使える。
+// 探す欄と、最近使ったお店、続けて登録したお店の残り（設定データ。docs/kakei.md §3.5）。
+// 位置からの候補は出さない。打った名前をそのまま使える（新しいお店は記録の保存で自動で登録される）。
 
 interface StorePickerProps {
   value: string;
+  /** 登録したお店のうち、最近使ったお店に出ていないもの（名前順。使わなくしたものは除く）。 */
+  registered: string[];
+  /** 最近使ったお店（新しい順。使わなくしたものは除く）。 */
   recent: string[];
   onPick: (store: string) => void;
   onClose: () => void;
 }
 
-export default function StorePicker({ value, recent, onPick, onClose }: StorePickerProps) {
+export default function StorePicker({ value, registered, recent, onPick, onClose }: StorePickerProps) {
   const [query, setQuery] = useState(value);
   const typed = query.trim();
-  const matches = useMemo(() => {
+  const { matchedRegistered, matchedRecent } = useMemo(() => {
     const key = normalizeName(typed);
-    return key === '' ? recent : recent.filter((store) => normalizeName(store).includes(key));
-  }, [recent, typed]);
-  const exact = matches.some((store) => store === typed);
+    const pick = (stores: string[]) => (key === '' ? stores : stores.filter((store) => normalizeName(store).includes(key)));
+    return { matchedRegistered: pick(registered), matchedRecent: pick(recent) };
+  }, [registered, recent, typed]);
+  const exact = [...matchedRegistered, ...matchedRecent].some((store) => store === typed);
 
   return (
     <View style={styles.screen}>
@@ -47,9 +52,16 @@ export default function StorePicker({ value, recent, onPick, onClose }: StorePic
             <Text style={[styles.name, styles.use]}>「{typed}」にする</Text>
           </Pressable>
         )}
-        {matches.length > 0 && <Text style={styles.sectionTitle}>最近使ったお店</Text>}
-        {matches.map((store) => (
-          <Pressable key={store} accessibilityRole="button" onPress={() => onPick(store)} style={styles.row}>
+        {matchedRecent.length > 0 && <Text style={styles.sectionTitle}>最近使ったお店</Text>}
+        {matchedRecent.map((store) => (
+          <Pressable key={`recent-${store}`} accessibilityRole="button" onPress={() => onPick(store)} style={styles.row}>
+            <Store size={18} color={colors.textFaint} />
+            <Text style={styles.name}>{store}</Text>
+          </Pressable>
+        ))}
+        {matchedRegistered.length > 0 && <Text style={styles.sectionTitle}>登録したお店</Text>}
+        {matchedRegistered.map((store) => (
+          <Pressable key={`registered-${store}`} accessibilityRole="button" onPress={() => onPick(store)} style={styles.row}>
             <Store size={18} color={colors.textFaint} />
             <Text style={styles.name}>{store}</Text>
           </Pressable>

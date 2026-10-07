@@ -114,7 +114,7 @@ export default function WalletPicker({ title, wallets, selectedId, onPick, onClo
   );
 }
 
-function WalletModal({
+export function WalletModal({
   wallet,
   onClose,
   onSubmit,

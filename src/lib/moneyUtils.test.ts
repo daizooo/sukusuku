@@ -25,9 +25,10 @@ import {
   recentStores,
   shiftMonth,
   specialActualsFromRecords,
+  storeChoices,
 } from './moneyUtils.ts';
 import { buildYearRows } from './specialUtils.ts';
-import type { MoneyBudget, MoneyCategory, MoneyItem, MoneyRecord, MoneyWallet, SpecialItem } from '../types/app.ts';
+import type { MoneyBudget, MoneyCategory, MoneyItem, MoneyRecord, MoneyStore, MoneyWallet, SpecialItem } from '../types/app.ts';
 
 // ---- 月・年度 ----
 assert.equal(shiftMonth('2026-12', 1), '2027-01');
@@ -210,6 +211,21 @@ assert.deepEqual(
 
 assert.deepEqual(frequentCategoryIds(records, categories, 'living', 2), ['grocery', 'eatout'], '多い順、同じ回数なら最近使った順');
 assert.deepEqual(recentStores(records), ['レストラン', 'スーパー']);
+
+// お店の選択肢: 最近使ったお店を先に、続けて登録したお店の残りを名前順に。使わなくしたお店は出さない。
+const storeList: MoneyStore[] = [
+  { id: 's1', name: 'ドラッグ', archived: false },
+  { id: 's2', name: 'スーパー', archived: false },
+  { id: 's3', name: '閉店した店', archived: true },
+];
+assert.deepEqual(storeChoices(storeList, records), { recent: ['レストラン', 'スーパー'], registered: ['ドラッグ'] }, '最近使ったお店と重なる登録は、登録のほうに出さない');
+assert.deepEqual(storeChoices(storeList, records, 1), { recent: ['レストラン'], registered: ['スーパー', 'ドラッグ'] }, '最近の件数を絞ると、残りは登録のほうへ');
+assert.deepEqual(
+  storeChoices([{ id: 's4', name: 'レストラン', archived: true }], records),
+  { recent: ['スーパー'], registered: [] },
+  '使わなくしたお店は、記録で使っていても候補に出さない',
+);
+assert.deepEqual(storeChoices([], records), { recent: ['レストラン', 'スーパー'], registered: [] }, '登録が無ければ最近使ったお店だけ');
 assert.equal(lastWalletId(records, wallets, 'expense'), 'bank', '前回の出金元（特別費の記録も含む）');
 assert.equal(
   lastWalletId(records.filter((entry) => entry.id !== 'r6'), wallets, 'expense'),

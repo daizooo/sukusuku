@@ -954,6 +954,41 @@ export type Database = {
           },
         ]
       }
+      money_stores: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          family_id: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          family_id: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          family_id?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_stores_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_wallets: {
         Row: {
           archived_at: string | null

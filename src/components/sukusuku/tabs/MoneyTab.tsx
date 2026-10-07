@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Settings } from 'lucide-react';
 import type {
   HouseholdProduct,
   MoneyBudget,
   MoneyCategory,
   MoneyRecord,
   MoneyRecordDraft,
+  MoneyStore,
   MoneyWallet,
   MoneyWalletDraft,
   SpecialItem,
@@ -18,6 +19,7 @@ import {
   deleteMoneyRecord,
   insertMoneyWallet,
   loadMoney,
+  loadMoneyStores,
   saveMoneyRecord,
   updateMoneyWallet,
   type MoneyData,
@@ -29,6 +31,7 @@ import MoneyRecordsView from '../money/MoneyRecordsView';
 import MoneyMonthView from '../money/MoneyMonthView';
 import RecordEditor from '../money/RecordEditor';
 import CategoryEditor from '../money/CategoryEditor';
+import MoneySettings from '../money/MoneySettings';
 import MoneyYearView from '../money/MoneyYearView';
 import SpecialPanel from '../living/SpecialPanel';
 
@@ -43,6 +46,7 @@ import SpecialPanel from '../living/SpecialPanel';
  *   種類と予算はここから直す
  * - 年: 年度の収支と内訳、月ごとの収支（押すとその月へ）
  * - 特別費: 年度の予定と実績（「年」と同じ年度を見る）。特別費の数字はこの面だけに出す
+ * - 見出しの右の歯車は「家計の設定」（予算・種類・出金元・お店。docs/kakei.md §3.5）
  *
  * 見出し・切り替え・月の送りは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  * 他のタブと違い、読み書きはこのタブの中で完結させる（アプリ全体の状態に持たない）。
@@ -65,6 +69,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [categories, setCategories] = useState<MoneyCategory[]>([]);
   const [budgets, setBudgets] = useState<MoneyBudget[]>([]);
   const [wallets, setWallets] = useState<MoneyWallet[]>([]);
+  const [stores, setStores] = useState<MoneyStore[]>([]);
   const [records, setRecords] = useState<MoneyRecord[]>([]);
   const [products, setProducts] = useState<HouseholdProduct[]>([]);
   const [specialItems, setSpecialItems] = useState<SpecialItem[]>([]);
@@ -74,6 +79,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [fiscalYear, setFiscalYear] = useState(() => fiscalYearOfMonth(monthKeyOfDate(new Date())));
   const [editing, setEditing] = useState<Editing>(null);
   const [editingCategories, setEditingCategories] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   /** 読んだものを画面に入れる。 */
   const apply = useCallback(
@@ -81,6 +87,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       setCategories(money.categories);
       setBudgets(money.budgets);
       setWallets(money.wallets);
+      setStores(money.stores);
       setRecords(money.records);
       setProducts(loadedProducts);
       setSpecialItems(special.items);
@@ -127,6 +134,10 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       // 日用品の台帳の「いつもの値段」が変わるので読み直す（DBの save_money_record が直す）。
       if (saved.items.some((item) => item.productId !== null)) {
         setProducts(await loadHouseholdProducts(supabase, familyId));
+      }
+      // 新しいお店の名前は、DBの save_money_record がお店の設定に登録する。
+      if (saved.store !== '' && !stores.some((entry) => entry.name === saved.store)) {
+        setStores(await loadMoneyStores(supabase, familyId));
       }
     } catch {
       failed('保存');
@@ -175,7 +186,18 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
 
   return (
     <div className="relative p-4 pb-0 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
-      <h2 className="shrink-0 pb-1 text-lg font-bold text-gray-900">家計</h2>
+      <div className="shrink-0 flex items-center pb-1">
+        <h2 className="text-lg font-bold text-gray-900">家計</h2>
+        <span className="flex-1" />
+        <button
+          type="button"
+          aria-label="家計の設定"
+          onClick={() => setSettingsOpen(true)}
+          className="p-0.5 text-gray-700 hover:text-gray-900"
+        >
+          <Settings size={22} />
+        </button>
+      </div>
       {/* 4つの面の切り替え。等幅に並べ、選んでいる面は濃い文字と青い下線。 */}
       <div role="tablist" className="shrink-0 flex border-b border-gray-200">
         {VIEWS.map((entry) => {
@@ -258,6 +280,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           categories={categories}
           budgets={budgets}
           wallets={wallets}
+          stores={stores}
           records={records}
           products={products}
           specialItems={specialItems}
@@ -268,6 +291,22 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           onSaveWallet={saveWallet}
           onArchiveWallet={(wallet) => void archiveWallet(wallet)}
           onEditCategories={() => setEditingCategories(true)}
+        />
+      )}
+
+      {settingsOpen && (
+        <MoneySettings
+          familyId={familyId}
+          fiscalYear={fiscalYearOfMonth(monthKey)}
+          categories={categories}
+          budgets={budgets}
+          wallets={wallets}
+          stores={stores}
+          onCategories={setCategories}
+          onBudgets={setBudgets}
+          onWallets={setWallets}
+          onStores={setStores}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
 

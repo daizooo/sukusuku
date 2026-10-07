@@ -15,6 +15,7 @@ import type {
   MoneyItemDraft,
   MoneyRecord,
   MoneyRecordKind,
+  MoneyStore,
   MoneyWallet,
   MoneyWalletType,
   SpecialActual,
@@ -394,6 +395,27 @@ export function recentStores(records: readonly MoneyRecord[], limit = 12): strin
     if (stores.length >= limit) break;
   }
   return stores;
+}
+
+/**
+ * お店の選択肢（docs/kakei.md §3.5）。まず最近使ったお店（新しい順。登録の有無は問わない）、
+ * 続けて登録したお店のうち残りを名前順に。使わなくしたお店は、記録で使っていても候補に出さない。
+ */
+export function storeChoices(
+  stores: readonly MoneyStore[],
+  records: readonly MoneyRecord[],
+  recentLimit = 12,
+): { registered: string[]; recent: string[] } {
+  const archived = new Set(stores.filter((store) => store.archived).map((store) => store.name));
+  const recent = recentStores(records, Number.MAX_SAFE_INTEGER)
+    .filter((name) => !archived.has(name))
+    .slice(0, recentLimit);
+  const shown = new Set(recent);
+  const registered = stores
+    .filter((store) => !store.archived && !shown.has(store.name))
+    .map((store) => store.name)
+    .sort((a, b) => a.localeCompare(b, 'ja'));
+  return { registered, recent };
 }
 
 /** 前回の出金元（その種類の記録でいちばん新しいもの）。使わなくした出金元は使わない。 */

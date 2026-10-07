@@ -102,7 +102,7 @@ export default function WalletPicker({ title, wallets, selectedId, onPick, onClo
   );
 }
 
-function WalletSheet({
+export function WalletSheet({
   wallet,
   onClose,
   onSubmit,

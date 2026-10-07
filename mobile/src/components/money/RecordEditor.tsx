@@ -10,6 +10,7 @@ import type {
   MoneyRecord,
   MoneyRecordDraft,
   MoneyRecordKind,
+  MoneyStore,
   MoneyWallet,
   MoneyWalletDraft,
   SpecialActual,
@@ -34,7 +35,7 @@ import {
   livingSpendByTop,
   monthKeyOf,
   pressCalcKey,
-  recentStores,
+  storeChoices,
   RECORD_KIND_LABEL,
   sameGroupTarget,
   topCategoryIdOf,
@@ -77,6 +78,8 @@ export interface RecordEditorProps {
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   wallets: MoneyWallet[];
+  /** 登録したお店（設定データ）。お店の選択画面で先に出す。 */
+  stores: MoneyStore[];
   records: MoneyRecord[];
   products: HouseholdProduct[];
   specialItems: SpecialItem[];
@@ -94,6 +97,7 @@ export default function RecordEditor({
   categories,
   budgets,
   wallets,
+  stores,
   records,
   products,
   specialItems,
@@ -130,7 +134,7 @@ export default function RecordEditor({
 
   const monthKey = monthKeyOf(occurredOn);
   const spend = useMemo(() => livingSpendByTop(records, categories, monthKey), [records, categories, monthKey]);
-  const stores = useMemo(() => recentStores(records), [records]);
+  const storeOptions = useMemo(() => storeChoices(stores, records), [stores, records]);
   const total = kind === 'transfer' ? transferAmount : groups.reduce((sum, group) => sum + editorGroupTotal(group), 0);
   const specialKind = kind === 'income' ? 'income' : 'expense';
 
@@ -403,7 +407,8 @@ export default function RecordEditor({
         return (
           <StorePicker
             value={store}
-            recent={stores}
+            registered={storeOptions.registered}
+            recent={storeOptions.recent}
             onPick={(value) => {
               setStore(value);
               pop();
