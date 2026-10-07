@@ -307,7 +307,7 @@ iPhone / Macを考えないことが決まった（§5）ので、**PWAを恒久
 ## 8. ビルドと配布
 
 - **ストアには出さない。** `.apk` を自分たちの端末に直接入れる。審査も登録も要らない。
-- **`.apk` はCIが毎日18時(日本時間)に作る**（`.github/workflows/mobile-apk.yml`）。
+- **`.apk` はCIが毎日夕方（16:17(日本時間)に予約）に作る**（`.github/workflows/mobile-apk.yml`）。
   前日から `mobile/` が変わっていればビルドし、そのままFirebase App Distributionで
   配る（docs/mobile-distribution.md）。急ぐときは Actions > mobile APK > Run workflow。`src/` がVercelのプレビューで確かめられるのと
   同じ形をネイティブ側にも用意したもので、**これが凍結の原因（実機で一度も動かないまま

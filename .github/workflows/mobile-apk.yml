@@ -5,7 +5,7 @@
 # Vercelのプレビューで PRごとに実機で確かめられるのと同じ状態を、ネイティブ側にも
 # 用意して原因そのものを潰す。
 #
-# Androidのフルビルドは**毎日18時(日本時間)の定時実行**と**手動実行**のときだけ行い、
+# Androidのフルビルドは**毎日夕方の定時実行**（16:17(日本時間)に予約）と**手動実行**のときだけ行い、
 # Firebase App Distribution で家族の端末(App Tester)へ配る。PRでは
 # Actionsの実行時間を使わない型チェックだけを行う。
 #
@@ -31,9 +31,12 @@ on:
     paths:
       - 'mobile/**'
       - '.github/workflows/mobile-apk.yml'
-  # 毎日18:00(日本時間) = 09:00(UTC)。混雑時は数分〜十数分遅れることがある。
+  # 毎日16:17(日本時間) = 07:17(UTC)に予約する。
+  # GitHubの定時実行は混雑で遅れ、以前の「18:00ちょうど（0 9 * * *）」は実際には
+  # 4時間半〜8時間半遅れて22:30〜翌2:40に始まっていた（2026-09-26〜10-06の実測）。
+  # 混みやすい毎時0分を外し、遅れる分だけ早めに予約する。それでも日によって遅れ方は変わる。
   schedule:
-    - cron: '0 9 * * *'
+    - cron: '17 7 * * *'
   workflow_dispatch:
     inputs:
       distribute:
@@ -92,21 +95,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # 配らなかった日も実行結果の画面で分かるように、どちらになったかを要約に書く
+          # （配布が無い日は App Tester のメールも来ない）。
+          summary() { echo "$1" >> "$GITHUB_STEP_SUMMARY"; echo "::notice::$1"; }
           if [ "${{ github.event_name }}" != 'schedule' ]; then
+            summary '手動実行なので、ビルドする。'
             echo 'changed=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           BASE=$(gh api "repos/${{ github.repository }}/actions/workflows/mobile-apk.yml/runs?branch=main&status=success&per_page=50" \
             --jq '[.workflow_runs[] | select(.event == "schedule" or .event == "push")][0].head_sha // empty')
           if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            echo "前回配ったコミットが分からないのでビルドする（BASE=${BASE:-なし}）"
+            summary "前回配ったコミットが分からないので、ビルドして配る（BASE=${BASE:-なし}）。"
             echo 'changed=true' >> "$GITHUB_OUTPUT"
           elif git diff --quiet "$BASE" HEAD -- mobile .github/workflows/mobile-apk.yml; then
-            echo "前回（${BASE:0:7}）から mobile/ に変更が無いのでビルドしない"
+            summary "今日は配っていない: 前回配った ${BASE:0:7} から mobile/ に変更が無いため、ビルド・配布をしない（App Tester のメールも来ない）。"
             echo 'changed=false' >> "$GITHUB_OUTPUT"
           else
-            echo "前回（${BASE:0:7}）から変更がある:"
-            git log --oneline "$BASE..HEAD" -- mobile .github/workflows/mobile-apk.yml
+            summary "前回配った ${BASE:0:7} から mobile/ に変更があるので、ビルドして配る。"
+            git log --oneline "$BASE..HEAD" -- mobile .github/workflows/mobile-apk.yml | sed 's/^/- /' | tee -a "$GITHUB_STEP_SUMMARY"
             echo 'changed=true' >> "$GITHUB_OUTPUT"
           fi
 

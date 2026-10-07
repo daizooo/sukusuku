@@ -128,7 +128,7 @@ Web版と同じメールアドレス・パスワードでログインできる�
 **日々の確認は手元で作る。** JDK17とAndroid SDKを入れれば、JSの変更は保存した瞬間に
 画面へ反映される（手順は [docs/mobile-local-build.md](../docs/mobile-local-build.md)）。
 
-**家族へ配るぶんはCIが作る。** **毎日18時(日本時間)**に、前日から `mobile/` が
+**家族へ配るぶんはCIが作る。** **毎日夕方（16:17(日本時間)に予約。実際の開始は混雑で遅れる）**に、前日から `mobile/` が
 変わっていれば `.apk` を作り、そのままFirebase App Distributionで配る
 （`.github/workflows/mobile-apk.yml`）。急ぐときは Actions > mobile APK >
 Run workflow で今すぐ配れる。**PRでは型チェックだけが走る。**
