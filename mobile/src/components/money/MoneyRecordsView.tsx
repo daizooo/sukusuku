@@ -134,7 +134,7 @@ export default function MoneyRecordsView({
                             </Text>
                           )}
                         </View>
-                        <Text style={[type.amount, record.kind === 'transfer' && styles.muted]}>
+                        <Text style={[type.amount, record.kind === 'transfer' && styles.muted, record.kind === 'income' && styles.income]}>
                           {record.kind === 'income' ? '+' : ''}
                           {formatYen(total)}
                         </Text>
@@ -170,4 +170,6 @@ const styles = StyleSheet.create({
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
   pressed: { backgroundColor: colors.background },
   muted: { color: colors.textMuted },
+  // 収入の額は緑（支出と見分けがつくように）。
+  income: { color: colors.moneyIncome },
 });

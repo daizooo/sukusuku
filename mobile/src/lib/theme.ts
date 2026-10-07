@@ -121,5 +121,5 @@ export const colors = {
   moneyOverRing: '#fca5a5', // red-300（超えた輪）
   moneyOverBorder: '#fecaca', // red-200（超えたタイルの枠）
   moneyOverSurface: '#fef2f2', // red-50
-  moneyIncome: '#0284c7', // sky-600（収入の額）
+  moneyIncome: '#43b02a', // 収入の額（明るい緑。green-500 と lime-600 の間）
 } as const;

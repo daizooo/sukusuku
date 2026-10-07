@@ -38,6 +38,9 @@ export const minus = (base: string, isMinus: boolean | undefined) =>
 
 export const cardClass = 'rounded-2xl border border-gray-200 bg-white';
 
+/** 収入の額の色（明るい緑。green-500 と lime-600 の間）。mobile の colors.moneyIncome と同じ。 */
+export const incomeAmountClass = 'text-[#43b02a]';
+
 function Stepper({
   label,
   prevLabel,
