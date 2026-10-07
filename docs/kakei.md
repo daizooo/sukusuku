@@ -75,6 +75,12 @@
 
 - 画面の流れ（Zaim と同じ）: 「＋」→ **記録の詳細** → 品目を押す／「品目を追加する」→ **品目**（**電卓はここで初めて出る**。
   ＋−×÷で計算できる）→ 種類を押す → **種類の選択**（大分類 › 小分類）。出金元・お店はそれぞれ**選ぶ画面**へ
+- **品目の画面では、同じ種類の品目を何行でもまとめて記録する**（2026-10-07に決定）。行＝品名・個数（−＋）・単価・金額。
+  選んだ行の金額（単価）を電卓で直す。下に小計。記録の詳細では、品目を**種類ごとにまとめて**1行で見せる（中の品名を下に小さく）
+- **「いつもの」**: 品目の画面の上に、その種類に入る**日用品の台帳**（`household_products`。食品も含めた「毎月必ず買うもの」）を並べ、
+  押すと品名・いつもの値段・個数1で1行足す。保存すると、台帳の「いつもの値段」を今回の単価に更新し、
+  台帳には「いつ・何個・いくらで買ったか」が残る（日用品の画面で使う。docs/home.md §4.5）。
+  台帳に無いものは「行を追加」で品名を打つ（あとから台帳に入れられる）
 - **出金元**: 家族で登録する（カード・財布・口座・プリペイド など。Zaim の「出金元の選択」と同じ並び）。前回のものを既定にする
 - **お店**: 選ぶ画面で、検索と「最近使ったお店」（前に入れたお店から）。位置からの候補は出さない
 - **振替**: 出金元 → 入金先（例: 生活費用の口座 → 貯金用の口座）。**入金先が貯金用の出金元なら「貯金」として数える**。
@@ -132,8 +138,9 @@ money_wallets     出金元。 id / family_id / name / type('card'|'cash'|'bank'
                   position / archived_at
 money_records     記録の詳細。 id / family_id / kind('expense'|'income'|'transfer') / occurred_on / wallet_id /
                   to_wallet_id(振替の入金先) / store / recurring_id / created_by
-money_items       品目。 id / record_id / amount / category_id(小分類か大分類) /
-                  special_item_id・special_plan_id(特別費のとき) / name / memo / position
+money_items       品目（1行）。 id / record_id / amount / category_id(小分類か大分類) /
+                  special_item_id・special_plan_id(特別費のとき) / product_id(日用品の台帳。任意) / quantity / unit_price /
+                  name / memo / position
 money_recurring   毎月の記録。 id / family_id / kind / day / wallet_id / to_wallet_id / store / 品目（種類・額）
 money_months      月のメモ。 family_id / month / note
 money_card_closes カードの照合。 wallet_id / month / statement_amount / closed_at
@@ -143,6 +150,8 @@ money_card_closes カードの照合。 wallet_id / month / statement_amount / c
 - 特別費の項目・予定は今の `special_items`・`special_plans` のまま。特別費の品目は `category_id` を持たず、
   `special_item_id`（と予定にひも付くときは `special_plan_id`）を持つ
 - 振替の記録は品目を1つ持つ（金額だけ。種類なし）
+- 日用品の台帳 `household_products` に、その品を記録するときの種類 `money_category_id`（小分類）を足す。
+  品目の画面の「いつもの」はこれで絞る
 - 数え方（年度・月の集計・差・要因の上位）は mobile・PWA で同じ中身の `moneyUtils.ts`（テストつき）
 
 ## 6. 移し替え
