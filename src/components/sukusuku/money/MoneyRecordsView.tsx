@@ -13,7 +13,7 @@ import {
   recordsInMonth,
   topCategoryIdOf,
 } from '@/lib/moneyUtils';
-import { CategoryIcon, Hero, MonthBar, cardClass, type } from './moneyVisual';
+import { CategoryIcon, Hero, MonthBar, cardClass, incomeAmountClass, type } from './moneyVisual';
 
 // 家計タブの「記録」（docs/kakei.md §2・§3）。mobile版の `mobile/src/components/money/MoneyRecordsView.tsx` と同じ並び・文言。
 //
@@ -130,7 +130,15 @@ export default function MoneyRecordsView({
                           <span className={`block truncate ${type.row}`}>{title}</span>
                           {sub !== '' && <span className={`block truncate ${type.sub}`}>{sub}</span>}
                         </span>
-                        <span className={record.kind === 'transfer' ? type.amount.replace('text-gray-900', 'text-gray-500') : type.amount}>
+                        <span
+                          className={
+                            record.kind === 'transfer'
+                              ? type.amount.replace('text-gray-900', 'text-gray-500')
+                              : record.kind === 'income'
+                                ? type.amount.replace('text-gray-900', incomeAmountClass)
+                                : type.amount
+                          }
+                        >
                           {record.kind === 'income' ? '+' : ''}
                           {formatYen(recordTotal(record))}
                         </span>
