@@ -3,11 +3,21 @@
 import assert from 'node:assert/strict';
 
 import {
+  buildStockBoard,
+  carryInspection,
+  costOverview,
   countByLevel,
   expiryLevel,
   formatExpiry,
   formatQuantity,
+  formatYen,
+  inspectionDue,
+  jstDateOf,
+  nextInspectionOn,
   parseExpiryInput,
+  replacementLots,
+  targetCost,
+  unitPriceOf,
   isShort,
   requiredQuantity,
   sortStockItems,
@@ -134,3 +144,179 @@ assert.deepEqual(light.carry, { required: 1, have: 1, shortage: 0 });
 assert.equal(isShort(light), false);
 
 console.log('stockUtils storage: OK');
+
+// ---- 値段・点検・要対応（docs/home.md §10.2） ----
+
+assert.equal(formatYen(1234567), '¥1,234,567');
+assert.equal(formatYen(980.4), '¥980');
+assert.equal(formatYen(0), '¥0');
+
+// created_at（UTC）を日本時間の日付にする。UTC 15:00 以降は翌日。
+assert.equal(jstDateOf('2026-10-06T14:59:59Z'), '2026-10-06');
+assert.equal(jstDateOf('2026-10-06T15:00:00Z'), '2026-10-07');
+
+// 最小単位あたり。500mlの本（0.5L）が120円なら 240円/L。目標に数えていない・値段未登録は null。
+assert.equal(unitPriceOf({ price: 120, amountPerUnit: 0.5, targetId: 'water' }), 240);
+assert.equal(unitPriceOf({ price: 120, amountPerUnit: 0.5, targetId: null }), null);
+assert.equal(unitPriceOf({ price: null, amountPerUnit: 0.5, targetId: 'water' }), null);
+
+// 点検。期限のある品・間隔の無い品・数が0の品は対象外。点検日が無ければ追加日から数える。
+const radio = { expiresOn: null, quantity: 1, inspectedOn: null, inspectIntervalMonths: 6, createdOn: '2026-10-07' };
+assert.equal(nextInspectionOn(radio), '2027-04-07');
+assert.equal(inspectionDue(radio, '2027-04-06'), false);
+assert.equal(inspectionDue(radio, '2027-04-07'), true);
+assert.equal(nextInspectionOn({ ...radio, inspectedOn: '2027-04-07' }), '2027-10-07');
+assert.equal(nextInspectionOn({ ...radio, inspectIntervalMonths: 3 }), '2027-01-07');
+assert.equal(nextInspectionOn({ ...radio, inspectIntervalMonths: null }), null);
+assert.equal(nextInspectionOn({ ...radio, expiresOn: '2030-01-01' }), null);
+assert.equal(nextInspectionOn({ ...radio, quantity: 0 }), null);
+// 月末の追加日から半年後が存在しない日でも、その月の末日にそろう。
+assert.equal(nextInspectionOn({ ...radio, createdOn: '2026-08-31' }), '2027-02-28');
+
+// 持ち出しバッグ。空なら null。一度も点検していなければ、一番古い追加日から半年。
+const bagItem = (storage: 'home' | 'carry', inspectedOn: string | null, createdOn: string) => ({
+  storage,
+  quantity: 1,
+  inspectedOn,
+  createdOn,
+});
+assert.equal(carryInspection([bagItem('home', null, '2026-01-01')], today), null);
+assert.deepEqual(carryInspection([bagItem('carry', null, '2026-04-06'), bagItem('carry', null, '2026-09-01')], today), {
+  lastOn: null,
+  nextOn: '2026-10-06',
+  due: true,
+});
+assert.deepEqual(carryInspection([bagItem('carry', '2026-09-01', '2026-01-01'), bagItem('carry', null, '2026-01-01')], today), {
+  lastOn: '2026-09-01',
+  nextOn: '2027-03-01',
+  due: false,
+});
+
+// 要対応: 期限切れ・3か月以内のロットだけ。数が0・1年以内は出さない。値段未登録は合計に含めない。
+const lot = (name: string, expiresOn: string | null, quantity: number, price: number | null) => ({
+  name,
+  expiresOn,
+  quantity,
+  price,
+  amountPerUnit: 1,
+  targetId: null,
+});
+const replacement = replacementLots(
+  [
+    lot('スープ', '2026-12-01', 4, 200),
+    lot('水', '2026-09-30', 10, 100),
+    lot('えいようかん', '2026-11-01', 5, null),
+    lot('缶', '2027-06-30', 3, 300),
+    lot('ラジオ', null, 1, 5000),
+    lot('空', '2026-10-10', 0, 100),
+  ],
+  today,
+);
+assert.deepEqual(
+  replacement.lots.map((row) => [row.item.name, row.level, row.amount]),
+  [
+    ['水', 'expired', 1000],
+    ['えいようかん', 'soon', null],
+    ['スープ', 'soon', 800],
+  ],
+);
+assert.equal(replacement.total, 1800);
+assert.equal(replacement.unpriced, 1);
+
+// 目標の費用。水500ml（0.5L・120円）と1.8L（300円）を、持っている量で重みを付けて平均する。
+// 500ml: 240円/L・持っているのは 4L。1.8L: 約166.7円/L・持っているのは 3.6L。
+const costTarget = { id: 'water', quantity: 3, perPersonDay: true };
+const [costStatus] = targetStatuses(
+  [costTarget],
+  [
+    { targetId: 'water', quantity: 8, amountPerUnit: 0.5, expiresOn: '2036-12-06' },
+    { targetId: 'water', quantity: 2, amountPerUnit: 1.8, expiresOn: '2037-02-23' },
+  ],
+  plan,
+  today,
+);
+const cost = targetCost(
+  costStatus,
+  [
+    { targetId: 'water', quantity: 8, amountPerUnit: 0.5, price: 120 },
+    { targetId: 'water', quantity: 2, amountPerUnit: 1.8, price: 300 },
+  ],
+  plan,
+);
+assert.equal(cost.daily, 9);
+assert.ok(cost.unitPrice !== null && Math.abs(cost.unitPrice - (240 * 4 + (300 / 1.8) * 3.6) / 7.6) < 1e-9);
+assert.equal(cost.total, cost.unitPrice! * 63);
+assert.equal(cost.shortageCost, cost.unitPrice! * costStatus.shortage);
+
+// 値段が未登録の目標は費用を出さず、合計にも含めず、件数だけ数える。決まった数の品目は1日あたりが null。
+const noPrice = targetCost(costStatus, [{ targetId: 'water', quantity: 8, amountPerUnit: 0.5, price: null }], plan);
+assert.deepEqual(noPrice, { unitPrice: null, daily: 9, total: null, shortageCost: null });
+const fixed = targetCost({ ...costStatus, target: { id: 'r', quantity: 1, perPersonDay: false }, required: 1, shortage: 1 }, [], plan);
+assert.equal(fixed.daily, null);
+assert.deepEqual(costOverview([cost, noPrice]), {
+  total: cost.total!,
+  shortageTotal: cost.shortageCost!,
+  unpricedTargets: 1,
+});
+
+console.log('stockUtils cost/inspection: OK');
+
+// ---- 点検盤のまとめ ----
+const boardItem = (patch: Record<string, unknown>) => ({
+  id: String(patch.name),
+  name: 'x',
+  category: '',
+  position: 0,
+  quantity: 1,
+  unit: '',
+  amountPerUnit: 1,
+  targetId: null,
+  price: null,
+  expiresOn: null,
+  storage: 'home' as const,
+  inspectedOn: null,
+  inspectIntervalMonths: null,
+  createdOn: '2026-01-01',
+  ...patch,
+});
+const board = buildStockBoard(
+  [
+    boardItem({ name: '水500', targetId: 'water', amountPerUnit: 0.5, quantity: 6, price: 100, expiresOn: '2026-11-30' }),
+    boardItem({ name: '水1.8', targetId: 'water', amountPerUnit: 1.8, quantity: 2, expiresOn: '2030-01-01', storage: 'carry' }),
+    boardItem({ name: 'クッキー', expiresOn: '2027-03-01', price: 200 }),
+    boardItem({ name: 'ラジオ', inspectIntervalMonths: 6, createdOn: '2026-04-01' }),
+    boardItem({ name: 'ランタン', inspectIntervalMonths: 6, inspectedOn: '2026-09-01' }),
+    boardItem({ name: '衛生用品' }),
+  ],
+  [{ id: 'water', quantity: 3, perPersonDay: true, carry: true }],
+  plan,
+  today,
+);
+assert.equal(board.blocks.length, 1);
+assert.deepEqual(
+  board.blocks[0].lots.map((lot) => lot.name),
+  ['水500', '水1.8'],
+);
+assert.deepEqual(
+  board.others.map((lot) => lot.name),
+  ['クッキー'],
+);
+assert.deepEqual(
+  board.equipment.map((lot) => lot.name).sort(),
+  ['ラジオ', 'ランタン', '衛生用品'],
+);
+// 点検の時期はラジオだけ（追加から半年経った）。ランタンは先月点検済み、衛生用品は間隔なし。
+assert.deepEqual(
+  board.attention.inspect.map((lot) => lot.name),
+  ['ラジオ'],
+);
+assert.deepEqual(
+  board.attention.replacement.lots.map((row) => row.item.name),
+  ['水500'],
+);
+assert.equal(board.attention.short.length, 1);
+assert.equal(board.counts.soon, 1);
+assert.equal(board.counts.inspect, 1);
+assert.equal(board.attention.bag?.lastOn, null);
+
+console.log('stockUtils board: OK');

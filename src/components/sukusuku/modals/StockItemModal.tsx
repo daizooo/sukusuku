@@ -4,8 +4,11 @@ import { useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import type { StockItem, StockItemDraft, StockTarget } from '@/types/app';
 import {
+  DEFAULT_INSPECT_MONTHS,
   formatExpiry,
   formatQuantity,
+  formatYen,
+  INSPECT_INTERVAL_OPTIONS,
   parseExpiryInput,
   STORAGE_LABEL,
   type StockStorage,
@@ -29,6 +32,9 @@ interface FormState {
   targetId: string | null;
   amountPerUnit: string;
   storage: StockStorage;
+  price: string;
+  inspectedOn: string;
+  inspectInterval: number | null;
 }
 
 const STORAGE_OPTIONS: { value: StockStorage; label: string }[] = [
@@ -48,6 +54,9 @@ const initialState = (item: StockItem | null, defaultStorage: StockStorage): For
         targetId: item.targetId,
         amountPerUnit: formatQuantity(item.amountPerUnit),
         storage: item.storage,
+        price: item.price === null ? '' : formatQuantity(item.price),
+        inspectedOn: formatExpiry({ expiresOn: item.inspectedOn, expiresMonthOnly: false }),
+        inspectInterval: item.inspectIntervalMonths,
       }
     : {
         name: '',
@@ -59,6 +68,9 @@ const initialState = (item: StockItem | null, defaultStorage: StockStorage): For
         targetId: null,
         amountPerUnit: '1',
         storage: defaultStorage,
+        price: '',
+        inspectedOn: '',
+        inspectInterval: DEFAULT_INSPECT_MONTHS,
       };
 
 /** 入力を確かめて保存する形にする。だめなら突き返す文言。 */
@@ -74,6 +86,10 @@ function toStockDraft(form: FormState): StockItemDraft | string {
   if (!Number.isFinite(amountPerUnit) || amountPerUnit <= 0) {
     return '1つあたりの量は0より大きい数字で入れてください';
   }
+  const price = form.price.trim() === '' ? null : Number(form.price.trim());
+  if (price !== null && (!Number.isFinite(price) || price < 0)) return '値段は0以上の数字で入れてください';
+  const inspected = parseExpiryInput(form.inspectedOn);
+  if (!inspected || inspected.expiresMonthOnly) return '点検日は「2026.10.07」の形で入れてください';
   return {
     name: form.name,
     category: form.category,
@@ -85,6 +101,10 @@ function toStockDraft(form: FormState): StockItemDraft | string {
     targetId: form.targetId,
     amountPerUnit,
     storage: form.storage,
+    price,
+    inspectedOn: inspected.expiresOn,
+    // 点検の間隔は期限の無い備品だけ（期限のあるものは期限で見る）。
+    inspectIntervalMonths: expiry.expiresOn === null ? form.inspectInterval : null,
   };
 }
 
@@ -124,6 +144,15 @@ export default function StockItemModal({
 
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
   const selectedTarget = targets.find((target) => target.id === form.targetId) ?? null;
+  // 点検は期限の無い備品だけ。期限の欄が空のあいだ出す。
+  const isInspectable = form.expiry.trim() === '';
+  // 値段を最小単位（目標の単位）あたりに直した目安。
+  const priceValue = Number(form.price.trim());
+  const amountValue = Number(form.amountPerUnit.trim());
+  const perUnitHint =
+    selectedTarget && form.price.trim() !== '' && priceValue >= 0 && amountValue > 0
+      ? `${selectedTarget.unit}あたり ${formatYen(priceValue / amountValue)}`
+      : null;
 
   /** 「使った」「足した」を1つずつ。数の欄が読めないときは0から数える。 */
   const step = (delta: number) => {
@@ -338,6 +367,61 @@ export default function StockItemModal({
                   単位が同じなら1のまま。水 500ml の本を L で数えるなら 0.5
                 </span>
               </>
+            )}
+          </div>
+        )}
+
+        <div>
+          <span className={labelClass}>値段（1つあたり・円）</span>
+          <input
+            className={inputClass}
+            value={form.price}
+            onChange={(event) => update({ price: event.target.value })}
+            placeholder="例: 120"
+            inputMode="decimal"
+            aria-label="値段"
+          />
+          <span className="block text-[11px] text-gray-400 mt-1">
+            {perUnitHint ?? '数を変えても合計は自動で合います。未登録のままでも使えます'}
+          </span>
+        </div>
+
+        {isInspectable && (
+          <div>
+            <span className={labelClass}>点検（動作を確かめる間隔）</span>
+            <div className="flex flex-wrap gap-1.5">
+              {[null, ...INSPECT_INTERVAL_OPTIONS].map((months) => {
+                const selected = form.inspectInterval === months;
+                return (
+                  <button
+                    key={months ?? 'none'}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => update({ inspectInterval: months })}
+                    className={`px-2.5 py-1 rounded-full text-xs font-bold transition ${
+                      selected ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {months === null ? '点検しない' : `${months}か月`}
+                  </button>
+                );
+              })}
+            </div>
+            {form.inspectInterval !== null && (
+              <label className="block mt-2">
+                <span className="block text-[11px] text-gray-500 mb-1">最後に点検した日</span>
+                <input
+                  className={inputClass}
+                  value={form.inspectedOn}
+                  onChange={(event) => update({ inspectedOn: event.target.value })}
+                  placeholder="2026.10.07"
+                  inputMode="decimal"
+                  aria-label="点検日"
+                />
+                <span className="block text-[11px] text-gray-400 mt-1">
+                  空のままなら、追加した日から数えます
+                </span>
+              </label>
             )}
           </div>
         )}
