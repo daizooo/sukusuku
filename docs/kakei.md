@@ -153,7 +153,7 @@ money_card_closes カードの照合。 wallet_id / month / statement_amount / c
   `special_item_id`（と予定にひも付くときは `special_plan_id`）を持つ
 - 振替の記録は品目を1つ持つ（金額だけ。種類なし）
 - 日用品の台帳 `household_products` に、その品を記録するときの種類 `money_category_id`（小分類）を足す。
-  品目の画面の「いつもの」はこれで絞る
+  「日用品から選ぶ」の一覧のはじめの絞り込みに使う
 - 数え方（年度・月の集計・差・要因の上位）は mobile・PWA で同じ中身の `moneyUtils.ts`（テストつき）
 
 ## 6. 移し替え
