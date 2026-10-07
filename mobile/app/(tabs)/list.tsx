@@ -26,6 +26,7 @@ import {
   insertItem,
   insertList,
   loadLists,
+  moveUngroupedItems,
   seedDefaultLists,
   updateGroupName,
   updateGroupPositions,
@@ -40,7 +41,7 @@ import ListEditorModal from '@/components/list/ListEditorModal';
 import { loadHouseholdProducts } from '@/lib/api/householdProducts';
 import { suggestProducts } from '@/lib/shoppingUtils';
 import ListOverviewCard from '@/components/list/ListOverviewCard';
-import { AddRow, GroupHeader, ItemRow } from '@/components/list/ListRows';
+import { AddRow, GroupHeader, ItemRow, UngroupedHeader } from '@/components/list/ListRows';
 import { useDragReorder } from '@/components/list/useDragReorder';
 
 /**
@@ -327,6 +328,36 @@ export default function ListScreen() {
     }
   };
 
+  /**
+   * 未分類に名前を付ける。未分類はグループの行を持たないので、その名前のグループを
+   * 末尾（未分類が出ていた位置）に作り、未分類の項目をそこへ移す。
+   */
+  const nameUngrouped = async (listId: string, name: string) => {
+    let created: ListGroup;
+    try {
+      created = await insertGroup(supabase, {
+        listId,
+        name,
+        position: groups.filter((group) => group.listId === listId).length,
+      });
+    } catch {
+      failed('グループの追加');
+      return;
+    }
+    setGroups((prev) => [...prev, created]);
+    const previousItems = items;
+    setItems((prev) =>
+      prev.map((item) => (item.listId === listId && item.groupId === null ? { ...item, groupId: created.id } : item)),
+    );
+    try {
+      await moveUngroupedItems(supabase, listId, created.id);
+    } catch {
+      // グループはできているので残し、項目だけ未分類へ戻す。
+      setItems(previousItems);
+      failed('項目の移動');
+    }
+  };
+
   const removeGroup = async (id: string) => {
     const previousGroups = groups;
     setGroups((prev) => prev.filter((group) => group.id !== id));
@@ -594,7 +625,8 @@ export default function ListScreen() {
             {/* どの枠にも入れていない項目があるときだけ出す。 */}
             {ungroupedItems.length > 0 && (
               <View style={[styles.card, styles.cardSpaced]}>
-                <Text style={styles.ungroupedTitle}>未分類</Text>
+                {/* 見出しを押すと名前を付けられる（その名前のグループになる）。 */}
+                <UngroupedHeader onName={(name) => void nameUngrouped(selected.id, name)} />
                 {itemRows(itemsSection(null), ungroupedItems)}
                 <AddRow
                   divided
@@ -729,16 +761,6 @@ const styles = StyleSheet.create({
   cardSpaced: { marginTop: 12 },
   lifted: { zIndex: 20, elevation: 8, backgroundColor: colors.surface, borderRadius: 8 },
   liftedCard: { borderColor: colors.dragBorder },
-  ungroupedTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textMuted,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.neutralSurface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
 
   doneHeader: {
     flexDirection: 'row',

@@ -189,6 +189,19 @@ export async function updateGroupName(supabase: SupabaseDb, id: string, name: st
 }
 
 /**
+ * 未分類の項目をまとめてグループへ入れる。未分類の見出しに名前を付けたときに使う
+ * （未分類はグループの行を持たないので、名前を付けるとグループを作ってそこへ移す）。
+ */
+export async function moveUngroupedItems(supabase: SupabaseDb, listId: string, groupId: string): Promise<void> {
+  const { error } = await supabase
+    .from('list_items')
+    .update({ group_id: groupId })
+    .eq('list_id', listId)
+    .is('group_id', null);
+  if (error) throw error;
+}
+
+/**
  * グループを消す。中の項目は消さず未分類へ落ちる
  * （外部キーの on delete set null）。買い忘れを生まないため。
  */
