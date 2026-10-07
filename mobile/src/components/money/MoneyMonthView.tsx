@@ -6,17 +6,19 @@ import { colors } from '@/lib/theme';
 import {
   buildBudgetTiles,
   buildMonthSummary,
+  buildSpecialProgress,
   fiscalYearOfMonth,
   formatSignedYen,
   formatYen,
   type BudgetTile,
 } from '@/lib/moneyUtils';
-import { buildYearRows } from '@/lib/specialUtils';
+import { buildYearRows, formatFiscalYear } from '@/lib/specialUtils';
 import { MonthBar, UsageRing } from '@/components/money/moneyVisual';
 
 // 家計タブの「月」（docs/kakei.md §4.1）。PWA版の `src/components/sukusuku/money/MoneyMonthView.tsx` と同じ並び・文言。
 //
-// 上に結論（月の収支＝収入 − 生活費 − 貯金。特別費は別枠）、その下に生活費の大分類のタイル（使った割合の輪）を
+// 上に結論（月の収支＝収入 − 生活費 − 貯金）。特別費は月の収支に入れず、その下に別枠で
+// 「この月に特別費の年度の予算がどれだけ減ったか・残り」を出す。その下に生活費の大分類のタイル（使った割合の輪）を
 // 予算を超えた順に。タイルを押すと開く「要因」・月のメモ・カードの締めは docs/kakei.md §7 の3 で足す。
 
 interface MoneyMonthViewProps {
@@ -48,16 +50,12 @@ export default function MoneyMonthView({
   );
   const tiles = useMemo(() => buildBudgetTiles(records, categories, budgets, monthKey), [records, categories, budgets, monthKey]);
   // その月の特別費の予定（済・まだ）。
-  const special = useMemo(() => {
-    const month = Number(monthKey.slice(5, 7));
-    const rows = buildYearRows(specialItems, specialActuals, fiscalYearOfMonth(monthKey), 'expense').filter(
-      (row) => row.month === month,
-    );
-    return {
-      planned: rows.reduce((sum, row) => sum + row.budget, 0),
-      pending: rows.filter((row) => row.planId !== null && row.actual === null).length,
-    };
-  }, [specialItems, specialActuals, monthKey]);
+  // 特別費の年度の予算が、この月にどれだけ減ったか（月の収支には入れない）。
+  const special = useMemo(
+    () =>
+      buildSpecialProgress(buildYearRows(specialItems, specialActuals, fiscalYearOfMonth(monthKey), 'expense'), monthKey),
+    [specialItems, specialActuals, monthKey],
+  );
   const livingDiff = summary.livingBudget - summary.living;
 
   return (
@@ -69,28 +67,59 @@ export default function MoneyMonthView({
             <Text style={styles.summaryLabel}>月の収支（収入 − 生活費 − 貯金）</Text>
             <Text style={[styles.balance, summary.balance < 0 && styles.over]}>{formatSignedYen(summary.balance)}</Text>
           </View>
-          <View style={styles.summaryLine}>
-            <Text style={styles.summarySub}>予算どおりなら {formatSignedYen(summary.plannedBalance)}</Text>
-            <Text style={[styles.summarySub, livingDiff < 0 && styles.over]}>
-              生活費 {formatSignedYen(livingDiff)}（{livingDiff < 0 ? '予算超え' : '予算内'}）
-            </Text>
+          <View style={styles.line}>
+            <Text style={styles.lineLabel}>収入</Text>
+            <Text style={styles.lineValue}>{formatYen(summary.income)}</Text>
           </View>
-          {(summary.saving > 0 || summary.savingTarget > 0) && (
-            <View style={styles.summaryLine}>
-              <Text style={styles.summarySub}>貯金</Text>
-              <Text style={styles.summarySub}>
-                {formatYen(summary.saving)}
-                {summary.savingTarget > 0 ? ` / 目標 ${formatYen(summary.savingTarget)}` : ''}
+          <View style={styles.line}>
+            <Text style={styles.lineLabel}>
+              生活費<Text style={[styles.lineNote, livingDiff < 0 && styles.over]}>
+                {'　'}予算 {formatYen(summary.livingBudget)}・差 {formatSignedYen(livingDiff)}
               </Text>
-            </View>
-          )}
-          <View style={[styles.summaryLine, styles.divided]}>
-            <Text style={styles.summarySub}>特別費（別枠）</Text>
-            <Text style={styles.summarySub}>
-              済 <Text style={styles.strong}>{formatYen(summary.special)}</Text> / 予定 {formatYen(special.planned)}
-              {special.pending > 0 && <Text style={styles.over}>　まだ{special.pending}件</Text>}
+            </Text>
+            <Text style={styles.lineValue}>−{formatYen(summary.living)}</Text>
+          </View>
+          <View style={styles.line}>
+            <Text style={styles.lineLabel}>
+              貯金
+              {summary.savingTarget > 0 && (
+                <Text style={styles.lineNote}>
+                  {'　'}目標 {formatYen(summary.savingTarget)}
+                </Text>
+              )}
+            </Text>
+            <Text style={styles.lineValue}>−{formatYen(summary.saving)}</Text>
+          </View>
+          <Text style={styles.lineNote}>予算どおりなら {formatSignedYen(summary.plannedBalance)}</Text>
+        </View>
+
+        <View style={styles.special}>
+          <View style={styles.line}>
+            <Text style={styles.specialTitle}>特別費（月の収支とは別）</Text>
+            <Text style={styles.lineValue}>今月 −{formatYen(special.spentThisMonth)}</Text>
+          </View>
+          <View style={styles.bar}>
+            <View
+              style={[
+                styles.barFill,
+                {
+                  width: `${special.yearBudget > 0 ? Math.min(100, (special.spentToDate / special.yearBudget) * 100) : 0}%`,
+                },
+                special.remaining < 0 && styles.barOver,
+              ]}
+            />
+          </View>
+          <View style={styles.line}>
+            <Text style={styles.lineNote}>
+              {formatFiscalYear(fiscalYearOfMonth(monthKey))}の予算 {formatYen(special.yearBudget)}
+            </Text>
+            <Text style={[styles.lineNote, special.remaining < 0 && styles.over]}>
+              {special.remaining < 0 ? `${formatYen(special.remaining)} 超過` : `残り ${formatYen(special.remaining)}`}
             </Text>
           </View>
+          {special.pendingThisMonth > 0 && (
+            <Text style={[styles.lineNote, styles.over]}>この月の予定でまだ払っていないもの {special.pendingThisMonth}件</Text>
+          )}
         </View>
 
         <View style={styles.sectionHead}>
@@ -151,7 +180,8 @@ function Tile({ tile }: { tile: BudgetTile }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingBottom: 24 },
+  // 右下の「＋」にタイルが隠れないよう、下を空ける。
+  content: { paddingHorizontal: 16, paddingBottom: 96 },
   summary: {
     borderRadius: 14,
     borderWidth: 1,
@@ -163,10 +193,23 @@ const styles = StyleSheet.create({
   summaryHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   summaryLabel: { flex: 1, fontSize: 12, fontWeight: '500', color: colors.textMuted },
   balance: { fontSize: 26, fontWeight: '700', color: colors.text },
-  summaryLine: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  summarySub: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
-  strong: { fontWeight: '700', color: colors.text },
-  divided: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8, marginTop: 4 },
+  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 },
+  lineLabel: { flex: 1, fontSize: 13, fontWeight: '500', color: colors.textSubtle },
+  lineNote: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
+  lineValue: { fontSize: 13, fontWeight: '600', color: colors.text },
+  special: {
+    marginTop: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: 14,
+    gap: 6,
+  },
+  specialTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.text },
+  bar: { height: 6, borderRadius: 3, backgroundColor: colors.neutralSurface, overflow: 'hidden' },
+  barFill: { height: 6, borderRadius: 3, backgroundColor: colors.livingSpecial },
+  barOver: { backgroundColor: colors.moneyOverRing },
   over: { color: colors.moneyOver },
   muted: { color: colors.textFaint },
   sectionHead: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 18, marginBottom: 8 },

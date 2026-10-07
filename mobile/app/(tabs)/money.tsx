@@ -32,16 +32,17 @@ import MoneyRecordsView from '@/components/money/MoneyRecordsView';
 import MoneyMonthView from '@/components/money/MoneyMonthView';
 import RecordEditor from '@/components/money/RecordEditor';
 import CategoryEditor from '@/components/money/CategoryEditor';
-import SpecialPanel from '@/components/living/SpecialPanel';
+import MoneyYearView from '@/components/money/MoneyYearView';
 
 /**
  * 家計タブ（docs/kakei.md）。日々の収支の記録と、月・年の振り返り。
  * Web版の `src/components/sukusuku/tabs/MoneyTab.tsx` と同じ項目・並び・文言にしてある。
  *
- * 中は「記録 / 月 / 年」の3つ。見出しの右は淡い色の丸いボタン「＋」（記録を追加）だけ（§2）。
+ * 中は「記録 / 月 / 年」の3つ。記録の追加は右下の丸いボタン「＋」（Zaim と同じ。§2）。
  * - 記録: その月の記録を日ごとに。押すと記録の詳細（RecordEditor。Zaim と同じ流れ）
- * - 月: 月の収支と、生活費の大分類のタイル（予算を超えた順）。種類と予算はここから直す
- * - 年: 特別費の年度の予定と実績（暮らしタブから移した。年の振り返りは §7 の5 で作り直す）
+ * - 月: 月の収支（収入 − 生活費 − 貯金）、特別費の年度の予算の減り（別枠）、生活費の大分類のタイル。
+ *   種類と予算はここから直す
+ * - 年: 年度の収支（月ごとの表と合計）と、その下に特別費の予定と実績
  *
  * 見出し・切り替え・月の送りは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  */
@@ -71,6 +72,7 @@ export default function MoneyScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [view, setView] = useState<View3>('records');
   const [monthKey, setMonthKey] = useState(() => monthKeyOfDate(new Date()));
+  const [fiscalYear, setFiscalYear] = useState(() => fiscalYearOfMonth(monthKeyOfDate(new Date())));
   const [editing, setEditing] = useState<Editing>(null);
   const [editingCategories, setEditingCategories] = useState(false);
 
@@ -180,15 +182,6 @@ export default function MoneyScreen() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.title}>家計</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="記録を追加"
-          onPress={() => setEditing('new')}
-          disabled={!familyId}
-          style={styles.addButton}
-        >
-          <Plus size={22} color={colors.moneyText} />
-        </Pressable>
       </View>
       <View accessibilityRole="tablist" style={styles.views}>
         {VIEWS.map((entry) => {
@@ -232,10 +225,34 @@ export default function MoneyScreen() {
           onEditCategories={() => setEditingCategories(true)}
         />
       ) : (
-        <View style={styles.year}>
-          <SpecialPanel familyId={familyId} onRecordsChanged={() => familyId && void reload(familyId).catch(() => {})} />
-        </View>
+        <MoneyYearView
+          fiscalYear={fiscalYear}
+          onFiscalYear={setFiscalYear}
+          familyId={familyId}
+          records={records}
+          categories={categories}
+          budgets={budgets}
+          wallets={wallets}
+          onSelectMonth={(next) => {
+            setMonthKey(next);
+            setView('month');
+          }}
+          onRecordsChanged={() => {
+            if (familyId) void reload(familyId).catch(() => {});
+          }}
+        />
       )}
+
+      {/* 記録の追加は右下の丸いボタン（Zaim と同じ）。どの面でも同じ場所。 */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="記録を追加"
+        onPress={() => setEditing('new')}
+        disabled={!familyId}
+        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+      >
+        <Plus size={28} color={colors.primaryText} />
+      </Pressable>
 
       {editing !== null && (
         <RecordEditor
@@ -275,23 +292,21 @@ export default function MoneyScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   centered: { alignItems: 'center', justifyContent: 'center' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
+  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
   title: { fontSize: 18, fontWeight: '700', color: colors.text },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  fab: {
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.moneySoft,
+    backgroundColor: colors.money,
+    elevation: 6,
   },
+  fabPressed: { opacity: 0.85 },
   views: {
     flexDirection: 'row',
     gap: 20,
@@ -304,5 +319,4 @@ const styles = StyleSheet.create({
   viewTextSelected: { color: colors.text, fontWeight: '700' },
   underline: { marginTop: 6, height: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: 'transparent' },
   underlineSelected: { backgroundColor: colors.moneyRing },
-  year: { flex: 1, paddingTop: 10 },
 });

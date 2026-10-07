@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 
 import {
   budgetFor,
+  buildSpecialProgress,
+  buildYearSummary,
   buildBudgetTiles,
   buildMonthSummary,
   categoryPath,
@@ -22,7 +24,8 @@ import {
   shiftMonth,
   specialActualsFromRecords,
 } from './moneyUtils.ts';
-import type { MoneyBudget, MoneyCategory, MoneyItem, MoneyRecord, MoneyWallet } from '../types/app.ts';
+import { buildYearRows } from './specialUtils.ts';
+import type { MoneyBudget, MoneyCategory, MoneyItem, MoneyRecord, MoneyWallet, SpecialItem } from '../types/app.ts';
 
 // ---- 月・年度 ----
 assert.equal(shiftMonth('2026-12', 1), '2027-01');
@@ -214,6 +217,67 @@ assert.equal(pressCalcKey('12', '+'), '12+');
 assert.equal(pressCalcKey('12+', '*'), '12*', '演算子は置き換える');
 assert.equal(pressCalcKey('', '+'), '');
 assert.equal(pressCalcKey('12', 'back'), '1');
+
+// ---- 年度の収支 ----
+const year = buildYearSummary(records, categories, budgets, wallets, 2026, '2026-09');
+assert.equal(year.months.length, 12);
+assert.equal(year.months[0].monthKey, '2026-04');
+assert.equal(year.months[11].monthKey, '2027-03');
+const september = year.months.find((row) => row.monthKey === '2026-09')!;
+assert.equal(september.balance, summary.balance, '月の行は月の収支と同じ');
+assert.equal(september.livingDiff, summary.livingBudget - summary.living);
+const august = year.months.find((row) => row.monthKey === '2026-08')!;
+assert.equal(august.living, 1000);
+assert.equal(year.total.living, september.living + august.living, '記録の無い月は0');
+assert.equal(year.total.balance, year.months.reduce((sum, row) => sum + row.balance, 0));
+assert.equal(year.months.find((row) => row.monthKey === '2026-10')!.living, 0, 'まだ来ていない月は数えない');
+assert.equal(
+  buildYearSummary(records, categories, budgets, wallets, 2026, '2026-08').total.living,
+  1000,
+  'upTo より後の月は合計に入れない',
+);
+
+// ---- 特別費の年度の予算の減り ----
+const specialItems: SpecialItem[] = [
+  {
+    id: 'tax',
+    kind: 'expense',
+    category: '税金',
+    name: '自動車税',
+    cycleYears: 1,
+    baseYear: null,
+    note: '',
+    position: 0,
+    plans: [
+      { id: 'plan1', month: 9, amount: 60000, tentative: false },
+      { id: 'plan2', month: 9, amount: 10000, tentative: false },
+    ],
+  },
+  { id: 'trip', kind: 'expense', category: '旅行', name: '旅行', cycleYears: 1, baseYear: null, note: '', position: 1, plans: [{ id: 'plan3', month: 12, amount: 100000, tentative: false }] },
+];
+const specialRows = buildYearRows(
+  specialItems,
+  [
+    ...specialActualsFromRecords(records),
+    { id: 'old', recordId: 'r0', itemId: 'trip', planId: null, occurredOn: '2026-05-03', amount: 20000, note: '' },
+  ],
+  2026,
+  'expense',
+);
+assert.deepEqual(buildSpecialProgress(specialRows, '2026-09'), {
+  yearBudget: 170000,
+  spentThisMonth: 58000,
+  spentToDate: 78000,
+  remaining: 92000,
+  pendingThisMonth: 1,
+});
+assert.deepEqual(buildSpecialProgress(specialRows, '2026-06'), {
+  yearBudget: 170000,
+  spentThisMonth: 0,
+  spentToDate: 20000,
+  remaining: 150000,
+  pendingThisMonth: 0,
+});
 
 // ---- 入力の形との行き来 ----
 let key = 0;

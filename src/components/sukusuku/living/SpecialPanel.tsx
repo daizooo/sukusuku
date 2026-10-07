@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import type { SpecialActual, SpecialActualDraft, SpecialItem, SpecialKind } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { toDateString } from '@/lib/dateUtils';
@@ -19,7 +19,6 @@ import {
   buildYearRows,
   calendarYearOf,
   fiscalYearOf,
-  fiscalYearOfDate,
   formatFiscalYear,
   groupByMonth,
   isOverBudget,
@@ -32,7 +31,8 @@ import SegmentedTabs from '../ui/SegmentedTabs';
 import SpecialItemModal, { type SpecialItemModalResult } from '../modals/SpecialItemModal';
 import SpecialActualModal from '../modals/SpecialActualModal';
 
-// 特別費の面（docs/home.md §5.4）。家計タブの「年」に置く（docs/kakei.md §2。年の振り返りは §7 の5 で作り直す）。
+// 特別費の予定と実績（docs/home.md §5.4）。家計タブの「年」の、年度の収支の下に置く（docs/kakei.md §4.2）。
+// 年度は「年」の画面で選んだもの。スクロールも「年」の画面に任せる（ここは中身だけ）。
 // mobile版の `mobile/src/components/living/SpecialPanel.tsx` と同じ項目・並び・文言。
 //
 // 実績は家計の記録の品目（docs/kakei.md §3.2）。「済」は品目1つの記録を作り、家計タブの記録にも出る。
@@ -40,7 +40,6 @@ import SpecialActualModal from '../modals/SpecialActualModal';
 // 年度（4月〜翌3月）ごとに、特別費（支出）と特別収入（賞与など）の「予算・実績・差異」を見る。
 // 一覧は月ごと（4月→3月）で、1行＝予定1回ぶん（または予定外の出費1件）。
 // 予定の行の左の丸を1回押すと、予算の額・今日の日付で実績になる（額が違えば行を押して直す）。
-// 上（年度・支出/収入・合計）は固定で、スクロールするのは月ごとの一覧だけ。
 
 const KIND_OPTIONS: { id: SpecialKind; label: string }[] = [
   { id: 'expense', label: '特別費（支出）' },
@@ -51,16 +50,19 @@ const signed = (value: number) => `${value < 0 ? '−' : ''}${formatPrice(Math.a
 
 interface SpecialPanelProps {
   familyId: string;
+  /** 年度（4月始まり）。「年」の画面で選ぶ。 */
+  fiscalYear: number;
+  /** 予定外の出費を足したとき、その年度へ移る。 */
+  onFiscalYear: (fiscalYear: number) => void;
   /** 実績（家計の記録）を足した・直した・消した。家計タブの記録を読み直す。 */
   onRecordsChanged?: () => void;
 }
 
-export default function SpecialPanel({ familyId, onRecordsChanged }: SpecialPanelProps) {
+export default function SpecialPanel({ familyId, fiscalYear, onFiscalYear, onRecordsChanged }: SpecialPanelProps) {
   const supabase = useMemo(() => createClient(), []);
   const [items, setItems] = useState<SpecialItem[]>([]);
   const [actuals, setActuals] = useState<SpecialActual[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [fiscalYear, setFiscalYear] = useState(() => fiscalYearOfDate(new Date()));
   const [kind, setKind] = useState<SpecialKind>('expense');
   const [editingRow, setEditingRow] = useState<SpecialRow | null>(null);
   const [editingItem, setEditingItem] = useState<SpecialItem | null>(null);
@@ -174,7 +176,7 @@ export default function SpecialPanel({ familyId, onRecordsChanged }: SpecialPane
         setItems((prev) => [...prev, created.item]);
         withActual(created.actual);
         setKind(created.item.kind);
-        setFiscalYear(fiscalYearOf(result.actual.occurredOn));
+        onFiscalYear(fiscalYearOf(result.actual.occurredOn));
       } else if (target === null) {
         const created = await insertSpecialItem(supabase, familyId, result.draft, nextPosition());
         setItems((prev) => [...prev, created]);
@@ -217,24 +219,9 @@ export default function SpecialPanel({ familyId, onRecordsChanged }: SpecialPane
 
   return (
     <>
-      <div className="shrink-0 flex items-center gap-2 pb-2">
-        <button
-          type="button"
-          aria-label="前の年度"
-          onClick={() => setFiscalYear((year) => year - 1)}
-          className="w-[30px] h-[30px] rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200"
-        >
-          <ChevronLeft size={18} className="text-gray-600" />
-        </button>
-        <span className="text-base font-bold text-gray-900">{formatFiscalYear(fiscalYear)}</span>
-        <button
-          type="button"
-          aria-label="次の年度"
-          onClick={() => setFiscalYear((year) => year + 1)}
-          className="w-[30px] h-[30px] rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200"
-        >
-          <ChevronRight size={18} className="text-gray-600" />
-        </button>
+      <div className="flex items-baseline gap-1.5 pb-2">
+        <h3 className="text-[17px] font-bold text-gray-900">特別費</h3>
+        <span className="text-xs text-gray-400">{formatFiscalYear(fiscalYear)}の予定と実績</span>
         <span className="flex-1" />
         <button
           type="button"
@@ -251,10 +238,10 @@ export default function SpecialPanel({ familyId, onRecordsChanged }: SpecialPane
         value={kind}
         onChange={setKind}
         ariaLabel="特別費か特別収入か"
-        className="shrink-0 mb-2"
+        className="mb-2"
       />
 
-      <div className="shrink-0 flex mb-1.5 rounded-xl border border-gray-200 bg-white py-2">
+      <div className="flex mb-1.5 rounded-xl border border-gray-200 bg-white py-2">
         <div className="flex-1 text-center">
           <p className="text-[11px] font-bold text-gray-500">予算</p>
           <p className="mt-0.5 text-[15px] font-bold text-gray-900 tabular-nums">{formatPrice(totals.budget)}</p>
@@ -289,7 +276,7 @@ export default function SpecialPanel({ familyId, onRecordsChanged }: SpecialPane
             : '年に数回の大きな出費や賞与を「項目を追加」で登録すると、年度ごとの予算と実績を見られます'}
         </p>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto pb-6">
+        <div className="pb-6">
           {groups.map((group) => (
             <section key={group.month ?? 'none'} className="mb-3">
               <div className="flex items-baseline justify-between pb-1">

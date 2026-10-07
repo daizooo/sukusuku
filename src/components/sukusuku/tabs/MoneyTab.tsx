@@ -29,16 +29,17 @@ import MoneyRecordsView from '../money/MoneyRecordsView';
 import MoneyMonthView from '../money/MoneyMonthView';
 import RecordEditor from '../money/RecordEditor';
 import CategoryEditor from '../money/CategoryEditor';
-import SpecialPanel from '../living/SpecialPanel';
+import MoneyYearView from '../money/MoneyYearView';
 
 /**
  * 家計タブ（docs/kakei.md）。日々の収支の記録と、月・年の振り返り。
  * mobile版の `mobile/app/(tabs)/money.tsx` と同じ項目・並び・文言にしてある。
  *
- * 中は「記録 / 月 / 年」の3つ。見出しの右は淡い色の丸いボタン「＋」（記録を追加）だけ（§2）。
+ * 中は「記録 / 月 / 年」の3つ。記録の追加は右下の丸いボタン「＋」（Zaim と同じ。§2）。
  * - 記録: その月の記録を日ごとに。押すと記録の詳細（RecordEditor。Zaim と同じ流れ）
- * - 月: 月の収支と、生活費の大分類のタイル（予算を超えた順）。種類と予算はここから直す
- * - 年: 特別費の年度の予定と実績（暮らしタブから移した。年の振り返りは §7 の5 で作り直す）
+ * - 月: 月の収支（収入 − 生活費 − 貯金）、特別費の年度の予算の減り（別枠）、生活費の大分類のタイル。
+ *   種類と予算はここから直す
+ * - 年: 年度の収支（月ごとの表と合計）と、その下に特別費の予定と実績
  *
  * 見出し・切り替え・月の送りは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  * 他のタブと違い、読み書きはこのタブの中で完結させる（アプリ全体の状態に持たない）。
@@ -66,6 +67,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [view, setView] = useState<MoneyView>('records');
   const [monthKey, setMonthKey] = useState(() => monthKeyOfDate(new Date()));
+  const [fiscalYear, setFiscalYear] = useState(() => fiscalYearOfMonth(monthKeyOfDate(new Date())));
   const [editing, setEditing] = useState<Editing>(null);
   const [editingCategories, setEditingCategories] = useState(false);
 
@@ -169,17 +171,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
 
   return (
     <div className="relative p-4 pb-0 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
-      <div className="shrink-0 flex items-center justify-between pb-1">
-        <h2 className="text-lg font-bold text-gray-900">家計</h2>
-        <button
-          type="button"
-          aria-label="記録を追加"
-          onClick={() => setEditing('new')}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-800 hover:bg-blue-200"
-        >
-          <Plus size={22} />
-        </button>
-      </div>
+      <h2 className="shrink-0 pb-1 text-lg font-bold text-gray-900">家計</h2>
       <div role="tablist" className="shrink-0 flex gap-5 border-b border-gray-200">
         {VIEWS.map((entry) => {
           const selected = entry.id === view;
@@ -224,10 +216,31 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           onEditCategories={() => setEditingCategories(true)}
         />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col pt-2.5">
-          <SpecialPanel familyId={familyId} onRecordsChanged={() => void reload().catch(() => {})} />
-        </div>
+        <MoneyYearView
+          fiscalYear={fiscalYear}
+          onFiscalYear={setFiscalYear}
+          familyId={familyId}
+          records={records}
+          categories={categories}
+          budgets={budgets}
+          wallets={wallets}
+          onSelectMonth={(next) => {
+            setMonthKey(next);
+            setView('month');
+          }}
+          onRecordsChanged={() => void reload().catch(() => {})}
+        />
       )}
+
+      {/* 記録の追加は右下の丸いボタン（Zaim と同じ）。どの面でも同じ場所。 */}
+      <button
+        type="button"
+        aria-label="記録を追加"
+        onClick={() => setEditing('new')}
+        className="absolute bottom-4 right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition-all hover:bg-blue-700 hover:scale-105 active:scale-95"
+      >
+        <Plus size={28} />
+      </button>
 
       {editing !== null && (
         <RecordEditor

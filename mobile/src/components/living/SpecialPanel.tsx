@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Check, Plus } from 'lucide-react-native';
 import type { SpecialActual, SpecialActualDraft, SpecialItem, SpecialKind } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
@@ -20,7 +20,6 @@ import {
   calendarYearOf,
   formatFiscalYear,
   fiscalYearOf,
-  fiscalYearOfDate,
   groupByMonth,
   isOverBudget,
   yearTotals,
@@ -32,7 +31,8 @@ import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import SpecialItemSheet, { type SpecialItemSheetResult } from '@/components/living/SpecialItemSheet';
 import SpecialActualSheet from '@/components/living/SpecialActualSheet';
 
-// 特別費の面（docs/home.md §5.4）。家計タブの「年」に置く（docs/kakei.md §2。年の振り返りは §7 の5 で作り直す）。
+// 特別費の予定と実績（docs/home.md §5.4）。家計タブの「年」の、年度の収支の下に置く（docs/kakei.md §4.2）。
+// 年度は「年」の画面で選んだもの。スクロールも「年」の画面に任せる（ここは中身だけ）。
 // PWA版の `src/components/sukusuku/living/SpecialPanel.tsx` と同じ項目・並び・文言。
 //
 // 実績は家計の記録の品目（docs/kakei.md §3.2）。「済」は品目1つの記録を作り、家計タブの記録にも出る。
@@ -40,7 +40,6 @@ import SpecialActualSheet from '@/components/living/SpecialActualSheet';
 // 年度（4月〜翌3月）ごとに、特別費（支出）と特別収入（賞与など）の「予算・実績・差異」を見る。
 // 一覧は月ごと（4月→3月）で、1行＝予定1回ぶん（または予定外の出費1件）。
 // 予定の行の右の「済」を1回押すと、予算の額・今日の日付で実績になる（額が違えば行を押して直す）。
-// 上（年度・支出/収入・合計）は固定で、スクロールするのは月ごとの一覧だけ。
 
 const KIND_OPTIONS: { id: SpecialKind; label: string }[] = [
   { id: 'expense', label: '特別費（支出）' },
@@ -55,15 +54,18 @@ type EditingItem = SpecialItem | null;
 
 interface SpecialPanelProps {
   familyId: string | null;
+  /** 年度（4月始まり）。「年」の画面で選ぶ。 */
+  fiscalYear: number;
+  /** 予定外の出費を足したとき、その年度へ移る。 */
+  onFiscalYear: (fiscalYear: number) => void;
   /** 実績（家計の記録）を足した・直した・消した。家計タブの記録を読み直す。 */
   onRecordsChanged?: () => void;
 }
 
-export default function SpecialPanel({ familyId, onRecordsChanged }: SpecialPanelProps) {
+export default function SpecialPanel({ familyId, fiscalYear, onFiscalYear, onRecordsChanged }: SpecialPanelProps) {
   const [items, setItems] = useState<SpecialItem[]>([]);
   const [actuals, setActuals] = useState<SpecialActual[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [fiscalYear, setFiscalYear] = useState(() => fiscalYearOfDate(new Date()));
   const [kind, setKind] = useState<SpecialKind>('expense');
   const [editingRow, setEditingRow] = useState<EditingRow>(null);
   const [editingItem, setEditingItem] = useState<EditingItem>(null);
@@ -178,7 +180,7 @@ export default function SpecialPanel({ familyId, onRecordsChanged }: SpecialPane
         setItems((prev) => [...prev, created.item]);
         withActual(created.actual);
         setKind(created.item.kind);
-        setFiscalYear(fiscalYearOf(result.actual.occurredOn));
+        onFiscalYear(fiscalYearOf(result.actual.occurredOn));
       } else if (target === null) {
         const created = await insertSpecialItem(supabase, familyId, result.draft, nextPosition());
         setItems((prev) => [...prev, created]);
@@ -221,26 +223,9 @@ export default function SpecialPanel({ familyId, onRecordsChanged }: SpecialPane
 
   return (
     <>
-      <View style={styles.yearBar}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="前の年度"
-          onPress={() => setFiscalYear((year) => year - 1)}
-          hitSlop={8}
-          style={styles.yearButton}
-        >
-          <ChevronLeft size={18} color={colors.textSubtle} />
-        </Pressable>
-        <Text style={styles.yearLabel}>{formatFiscalYear(fiscalYear)}</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="次の年度"
-          onPress={() => setFiscalYear((year) => year + 1)}
-          hitSlop={8}
-          style={styles.yearButton}
-        >
-          <ChevronRight size={18} color={colors.textSubtle} />
-        </Pressable>
+      <View style={styles.head}>
+        <Text style={styles.headTitle}>特別費</Text>
+        <Text style={styles.headHint}>{formatFiscalYear(fiscalYear)}の予定と実績</Text>
         <View style={styles.flex} />
         <Pressable
           accessibilityRole="button"
@@ -286,7 +271,7 @@ export default function SpecialPanel({ familyId, onRecordsChanged }: SpecialPane
       {isLoading ? (
         <Text style={styles.message}>読み込み中...</Text>
       ) : groups.length === 0 ? (
-        <View style={[styles.centered, styles.flex]}>
+        <View style={styles.centered}>
           <Text style={styles.message}>
             {hasAnything
               ? `${formatFiscalYear(fiscalYear)}の${kind === 'expense' ? '特別費' : '特別収入'}はありません`
@@ -294,7 +279,7 @@ export default function SpecialPanel({ familyId, onRecordsChanged }: SpecialPane
           </Text>
         </View>
       ) : (
-        <ScrollView style={styles.flex} contentContainerStyle={styles.listContent}>
+        <View style={styles.listContent}>
           {groups.map((group) => (
             <View key={group.month ?? 'none'} style={styles.group}>
               <View style={styles.groupHead}>
@@ -350,7 +335,7 @@ export default function SpecialPanel({ familyId, onRecordsChanged }: SpecialPane
               </View>
             </View>
           ))}
-        </ScrollView>
+        </View>
       )}
 
       {editingRow !== null && (
@@ -390,16 +375,9 @@ export default function SpecialPanel({ familyId, onRecordsChanged }: SpecialPane
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  yearBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
-  yearButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.neutralSurface,
-  },
-  yearLabel: { fontSize: 16, fontWeight: '700', color: colors.text },
+  head: { flexDirection: 'row', alignItems: 'baseline', gap: 6, paddingHorizontal: 16, paddingBottom: 8 },
+  headTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
+  headHint: { fontSize: 12, fontWeight: '500', color: colors.textFaint },
   addItem: {
     flexDirection: 'row',
     alignItems: 'center',

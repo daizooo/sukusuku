@@ -16,7 +16,7 @@ import { CategoryBadge, MonthBar } from './moneyVisual';
 
 // 家計タブの「記録」（docs/kakei.md §2・§3）。mobile版の `mobile/src/components/money/MoneyRecordsView.tsx` と同じ並び・文言。
 // その月の記録を日ごと（新しい日から）に並べる。1行＝1件の記録（種類・お店・出金元・合計）。押すと記録の詳細。
-// 月の送りは固定で、スクロールするのは一覧だけ。
+// 月の送りは固定で、スクロールするのは一覧だけ（右下の「＋」に最後が隠れないよう、下を空ける）。
 
 interface MoneyRecordsViewProps {
   monthKey: string;
@@ -96,9 +96,9 @@ export default function MoneyRecordsView({
       {isLoading ? (
         <p className="py-8 text-center text-sm text-gray-400">読み込み中...</p>
       ) : days.length === 0 ? (
-        <p className="p-8 text-center text-sm text-gray-400">この月の記録はまだありません。右上の「＋」で記録します</p>
+        <p className="p-8 text-center text-sm text-gray-400">この月の記録はまだありません。右下の「＋」で記録します</p>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto pb-6">
+        <div className="flex-1 min-h-0 overflow-y-auto pb-24">
           {days.map((day) => (
             <div key={day.date} className="mb-3">
               <p className="pb-1 text-xs font-bold text-gray-500">{dayLabel(day.date)}</p>

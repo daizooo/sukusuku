@@ -6,17 +6,19 @@ import type { MoneyBudget, MoneyCategory, MoneyRecord, MoneyWallet, SpecialActua
 import {
   buildBudgetTiles,
   buildMonthSummary,
+  buildSpecialProgress,
   fiscalYearOfMonth,
   formatSignedYen,
   formatYen,
   type BudgetTile,
 } from '@/lib/moneyUtils';
-import { buildYearRows } from '@/lib/specialUtils';
+import { buildYearRows, formatFiscalYear } from '@/lib/specialUtils';
 import { MonthBar, UsageRing } from './moneyVisual';
 
 // 家計タブの「月」（docs/kakei.md §4.1）。mobile版の `mobile/src/components/money/MoneyMonthView.tsx` と同じ並び・文言。
 //
-// 上に結論（月の収支＝収入 − 生活費 − 貯金。特別費は別枠）、その下に生活費の大分類のタイル（使った割合の輪）を
+// 上に結論（月の収支＝収入 − 生活費 − 貯金）。特別費は月の収支に入れず、その下に別枠で
+// 「この月に特別費の年度の予算がどれだけ減ったか・残り」を出す。その下に生活費の大分類のタイル（使った割合の輪）を
 // 予算を超えた順に。タイルを押すと開く「要因」・月のメモ・カードの締めは docs/kakei.md §7 の3 で足す。
 
 interface MoneyMonthViewProps {
@@ -48,22 +50,19 @@ export default function MoneyMonthView({
   );
   const tiles = useMemo(() => buildBudgetTiles(records, categories, budgets, monthKey), [records, categories, budgets, monthKey]);
   // その月の特別費の予定（済・まだ）。
-  const special = useMemo(() => {
-    const month = Number(monthKey.slice(5, 7));
-    const rows = buildYearRows(specialItems, specialActuals, fiscalYearOfMonth(monthKey), 'expense').filter(
-      (row) => row.month === month,
-    );
-    return {
-      planned: rows.reduce((sum, row) => sum + row.budget, 0),
-      pending: rows.filter((row) => row.planId !== null && row.actual === null).length,
-    };
-  }, [specialItems, specialActuals, monthKey]);
+  // 特別費の年度の予算が、この月にどれだけ減ったか（月の収支には入れない）。
+  const special = useMemo(
+    () =>
+      buildSpecialProgress(buildYearRows(specialItems, specialActuals, fiscalYearOfMonth(monthKey), 'expense'), monthKey),
+    [specialItems, specialActuals, monthKey],
+  );
   const livingDiff = summary.livingBudget - summary.living;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <MonthBar monthKey={monthKey} onChange={onMonth} />
-      <div className="flex-1 min-h-0 overflow-y-auto pb-6">
+      {/* 右下の「＋」にタイルが隠れないよう、下を空ける。 */}
+      <div className="flex-1 min-h-0 overflow-y-auto pb-24">
         <div className="space-y-1.5 rounded-2xl border border-gray-200 bg-white p-3.5">
           <div className="flex items-center justify-between gap-2">
             <span className="flex-1 text-xs text-gray-500">月の収支（収入 − 生活費 − 貯金）</span>
@@ -71,28 +70,51 @@ export default function MoneyMonthView({
               {formatSignedYen(summary.balance)}
             </span>
           </div>
-          <div className="flex justify-between gap-2 text-xs text-gray-500 tabular-nums">
-            <span>予算どおりなら {formatSignedYen(summary.plannedBalance)}</span>
-            <span className={livingDiff < 0 ? 'text-red-600' : ''}>
-              生活費 {formatSignedYen(livingDiff)}（{livingDiff < 0 ? '予算超え' : '予算内'}）
-            </span>
+          <div className="flex justify-between gap-2 text-[13px] tabular-nums">
+            <span className="text-gray-700">収入</span>
+            <span className="font-semibold text-gray-900">{formatYen(summary.income)}</span>
           </div>
-          {(summary.saving > 0 || summary.savingTarget > 0) && (
-            <div className="flex justify-between gap-2 text-xs text-gray-500 tabular-nums">
-              <span>貯金</span>
-              <span>
-                {formatYen(summary.saving)}
-                {summary.savingTarget > 0 ? ` / 目標 ${formatYen(summary.savingTarget)}` : ''}
+          <div className="flex justify-between gap-2 text-[13px] tabular-nums">
+            <span className="text-gray-700">
+              生活費
+              <span className={`text-[11px] ${livingDiff < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                　予算 {formatYen(summary.livingBudget)}・差 {formatSignedYen(livingDiff)}
               </span>
-            </div>
-          )}
-          <div className="mt-1 flex justify-between gap-2 border-t border-gray-200 pt-2 text-xs text-gray-500 tabular-nums">
-            <span>特別費（別枠）</span>
+            </span>
+            <span className="font-semibold text-gray-900">−{formatYen(summary.living)}</span>
+          </div>
+          <div className="flex justify-between gap-2 text-[13px] tabular-nums">
+            <span className="text-gray-700">
+              貯金
+              {summary.savingTarget > 0 && <span className="text-[11px] text-gray-400">　目標 {formatYen(summary.savingTarget)}</span>}
+            </span>
+            <span className="font-semibold text-gray-900">−{formatYen(summary.saving)}</span>
+          </div>
+          <p className="text-[11px] text-gray-400 tabular-nums">予算どおりなら {formatSignedYen(summary.plannedBalance)}</p>
+        </div>
+
+        <div className="mt-2.5 space-y-1.5 rounded-2xl border border-gray-200 bg-white p-3.5 tabular-nums">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-[13px] font-bold text-gray-900">特別費（月の収支とは別）</span>
+            <span className="text-[13px] font-semibold text-gray-900">今月 −{formatYen(special.spentThisMonth)}</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
+            <div
+              className={`h-1.5 rounded-full ${special.remaining < 0 ? 'bg-red-300' : 'bg-blue-600'}`}
+              style={{ width: `${special.yearBudget > 0 ? Math.min(100, (special.spentToDate / special.yearBudget) * 100) : 0}%` }}
+            />
+          </div>
+          <div className="flex justify-between gap-2 text-[11px] text-gray-400">
             <span>
-              済 <b className="text-gray-900">{formatYen(summary.special)}</b> / 予定 {formatYen(special.planned)}
-              {special.pending > 0 && <span className="text-red-600">　まだ{special.pending}件</span>}
+              {formatFiscalYear(fiscalYearOfMonth(monthKey))}の予算 {formatYen(special.yearBudget)}
+            </span>
+            <span className={special.remaining < 0 ? 'text-red-600' : ''}>
+              {special.remaining < 0 ? `${formatYen(special.remaining)} 超過` : `残り ${formatYen(special.remaining)}`}
             </span>
           </div>
+          {special.pendingThisMonth > 0 && (
+            <p className="text-[11px] text-red-600">この月の予定でまだ払っていないもの {special.pendingThisMonth}件</p>
+          )}
         </div>
 
         <div className="mt-4 mb-2 flex items-baseline gap-1.5">

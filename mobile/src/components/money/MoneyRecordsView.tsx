@@ -96,7 +96,7 @@ export default function MoneyRecordsView({
       {isLoading ? (
         <Text style={styles.message}>読み込み中...</Text>
       ) : days.length === 0 ? (
-        <Text style={styles.message}>この月の記録はまだありません。右上の「＋」で記録します</Text>
+        <Text style={styles.message}>この月の記録はまだありません。右下の「＋」で記録します</Text>
       ) : (
         <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
           {days.map((day) => (
@@ -150,7 +150,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   monthTotals: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
   message: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', padding: 32 },
-  content: { paddingHorizontal: 16, paddingBottom: 24 },
+  // 右下の「＋」に一覧の最後が隠れないよう、下を空ける。
+  content: { paddingHorizontal: 16, paddingBottom: 96 },
   day: { marginBottom: 12 },
   dayTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted, paddingBottom: 4 },
   card: {
