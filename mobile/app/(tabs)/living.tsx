@@ -41,6 +41,7 @@ import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import StockItemSheet from '@/components/living/StockItemSheet';
 import StockTargetSheet from '@/components/living/StockTargetSheet';
 import ProductsPanel, { type EditingProduct } from '@/components/living/ProductsPanel';
+import SpecialPanel from '@/components/living/SpecialPanel';
 import LivingMenu, { LIVING_SECTIONS, type LivingSection } from '@/components/living/LivingMenu';
 import LotteryPanel from '@/components/living/LotteryPanel';
 import { useShoppingSender } from '@/components/living/useShoppingSender';
@@ -114,6 +115,7 @@ export default function LivingScreen() {
   const [view, setView] = useState<StockView>('expiry');
   const [editingTarget, setEditingTarget] = useState<EditingTarget>(null);
   const [editingProduct, setEditingProduct] = useState<EditingProduct>(null);
+  const [addingSpecial, setAddingSpecial] = useState(false);
   const sender = useShoppingSender(familyId);
 
   useEffect(() => {
@@ -481,9 +483,11 @@ export default function LivingScreen() {
             onPress={() =>
               section === 'products'
                 ? setEditingProduct('new')
-                : view === 'expiry'
-                  ? setEditing('new')
-                  : setEditingTarget('new')
+                : section === 'special'
+                  ? setAddingSpecial(true)
+                  : view === 'expiry'
+                    ? setEditing('new')
+                    : setEditingTarget('new')
             }
             style={[styles.addButton, { backgroundColor: current.color }]}
             disabled={!familyId}
@@ -547,6 +551,8 @@ export default function LivingScreen() {
 
       {section === 'products' ? (
         <ProductsPanel familyId={familyId} sender={sender} editing={editingProduct} onEdit={setEditingProduct} />
+      ) : section === 'special' ? (
+        <SpecialPanel familyId={familyId} adding={addingSpecial} onAddClose={() => setAddingSpecial(false)} />
       ) : section === 'lottery' ? (
         <LotteryPanel familyId={familyId} userId={session.user.id} />
       ) : isLoading ? (

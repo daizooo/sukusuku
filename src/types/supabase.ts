@@ -922,6 +922,142 @@ export type Database = {
           },
         ]
       }
+      special_actuals: {
+        Row: {
+          amount: number
+          created_at: string
+          family_id: string
+          id: string
+          item_id: string
+          note: string
+          occurred_on: string
+          plan_id: string | null
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          family_id: string
+          id?: string
+          item_id: string
+          note?: string
+          occurred_on: string
+          plan_id?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          family_id?: string
+          id?: string
+          item_id?: string
+          note?: string
+          occurred_on?: string
+          plan_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "special_actuals_item_fkey"
+            columns: ["item_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "special_items"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
+            foreignKeyName: "special_actuals_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "special_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      special_items: {
+        Row: {
+          base_year: number | null
+          category: string
+          created_at: string
+          cycle_years: number
+          family_id: string
+          id: string
+          kind: string
+          name: string
+          note: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          base_year?: number | null
+          category?: string
+          created_at?: string
+          cycle_years?: number
+          family_id: string
+          id?: string
+          kind?: string
+          name: string
+          note?: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          base_year?: number | null
+          category?: string
+          created_at?: string
+          cycle_years?: number
+          family_id?: string
+          id?: string
+          kind?: string
+          name?: string
+          note?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "special_items_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      special_plans: {
+        Row: {
+          amount: number
+          created_at: string
+          family_id: string
+          id: string
+          item_id: string
+          month: number | null
+          tentative: boolean
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          family_id: string
+          id?: string
+          item_id: string
+          month?: number | null
+          tentative?: boolean
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          family_id?: string
+          id?: string
+          item_id?: string
+          month?: number | null
+          tentative?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "special_plans_item_fkey"
+            columns: ["item_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "special_items"
+            referencedColumns: ["id", "family_id"]
+          },
+        ]
+      }
       stock_expiry_deliveries: {
         Row: {
           error: string | null

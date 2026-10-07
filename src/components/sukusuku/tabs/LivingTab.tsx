@@ -39,6 +39,7 @@ import StockItemModal from '../modals/StockItemModal';
 import StockTargetModal from '../modals/StockTargetModal';
 import ProductsPanel, { type EditingProduct } from '../living/ProductsPanel';
 import LivingMenu, { LIVING_SECTIONS, type LivingSection } from '../living/LivingMenu';
+import SpecialPanel from '../living/SpecialPanel';
 import LotteryPanel from '../living/LotteryPanel';
 import { useShoppingSender } from '../living/useShoppingSender';
 import { shortageTitle } from '@/lib/shoppingUtils';
@@ -111,6 +112,7 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
   const [editing, setEditing] = useState<Editing>(null);
   const [editingTarget, setEditingTarget] = useState<EditingTarget>(null);
   const [editingProduct, setEditingProduct] = useState<EditingProduct>(null);
+  const [addingSpecial, setAddingSpecial] = useState(false);
   const sender = useShoppingSender(familyId);
 
   useEffect(() => {
@@ -449,9 +451,11 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
             onClick={() =>
               section === 'products'
                 ? setEditingProduct('new')
-                : view === 'expiry'
-                  ? setEditing('new')
-                  : setEditingTarget('new')
+                : section === 'special'
+                  ? setAddingSpecial(true)
+                  : view === 'expiry'
+                    ? setEditing('new')
+                    : setEditingTarget('new')
             }
             className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-sm font-bold transition ${current.accent}`}
           >
@@ -512,6 +516,8 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
 
       {section === 'products' ? (
         <ProductsPanel familyId={familyId} sender={sender} editing={editingProduct} onEdit={setEditingProduct} />
+      ) : section === 'special' ? (
+        <SpecialPanel familyId={familyId} adding={addingSpecial} onAddClose={() => setAddingSpecial(false)} />
       ) : section === 'lottery' ? (
         <LotteryPanel familyId={familyId} userId={userId} />
       ) : isLoading ? (

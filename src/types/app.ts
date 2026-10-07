@@ -460,6 +460,58 @@ export interface HouseholdProduct {
 
 export type HouseholdProductDraft = Omit<HouseholdProduct, 'id' | 'lastAddedAt'>;
 
+/** 特別費の種類。支出と、特別収入（賞与など）。docs/home.md §5.4。 */
+export type SpecialKind = 'expense' | 'income';
+
+/** 特別費の予定（1回ぶん）。special_plans に対応。 */
+export interface SpecialPlan {
+  id: string;
+  /** 発生する月（1〜12）。月が決まっていないものは null。 */
+  month: number | null;
+  amount: number;
+  /** 月がまだ仮のもの。 */
+  tentative: boolean;
+}
+
+/** 特別費の項目。special_items に対応（予定は special_plans から集めて持つ）。 */
+export interface SpecialItem {
+  id: string;
+  kind: SpecialKind;
+  category: string;
+  name: string;
+  /** 周期。1=毎年、n=n年おき、0=1回きり。 */
+  cycleYears: number;
+  /** 周期の起点の年度（4月始まり。2026年4月〜2027年3月なら 2026）。毎年なら null でよい。 */
+  baseYear: number | null;
+  note: string;
+  position: number;
+  plans: SpecialPlan[];
+}
+
+/** 特別費の実績。special_actuals に対応。planId があれば予定の実績、無ければ予定外。 */
+export interface SpecialActual {
+  id: string;
+  itemId: string;
+  planId: string | null;
+  /** YYYY-MM-DD。年度はここから決める。 */
+  occurredOn: string;
+  amount: number;
+  note: string;
+}
+
+/** 項目の編集内容。plans の id は既存の予定を残すためのもの（新しい予定は無い）。 */
+export interface SpecialItemDraft {
+  kind: SpecialKind;
+  category: string;
+  name: string;
+  cycleYears: number;
+  baseYear: number | null;
+  note: string;
+  plans: { id: string | null; month: number | null; amount: number; tentative: boolean }[];
+}
+
+export type SpecialActualDraft = Omit<SpecialActual, 'id' | 'itemId' | 'planId'>;
+
 /** 補助くじの玉。white＝25%、blue＝50%、red＝75%、gold＝100%（docs/home.md §9）。 */
 export type SubsidyBallId = 'white' | 'blue' | 'red' | 'gold';
 
