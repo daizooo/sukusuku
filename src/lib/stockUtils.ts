@@ -232,7 +232,7 @@ interface PricedStock {
 
 /** ロットの1つあたりの値段を、目標の最小単位（L・食・個など）あたりに直す。目標に数えていない・値段未登録なら null。 */
 export function unitPriceOf(item: PricedStock): number | null {
-  if (item.price === null || item.targetId === null || item.amountPerUnit <= 0) return null;
+  if (item.price == null || item.targetId === null || item.amountPerUnit <= 0) return null;
   return item.price / item.amountPerUnit;
 }
 
@@ -247,7 +247,7 @@ interface InspectableStock {
 
 /** 次の点検の日。点検の対象でない（期限がある・間隔が無い・数が0）なら null。 */
 export function nextInspectionOn(item: InspectableStock): string | null {
-  if (item.expiresOn !== null || item.inspectIntervalMonths === null || item.quantity <= 0) return null;
+  if (item.expiresOn !== null || item.inspectIntervalMonths == null || item.quantity <= 0) return null;
   return addMonths(item.inspectedOn ?? item.createdOn, item.inspectIntervalMonths);
 }
 
@@ -299,7 +299,7 @@ export function replacementLots<T extends CostedStock>(
     if (item.quantity <= 0) continue;
     const level = expiryLevel(item.expiresOn, today);
     if (level !== 'expired' && level !== 'soon') continue;
-    lots.push({ item, level, amount: item.price === null ? null : item.price * item.quantity });
+    lots.push({ item, level, amount: item.price == null ? null : item.price * item.quantity });
   }
   const total = lots.reduce((sum, lot) => sum + (lot.amount ?? 0), 0);
   return { lots, total, unpriced: lots.filter((lot) => lot.amount === null).length };

@@ -22,9 +22,10 @@ const rowToStockItem = (row: StockItemRow): StockItem => ({
   targetId: row.target_id,
   amountPerUnit: Number(row.amount_per_unit),
   storage: row.storage === 'carry' ? 'carry' : 'home',
-  price: row.price === null ? null : Number(row.price),
-  inspectedOn: row.inspected_on,
-  inspectIntervalMonths: row.inspect_interval_months,
+  // migration 0062 の適用前は、これらの列が返らない（undefined）。null として扱って壊れないようにする。
+  price: row.price == null ? null : Number(row.price),
+  inspectedOn: row.inspected_on ?? null,
+  inspectIntervalMonths: row.inspect_interval_months ?? null,
   createdOn: jstDateOf(row.created_at),
 });
 

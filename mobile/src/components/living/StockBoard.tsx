@@ -200,37 +200,64 @@ export default function StockBoard({
     </View>
   );
 
-  // ---- 品目のタイル（3列。余白を詰めて、1画面で多く見られるように） ----
-  const productTile = (product: StockProduct<StockItem, StockTarget>) => {
+  // ---- 品目の行（リスト。品名は全部見せ、数量を右に大きく） ----
+  const productRow = (product: StockProduct<StockItem, StockTarget>, index: number) => {
     const status = product.target?.status ?? null;
     const shortage = status?.shortage ?? 0;
     const required = status?.required ?? 0;
     const ratio = status && required > 0 ? Math.min(1, status.have / required) : null;
     const nearestLevel = product.nearest?.level;
     const nearestAlert = nearestLevel === 'expired' || nearestLevel === 'soon';
+    const hasNotes = shortage > 0 || product.nearest !== null || product.inspect !== null;
     return (
       <Pressable
         key={product.key}
         accessibilityRole="button"
         accessibilityLabel={`${product.name}の詳しい画面を開く`}
         onPress={() => setDetailKey(product.key)}
-        style={styles.tile}
+        style={[styles.row, index > 0 && styles.rowDivided]}
       >
-        <View style={styles.tileHead}>
-          <View style={styles.tileIcon}>
-            <StockIcon name={product.name} category={product.category} size={12} color={SOFT.icon} />
-          </View>
-          <Text style={styles.tileName} numberOfLines={1}>
-            {product.name}
-          </Text>
+        <View style={styles.tileIcon}>
+          <StockIcon name={product.name} category={product.category} size={13} color={SOFT.icon} />
         </View>
-        <Text style={styles.tileTotal}>
-          {formatQuantity(product.total)}
-          <Text style={styles.tileUnit}> {product.unit}</Text>
-          {product.carryTotal > 0 && <Text style={styles.tileBag}>  バッグ{formatQuantity(product.carryTotal)}</Text>}
-        </Text>
+        <View style={styles.flex}>
+          <Text style={styles.rowName}>{product.name}</Text>
+          {hasNotes && (
+            <View style={styles.notes}>
+              {shortage > 0 && status && (
+                <Text style={[styles.tileNote, styles.alertText]}>
+                  あと{formatQuantity(shortage)}
+                  {status.target.unit}不足
+                </Text>
+              )}
+              {product.nearest && (
+                <View style={styles.noteRow}>
+                  <Clock size={9} color={nearestAlert ? colors.alertText : colors.textFaint} />
+                  <Text style={[styles.tileNote, nearestAlert && styles.alertText]}>
+                    {expiryCountdown(product.nearest.on, today)}
+                  </Text>
+                </View>
+              )}
+              {product.inspect && (
+                <View style={styles.noteRow}>
+                  <Wrench size={9} color={product.inspect.due ? colors.alertText : colors.textFaint} />
+                  <Text style={[styles.tileNote, product.inspect.due && styles.alertText]}>
+                    {product.inspect.due ? '点検の時期' : `点検まで${spanText(daysBetween(today, product.inspect.next))}`}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+        <View style={styles.rowRight}>
+          <Text style={styles.rowTotal}>
+            {formatQuantity(product.total)}
+            <Text style={styles.tileUnit}> {product.unit}</Text>
+          </Text>
+          {product.carryTotal > 0 && <Text style={styles.tileBag}>バッグ{formatQuantity(product.carryTotal)}</Text>}
+        </View>
         {ratio !== null && (
-          <View style={styles.bar}>
+          <View style={styles.rowBar}>
             <View
               style={[
                 styles.barFill,
@@ -239,30 +266,6 @@ export default function StockBoard({
             />
           </View>
         )}
-        <View style={styles.notes}>
-          {shortage > 0 && status && (
-            <Text style={[styles.tileNote, styles.alertText]}>
-              あと{formatQuantity(shortage)}
-              {status.target.unit}
-            </Text>
-          )}
-          {product.nearest && (
-            <View style={styles.noteRow}>
-              <Clock size={9} color={nearestAlert ? colors.alertText : colors.textFaint} />
-              <Text style={[styles.tileNote, nearestAlert && styles.alertText]}>
-                {expiryCountdown(product.nearest.on, today)}
-              </Text>
-            </View>
-          )}
-          {product.inspect && (
-            <View style={styles.noteRow}>
-              <Wrench size={9} color={product.inspect.due ? colors.alertText : colors.textFaint} />
-              <Text style={[styles.tileNote, product.inspect.due && styles.alertText]}>
-                {product.inspect.due ? '点検' : `${spanText(daysBetween(today, product.inspect.next))}後`}
-              </Text>
-            </View>
-          )}
-        </View>
       </Pressable>
     );
   };
@@ -286,7 +289,7 @@ export default function StockBoard({
         shown.map((row) => (
           <View key={row.category} style={styles.section}>
             {categoryHeader(row.category, row.products.length)}
-            <View style={styles.grid}>{row.products.map(productTile)}</View>
+            <View style={styles.card}>{row.products.map(productRow)}</View>
           </View>
         ))
       )}
@@ -354,38 +357,32 @@ export default function StockBoard({
         Object.entries(bagByCategory).map(([name, rows]) => (
           <View key={name} style={styles.section}>
             {categoryHeader(name, rows.length)}
-            <View style={styles.grid}>
-              {rows.map((item) => {
+            <View style={styles.card}>
+              {rows.map((item, index) => {
                 const on = checked.has(item.id);
                 const level = expiryLevel(item.expiresOn, today);
                 const alert = level === 'expired' || level === 'soon';
                 return (
-                  <View key={item.id} style={[styles.bagTile, on && styles.bagTileOn]}>
+                  <View key={item.id} style={[styles.bagRow, index > 0 && styles.rowDivided, on && styles.bagRowOn]}>
                     <Pressable
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: on }}
                       accessibilityLabel={`${item.name}を確かめた`}
                       onPress={() => toggle(item.id)}
-                      style={styles.bagBody}
+                      style={styles.bagMain}
                     >
-                      <View style={styles.tileHead}>
-                        <View style={[styles.tileIcon, on && { backgroundColor: SOFT.border }]}>
-                          {on ? (
-                            <Check size={13} color={SOFT.buttonText} strokeWidth={3} />
-                          ) : (
-                            <StockIcon name={item.name} category={item.category} size={12} color={SOFT.icon} />
-                          )}
-                        </View>
-                        <Text style={styles.tileName} numberOfLines={1}>
-                          {item.name}
-                        </Text>
+                      <View style={[styles.checkCircle, on && styles.checkCircleOn]}>
+                        {on && <Check size={14} color={SOFT.buttonText} strokeWidth={3} />}
                       </View>
-                      <Text style={styles.tileTotal}>
+                      <View style={styles.flex}>
+                        <Text style={styles.rowName}>{item.name}</Text>
+                        {item.expiresOn && (
+                          <Text style={[styles.tileNote, alert && styles.alertText]}>{expiryCountdown(item.expiresOn, today)}</Text>
+                        )}
+                      </View>
+                      <Text style={styles.rowTotal}>
                         {formatQuantity(item.quantity)}
                         <Text style={styles.tileUnit}> {item.unit}</Text>
-                      </Text>
-                      <Text style={[styles.tileNote, alert && styles.alertText]}>
-                        {item.expiresOn ? expiryCountdown(item.expiresOn, today) : ' '}
                       </Text>
                     </Pressable>
                     <Pressable
@@ -395,7 +392,7 @@ export default function StockBoard({
                       hitSlop={6}
                       style={styles.bagEdit}
                     >
-                      <Pencil size={11} color={colors.textFaint} />
+                      <Pencil size={12} color={colors.textFaint} />
                     </Pressable>
                   </View>
                 );
@@ -571,24 +568,16 @@ const styles = StyleSheet.create({
   categoryName: { fontSize: 13, fontWeight: '700', color: colors.text },
   categoryCount: { fontSize: 11, fontWeight: '700', color: colors.textFaint },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  tile: {
-    width: '32%',
-    gap: 2,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  tileHead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  tileIcon: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.bg },
-  tileName: { flex: 1, fontSize: 12, fontWeight: '700', color: colors.text },
-  tileTotal: { fontSize: 20, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  rowDivided: { borderTopWidth: 1, borderTopColor: colors.neutralSurface },
+  rowName: { fontSize: 13, fontWeight: '700', color: colors.text, lineHeight: 17 },
+  rowTotal: { fontSize: 16, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'], textAlign: 'right' },
+  rowRight: { alignItems: 'flex-end' },
+  rowBar: { position: 'absolute', left: 10, right: 10, bottom: 0, height: 2, backgroundColor: colors.neutralSurface, overflow: 'hidden' },
+  tileIcon: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.bg },
   tileUnit: { fontSize: 10, fontWeight: '700', color: colors.textFaint },
   tileBag: { fontSize: 10, fontWeight: '700', color: colors.borderStrong },
-  bar: { height: 3, borderRadius: 2, backgroundColor: colors.neutralSurface, overflow: 'hidden' },
-  barFill: { height: 3, borderRadius: 2 },
+  barFill: { height: 2 },
   notes: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 6 },
   tileNote: { fontSize: 10, fontWeight: '700', color: colors.textFaint, fontVariant: ['tabular-nums'] },
   noteRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
@@ -602,16 +591,21 @@ const styles = StyleSheet.create({
   shortLabel: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
   shortPill: { borderRadius: 999, backgroundColor: colors.dangerSurface, paddingHorizontal: 8, paddingVertical: 2 },
   shortPillText: { fontSize: 11, fontWeight: '700', color: colors.alertText, fontVariant: ['tabular-nums'] },
-  bagTile: {
-    width: '32%',
+  bagRow: { flexDirection: 'row', alignItems: 'center' },
+  bagRowOn: { backgroundColor: SOFT.bg },
+  bagMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  checkCircle: {
+    width: 24,
+    height: 24,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.surface,
   },
-  bagTileOn: { borderColor: SOFT.border, backgroundColor: SOFT.bg },
-  bagBody: { gap: 2, paddingHorizontal: 8, paddingVertical: 6 },
-  bagEdit: { position: 'absolute', top: 4, right: 4 },
+  checkCircleOn: { borderColor: SOFT.border, backgroundColor: SOFT.button },
+  bagEdit: { paddingHorizontal: 10, paddingVertical: 8 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingBottom: 12, paddingTop: 8, backgroundColor: colors.background },
   finish: { borderRadius: 16, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.neutralSurface },
   finishOn: { backgroundColor: SOFT.button },

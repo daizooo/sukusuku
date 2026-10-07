@@ -207,63 +207,69 @@ export default function StockBoard({
     </section>
   );
 
-  // ---- 品目のタイル（3列。余白を詰めて、1画面で多く見られるように） ----
-  const productTile = (product: StockProduct<StockItem, StockTarget>) => {
+  // ---- 品目の行（リスト。品名は全部見せ、数量を右に大きく） ----
+  const listClass = 'rounded-xl border border-gray-200 bg-white divide-y divide-gray-100 overflow-hidden';
+
+  const productRow = (product: StockProduct<StockItem, StockTarget>) => {
     const status = product.target?.status ?? null;
     const shortage = status?.shortage ?? 0;
     const required = status?.required ?? 0;
     const ratio = status && required > 0 ? Math.min(1, status.have / required) : null;
     const nearestLevel = product.nearest?.level;
     const nearestAlert = nearestLevel === 'expired' || nearestLevel === 'soon';
+    const hasNotes = shortage > 0 || product.nearest !== null || product.inspect !== null;
     return (
-      <button
-        key={product.key}
-        type="button"
-        onClick={() => setDetailKey(product.key)}
-        className={`${tileClass} flex min-w-0 flex-col gap-0.5 px-2 py-1.5 text-left hover:bg-gray-50`}
-      >
-        <span className="flex min-w-0 items-center gap-1">
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-50 text-orange-500">
-            <StockIcon name={product.name} category={product.category} size={12} />
+      <li key={product.key}>
+        <button
+          type="button"
+          onClick={() => setDetailKey(product.key)}
+          className="relative flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-gray-50"
+        >
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-50 text-orange-500">
+            <StockIcon name={product.name} category={product.category} size={13} />
           </span>
-          <span className="truncate text-[12px] font-bold text-gray-900">{product.name}</span>
-        </span>
-        <span className="leading-tight text-gray-900 tabular-nums">
-          <span className="text-xl font-bold">{formatQuantity(product.total)}</span>
-          <span className="ml-0.5 text-[10px] font-bold text-gray-400">{product.unit}</span>
-          {product.carryTotal > 0 && (
-            <span className="ml-1.5 text-[10px] font-bold text-gray-300">バッグ{formatQuantity(product.carryTotal)}</span>
-          )}
-        </span>
-        {ratio !== null && (
-          <span className="block h-[3px] overflow-hidden rounded-full bg-gray-100">
-            <span
-              className={`block h-full rounded-full ${shortage > 0 ? 'bg-red-400' : 'bg-orange-300'}`}
-              style={{ width: `${Math.round(ratio * 100)}%` }}
-            />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-bold leading-tight text-gray-900">{product.name}</span>
+            {hasNotes && (
+              <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] font-bold leading-tight tabular-nums">
+                {shortage > 0 && status && (
+                  <span className="text-red-700">
+                    あと{formatQuantity(shortage)}
+                    {status.target.unit}不足
+                  </span>
+                )}
+                {product.nearest && (
+                  <span className={`flex items-center gap-0.5 ${nearestAlert ? 'text-red-700' : 'text-gray-400'}`}>
+                    <Clock size={9} />
+                    {expiryCountdown(product.nearest.on, today)}
+                  </span>
+                )}
+                {product.inspect && (
+                  <span className={`flex items-center gap-0.5 ${product.inspect.due ? 'text-red-700' : 'text-gray-400'}`}>
+                    <Wrench size={9} />
+                    {product.inspect.due ? '点検の時期' : `点検まで${spanText(daysBetween(today, product.inspect.next))}`}
+                  </span>
+                )}
+              </span>
+            )}
           </span>
-        )}
-        <span className="flex flex-wrap items-center gap-x-1.5 text-[10px] font-bold leading-tight tabular-nums">
-          {shortage > 0 && status && (
-            <span className="text-red-700">
-              あと{formatQuantity(shortage)}
-              {status.target.unit}
+          <span className="shrink-0 text-right leading-tight tabular-nums">
+            <span className="text-base font-bold text-gray-900">{formatQuantity(product.total)}</span>
+            <span className="ml-0.5 text-[10px] font-bold text-gray-400">{product.unit}</span>
+            {product.carryTotal > 0 && (
+              <span className="block text-[10px] font-bold text-gray-300">バッグ{formatQuantity(product.carryTotal)}</span>
+            )}
+          </span>
+          {ratio !== null && (
+            <span className="absolute inset-x-2.5 bottom-0 block h-[2px] overflow-hidden rounded-full bg-gray-100">
+              <span
+                className={`block h-full ${shortage > 0 ? 'bg-red-400' : 'bg-orange-300'}`}
+                style={{ width: `${Math.round(ratio * 100)}%` }}
+              />
             </span>
           )}
-          {product.nearest && (
-            <span className={`flex items-center gap-0.5 ${nearestAlert ? 'text-red-700' : 'text-gray-400'}`}>
-              <Clock size={9} />
-              {expiryCountdown(product.nearest.on, today)}
-            </span>
-          )}
-          {product.inspect && (
-            <span className={`flex items-center gap-0.5 ${product.inspect.due ? 'text-red-700' : 'text-gray-400'}`}>
-              <Wrench size={9} />
-              {product.inspect.due ? '点検' : `${spanText(daysBetween(today, product.inspect.next))}後`}
-            </span>
-          )}
-        </span>
-      </button>
+        </button>
+      </li>
     );
   };
 
@@ -286,7 +292,7 @@ export default function StockBoard({
         shown.map((row) => (
           <section key={row.category}>
             {categoryHeader(row.category, row.products.length)}
-            <div className="grid grid-cols-3 gap-1.5">{row.products.map(productTile)}</div>
+            <ul className={listClass}>{row.products.map(productRow)}</ul>
           </section>
         ))
       )}
@@ -357,56 +363,53 @@ export default function StockBoard({
         Object.entries(bagByCategory).map(([name, rows]) => (
           <section key={name}>
             {categoryHeader(name, rows.length)}
-            <div className="grid grid-cols-3 gap-1.5">
+            <ul className={listClass}>
               {rows.map((item) => {
                 const on = checked.has(item.id);
                 const level = expiryLevel(item.expiresOn, today);
                 const alert = level === 'expired' || level === 'soon';
                 return (
-                  <div
-                    key={item.id}
-                    className={`relative rounded-xl border transition ${
-                      on ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white'
-                    }`}
-                  >
+                  <li key={item.id} className={`flex items-center transition ${on ? 'bg-orange-50' : ''}`}>
                     <button
                       type="button"
                       role="checkbox"
                       aria-checked={on}
                       aria-label={`${item.name}を確かめた`}
                       onClick={() => toggle(item.id)}
-                      className="flex w-full min-w-0 flex-col gap-0.5 px-2 py-1.5 text-left"
+                      className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-left"
                     >
-                      <span className="flex min-w-0 items-center gap-1">
-                        <span
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                            on ? 'bg-orange-200 text-orange-800' : 'bg-orange-50 text-orange-500'
-                          }`}
-                        >
-                          {on ? <Check size={13} strokeWidth={3} /> : <StockIcon name={item.name} category={item.category} size={12} />}
-                        </span>
-                        <span className="truncate text-[12px] font-bold text-gray-900">{item.name}</span>
+                      <span
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
+                          on ? 'border-orange-300 bg-orange-200 text-orange-800' : 'border-gray-200 bg-white text-transparent'
+                        }`}
+                      >
+                        <Check size={14} strokeWidth={3} />
                       </span>
-                      <span className="leading-tight text-gray-900 tabular-nums">
-                        <span className="text-xl font-bold">{formatQuantity(item.quantity)}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-bold leading-tight text-gray-900">{item.name}</span>
+                        {item.expiresOn && (
+                          <span className={`block text-[10px] font-bold leading-tight ${alert ? 'text-red-700' : 'text-gray-400'}`}>
+                            {expiryCountdown(item.expiresOn, today)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 leading-tight tabular-nums">
+                        <span className="text-base font-bold text-gray-900">{formatQuantity(item.quantity)}</span>
                         <span className="ml-0.5 text-[10px] font-bold text-gray-400">{item.unit}</span>
-                      </span>
-                      <span className={`text-[10px] font-bold leading-tight ${alert ? 'text-red-700' : 'text-gray-400'}`}>
-                        {item.expiresOn ? expiryCountdown(item.expiresOn, today) : '\u00a0'}
                       </span>
                     </button>
                     <button
                       type="button"
                       aria-label={`${item.name}を編集`}
                       onClick={() => onEditItem(item)}
-                      className="absolute right-0.5 top-0.5 flex h-6 w-6 items-center justify-center rounded-full text-gray-300 hover:bg-gray-100 hover:text-gray-500"
+                      className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-gray-300 hover:bg-gray-100 hover:text-gray-500"
                     >
-                      <Pencil size={11} />
+                      <Pencil size={12} />
                     </button>
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           </section>
         ))
       )}

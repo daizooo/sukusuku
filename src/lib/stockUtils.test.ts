@@ -399,3 +399,11 @@ assert.deepEqual(radioProduct.inspect, { next: '2026-10-01', due: true });
 assert.equal(radioProduct.nearest, null);
 
 console.log('stockUtils categories: OK');
+
+// migration 0062 の適用前は、値段・点検の列が undefined で来ても壊れない（NaN を出さない）。
+const legacy = { ...radio, inspectIntervalMonths: undefined as unknown as null, price: undefined as unknown as null };
+assert.equal(nextInspectionOn(legacy), null);
+assert.equal(unitPriceOf({ price: undefined as unknown as null, amountPerUnit: 1, targetId: 'w' }), null);
+assert.equal(replacementLots([{ ...lot('水', '2026-09-30', 2, null), price: undefined as unknown as null }], today).lots[0].amount, null);
+
+console.log('stockUtils legacy: OK');
