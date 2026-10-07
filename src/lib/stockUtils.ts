@@ -346,6 +346,77 @@ export function costOverview(costs: TargetCost[]): { total: number; shortageTota
   };
 }
 
+// ---- 点検盤の見た目に使う小さな計算（docs/home.md §10.2） ----
+
+/** 2つの日付（YYYY-MM-DD）の日数の差（to − from）。 */
+export function daysBetween(from: string, to: string): number {
+  const parse = (key: string) => {
+    const [year, month, day] = key.split('-').map(Number);
+    return Date.UTC(year, month - 1, day);
+  };
+  return Math.round((parse(to) - parse(from)) / 86_400_000);
+}
+
+/** 日数を「3日」「2か月」のように短く言う。 */
+export function spanText(days: number): string {
+  const abs = Math.abs(days);
+  if (abs < 60) return `${abs}日`;
+  if (abs < 730) return `${Math.floor(abs / 30)}か月`;
+  return `${Math.floor(abs / 365)}年`;
+}
+
+/** 期限までの言い方。「あと18日」「切れて12日」「今日まで」。 */
+export function expiryCountdown(expiresOn: string, today: string): string {
+  const days = daysBetween(today, expiresOn);
+  if (days < 0) return `切れて${spanText(days)}`;
+  if (days === 0) return '今日まで';
+  return `あと${spanText(days)}`;
+}
+
+/** 品名・カテゴリに合う絵柄（アイコン）の名前。画面側でアイコンに対応づける。 */
+export type StockIconKey =
+  | 'water'
+  | 'drink'
+  | 'rice'
+  | 'meat'
+  | 'soup'
+  | 'snack'
+  | 'toilet'
+  | 'trash'
+  | 'radio'
+  | 'light'
+  | 'battery'
+  | 'baby'
+  | 'care'
+  | 'warm'
+  | 'bag'
+  | 'other';
+
+const ICON_RULES: [StockIconKey, RegExp][] = [
+  ['toilet', /トイレ/],
+  ['trash', /防臭|ゴミ|ごみ|ポリ袋/],
+  ['bag', /ウォーターバッグ|給水|リュック|バッグ/],
+  ['water', /水|ウォーター/],
+  ['drink', /アクエリ|飲料|ジュース|お茶|茶|スポーツドリンク|コーヒー/],
+  ['rice', /米|ご飯|ごはん|アルファ|おかゆ|パスタ|麺|パン/],
+  ['soup', /スープ|味噌汁|みそ汁/],
+  ['meat', /缶|肉|魚|やきとり|焼き鳥|サバ|さば|ツナ|レトルト|カレー/],
+  ['snack', /ようかん|羊羹|ビスケット|クッキー|おやつ|お菓子|チョコ|飴|あめ|ゼリー|栄養/],
+  ['radio', /ラジオ/],
+  ['light', /ライト|ランタン|懐中|照明|ろうそく|ヘッド/],
+  ['battery', /電池|バッテリー|電源|充電|ソーラー|発電/],
+  ['baby', /ミルク|おむつ|オムツ|ベビー|離乳|哺乳|粉/],
+  ['care', /衛生|ウェット|マスク|ティッシュ|絆創膏|救急|消毒|薬|歯|生理/],
+  ['warm', /毛布|寝袋|防寒|カイロ|ブランケット|雨具|レイン|軍手|手袋/],
+];
+
+export function stockIconKey(name: string, category = ''): StockIconKey {
+  const hit = ICON_RULES.find(([, pattern]) => pattern.test(name));
+  if (hit) return hit[0];
+  const byCategory = ICON_RULES.find(([key, pattern]) => key !== 'water' && pattern.test(category));
+  return byCategory ? byCategory[0] : 'other';
+}
+
 // ---- 点検盤（画面の作り直し。docs/home.md §10.2）の表示用のまとめ ----
 
 type BoardItem = CountableStock &
@@ -372,8 +443,18 @@ export interface StockBoard<I extends BoardItem, T extends TargetLike> {
     bag: ReturnType<typeof carryInspection>;
   };
   overview: ReturnType<typeof costOverview>;
-  /** 「備えの状況」の件数。 */
-  counts: { short: number; carryShort: number; expired: number; soon: number; inspect: number };
+  /** 「備えの状況」の件数。year は3か月より先〜1年以内、ok は1年より先（数が0のロットは数えない）。 */
+  counts: {
+    short: number;
+    carryShort: number;
+    expired: number;
+    soon: number;
+    year: number;
+    ok: number;
+    inspect: number;
+  };
+  /** 備え度（0〜100）。目標ごとの「持っている / 必要」（最大1）の平均。目標が無ければ100。 */
+  readiness: number;
 }
 
 export function buildStockBoard<I extends BoardItem, T extends TargetLike>(
@@ -393,7 +474,17 @@ export function buildStockBoard<I extends BoardItem, T extends TargetLike>(
   const loose = items.filter((item) => item.targetId === null || !targetIds.has(item.targetId));
   const replacement = replacementLots(items, today);
   const inspect = items.filter((item) => inspectionDue(item, today));
-  const counts = countByLevel(items.filter((item) => item.quantity > 0), today);
+  const stocked = items.filter((item) => item.quantity > 0);
+  const counts = countByLevel(stocked, today);
+  const ok = stocked.filter((item) => expiryLevel(item.expiresOn, today) === 'ok').length;
+  const readiness =
+    blocks.length === 0
+      ? 100
+      : Math.round(
+          (blocks.reduce((sum, { status }) => sum + (status.required > 0 ? Math.min(1, status.have / status.required) : 1), 0) /
+            blocks.length) *
+            100,
+        );
   return {
     blocks,
     others: sortStockItems(loose.filter((item) => item.expiresOn !== null)),
@@ -410,7 +501,10 @@ export function buildStockBoard<I extends BoardItem, T extends TargetLike>(
       carryShort: statuses.filter((status) => (status.carry?.shortage ?? 0) > 0).length,
       expired: counts.expired,
       soon: counts.soon,
+      year: counts.year,
+      ok,
       inspect: inspect.length,
     },
+    readiness,
   };
 }

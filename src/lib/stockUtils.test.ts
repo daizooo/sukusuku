@@ -7,6 +7,10 @@ import {
   carryInspection,
   costOverview,
   countByLevel,
+  daysBetween,
+  expiryCountdown,
+  spanText,
+  stockIconKey,
   expiryLevel,
   formatExpiry,
   formatQuantity,
@@ -320,3 +324,31 @@ assert.equal(board.counts.inspect, 1);
 assert.equal(board.attention.bag?.lastOn, null);
 
 console.log('stockUtils board: OK');
+
+// ---- 見た目の小さな計算 ----
+assert.equal(daysBetween('2026-10-07', '2026-10-17'), 10);
+assert.equal(daysBetween('2026-10-07', '2026-09-30'), -7);
+assert.equal(daysBetween('2027-02-28', '2027-03-01'), 1);
+assert.equal(spanText(18), '18日');
+assert.equal(spanText(-100), '3か月');
+assert.equal(spanText(800), '2年');
+assert.equal(expiryCountdown('2026-10-25', '2026-10-07'), 'あと18日');
+assert.equal(expiryCountdown('2026-09-25', '2026-10-07'), '切れて12日');
+assert.equal(expiryCountdown('2026-10-07', '2026-10-07'), '今日まで');
+assert.equal(expiryCountdown('2027-03-07', '2026-10-07'), 'あと5か月');
+
+assert.equal(stockIconKey('水 500ml'), 'water');
+assert.equal(stockIconKey('ウォーターバッグ（10L）'), 'bag');
+assert.equal(stockIconKey('BOS非常用トイレ'), 'toilet');
+assert.equal(stockIconKey('BOS防臭袋'), 'trash');
+assert.equal(stockIconKey('アクエリアスパウダー'), 'drink');
+assert.equal(stockIconKey('やきとり缶'), 'meat');
+assert.equal(stockIconKey('LEDランタン'), 'light');
+assert.equal(stockIconKey('なぞの品', '照明・情報・電池類'), 'light');
+assert.equal(stockIconKey('なぞの品'), 'other');
+
+assert.equal(board.readiness, Math.round((Math.min(1, 6.6 / 63)) * 100));
+assert.equal(board.counts.ok, 1);
+assert.equal(board.counts.year, 1);
+
+console.log('stockUtils look: OK');
