@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {
   budgetFor,
   buildSpecialProgress,
+  buildSpecialReview,
   buildYearSummary,
   buildBudgetTiles,
   buildMonthSummary,
@@ -157,15 +158,14 @@ const records: MoneyRecord[] = [
   record('r9', { occurredOn: '2026-09-02', walletId: 'card', store: '', items: [item({ amount: 85000, categoryId: 'house' })] }),
 ];
 
-const summary = buildMonthSummary(records, categories, budgets, wallets, '2026-09');
+const summary = buildMonthSummary(records, categories, budgets, '2026-09');
 assert.equal(summary.income, 300000, '特別収入は月の収入に入れない');
 assert.equal(summary.living, 396 + 168 + 500 + 70000 + 85000);
-assert.equal(summary.saving, 30000, '貯金用の口座への振替だけを貯金にする');
+assert.equal('saving' in summary, false, '貯金は記録なので、集計にも表示にも入れない（貯金用の口座への振替も数えない）');
 assert.equal(summary.special, 58000, '特別費は別枠');
 assert.equal(summary.livingBudget, 60000 + 5000 + 85000, '使わなくした大分類・収入は予算に入れない');
-assert.equal(summary.balance, summary.income - summary.living - summary.saving);
-assert.equal(summary.plannedBalance, summary.income - summary.livingBudget - summary.saving);
-assert.equal(summary.savingTarget, 30000);
+assert.equal(summary.balance, summary.income - summary.living, '生活費の収支＝収入 − 特別費以外の支出（特別費・振替は入れない）');
+assert.equal(summary.plannedBalance, summary.income - summary.livingBudget);
 
 const tiles = buildBudgetTiles(records, categories, budgets, '2026-09');
 assert.deepEqual(
@@ -249,7 +249,7 @@ assert.equal(pressCalcKey('', '+'), '');
 assert.equal(pressCalcKey('12', 'back'), '1');
 
 // ---- 年度の収支 ----
-const year = buildYearSummary(records, categories, budgets, wallets, 2026, '2026-09');
+const year = buildYearSummary(records, categories, budgets, 2026, '2026-09');
 assert.equal(year.months.length, 12);
 assert.equal(year.months[0].monthKey, '2026-04');
 assert.equal(year.months[11].monthKey, '2027-03');
@@ -263,9 +263,24 @@ assert.equal(year.recordedMonths, 2, '記録のある月だけを数える');
 assert.equal(year.months[0].recorded, false);
 assert.equal(year.total.livingDiff, september.livingDiff + august.livingDiff, '記録の無い月の予算は差に入れない');
 assert.equal(year.total.balance, year.months.reduce((sum, row) => sum + row.balance, 0));
+assert.equal(september.special, 58000, '年の月の行にも、その月の特別費を出す');
+assert.equal(year.total.special, 58000, '特別費は年の合計にも別に数える（収支には入れない）');
+assert.equal(year.total.balance, year.total.income - year.total.living, '年の収支も 収入 − 生活費');
+// 生活費の記録が無く、特別費だけの月も、特別費は年に数える
+const specialOnly = buildYearSummary(
+  [record('s1', { occurredOn: '2026-07-10', items: [item({ amount: 30000, specialItemId: 'tax' })] })],
+  categories,
+  budgets,
+  2026,
+  '2026-09',
+);
+assert.equal(specialOnly.total.special, 30000);
+assert.equal(specialOnly.recordedMonths, 0, '特別費だけの月は、生活費の収支を数える月には入れない');
+assert.equal(specialOnly.months.find((row) => row.monthKey === '2026-07')!.special, 30000);
+
 assert.equal(year.months.find((row) => row.monthKey === '2026-10')!.recorded, false, 'まだ来ていない月は数えない');
 assert.equal(
-  buildYearSummary(records, categories, budgets, wallets, 2026, '2026-08').total.living,
+  buildYearSummary(records, categories, budgets, 2026, '2026-08').total.living,
   1000,
   'upTo より後の月は合計に入れない',
 );
@@ -311,6 +326,12 @@ assert.deepEqual(buildSpecialProgress(specialRows, '2026-06'), {
   remaining: 150000,
   pendingThisMonth: 0,
 });
+
+// 振り返りの特別費: 月はその月に払った額と、その月までの累計での予算の残り。年は年度ぜんたい
+assert.deepEqual(buildSpecialReview(specialRows, '2026-09'), { yearBudget: 170000, spent: 58000, spentToDate: 78000, remaining: 92000 });
+assert.deepEqual(buildSpecialReview(specialRows, '2026-06'), { yearBudget: 170000, spent: 0, spentToDate: 20000, remaining: 150000 });
+assert.deepEqual(buildSpecialReview(specialRows, null), { yearBudget: 170000, spent: 78000, spentToDate: 78000, remaining: 92000 }, '年度ぜんたい');
+assert.equal(buildSpecialReview([], '2026-09').remaining, 0);
 
 // ---- 入力の形との行き来 ----
 let key = 0;

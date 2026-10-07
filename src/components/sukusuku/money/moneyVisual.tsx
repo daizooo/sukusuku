@@ -101,6 +101,72 @@ export function YearBar({ fiscalYear, onChange }: { fiscalYear: number; onChange
   );
 }
 
+/** 振り返りの期間。月か年度。 */
+export type ReviewPeriod = 'month' | 'year';
+
+const PERIODS: { id: ReviewPeriod; label: string }[] = [
+  { id: 'month', label: '月' },
+  { id: 'year', label: '年' },
+];
+
+/** 振り返りの送り（‹ 2026年10月 ›）。右の「月 / 年」で期間を切り替える（同じ面で月も年も見る）。 */
+export function PeriodBar({
+  period,
+  onPeriod,
+  monthKey,
+  onMonth,
+  fiscalYear,
+  onFiscalYear,
+}: {
+  period: ReviewPeriod;
+  onPeriod: (period: ReviewPeriod) => void;
+  monthKey: string;
+  onMonth: (monthKey: string) => void;
+  fiscalYear: number;
+  onFiscalYear: (fiscalYear: number) => void;
+}) {
+  const toggle = (
+    <div role="tablist" className="flex rounded-full bg-gray-100 p-0.5">
+      {PERIODS.map((entry) => {
+        const selected = entry.id === period;
+        return (
+          <button
+            key={entry.id}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => onPeriod(entry.id)}
+            className={`rounded-full px-3.5 py-1 text-[13px] ${
+              selected ? 'bg-white font-bold text-gray-900 shadow-sm' : 'font-semibold text-gray-500'
+            }`}
+          >
+            {entry.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+  return period === 'month' ? (
+    <Stepper
+      label={formatMonthKey(monthKey)}
+      prevLabel="前の月"
+      nextLabel="次の月"
+      onPrev={() => onMonth(shiftMonth(monthKey, -1))}
+      onNext={() => onMonth(shiftMonth(monthKey, 1))}
+      right={toggle}
+    />
+  ) : (
+    <Stepper
+      label={formatFiscalYear(fiscalYear)}
+      prevLabel="前の年度"
+      nextLabel="次の年度"
+      onPrev={() => onFiscalYear(fiscalYear - 1)}
+      onNext={() => onFiscalYear(fiscalYear + 1)}
+      right={toggle}
+    />
+  );
+}
+
 /** 結論のカード。ラベル・大きな数字・一言、その下に内訳（children）。 */
 export function Hero({
   label,

@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Check, Pencil, Plus } from 'lucide-react';
 import type { MoneyWallet, MoneyWalletDraft, MoneyWalletType } from '@/types/app';
 import { WALLET_TYPES } from '@/lib/moneyUtils';
-import { parseAmountInput } from '@/lib/specialUtils';
 import { ModalShell } from '../modals/TaskForm';
 import { PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
 
@@ -128,14 +127,12 @@ export function WalletModal({
   const [name, setName] = useState(wallet?.name ?? '');
   const [type, setType] = useState<MoneyWalletType>(wallet?.type ?? 'card');
   const [isSaving, setIsSaving] = useState(wallet?.isSaving ?? false);
-  const [target, setTarget] = useState(wallet?.savingTarget != null ? String(wallet.savingTarget) : '');
   const [error, setError] = useState<string | null>(null);
 
   const submit = () => {
     if (name.trim() === '') return setError('名前を入れてください');
-    const savingTarget = target.trim() === '' ? null : parseAmountInput(target);
-    if (isSaving && target.trim() !== '' && savingTarget === null) return setError('目標は0以上の整数（円）で入れてください');
-    onSubmit({ name, type, isSaving, savingTarget: isSaving ? savingTarget : null });
+    // 貯金は記録なので、貯金用は目印だけ（収支には入れない。月の目標も持たない。docs/kakei.md §4）。
+    onSubmit({ name, type, isSaving, savingTarget: isSaving ? (wallet?.savingTarget ?? null) : null });
   };
 
   const archive = () => {
@@ -183,22 +180,10 @@ export function WalletModal({
         <label className="flex items-center gap-3">
           <span className="flex-1">
             <span className="block text-xs font-bold text-gray-700">貯金用</span>
-            <span className="block text-xs text-gray-400">ここへの振替を貯金として数えます</span>
+            <span className="block text-xs text-gray-400">貯金用の口座の目印です（収支には入れません）</span>
           </span>
           <input type="checkbox" checked={isSaving} onChange={(event) => setIsSaving(event.target.checked)} className="h-5 w-5" />
         </label>
-        {isSaving && (
-          <label className="block">
-            <span className={labelClass}>月の貯金の目標（円）</span>
-            <input
-              className={inputClass}
-              value={target}
-              onChange={(event) => setTarget(event.target.value)}
-              inputMode="numeric"
-              placeholder="任意"
-            />
-          </label>
-        )}
         {error && <p className="text-xs text-red-500">{error}</p>}
       </div>
     </ModalShell>

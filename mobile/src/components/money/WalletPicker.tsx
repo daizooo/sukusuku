@@ -4,7 +4,6 @@ import { Check, Pencil, Plus } from 'lucide-react-native';
 import type { MoneyWallet, MoneyWalletDraft, MoneyWalletType } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { WALLET_TYPES } from '@/lib/moneyUtils';
-import { parseAmountInput } from '@/lib/specialUtils';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
@@ -116,14 +115,12 @@ export function WalletSheet({
   const [name, setName] = useState(wallet?.name ?? '');
   const [type, setType] = useState<MoneyWalletType>(wallet?.type ?? 'card');
   const [isSaving, setIsSaving] = useState(wallet?.isSaving ?? false);
-  const [target, setTarget] = useState(wallet?.savingTarget != null ? String(wallet.savingTarget) : '');
   const [error, setError] = useState<string | null>(null);
 
   const submit = () => {
     if (name.trim() === '') return setError('名前を入れてください');
-    const savingTarget = target.trim() === '' ? null : parseAmountInput(target);
-    if (isSaving && target.trim() !== '' && savingTarget === null) return setError('目標は0以上の整数（円）で入れてください');
-    onSubmit({ name, type, isSaving, savingTarget: isSaving ? savingTarget : null });
+    // 貯金は記録なので、貯金用は目印だけ（収支には入れない。月の目標も持たない。docs/kakei.md §4）。
+    onSubmit({ name, type, isSaving, savingTarget: isSaving ? (wallet?.savingTarget ?? null) : null });
   };
 
   const archive = () =>
@@ -177,23 +174,10 @@ export function WalletSheet({
         <View style={styles.switchRow}>
           <View style={styles.flex}>
             <Text style={styles.label}>貯金用</Text>
-            <Text style={styles.sub}>ここへの振替を貯金として数えます</Text>
+            <Text style={styles.sub}>貯金用の口座の目印です（収支には入れません）</Text>
           </View>
           <Switch value={isSaving} onValueChange={setIsSaving} />
         </View>
-        {isSaving && (
-          <View style={styles.field}>
-            <Text style={styles.label}>月の貯金の目標（円）</Text>
-            <TextInput
-              style={styles.input}
-              value={target}
-              onChangeText={setTarget}
-              keyboardType="number-pad"
-              placeholder="任意"
-              placeholderTextColor={colors.textFaint}
-            />
-          </View>
-        )}
         {error && <Text style={styles.error}>{error}</Text>}
       </LogModalShell>
     </SheetModal>
