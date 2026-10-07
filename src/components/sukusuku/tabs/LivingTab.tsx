@@ -76,7 +76,6 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
   // 開いている画面。null はメニュー（docs/home.md §2）。
   const [section, setSection] = useState<LivingSection | null>(null);
   // 防災備蓄の保管場所の切り替え。追加するロットの保管場所の初期値にもなる。
-  const [storageTab, setStorageTab] = useState<StockStorage>('home');
   const [restocking, setRestocking] = useState<StockItem | null>(null);
   // 戻る操作は、開いている画面からメニューへ戻す（メニューのときは1つ前のタブへ）。
   useBackLayer(() => setSection(null), section !== null);
@@ -321,8 +320,6 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
           targets={targets}
           plan={plan}
           today={today}
-          storage={storageTab}
-          onStorageChange={setStorageTab}
           onEditItem={setEditing}
           onEditTarget={setEditingTarget}
           onAddTarget={() => setEditingTarget('new')}
@@ -345,7 +342,6 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
           onClose={() => setEditing(null)}
           onSubmit={(draft) => void save(draft)}
           onDelete={editing === 'new' ? undefined : () => void remove(editing.id)}
-          defaultStorage={storageTab}
           onMove={editing === 'new' ? undefined : (count) => void move(editing, count)}
         />
       )}

@@ -1,40 +1,32 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Check, ChevronRight, Clock, Minus, Pencil, Plus, Settings2, Wrench } from 'lucide-react-native';
+import { Backpack, Check, ChevronRight, Clock, Minus, Plus, Settings2, Wrench } from 'lucide-react-native';
 import type { StockItem, StockTarget } from '@/types/app';
 import { colors } from '@/lib/theme';
 import {
   buildStockBoard,
   daysBetween,
   expiryCountdown,
-  expiryLevel,
-  formatExpiry,
   formatQuantity,
   formatYen,
   spanText,
   type StockPlan,
   type StockProduct,
-  type StockStorage,
 } from '@/lib/stockUtils';
-import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import StockAttention from './StockAttention';
+import StockBagCheck from './StockBagCheck';
 import StockProductDetail from './StockProductDetail';
 import { readinessColor, Ring, SOFT, StockIcon, TONE } from './stockVisual';
 
 // 防災備蓄の画面（docs/home.md §10.2・§10.2.1）。PWA版の
 // `src/components/sukusuku/living/StockBoard.tsx` と同じ構成・項目・文言にしてある。
 //
-// 主役は「どんな備蓄が、どれだけあるか」。カテゴリごとに品目をタイルで並べ、数量を大きく出す。
-// 期限・不足・点検は品目に付く補助の情報なので、タイルの小さな一行と、上の細い帯から開く
-// 「確認が必要なもの」（StockAttention）に置く。色は赤（対応が要るもの）以外は使わない。
-//   上（固定）: 確認が必要なものの帯・備蓄／持ち出しの切り替え・カテゴリの絞り込み。
-//   中（スクロール）: 備え度 → カテゴリごとの品目タイル。
-//   持ち出しは、バッグの中身を押して確かめるチェック表（カテゴリごと）。
-
-const STORAGE_OPTIONS: { id: StockStorage; label: string }[] = [
-  { id: 'home', label: '寝室' },
-  { id: 'carry', label: '持ち出し用' },
-];
+// 主役は「どんな備蓄が、どれだけあるか」。カテゴリごとに品目の行を並べ、全体の数を大きく出す。
+// 期限・不足・点検は品目に付く補助の情報なので、行の小さな一行と、上の細い帯から開く
+// 「確認が必要なもの」（StockAttention）に置く。色は淡い橙と、対応が要るものの赤だけ。
+//   上（固定）: 確認が必要なものの帯と「バッグ」・カテゴリの絞り込み。
+//   中（スクロール）: 備え度 → カテゴリごとの品目の行（寝室・持ち出し用の内訳は品目の詳しい画面）。
+//   「バッグ」は、バッグの中身を押して確かめるチェック表（StockBagCheck）を開く。
 
 type PlanKey = keyof StockPlan;
 
@@ -44,8 +36,6 @@ interface StockBoardProps {
   plan: StockPlan;
   /** 日本時間の今日（YYYY-MM-DD）。 */
   today: string;
-  storage: StockStorage;
-  onStorageChange: (storage: StockStorage) => void;
   onEditItem: (item: StockItem) => void;
   onEditTarget: (target: StockTarget) => void;
   onAddTarget: () => void;
@@ -60,8 +50,6 @@ interface StockBoardProps {
   onInspect: (items: StockItem[]) => void;
 }
 
-const dateText = (on: string) => formatExpiry({ expiresOn: on, expiresMonthOnly: false });
-
 /** 絞り込みの「すべて」。 */
 const ALL = '';
 
@@ -70,8 +58,6 @@ export default function StockBoard({
   targets,
   plan,
   today,
-  storage,
-  onStorageChange,
   onEditItem,
   onEditTarget,
   onAddTarget,
@@ -84,12 +70,11 @@ export default function StockBoard({
 }: StockBoardProps) {
   const board = useMemo(() => buildStockBoard(items, targets, plan, today), [items, targets, plan, today]);
   const { counts, overview, attention, readiness, categories } = board;
-  // 持ち出しのチェック表で、確かめたロット（この画面の中だけ。点検した日の記録は「点検完了」で行う）。
-  const [checked, setChecked] = useState<Set<string>>(new Set());
   const [showPlan, setShowPlan] = useState(false);
   const [category, setCategory] = useState(ALL);
   const [detailKey, setDetailKey] = useState<string | null>(null);
   const [attentionOpen, setAttentionOpen] = useState(false);
+  const [bagOpen, setBagOpen] = useState(false);
 
   const bagDue = attention.bag?.due === true;
   const expiryCount = counts.expired + counts.soon;
@@ -102,10 +87,6 @@ export default function StockBoard({
   const shown = activeCategory === ALL ? categories : categories.filter((row) => row.category === activeCategory);
   const detail = categories.flatMap((row) => row.products).find((product) => product.key === detailKey) ?? null;
   const inspectable = board.equipment.filter((item) => item.inspectIntervalMonths !== null);
-
-  const bagAge = attention.bag?.lastOn
-    ? `${spanText(daysBetween(attention.bag.lastOn, today))}前に点検`
-    : 'まだ点検していません';
 
   // ---- 上の細い帯 ----
   const banner =
@@ -130,6 +111,20 @@ export default function StockBoard({
         <Text style={styles.calmText}>確認が必要なものはありません</Text>
       </View>
     );
+
+  // ---- 帯の右の「バッグ」（持ち出しバッグの点検を開く。点検の時期だけ赤い点） ----
+  const bagButton = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={bagDue ? '持ち出しバッグを点検する（点検の時期です）' : '持ち出しバッグを点検する'}
+      onPress={() => setBagOpen(true)}
+      style={styles.bagButton}
+    >
+      <Backpack size={14} color={SOFT.buttonText} />
+      <Text style={styles.bagButtonText}>バッグ</Text>
+      {bagDue && <View style={styles.bagDot} />}
+    </Pressable>
+  );
 
   // ---- 備え度（1行） ----
   const ringColor = readinessColor(readiness);
@@ -254,7 +249,6 @@ export default function StockBoard({
             {formatQuantity(product.total)}
             <Text style={styles.tileUnit}> {product.unit}</Text>
           </Text>
-          {product.carryTotal > 0 && <Text style={styles.tileBag}>バッグ{formatQuantity(product.carryTotal)}</Text>}
         </View>
         {ratio !== null && (
           <View style={styles.rowBar}>
@@ -300,123 +294,14 @@ export default function StockBoard({
     </>
   );
 
-  // ---- 持ち出し: バッグの中身を押して確かめる（カテゴリごと） ----
-  const bagLots = items.filter((item) => item.storage === 'carry' && item.quantity > 0);
-  const doneCount = bagLots.filter((item) => checked.has(item.id)).length;
-  const allChecked = bagLots.length > 0 && doneCount === bagLots.length;
-  const carryShortages = board.blocks.filter((block) => (block.status.carry?.shortage ?? 0) > 0);
-  const bagByCategory = bagLots.reduce<Record<string, StockItem[]>>((groups, item) => {
-    const key = item.category.trim() || 'その他';
-    (groups[key] ??= []).push(item);
-    return groups;
-  }, {});
-
-  const toggle = (id: string) =>
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  const carryView = (
-    <>
-      <View style={[styles.card, styles.summaryRow]}>
-        <Ring size={44} stroke={5} ratio={bagLots.length === 0 ? 0 : doneCount / bagLots.length} color={TONE.accent}>
-          <Text style={styles.bagValue}>
-            {doneCount}/{bagLots.length}
-          </Text>
-        </Ring>
-        <View style={styles.flex}>
-          <Text style={styles.summaryTitle}>{plan.carryDays}日分のバッグ</Text>
-          <Text style={[styles.bagAge, bagDue && styles.alertText]}>
-            {attention.bag
-              ? `${bagAge}${bagDue ? '・点検の時期です' : `・次は ${dateText(attention.bag.nextOn)} ごろ`}`
-              : 'バッグは空です'}
-          </Text>
-        </View>
-      </View>
-
-      {carryShortages.length > 0 && (
-        <View style={styles.pills}>
-          <Text style={styles.shortLabel}>足りない</Text>
-          {carryShortages.map(({ status }) => (
-            <View key={status.target.id} style={styles.shortPill}>
-              <Text style={styles.shortPillText}>
-                {status.target.name} あと{formatQuantity(status.carry?.shortage ?? 0)}
-                {status.target.unit}
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {bagLots.length === 0 ? (
-        <Text style={styles.empty}>持ち出しバッグには何も入っていません</Text>
-      ) : (
-        Object.entries(bagByCategory).map(([name, rows]) => (
-          <View key={name} style={styles.section}>
-            {categoryHeader(name, rows.length)}
-            <View style={styles.card}>
-              {rows.map((item, index) => {
-                const on = checked.has(item.id);
-                const level = expiryLevel(item.expiresOn, today);
-                const alert = level === 'expired' || level === 'soon';
-                return (
-                  <View key={item.id} style={[styles.bagRow, index > 0 && styles.rowDivided, on && styles.bagRowOn]}>
-                    <Pressable
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: on }}
-                      accessibilityLabel={`${item.name}を確かめた`}
-                      onPress={() => toggle(item.id)}
-                      style={styles.bagMain}
-                    >
-                      <View style={[styles.checkCircle, on && styles.checkCircleOn]}>
-                        {on && <Check size={14} color={SOFT.buttonText} strokeWidth={3} />}
-                      </View>
-                      <View style={styles.flex}>
-                        <Text style={styles.rowName}>{item.name}</Text>
-                        {item.expiresOn && (
-                          <Text style={[styles.tileNote, alert && styles.alertText]}>{expiryCountdown(item.expiresOn, today)}</Text>
-                        )}
-                      </View>
-                      <Text style={styles.rowTotal}>
-                        {formatQuantity(item.quantity)}
-                        <Text style={styles.tileUnit}> {item.unit}</Text>
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`${item.name}を編集`}
-                      onPress={() => onEditItem(item)}
-                      hitSlop={6}
-                      style={styles.bagEdit}
-                    >
-                      <Pencil size={12} color={colors.textFaint} />
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        ))
-      )}
-    </>
-  );
-
   return (
     <>
-      <View style={styles.bannerWrap}>{banner}</View>
+      <View style={styles.bannerWrap}>
+        <View style={styles.flex}>{banner}</View>
+        {bagButton}
+      </View>
 
-      <SegmentedTabs
-        options={STORAGE_OPTIONS}
-        value={storage}
-        onChange={onStorageChange}
-        accessibilityLabel="保管場所"
-        style={styles.tabs}
-      />
-
-      {storage === 'home' && categories.length > 1 && (
+      {categories.length > 1 && (
         <View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
             {[ALL, ...categories.map((row) => row.category)].map((value) => {
@@ -438,29 +323,9 @@ export default function StockBoard({
       )}
 
       <View style={styles.flex}>
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={[styles.content, storage === 'carry' && bagLots.length > 0 && styles.contentWithFooter]}
-        >
-          {storage === 'home' ? homeView : carryView}
+        <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+          {homeView}
         </ScrollView>
-        {storage === 'carry' && bagLots.length > 0 && (
-          <View style={styles.footer}>
-            <Pressable
-              accessibilityRole="button"
-              disabled={!allChecked}
-              onPress={() => {
-                onInspect(bagLots);
-                setChecked(new Set());
-              }}
-              style={[styles.finish, allChecked && styles.finishOn]}
-            >
-              <Text style={[styles.finishText, allChecked && { color: SOFT.buttonText }]}>
-                {allChecked ? '点検完了（今日の日付を残す）' : `あと${bagLots.length - doneCount}つ確かめましょう`}
-              </Text>
-            </Pressable>
-          </View>
-        )}
       </View>
 
       {detail && (
@@ -500,8 +365,23 @@ export default function StockBoard({
           onInspect={onInspect}
           onOpenBag={() => {
             setAttentionOpen(false);
-            onStorageChange('carry');
+            setBagOpen(true);
           }}
+        />
+      )}
+
+      {bagOpen && (
+        <StockBagCheck
+          board={board}
+          items={items}
+          plan={plan}
+          today={today}
+          onClose={() => setBagOpen(false)}
+          onEditItem={(item) => {
+            setBagOpen(false);
+            onEditItem(item);
+          }}
+          onInspect={onInspect}
         />
       )}
     </>
@@ -511,7 +391,7 @@ export default function StockBoard({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  bannerWrap: { paddingHorizontal: 16, paddingBottom: 6 },
+  bannerWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingBottom: 6 },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -526,16 +406,35 @@ const styles = StyleSheet.create({
   redDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: TONE.alert },
   bannerTitle: { fontSize: 13, fontWeight: '700', color: colors.text },
   bannerSub: { flex: 1, fontSize: 11, fontWeight: '700', color: colors.textFaint },
-  calm: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
+  calm: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4, paddingVertical: 7 },
+  bagButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 16,
+    backgroundColor: SOFT.button,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  bagButtonText: { fontSize: 12, fontWeight: '700', color: SOFT.buttonText },
+  bagDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: colors.background,
+    backgroundColor: TONE.alert,
+  },
   calmText: { fontSize: 12, fontWeight: '700', color: colors.textFaint },
-  tabs: { marginHorizontal: 16, marginBottom: 6 },
   chips: { gap: 6, paddingHorizontal: 16, paddingBottom: 6 },
   chip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: colors.neutralSurface },
   chipOn: { backgroundColor: SOFT.button },
   chipText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   chipTextOn: { color: SOFT.buttonText },
   content: { paddingHorizontal: 16, paddingBottom: 24, gap: 10 },
-  contentWithFooter: { paddingBottom: 96 },
   section: { gap: 4 },
   card: {
     backgroundColor: colors.surface,
@@ -547,9 +446,6 @@ const styles = StyleSheet.create({
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 6 },
   summaryLine: { flex: 1, fontSize: 12, fontWeight: '700', color: colors.text },
   ringValue: { fontSize: 10, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  ringCenter: { alignItems: 'center' },
-  ringLabel: { fontSize: 9, fontWeight: '700', color: colors.textFaint, marginTop: 1 },
-  summaryTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
   summarySub: { fontSize: 11, fontWeight: '500', color: colors.textFaint, marginTop: 2, fontVariant: ['tabular-nums'] },
   gear: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.bg },
   planPanel: {
@@ -567,7 +463,6 @@ const styles = StyleSheet.create({
   categoryIcon: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.button },
   categoryName: { fontSize: 13, fontWeight: '700', color: colors.text },
   categoryCount: { fontSize: 11, fontWeight: '700', color: colors.textFaint },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 6 },
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.neutralSurface },
   rowName: { fontSize: 13, fontWeight: '700', color: colors.text, lineHeight: 17 },
@@ -576,7 +471,6 @@ const styles = StyleSheet.create({
   rowBar: { position: 'absolute', left: 10, right: 10, bottom: 0, height: 2, backgroundColor: colors.neutralSurface, overflow: 'hidden' },
   tileIcon: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.bg },
   tileUnit: { fontSize: 10, fontWeight: '700', color: colors.textFaint },
-  tileBag: { fontSize: 10, fontWeight: '700', color: colors.borderStrong },
   barFill: { height: 2 },
   notes: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 6 },
   tileNote: { fontSize: 10, fontWeight: '700', color: colors.textFaint, fontVariant: ['tabular-nums'] },
@@ -585,29 +479,4 @@ const styles = StyleSheet.create({
   addTarget: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 4 },
   addTargetText: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
-  bagValue: { fontSize: 11, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
-  bagAge: { fontSize: 11, fontWeight: '700', color: colors.textFaint, marginTop: 1 },
-  pills: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
-  shortLabel: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
-  shortPill: { borderRadius: 999, backgroundColor: colors.dangerSurface, paddingHorizontal: 8, paddingVertical: 2 },
-  shortPillText: { fontSize: 11, fontWeight: '700', color: colors.alertText, fontVariant: ['tabular-nums'] },
-  bagRow: { flexDirection: 'row', alignItems: 'center' },
-  bagRowOn: { backgroundColor: SOFT.bg },
-  bagMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 6 },
-  checkCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-  },
-  checkCircleOn: { borderColor: SOFT.border, backgroundColor: SOFT.button },
-  bagEdit: { paddingHorizontal: 10, paddingVertical: 8 },
-  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingBottom: 12, paddingTop: 8, backgroundColor: colors.background },
-  finish: { borderRadius: 16, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.neutralSurface },
-  finishOn: { backgroundColor: SOFT.button },
-  finishText: { fontSize: 14, fontWeight: '700', color: colors.textFaint },
 });

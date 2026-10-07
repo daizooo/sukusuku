@@ -139,7 +139,7 @@ export default function StockItemModal({
   onMove,
 }: StockItemModalProps) {
   const [form, setForm] = useState<FormState>(() => initialState(item, defaultStorage));
-  const [moveCount, setMoveCount] = useState('1');
+  const [moveCount, setMoveCount] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
@@ -170,15 +170,16 @@ export default function StockItemModal({
     onSubmit(draft);
   };
 
-  /** 一部を移す。移せるのは1以上、今の数まで（全部なら場所ごと変わる）。 */
-  const otherStorage: StockStorage = item?.storage === 'carry' ? 'home' : 'carry';
+  /**
+   * 寝室のロットを持ち出し用へ分ける／持ち出し用のロットを寝室へ戻す（docs/home.md §10.2.2）。
+   * 移せるのは1以上、今の数まで（全部なら場所ごと変わる）。1つだけのロットも移せる。
+   */
+  const moveLabel = item?.storage === 'carry' ? '寝室へ戻す' : '持ち出し用へ分ける';
+  const stepMove = (delta: number) =>
+    setMoveCount((prev) => Math.min(Math.max(1, Math.floor(item?.quantity ?? 1)), Math.max(1, prev + delta)));
   const handleMove = () => {
-    const count = Number(moveCount.trim());
-    if (!item || !Number.isFinite(count) || count <= 0 || count > item.quantity) {
-      setError(`移す数は1〜${item ? formatQuantity(item.quantity) : ''}で入れてください`);
-      return;
-    }
-    onMove?.(count);
+    if (!item || moveCount <= 0 || moveCount > item.quantity) return;
+    onMove?.(moveCount);
   };
 
   const handleDelete = () => {
@@ -292,23 +293,35 @@ export default function StockItemModal({
         <div>
           <span className={labelClass}>保管場所</span>
           <Segmented options={STORAGE_OPTIONS} value={form.storage} onChange={(storage) => update({ storage })} />
-          {item && onMove && item.quantity > 1 && (
-            <div className="flex items-center gap-2 mt-2">
-              <span className="text-sm text-gray-700">一部を{STORAGE_LABEL[otherStorage]}へ</span>
-              <input
-                className="w-22 border border-gray-300 rounded-lg px-3 py-2 text-sm tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
-                value={moveCount}
-                onChange={(event) => setMoveCount(event.target.value)}
-                inputMode="decimal"
-                aria-label="移す数"
-              />
-              <span className="text-sm text-gray-700">{item.unit}</span>
+          {item && onMove && item.quantity >= 1 && (
+            <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-orange-50 p-1.5">
+              <span className="flex-1 pl-1 text-xs font-bold text-orange-800">{moveLabel}</span>
+              <button
+                type="button"
+                aria-label="移す数を減らす"
+                onClick={() => stepMove(-1)}
+                className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-orange-100 bg-white text-orange-800"
+              >
+                <Minus size={14} />
+              </button>
+              <span className="min-w-11 text-center text-[15px] font-bold text-gray-900 tabular-nums">
+                {formatQuantity(moveCount)}
+                <span className="ml-0.5 text-[11px] text-gray-400">{item.unit}</span>
+              </span>
+              <button
+                type="button"
+                aria-label="移す数を増やす"
+                onClick={() => stepMove(1)}
+                className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-orange-100 bg-white text-orange-800"
+              >
+                <Plus size={14} />
+              </button>
               <button
                 type="button"
                 onClick={handleMove}
-                className="px-3 py-2 rounded-lg bg-gray-100 text-sm font-bold text-blue-600 hover:bg-gray-200"
+                className="rounded-lg bg-orange-100 px-3 py-1.5 text-[13px] font-bold text-orange-800 hover:bg-orange-200"
               >
-                移す
+                {item.storage === 'carry' ? '戻す' : '分ける'}
               </button>
             </div>
           )}

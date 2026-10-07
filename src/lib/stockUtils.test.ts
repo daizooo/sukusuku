@@ -25,6 +25,7 @@ import {
   isShort,
   requiredQuantity,
   sortStockItems,
+  storageShares,
   targetStatuses,
 } from './stockUtils.ts';
 
@@ -397,6 +398,35 @@ assert.equal(catBoard.categories[0].products[0].total, 10);
 const radioProduct = catBoard.categories[2].products[0];
 assert.deepEqual(radioProduct.inspect, { next: '2026-10-01', due: true });
 assert.equal(radioProduct.nearest, null);
+
+// 寝室・持ち出し用の内訳。持ち出しに入れる目標は、持ち出し用に「人数×バッグの日数」分、寝室に残りを要るとする。
+assert.deepEqual(storageShares(foods[0], today), {
+  home: { have: 10, required: 54, shortage: 44, surplus: 0 },
+  carry: { have: 4, required: 9, shortage: 5, surplus: 0 },
+});
+// 持ち出しに入れない目標は、寝室に全部が要る。持ち出し用の要る量は無い。
+assert.deepEqual(storageShares(catBoard.categories[0].products[0], today), {
+  home: { have: 10, required: 63, shortage: 53, surplus: 0 },
+  carry: { have: 0, required: null, shortage: 0, surplus: 0 },
+});
+// 目標の無い品目は、ロットの数だけ。
+assert.deepEqual(storageShares(foods[1], today).home, { have: 5, required: null, shortage: 0, surplus: 0 });
+// 寝室が多く、持ち出し用が足りない（分ければ揃う）。期限切れは数えない。
+const shareTarget = { id: 's', quantity: 1, perPersonDay: true, carry: true, category: '', name: '', position: 0, unit: '本' };
+const shareProduct = buildStockBoard(
+  [
+    catItem({ name: '水', targetId: 's', quantity: 25, expiresOn: '2030-01-01' }),
+    catItem({ name: '水', targetId: 's', quantity: 1, expiresOn: '2030-01-01', storage: 'carry' }),
+    catItem({ name: '水', targetId: 's', quantity: 5, expiresOn: '2026-01-01', storage: 'carry' }),
+  ],
+  [shareTarget],
+  plan,
+  today,
+).categories[0].products[0];
+assert.deepEqual(storageShares(shareProduct, today), {
+  home: { have: 25, required: 18, shortage: 0, surplus: 7 },
+  carry: { have: 1, required: 3, shortage: 2, surplus: 0 },
+});
 
 console.log('stockUtils categories: OK');
 

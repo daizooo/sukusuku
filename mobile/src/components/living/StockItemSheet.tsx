@@ -15,6 +15,7 @@ import {
 import { colors } from '@/lib/theme';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
+import { SOFT } from './stockVisual';
 
 // 防災備蓄の1行を足す・直す（docs/home.md §3.2）。PWA版の
 // `src/components/sukusuku/modals/StockItemModal.tsx` と同じ項目・同じ文言。
@@ -132,7 +133,7 @@ export default function StockItemSheet({
   onMove,
 }: StockItemSheetProps) {
   const [form, setForm] = useState<FormState>(() => initialState(item, defaultStorage));
-  const [moveCount, setMoveCount] = useState('1');
+  const [moveCount, setMoveCount] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
@@ -163,15 +164,16 @@ export default function StockItemSheet({
     onSubmit(draft);
   };
 
-  /** 一部を移す。移せるのは1以上、今の数まで（全部なら場所ごと変わる）。 */
-  const otherStorage: StockStorage = item?.storage === 'carry' ? 'home' : 'carry';
+  /**
+   * 寝室のロットを持ち出し用へ分ける／持ち出し用のロットを寝室へ戻す（docs/home.md §10.2.2）。
+   * 移せるのは1以上、今の数まで（全部なら場所ごと変わる）。1つだけのロットも移せる。
+   */
+  const moveLabel = item?.storage === 'carry' ? '寝室へ戻す' : '持ち出し用へ分ける';
+  const stepMove = (delta: number) =>
+    setMoveCount((prev) => Math.min(Math.max(1, Math.floor(item?.quantity ?? 1)), Math.max(1, prev + delta)));
   const handleMove = () => {
-    const count = Number(moveCount.trim());
-    if (!item || !Number.isFinite(count) || count <= 0 || count > item.quantity) {
-      setError(`移す数は1〜${item ? formatQuantity(item.quantity) : ''}で入れてください`);
-      return;
-    }
-    onMove?.(count);
+    if (!item || moveCount <= 0 || moveCount > item.quantity) return;
+    onMove?.(moveCount);
   };
 
   const handleDelete = () =>
@@ -305,20 +307,31 @@ export default function StockItemSheet({
               );
             })}
           </View>
-          {item && onMove && item.quantity > 1 && (
-            <View style={styles.perUnitRow}>
-              <Text style={styles.perUnitLabel}>一部を{STORAGE_LABEL[otherStorage]}へ</Text>
-              <TextInput
-                style={[styles.input, styles.perUnitInput]}
-                value={moveCount}
-                onChangeText={setMoveCount}
-                keyboardType="decimal-pad"
-                inputMode="decimal"
-                accessibilityLabel="移す数"
-              />
-              <Text style={styles.perUnitLabel}>{item.unit}</Text>
+          {item && onMove && item.quantity >= 1 && (
+            <View style={styles.moveRow}>
+              <Text style={styles.moveLabel}>{moveLabel}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="移す数を減らす"
+                onPress={() => stepMove(-1)}
+                style={styles.moveStep}
+              >
+                <Minus size={14} color={SOFT.buttonText} />
+              </Pressable>
+              <Text style={styles.moveValue}>
+                {formatQuantity(moveCount)}
+                <Text style={styles.moveUnit}> {item.unit}</Text>
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="移す数を増やす"
+                onPress={() => stepMove(1)}
+                style={styles.moveStep}
+              >
+                <Plus size={14} color={SOFT.buttonText} />
+              </Pressable>
               <Pressable accessibilityRole="button" onPress={handleMove} style={styles.moveButton}>
-                <Text style={styles.moveButtonText}>移す</Text>
+                <Text style={styles.moveButtonText}>{item.storage === 'carry' ? '戻す' : '分ける'}</Text>
               </Pressable>
             </View>
           )}
@@ -483,8 +496,22 @@ const styles = StyleSheet.create({
   segmentSelected: { backgroundColor: colors.surface },
   segmentText: { fontSize: 13, color: colors.textMuted, fontWeight: '500' },
   segmentTextSelected: { color: colors.text, fontWeight: '700' },
-  moveButton: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: colors.neutralSurface },
-  moveButtonText: { fontSize: 13, fontWeight: '700', color: colors.navActiveText },
+  moveRow: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 10, backgroundColor: SOFT.bg, padding: 6 },
+  moveLabel: { flex: 1, fontSize: 12, fontWeight: '700', color: SOFT.buttonText, paddingLeft: 4 },
+  moveStep: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: SOFT.button,
+    backgroundColor: colors.surface,
+  },
+  moveValue: { minWidth: 44, textAlign: 'center', fontSize: 15, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  moveUnit: { fontSize: 11, fontWeight: '700', color: colors.textFaint },
+  moveButton: { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: SOFT.button },
+  moveButtonText: { fontSize: 13, fontWeight: '700', color: SOFT.buttonText },
   perUnitRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   perUnitLabel: { fontSize: 13, fontWeight: '500', color: colors.textSubtle },
   perUnitInput: { width: 88, textAlign: 'center' },

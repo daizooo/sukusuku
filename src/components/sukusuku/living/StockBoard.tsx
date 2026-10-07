@@ -1,40 +1,32 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Check, ChevronRight, Clock, Minus, Pencil, Plus, Settings2, Wrench } from 'lucide-react';
+import { Backpack, Check, ChevronRight, Clock, Minus, Plus, Settings2, Wrench } from 'lucide-react';
 import type { StockItem, StockTarget } from '@/types/app';
 import {
   buildStockBoard,
   daysBetween,
   expiryCountdown,
-  expiryLevel,
-  formatExpiry,
   formatQuantity,
   formatYen,
   spanText,
   type StockPlan,
   type StockProduct,
-  type StockStorage,
 } from '@/lib/stockUtils';
-import SegmentedTabs from '../ui/SegmentedTabs';
 import StockAttention from './StockAttention';
+import StockBagCheck from './StockBagCheck';
 import StockProductDetail from './StockProductDetail';
-import { readinessColor, Ring, StockIcon, TONE } from './stockVisual';
+import { readinessColor, Ring, StockIcon } from './stockVisual';
 
 // 防災備蓄の画面（docs/home.md §10.2・§10.2.1）。mobile版の
 // `mobile/src/components/living/StockBoard.tsx` と同じ構成・項目・文言にしてある。
 //
-// 主役は「どんな備蓄が、どれだけあるか」。カテゴリごとに品目をタイルで並べ、数量を大きく出す。
-// 期限・不足・点検は品目に付く補助の情報なので、タイルの小さな一行と、上の細い帯から開く
-// 「確認が必要なもの」（StockAttention）に置く。色は赤（対応が要るもの）以外は使わない。
-//   上（固定）: 確認が必要なものの帯・備蓄／持ち出しの切り替え・カテゴリの絞り込み。
-//   中（スクロール）: 備え度 → カテゴリごとの品目タイル。
-//   持ち出しは、バッグの中身を押して確かめるチェック表（カテゴリごと）。
-
-const STORAGE_OPTIONS: { id: StockStorage; label: string }[] = [
-  { id: 'home', label: '寝室' },
-  { id: 'carry', label: '持ち出し用' },
-];
+// 主役は「どんな備蓄が、どれだけあるか」。カテゴリごとに品目の行を並べ、全体の数を大きく出す。
+// 期限・不足・点検は品目に付く補助の情報なので、行の小さな一行と、上の細い帯から開く
+// 「確認が必要なもの」（StockAttention）に置く。色は淡い橙と、対応が要るものの赤だけ。
+//   上（固定）: 確認が必要なものの帯と「バッグ」・カテゴリの絞り込み。
+//   中（スクロール）: 備え度 → カテゴリごとの品目の行（寝室・持ち出し用の内訳は品目の詳しい画面）。
+//   「バッグ」は、バッグの中身を押して確かめるチェック表（StockBagCheck）を開く。
 
 type PlanKey = keyof StockPlan;
 
@@ -44,8 +36,6 @@ interface StockBoardProps {
   plan: StockPlan;
   /** 日本時間の今日（YYYY-MM-DD）。 */
   today: string;
-  storage: StockStorage;
-  onStorageChange: (storage: StockStorage) => void;
   onEditItem: (item: StockItem) => void;
   onEditTarget: (target: StockTarget) => void;
   onAddTarget: () => void;
@@ -60,8 +50,6 @@ interface StockBoardProps {
   onInspect: (items: StockItem[]) => void;
 }
 
-const dateText = (on: string) => formatExpiry({ expiresOn: on, expiresMonthOnly: false });
-
 /** 絞り込みの「すべて」。 */
 const ALL = '';
 
@@ -72,8 +60,6 @@ export default function StockBoard({
   targets,
   plan,
   today,
-  storage,
-  onStorageChange,
   onEditItem,
   onEditTarget,
   onAddTarget,
@@ -86,12 +72,11 @@ export default function StockBoard({
 }: StockBoardProps) {
   const board = useMemo(() => buildStockBoard(items, targets, plan, today), [items, targets, plan, today]);
   const { counts, overview, attention, readiness, categories } = board;
-  // 持ち出しのチェック表で、確かめたロット（この画面の中だけ。点検した日の記録は「点検完了」で行う）。
-  const [checked, setChecked] = useState<Set<string>>(new Set());
   const [showPlan, setShowPlan] = useState(false);
   const [category, setCategory] = useState(ALL);
   const [detailKey, setDetailKey] = useState<string | null>(null);
   const [attentionOpen, setAttentionOpen] = useState(false);
+  const [bagOpen, setBagOpen] = useState(false);
 
   const bagDue = attention.bag?.due === true;
   const expiryCount = counts.expired + counts.soon;
@@ -105,17 +90,13 @@ export default function StockBoard({
   const detail = categories.flatMap((row) => row.products).find((product) => product.key === detailKey) ?? null;
   const inspectable = board.equipment.filter((item) => item.inspectIntervalMonths !== null);
 
-  const bagAge = attention.bag?.lastOn
-    ? `${spanText(daysBetween(attention.bag.lastOn, today))}前に点検`
-    : 'まだ点検していません';
-
   // ---- 上の細い帯 ----
   const banner =
     attentionCount > 0 ? (
       <button
         type="button"
         onClick={() => setAttentionOpen(true)}
-        className="shrink-0 mb-1.5 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-left hover:bg-gray-50"
+        className="min-w-0 flex-1 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-left hover:bg-gray-50"
       >
         <span className="h-2 w-2 shrink-0 rounded-full bg-red-400" />
         <span className="text-[13px] font-bold text-gray-900">確認が必要 {attentionCount}件</span>
@@ -131,11 +112,25 @@ export default function StockBoard({
         <ChevronRight size={15} className="shrink-0 text-gray-300" />
       </button>
     ) : (
-      <p className="shrink-0 mb-1.5 flex items-center gap-1.5 px-1 text-[11px] font-bold text-gray-400">
+      <p className="min-w-0 flex-1 flex items-center gap-1.5 px-1 py-1.5 text-[11px] font-bold text-gray-400">
         <Check size={13} />
         確認が必要なものはありません
       </p>
     );
+
+  // ---- 帯の右の「バッグ」（持ち出しバッグの点検を開く。点検の時期だけ赤い点） ----
+  const bagButton = (
+    <button
+      type="button"
+      aria-label={bagDue ? '持ち出しバッグを点検する（点検の時期です）' : '持ち出しバッグを点検する'}
+      onClick={() => setBagOpen(true)}
+      className="relative flex shrink-0 items-center gap-1 rounded-xl bg-orange-100 px-2.5 py-1.5 text-xs font-bold text-orange-800 hover:bg-orange-200"
+    >
+      <Backpack size={14} />
+      バッグ
+      {bagDue && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-gray-50 bg-red-400" />}
+    </button>
+  );
 
   // ---- 備え度（1行） ----
   const ringColor = readinessColor(readiness);
@@ -256,9 +251,6 @@ export default function StockBoard({
           <span className="shrink-0 text-right leading-tight tabular-nums">
             <span className="text-base font-bold text-gray-900">{formatQuantity(product.total)}</span>
             <span className="ml-0.5 text-[10px] font-bold text-gray-400">{product.unit}</span>
-            {product.carryTotal > 0 && (
-              <span className="block text-[10px] font-bold text-gray-300">バッグ{formatQuantity(product.carryTotal)}</span>
-            )}
           </span>
           {ratio !== null && (
             <span className="absolute inset-x-2.5 bottom-0 block h-[2px] overflow-hidden rounded-full bg-gray-100">
@@ -307,128 +299,14 @@ export default function StockBoard({
     </>
   );
 
-  // ---- 持ち出し: バッグの中身を押して確かめる（カテゴリごと） ----
-  const bagLots = items.filter((item) => item.storage === 'carry' && item.quantity > 0);
-  const doneCount = bagLots.filter((item) => checked.has(item.id)).length;
-  const allChecked = bagLots.length > 0 && doneCount === bagLots.length;
-  const carryShortages = board.blocks.filter((block) => (block.status.carry?.shortage ?? 0) > 0);
-  const bagByCategory = bagLots.reduce<Record<string, StockItem[]>>((groups, item) => {
-    const key = item.category.trim() || 'その他';
-    (groups[key] ??= []).push(item);
-    return groups;
-  }, {});
-
-  const toggle = (id: string) =>
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  const carryView = (
-    <>
-      <section className={`${tileClass} flex items-center gap-3 px-3 py-2`}>
-        <Ring size={44} stroke={5} ratio={bagLots.length === 0 ? 0 : doneCount / bagLots.length} color={TONE.accent}>
-          <span className="text-[11px] font-bold tabular-nums text-gray-900">
-            {doneCount}/{bagLots.length}
-          </span>
-        </Ring>
-        <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-bold text-gray-900">{plan.carryDays}日分のバッグ</p>
-          <p className={`text-[11px] font-bold ${bagDue ? 'text-red-700' : 'text-gray-400'}`}>
-            {attention.bag ? `${bagAge}${bagDue ? '・点検の時期です' : `・次は ${dateText(attention.bag.nextOn)} ごろ`}` : 'バッグは空です'}
-          </p>
-        </div>
-      </section>
-
-      {carryShortages.length > 0 && (
-        <section className="flex flex-wrap items-center gap-1.5 px-1">
-          <span className="text-[11px] font-bold text-gray-500">足りない</span>
-          {carryShortages.map(({ status }) => (
-            <span
-              key={status.target.id}
-              className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700 tabular-nums"
-            >
-              {status.target.name} あと{formatQuantity(status.carry?.shortage ?? 0)}
-              {status.target.unit}
-            </span>
-          ))}
-        </section>
-      )}
-
-      {bagLots.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-400">持ち出しバッグには何も入っていません</p>
-      ) : (
-        Object.entries(bagByCategory).map(([name, rows]) => (
-          <section key={name}>
-            {categoryHeader(name, rows.length)}
-            <ul className={listClass}>
-              {rows.map((item) => {
-                const on = checked.has(item.id);
-                const level = expiryLevel(item.expiresOn, today);
-                const alert = level === 'expired' || level === 'soon';
-                return (
-                  <li key={item.id} className={`flex items-center transition ${on ? 'bg-orange-50' : ''}`}>
-                    <button
-                      type="button"
-                      role="checkbox"
-                      aria-checked={on}
-                      aria-label={`${item.name}を確かめた`}
-                      onClick={() => toggle(item.id)}
-                      className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-left"
-                    >
-                      <span
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
-                          on ? 'border-orange-300 bg-orange-200 text-orange-800' : 'border-gray-200 bg-white text-transparent'
-                        }`}
-                      >
-                        <Check size={14} strokeWidth={3} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[13px] font-bold leading-tight text-gray-900">{item.name}</span>
-                        {item.expiresOn && (
-                          <span className={`block text-[10px] font-bold leading-tight ${alert ? 'text-red-700' : 'text-gray-400'}`}>
-                            {expiryCountdown(item.expiresOn, today)}
-                          </span>
-                        )}
-                      </span>
-                      <span className="shrink-0 leading-tight tabular-nums">
-                        <span className="text-base font-bold text-gray-900">{formatQuantity(item.quantity)}</span>
-                        <span className="ml-0.5 text-[10px] font-bold text-gray-400">{item.unit}</span>
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`${item.name}を編集`}
-                      onClick={() => onEditItem(item)}
-                      className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-gray-300 hover:bg-gray-100 hover:text-gray-500"
-                    >
-                      <Pencil size={12} />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))
-      )}
-    </>
-  );
-
   return (
     <>
-      {banner}
+      <div className="shrink-0 mb-1.5 flex items-center gap-1.5">
+        {banner}
+        {bagButton}
+      </div>
 
-      <SegmentedTabs
-        ariaLabel="保管場所"
-        value={storage}
-        onChange={onStorageChange}
-        options={STORAGE_OPTIONS}
-        className="shrink-0 mb-1.5"
-      />
-
-      {storage === 'home' && categories.length > 1 && (
+      {categories.length > 1 && (
         <div className="shrink-0 flex gap-1.5 overflow-x-auto pb-1.5">
           {[ALL, ...categories.map((row) => row.category)].map((value) => {
             const selected = value === activeCategory;
@@ -449,26 +327,7 @@ export default function StockBoard({
         </div>
       )}
 
-      <div className="relative flex-1 min-h-0">
-        <div className="h-full overflow-y-auto space-y-2.5 pb-24">{storage === 'home' ? homeView : carryView}</div>
-        {storage === 'carry' && bagLots.length > 0 && (
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent pt-4">
-            <button
-              type="button"
-              disabled={!allChecked}
-              onClick={() => {
-                onInspect(bagLots);
-                setChecked(new Set());
-              }}
-              className={`w-full rounded-2xl py-3.5 text-sm font-bold transition ${
-                allChecked ? 'bg-orange-200 text-orange-900 hover:bg-orange-300' : 'bg-gray-200 text-gray-400'
-              }`}
-            >
-              {allChecked ? '点検完了（今日の日付を残す）' : `あと${bagLots.length - doneCount}つ確かめましょう`}
-            </button>
-          </div>
-        )}
-      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 pb-6">{homeView}</div>
 
       {detail && (
         <StockProductDetail
@@ -507,8 +366,23 @@ export default function StockBoard({
           onInspect={onInspect}
           onOpenBag={() => {
             setAttentionOpen(false);
-            onStorageChange('carry');
+            setBagOpen(true);
           }}
+        />
+      )}
+
+      {bagOpen && (
+        <StockBagCheck
+          board={board}
+          items={items}
+          plan={plan}
+          today={today}
+          onClose={() => setBagOpen(false)}
+          onEditItem={(item) => {
+            setBagOpen(false);
+            onEditItem(item);
+          }}
+          onInspect={onInspect}
         />
       )}
     </>

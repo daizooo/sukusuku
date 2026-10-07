@@ -620,3 +620,44 @@ export function groupStockProducts<I extends BoardItem, T extends BoardTarget>(
   // 「その他」は最後に。
   return [...categories.filter((row) => row.category !== NO_CATEGORY), ...categories.filter((row) => row.category === NO_CATEGORY)];
 }
+
+// ---- 品目の数の内訳（寝室・持ち出し用。docs/home.md §10.2.2） ----
+
+/** 1つの保管場所の数。required は、その場所に要る量（目標が無い・持ち出しに入れない品目なら null）。 */
+export interface StorageShare {
+  have: number;
+  required: number | null;
+  /** 足りない量（足りていれば0）。 */
+  shortage: number;
+  /** 要る量より多い分（required が null なら0）。 */
+  surplus: number;
+}
+
+/**
+ * 品目の数を寝室・持ち出し用に分ける。数え方は品目の total と同じ（目標があれば期限切れを除いた
+ * 目標の単位の量、無ければロットの数）。持ち出しに入れる目標なら、持ち出し用の要る量は
+ * 「人数×バッグの日数」分、寝室の要る量は全体の必要数からそれを引いた分。
+ */
+export function storageShares<I extends BoardItem, T extends TargetLike>(
+  product: Pick<StockProduct<I, T>, 'target' | 'lots'>,
+  today: string,
+): Record<StockStorage, StorageShare> {
+  const status = product.target?.status ?? null;
+  const have = (storage: StockStorage) =>
+    round2(
+      product.lots
+        .filter(
+          (lot) => lot.storage === storage && lot.quantity > 0 && (!status || expiryLevel(lot.expiresOn, today) !== 'expired'),
+        )
+        .reduce((total, lot) => total + lot.quantity * (status ? lot.amountPerUnit : 1), 0),
+    );
+  const share = (amount: number, required: number | null): StorageShare => ({
+    have: amount,
+    required,
+    shortage: required === null ? 0 : round2(Math.max(0, required - amount)),
+    surplus: required === null ? 0 : round2(Math.max(0, amount - required)),
+  });
+  const carryRequired = status?.carry ? status.carry.required : null;
+  const homeRequired = status ? round2(Math.max(0, status.required - (carryRequired ?? 0))) : null;
+  return { home: share(have('home'), homeRequired), carry: share(have('carry'), carryRequired) };
+}
