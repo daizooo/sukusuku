@@ -12,7 +12,6 @@ import {
   formatQuantity,
   formatYen,
   spanText,
-  STORAGE_LABEL,
   type StockPlan,
   type StockProduct,
   type StockStorage,
@@ -20,7 +19,7 @@ import {
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import StockAttention from './StockAttention';
 import StockProductDetail from './StockProductDetail';
-import { readinessColor, Ring, StockIcon, TONE } from './stockVisual';
+import { readinessColor, Ring, SOFT, StockIcon, TONE } from './stockVisual';
 
 // 防災備蓄の画面（docs/home.md §10.2・§10.2.1）。PWA版の
 // `src/components/sukusuku/living/StockBoard.tsx` と同じ構成・項目・文言にしてある。
@@ -33,8 +32,8 @@ import { readinessColor, Ring, StockIcon, TONE } from './stockVisual';
 //   持ち出しは、バッグの中身を押して確かめるチェック表（カテゴリごと）。
 
 const STORAGE_OPTIONS: { id: StockStorage; label: string }[] = [
-  { id: 'home', label: '備蓄' },
-  { id: 'carry', label: STORAGE_LABEL.carry },
+  { id: 'home', label: '寝室' },
+  { id: 'carry', label: '持ち出し用' },
 ];
 
 type PlanKey = keyof StockPlan;
@@ -159,7 +158,7 @@ export default function StockBoard({
           onPress={() => setShowPlan((prev) => !prev)}
           style={styles.gear}
         >
-          <Settings2 size={16} color={colors.textSubtle} />
+          <Settings2 size={16} color={SOFT.icon} />
         </Pressable>
       </View>
       {showPlan && (
@@ -220,7 +219,7 @@ export default function StockBoard({
       >
         <View style={styles.tileTop}>
           <View style={styles.tileIcon}>
-            <StockIcon name={product.name} category={product.category} size={18} color={colors.textSubtle} />
+            <StockIcon name={product.name} category={product.category} size={18} color={SOFT.icon} />
           </View>
           {product.carryTotal > 0 && (
             <View style={styles.bagTag}>
@@ -240,7 +239,7 @@ export default function StockBoard({
             <View
               style={[
                 styles.barFill,
-                { width: `${Math.round(ratio * 100)}%`, backgroundColor: shortage > 0 ? TONE.alert : TONE.ok },
+                { width: `${Math.round(ratio * 100)}%`, backgroundColor: shortage > 0 ? TONE.alert : SOFT.border },
               ]}
             />
           </View>
@@ -275,7 +274,7 @@ export default function StockBoard({
   const categoryHeader = (name: string, count: number) => (
     <View style={styles.categoryHeader}>
       <View style={styles.categoryIcon}>
-        <StockIcon name={name} size={15} color={colors.primaryText} />
+        <StockIcon name={name} size={15} color={SOFT.icon} />
       </View>
       <Text style={styles.categoryName}>{name}</Text>
       <Text style={styles.categoryCount}>{count}品目</Text>
@@ -380,11 +379,11 @@ export default function StockBoard({
                       onPress={() => toggle(item.id)}
                       style={styles.bagBody}
                     >
-                      <View style={[styles.bagIcon, on && { backgroundColor: TONE.accent }]}>
+                      <View style={[styles.bagIcon, on ? { backgroundColor: SOFT.border } : null]}>
                         {on ? (
-                          <Check size={26} color={colors.primaryText} strokeWidth={3} />
+                          <Check size={26} color={SOFT.buttonText} strokeWidth={3} />
                         ) : (
-                          <StockIcon name={item.name} category={item.category} size={24} color={colors.textSubtle} />
+                          <StockIcon name={item.name} category={item.category} size={24} color={SOFT.icon} />
                         )}
                       </View>
                       <Text style={styles.bagName} numberOfLines={2}>
@@ -468,7 +467,7 @@ export default function StockBoard({
               }}
               style={[styles.finish, allChecked && styles.finishOn]}
             >
-              <Text style={[styles.finishText, allChecked && { color: colors.primaryText }]}>
+              <Text style={[styles.finishText, allChecked && { color: SOFT.buttonText }]}>
                 {allChecked ? '点検完了（今日の日付を残す）' : `あと${bagLots.length - doneCount}つ確かめましょう`}
               </Text>
             </Pressable>
@@ -544,9 +543,9 @@ const styles = StyleSheet.create({
   tabs: { marginHorizontal: 16, marginBottom: 8 },
   chips: { gap: 6, paddingHorizontal: 16, paddingBottom: 8 },
   chip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: colors.neutralSurface },
-  chipOn: { backgroundColor: TONE.accent },
+  chipOn: { backgroundColor: SOFT.button },
   chipText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  chipTextOn: { color: colors.primaryText },
+  chipTextOn: { color: SOFT.buttonText },
   content: { paddingHorizontal: 16, paddingBottom: 24, gap: 16 },
   contentWithFooter: { paddingBottom: 96 },
   section: { gap: 8 },
@@ -563,7 +562,7 @@ const styles = StyleSheet.create({
   ringLabel: { fontSize: 9, fontWeight: '700', color: colors.textFaint, marginTop: 1 },
   summaryTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
   summarySub: { fontSize: 11, fontWeight: '500', color: colors.textFaint, marginTop: 2, fontVariant: ['tabular-nums'] },
-  gear: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.neutralSurface },
+  gear: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.bg },
   planPanel: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -576,7 +575,7 @@ const styles = StyleSheet.create({
   stepButton: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.neutralSurface },
   stepValue: { minWidth: 32, textAlign: 'center', fontSize: 14, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   categoryHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  categoryIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: TONE.accent },
+  categoryIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.button },
   categoryName: { fontSize: 16, fontWeight: '700', color: colors.text },
   categoryCount: { fontSize: 12, fontWeight: '700', color: colors.textFaint },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
@@ -590,7 +589,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   tileTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  tileIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.neutralSurface },
+  tileIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.bg },
   bagTag: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: colors.neutralSurface },
   bagTagText: { fontSize: 10, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   tileName: { fontSize: 13, fontWeight: '700', color: colors.text, lineHeight: 16, minHeight: 32, marginTop: 4 },
@@ -613,15 +612,15 @@ const styles = StyleSheet.create({
   shortPill: { borderRadius: 999, backgroundColor: colors.dangerSurface, paddingHorizontal: 10, paddingVertical: 4 },
   shortPillText: { fontSize: 11, fontWeight: '700', color: colors.alertText, fontVariant: ['tabular-nums'] },
   bagTile: { width: '48.4%', borderRadius: 16, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.surface },
-  bagTileOn: { borderColor: TONE.accent, backgroundColor: colors.background },
+  bagTileOn: { borderColor: SOFT.border, backgroundColor: SOFT.bg },
   bagBody: { alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingTop: 16, paddingBottom: 12 },
-  bagIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.neutralSurface },
+  bagIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.bg },
   bagName: { fontSize: 13, fontWeight: '700', color: colors.text, textAlign: 'center', minHeight: 32, lineHeight: 16 },
   bagQty: { fontSize: 18, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   bagUnit: { fontSize: 12, fontWeight: '700', color: colors.textFaint },
   bagEdit: { position: 'absolute', top: 8, right: 8 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingBottom: 12, paddingTop: 8, backgroundColor: colors.background },
   finish: { borderRadius: 16, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.neutralSurface },
-  finishOn: { backgroundColor: TONE.accent },
+  finishOn: { backgroundColor: SOFT.button },
   finishText: { fontSize: 14, fontWeight: '700', color: colors.textFaint },
 });

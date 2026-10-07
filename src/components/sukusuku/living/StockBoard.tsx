@@ -12,7 +12,6 @@ import {
   formatQuantity,
   formatYen,
   spanText,
-  STORAGE_LABEL,
   type StockPlan,
   type StockProduct,
   type StockStorage,
@@ -33,8 +32,8 @@ import { readinessColor, Ring, StockIcon, TONE } from './stockVisual';
 //   持ち出しは、バッグの中身を押して確かめるチェック表（カテゴリごと）。
 
 const STORAGE_OPTIONS: { id: StockStorage; label: string }[] = [
-  { id: 'home', label: '備蓄' },
-  { id: 'carry', label: STORAGE_LABEL.carry },
+  { id: 'home', label: '寝室' },
+  { id: 'carry', label: '持ち出し用' },
 ];
 
 type PlanKey = keyof StockPlan;
@@ -118,7 +117,7 @@ export default function StockBoard({
         onClick={() => setAttentionOpen(true)}
         className="shrink-0 mb-2 flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-left hover:bg-gray-50"
       >
-        <span className="h-2 w-2 shrink-0 rounded-full bg-red-600" />
+        <span className="h-2 w-2 shrink-0 rounded-full bg-red-400" />
         <span className="text-sm font-bold text-gray-900">確認が必要 {attentionCount}件</span>
         <span className="flex-1 min-w-0 truncate text-[11px] font-bold text-gray-400">
           {[
@@ -165,7 +164,7 @@ export default function StockBoard({
           aria-label="人数・日数を変える"
           aria-expanded={showPlan}
           onClick={() => setShowPlan((prev) => !prev)}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-600"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-50 text-orange-500"
         >
           <Settings2 size={16} />
         </button>
@@ -226,7 +225,7 @@ export default function StockBoard({
         className={`${tileClass} flex flex-col gap-1 p-3 text-left hover:bg-gray-50`}
       >
         <span className="flex items-start justify-between gap-1">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-600">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-50 text-orange-500">
             <StockIcon name={product.name} category={product.category} size={18} />
           </span>
           {product.carryTotal > 0 && (
@@ -243,7 +242,7 @@ export default function StockBoard({
         {ratio !== null && (
           <span className="block h-1 overflow-hidden rounded-full bg-gray-100">
             <span
-              className={`block h-full rounded-full ${shortage > 0 ? 'bg-red-600' : 'bg-gray-700'}`}
+              className={`block h-full rounded-full ${shortage > 0 ? 'bg-red-400' : 'bg-orange-300'}`}
               style={{ width: `${Math.round(ratio * 100)}%` }}
             />
           </span>
@@ -273,7 +272,7 @@ export default function StockBoard({
 
   const categoryHeader = (name: string, count: number) => (
     <h2 className="mb-2 flex items-center gap-2 text-base font-bold text-gray-900">
-      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-white">
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-orange-600">
         <StockIcon name={name} size={15} />
       </span>
       {name}
@@ -381,7 +380,7 @@ export default function StockBoard({
                   <div
                     key={item.id}
                     className={`relative rounded-2xl border-2 transition ${
-                      on ? 'border-gray-900 bg-gray-50' : 'border-gray-200 bg-white'
+                      on ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white'
                     }`}
                   >
                     <button
@@ -394,7 +393,7 @@ export default function StockBoard({
                     >
                       <span
                         className={`flex h-12 w-12 items-center justify-center rounded-full ${
-                          on ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
+                          on ? 'bg-orange-200 text-orange-800' : 'bg-orange-50 text-orange-500'
                         }`}
                       >
                         {on ? <Check size={26} strokeWidth={3} /> : <StockIcon name={item.name} category={item.category} size={24} />}
@@ -453,7 +452,7 @@ export default function StockBoard({
                 aria-pressed={selected}
                 onClick={() => setCategory(value)}
                 className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition ${
-                  selected ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  selected ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }`}
               >
                 {value === ALL ? 'すべて' : value}
@@ -475,7 +474,7 @@ export default function StockBoard({
                 setChecked(new Set());
               }}
               className={`w-full rounded-2xl py-3.5 text-sm font-bold transition ${
-                allChecked ? 'bg-gray-900 text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-400'
+                allChecked ? 'bg-orange-200 text-orange-900 hover:bg-orange-300' : 'bg-gray-200 text-gray-400'
               }`}
             >
               {allChecked ? '点検完了（今日の日付を残す）' : `あと${bagLots.length - doneCount}つ確かめましょう`}

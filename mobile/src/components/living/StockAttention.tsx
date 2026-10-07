@@ -13,7 +13,7 @@ import {
 import { colors } from '@/lib/theme';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
-import { StockIcon, TONE } from './stockVisual';
+import { SOFT, StockIcon, TONE } from './stockVisual';
 
 // 「確認が必要なもの」（docs/home.md §10.2）。期限・不足・点検は品目に付く補助の情報なので、
 // 一覧の主役にはせず、上の帯から開くこの画面に集める。PWA版の
@@ -58,7 +58,7 @@ export default function StockAttention({
 
   const bubble = (name: string, category: string) => (
     <View style={styles.bubble}>
-      <StockIcon name={name} category={category} size={22} color={colors.textSubtle} />
+      <StockIcon name={name} category={category} size={22} color={SOFT.icon} />
     </View>
   );
 
@@ -68,8 +68,8 @@ export default function StockAttention({
       onPress={onPress}
       style={[styles.action, kind === 'main' ? styles.actionMain : styles.actionSub]}
     >
-      <Icon size={14} color={kind === 'main' ? colors.primaryText : colors.textSubtle} />
-      <Text style={[styles.actionText, { color: kind === 'main' ? colors.primaryText : colors.textSubtle }]}>{label}</Text>
+      <Icon size={14} color={kind === 'main' ? SOFT.buttonText : colors.textSubtle} />
+      <Text style={[styles.actionText, { color: kind === 'main' ? SOFT.buttonText : colors.textSubtle }]}>{label}</Text>
     </Pressable>
   );
 
@@ -178,7 +178,7 @@ export default function StockAttention({
                       onPress={() => onSendShortage(target, shortage)}
                       style={styles.toList}
                     >
-                      <ListPlus size={18} color={colors.primaryText} />
+                      <ListPlus size={18} color={SOFT.buttonText} />
                       <Text style={styles.toListText}>リストへ</Text>
                     </Pressable>
                   )}
@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.neutralSurface,
+    backgroundColor: SOFT.bg,
   },
   chip: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   chipText: { fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] },
@@ -276,14 +276,14 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 8,
   },
-  actionMain: { backgroundColor: TONE.accent },
+  actionMain: { backgroundColor: SOFT.button },
   actionSub: { backgroundColor: colors.neutralSurface },
   actionText: { fontSize: 12, fontWeight: '700' },
   miniBar: { height: 6, borderRadius: 3, backgroundColor: colors.neutralSurface, overflow: 'hidden', marginTop: 6 },
   miniFill: { height: 6, borderRadius: 3, backgroundColor: TONE.alert },
   shortText: { fontSize: 11, fontWeight: '700', color: colors.alertText, marginTop: 4, fontVariant: ['tabular-nums'] },
-  toList: { alignItems: 'center', gap: 2, borderRadius: 12, backgroundColor: TONE.accent, paddingHorizontal: 12, paddingVertical: 8 },
-  toListText: { fontSize: 10, fontWeight: '700', color: colors.primaryText },
+  toList: { alignItems: 'center', gap: 2, borderRadius: 12, backgroundColor: SOFT.button, paddingHorizontal: 12, paddingVertical: 8 },
+  toListText: { fontSize: 10, fontWeight: '700', color: SOFT.buttonText },
   bulk: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -46,11 +46,11 @@ const ICONS: Record<StockIconKey, LucideIcon> = {
 
 /** 状態の色。リングの線・数字に使う。 */
 export const TONE = {
-  // 色は「赤＝いま対応が要る」だけ。それ以外は濃いグレーと薄いグレーで描く。
-  ok: '#374151',
-  warn: '#374151',
-  alert: '#dc2626',
-  accent: '#111827',
+  // 色は淡い橙（防災備蓄の色）と、いま対応が要るものの赤だけ。濃い色は文字以外に使わない。
+  ok: '#fb923c',
+  warn: '#fb923c',
+  alert: '#f87171',
+  accent: '#fb923c',
   track: '#e5e7eb',
   mute: '#9ca3af',
 } as const;
