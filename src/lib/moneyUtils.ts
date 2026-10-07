@@ -454,6 +454,8 @@ export function fiscalMonthKeys(fiscalYear: number): string[] {
 
 export interface YearMonthRow {
   monthKey: string;
+  /** その月に記録（特別費を除く）があるか。無い月は数えない（使い始める前の月・まだ来ていない月）。 */
+  recorded: boolean;
   income: number;
   living: number;
   saving: number;
@@ -465,12 +467,16 @@ export interface YearMonthRow {
 
 export interface YearSummary {
   months: YearMonthRow[];
-  total: Omit<YearMonthRow, 'monthKey'>;
+  /** 記録のある月だけの合計。 */
+  total: Omit<YearMonthRow, 'monthKey' | 'recorded'>;
+  /** 記録のある月の数。 */
+  recordedMonths: number;
 }
 
 /**
  * 年度の収支（docs/kakei.md §4.2）。月ごとの 収入・生活費・貯金・収支 と年間の合計。特別費は入れない。
- * upTo（YYYY-MM）より後の月は、まだ来ていないので合計に入れない（行は 0 のまま返す）。
+ * 記録（特別費を除く）の無い月は数えない（使い始める前の月まで予算が残ったように見えないように）。
+ * upTo（YYYY-MM）より後の月は、まだ来ていないので数えない。
  */
 export function buildYearSummary(
   records: readonly MoneyRecord[],
@@ -481,17 +487,23 @@ export function buildYearSummary(
   upTo: string,
 ): YearSummary {
   const total = { income: 0, living: 0, saving: 0, balance: 0, livingDiff: 0 };
+  let recordedMonths = 0;
   const months = fiscalMonthKeys(fiscalYear).map((monthKey) => {
-    if (monthKey > upTo) return { monthKey, income: 0, living: 0, saving: 0, balance: 0, livingDiff: 0 };
+    const recorded =
+      monthKey <= upTo &&
+      recordsInMonth(records, monthKey).some((record) => record.items.some((item) => item.specialItemId === null));
+    if (!recorded) return { monthKey, recorded, income: 0, living: 0, saving: 0, balance: 0, livingDiff: 0 };
     const summary = buildMonthSummary(records, categories, budgets, wallets, monthKey);
     const row = {
       monthKey,
+      recorded,
       income: summary.income,
       living: summary.living,
       saving: summary.saving,
       balance: summary.balance,
       livingDiff: summary.livingBudget - summary.living,
     };
+    recordedMonths += 1;
     total.income += row.income;
     total.living += row.living;
     total.saving += row.saving;
@@ -499,7 +511,7 @@ export function buildYearSummary(
     total.livingDiff += row.livingDiff;
     return row;
   });
-  return { months, total };
+  return { months, total, recordedMonths };
 }
 
 export interface SpecialProgress {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Check, Plus } from 'lucide-react-native';
 import type { SpecialActual, SpecialActualDraft, SpecialItem, SpecialKind } from '@/types/app';
 import { supabase } from '@/lib/supabase';
@@ -26,35 +26,32 @@ import {
   type SpecialRow,
 } from '@/lib/specialUtils';
 import { categoryOptions } from '@/lib/stockUtils';
-import { formatPrice } from '@/lib/shoppingUtils';
+import { formatYen } from '@/lib/moneyUtils';
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import SpecialItemSheet, { type SpecialItemSheetResult } from '@/components/living/SpecialItemSheet';
 import SpecialActualSheet from '@/components/living/SpecialActualSheet';
+import { Hero, ProgressBar, SectionHeader, YearBar, type } from '@/components/money/moneyVisual';
 
-// 特別費の予定と実績（docs/home.md §5.4）。家計タブの「年」の、年度の収支の下に置く（docs/kakei.md §4.2）。
-// 年度は「年」の画面で選んだもの。スクロールも「年」の画面に任せる（ここは中身だけ）。
+// 家計タブの「特別費」（docs/home.md §5.4・docs/kakei.md §4.3）。年度の予定と実績。
 // PWA版の `src/components/sukusuku/living/SpecialPanel.tsx` と同じ項目・並び・文言。
 //
-// 実績は家計の記録の品目（docs/kakei.md §3.2）。「済」は品目1つの記録を作り、家計タブの記録にも出る。
-//
-// 年度（4月〜翌3月）ごとに、特別費（支出）と特別収入（賞与など）の「予算・実績・差異」を見る。
-// 一覧は月ごと（4月→3月）で、1行＝予定1回ぶん（または予定外の出費1件）。
-// 予定の行の右の「済」を1回押すと、予算の額・今日の日付で実績になる（額が違えば行を押して直す）。
+// 年度の送りと「特別費 / 特別収入」の切り替えは固定し、下をスクロールする。
+// 結論は年度に払った額（特別収入は入った額）と、予算に対する進み具合・残り。
+// その下に予定と実績を月ごと（4月→3月）に。1行＝予定1回ぶん（または予定外の出費1件）。
+// 行の左の丸を1回押すと、予算の額・今日の日付で実績になる（額が違えば行を押して直す）。
+// 実績は家計の記録の品目（docs/kakei.md §3.2）。「済」は品目1つの記録を作り、「記録」にも出る。
 
 const KIND_OPTIONS: { id: SpecialKind; label: string }[] = [
-  { id: 'expense', label: '特別費（支出）' },
+  { id: 'expense', label: '特別費' },
   { id: 'income', label: '特別収入' },
 ];
-
-/** 年度の合計に出す「差異」。支出は予算−実績（あと使える額）、収入は予算−実績（まだ入っていない額）。 */
-const signed = (value: number) => `${value < 0 ? '−' : ''}${formatPrice(Math.abs(value))}`;
 
 type EditingRow = { row: SpecialRow } | null;
 type EditingItem = SpecialItem | null;
 
 interface SpecialPanelProps {
   familyId: string | null;
-  /** 年度（4月始まり）。「年」の画面で選ぶ。 */
+  /** 年度（4月始まり）。「年」と同じ年度を見る。 */
   fiscalYear: number;
   /** 予定外の出費を足したとき、その年度へ移る。 */
   onFiscalYear: (fiscalYear: number) => void;
@@ -95,12 +92,8 @@ export default function SpecialPanel({ familyId, fiscalYear, onFiscalYear, onRec
   const rows = useMemo(() => buildYearRows(items, actuals, fiscalYear, kind), [items, actuals, fiscalYear, kind]);
   const groups = useMemo(() => groupByMonth(rows), [rows]);
   const totals = useMemo(() => yearTotals(rows), [rows]);
-  // 収入と支出の差引（予算どおり・実績どおり）。
-  const balance = useMemo(() => {
-    const income = yearTotals(buildYearRows(items, actuals, fiscalYear, 'income'));
-    const expense = yearTotals(buildYearRows(items, actuals, fiscalYear, 'expense'));
-    return { budget: income.budget - expense.budget, actual: income.actual - expense.actual };
-  }, [items, actuals, fiscalYear]);
+  // まだ済にしていない予定の件数。
+  const pending = useMemo(() => rows.filter((row) => row.planId !== null && row.actual === null).length, [rows]);
   const categories = useMemo(() => categoryOptions(items), [items]);
   const hasAnything = items.length > 0;
 
@@ -221,23 +214,12 @@ export default function SpecialPanel({ familyId, fiscalYear, onFiscalYear, onRec
   const monthLabel = (month: number | null) =>
     month === null ? '月未定' : `${calendarYearOf(fiscalYear, month)}年${month}月`;
 
-  return (
-    <>
-      <View style={styles.head}>
-        <Text style={styles.headTitle}>特別費</Text>
-        <Text style={styles.headHint}>{formatFiscalYear(fiscalYear)}の予定と実績</Text>
-        <View style={styles.flex} />
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setAdding(true)}
-          disabled={!familyId}
-          style={styles.addItem}
-        >
-          <Plus size={14} color={colors.livingSpecial} />
-          <Text style={styles.addItemText}>項目を追加</Text>
-        </Pressable>
-      </View>
+  const income = kind === 'income';
+  const remaining = totals.budget - totals.actual;
 
+  return (
+    <View style={styles.flex}>
+      <YearBar fiscalYear={fiscalYear} onChange={onFiscalYear} />
       <SegmentedTabs
         options={KIND_OPTIONS}
         value={kind}
@@ -246,46 +228,50 @@ export default function SpecialPanel({ familyId, fiscalYear, onFiscalYear, onRec
         style={styles.kinds}
       />
 
-      <View style={styles.totals}>
-        <View style={styles.totalCell}>
-          <Text style={styles.totalLabel}>予算</Text>
-          <Text style={styles.totalValue}>{formatPrice(totals.budget)}</Text>
-        </View>
-        <View style={styles.totalCell}>
-          <Text style={styles.totalLabel}>実績</Text>
-          <Text style={styles.totalValue}>{formatPrice(totals.actual)}</Text>
-        </View>
-        <View style={styles.totalCell}>
-          <Text style={styles.totalLabel}>差異</Text>
-          <Text style={[styles.totalValue, totals.diff < 0 && kind === 'expense' && styles.over]}>
-            {signed(totals.diff)}
-          </Text>
-        </View>
-      </View>
-      {hasAnything && (
-        <Text style={styles.balance}>
-          収入 − 支出　予算 {signed(balance.budget)} ／ 実績 {signed(balance.actual)}
-        </Text>
-      )}
+      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+        <Hero
+          label={income ? '年度に入った特別収入' : '年度に払った特別費'}
+          value={formatYen(totals.actual)}
+          note={
+            remaining < 0
+              ? `予算 ${formatYen(totals.budget)}・${formatYen(remaining)} 超過`
+              : income
+                ? `予定 ${formatYen(totals.budget)}・まだ ${formatYen(remaining)}`
+                : `予算 ${formatYen(totals.budget)}・残り ${formatYen(remaining)}`
+          }
+        >
+          <View style={styles.progress}>
+            <ProgressBar ratio={totals.budget > 0 ? totals.actual / totals.budget : 0} over={!income && remaining < 0} />
+            {pending > 0 && <Text style={type.faint}>まだ済にしていない予定 {pending}件</Text>}
+          </View>
+        </Hero>
 
-      {isLoading ? (
-        <Text style={styles.message}>読み込み中...</Text>
-      ) : groups.length === 0 ? (
-        <View style={styles.centered}>
+        <SectionHeader
+          title="予定と実績"
+          hint="月ごと"
+          right={
+            <Pressable accessibilityRole="button" onPress={() => setAdding(true)} disabled={!familyId} hitSlop={8} style={styles.add}>
+              <Plus size={14} color={colors.money} />
+              <Text style={type.link}>項目を追加</Text>
+            </Pressable>
+          }
+        />
+
+        {isLoading ? (
+          <Text style={styles.message}>読み込み中...</Text>
+        ) : groups.length === 0 ? (
           <Text style={styles.message}>
             {hasAnything
-              ? `${formatFiscalYear(fiscalYear)}の${kind === 'expense' ? '特別費' : '特別収入'}はありません`
+              ? `${formatFiscalYear(fiscalYear)}の${income ? '特別収入' : '特別費'}はありません`
               : '年に数回の大きな出費や賞与を「項目を追加」で登録すると、年度ごとの予算と実績を見られます'}
           </Text>
-        </View>
-      ) : (
-        <View style={styles.listContent}>
-          {groups.map((group) => (
+        ) : (
+          groups.map((group) => (
             <View key={group.month ?? 'none'} style={styles.group}>
               <View style={styles.groupHead}>
                 <Text style={styles.groupTitle}>{monthLabel(group.month)}</Text>
-                <Text style={styles.groupSum}>
-                  予算 {formatPrice(group.budget)} ／ 実績 {formatPrice(group.actual)}
+                <Text style={type.faint}>
+                  {formatYen(group.actual)} / {formatYen(group.budget)}
                 </Text>
               </View>
               <View style={styles.card}>
@@ -300,7 +286,7 @@ export default function SpecialPanel({ familyId, fiscalYear, onFiscalYear, onRec
                       key={row.key}
                       accessibilityRole="button"
                       onPress={() => setEditingRow({ row })}
-                      style={[styles.row, index > 0 && styles.rowDivided, !paid && styles.rowPending]}
+                      style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.pressed]}
                     >
                       {row.planId !== null ? (
                         <Pressable
@@ -318,25 +304,29 @@ export default function SpecialPanel({ familyId, fiscalYear, onFiscalYear, onRec
                         </View>
                       )}
                       <View style={styles.flex}>
-                        <Text style={styles.name}>{row.item.name}</Text>
-                        {sub !== '' && <Text style={styles.sub}>{sub}</Text>}
+                        <Text style={[type.row, !paid && styles.pendingText]} numberOfLines={1}>
+                          {row.item.name}
+                        </Text>
+                        {sub !== '' && <Text style={type.faint}>{sub}</Text>}
                       </View>
                       <View style={styles.rowRight}>
-                        {row.planId !== null && <Text style={styles.budget}>予算 {formatPrice(row.budget)}</Text>}
                         {paid ? (
-                          <Text style={[styles.actual, over && styles.over]}>実績 {formatPrice(row.actual!)}</Text>
+                          <Text style={[type.amount, over && type.minus]}>{formatYen(row.actual!)}</Text>
                         ) : (
-                          <Text style={styles.unpaid}>未</Text>
+                          <Text style={[type.amount, styles.pendingText]}>{formatYen(row.budget)}</Text>
                         )}
+                        <Text style={type.faint}>
+                          {paid ? (row.planId !== null ? `予算 ${formatYen(row.budget)}` : '予定外') : 'まだ'}
+                        </Text>
                       </View>
                     </Pressable>
                   );
                 })}
               </View>
             </View>
-          ))}
-        </View>
-      )}
+          ))
+        )}
+      </ScrollView>
 
       {editingRow !== null && (
         <SpecialActualSheet
@@ -368,79 +358,41 @@ export default function SpecialPanel({ familyId, fiscalYear, onFiscalYear, onRec
           onDelete={editingItem === null ? undefined : () => void removeItem(editingItem.id)}
         />
       )}
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  centered: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  head: { flexDirection: 'row', alignItems: 'baseline', gap: 6, paddingHorizontal: 16, paddingBottom: 8 },
-  headTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
-  headHint: { fontSize: 12, fontWeight: '500', color: colors.textFaint },
-  addItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: colors.livingSpecialSurface,
-  },
-  addItemText: { fontSize: 12, fontWeight: '700', color: colors.livingSpecial },
-  kinds: { marginHorizontal: 16, marginBottom: 8 },
-  totals: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingVertical: 8,
-  },
-  totalCell: { flex: 1, alignItems: 'center' },
-  totalLabel: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
-  totalValue: { fontSize: 15, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'], marginTop: 2 },
-  balance: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textMuted,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    fontVariant: ['tabular-nums'],
-  },
-  message: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
-  listContent: { paddingHorizontal: 16, paddingBottom: 24 },
-  group: { marginBottom: 12 },
-  groupHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: 4 },
+  kinds: { marginHorizontal: 16, marginBottom: 6 },
+  // 右下の「＋」に一覧の最後が隠れないよう、下を空ける。
+  content: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 96 },
+  progress: { gap: 6, paddingTop: 8 },
+  add: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
+  group: { marginBottom: 16 },
+  groupHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: 6 },
   groupTitle: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },
-  groupSum: { fontSize: 11, fontWeight: '500', color: colors.textFaint, fontVariant: ['tabular-nums'] },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
-  rowPending: { opacity: 0.85 },
+  pressed: { backgroundColor: colors.background },
   check: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     borderWidth: 2,
     borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkDone: { borderColor: colors.livingSpecial, backgroundColor: colors.livingSpecial },
-  name: { fontSize: 14, fontWeight: '700', color: colors.text },
-  sub: { fontSize: 11, fontWeight: '500', color: colors.textFaint, marginTop: 2 },
+  checkDone: { borderColor: colors.money, backgroundColor: colors.money },
+  pendingText: { color: colors.textMuted },
   rowRight: { alignItems: 'flex-end' },
-  budget: { fontSize: 11, fontWeight: '500', color: colors.textFaint, fontVariant: ['tabular-nums'] },
-  actual: { fontSize: 13, fontWeight: '700', color: colors.textSubtle, fontVariant: ['tabular-nums'], marginTop: 2 },
-  unpaid: { fontSize: 12, fontWeight: '700', color: colors.textFaint, marginTop: 2 },
-  over: { color: colors.alertText },
 });

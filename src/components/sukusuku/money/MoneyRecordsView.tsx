@@ -12,11 +12,12 @@ import {
   recordsInMonth,
   topCategoryIdOf,
 } from '@/lib/moneyUtils';
-import { CategoryBadge, MonthBar } from './moneyVisual';
+import { CategoryBadge, Hero, MonthBar, cardClass, type } from './moneyVisual';
 
 // 家計タブの「記録」（docs/kakei.md §2・§3）。mobile版の `mobile/src/components/money/MoneyRecordsView.tsx` と同じ並び・文言。
-// その月の記録を日ごと（新しい日から）に並べる。1行＝1件の記録（種類・お店・出金元・合計）。押すと記録の詳細。
-// 月の送りは固定で、スクロールするのは一覧だけ（右下の「＋」に最後が隠れないよう、下を空ける）。
+//
+// 結論はその月に使った額（支出の合計）。その下に記録を日ごと（新しい日から）。
+// 1行＝1件の記録（種類・お店・出金元・合計）。押すと記録の詳細。月の送りは固定で、スクロールするのは下だけ。
 
 interface MoneyRecordsViewProps {
   monthKey: string;
@@ -62,8 +63,8 @@ export default function MoneyRecordsView({
     if (record.kind === 'transfer') {
       return {
         badge: '振',
-        title: `振替 ${walletName(record.walletId) || '?'} → ${walletName(record.toWalletId) || '?'}`,
-        sub: '',
+        title: '振替',
+        sub: `${walletName(record.walletId) || '?'} → ${walletName(record.toWalletId) || '?'}`,
       };
     }
     const groups = groupItems(record.items);
@@ -76,66 +77,67 @@ export default function MoneyRecordsView({
         : '';
     return {
       badge: top ? categories.find((category) => category.id === top)?.name ?? '' : '特',
-      title: groups.length > 1 ? `${firstTitle} ほか${groups.length - 1}種類` : firstTitle,
+      title: groups.length > 1 ? `${firstTitle} ほか${groups.length - 1}` : firstTitle,
       sub: [record.store, walletName(record.walletId)].filter((text) => text !== '').join('・'),
     };
   };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <MonthBar
-        monthKey={monthKey}
-        onChange={onMonth}
-        right={
-          <span className="text-xs font-semibold text-gray-500 tabular-nums">
-            支出 {formatYen(totals.expense)}
-            {totals.income > 0 ? `　収入 ${formatYen(totals.income)}` : ''}
-          </span>
-        }
-      />
-      {isLoading ? (
-        <p className="py-8 text-center text-sm text-gray-400">読み込み中...</p>
-      ) : days.length === 0 ? (
-        <p className="p-8 text-center text-sm text-gray-400">この月の記録はまだありません。右下の「＋」で記録します</p>
-      ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto pb-24">
-          {days.map((day) => (
-            <div key={day.date} className="mb-3">
-              <p className="pb-1 text-xs font-bold text-gray-500">{dayLabel(day.date)}</p>
-              <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-                {day.records.map((record, index) => {
-                  const { badge, title, sub } = describe(record);
-                  const total = recordTotal(record);
-                  return (
-                    <button
-                      key={record.id}
-                      type="button"
-                      onClick={() => onOpen(record)}
-                      className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-gray-50 ${
-                        index > 0 ? 'border-t border-gray-200' : ''
-                      }`}
-                    >
-                      <CategoryBadge label={badge} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-gray-900">{title}</span>
-                        {sub !== '' && <span className="mt-0.5 block truncate text-xs text-gray-400">{sub}</span>}
-                      </span>
-                      <span
-                        className={`text-[15px] font-bold tabular-nums ${
-                          record.kind === 'income' ? 'text-sky-600' : record.kind === 'transfer' ? 'text-gray-500' : 'text-gray-900'
+      <MonthBar monthKey={monthKey} onChange={onMonth} />
+      {/* 右下の「＋」に一覧の最後が隠れないよう、下を空ける。 */}
+      <div className="flex-1 min-h-0 overflow-y-auto pb-24">
+        <Hero
+          label="この月に使った額"
+          value={formatYen(totals.expense)}
+          note={totals.income > 0 ? `収入 +${formatYen(totals.income)}` : undefined}
+        />
+
+        {isLoading ? (
+          <p className="py-8 text-center text-sm text-gray-400">読み込み中...</p>
+        ) : days.length === 0 ? (
+          <p className="py-8 text-center text-sm text-gray-400">この月の記録はまだありません。右下の「＋」で記録します</p>
+        ) : (
+          days.map((day) => {
+            const spent = day.records
+              .filter((record) => record.kind === 'expense')
+              .reduce((sum, record) => sum + recordTotal(record), 0);
+            return (
+              <section key={day.date} className="mt-5">
+                <div className="flex items-baseline justify-between pb-1.5">
+                  <h4 className="text-[13px] font-bold text-gray-700">{dayLabel(day.date)}</h4>
+                  {spent > 0 && <span className={type.faint}>{formatYen(spent)}</span>}
+                </div>
+                <div className={`${cardClass} overflow-hidden`}>
+                  {day.records.map((record, index) => {
+                    const { badge, title, sub } = describe(record);
+                    return (
+                      <button
+                        key={record.id}
+                        type="button"
+                        onClick={() => onOpen(record)}
+                        className={`flex w-full items-center gap-3 px-3.5 py-3 text-left hover:bg-gray-50 ${
+                          index > 0 ? 'border-t border-gray-200' : ''
                         }`}
                       >
-                        {record.kind === 'income' ? '+' : ''}
-                        {formatYen(total)}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+                        <CategoryBadge label={badge} />
+                        <span className="min-w-0 flex-1">
+                          <span className={`block truncate ${type.row}`}>{title}</span>
+                          {sub !== '' && <span className={`block truncate ${type.sub}`}>{sub}</span>}
+                        </span>
+                        <span className={record.kind === 'transfer' ? type.amount.replace('text-gray-900', 'text-gray-500') : type.amount}>
+                          {record.kind === 'income' ? '+' : ''}
+                          {formatYen(recordTotal(record))}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

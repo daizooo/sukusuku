@@ -30,27 +30,31 @@ import MoneyMonthView from '../money/MoneyMonthView';
 import RecordEditor from '../money/RecordEditor';
 import CategoryEditor from '../money/CategoryEditor';
 import MoneyYearView from '../money/MoneyYearView';
+import SpecialPanel from '../living/SpecialPanel';
 
 /**
  * 家計タブ（docs/kakei.md）。日々の収支の記録と、月・年の振り返り。
  * mobile版の `mobile/app/(tabs)/money.tsx` と同じ項目・並び・文言にしてある。
  *
- * 中は「記録 / 月 / 年」の3つ。記録の追加は右下の丸いボタン「＋」（Zaim と同じ。§2）。
- * - 記録: その月の記録を日ごとに。押すと記録の詳細（RecordEditor。Zaim と同じ流れ）
- * - 月: 月の収支（収入 − 生活費 − 貯金）、特別費の年度の予算の減り（別枠）、生活費の大分類のタイル。
+ * 中は「記録 / 月 / 年 / 特別費」の4つ。記録の追加は右下の丸いボタン「＋」（Zaim と同じ。§2）。
+ * どの面も「送り → 結論（数字を1つ大きく）→ 内訳 → 明細」の順（見た目の決まりは §2.1・moneyVisual）。
+ * - 記録: その月に使った額と、記録を日ごとに。押すと記録の詳細（RecordEditor。Zaim と同じ流れ）
+ * - 月: 月の収支（収入 − 生活費 − 貯金）と内訳、特別費の1行（押すと「特別費」へ）、生活費の大分類のタイル。
  *   種類と予算はここから直す
- * - 年: 年度の収支（月ごとの表と合計）と、その下に特別費の予定と実績
+ * - 年: 年度の収支と内訳、月ごとの収支（押すとその月へ）
+ * - 特別費: 年度の予定と実績（「年」と同じ年度を見る）
  *
  * 見出し・切り替え・月の送りは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  * 他のタブと違い、読み書きはこのタブの中で完結させる（アプリ全体の状態に持たない）。
  */
 
-type MoneyView = 'records' | 'month' | 'year';
+type MoneyView = 'records' | 'month' | 'year' | 'special';
 
 const VIEWS: { id: MoneyView; label: string }[] = [
   { id: 'records', label: '記録' },
   { id: 'month', label: '月' },
   { id: 'year', label: '年' },
+  { id: 'special', label: '特別費' },
 ];
 
 /** 記録の入力。null は閉じている、'new' は新しく記録する。 */
@@ -172,7 +176,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   return (
     <div className="relative p-4 pb-0 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <h2 className="shrink-0 pb-1 text-lg font-bold text-gray-900">家計</h2>
-      <div role="tablist" className="shrink-0 flex gap-5 border-b border-gray-200">
+      {/* 4つの面の切り替え。等幅に並べ、選んでいる面は濃い文字と青い下線。 */}
+      <div role="tablist" className="shrink-0 flex border-b border-gray-200">
         {VIEWS.map((entry) => {
           const selected = entry.id === view;
           return (
@@ -182,11 +187,12 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               role="tab"
               aria-selected={selected}
               onClick={() => setView(entry.id)}
-              className={`border-b-[3px] px-0.5 pt-1.5 pb-1.5 text-[15px] ${
-                selected ? 'border-blue-300 font-bold text-gray-900' : 'border-transparent font-semibold text-gray-500'
-              }`}
+              className="flex flex-1 flex-col items-center pt-2"
             >
-              {entry.label}
+              <span className={`text-[15px] ${selected ? 'font-bold text-gray-900' : 'font-semibold text-gray-400'}`}>
+                {entry.label}
+              </span>
+              <span className={`mt-2 h-[3px] w-8 rounded-full ${selected ? 'bg-blue-600' : 'bg-transparent'}`} />
             </button>
           );
         })}
@@ -214,12 +220,15 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           specialItems={specialItems}
           specialActuals={specialActuals}
           onEditCategories={() => setEditingCategories(true)}
+          onOpenSpecial={() => {
+            setFiscalYear(fiscalYearOfMonth(monthKey));
+            setView('special');
+          }}
         />
-      ) : (
+      ) : view === 'year' ? (
         <MoneyYearView
           fiscalYear={fiscalYear}
           onFiscalYear={setFiscalYear}
-          familyId={familyId}
           records={records}
           categories={categories}
           budgets={budgets}
@@ -228,6 +237,12 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
             setMonthKey(next);
             setView('month');
           }}
+        />
+      ) : (
+        <SpecialPanel
+          familyId={familyId}
+          fiscalYear={fiscalYear}
+          onFiscalYear={setFiscalYear}
           onRecordsChanged={() => void reload().catch(() => {})}
         />
       )}

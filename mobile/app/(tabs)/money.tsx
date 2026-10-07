@@ -33,26 +33,30 @@ import MoneyMonthView from '@/components/money/MoneyMonthView';
 import RecordEditor from '@/components/money/RecordEditor';
 import CategoryEditor from '@/components/money/CategoryEditor';
 import MoneyYearView from '@/components/money/MoneyYearView';
+import SpecialPanel from '@/components/living/SpecialPanel';
 
 /**
  * 家計タブ（docs/kakei.md）。日々の収支の記録と、月・年の振り返り。
  * Web版の `src/components/sukusuku/tabs/MoneyTab.tsx` と同じ項目・並び・文言にしてある。
  *
- * 中は「記録 / 月 / 年」の3つ。記録の追加は右下の丸いボタン「＋」（Zaim と同じ。§2）。
- * - 記録: その月の記録を日ごとに。押すと記録の詳細（RecordEditor。Zaim と同じ流れ）
- * - 月: 月の収支（収入 − 生活費 − 貯金）、特別費の年度の予算の減り（別枠）、生活費の大分類のタイル。
+ * 中は「記録 / 月 / 年 / 特別費」の4つ。記録の追加は右下の丸いボタン「＋」（Zaim と同じ。§2）。
+ * どの面も「送り → 結論（数字を1つ大きく）→ 内訳 → 明細」の順（見た目の決まりは §2.1・moneyVisual）。
+ * - 記録: その月に使った額と、記録を日ごとに。押すと記録の詳細（RecordEditor。Zaim と同じ流れ）
+ * - 月: 月の収支（収入 − 生活費 − 貯金）と内訳、特別費の1行（押すと「特別費」へ）、生活費の大分類のタイル。
  *   種類と予算はここから直す
- * - 年: 年度の収支（月ごとの表と合計）と、その下に特別費の予定と実績
+ * - 年: 年度の収支と内訳、月ごとの収支（押すとその月へ）
+ * - 特別費: 年度の予定と実績（「年」と同じ年度を見る）
  *
  * 見出し・切り替え・月の送りは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  */
 
-type View3 = 'records' | 'month' | 'year';
+type View3 = 'records' | 'month' | 'year' | 'special';
 
 const VIEWS: { id: View3; label: string }[] = [
   { id: 'records', label: '記録' },
   { id: 'month', label: '月' },
   { id: 'year', label: '年' },
+  { id: 'special', label: '特別費' },
 ];
 
 /** 記録の入力。null は閉じている、'new' は新しく記録する。 */
@@ -223,12 +227,15 @@ export default function MoneyScreen() {
           specialItems={specialItems}
           specialActuals={specialActuals}
           onEditCategories={() => setEditingCategories(true)}
+          onOpenSpecial={() => {
+            setFiscalYear(fiscalYearOfMonth(monthKey));
+            setView('special');
+          }}
         />
-      ) : (
+      ) : view === 'year' ? (
         <MoneyYearView
           fiscalYear={fiscalYear}
           onFiscalYear={setFiscalYear}
-          familyId={familyId}
           records={records}
           categories={categories}
           budgets={budgets}
@@ -237,6 +244,12 @@ export default function MoneyScreen() {
             setMonthKey(next);
             setView('month');
           }}
+        />
+      ) : (
+        <SpecialPanel
+          familyId={familyId}
+          fiscalYear={fiscalYear}
+          onFiscalYear={setFiscalYear}
           onRecordsChanged={() => {
             if (familyId) void reload(familyId).catch(() => {});
           }}
@@ -307,16 +320,16 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   fabPressed: { opacity: 0.85 },
+  // 4つの面の切り替え。等幅に並べ、選んでいる面は濃い文字と青い下線。
   views: {
     flexDirection: 'row',
-    gap: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  viewTab: { paddingTop: 6, alignItems: 'center' },
-  viewText: { fontSize: 15, fontWeight: '600', color: colors.textMuted, paddingHorizontal: 2 },
+  viewTab: { flex: 1, paddingTop: 8, alignItems: 'center' },
+  viewText: { fontSize: 15, fontWeight: '600', color: colors.textFaint },
   viewTextSelected: { color: colors.text, fontWeight: '700' },
-  underline: { marginTop: 6, height: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: 'transparent' },
-  underlineSelected: { backgroundColor: colors.moneyRing },
+  underline: { marginTop: 8, height: 3, width: 32, borderRadius: 2, backgroundColor: 'transparent' },
+  underlineSelected: { backgroundColor: colors.money },
 });

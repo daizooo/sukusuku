@@ -4,41 +4,171 @@ import type { ReactNode } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useBackLayer } from '@/lib/browserHistory';
 import { formatMonthKey, shiftMonth } from '@/lib/moneyUtils';
+import { formatFiscalYear } from '@/lib/specialUtils';
 
-// 家計タブで共通に使う小さな部品（月の送り・使った割合の輪・種類の頭文字・全画面の枠と見出し）。
+// 家計タブで共通に使う部品と、見た目の決まり（docs/kakei.md §2.1）。
 // mobile版の `mobile/src/components/money/moneyVisual.tsx` と同じ見た目。
+//
+// どの面も「送り（月・年度）→ 結論（数字を1つ大きく）→ 内訳 → 明細」の順に並べる。
+// 文字は4段（結論の数字 / 見出し / 行 / 補足）に絞り、色は意味のあるところだけ
+// （赤＝マイナス・超過、青＝押せるもの）。
 
-/** 月の送り（‹ 2026年9月 ›）。 */
-export function MonthBar({
-  monthKey,
-  onChange,
+/** 文字の大きさと濃さ（4段）。mobile の `type` と同じ値。 */
+export const type = {
+  /** 結論の数字。 */
+  hero: 'text-[34px] leading-tight font-bold text-gray-900 tabular-nums',
+  /** 見出し・ラベルの強いもの。 */
+  title: 'text-base font-bold text-gray-900',
+  /** 行の主（名前）。 */
+  row: 'text-[15px] font-semibold text-gray-900',
+  /** 行の金額。 */
+  amount: 'text-[15px] font-bold text-gray-900 tabular-nums',
+  /** 補足（ラベル・内訳の説明）。 */
+  sub: 'text-xs font-medium text-gray-500 tabular-nums',
+  /** 薄い補足（予算・件数など）。 */
+  faint: 'text-[11px] font-medium text-gray-400 tabular-nums',
+  /** 押せる文字。 */
+  link: 'text-[13px] font-bold text-blue-600',
+} as const;
+
+/** マイナス・超過は赤（tailwind の打ち消しを避けるため、色だけ差し替える）。 */
+export const minus = (base: string, isMinus: boolean | undefined) =>
+  isMinus ? base.replace(/text-gray-\d+/, 'text-red-600') : base;
+
+export const cardClass = 'rounded-2xl border border-gray-200 bg-white';
+
+function Stepper({
+  label,
+  prevLabel,
+  nextLabel,
+  onPrev,
+  onNext,
   right,
 }: {
-  monthKey: string;
-  onChange: (monthKey: string) => void;
+  label: string;
+  prevLabel: string;
+  nextLabel: string;
+  onPrev: () => void;
+  onNext: () => void;
   right?: ReactNode;
 }) {
+  const buttonClass =
+    'flex h-[30px] w-[30px] items-center justify-center rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200';
   return (
-    <div className="shrink-0 flex items-center gap-2 py-2">
-      <button
-        type="button"
-        aria-label="前の月"
-        onClick={() => onChange(shiftMonth(monthKey, -1))}
-        className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
-      >
+    <div className="shrink-0 flex items-center gap-2 py-2.5">
+      <button type="button" aria-label={prevLabel} onClick={onPrev} className={buttonClass}>
         <ChevronLeft size={18} />
       </button>
-      <span className="text-[17px] font-bold text-gray-900 tabular-nums">{formatMonthKey(monthKey)}</span>
-      <button
-        type="button"
-        aria-label="次の月"
-        onClick={() => onChange(shiftMonth(monthKey, 1))}
-        className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
-      >
+      <span className="text-[17px] font-bold text-gray-900 tabular-nums">{label}</span>
+      <button type="button" aria-label={nextLabel} onClick={onNext} className={buttonClass}>
         <ChevronRight size={18} />
       </button>
       <span className="flex-1" />
       {right}
+    </div>
+  );
+}
+
+/** 月の送り。 */
+export function MonthBar({ monthKey, onChange }: { monthKey: string; onChange: (monthKey: string) => void }) {
+  return (
+    <Stepper
+      label={formatMonthKey(monthKey)}
+      prevLabel="前の月"
+      nextLabel="次の月"
+      onPrev={() => onChange(shiftMonth(monthKey, -1))}
+      onNext={() => onChange(shiftMonth(monthKey, 1))}
+    />
+  );
+}
+
+/** 年度の送り（右に期間）。 */
+export function YearBar({ fiscalYear, onChange }: { fiscalYear: number; onChange: (fiscalYear: number) => void }) {
+  return (
+    <Stepper
+      label={formatFiscalYear(fiscalYear)}
+      prevLabel="前の年度"
+      nextLabel="次の年度"
+      onPrev={() => onChange(fiscalYear - 1)}
+      onNext={() => onChange(fiscalYear + 1)}
+      right={
+        <span className={type.faint}>
+          {fiscalYear}年4月〜{fiscalYear + 1}年3月
+        </span>
+      }
+    />
+  );
+}
+
+/** 結論のカード。ラベル・大きな数字・一言、その下に内訳（children）。 */
+export function Hero({
+  label,
+  value,
+  isMinus,
+  note,
+  children,
+}: {
+  label: string;
+  value: string;
+  isMinus?: boolean;
+  note?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div className={`${cardClass} p-4`}>
+      <p className="text-[13px] font-semibold text-gray-500">{label}</p>
+      <p className={minus(type.hero, isMinus)}>{value}</p>
+      {note !== undefined && <p className={type.sub}>{note}</p>}
+      {children !== undefined && <div className="mt-3 border-t border-gray-200 pt-1">{children}</div>}
+    </div>
+  );
+}
+
+/** 内訳の1行（ラベル・小さな補足・金額）。 */
+export function StatRow({
+  label,
+  note,
+  noteMinus,
+  value,
+  isMinus,
+}: {
+  label: string;
+  note?: string;
+  noteMinus?: boolean;
+  value: string;
+  isMinus?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2 py-2">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-gray-700">{label}</p>
+        {note !== undefined && <p className={minus(type.faint, noteMinus)}>{note}</p>}
+      </div>
+      <span className={minus(type.amount, isMinus)}>{value}</span>
+    </div>
+  );
+}
+
+/** 区切りの見出し（左に見出しと一言、右に操作）。 */
+export function SectionHeader({ title, hint, right }: { title: string; hint?: string; right?: ReactNode }) {
+  return (
+    <div className="mt-6 mb-2.5 flex items-baseline gap-1.5">
+      <h3 className={type.title}>{title}</h3>
+      {hint !== undefined && <span className={type.faint}>{hint}</span>}
+      <span className="flex-1" />
+      {right}
+    </div>
+  );
+}
+
+/** 細い進み具合の帯（0〜1）。超えたら淡い赤。 */
+export function ProgressBar({ ratio, over }: { ratio: number; over?: boolean }) {
+  return (
+    <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
+      <div
+        className={`h-1.5 rounded-full ${over ? 'bg-red-300' : 'bg-blue-300'}`}
+        style={{ width: `${Math.max(0, Math.min(1, ratio)) * 100}%` }}
+      />
     </div>
   );
 }
@@ -65,7 +195,7 @@ export function UsageRing({ percent, size = 52 }: { percent: number | null; size
           strokeLinecap="round"
         />
       </svg>
-      <span className={`relative text-[11px] font-bold tabular-nums ${over ? 'text-red-600' : 'text-blue-600'}`}>
+      <span className={`relative font-bold tabular-nums ${size < 48 ? 'text-[9px]' : 'text-[11px]'} ${over ? 'text-red-600' : 'text-blue-600'}`}>
         {percent === null ? '−' : `${percent}%`}
       </span>
     </div>

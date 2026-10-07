@@ -4,43 +4,169 @@ import Svg, { Circle } from 'react-native-svg';
 import { ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 import { formatMonthKey, shiftMonth } from '@/lib/moneyUtils';
+import { formatFiscalYear } from '@/lib/specialUtils';
 
-// 家計タブで共通に使う小さな部品（月の送り・使った割合の輪・種類の頭文字・全画面の見出し）。
+// 家計タブで共通に使う部品と、見た目の決まり（docs/kakei.md §2.1）。
 // PWA版の `src/components/sukusuku/money/moneyVisual.tsx` と同じ見た目。
+//
+// どの面も「送り（月・年度）→ 結論（数字を1つ大きく）→ 内訳 → 明細」の順に並べる。
+// 文字は4段（結論の数字 / 見出し / 行 / 補足）に絞り、色は意味のあるところだけ
+// （赤＝マイナス・超過、青＝押せるもの）。
 
-/** 月の送り（‹ 2026年9月 ›）。 */
-export function MonthBar({
-  monthKey,
-  onChange,
+/** 文字の大きさと濃さ（4段）。数字・英字を出す Text には必ず fontWeight を付ける（CLAUDE.md）。 */
+export const type = StyleSheet.create({
+  /** 結論の数字。 */
+  hero: { fontSize: 34, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  /** 見出し・ラベルの強いもの。 */
+  title: { fontSize: 16, fontWeight: '700', color: colors.text },
+  /** 行の主（名前）。 */
+  row: { fontSize: 15, fontWeight: '600', color: colors.text },
+  /** 行の金額。 */
+  amount: { fontSize: 15, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  /** 補足（ラベル・内訳の説明）。 */
+  sub: { fontSize: 12, fontWeight: '500', color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  /** 薄い補足（予算・件数など）。 */
+  faint: { fontSize: 11, fontWeight: '500', color: colors.textFaint, fontVariant: ['tabular-nums'] },
+  /** マイナス・超過。 */
+  minus: { color: colors.moneyOver },
+  /** 押せる文字。 */
+  link: { fontSize: 13, fontWeight: '700', color: colors.money },
+});
+
+/** 前後に送るボタンつきの見出し（‹ 2026年9月 ›）。 */
+function Stepper({
+  label,
+  prevLabel,
+  nextLabel,
+  onPrev,
+  onNext,
   right,
 }: {
-  monthKey: string;
-  onChange: (monthKey: string) => void;
+  label: string;
+  prevLabel: string;
+  nextLabel: string;
+  onPrev: () => void;
+  onNext: () => void;
   right?: ReactNode;
 }) {
   return (
-    <View style={styles.monthBar}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="前の月"
-        onPress={() => onChange(shiftMonth(monthKey, -1))}
-        hitSlop={8}
-        style={styles.monthButton}
-      >
+    <View style={styles.stepper}>
+      <Pressable accessibilityRole="button" accessibilityLabel={prevLabel} onPress={onPrev} hitSlop={8} style={styles.stepButton}>
         <ChevronLeft size={18} color={colors.textSubtle} />
       </Pressable>
-      <Text style={styles.monthLabel}>{formatMonthKey(monthKey)}</Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="次の月"
-        onPress={() => onChange(shiftMonth(monthKey, 1))}
-        hitSlop={8}
-        style={styles.monthButton}
-      >
+      <Text style={styles.stepLabel}>{label}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={nextLabel} onPress={onNext} hitSlop={8} style={styles.stepButton}>
         <ChevronRight size={18} color={colors.textSubtle} />
       </Pressable>
       <View style={styles.flex} />
       {right}
+    </View>
+  );
+}
+
+/** 月の送り。 */
+export function MonthBar({ monthKey, onChange }: { monthKey: string; onChange: (monthKey: string) => void }) {
+  return (
+    <Stepper
+      label={formatMonthKey(monthKey)}
+      prevLabel="前の月"
+      nextLabel="次の月"
+      onPrev={() => onChange(shiftMonth(monthKey, -1))}
+      onNext={() => onChange(shiftMonth(monthKey, 1))}
+    />
+  );
+}
+
+/** 年度の送り（右に期間）。 */
+export function YearBar({ fiscalYear, onChange }: { fiscalYear: number; onChange: (fiscalYear: number) => void }) {
+  return (
+    <Stepper
+      label={formatFiscalYear(fiscalYear)}
+      prevLabel="前の年度"
+      nextLabel="次の年度"
+      onPrev={() => onChange(fiscalYear - 1)}
+      onNext={() => onChange(fiscalYear + 1)}
+      right={
+        <Text style={type.faint}>
+          {fiscalYear}年4月〜{fiscalYear + 1}年3月
+        </Text>
+      }
+    />
+  );
+}
+
+/** 結論のカード。ラベル・大きな数字・一言、その下に内訳（children）。 */
+export function Hero({
+  label,
+  value,
+  minus,
+  note,
+  children,
+}: {
+  label: string;
+  value: string;
+  minus?: boolean;
+  note?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <View style={styles.card}>
+      <Text style={styles.heroLabel}>{label}</Text>
+      <Text style={[type.hero, minus && type.minus]}>{value}</Text>
+      {note !== undefined && <Text style={type.sub}>{note}</Text>}
+      {children !== undefined && <View style={styles.heroBody}>{children}</View>}
+    </View>
+  );
+}
+
+/** 内訳の1行（ラベル・小さな補足・金額）。 */
+export function StatRow({
+  label,
+  note,
+  noteMinus,
+  value,
+  minus,
+}: {
+  label: string;
+  note?: string;
+  noteMinus?: boolean;
+  value: string;
+  minus?: boolean;
+}) {
+  return (
+    <View style={styles.statRow}>
+      <View style={styles.flex}>
+        <Text style={styles.statLabel}>{label}</Text>
+        {note !== undefined && <Text style={[type.faint, noteMinus && type.minus]}>{note}</Text>}
+      </View>
+      <Text style={[type.amount, minus && type.minus]}>{value}</Text>
+    </View>
+  );
+}
+
+/** 区切りの見出し（左に見出しと一言、右に操作）。 */
+export function SectionHeader({ title, hint, right }: { title: string; hint?: string; right?: ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <Text style={type.title}>{title}</Text>
+      {hint !== undefined && <Text style={type.faint}>{hint}</Text>}
+      <View style={styles.flex} />
+      {right}
+    </View>
+  );
+}
+
+/** 細い進み具合の帯（0〜1）。超えたら淡い赤。 */
+export function ProgressBar({ ratio, over }: { ratio: number; over?: boolean }) {
+  return (
+    <View style={styles.bar}>
+      <View
+        style={[
+          styles.barFill,
+          { width: `${Math.max(0, Math.min(1, ratio)) * 100}%` },
+          over && { backgroundColor: colors.moneyOverRing },
+        ]}
+      />
     </View>
   );
 }
@@ -68,7 +194,7 @@ export function UsageRing({ percent, size = 52 }: { percent: number | null; size
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
-      <Text style={[styles.ringText, over && styles.over]}>{percent === null ? '−' : `${percent}%`}</Text>
+      <Text style={[styles.ringText, size < 48 && styles.ringTextSmall, over && type.minus]}>{percent === null ? '−' : `${percent}%`}</Text>
     </View>
   );
 }
@@ -128,8 +254,8 @@ export function PrimaryButton({ label, onPress, disabled }: { label: string; onP
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  monthBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 8 },
-  monthButton: {
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
+  stepButton: {
     width: 30,
     height: 30,
     borderRadius: 15,
@@ -137,9 +263,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.neutralSurface,
   },
-  monthLabel: { fontSize: 17, fontWeight: '700', color: colors.text },
+  stepLabel: { fontSize: 17, fontWeight: '700', color: colors.text },
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: 16,
+    gap: 2,
+  },
+  heroLabel: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  heroBody: { marginTop: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 4 },
+  statRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
+  statLabel: { fontSize: 14, fontWeight: '600', color: colors.textSubtle },
+  section: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 24, marginBottom: 10 },
+  bar: { height: 6, borderRadius: 3, backgroundColor: colors.neutralSurface, overflow: 'hidden' },
+  barFill: { height: 6, borderRadius: 3, backgroundColor: colors.moneyRing },
   ringText: { fontSize: 11, fontWeight: '700', color: colors.money },
-  over: { color: colors.moneyOver },
+  ringTextSmall: { fontSize: 9 },
   badge: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.moneySurface },
   badgeText: { fontSize: 13, fontWeight: '700', color: colors.money },
   header: {

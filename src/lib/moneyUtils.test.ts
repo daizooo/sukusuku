@@ -229,8 +229,11 @@ assert.equal(september.livingDiff, summary.livingBudget - summary.living);
 const august = year.months.find((row) => row.monthKey === '2026-08')!;
 assert.equal(august.living, 1000);
 assert.equal(year.total.living, september.living + august.living, '記録の無い月は0');
+assert.equal(year.recordedMonths, 2, '記録のある月だけを数える');
+assert.equal(year.months[0].recorded, false);
+assert.equal(year.total.livingDiff, september.livingDiff + august.livingDiff, '記録の無い月の予算は差に入れない');
 assert.equal(year.total.balance, year.months.reduce((sum, row) => sum + row.balance, 0));
-assert.equal(year.months.find((row) => row.monthKey === '2026-10')!.living, 0, 'まだ来ていない月は数えない');
+assert.equal(year.months.find((row) => row.monthKey === '2026-10')!.recorded, false, 'まだ来ていない月は数えない');
 assert.equal(
   buildYearSummary(records, categories, budgets, wallets, 2026, '2026-08').total.living,
   1000,
