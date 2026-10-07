@@ -70,9 +70,12 @@
 
 ### 3.2 1件の記録
 
-日付・金額・種類（小分類、または特別費の項目）・**払い方**（カード／現金／口座）・メモ。誰が入れたかは持つ（表示はしない）。
+日付・金額・種類（小分類、または特別費の項目）・**払い元**・お店・メモ。誰が入れたかは持つ（表示はしない）。
 
-- 払い方は前回のものを既定にする
+- **払い元は家族で登録する**（例: 三井住友カード・PayPay・現金・口座。種類＝カード／QR／現金／口座）。前回のものを既定にする
+- お店は任意。前に入れたお店を候補に出す（要因を読むときの手がかり。Zaim の「＠ お店」と同じ）
+- 入力は**1画面で完結**（Zaim は金額→詳細の2画面）: 支出／収入／貯金、**計算できるテンキー**（＋−×÷）、払い元、
+  よく使う小分類（「すべて」で大分類ごとの一覧と特別費の予定）、お店・メモ。種類を選ぶと**その大分類の今月の残り**が見える
 - **特別費は、その年度の予定から選ぶ**（まだ済でない予定を上に。選ぶと予算の額が入る）。これが特別費の「済」になる
   （特別費の実績 `special_actuals` は、この記録に移す。§6）。予定に無い特別費は項目を足して記録する
 
@@ -83,8 +86,8 @@
 
 ### 3.4 カードの月末の照合（今の財布方式）
 
-- カードで払った記録は、その月のカードの合計として積み上がる（Zaim のマイナス残高にあたる）
-- 月が替わったら、カードの明細の合計を入れる → 合計が合えば「締める」（合わなければ差額を出し、記録を見直す）
+- カードで払った記録は、**払い元（カード）ごと**にその月の合計として積み上がる（Zaim のマイナス残高にあたる）
+- 月が替わったら、カードごとに明細の合計を入れる → 合計が合えば「締める」（合わなければ差額を出し、記録を見直す）
 - 締めた月の記録は、締めを外すまで直せないようにする（あとから合計が変わらないように）
 
 ## 4. 振り返り
@@ -116,11 +119,13 @@
 ```
 money_categories  種類。 id / family_id / group('living'|'income'|'saving') / parent_id(null=大分類) / name / position / archived_at
 money_budgets     予算。 id / category_id(大分類) / fiscal_year / monthly_amount
+money_wallets     払い元。 id / family_id / name / type('card'|'qr'|'cash'|'bank') / position / archived_at
 money_entries     記録。 id / family_id / occurred_on / amount / category_id(小分類か大分類) /
-                  special_item_id・special_plan_id(特別費のとき) / method('card'|'cash'|'bank') / memo /
+                  special_item_id・special_plan_id(特別費のとき) / wallet_id / store / memo /
                   recurring_id / created_by
-money_recurring   毎月の記録。 id / family_id / category_id / amount / day / method / memo / active
-money_months      月の締め。 family_id / month / card_statement_amount / closed_at / note
+money_recurring   毎月の記録。 id / family_id / category_id / amount / day / wallet_id / memo / active
+money_months      月のメモ。 family_id / month / note
+money_card_closes カードの照合。 wallet_id / month / statement_amount / closed_at
 ```
 
 - 全部 `family_id` 単位のRLS（`current_family_id()`）
@@ -141,8 +146,8 @@ money_months      月の締め。 family_id / month / card_statement_amount / cl
 | 順 | 中身 | DB |
 | --- | --- | --- |
 | 1 | この設計（docs）と、画面のモックで形を決める | – |
-| 2 | 家計タブ新設（6タブ・`start_tab`）、種類・予算・記録の入力と一覧、特別費の「済」を記録に、暮らしタブから特別費を外す | `money_categories`・`money_budgets`・`money_entries`、`special_actuals` の移し替え |
-| 3 | 月の振り返りと月の締め（カードの照合・メモ） | `money_months` |
+| 2 | 家計タブ新設（6タブ・`start_tab`）、種類・予算・払い元・記録の入力と一覧、特別費の「済」を記録に、暮らしタブから特別費を外す | `money_categories`・`money_budgets`・`money_wallets`・`money_entries`、`special_actuals` の移し替え |
+| 3 | 月の振り返りと月の締め（カードの照合・メモ） | `money_months`・`money_card_closes` |
 | 4 | 固定費・給料の毎月の自動記録 | `money_recurring` |
 | 5 | 年の振り返り（特別費の年の流れ・見通しを含む。home.md §10.3） | – |
 
