@@ -750,6 +750,7 @@ export type Database = {
           archived_at: string | null
           created_at: string
           family_id: string
+          icon: string | null
           id: string
           kind: string
           name: string
@@ -761,6 +762,7 @@ export type Database = {
           archived_at?: string | null
           created_at?: string
           family_id: string
+          icon?: string | null
           id?: string
           kind?: string
           name: string
@@ -772,6 +774,7 @@ export type Database = {
           archived_at?: string | null
           created_at?: string
           family_id?: string
+          icon?: string | null
           id?: string
           kind?: string
           name?: string

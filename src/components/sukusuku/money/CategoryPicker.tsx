@@ -9,11 +9,12 @@ import {
   fiscalYearOfMonth,
   formatYen,
   frequentCategoryIds,
+  iconKeyOf,
   livingSpendByTop,
   topCategories,
 } from '@/lib/moneyUtils';
 import { appliesInYear, buildYearRows, formatFiscalYear } from '@/lib/specialUtils';
-import { ScreenHeader, StackedScreen } from './moneyVisual';
+import { CategoryIcon, ScreenHeader, StackedScreen } from './moneyVisual';
 
 // 種類の選択（docs/kakei.md §3.1・§3.2）。mobile版の `mobile/src/components/money/CategoryPicker.tsx` と同じ並び・文言。
 //
@@ -42,7 +43,7 @@ interface CategoryPickerProps {
   onEditCategories: () => void;
 }
 
-const chipClass = 'rounded-full border border-gray-200 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50';
+const chipClass = 'rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50';
 
 export default function CategoryPicker({
   kind,
@@ -89,7 +90,7 @@ export default function CategoryPicker({
           </button>
         }
       />
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
         {tops.length === 0 && (
           <p className="py-6 text-center text-sm text-gray-400">種類がまだありません。右上の歯車から種類を作れます</p>
         )}
@@ -102,7 +103,7 @@ export default function CategoryPicker({
                   key={id}
                   type="button"
                   onClick={() => pickCategory(id)}
-                  className="rounded-full bg-blue-100 px-3.5 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-200"
+                  className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold text-blue-800 hover:bg-blue-200"
                 >
                   {nameOf(id)}
                 </button>
@@ -117,8 +118,9 @@ export default function CategoryPicker({
           const remaining = budget === null ? null : budget - (spend.get(top.id) ?? 0);
           return (
             <section key={top.id} className="space-y-2">
-              <div className="flex items-baseline justify-between">
-                <p className="text-[15px] font-bold text-gray-900">{top.name}</p>
+              <div className="flex items-center gap-2">
+                <CategoryIcon iconKey={iconKeyOf(top)} size={24} />
+                <p className="flex-1 text-[15px] font-bold text-gray-900">{top.name}</p>
                 {remaining !== null && (
                   <p className={`text-xs font-semibold tabular-nums ${remaining < 0 ? 'text-red-600' : 'text-gray-500'}`}>
                     今月 {remaining < 0 ? `${formatYen(remaining)} 超過` : `残り ${formatYen(remaining)}`}

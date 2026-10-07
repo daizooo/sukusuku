@@ -15,6 +15,8 @@ import {
   groupsFromItems,
   itemsFromGroups,
   frequentCategoryIds,
+  guessIconKey,
+  iconKeyOf,
   groupItems,
   groupRecordsByDay,
   itemNamesLabel,
@@ -43,6 +45,7 @@ const cat = (id: string, name: string, parentId: string | null, extra: Partial<M
   name,
   parentId,
   kind: 'living',
+  icon: null,
   position: 0,
   archived: false,
   ...extra,
@@ -60,6 +63,17 @@ const categories: MoneyCategory[] = [
 assert.equal(categoryPath(categories, 'grocery'), '食費 › 食料品');
 assert.equal(categoryPath(categories, 'food'), '食費');
 assert.equal(categoryPath(categories, null), '');
+
+// ---- アイコン（決めていなければ名前から） ----
+assert.equal(guessIconKey('食費'), 'food');
+assert.equal(guessIconKey('食料品'), 'grocery', '食料品は「食」より先に当てる');
+assert.equal(guessIconKey('日用品・雑貨費'), 'daily');
+assert.equal(guessIconKey('通信費'), 'phone');
+assert.equal(guessIconKey('インターネット'), 'wifi');
+assert.equal(guessIconKey('子ども費'), 'baby');
+assert.equal(guessIconKey('なにか'), 'other');
+assert.equal(iconKeyOf({ name: '食費', icon: 'cafe' }), 'cafe', '決めたアイコンが先');
+assert.equal(iconKeyOf(null), 'other');
 
 // ---- 予算（その年度に無ければ前の年度） ----
 const budgets: MoneyBudget[] = [

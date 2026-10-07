@@ -11,7 +11,7 @@ import {
   type EditorLine,
 } from '@/lib/moneyUtils';
 import Calculator from './Calculator';
-import { CategoryBadge, PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
+import { CategoryIcon, PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
 
 // 品目の画面（docs/kakei.md §3.2）。mobile版の `mobile/src/components/money/ItemsScreen.tsx` と同じ並び・文言。
 //
@@ -50,6 +50,8 @@ interface ItemsScreenProps {
   work: ItemsWork;
   onChange: (work: ItemsWork) => void;
   title: string;
+  /** 種類のアイコン。 */
+  iconKey: string;
   subtitle: string;
   canPickProducts: boolean;
   onChangeCategory: () => void;
@@ -63,6 +65,7 @@ export default function ItemsScreen({
   work,
   onChange,
   title,
+  iconKey,
   subtitle,
   canPickProducts,
   onChangeCategory,
@@ -133,7 +136,7 @@ export default function ItemsScreen({
         onClick={onChangeCategory}
         className="shrink-0 flex items-center gap-3 border-b border-gray-200 px-4 py-3 text-left hover:bg-gray-50"
       >
-        <CategoryBadge label={title} />
+        <CategoryIcon iconKey={iconKey} />
         <span className="flex-1">
           <span className="block text-base font-bold text-gray-900">{title}</span>
           {subtitle !== '' && <span className="block text-xs text-gray-500 tabular-nums">{subtitle}</span>}

@@ -3,7 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
-import { formatMonthKey, shiftMonth } from '@/lib/moneyUtils';
+import { formatMonthKey, iconTone, shiftMonth } from '@/lib/moneyUtils';
+import { MONEY_ICON_COMPONENTS } from '@/components/money/moneyIcons';
 import { formatFiscalYear } from '@/lib/specialUtils';
 
 // 家計タブで共通に使う部品と、見た目の決まり（docs/kakei.md §2.1）。
@@ -199,11 +200,13 @@ export function UsageRing({ percent, size = 52 }: { percent: number | null; size
   );
 }
 
-/** 種類の頭文字の丸（「食」）。 */
-export function CategoryBadge({ label, size = 32 }: { label: string; size?: number }) {
+/** 種類のアイコン（色つきの丸）。key は moneyUtils の MONEY_ICONS。 */
+export function CategoryIcon({ iconKey, size = 32 }: { iconKey: string; size?: number }) {
+  const tone = iconTone(iconKey);
+  const Icon = MONEY_ICON_COMPONENTS[tone.key] ?? MONEY_ICON_COMPONENTS.other;
   return (
-    <View style={[styles.badge, { width: size, height: size, borderRadius: size / 2 }]}>
-      <Text style={styles.badgeText}>{label.slice(0, 1) || '・'}</Text>
+    <View style={[styles.badge, { width: size, height: size, borderRadius: size / 2, backgroundColor: tone.surface }]}>
+      <Icon size={Math.round(size * 0.55)} color={tone.color} />
     </View>
   );
 }
@@ -281,8 +284,7 @@ const styles = StyleSheet.create({
   barFill: { height: 6, borderRadius: 3, backgroundColor: colors.moneyRing },
   ringText: { fontSize: 11, fontWeight: '700', color: colors.money },
   ringTextSmall: { fontSize: 9 },
-  badge: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.moneySurface },
-  badgeText: { fontSize: 13, fontWeight: '700', color: colors.money },
+  badge: { alignItems: 'center', justifyContent: 'center' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -11,7 +11,7 @@ import {
   type EditorLine,
 } from '@/lib/moneyUtils';
 import Calculator from '@/components/money/Calculator';
-import { CategoryBadge, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
+import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 
 // 品目の画面（docs/kakei.md §3.2）。PWA版の `src/components/sukusuku/money/ItemsScreen.tsx` と同じ並び・文言。
 //
@@ -51,6 +51,8 @@ interface ItemsScreenProps {
   onChange: (work: ItemsWork) => void;
   /** 種類の見出し（「食費 › 食料品」）と、その下の一言（今月の残り）。 */
   title: string;
+  /** 種類のアイコン。 */
+  iconKey: string;
   subtitle: string;
   /** 日用品から選べるか（生活費の種類だけ）。 */
   canPickProducts: boolean;
@@ -65,6 +67,7 @@ export default function ItemsScreen({
   work,
   onChange,
   title,
+  iconKey,
   subtitle,
   canPickProducts,
   onChangeCategory,
@@ -129,7 +132,7 @@ export default function ItemsScreen({
         }
       />
       <Pressable accessibilityRole="button" accessibilityLabel="種類を変える" onPress={onChangeCategory} style={styles.category}>
-        <CategoryBadge label={title} />
+        <CategoryIcon iconKey={iconKey} />
         <View style={styles.flex}>
           <Text style={styles.categoryName}>{title}</Text>
           {subtitle !== '' && <Text style={styles.categorySub}>{subtitle}</Text>}

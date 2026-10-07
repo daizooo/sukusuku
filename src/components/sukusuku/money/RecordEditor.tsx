@@ -24,6 +24,7 @@ import {
   formatCalc,
   formatYen,
   groupsFromItems,
+  iconKeyOf,
   isBlankLine,
   itemNamesLabel,
   itemsFromGroups,
@@ -43,7 +44,7 @@ import ItemsScreen, { blankLine, newLineKey, type ItemsWork } from './ItemsScree
 import ProductPicker, { type PickedProduct } from './ProductPicker';
 import StorePicker from './StorePicker';
 import WalletPicker from './WalletPicker';
-import { CategoryBadge, FullScreen, PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
+import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
 
 // 記録の入力（docs/kakei.md §3.2。Zaim を踏襲）。mobile版の `mobile/src/components/money/RecordEditor.tsx` と同じ流れ・文言。
 //
@@ -140,6 +141,13 @@ export default function RecordEditor({
       : target.specialItemId !== null
         ? `${kind === 'income' ? '特別収入' : '特別費'} › ${specialName(target.specialItemId)}`
         : '';
+
+  /** まとまりのアイコン（大分類のアイコン。特別費は支払いの絵）。 */
+  const groupIconKey = (target: Pick<EditorGroup, 'categoryId'>) => {
+    if (target.categoryId === null) return 'receipt';
+    const topId = topCategoryIdOf(categories, target.categoryId);
+    return iconKeyOf(categories.find((category) => category.id === topId));
+  };
 
   /** まとまりの一言（今月の残り・特別費の予算）。 */
   const groupSubtitle = (target: Pick<EditorGroup, 'categoryId' | 'specialItemId' | 'specialPlanId'>) => {
@@ -324,6 +332,7 @@ export default function RecordEditor({
             work={work}
             onChange={setWork}
             title={groupTitle(work)}
+            iconKey={groupIconKey(work)}
             subtitle={groupSubtitle(work)}
             canPickProducts={work.categoryId !== null && kind === 'expense'}
             onChangeCategory={() => push({ type: 'category', purpose: 'change' })}
@@ -501,8 +510,6 @@ export default function RecordEditor({
               <span className="text-[11px] text-gray-400">種類ごとにまとめて表示</span>
             </div>
             {groups.map((group) => {
-              const top = group.categoryId !== null ? topCategoryIdOf(categories, group.categoryId) : null;
-              const badge = top ? categories.find((category) => category.id === top)?.name ?? '' : '特';
               const names = itemNamesLabel(group.lines);
               return (
                 <button
@@ -511,7 +518,7 @@ export default function RecordEditor({
                   onClick={() => openGroup(group)}
                   className="flex w-full items-start gap-3 border-b border-gray-200 py-3 text-left hover:bg-gray-50"
                 >
-                  <CategoryBadge label={badge} />
+                  <CategoryIcon iconKey={groupIconKey(group)} />
                   <span className="flex-1">
                     <span className="block text-[15px] font-semibold text-gray-900">{groupTitle(group)}</span>
                     {names !== '' && <span className="mt-0.5 block text-xs text-gray-400">{names}</span>}

@@ -9,11 +9,12 @@ import {
   fiscalYearOfMonth,
   formatYen,
   frequentCategoryIds,
+  iconKeyOf,
   livingSpendByTop,
   topCategories,
 } from '@/lib/moneyUtils';
 import { appliesInYear, buildYearRows, formatFiscalYear } from '@/lib/specialUtils';
-import { ScreenHeader } from '@/components/money/moneyVisual';
+import { CategoryIcon, ScreenHeader } from '@/components/money/moneyVisual';
 
 // 種類の選択（docs/kakei.md §3.1・§3.2）。PWA版の `src/components/sukusuku/money/CategoryPicker.tsx` と同じ並び・文言。
 //
@@ -113,7 +114,8 @@ export default function CategoryPicker({
           return (
             <View key={top.id} style={styles.section}>
               <View style={styles.topRow}>
-                <Text style={styles.topName}>{top.name}</Text>
+                <CategoryIcon iconKey={iconKeyOf(top)} size={24} />
+                <Text style={[styles.topName, styles.flex]}>{top.name}</Text>
                 {remaining !== null && (
                   <Text style={[styles.remaining, remaining < 0 && styles.over]}>
                     今月 {remaining < 0 ? `${formatYen(remaining)} 超過` : `残り ${formatYen(remaining)}`}
@@ -191,25 +193,25 @@ export default function CategoryPicker({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
-  content: { padding: 16, gap: 18, paddingBottom: 32 },
+  content: { padding: 16, gap: 14, paddingBottom: 32 },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
   section: { gap: 8 },
   sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  topRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topName: { fontSize: 15, fontWeight: '700', color: colors.text },
   remaining: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
   over: { color: colors.moneyOver },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   chipStrong: { borderColor: colors.moneySoft, backgroundColor: colors.moneySoft },
-  chipText: { fontSize: 14, fontWeight: '600', color: colors.textSubtle },
+  chipText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
   chipTextStrong: { color: colors.moneyText },
   planRow: {
     flexDirection: 'row',

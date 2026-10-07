@@ -8,15 +8,16 @@ import {
   formatYen,
   groupItems,
   groupRecordsByDay,
+  iconKeyOf,
   recordTotal,
   recordsInMonth,
   topCategoryIdOf,
 } from '@/lib/moneyUtils';
-import { CategoryBadge, Hero, MonthBar, cardClass, type } from './moneyVisual';
+import { CategoryIcon, Hero, MonthBar, cardClass, type } from './moneyVisual';
 
 // 家計タブの「記録」（docs/kakei.md §2・§3）。mobile版の `mobile/src/components/money/MoneyRecordsView.tsx` と同じ並び・文言。
 //
-// 結論はその月に使った額（支出の合計）。その下に記録を日ごと（新しい日から）。
+// 結論はその月に使った額（生活費。特別費は「特別費」の面だけで見る）。その下に記録を日ごと（新しい日から）。
 // 1行＝1件の記録（種類・お店・出金元・合計）。押すと記録の詳細。月の送りは固定で、スクロールするのは下だけ。
 
 interface MoneyRecordsViewProps {
@@ -50,9 +51,11 @@ export default function MoneyRecordsView({
   const totals = useMemo(() => {
     let expense = 0;
     let income = 0;
+    // 特別費の品目は数えない（特別費は「特別費」の面だけで見る）。
     for (const record of inMonth) {
-      if (record.kind === 'expense') expense += recordTotal(record);
-      if (record.kind === 'income') income += recordTotal(record);
+      const amount = record.items.filter((item) => item.specialItemId === null).reduce((sum, item) => sum + item.amount, 0);
+      if (record.kind === 'expense') expense += amount;
+      if (record.kind === 'income') income += amount;
     }
     return { expense, income };
   }, [inMonth]);
@@ -62,7 +65,7 @@ export default function MoneyRecordsView({
   const describe = (record: MoneyRecord) => {
     if (record.kind === 'transfer') {
       return {
-        badge: '振',
+        icon: 'wallet',
         title: '振替',
         sub: `${walletName(record.walletId) || '?'} → ${walletName(record.toWalletId) || '?'}`,
       };
@@ -76,7 +79,7 @@ export default function MoneyRecordsView({
         ? `${record.kind === 'income' ? '特別収入' : '特別費'} › ${specialItems.find((item) => item.id === first.specialItemId)?.name ?? ''}`
         : '';
     return {
-      badge: top ? categories.find((category) => category.id === top)?.name ?? '' : '特',
+      icon: top ? iconKeyOf(categories.find((category) => category.id === top)) : 'receipt',
       title: groups.length > 1 ? `${firstTitle} ほか${groups.length - 1}` : firstTitle,
       sub: [record.store, walletName(record.walletId)].filter((text) => text !== '').join('・'),
     };
@@ -88,7 +91,7 @@ export default function MoneyRecordsView({
       {/* 右下の「＋」に一覧の最後が隠れないよう、下を空ける。 */}
       <div className="flex-1 min-h-0 overflow-y-auto pb-24">
         <Hero
-          label="この月に使った額"
+          label="この月に使った額（生活費）"
           value={formatYen(totals.expense)}
           note={totals.income > 0 ? `収入 +${formatYen(totals.income)}` : undefined}
         />
@@ -101,7 +104,9 @@ export default function MoneyRecordsView({
           days.map((day) => {
             const spent = day.records
               .filter((record) => record.kind === 'expense')
-              .reduce((sum, record) => sum + recordTotal(record), 0);
+              .flatMap((record) => record.items)
+              .filter((item) => item.specialItemId === null)
+              .reduce((sum, item) => sum + item.amount, 0);
             return (
               <section key={day.date} className="mt-5">
                 <div className="flex items-baseline justify-between pb-1.5">
@@ -110,7 +115,7 @@ export default function MoneyRecordsView({
                 </div>
                 <div className={`${cardClass} overflow-hidden`}>
                   {day.records.map((record, index) => {
-                    const { badge, title, sub } = describe(record);
+                    const { icon, title, sub } = describe(record);
                     return (
                       <button
                         key={record.id}
@@ -120,7 +125,7 @@ export default function MoneyRecordsView({
                           index > 0 ? 'border-t border-gray-200' : ''
                         }`}
                       >
-                        <CategoryBadge label={badge} />
+                        <CategoryIcon iconKey={icon} />
                         <span className="min-w-0 flex-1">
                           <span className={`block truncate ${type.row}`}>{title}</span>
                           {sub !== '' && <span className={`block truncate ${type.sub}`}>{sub}</span>}

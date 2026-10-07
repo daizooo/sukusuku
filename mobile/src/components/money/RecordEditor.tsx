@@ -26,6 +26,7 @@ import {
   formatCalc,
   formatYen,
   groupsFromItems,
+  iconKeyOf,
   isBlankLine,
   itemNamesLabel,
   itemsFromGroups,
@@ -45,7 +46,7 @@ import ItemsScreen, { blankLine, newLineKey, type ItemsWork } from '@/components
 import ProductPicker, { type PickedProduct } from '@/components/money/ProductPicker';
 import StorePicker from '@/components/money/StorePicker';
 import WalletPicker from '@/components/money/WalletPicker';
-import { CategoryBadge, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
+import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 
 // 記録の入力（docs/kakei.md §3.2。Zaim を踏襲）。PWA版の `src/components/sukusuku/money/RecordEditor.tsx` と同じ流れ・文言。
 //
@@ -143,6 +144,13 @@ export default function RecordEditor({
       : target.specialItemId !== null
         ? `${kind === 'income' ? '特別収入' : '特別費'} › ${specialName(target.specialItemId)}`
         : '';
+
+  /** まとまりのアイコン（大分類のアイコン。特別費は支払いの絵）。 */
+  const groupIconKey = (target: Pick<EditorGroup, 'categoryId'>) => {
+    if (target.categoryId === null) return 'receipt';
+    const topId = topCategoryIdOf(categories, target.categoryId);
+    return iconKeyOf(categories.find((category) => category.id === topId));
+  };
 
   /** まとまりの一言（今月の残り・特別費の予算）。 */
   const groupSubtitle = (target: Pick<EditorGroup, 'categoryId' | 'specialItemId' | 'specialPlanId'>) => {
@@ -350,6 +358,7 @@ export default function RecordEditor({
             work={work}
             onChange={setWork}
             title={groupTitle(work)}
+            iconKey={groupIconKey(work)}
             subtitle={groupSubtitle(work)}
             canPickProducts={work.categoryId !== null && kind === 'expense'}
             onChangeCategory={() => push({ type: 'category', purpose: 'change' })}
@@ -520,12 +529,10 @@ export default function RecordEditor({
               <Text style={styles.itemsHint}>種類ごとにまとめて表示</Text>
             </View>
             {groups.map((group) => {
-              const top = group.categoryId !== null ? topCategoryIdOf(categories, group.categoryId) : null;
-              const badge = top ? categories.find((category) => category.id === top)?.name ?? '' : '特';
               const names = itemNamesLabel(group.lines);
               return (
                 <Pressable key={group.key} accessibilityRole="button" onPress={() => openGroup(group)} style={styles.group}>
-                  <CategoryBadge label={badge} />
+                  <CategoryIcon iconKey={groupIconKey(group)} />
                   <View style={styles.flex}>
                     <Text style={styles.groupTitle}>{groupTitle(group)}</Text>
                     {names !== '' && <Text style={styles.groupNames}>{names}</Text>}

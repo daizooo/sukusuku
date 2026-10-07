@@ -597,6 +597,8 @@ export interface MoneyCategory {
   kind: MoneyCategoryKind;
   parentId: string | null;
   name: string;
+  /** アイコン（moneyUtils の MONEY_ICONS の key）。null は名前から選ぶ。 */
+  icon: string | null;
   position: number;
   /** 使わなくした（選べないが、記録には残る）。 */
   archived: boolean;

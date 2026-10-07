@@ -27,6 +27,7 @@ const rowToCategory = (row: CategoryRow): MoneyCategory => ({
   kind: row.kind === 'income' ? 'income' : 'living',
   parentId: row.parent_id,
   name: row.name,
+  icon: row.icon ?? null,
   position: row.position,
   archived: row.archived_at !== null,
 });
@@ -163,7 +164,7 @@ export async function deleteMoneyRecord(supabase: SupabaseDb, id: string): Promi
 export async function insertMoneyCategory(
   supabase: SupabaseDb,
   familyId: string,
-  fields: { kind: MoneyCategoryKind; parentId: string | null; name: string; position: number },
+  fields: { kind: MoneyCategoryKind; parentId: string | null; name: string; icon: string | null; position: number },
 ): Promise<MoneyCategory> {
   const { data, error } = await supabase
     .from('money_categories')
@@ -172,6 +173,7 @@ export async function insertMoneyCategory(
       kind: fields.kind,
       parent_id: fields.parentId,
       name: fields.name.trim(),
+      icon: fields.icon,
       position: fields.position,
     })
     .select('*')
@@ -183,12 +185,13 @@ export async function insertMoneyCategory(
 export async function updateMoneyCategory(
   supabase: SupabaseDb,
   id: string,
-  fields: { name?: string; position?: number; archived?: boolean },
+  fields: { name?: string; icon?: string | null; position?: number; archived?: boolean },
 ): Promise<MoneyCategory> {
   const { data, error } = await supabase
     .from('money_categories')
     .update({
       ...(fields.name !== undefined && { name: fields.name.trim() }),
+      ...(fields.icon !== undefined && { icon: fields.icon }),
       ...(fields.position !== undefined && { position: fields.position }),
       ...(fields.archived !== undefined && { archived_at: fields.archived ? new Date().toISOString() : null }),
     })

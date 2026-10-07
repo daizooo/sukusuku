@@ -41,11 +41,11 @@ import SpecialPanel from '@/components/living/SpecialPanel';
  *
  * 中は「記録 / 月 / 年 / 特別費」の4つ。記録の追加は右下の丸いボタン「＋」（Zaim と同じ。§2）。
  * どの面も「送り → 結論（数字を1つ大きく）→ 内訳 → 明細」の順（見た目の決まりは §2.1・moneyVisual）。
- * - 記録: その月に使った額と、記録を日ごとに。押すと記録の詳細（RecordEditor。Zaim と同じ流れ）
- * - 月: 月の収支（収入 − 生活費 − 貯金）と内訳、特別費の1行（押すと「特別費」へ）、生活費の大分類のタイル。
+ * - 記録: その月に使った額（特別費を除く）と、記録を日ごとに。押すと記録の詳細（RecordEditor。Zaim と同じ流れ）
+ * - 月: 月の収支（収入 − 生活費 − 貯金）と内訳、生活費の大分類の小さな一覧（特別費は出さない）。
  *   種類と予算はここから直す
  * - 年: 年度の収支と内訳、月ごとの収支（押すとその月へ）
- * - 特別費: 年度の予定と実績（「年」と同じ年度を見る）
+ * - 特別費: 年度の予定と実績（「年」と同じ年度を見る）。特別費の数字はこの面だけに出す
  *
  * 見出し・切り替え・月の送りは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  */
@@ -224,13 +224,7 @@ export default function MoneyScreen() {
           categories={categories}
           budgets={budgets}
           wallets={wallets}
-          specialItems={specialItems}
-          specialActuals={specialActuals}
           onEditCategories={() => setEditingCategories(true)}
-          onOpenSpecial={() => {
-            setFiscalYear(fiscalYearOfMonth(monthKey));
-            setView('special');
-          }}
         />
       ) : view === 'year' ? (
         <MoneyYearView

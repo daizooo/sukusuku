@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Plus } from 'lucide-reac
 import type { MoneyBudget, MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
-import { budgetFor, childCategories, formatYen, topCategories } from '@/lib/moneyUtils';
+import { budgetFor, childCategories, formatYen, guessIconKey, iconKeyOf, MONEY_ICONS, topCategories } from '@/lib/moneyUtils';
 import { formatFiscalYear, parseAmountInput } from '@/lib/specialUtils';
 import {
   insertDefaultMoneyCategories,
@@ -15,7 +15,7 @@ import {
 } from '@/lib/api/money';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
-import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
+import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 
 // 種類と予算（docs/kakei.md §3.1）。PWA版の `src/components/sukusuku/money/CategoryEditor.tsx` と同じ並び・文言。
 //
@@ -122,13 +122,14 @@ export default function CategoryEditor({
           kind,
           parentId: target.parentId,
           name: result.name,
+          icon: result.icon,
           position: siblings.reduce((max, entry) => Math.max(max, entry.position + 1), 0),
         });
         onCategories((prev) => [...prev, category]);
       } else {
         category = target.category;
-        if (result.name.trim() !== category.name) {
-          category = await updateMoneyCategory(supabase, category.id, { name: result.name });
+        if (result.name.trim() !== category.name || result.icon !== category.icon) {
+          category = await updateMoneyCategory(supabase, category.id, { name: result.name, icon: result.icon });
           replace(category);
         }
       }
@@ -206,6 +207,7 @@ export default function CategoryEditor({
             return (
               <View key={top.id} style={[styles.card, top.archived && styles.archived]}>
                 <Pressable accessibilityRole="button" onPress={() => setEditing({ category: top })} style={styles.topRow}>
+                  <CategoryIcon iconKey={iconKeyOf(top)} />
                   <Text style={styles.topName}>{top.name}</Text>
                   {top.archived && <Text style={styles.archivedLabel}>使わない</Text>}
                   <View style={styles.flex} />
@@ -279,6 +281,8 @@ export default function CategoryEditor({
 
 interface SheetResult {
   name: string;
+  /** アイコン（大分類だけ）。null は名前から選ぶ。 */
+  icon: string | null;
   /** 大分類の月の予算。入れなかった・小分類は null。 */
   budget: number | null;
 }
@@ -306,6 +310,7 @@ function CategorySheet({
 }) {
   const [name, setName] = useState(category?.name ?? '');
   const [amount, setAmount] = useState(budget === null ? '' : String(budget));
+  const [icon, setIcon] = useState<string | null>(category?.icon ?? null);
   const [error, setError] = useState<string | null>(null);
   const withBudget = isTop && showBudget;
 
@@ -313,7 +318,7 @@ function CategorySheet({
     if (name.trim() === '') return setError('名前を入れてください');
     const value = amount.trim() === '' ? null : parseAmountInput(amount);
     if (withBudget && amount.trim() !== '' && value === null) return setError('予算は0以上の整数（円）で入れてください');
-    onSubmit({ name, budget: withBudget ? value : null });
+    onSubmit({ name, icon: isTop ? icon : (category?.icon ?? null), budget: withBudget ? value : null });
   };
 
   return (
@@ -344,6 +349,35 @@ function CategorySheet({
             placeholderTextColor={colors.textFaint}
           />
         </View>
+        {isTop && (
+          <View style={styles.field}>
+            <Text style={styles.label}>アイコン</Text>
+            <View style={styles.icons}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="名前から選ぶ"
+                accessibilityState={{ selected: icon === null }}
+                onPress={() => setIcon(null)}
+                style={[styles.iconChoice, icon === null && styles.iconChoiceSelected]}
+              >
+                <CategoryIcon iconKey={guessIconKey(name)} size={34} />
+                <Text style={styles.iconAuto}>自動</Text>
+              </Pressable>
+              {MONEY_ICONS.map((entry) => (
+                <Pressable
+                  key={entry.key}
+                  accessibilityRole="button"
+                  accessibilityLabel={entry.label}
+                  accessibilityState={{ selected: icon === entry.key }}
+                  onPress={() => setIcon(entry.key)}
+                  style={[styles.iconChoice, icon === entry.key && styles.iconChoiceSelected]}
+                >
+                  <CategoryIcon iconKey={entry.key} size={34} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
         {withBudget && (
           <View style={styles.field}>
             <Text style={styles.label}>{formatFiscalYear(fiscalYear)}の月の予算（円）</Text>
@@ -439,6 +473,18 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   hint: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
+  icons: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  iconChoice: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconChoiceSelected: { borderColor: colors.money },
+  iconAuto: { position: 'absolute', bottom: -1, fontSize: 9, fontWeight: '700', color: colors.textMuted },
   moveRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   moveButton: {
     flexDirection: 'row',

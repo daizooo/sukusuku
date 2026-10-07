@@ -3,7 +3,8 @@
 import type { ReactNode } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useBackLayer } from '@/lib/browserHistory';
-import { formatMonthKey, shiftMonth } from '@/lib/moneyUtils';
+import { formatMonthKey, iconTone, shiftMonth } from '@/lib/moneyUtils';
+import { MONEY_ICON_COMPONENTS } from './moneyIcons';
 import { formatFiscalYear } from '@/lib/specialUtils';
 
 // 家計タブで共通に使う部品と、見た目の決まり（docs/kakei.md §2.1）。
@@ -202,11 +203,16 @@ export function UsageRing({ percent, size = 52 }: { percent: number | null; size
   );
 }
 
-/** 種類の頭文字の丸（「食」）。 */
-export function CategoryBadge({ label }: { label: string }) {
+/** 種類のアイコン（色つきの丸）。key は moneyUtils の MONEY_ICONS。 */
+export function CategoryIcon({ iconKey, size = 32 }: { iconKey: string; size?: number }) {
+  const tone = iconTone(iconKey);
+  const Icon = MONEY_ICON_COMPONENTS[tone.key] ?? MONEY_ICON_COMPONENTS.other;
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[13px] font-bold text-blue-600">
-      {label.slice(0, 1) || '・'}
+    <span
+      className="flex shrink-0 items-center justify-center rounded-full"
+      style={{ width: size, height: size, backgroundColor: tone.surface, color: tone.color }}
+    >
+      <Icon size={Math.round(size * 0.55)} />
     </span>
   );
 }

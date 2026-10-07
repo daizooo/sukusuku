@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import type { MoneyBudget, MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
-import { budgetFor, childCategories, formatYen, topCategories } from '@/lib/moneyUtils';
+import { budgetFor, childCategories, formatYen, guessIconKey, iconKeyOf, MONEY_ICONS, topCategories } from '@/lib/moneyUtils';
 import { formatFiscalYear, parseAmountInput } from '@/lib/specialUtils';
 import {
   insertDefaultMoneyCategories,
@@ -13,7 +13,7 @@ import {
   updateMoneyCategory,
 } from '@/lib/api/money';
 import { ModalShell } from '../modals/TaskForm';
-import { FullScreen, PrimaryButton, ScreenHeader } from './moneyVisual';
+import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader } from './moneyVisual';
 
 // 種類と予算（docs/kakei.md §3.1）。mobile版の `mobile/src/components/money/CategoryEditor.tsx` と同じ並び・文言。
 //
@@ -120,14 +120,15 @@ export default function CategoryEditor({
           kind,
           parentId: target.parentId,
           name: result.name,
+          icon: result.icon,
           position: siblings.reduce((max, entry) => Math.max(max, entry.position + 1), 0),
         });
         const created = category;
         onCategories((prev) => [...prev, created]);
       } else {
         category = target.category;
-        if (result.name.trim() !== category.name) {
-          category = await updateMoneyCategory(supabase, category.id, { name: result.name });
+        if (result.name.trim() !== category.name || result.icon !== category.icon) {
+          category = await updateMoneyCategory(supabase, category.id, { name: result.name, icon: result.icon });
           replace(category);
         }
       }
@@ -198,6 +199,7 @@ export default function CategoryEditor({
                 onClick={() => setEditing({ category: top })}
                 className="flex w-full items-center gap-2 text-left"
               >
+                <CategoryIcon iconKey={iconKeyOf(top)} />
                 <span className="text-[15px] font-bold text-gray-900">{top.name}</span>
                 {top.archived && <span className="text-[11px] font-semibold text-gray-400">使わない</span>}
                 <span className="flex-1" />
@@ -272,6 +274,8 @@ export default function CategoryEditor({
 
 interface SheetResult {
   name: string;
+  /** アイコン（大分類だけ）。null は名前から選ぶ。 */
+  icon: string | null;
   /** 大分類の月の予算。入れなかった・小分類は null。 */
   budget: number | null;
 }
@@ -303,6 +307,7 @@ function CategoryModal({
 }) {
   const [name, setName] = useState(category?.name ?? '');
   const [amount, setAmount] = useState(budget === null ? '' : String(budget));
+  const [icon, setIcon] = useState<string | null>(category?.icon ?? null);
   const [error, setError] = useState<string | null>(null);
   const withBudget = isTop && showBudget;
 
@@ -310,7 +315,7 @@ function CategoryModal({
     if (name.trim() === '') return setError('名前を入れてください');
     const value = amount.trim() === '' ? null : parseAmountInput(amount);
     if (withBudget && amount.trim() !== '' && value === null) return setError('予算は0以上の整数（円）で入れてください');
-    onSubmit({ name, budget: withBudget ? value : null });
+    onSubmit({ name, icon: isTop ? icon : (category?.icon ?? null), budget: withBudget ? value : null });
   };
 
   const moveClass = 'flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1.5 text-[13px] font-semibold text-gray-700';
@@ -344,6 +349,39 @@ function CategoryModal({
             placeholder={isTop ? '例: 食費' : '例: 外食'}
           />
         </label>
+        {isTop && (
+          <div>
+            <span className={labelClass}>アイコン</span>
+            <div className="flex flex-wrap gap-1">
+              <button
+                type="button"
+                aria-label="名前から選ぶ"
+                aria-pressed={icon === null}
+                onClick={() => setIcon(null)}
+                className={`relative flex h-[46px] w-[46px] items-center justify-center rounded-xl border-2 ${
+                  icon === null ? 'border-blue-600' : 'border-transparent'
+                }`}
+              >
+                <CategoryIcon iconKey={guessIconKey(name)} size={34} />
+                <span className="absolute -bottom-0.5 text-[9px] font-bold text-gray-500">自動</span>
+              </button>
+              {MONEY_ICONS.map((entry) => (
+                <button
+                  key={entry.key}
+                  type="button"
+                  aria-label={entry.label}
+                  aria-pressed={icon === entry.key}
+                  onClick={() => setIcon(entry.key)}
+                  className={`flex h-[46px] w-[46px] items-center justify-center rounded-xl border-2 ${
+                    icon === entry.key ? 'border-blue-600' : 'border-transparent'
+                  }`}
+                >
+                  <CategoryIcon iconKey={entry.key} size={34} />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {withBudget && (
           <label className="block">
             <span className={labelClass}>{formatFiscalYear(fiscalYear)}の月の予算（円）</span>

@@ -110,6 +110,96 @@ export const DEFAULT_CATEGORIES: { kind: MoneyCategoryKind; name: string; childr
   { kind: 'income', name: 'その他の収入', children: [] },
 ];
 
+// ---- 種類のアイコン（docs/kakei.md §3.1。Zaim と同じく種類ごとに絵と色） ----
+
+/** 選べるアイコン。key を money_categories.icon に入れる。色はアイコンごとに決まっている（家族は絵だけ選ぶ）。 */
+export const MONEY_ICONS: { key: string; label: string; color: string; surface: string }[] = [
+  { key: 'home', label: '住まい', color: '#b45309', surface: '#fffbeb' },
+  { key: 'sofa', label: '家具', color: '#b45309', surface: '#fffbeb' },
+  { key: 'food', label: '食事', color: '#ea580c', surface: '#fff7ed' },
+  { key: 'grocery', label: '買い物', color: '#ea580c', surface: '#fff7ed' },
+  { key: 'cafe', label: 'カフェ', color: '#ea580c', surface: '#fff7ed' },
+  { key: 'drink', label: 'お酒', color: '#ea580c', surface: '#fff7ed' },
+  { key: 'power', label: '電気', color: '#ca8a04', surface: '#fefce8' },
+  { key: 'gas', label: 'ガス', color: '#ca8a04', surface: '#fefce8' },
+  { key: 'water', label: '水道', color: '#ca8a04', surface: '#fefce8' },
+  { key: 'daily', label: '日用品', color: '#059669', surface: '#ecfdf5' },
+  { key: 'beauty', label: '美容', color: '#db2777', surface: '#fdf2f8' },
+  { key: 'clothes', label: '服', color: '#db2777', surface: '#fdf2f8' },
+  { key: 'hair', label: '美容院', color: '#db2777', surface: '#fdf2f8' },
+  { key: 'train', label: '電車', color: '#0284c7', surface: '#f0f9ff' },
+  { key: 'car', label: '車', color: '#0284c7', surface: '#f0f9ff' },
+  { key: 'fuel', label: 'ガソリン', color: '#0284c7', surface: '#f0f9ff' },
+  { key: 'plane', label: '旅行', color: '#0284c7', surface: '#f0f9ff' },
+  { key: 'phone', label: '携帯', color: '#4f46e5', surface: '#eef2ff' },
+  { key: 'wifi', label: 'ネット', color: '#4f46e5', surface: '#eef2ff' },
+  { key: 'medical', label: '病院', color: '#e11d48', surface: '#fff1f2' },
+  { key: 'pill', label: '薬', color: '#e11d48', surface: '#fff1f2' },
+  { key: 'heart', label: '健康', color: '#e11d48', surface: '#fff1f2' },
+  { key: 'ticket', label: 'レジャー', color: '#7c3aed', surface: '#f5f3ff' },
+  { key: 'game', label: '遊び', color: '#7c3aed', surface: '#f5f3ff' },
+  { key: 'book', label: '本・趣味', color: '#7c3aed', surface: '#f5f3ff' },
+  { key: 'sports', label: '運動', color: '#7c3aed', surface: '#f5f3ff' },
+  { key: 'baby', label: '子ども', color: '#0d9488', surface: '#f0fdfa' },
+  { key: 'school', label: '学び', color: '#0d9488', surface: '#f0fdfa' },
+  { key: 'gift', label: '贈り物', color: '#0d9488', surface: '#f0fdfa' },
+  { key: 'pet', label: 'ペット', color: '#65a30d', surface: '#f7fee7' },
+  { key: 'wallet', label: 'お小遣い', color: '#2563eb', surface: '#eff6ff' },
+  { key: 'insurance', label: '保険', color: '#2563eb', surface: '#eff6ff' },
+  { key: 'receipt', label: '支払い', color: '#2563eb', surface: '#eff6ff' },
+  { key: 'salary', label: '給料', color: '#2563eb', surface: '#eff6ff' },
+  { key: 'savings', label: '貯金', color: '#2563eb', surface: '#eff6ff' },
+  { key: 'other', label: 'その他', color: '#6b7280', surface: '#f3f4f6' },
+];
+
+const ICON_RULES: [RegExp, string][] = [
+  [/住|家賃|ローン|管理費|修繕/, 'home'],
+  [/家具|家電/, 'sofa'],
+  [/食料|スーパー/, 'grocery'],
+  [/嗜好|カフェ|お菓子/, 'cafe'],
+  [/酒/, 'drink'],
+  [/外食|食/, 'food'],
+  [/電気|光熱/, 'power'],
+  [/ガス/, 'gas'],
+  [/水道/, 'water'],
+  [/化粧|コスメ/, 'beauty'],
+  [/美容/, 'hair'],
+  [/おしゃれ|服|衣/, 'clothes'],
+  [/ガソリン/, 'fuel'],
+  [/車|駐車/, 'car'],
+  [/交通|電車|バス/, 'train'],
+  [/旅行/, 'plane'],
+  [/ネット|インターネット/, 'wifi'],
+  [/携帯|通信|電話/, 'phone'],
+  [/薬|ドラッグ/, 'pill'],
+  [/医療|病院|歯科/, 'medical'],
+  [/保険/, 'insurance'],
+  [/娯楽|レジャー/, 'ticket'],
+  [/本|趣味/, 'book'],
+  [/運動|ジム|スポーツ/, 'sports'],
+  [/保育|習い|学|教育/, 'school'],
+  [/子ども|子供|おもちゃ|ベビー/, 'baby'],
+  [/交際|お祝い|仕送り|プレゼント/, 'gift'],
+  [/ペット/, 'pet'],
+  [/小遣い/, 'wallet'],
+  [/給料|給与|賞与|収入/, 'salary'],
+  [/貯金|積立/, 'savings'],
+  [/日用|雑貨/, 'daily'],
+];
+
+/** 名前から近いアイコンを選ぶ（アイコンを決めていない種類に使う）。当たらなければ「その他」。 */
+export function guessIconKey(name: string): string {
+  return ICON_RULES.find(([pattern]) => pattern.test(name))?.[1] ?? 'other';
+}
+
+/** 種類のアイコン（決めたもの、無ければ名前から）。 */
+export const iconKeyOf = (category: Pick<MoneyCategory, 'icon' | 'name'> | null | undefined): string =>
+  category ? (category.icon ?? guessIconKey(category.name)) : 'other';
+
+/** アイコンの色（知らない key は「その他」の色）。 */
+export const iconTone = (key: string) =>
+  MONEY_ICONS.find((icon) => icon.key === key) ?? MONEY_ICONS[MONEY_ICONS.length - 1];
+
 const byPosition = <T extends { position: number; name: string }>(a: T, b: T) =>
   a.position !== b.position ? a.position - b.position : a.name.localeCompare(b.name, 'ja');
 
