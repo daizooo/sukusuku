@@ -1,5 +1,16 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Animated,
+  Easing,
+  Keyboard,
+  KeyboardAvoidingView,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { BookOpen, Check, ChevronRight, CircleQuestionMark, Gift, History, Ticket, type LucideIcon } from 'lucide-react-native';
 import type { SubsidyBallId } from '@/types/app';
@@ -13,6 +24,7 @@ import LotteryBall from '@/components/living/LotteryBall';
 // 福引所の1枚の面にまとめる: 福引券（残り回数）・ガラポン・今月のラッキーカラーなど・買いたいものと金額・「ガラポン！」。
 // 賞品一覧・金コレ（金賞コレクション）・履歴・ヘルプは下のボタンから、画面の中央の枠で開く。持っている券は、あるときだけ右上のボタンから開く。
 // 「ガラポン！」を押すと、この面のガラポンが回り、受け皿に玉が出てから結果の枠が開く。
+// 入力中はキーボードの高さ分だけ中身を縮め、入力欄（買いたいもの・金額）が見える位置までスクロールする。
 
 export type LotteryDialogKind = 'prizes' | 'coupons' | 'collection' | 'history' | 'help';
 
@@ -21,6 +33,8 @@ const HERO_FROM = '#dc2626';
 const HERO_TO = '#f97316';
 const GOLD = '#fbbf24';
 const GOLD_LIGHT = '#fde68a';
+/** キーボードが出たとき、フォームの上に残す余白。 */
+const FORM_MARGIN = 12;
 
 const MENU: { id: LotteryDialogKind; label: string; icon: LucideIcon }[] = [
   { id: 'prizes', label: '賞品一覧', icon: Gift },
@@ -116,8 +130,20 @@ export default function LotteryDrawView({
 }: LotteryDrawViewProps) {
   const lucky = ballOf(plan.luckyBall);
   const editable = remaining > 0 && !spinning;
+
+  // 画面全体を使う作り（edge-to-edge）では、キーボードが出ても面は縮まず、入力欄が隠れる。
+  // KeyboardAvoidingViewで中身を縮め、キーボードが出たら入力欄（フォーム）の位置までスクロールする。
+  const scrollRef = useRef<ScrollView>(null);
+  const formY = useRef(0);
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidShow', () => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, formY.current - FORM_MARGIN), animated: true });
+    });
+    return () => sub.remove();
+  }, []);
+
   return (
-    <View style={styles.surface}>
+    <KeyboardAvoidingView style={styles.surface} behavior="padding">
       <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
         <Defs>
           <LinearGradient id="lotteryHome" x1="0" y1="0" x2="1" y2="1">
@@ -130,7 +156,7 @@ export default function LotteryDrawView({
         <Circle cx="4%" cy="46%" r={48} fill="#ffffff" opacity={0.07} />
         <Circle cx="80%" cy="62%" r={30} fill={GOLD_LIGHT} opacity={0.14} />
       </Svg>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.topRow}>
           <View style={[styles.ticketBadge, remaining <= 0 && !isLoading && styles.ticketBadgeEmpty]}>
             <Ticket size={18} color={remaining > 0 || isLoading ? '#7f1d1d' : '#ffffff'} />
@@ -188,7 +214,7 @@ export default function LotteryDrawView({
           )}
         </View>
 
-        <View style={styles.form}>
+        <View style={styles.form} onLayout={(event) => (formY.current = event.nativeEvent.layout.y)}>
           <TextInput
             style={styles.input}
             value={itemName}
@@ -232,7 +258,7 @@ export default function LotteryDrawView({
           })}
         </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
