@@ -131,26 +131,25 @@ export default function StockBoard({
       </View>
     );
 
-  // ---- 備え度（小さく） ----
+  // ---- 備え度（1行） ----
   const ringColor = readinessColor(readiness);
   const summary = (
     <View style={styles.card}>
       <View style={styles.summaryRow}>
-        <Ring size={52} stroke={6} ratio={readiness / 100} color={ringColor}>
-          <Text style={[styles.ringValue, { color: ringColor }]}>{readiness}%</Text>
+        <Ring size={36} stroke={5} ratio={readiness / 100} color={ringColor}>
+          <Text style={[styles.ringValue, { color: ringColor }]}>{readiness}</Text>
         </Ring>
-        <View style={styles.flex}>
-          <Text style={styles.summaryTitle}>
-            {plan.people}人 × {plan.days}日分の備え
-          </Text>
+        <Text style={styles.summaryLine} numberOfLines={1}>
+          {plan.people}人×{plan.days}日分
           <Text style={styles.summarySub}>
+            {'  '}
             {overview.shortageTotal > 0
-              ? `あと ${formatYen(overview.shortageTotal)} で揃う${overview.unpricedTargets > 0 ? '（一部未登録）' : ''}`
+              ? `あと ${formatYen(overview.shortageTotal)}${overview.unpricedTargets > 0 ? '＋' : ''} で揃う`
               : overview.unpricedTargets > 0
                 ? '値段を入れると費用が出ます'
                 : '必要な量が揃っています'}
           </Text>
-        </View>
+        </Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="人数・日数を変える"
@@ -158,7 +157,7 @@ export default function StockBoard({
           onPress={() => setShowPlan((prev) => !prev)}
           style={styles.gear}
         >
-          <Settings2 size={16} color={SOFT.icon} />
+          <Settings2 size={14} color={SOFT.icon} />
         </Pressable>
       </View>
       {showPlan && (
@@ -201,7 +200,7 @@ export default function StockBoard({
     </View>
   );
 
-  // ---- 品目のタイル ----
+  // ---- 品目のタイル（3列。余白を詰めて、1画面で多く見られるように） ----
   const productTile = (product: StockProduct<StockItem, StockTarget>) => {
     const status = product.target?.status ?? null;
     const shortage = status?.shortage ?? 0;
@@ -217,22 +216,18 @@ export default function StockBoard({
         onPress={() => setDetailKey(product.key)}
         style={styles.tile}
       >
-        <View style={styles.tileTop}>
+        <View style={styles.tileHead}>
           <View style={styles.tileIcon}>
-            <StockIcon name={product.name} category={product.category} size={18} color={SOFT.icon} />
+            <StockIcon name={product.name} category={product.category} size={12} color={SOFT.icon} />
           </View>
-          {product.carryTotal > 0 && (
-            <View style={styles.bagTag}>
-              <Text style={styles.bagTagText}>バッグ {formatQuantity(product.carryTotal)}</Text>
-            </View>
-          )}
+          <Text style={styles.tileName} numberOfLines={1}>
+            {product.name}
+          </Text>
         </View>
-        <Text style={styles.tileName} numberOfLines={2}>
-          {product.name}
-        </Text>
         <Text style={styles.tileTotal}>
           {formatQuantity(product.total)}
           <Text style={styles.tileUnit}> {product.unit}</Text>
+          {product.carryTotal > 0 && <Text style={styles.tileBag}>  バッグ{formatQuantity(product.carryTotal)}</Text>}
         </Text>
         {ratio !== null && (
           <View style={styles.bar}>
@@ -244,29 +239,30 @@ export default function StockBoard({
             />
           </View>
         )}
-        {status && (
-          <Text style={[styles.tileNote, shortage > 0 && styles.alertText]}>
-            {shortage > 0
-              ? `必要 ${formatQuantity(required)}${status.target.unit}・あと${formatQuantity(shortage)}${status.target.unit}`
-              : `必要 ${formatQuantity(required)}${status.target.unit}`}
-          </Text>
-        )}
-        {product.nearest && (
-          <View style={styles.noteRow}>
-            <Clock size={11} color={nearestAlert ? colors.alertText : colors.textFaint} />
-            <Text style={[styles.tileNote, nearestAlert && styles.alertText]}>
-              {expiryCountdown(product.nearest.on, today)}
+        <View style={styles.notes}>
+          {shortage > 0 && status && (
+            <Text style={[styles.tileNote, styles.alertText]}>
+              あと{formatQuantity(shortage)}
+              {status.target.unit}
             </Text>
-          </View>
-        )}
-        {product.inspect && (
-          <View style={styles.noteRow}>
-            <Wrench size={11} color={product.inspect.due ? colors.alertText : colors.textFaint} />
-            <Text style={[styles.tileNote, product.inspect.due && styles.alertText]}>
-              {product.inspect.due ? '点検の時期' : `点検まで${spanText(daysBetween(today, product.inspect.next))}`}
-            </Text>
-          </View>
-        )}
+          )}
+          {product.nearest && (
+            <View style={styles.noteRow}>
+              <Clock size={9} color={nearestAlert ? colors.alertText : colors.textFaint} />
+              <Text style={[styles.tileNote, nearestAlert && styles.alertText]}>
+                {expiryCountdown(product.nearest.on, today)}
+              </Text>
+            </View>
+          )}
+          {product.inspect && (
+            <View style={styles.noteRow}>
+              <Wrench size={9} color={product.inspect.due ? colors.alertText : colors.textFaint} />
+              <Text style={[styles.tileNote, product.inspect.due && styles.alertText]}>
+                {product.inspect.due ? '点検' : `${spanText(daysBetween(today, product.inspect.next))}後`}
+              </Text>
+            </View>
+          )}
+        </View>
       </Pressable>
     );
   };
@@ -274,10 +270,10 @@ export default function StockBoard({
   const categoryHeader = (name: string, count: number) => (
     <View style={styles.categoryHeader}>
       <View style={styles.categoryIcon}>
-        <StockIcon name={name} size={15} color={SOFT.icon} />
+        <StockIcon name={name} size={11} color={SOFT.icon} />
       </View>
       <Text style={styles.categoryName}>{name}</Text>
-      <Text style={styles.categoryCount}>{count}品目</Text>
+      <Text style={styles.categoryCount}>{count}</Text>
     </View>
   );
 
@@ -322,40 +318,33 @@ export default function StockBoard({
 
   const carryView = (
     <>
-      <View style={[styles.card, styles.summaryRow, { padding: 16 }]}>
-        <Ring size={72} stroke={8} ratio={bagLots.length === 0 ? 0 : doneCount / bagLots.length} color={TONE.accent}>
-          <View style={styles.ringCenter}>
-            <Text style={styles.bagValue}>
-              {doneCount}
-              <Text style={styles.bagTotal}>/{bagLots.length}</Text>
-            </Text>
-            <Text style={styles.ringLabel}>確認</Text>
-          </View>
+      <View style={[styles.card, styles.summaryRow]}>
+        <Ring size={44} stroke={5} ratio={bagLots.length === 0 ? 0 : doneCount / bagLots.length} color={TONE.accent}>
+          <Text style={styles.bagValue}>
+            {doneCount}/{bagLots.length}
+          </Text>
         </Ring>
         <View style={styles.flex}>
           <Text style={styles.summaryTitle}>{plan.carryDays}日分のバッグ</Text>
-          <Text style={[styles.bagAge, bagDue && styles.alertText]}>{attention.bag ? bagAge : 'バッグは空です'}</Text>
-          {attention.bag && (
-            <Text style={styles.summarySub}>
-              {bagDue ? '点検の時期です' : `次は ${dateText(attention.bag.nextOn)} ごろ`}
-            </Text>
-          )}
+          <Text style={[styles.bagAge, bagDue && styles.alertText]}>
+            {attention.bag
+              ? `${bagAge}${bagDue ? '・点検の時期です' : `・次は ${dateText(attention.bag.nextOn)} ごろ`}`
+              : 'バッグは空です'}
+          </Text>
         </View>
       </View>
 
       {carryShortages.length > 0 && (
-        <View style={[styles.card, styles.shortBox]}>
-          <Text style={styles.shortBoxTitle}>バッグに足りないもの</Text>
-          <View style={styles.pills}>
-            {carryShortages.map(({ status }) => (
-              <View key={status.target.id} style={styles.shortPill}>
-                <Text style={styles.shortPillText}>
-                  {status.target.name} あと{formatQuantity(status.carry?.shortage ?? 0)}
-                  {status.target.unit}
-                </Text>
-              </View>
-            ))}
-          </View>
+        <View style={styles.pills}>
+          <Text style={styles.shortLabel}>足りない</Text>
+          {carryShortages.map(({ status }) => (
+            <View key={status.target.id} style={styles.shortPill}>
+              <Text style={styles.shortPillText}>
+                {status.target.name} あと{formatQuantity(status.carry?.shortage ?? 0)}
+                {status.target.unit}
+              </Text>
+            </View>
+          ))}
         </View>
       )}
 
@@ -379,23 +368,25 @@ export default function StockBoard({
                       onPress={() => toggle(item.id)}
                       style={styles.bagBody}
                     >
-                      <View style={[styles.bagIcon, on ? { backgroundColor: SOFT.border } : null]}>
-                        {on ? (
-                          <Check size={26} color={SOFT.buttonText} strokeWidth={3} />
-                        ) : (
-                          <StockIcon name={item.name} category={item.category} size={24} color={SOFT.icon} />
-                        )}
+                      <View style={styles.tileHead}>
+                        <View style={[styles.tileIcon, on && { backgroundColor: SOFT.border }]}>
+                          {on ? (
+                            <Check size={13} color={SOFT.buttonText} strokeWidth={3} />
+                          ) : (
+                            <StockIcon name={item.name} category={item.category} size={12} color={SOFT.icon} />
+                          )}
+                        </View>
+                        <Text style={styles.tileName} numberOfLines={1}>
+                          {item.name}
+                        </Text>
                       </View>
-                      <Text style={styles.bagName} numberOfLines={2}>
-                        {item.name}
-                      </Text>
-                      <Text style={styles.bagQty}>
+                      <Text style={styles.tileTotal}>
                         {formatQuantity(item.quantity)}
-                        <Text style={styles.bagUnit}> {item.unit}</Text>
+                        <Text style={styles.tileUnit}> {item.unit}</Text>
                       </Text>
-                      {item.expiresOn && (
-                        <Text style={[styles.tileNote, alert && styles.alertText]}>{expiryCountdown(item.expiresOn, today)}</Text>
-                      )}
+                      <Text style={[styles.tileNote, alert && styles.alertText]}>
+                        {item.expiresOn ? expiryCountdown(item.expiresOn, today) : ' '}
+                      </Text>
                     </Pressable>
                     <Pressable
                       accessibilityRole="button"
@@ -404,7 +395,7 @@ export default function StockBoard({
                       hitSlop={6}
                       style={styles.bagEdit}
                     >
-                      <Pencil size={13} color={colors.textFaint} />
+                      <Pencil size={11} color={colors.textFaint} />
                     </Pressable>
                   </View>
                 );
@@ -523,7 +514,7 @@ export default function StockBoard({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  bannerWrap: { paddingHorizontal: 16, paddingBottom: 8 },
+  bannerWrap: { paddingHorizontal: 16, paddingBottom: 6 },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -533,22 +524,22 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
     paddingHorizontal: 12,
-    paddingVertical: 11,
+    paddingVertical: 7,
   },
   redDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: TONE.alert },
-  bannerTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+  bannerTitle: { fontSize: 13, fontWeight: '700', color: colors.text },
   bannerSub: { flex: 1, fontSize: 11, fontWeight: '700', color: colors.textFaint },
   calm: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
   calmText: { fontSize: 12, fontWeight: '700', color: colors.textFaint },
-  tabs: { marginHorizontal: 16, marginBottom: 8 },
-  chips: { gap: 6, paddingHorizontal: 16, paddingBottom: 8 },
-  chip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: colors.neutralSurface },
+  tabs: { marginHorizontal: 16, marginBottom: 6 },
+  chips: { gap: 6, paddingHorizontal: 16, paddingBottom: 6 },
+  chip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: colors.neutralSurface },
   chipOn: { backgroundColor: SOFT.button },
   chipText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   chipTextOn: { color: SOFT.buttonText },
-  content: { paddingHorizontal: 16, paddingBottom: 24, gap: 16 },
+  content: { paddingHorizontal: 16, paddingBottom: 24, gap: 10 },
   contentWithFooter: { paddingBottom: 96 },
-  section: { gap: 8 },
+  section: { gap: 4 },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 16,
@@ -556,13 +547,14 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     overflow: 'hidden',
   },
-  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
-  ringValue: { fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 6 },
+  summaryLine: { flex: 1, fontSize: 12, fontWeight: '700', color: colors.text },
+  ringValue: { fontSize: 10, fontWeight: '700', fontVariant: ['tabular-nums'] },
   ringCenter: { alignItems: 'center' },
   ringLabel: { fontSize: 9, fontWeight: '700', color: colors.textFaint, marginTop: 1 },
   summaryTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
   summarySub: { fontSize: 11, fontWeight: '500', color: colors.textFaint, marginTop: 2, fontVariant: ['tabular-nums'] },
-  gear: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.bg },
+  gear: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.bg },
   planPanel: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -574,51 +566,52 @@ const styles = StyleSheet.create({
   stepperLabel: { fontSize: 11, fontWeight: '700', color: colors.textFaint },
   stepButton: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.neutralSurface },
   stepValue: { minWidth: 32, textAlign: 'center', fontSize: 14, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
-  categoryHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  categoryIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.button },
-  categoryName: { fontSize: 16, fontWeight: '700', color: colors.text },
-  categoryCount: { fontSize: 12, fontWeight: '700', color: colors.textFaint },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  categoryHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  categoryIcon: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.button },
+  categoryName: { fontSize: 13, fontWeight: '700', color: colors.text },
+  categoryCount: { fontSize: 11, fontWeight: '700', color: colors.textFaint },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tile: {
-    width: '48.4%',
-    gap: 4,
-    borderRadius: 16,
+    width: '32%',
+    gap: 2,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    padding: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
-  tileTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  tileIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.bg },
-  bagTag: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: colors.neutralSurface },
-  bagTagText: { fontSize: 10, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  tileName: { fontSize: 13, fontWeight: '700', color: colors.text, lineHeight: 16, minHeight: 32, marginTop: 4 },
-  tileTotal: { fontSize: 24, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
-  tileUnit: { fontSize: 12, fontWeight: '700', color: colors.textFaint },
-  bar: { height: 4, borderRadius: 2, backgroundColor: colors.neutralSurface, overflow: 'hidden' },
-  barFill: { height: 4, borderRadius: 2 },
-  tileNote: { fontSize: 11, fontWeight: '700', color: colors.textFaint, fontVariant: ['tabular-nums'] },
-  noteRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tileHead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tileIcon: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.bg },
+  tileName: { flex: 1, fontSize: 12, fontWeight: '700', color: colors.text },
+  tileTotal: { fontSize: 20, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  tileUnit: { fontSize: 10, fontWeight: '700', color: colors.textFaint },
+  tileBag: { fontSize: 10, fontWeight: '700', color: colors.borderStrong },
+  bar: { height: 3, borderRadius: 2, backgroundColor: colors.neutralSurface, overflow: 'hidden' },
+  barFill: { height: 3, borderRadius: 2 },
+  notes: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 6 },
+  tileNote: { fontSize: 10, fontWeight: '700', color: colors.textFaint, fontVariant: ['tabular-nums'] },
+  noteRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   alertText: { color: colors.alertText },
-  addTarget: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8 },
+  addTarget: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 4 },
   addTargetText: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
-  bagValue: { fontSize: 18, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
-  bagTotal: { fontSize: 12, fontWeight: '700', color: colors.textFaint },
-  bagAge: { fontSize: 11, fontWeight: '700', color: colors.textFaint, marginTop: 2 },
-  shortBox: { padding: 12, gap: 6 },
-  shortBoxTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  shortPill: { borderRadius: 999, backgroundColor: colors.dangerSurface, paddingHorizontal: 10, paddingVertical: 4 },
+  bagValue: { fontSize: 11, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  bagAge: { fontSize: 11, fontWeight: '700', color: colors.textFaint, marginTop: 1 },
+  pills: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
+  shortLabel: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
+  shortPill: { borderRadius: 999, backgroundColor: colors.dangerSurface, paddingHorizontal: 8, paddingVertical: 2 },
   shortPillText: { fontSize: 11, fontWeight: '700', color: colors.alertText, fontVariant: ['tabular-nums'] },
-  bagTile: { width: '48.4%', borderRadius: 16, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.surface },
+  bagTile: {
+    width: '32%',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
   bagTileOn: { borderColor: SOFT.border, backgroundColor: SOFT.bg },
-  bagBody: { alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingTop: 16, paddingBottom: 12 },
-  bagIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.bg },
-  bagName: { fontSize: 13, fontWeight: '700', color: colors.text, textAlign: 'center', minHeight: 32, lineHeight: 16 },
-  bagQty: { fontSize: 18, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
-  bagUnit: { fontSize: 12, fontWeight: '700', color: colors.textFaint },
-  bagEdit: { position: 'absolute', top: 8, right: 8 },
+  bagBody: { gap: 2, paddingHorizontal: 8, paddingVertical: 6 },
+  bagEdit: { position: 'absolute', top: 4, right: 4 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingBottom: 12, paddingTop: 8, backgroundColor: colors.background },
   finish: { borderRadius: 16, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.neutralSurface },
   finishOn: { backgroundColor: SOFT.button },

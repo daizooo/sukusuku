@@ -115,10 +115,10 @@ export default function StockBoard({
       <button
         type="button"
         onClick={() => setAttentionOpen(true)}
-        className="shrink-0 mb-2 flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-left hover:bg-gray-50"
+        className="shrink-0 mb-1.5 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-left hover:bg-gray-50"
       >
         <span className="h-2 w-2 shrink-0 rounded-full bg-red-400" />
-        <span className="text-sm font-bold text-gray-900">確認が必要 {attentionCount}件</span>
+        <span className="text-[13px] font-bold text-gray-900">確認が必要 {attentionCount}件</span>
         <span className="flex-1 min-w-0 truncate text-[11px] font-bold text-gray-400">
           {[
             expiryCount > 0 && `期限 ${expiryCount}`,
@@ -128,49 +128,47 @@ export default function StockBoard({
             .filter(Boolean)
             .join('・')}
         </span>
-        <ChevronRight size={16} className="shrink-0 text-gray-300" />
+        <ChevronRight size={15} className="shrink-0 text-gray-300" />
       </button>
     ) : (
-      <p className="shrink-0 mb-2 flex items-center gap-1.5 px-1 text-xs font-bold text-gray-400">
-        <Check size={14} />
+      <p className="shrink-0 mb-1.5 flex items-center gap-1.5 px-1 text-[11px] font-bold text-gray-400">
+        <Check size={13} />
         確認が必要なものはありません
       </p>
     );
 
-  // ---- 備え度（小さく） ----
+  // ---- 備え度（1行） ----
   const ringColor = readinessColor(readiness);
   const summary = (
-    <section className={`${tileClass} px-4 py-3`}>
-      <div className="flex items-center gap-3">
-        <Ring size={52} stroke={6} ratio={readiness / 100} color={ringColor}>
-          <span className="text-[13px] font-bold tabular-nums" style={{ color: ringColor }}>
-            {readiness}%
+    <section className={`${tileClass} px-3 py-1.5`}>
+      <div className="flex items-center gap-2.5">
+        <Ring size={36} stroke={5} ratio={readiness / 100} color={ringColor}>
+          <span className="text-[10px] font-bold tabular-nums" style={{ color: ringColor }}>
+            {readiness}
           </span>
         </Ring>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-gray-900">
-            {plan.people}人 × {plan.days}日分の備え
-          </p>
-          <p className="text-[11px] text-gray-400 tabular-nums">
+        <p className="flex-1 min-w-0 truncate text-[12px] font-bold text-gray-900">
+          {plan.people}人×{plan.days}日分
+          <span className="ml-2 font-medium text-gray-400 tabular-nums">
             {overview.shortageTotal > 0
-              ? `あと ${formatYen(overview.shortageTotal)} で揃う${overview.unpricedTargets > 0 ? '（一部未登録）' : ''}`
+              ? `あと ${formatYen(overview.shortageTotal)}${overview.unpricedTargets > 0 ? '＋' : ''} で揃う`
               : overview.unpricedTargets > 0
                 ? '値段を入れると費用が出ます'
                 : '必要な量が揃っています'}
-          </p>
-        </div>
+          </span>
+        </p>
         <button
           type="button"
           aria-label="人数・日数を変える"
           aria-expanded={showPlan}
           onClick={() => setShowPlan((prev) => !prev)}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-50 text-orange-500"
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-50 text-orange-500"
         >
-          <Settings2 size={16} />
+          <Settings2 size={14} />
         </button>
       </div>
       {showPlan && (
-        <div className="mt-3 grid grid-cols-3 gap-2 border-t border-gray-100 pt-3">
+        <div className="mt-2 grid grid-cols-3 gap-2 border-t border-gray-100 pt-2">
           {(
             [
               ['people', '人数', '人'],
@@ -209,7 +207,7 @@ export default function StockBoard({
     </section>
   );
 
-  // ---- 品目のタイル ----
+  // ---- 品目のタイル（3列。余白を詰めて、1画面で多く見られるように） ----
   const productTile = (product: StockProduct<StockItem, StockTarget>) => {
     const status = product.target?.status ?? null;
     const shortage = status?.shortage ?? 0;
@@ -222,61 +220,60 @@ export default function StockBoard({
         key={product.key}
         type="button"
         onClick={() => setDetailKey(product.key)}
-        className={`${tileClass} flex flex-col gap-1 p-3 text-left hover:bg-gray-50`}
+        className={`${tileClass} flex min-w-0 flex-col gap-0.5 px-2 py-1.5 text-left hover:bg-gray-50`}
       >
-        <span className="flex items-start justify-between gap-1">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-50 text-orange-500">
-            <StockIcon name={product.name} category={product.category} size={18} />
+        <span className="flex min-w-0 items-center gap-1">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-50 text-orange-500">
+            <StockIcon name={product.name} category={product.category} size={12} />
           </span>
+          <span className="truncate text-[12px] font-bold text-gray-900">{product.name}</span>
+        </span>
+        <span className="leading-tight text-gray-900 tabular-nums">
+          <span className="text-xl font-bold">{formatQuantity(product.total)}</span>
+          <span className="ml-0.5 text-[10px] font-bold text-gray-400">{product.unit}</span>
           {product.carryTotal > 0 && (
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-500 tabular-nums">
-              バッグ {formatQuantity(product.carryTotal)}
-            </span>
+            <span className="ml-1.5 text-[10px] font-bold text-gray-300">バッグ{formatQuantity(product.carryTotal)}</span>
           )}
         </span>
-        <span className="mt-1 line-clamp-2 min-h-8 text-[13px] font-bold leading-4 text-gray-900">{product.name}</span>
-        <span className="text-gray-900 tabular-nums">
-          <span className="text-2xl font-bold">{formatQuantity(product.total)}</span>
-          <span className="ml-0.5 text-xs font-bold text-gray-400">{product.unit}</span>
-        </span>
         {ratio !== null && (
-          <span className="block h-1 overflow-hidden rounded-full bg-gray-100">
+          <span className="block h-[3px] overflow-hidden rounded-full bg-gray-100">
             <span
               className={`block h-full rounded-full ${shortage > 0 ? 'bg-red-400' : 'bg-orange-300'}`}
               style={{ width: `${Math.round(ratio * 100)}%` }}
             />
           </span>
         )}
-        {status && (
-          <span className={`text-[11px] font-bold tabular-nums ${shortage > 0 ? 'text-red-700' : 'text-gray-400'}`}>
-            {shortage > 0
-              ? `必要 ${formatQuantity(required)}${status.target.unit}・あと${formatQuantity(shortage)}${status.target.unit}`
-              : `必要 ${formatQuantity(required)}${status.target.unit}`}
-          </span>
-        )}
-        {product.nearest && (
-          <span className={`flex items-center gap-1 text-[11px] font-bold ${nearestAlert ? 'text-red-700' : 'text-gray-400'}`}>
-            <Clock size={11} />
-            {expiryCountdown(product.nearest.on, today)}
-          </span>
-        )}
-        {product.inspect && (
-          <span className={`flex items-center gap-1 text-[11px] font-bold ${product.inspect.due ? 'text-red-700' : 'text-gray-400'}`}>
-            <Wrench size={11} />
-            {product.inspect.due ? '点検の時期' : `点検まで${spanText(daysBetween(today, product.inspect.next))}`}
-          </span>
-        )}
+        <span className="flex flex-wrap items-center gap-x-1.5 text-[10px] font-bold leading-tight tabular-nums">
+          {shortage > 0 && status && (
+            <span className="text-red-700">
+              あと{formatQuantity(shortage)}
+              {status.target.unit}
+            </span>
+          )}
+          {product.nearest && (
+            <span className={`flex items-center gap-0.5 ${nearestAlert ? 'text-red-700' : 'text-gray-400'}`}>
+              <Clock size={9} />
+              {expiryCountdown(product.nearest.on, today)}
+            </span>
+          )}
+          {product.inspect && (
+            <span className={`flex items-center gap-0.5 ${product.inspect.due ? 'text-red-700' : 'text-gray-400'}`}>
+              <Wrench size={9} />
+              {product.inspect.due ? '点検' : `${spanText(daysBetween(today, product.inspect.next))}後`}
+            </span>
+          )}
+        </span>
       </button>
     );
   };
 
   const categoryHeader = (name: string, count: number) => (
-    <h2 className="mb-2 flex items-center gap-2 text-base font-bold text-gray-900">
-      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-orange-600">
-        <StockIcon name={name} size={15} />
+    <h2 className="mb-1 flex items-center gap-1.5 text-[13px] font-bold text-gray-900">
+      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-100 text-orange-600">
+        <StockIcon name={name} size={11} />
       </span>
       {name}
-      <span className="text-xs font-bold text-gray-400">{count}品目</span>
+      <span className="text-[11px] font-bold text-gray-400">{count}</span>
     </h2>
   );
 
@@ -289,14 +286,14 @@ export default function StockBoard({
         shown.map((row) => (
           <section key={row.category}>
             {categoryHeader(row.category, row.products.length)}
-            <div className="grid grid-cols-2 gap-2.5">{row.products.map(productTile)}</div>
+            <div className="grid grid-cols-3 gap-1.5">{row.products.map(productTile)}</div>
           </section>
         ))
       )}
       <button
         type="button"
         onClick={onAddTarget}
-        className="flex w-full items-center justify-center gap-1 py-2.5 text-xs font-bold text-gray-500"
+        className="flex w-full items-center justify-center gap-1 py-1.5 text-xs font-bold text-gray-500"
       >
         <Plus size={14} />
         目標（必要数）を追加
@@ -325,43 +322,32 @@ export default function StockBoard({
 
   const carryView = (
     <>
-      <section className={`${tileClass} flex items-center gap-4 p-4`}>
-        <Ring size={72} stroke={8} ratio={bagLots.length === 0 ? 0 : doneCount / bagLots.length} color={TONE.accent}>
-          <span className="flex flex-col items-center leading-none">
-            <span className="text-lg font-bold tabular-nums text-gray-900">
-              {doneCount}
-              <span className="text-xs text-gray-400">/{bagLots.length}</span>
-            </span>
-            <span className="mt-0.5 text-[9px] font-bold text-gray-400">確認</span>
+      <section className={`${tileClass} flex items-center gap-3 px-3 py-2`}>
+        <Ring size={44} stroke={5} ratio={bagLots.length === 0 ? 0 : doneCount / bagLots.length} color={TONE.accent}>
+          <span className="text-[11px] font-bold tabular-nums text-gray-900">
+            {doneCount}/{bagLots.length}
           </span>
         </Ring>
-        <div className="flex-1 min-w-0 space-y-0.5">
-          <p className="text-sm font-bold text-gray-900">{plan.carryDays}日分のバッグ</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-bold text-gray-900">{plan.carryDays}日分のバッグ</p>
           <p className={`text-[11px] font-bold ${bagDue ? 'text-red-700' : 'text-gray-400'}`}>
-            {attention.bag ? bagAge : 'バッグは空です'}
+            {attention.bag ? `${bagAge}${bagDue ? '・点検の時期です' : `・次は ${dateText(attention.bag.nextOn)} ごろ`}` : 'バッグは空です'}
           </p>
-          {attention.bag && (
-            <p className="text-[11px] text-gray-400 tabular-nums">
-              {bagDue ? '点検の時期です' : `次は ${dateText(attention.bag.nextOn)} ごろ`}
-            </p>
-          )}
         </div>
       </section>
 
       {carryShortages.length > 0 && (
-        <section className={`${tileClass} px-4 py-3`}>
-          <p className="mb-1.5 text-xs font-bold text-gray-500">バッグに足りないもの</p>
-          <div className="flex flex-wrap gap-1.5">
-            {carryShortages.map(({ status }) => (
-              <span
-                key={status.target.id}
-                className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700 tabular-nums"
-              >
-                {status.target.name} あと{formatQuantity(status.carry?.shortage ?? 0)}
-                {status.target.unit}
-              </span>
-            ))}
-          </div>
+        <section className="flex flex-wrap items-center gap-1.5 px-1">
+          <span className="text-[11px] font-bold text-gray-500">足りない</span>
+          {carryShortages.map(({ status }) => (
+            <span
+              key={status.target.id}
+              className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700 tabular-nums"
+            >
+              {status.target.name} あと{formatQuantity(status.carry?.shortage ?? 0)}
+              {status.target.unit}
+            </span>
+          ))}
         </section>
       )}
 
@@ -371,7 +357,7 @@ export default function StockBoard({
         Object.entries(bagByCategory).map(([name, rows]) => (
           <section key={name}>
             {categoryHeader(name, rows.length)}
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-3 gap-1.5">
               {rows.map((item) => {
                 const on = checked.has(item.id);
                 const level = expiryLevel(item.expiresOn, today);
@@ -379,7 +365,7 @@ export default function StockBoard({
                 return (
                   <div
                     key={item.id}
-                    className={`relative rounded-2xl border-2 transition ${
+                    className={`relative rounded-xl border transition ${
                       on ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white'
                     }`}
                   >
@@ -389,35 +375,33 @@ export default function StockBoard({
                       aria-checked={on}
                       aria-label={`${item.name}を確かめた`}
                       onClick={() => toggle(item.id)}
-                      className="flex w-full flex-col items-center gap-1 px-2 pb-3 pt-4 text-center"
+                      className="flex w-full min-w-0 flex-col gap-0.5 px-2 py-1.5 text-left"
                     >
-                      <span
-                        className={`flex h-12 w-12 items-center justify-center rounded-full ${
-                          on ? 'bg-orange-200 text-orange-800' : 'bg-orange-50 text-orange-500'
-                        }`}
-                      >
-                        {on ? <Check size={26} strokeWidth={3} /> : <StockIcon name={item.name} category={item.category} size={24} />}
-                      </span>
-                      <span className="line-clamp-2 min-h-8 w-full text-[13px] font-bold leading-4 text-gray-900">
-                        {item.name}
-                      </span>
-                      <span className="text-lg font-bold text-gray-900 tabular-nums">
-                        {formatQuantity(item.quantity)}
-                        <span className="ml-0.5 text-xs text-gray-400">{item.unit}</span>
-                      </span>
-                      {item.expiresOn && (
-                        <span className={`text-[11px] font-bold ${alert ? 'text-red-700' : 'text-gray-400'}`}>
-                          {expiryCountdown(item.expiresOn, today)}
+                      <span className="flex min-w-0 items-center gap-1">
+                        <span
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                            on ? 'bg-orange-200 text-orange-800' : 'bg-orange-50 text-orange-500'
+                          }`}
+                        >
+                          {on ? <Check size={13} strokeWidth={3} /> : <StockIcon name={item.name} category={item.category} size={12} />}
                         </span>
-                      )}
+                        <span className="truncate text-[12px] font-bold text-gray-900">{item.name}</span>
+                      </span>
+                      <span className="leading-tight text-gray-900 tabular-nums">
+                        <span className="text-xl font-bold">{formatQuantity(item.quantity)}</span>
+                        <span className="ml-0.5 text-[10px] font-bold text-gray-400">{item.unit}</span>
+                      </span>
+                      <span className={`text-[10px] font-bold leading-tight ${alert ? 'text-red-700' : 'text-gray-400'}`}>
+                        {item.expiresOn ? expiryCountdown(item.expiresOn, today) : '\u00a0'}
+                      </span>
                     </button>
                     <button
                       type="button"
                       aria-label={`${item.name}を編集`}
                       onClick={() => onEditItem(item)}
-                      className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full text-gray-300 hover:bg-gray-100 hover:text-gray-500"
+                      className="absolute right-0.5 top-0.5 flex h-6 w-6 items-center justify-center rounded-full text-gray-300 hover:bg-gray-100 hover:text-gray-500"
                     >
-                      <Pencil size={13} />
+                      <Pencil size={11} />
                     </button>
                   </div>
                 );
@@ -438,11 +422,11 @@ export default function StockBoard({
         value={storage}
         onChange={onStorageChange}
         options={STORAGE_OPTIONS}
-        className="shrink-0 mb-2"
+        className="shrink-0 mb-1.5"
       />
 
       {storage === 'home' && categories.length > 1 && (
-        <div className="shrink-0 flex gap-1.5 overflow-x-auto pb-2">
+        <div className="shrink-0 flex gap-1.5 overflow-x-auto pb-1.5">
           {[ALL, ...categories.map((row) => row.category)].map((value) => {
             const selected = value === activeCategory;
             return (
@@ -451,7 +435,7 @@ export default function StockBoard({
                 type="button"
                 aria-pressed={selected}
                 onClick={() => setCategory(value)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold transition ${
                   selected ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }`}
               >
@@ -463,7 +447,7 @@ export default function StockBoard({
       )}
 
       <div className="relative flex-1 min-h-0">
-        <div className="h-full overflow-y-auto space-y-4 pb-24">{storage === 'home' ? homeView : carryView}</div>
+        <div className="h-full overflow-y-auto space-y-2.5 pb-24">{storage === 'home' ? homeView : carryView}</div>
         {storage === 'carry' && bagLots.length > 0 && (
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent pt-4">
             <button
