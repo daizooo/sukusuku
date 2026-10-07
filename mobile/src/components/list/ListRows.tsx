@@ -172,6 +172,49 @@ export function GroupHeader({
 }
 
 /**
+ * 未分類の見出し。押すと名前を付けられる。未分類はグループの行を持たないので、
+ * 名前を付けるとその名前のグループができ、未分類の項目はそこへ移る。
+ */
+export function UngroupedHeader({ onName }: { onName: (name: string) => void }) {
+  // null のあいだは読むだけの見出し。書き始めは空にして、例を出しておく。
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const close = (value: string) => {
+    const name = value.trim();
+    if (name) onName(name);
+    setDraft(null);
+  };
+
+  return (
+    <View style={styles.groupHeader}>
+      {draft === null ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="未分類に名前を付ける"
+          onPress={() => setDraft('')}
+          style={styles.flex}
+        >
+          <Text style={[styles.groupName, styles.ungroupedName]}>未分類</Text>
+        </Pressable>
+      ) : (
+        <TextInput
+          style={[styles.input, styles.flex, styles.groupInput]}
+          value={draft}
+          onChangeText={setDraft}
+          onSubmitEditing={() => close(draft)}
+          onBlur={() => close(draft)}
+          autoFocus
+          returnKeyType="done"
+          placeholder="グループの名前（例: イオン）"
+          placeholderTextColor={colors.textFaint}
+          accessibilityLabel="グループの名前"
+        />
+      )}
+    </View>
+  );
+}
+
+/**
  * 押すまではただの「+ ○○」の行で、押すと入力欄になる。
  * 確定しても欄は開いたままにするので、思いついたものを続けて打てる
  * （Google Keepと同じ動き）。項目の追加にも枠の追加にも使う。
@@ -323,6 +366,7 @@ const styles = StyleSheet.create({
   groupHeaderWithGrip: { paddingLeft: 0 },
   groupName: { fontSize: 13, fontWeight: '700', color: colors.text },
   groupCount: { fontWeight: '400', color: colors.textFaint },
+  ungroupedName: { color: colors.textMuted },
   groupInput: { paddingVertical: 4 },
 
   input: {

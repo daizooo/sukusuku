@@ -108,6 +108,7 @@ import {
   updateGroupName,
   insertList,
   loadLists,
+  moveUngroupedItems,
   seedDefaultLists,
   updateItemTitle as updateItemTitleApi,
   updateItemDone,
@@ -1270,6 +1271,33 @@ export default function SukusukuApp({
     }
   };
 
+  // 未分類に名前を付ける。未分類はグループの行を持たないので、その名前のグループを
+  // 末尾（未分類が出ていた位置）に作り、未分類の項目をそこへ移す。
+  const nameUngroupedHandler = async (listId: string, name: string) => {
+    const position = listGroups.filter((g) => g.listId === listId).length;
+    let created: ListGroup;
+    try {
+      created = await insertGroup(supabase, { listId, name, position });
+    } catch (err) {
+      console.error('Failed to add list group:', err);
+      alert('名前の変更に失敗しました。もう一度お試しください。');
+      return;
+    }
+    setListGroups((prev) => [...prev, created]);
+    const previousItems = listItems;
+    setListItems((prev) =>
+      prev.map((i) => (i.listId === listId && i.groupId === null ? { ...i, groupId: created.id } : i)),
+    );
+    try {
+      await moveUngroupedItems(supabase, listId, created.id);
+    } catch (err) {
+      // グループはできているので残し、項目だけ未分類へ戻す。
+      console.error('Failed to move ungrouped items:', err);
+      setListItems(previousItems);
+      alert('項目の移動に失敗しました。もう一度お試しください。');
+    }
+  };
+
   // グループを消しても中の項目は消さず、未分類へ落とす（買い忘れを生まないため）。
   const deleteGroupHandler = async (id: string) => {
     const previous = { groups: listGroups, items: listItems };
@@ -1424,6 +1452,7 @@ export default function SukusukuApp({
               onAddGroup={addGroupHandler}
               onRenameGroup={renameGroupHandler}
               onDeleteGroup={deleteGroupHandler}
+              onNameUngrouped={nameUngroupedHandler}
               onAddItem={addItemHandler}
               onToggleItem={toggleItemHandler}
               onRenameItem={renameItemHandler}

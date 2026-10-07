@@ -44,6 +44,8 @@ interface ListTabProps {
   onAddGroup: (listId: string, name: string) => void;
   onRenameGroup: (id: string, name: string) => void;
   onDeleteGroup: (id: string) => void;
+  /** 未分類に名前を付ける（その名前のグループを作り、未分類の項目を移す）。 */
+  onNameUngrouped: (listId: string, name: string) => void;
   onAddItem: (listId: string, groupId: string | null, title: string) => void;
   onToggleItem: (id: string) => void;
   /** 項目の内容を書き換える。持てるのは内容だけなので、渡すのも内容だけ。 */
@@ -231,6 +233,51 @@ function Grip({ onGrab, label }: { onGrab: (event: ReactPointerEvent<HTMLElement
     >
       <GripVertical size={16} />
     </span>
+  );
+}
+
+/**
+ * 未分類の見出し。押すと名前を付けられる。未分類はグループの行を持たないので、
+ * 名前を付けるとその名前のグループができ、未分類の項目はそこへ移る。
+ */
+function UngroupedHeader({ onName }: { onName: (name: string) => void }) {
+  // null のあいだは読むだけの見出し。書き始めは空にして、例を出しておく。
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const close = (value: string) => {
+    const name = value.trim();
+    if (name) onName(name);
+    setDraft(null);
+  };
+
+  return (
+    <div className="flex items-center pl-3 pr-1.5 py-2 bg-gray-100 border-b border-gray-200 select-none">
+      {draft === null ? (
+        <button
+          type="button"
+          onClick={() => setDraft('')}
+          aria-label="未分類に名前を付ける"
+          className="flex-1 min-w-0 text-left text-[13px] font-bold text-gray-500 py-0.5"
+        >
+          未分類
+        </button>
+      ) : (
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') close(draft);
+            if (e.key === 'Escape') setDraft(null);
+          }}
+          onBlur={() => close(draft)}
+          autoFocus
+          placeholder="グループの名前（例: イオン）"
+          aria-label="グループの名前"
+          className="flex-1 min-w-0 border border-gray-300 rounded-lg px-2 py-1 text-[13px] font-bold outline-none focus:border-blue-500"
+        />
+      )}
+    </div>
   );
 }
 
@@ -458,6 +505,7 @@ export default function ListTab({
   onAddGroup,
   onRenameGroup,
   onDeleteGroup,
+  onNameUngrouped,
   onAddItem,
   onToggleItem,
   onRenameItem,
@@ -735,7 +783,8 @@ export default function ListTab({
                   lifting(ungroupedItems) ? '' : 'overflow-hidden'
                 }`}
               >
-                <h3 className="text-[13px] font-bold text-gray-500 px-3 py-2 bg-gray-100 border-b border-gray-200">未分類</h3>
+                {/* 見出しを押すと名前を付けられる（その名前のグループになる）。 */}
+                <UngroupedHeader onName={(name) => selected && onNameUngrouped(selected.id, name)} />
                 {itemRows(itemsSection(null), ungroupedItems)}
                 <AddRow
                   divided
