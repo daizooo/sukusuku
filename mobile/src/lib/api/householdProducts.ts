@@ -18,6 +18,7 @@ const rowToProduct = (row: ProductRow): HouseholdProduct => ({
   price: row.price,
   note: row.note,
   lastAddedAt: row.last_added_at,
+  moneyCategoryId: row.money_category_id,
 });
 
 const draftToRow = (draft: HouseholdProductDraft): TablesUpdate<'household_products'> => ({

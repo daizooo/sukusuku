@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Check, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 import type { SpecialActual, SpecialActualDraft, SpecialItem, SpecialKind } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
@@ -32,8 +32,10 @@ import SegmentedTabs from '@/components/ui/SegmentedTabs';
 import SpecialItemSheet, { type SpecialItemSheetResult } from '@/components/living/SpecialItemSheet';
 import SpecialActualSheet from '@/components/living/SpecialActualSheet';
 
-// 暮らしタブの「特別費」の面（docs/home.md §5.4）。PWA版の
-// `src/components/sukusuku/living/SpecialPanel.tsx` と同じ項目・並び・文言。
+// 特別費の面（docs/home.md §5.4）。家計タブの「年」に置く（docs/kakei.md §2。年の振り返りは §7 の5 で作り直す）。
+// PWA版の `src/components/sukusuku/living/SpecialPanel.tsx` と同じ項目・並び・文言。
+//
+// 実績は家計の記録の品目（docs/kakei.md §3.2）。「済」は品目1つの記録を作り、家計タブの記録にも出る。
 //
 // 年度（4月〜翌3月）ごとに、特別費（支出）と特別収入（賞与など）の「予算・実績・差異」を見る。
 // 一覧は月ごと（4月→3月）で、1行＝予定1回ぶん（または予定外の出費1件）。
@@ -53,12 +55,11 @@ type EditingItem = SpecialItem | null;
 
 interface SpecialPanelProps {
   familyId: string | null;
-  /** ヘッダーの「追加」が押された。 */
-  adding: boolean;
-  onAddClose: () => void;
+  /** 実績（家計の記録）を足した・直した・消した。家計タブの記録を読み直す。 */
+  onRecordsChanged?: () => void;
 }
 
-export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPanelProps) {
+export default function SpecialPanel({ familyId, onRecordsChanged }: SpecialPanelProps) {
   const [items, setItems] = useState<SpecialItem[]>([]);
   const [actuals, setActuals] = useState<SpecialActual[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -66,6 +67,8 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
   const [kind, setKind] = useState<SpecialKind>('expense');
   const [editingRow, setEditingRow] = useState<EditingRow>(null);
   const [editingItem, setEditingItem] = useState<EditingItem>(null);
+  const [adding, setAdding] = useState(false);
+  const onAddClose = () => setAdding(false);
 
   useEffect(() => {
     if (!familyId) return;
@@ -101,13 +104,16 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
 
   const failed = (what: string) => Alert.alert(`${what}できませんでした`, 'もう一度お試しください。');
   const nextPosition = () => items.reduce((max, item) => Math.max(max, item.position + 1), 0);
-  const withActual = (actual: SpecialActual) => setActuals((prev) => [...prev.filter((a) => a.id !== actual.id), actual]);
+  const withActual = (actual: SpecialActual) => {
+    setActuals((prev) => [...prev.filter((a) => a.id !== actual.id), actual]);
+    onRecordsChanged?.();
+  };
 
   /** 「済」: 予算の額・今日の日付で実績にする。 */
   const markPaid = async (row: SpecialRow) => {
     if (!familyId || row.planId === null) return;
     try {
-      const created = await insertSpecialActual(supabase, familyId, row.item.id, row.planId, {
+      const created = await insertSpecialActual(supabase, row.item.kind, row.item.id, row.planId, {
         occurredOn: toDateString(new Date()),
         amount: row.budget,
         note: '',
@@ -125,8 +131,8 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
       const existing = row.actuals[0];
       withActual(
         existing
-          ? await updateSpecialActual(supabase, existing.id, draft)
-          : await insertSpecialActual(supabase, familyId, row.item.id, row.planId, draft),
+          ? await updateSpecialActual(supabase, existing, draft)
+          : await insertSpecialActual(supabase, row.item.kind, row.item.id, row.planId, draft),
       );
     } catch {
       failed('保存');
@@ -135,7 +141,8 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
 
   const clearActual = async (row: SpecialRow) => {
     setEditingRow(null);
-    const removedIds = row.actuals.map((actual) => actual.id);
+    const removed = row.actuals;
+    const removedIds = removed.map((actual) => actual.id);
     const previous = { items, actuals };
     setActuals((prev) => prev.filter((actual) => !removedIds.includes(actual.id)));
     // 予定の無い項目の唯一の実績を消したら、項目も残さない。
@@ -144,7 +151,8 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
     if (orphan) setItems((prev) => prev.filter((item) => item.id !== row.item.id));
     try {
       if (orphan) await deleteSpecialItem(supabase, row.item.id);
-      else await Promise.all(removedIds.map((id) => deleteSpecialActual(supabase, id)));
+      else await Promise.all(removed.map((actual) => deleteSpecialActual(supabase, actual)));
+      onRecordsChanged?.();
     } catch {
       setItems(previous.items);
       setActuals(previous.actuals);
@@ -200,6 +208,7 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
     setActuals((prev) => prev.filter((actual) => actual.itemId !== id));
     try {
       await deleteSpecialItem(supabase, id);
+      onRecordsChanged?.();
     } catch {
       setItems(previous.items);
       setActuals(previous.actuals);
@@ -232,9 +241,16 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
         >
           <ChevronRight size={18} color={colors.textSubtle} />
         </Pressable>
-        <Text style={styles.yearRange}>
-          {fiscalYear}年4月〜{fiscalYear + 1}年3月
-        </Text>
+        <View style={styles.flex} />
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setAdding(true)}
+          disabled={!familyId}
+          style={styles.addItem}
+        >
+          <Plus size={14} color={colors.livingSpecial} />
+          <Text style={styles.addItemText}>項目を追加</Text>
+        </Pressable>
       </View>
 
       <SegmentedTabs
@@ -274,7 +290,7 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
           <Text style={styles.message}>
             {hasAnything
               ? `${formatFiscalYear(fiscalYear)}の${kind === 'expense' ? '特別費' : '特別収入'}はありません`
-              : '年に数回の大きな出費や賞与を「追加」で登録すると、年度ごとの予算と実績を見られます'}
+              : '年に数回の大きな出費や賞与を「項目を追加」で登録すると、年度ごとの予算と実績を見られます'}
           </Text>
         </View>
       ) : (
@@ -384,7 +400,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutralSurface,
   },
   yearLabel: { fontSize: 16, fontWeight: '700', color: colors.text },
-  yearRange: { flex: 1, textAlign: 'right', fontSize: 11, fontWeight: '500', color: colors.textFaint },
+  addItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: colors.livingSpecialSurface,
+  },
+  addItemText: { fontSize: 12, fontWeight: '700', color: colors.livingSpecial },
   kinds: { marginHorizontal: 16, marginBottom: 8 },
   totals: {
     flexDirection: 'row',

@@ -452,6 +452,7 @@ export type Database = {
           family_id: string
           id: string
           last_added_at: string | null
+          money_category_id: string | null
           name: string
           note: string
           price: number | null
@@ -464,6 +465,7 @@ export type Database = {
           family_id: string
           id?: string
           last_added_at?: string | null
+          money_category_id?: string | null
           name: string
           note?: string
           price?: number | null
@@ -476,6 +478,7 @@ export type Database = {
           family_id?: string
           id?: string
           last_added_at?: string | null
+          money_category_id?: string | null
           name?: string
           note?: string
           price?: number | null
@@ -483,6 +486,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "household_products_money_category_id_fkey"
+            columns: ["money_category_id"]
+            isOneToOne: false
+            referencedRelation: "money_categories"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "household_products_family_id_fkey"
             columns: ["family_id"]
@@ -693,6 +703,297 @@ export type Database = {
             columns: ["used_draw_id"]
             isOneToOne: false
             referencedRelation: "subsidy_draws"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_budgets: {
+        Row: {
+          category_id: string
+          created_at: string
+          family_id: string
+          fiscal_year: number
+          id: string
+          monthly_amount: number
+          updated_at: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          family_id: string
+          fiscal_year: number
+          id?: string
+          monthly_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          family_id?: string
+          fiscal_year?: number
+          id?: string
+          monthly_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_budgets_category_fkey"
+            columns: ["category_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_categories"
+            referencedColumns: ["id", "family_id"]
+          },
+        ]
+      }
+      money_categories: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          family_id: string
+          id: string
+          kind: string
+          name: string
+          parent_id: string | null
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          family_id: string
+          id?: string
+          kind?: string
+          name: string
+          parent_id?: string | null
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          family_id?: string
+          id?: string
+          kind?: string
+          name?: string
+          parent_id?: string | null
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_categories_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_categories_parent_fkey"
+            columns: ["parent_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_categories"
+            referencedColumns: ["id", "family_id"]
+          },
+        ]
+      }
+      money_items: {
+        Row: {
+          amount: number
+          category_id: string | null
+          created_at: string
+          family_id: string
+          id: string
+          memo: string
+          name: string
+          position: number
+          product_id: string | null
+          quantity: number
+          record_id: string
+          special_item_id: string | null
+          special_plan_id: string | null
+          unit_price: number | null
+        }
+        Insert: {
+          amount?: number
+          category_id?: string | null
+          created_at?: string
+          family_id: string
+          id?: string
+          memo?: string
+          name?: string
+          position?: number
+          product_id?: string | null
+          quantity?: number
+          record_id: string
+          special_item_id?: string | null
+          special_plan_id?: string | null
+          unit_price?: number | null
+        }
+        Update: {
+          amount?: number
+          category_id?: string | null
+          created_at?: string
+          family_id?: string
+          id?: string
+          memo?: string
+          name?: string
+          position?: number
+          product_id?: string | null
+          quantity?: number
+          record_id?: string
+          special_item_id?: string | null
+          special_plan_id?: string | null
+          unit_price?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_items_category_fkey"
+            columns: ["category_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_categories"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
+            foreignKeyName: "money_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "household_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_items_record_fkey"
+            columns: ["record_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_records"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
+            foreignKeyName: "money_items_special_item_fkey"
+            columns: ["special_item_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "special_items"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
+            foreignKeyName: "money_items_special_plan_id_fkey"
+            columns: ["special_plan_id"]
+            isOneToOne: false
+            referencedRelation: "special_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_records: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          family_id: string
+          id: string
+          kind: string
+          occurred_on: string
+          store: string
+          to_wallet_id: string | null
+          updated_at: string
+          wallet_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          family_id: string
+          id?: string
+          kind?: string
+          occurred_on: string
+          store?: string
+          to_wallet_id?: string | null
+          updated_at?: string
+          wallet_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          family_id?: string
+          id?: string
+          kind?: string
+          occurred_on?: string
+          store?: string
+          to_wallet_id?: string | null
+          updated_at?: string
+          wallet_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_records_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_records_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_records_to_wallet_fkey"
+            columns: ["to_wallet_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_wallets"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
+            foreignKeyName: "money_records_wallet_fkey"
+            columns: ["wallet_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_wallets"
+            referencedColumns: ["id", "family_id"]
+          },
+        ]
+      }
+      money_wallets: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          family_id: string
+          id: string
+          is_saving: boolean
+          name: string
+          position: number
+          saving_target: number | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          family_id: string
+          id?: string
+          is_saving?: boolean
+          name: string
+          position?: number
+          saving_target?: number | null
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          family_id?: string
+          id?: string
+          is_saving?: boolean
+          name?: string
+          position?: number
+          saving_target?: number | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_wallets_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
             referencedColumns: ["id"]
           },
         ]
@@ -918,54 +1219,6 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      special_actuals: {
-        Row: {
-          amount: number
-          created_at: string
-          family_id: string
-          id: string
-          item_id: string
-          note: string
-          occurred_on: string
-          plan_id: string | null
-        }
-        Insert: {
-          amount?: number
-          created_at?: string
-          family_id: string
-          id?: string
-          item_id: string
-          note?: string
-          occurred_on: string
-          plan_id?: string | null
-        }
-        Update: {
-          amount?: number
-          created_at?: string
-          family_id?: string
-          id?: string
-          item_id?: string
-          note?: string
-          occurred_on?: string
-          plan_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "special_actuals_item_fkey"
-            columns: ["item_id", "family_id"]
-            isOneToOne: false
-            referencedRelation: "special_items"
-            referencedColumns: ["id", "family_id"]
-          },
-          {
-            foreignKeyName: "special_actuals_plan_id_fkey"
-            columns: ["plan_id"]
-            isOneToOne: false
-            referencedRelation: "special_plans"
             referencedColumns: ["id"]
           },
         ]
@@ -1588,6 +1841,10 @@ export type Database = {
       lottery_use_rate_up: {
         Args: { p_draw_id: string; p_coupon_id: string }
         Returns: Database["public"]["Tables"]["subsidy_draws"]["Row"]
+      }
+      save_money_record: {
+        Args: { p_items: Json; p_record: Json }
+        Returns: string
       }
     }
     Enums: {

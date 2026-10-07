@@ -1,8 +1,8 @@
 import { Tabs } from 'expo-router';
-import { Baby, CalendarDays, House, ListTodo, Settings } from 'lucide-react-native';
+import { Baby, CalendarDays, House, ListTodo, Settings, Wallet } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 
-// 下のタブバー。予定・リスト・育児・暮らし・設定の5つ（docs/family-app.md §4.1・docs/home.md §2）。
+// 下のタブバー。予定・リスト・育児・家計・暮らし・設定の6つ（docs/family-app.md §4.1・docs/kakei.md §2・docs/home.md §2）。
 // 並び・見出し・アイコンはPWA版の NAV_ITEMS と同じにしてある
 // （src/components/sukusuku/SukusukuApp.tsx）。
 //
@@ -41,6 +41,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="care"
         options={{ title: '育児', tabBarIcon: ({ color }) => <Baby size={22} color={color} /> }}
+      />
+      <Tabs.Screen
+        name="money"
+        options={{ title: '家計', tabBarIcon: ({ color }) => <Wallet size={22} color={color} /> }}
       />
       <Tabs.Screen
         name="living"

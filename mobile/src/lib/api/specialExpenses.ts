@@ -11,11 +11,14 @@ import type {
 
 type ItemRow = Tables<'special_items'>;
 type PlanRow = Tables<'special_plans'>;
-type ActualRow = Tables<'special_actuals'>;
+type ActualRow = Tables<'money_items'> & { money_records: { occurred_on: string } | null };
 type SupabaseDb = SupabaseClient<Database>;
 
-// 特別費の項目・予定・実績の読み書き（暮らしタブ。docs/home.md §5.4）。
+// 特別費の項目・予定・実績の読み書き（家計タブの「年」。docs/home.md §5.4・docs/kakei.md §3.2）。
 // PWA版の `src/lib/api/specialExpenses.ts` と同じ。
+//
+// 実績は家計の記録の品目（money_items）のうち、特別費の項目（special_item_id）を持つもの。
+// 「済」は、その品目1つだけの記録を作る（出金元・お店は空。あとで家計タブの記録から直せる）。
 
 const rowToPlan = (row: PlanRow): SpecialPlan => ({
   id: row.id,
@@ -38,12 +41,15 @@ const rowToItem = (row: ItemRow, plans: PlanRow[]): SpecialItem => ({
 
 const rowToActual = (row: ActualRow): SpecialActual => ({
   id: row.id,
-  itemId: row.item_id,
-  planId: row.plan_id,
-  occurredOn: row.occurred_on,
+  recordId: row.record_id,
+  itemId: row.special_item_id ?? '',
+  planId: row.special_plan_id,
+  occurredOn: row.money_records?.occurred_on ?? '',
   amount: row.amount,
-  note: row.note,
+  note: row.memo,
 });
+
+const ACTUAL_SELECT = '*, money_records(occurred_on)';
 
 const itemFields = (draft: SpecialItemDraft): TablesUpdate<'special_items'> => ({
   kind: draft.kind,
@@ -62,7 +68,7 @@ export async function loadSpecialExpenses(
   const [itemResult, planResult, actualResult] = await Promise.all([
     supabase.from('special_items').select('*').eq('family_id', familyId).order('position', { ascending: true }),
     supabase.from('special_plans').select('*').eq('family_id', familyId),
-    supabase.from('special_actuals').select('*').eq('family_id', familyId).order('occurred_on', { ascending: true }),
+    supabase.from('money_items').select(ACTUAL_SELECT).eq('family_id', familyId).not('special_item_id', 'is', null),
   ]);
   if (itemResult.error) throw itemResult.error;
   if (planResult.error) throw planResult.error;
@@ -70,7 +76,7 @@ export async function loadSpecialExpenses(
   const plans = planResult.data ?? [];
   return {
     items: (itemResult.data ?? []).map((row) => rowToItem(row, plans)),
-    actuals: (actualResult.data ?? []).map(rowToActual),
+    actuals: (actualResult.data ?? []).map(rowToActual).sort((a, b) => a.occurredOn.localeCompare(b.occurredOn)),
   };
 }
 
@@ -160,54 +166,84 @@ export async function updateSpecialItem(
   return rowToItem(data, planRows ?? []);
 }
 
-/** 項目を消す。予定・実績もいっしょに消える（DBの on delete cascade）。 */
+/**
+ * 項目を消す。予定・実績（品目）もいっしょに消える（DBの on delete cascade）。
+ * 品目が無くなった記録も残さない（特別費の品目だけの記録）。
+ */
 export async function deleteSpecialItem(supabase: SupabaseDb, id: string): Promise<void> {
+  const { data: linked, error: linkedError } = await supabase
+    .from('money_items')
+    .select('record_id')
+    .eq('special_item_id', id);
+  if (linkedError) throw linkedError;
   const { error } = await supabase.from('special_items').delete().eq('id', id);
   if (error) throw error;
+  await deleteEmptyRecords(supabase, [...new Set((linked ?? []).map((row) => row.record_id))]);
 }
 
-/** 実績を足す。planId があれば予定の実績（「済」）、無ければ予定外。 */
+/** 品目が1つも無くなった記録を消す。 */
+async function deleteEmptyRecords(supabase: SupabaseDb, recordIds: string[]): Promise<void> {
+  if (recordIds.length === 0) return;
+  const { data: remaining, error } = await supabase.from('money_items').select('record_id').in('record_id', recordIds);
+  if (error) throw error;
+  const kept = new Set((remaining ?? []).map((row) => row.record_id));
+  const empty = recordIds.filter((recordId) => !kept.has(recordId));
+  if (empty.length === 0) return;
+  const { error: deleteError } = await supabase.from('money_records').delete().in('id', empty);
+  if (deleteError) throw deleteError;
+}
+
+/**
+ * 実績を足す。planId があれば予定の実績（「済」）、無ければ予定外。
+ * 品目1つの記録を作る（特別収入なら収入の記録）。
+ */
 export async function insertSpecialActual(
   supabase: SupabaseDb,
-  familyId: string,
+  kind: SpecialKind,
   itemId: string,
   planId: string | null,
   draft: SpecialActualDraft,
 ): Promise<SpecialActual> {
-  const { data, error } = await supabase
-    .from('special_actuals')
-    .insert({
-      family_id: familyId,
-      item_id: itemId,
-      plan_id: planId,
-      occurred_on: draft.occurredOn,
-      amount: draft.amount,
-      note: draft.note.trim(),
-    })
-    .select('*')
-    .single();
+  const { data: recordId, error } = await supabase.rpc('save_money_record', {
+    p_record: { kind, occurred_on: draft.occurredOn, store: '' },
+    p_items: [{ amount: draft.amount, special_item_id: itemId, special_plan_id: planId, memo: draft.note.trim() }],
+  });
   if (error) throw error;
+  const { data, error: loadError } = await supabase
+    .from('money_items')
+    .select(ACTUAL_SELECT)
+    .eq('record_id', recordId)
+    .single();
+  if (loadError) throw loadError;
   return rowToActual(data);
 }
 
+/** 実績を直す。金額・メモは品目、日付は記録（同じ記録のほかの品目も同じ日付になる）。 */
 export async function updateSpecialActual(
   supabase: SupabaseDb,
-  id: string,
+  actual: SpecialActual,
   draft: SpecialActualDraft,
 ): Promise<SpecialActual> {
+  const { error: recordError } = await supabase
+    .from('money_records')
+    .update({ occurred_on: draft.occurredOn })
+    .eq('id', actual.recordId);
+  if (recordError) throw recordError;
   const { data, error } = await supabase
-    .from('special_actuals')
-    .update({ occurred_on: draft.occurredOn, amount: draft.amount, note: draft.note.trim() })
-    .eq('id', id)
-    .select('*')
+    .from('money_items')
+    .update({ amount: draft.amount, memo: draft.note.trim() })
+    .eq('id', actual.id)
+    .select(ACTUAL_SELECT)
     .single();
   if (error) throw error;
   return rowToActual(data);
 }
 
-export async function deleteSpecialActual(supabase: SupabaseDb, id: string): Promise<void> {
-  const { error } = await supabase.from('special_actuals').delete().eq('id', id);
+/** 実績を消す。記録に品目が残らなければ記録も消す。 */
+export async function deleteSpecialActual(supabase: SupabaseDb, actual: SpecialActual): Promise<void> {
+  const { error } = await supabase.from('money_items').delete().eq('id', actual.id);
   if (error) throw error;
+  await deleteEmptyRecords(supabase, [actual.recordId]);
 }
 
 /**
@@ -229,7 +265,7 @@ export async function insertUnplannedSpecial(
     position,
   );
   try {
-    const created = await insertSpecialActual(supabase, familyId, item.id, null, actual);
+    const created = await insertSpecialActual(supabase, fields.kind, item.id, null, actual);
     return { item, actual: created };
   } catch (error) {
     await supabase.from('special_items').delete().eq('id', item.id);

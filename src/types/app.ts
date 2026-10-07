@@ -332,7 +332,7 @@ export interface ListItem {
 }
 
 // 予定・リスト・育児・設定の4つ（docs/family-app.md §4.1）。
-export type TabId = 'schedule' | 'list' | 'care' | 'living' | 'info';
+export type TabId = 'schedule' | 'list' | 'care' | 'money' | 'living' | 'info';
 
 // スケジュールタブの表示切り替え。既定は月（カレンダー）。
 export type ScheduleView = 'month' | 'day' | 'list';
@@ -462,9 +462,11 @@ export interface HouseholdProduct {
   note: string;
   /** 最後に買い出しリストへ送った時刻（ISO）。 */
   lastAddedAt: string | null;
+  /** 家計に記録するときの種類（小分類）。「日用品から選ぶ」のはじめの絞り込みに使う（docs/kakei.md §5）。 */
+  moneyCategoryId: string | null;
 }
 
-export type HouseholdProductDraft = Omit<HouseholdProduct, 'id' | 'lastAddedAt'>;
+export type HouseholdProductDraft = Omit<HouseholdProduct, 'id' | 'lastAddedAt' | 'moneyCategoryId'>;
 
 /** 特別費の種類。支出と、特別収入（賞与など）。docs/home.md §5.4。 */
 export type SpecialKind = 'expense' | 'income';
@@ -494,9 +496,14 @@ export interface SpecialItem {
   plans: SpecialPlan[];
 }
 
-/** 特別費の実績。special_actuals に対応。planId があれば予定の実績、無ければ予定外。 */
+/**
+ * 特別費の実績。家計の品目のうち特別費の項目を持つもの（money_items。docs/kakei.md §3.2）を、
+ * 特別費の画面の形にしたもの。planId があれば予定の実績、無ければ予定外。id は品目の id。
+ */
 export interface SpecialActual {
   id: string;
+  /** 品目が入っている記録（money_records）の id。 */
+  recordId: string;
   itemId: string;
   planId: string | null;
   /** YYYY-MM-DD。年度はここから決める。 */
@@ -516,7 +523,7 @@ export interface SpecialItemDraft {
   plans: { id: string | null; month: number | null; amount: number; tentative: boolean }[];
 }
 
-export type SpecialActualDraft = Omit<SpecialActual, 'id' | 'itemId' | 'planId'>;
+export type SpecialActualDraft = Omit<SpecialActual, 'id' | 'recordId' | 'itemId' | 'planId'>;
 
 /** 補助くじの玉。white＝25%、blue＝50%、red＝75%、gold＝100%（docs/home.md §9）。 */
 export type SubsidyBallId = 'white' | 'blue' | 'red' | 'gold';
@@ -579,4 +586,91 @@ export interface LotteryCoupon {
   usedAt: string | null;
   /** 確認用のテストで出た券。本物のくじには使えない。 */
   isTest: boolean;
+}
+
+/** 家計の種類のまとまり。生活費と収入（docs/kakei.md §3.1）。特別費は special_items を使う。 */
+export type MoneyCategoryKind = 'living' | 'income';
+
+/** 家計の種類。money_categories に対応。parentId が null なら大分類（予算を置く単位）。 */
+export interface MoneyCategory {
+  id: string;
+  kind: MoneyCategoryKind;
+  parentId: string | null;
+  name: string;
+  position: number;
+  /** 使わなくした（選べないが、記録には残る）。 */
+  archived: boolean;
+}
+
+/** 家計の予算。大分類・年度ごとの月額。money_budgets に対応。 */
+export interface MoneyBudget {
+  id: string;
+  categoryId: string;
+  fiscalYear: number;
+  monthlyAmount: number;
+}
+
+/** 出金元の種類。 */
+export type MoneyWalletType = 'card' | 'cash' | 'bank' | 'prepaid' | 'qr';
+
+/** 出金元。money_wallets に対応。 */
+export interface MoneyWallet {
+  id: string;
+  name: string;
+  type: MoneyWalletType;
+  /** 貯金用の口座。ここへの振替を貯金として数える。 */
+  isSaving: boolean;
+  /** 貯金の月の目標（円）。 */
+  savingTarget: number | null;
+  position: number;
+  archived: boolean;
+}
+
+export type MoneyWalletDraft = Omit<MoneyWallet, 'id' | 'position' | 'archived'>;
+
+/** 記録の種類。支出・収入・振替。 */
+export type MoneyRecordKind = 'expense' | 'income' | 'transfer';
+
+/** 品目。money_items に対応。種類（categoryId）か特別費（specialItemId）を持つ。振替はどちらも無い。 */
+export interface MoneyItem {
+  id: string;
+  amount: number;
+  categoryId: string | null;
+  specialItemId: string | null;
+  specialPlanId: string | null;
+  /** 日用品の台帳の品。 */
+  productId: string | null;
+  quantity: number;
+  /** 単価。個数 × 単価 = 金額。金額だけ入れたものは null。 */
+  unitPrice: number | null;
+  name: string;
+  memo: string;
+}
+
+/** 記録（記録の詳細＋品目）。money_records に対応。 */
+export interface MoneyRecord {
+  id: string;
+  kind: MoneyRecordKind;
+  /** YYYY-MM-DD。 */
+  occurredOn: string;
+  /** 出金元（収入は入金先）。 */
+  walletId: string | null;
+  /** 振替の入金先。 */
+  toWalletId: string | null;
+  store: string;
+  createdBy: string | null;
+  items: MoneyItem[];
+}
+
+export type MoneyItemDraft = Omit<MoneyItem, 'id'>;
+
+/** 記録の保存内容。id が null なら新しい記録。品目は毎回すべて入れ替える。 */
+export interface MoneyRecordDraft {
+  id: string | null;
+  kind: MoneyRecordKind;
+  occurredOn: string;
+  walletId: string | null;
+  toWalletId: string | null;
+  store: string;
+  items: MoneyItemDraft[];
 }

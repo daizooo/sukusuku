@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import type { SpecialActual, SpecialActualDraft, SpecialItem, SpecialKind } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { toDateString } from '@/lib/dateUtils';
@@ -32,8 +32,10 @@ import SegmentedTabs from '../ui/SegmentedTabs';
 import SpecialItemModal, { type SpecialItemModalResult } from '../modals/SpecialItemModal';
 import SpecialActualModal from '../modals/SpecialActualModal';
 
-// 暮らしタブの「特別費」の面（docs/home.md §5.4）。mobile版の
-// `mobile/src/components/living/SpecialPanel.tsx` と同じ項目・並び・文言。
+// 特別費の面（docs/home.md §5.4）。家計タブの「年」に置く（docs/kakei.md §2。年の振り返りは §7 の5 で作り直す）。
+// mobile版の `mobile/src/components/living/SpecialPanel.tsx` と同じ項目・並び・文言。
+//
+// 実績は家計の記録の品目（docs/kakei.md §3.2）。「済」は品目1つの記録を作り、家計タブの記録にも出る。
 //
 // 年度（4月〜翌3月）ごとに、特別費（支出）と特別収入（賞与など）の「予算・実績・差異」を見る。
 // 一覧は月ごと（4月→3月）で、1行＝予定1回ぶん（または予定外の出費1件）。
@@ -49,12 +51,11 @@ const signed = (value: number) => `${value < 0 ? '−' : ''}${formatPrice(Math.a
 
 interface SpecialPanelProps {
   familyId: string;
-  /** ヘッダーの「追加」が押された。 */
-  adding: boolean;
-  onAddClose: () => void;
+  /** 実績（家計の記録）を足した・直した・消した。家計タブの記録を読み直す。 */
+  onRecordsChanged?: () => void;
 }
 
-export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPanelProps) {
+export default function SpecialPanel({ familyId, onRecordsChanged }: SpecialPanelProps) {
   const supabase = useMemo(() => createClient(), []);
   const [items, setItems] = useState<SpecialItem[]>([]);
   const [actuals, setActuals] = useState<SpecialActual[]>([]);
@@ -63,6 +64,8 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
   const [kind, setKind] = useState<SpecialKind>('expense');
   const [editingRow, setEditingRow] = useState<SpecialRow | null>(null);
   const [editingItem, setEditingItem] = useState<SpecialItem | null>(null);
+  const [adding, setAdding] = useState(false);
+  const onAddClose = () => setAdding(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -97,13 +100,16 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
 
   const failed = (what: string) => window.alert(`${what}できませんでした。もう一度お試しください。`);
   const nextPosition = () => items.reduce((max, item) => Math.max(max, item.position + 1), 0);
-  const withActual = (actual: SpecialActual) => setActuals((prev) => [...prev.filter((a) => a.id !== actual.id), actual]);
+  const withActual = (actual: SpecialActual) => {
+    setActuals((prev) => [...prev.filter((a) => a.id !== actual.id), actual]);
+    onRecordsChanged?.();
+  };
 
   /** 「済」: 予算の額・今日の日付で実績にする。 */
   const markPaid = async (row: SpecialRow) => {
     if (row.planId === null) return;
     try {
-      const created = await insertSpecialActual(supabase, familyId, row.item.id, row.planId, {
+      const created = await insertSpecialActual(supabase, row.item.kind, row.item.id, row.planId, {
         occurredOn: toDateString(new Date()),
         amount: row.budget,
         note: '',
@@ -120,8 +126,8 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
       const existing = row.actuals[0];
       withActual(
         existing
-          ? await updateSpecialActual(supabase, existing.id, draft)
-          : await insertSpecialActual(supabase, familyId, row.item.id, row.planId, draft),
+          ? await updateSpecialActual(supabase, existing, draft)
+          : await insertSpecialActual(supabase, row.item.kind, row.item.id, row.planId, draft),
       );
     } catch {
       failed('保存');
@@ -130,7 +136,8 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
 
   const clearActual = async (row: SpecialRow) => {
     setEditingRow(null);
-    const removedIds = row.actuals.map((actual) => actual.id);
+    const removed = row.actuals;
+    const removedIds = removed.map((actual) => actual.id);
     const previous = { items, actuals };
     setActuals((prev) => prev.filter((actual) => !removedIds.includes(actual.id)));
     // 予定の無い項目の唯一の実績を消したら、項目も残さない。
@@ -141,7 +148,8 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
     if (orphan) setItems((prev) => prev.filter((item) => item.id !== row.item.id));
     try {
       if (orphan) await deleteSpecialItem(supabase, row.item.id);
-      else await Promise.all(removedIds.map((id) => deleteSpecialActual(supabase, id)));
+      else await Promise.all(removed.map((actual) => deleteSpecialActual(supabase, actual)));
+      onRecordsChanged?.();
     } catch {
       setItems(previous.items);
       setActuals(previous.actuals);
@@ -196,6 +204,7 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
     setActuals((prev) => prev.filter((actual) => actual.itemId !== id));
     try {
       await deleteSpecialItem(supabase, id);
+      onRecordsChanged?.();
     } catch {
       setItems(previous.items);
       setActuals(previous.actuals);
@@ -226,9 +235,15 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
         >
           <ChevronRight size={18} className="text-gray-600" />
         </button>
-        <span className="flex-1 text-right text-[11px] text-gray-400">
-          {fiscalYear}年4月〜{fiscalYear + 1}年3月
-        </span>
+        <span className="flex-1" />
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="flex items-center gap-0.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-600 hover:bg-blue-100"
+        >
+          <Plus size={14} />
+          項目を追加
+        </button>
       </div>
 
       <SegmentedTabs
@@ -271,7 +286,7 @@ export default function SpecialPanel({ familyId, adding, onAddClose }: SpecialPa
         <p className="text-sm text-gray-400 text-center py-8 px-6">
           {hasAnything
             ? `${formatFiscalYear(fiscalYear)}の${kind === 'expense' ? '特別費' : '特別収入'}はありません`
-            : '年に数回の大きな出費や賞与を「追加」で登録すると、年度ごとの予算と実績を見られます'}
+            : '年に数回の大きな出費や賞与を「項目を追加」で登録すると、年度ごとの予算と実績を見られます'}
         </p>
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto pb-6">

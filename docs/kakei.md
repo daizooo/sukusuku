@@ -132,30 +132,36 @@
   これから5年の見通し
 - 月のメモを年の中で読み返せる
 
-## 5. データ（案。実装のPRで確定する）
+## 5. データ（§7 の2 で確定。migration 0063_money.sql）
 
 ```
-money_categories  種類。 id / family_id / group('living'|'income') / parent_id(null=大分類) / name / position / archived_at
-money_budgets     予算。 id / category_id(大分類) / fiscal_year / monthly_amount（貯金の目標は出金元に持つ）
+money_categories  種類。 id / family_id / kind('living'|'income') / parent_id(null=大分類) / name / position / archived_at
+money_budgets     予算。 id / family_id / category_id(大分類) / fiscal_year / monthly_amount（category_id・fiscal_year で1行）
 money_wallets     出金元。 id / family_id / name / type('card'|'cash'|'bank'|'prepaid'|'qr') / is_saving / saving_target /
                   position / archived_at
 money_records     記録の詳細。 id / family_id / kind('expense'|'income'|'transfer') / occurred_on / wallet_id /
-                  to_wallet_id(振替の入金先) / store / recurring_id / created_by
-money_items       品目（1行）。 id / record_id / amount / category_id(小分類か大分類) /
+                  to_wallet_id(振替の入金先) / store / created_by
+money_items       品目（1行）。 id / family_id / record_id / amount / category_id(小分類か大分類) /
                   special_item_id・special_plan_id(特別費のとき) / product_id(日用品の台帳。任意) / quantity / unit_price /
                   name / memo / position
+（§7 の3 以降）
 money_recurring   毎月の記録。 id / family_id / kind / day / wallet_id / to_wallet_id / store / 品目（種類・額）
 money_months      月のメモ。 family_id / month / note
 money_card_closes カードの照合。 wallet_id / month / statement_amount / closed_at
 ```
 
-- 全部 `family_id` 単位のRLS（`current_family_id()`）
+- 全部 `family_id` 単位のRLS（`current_family_id()`）。参照は (id, family_id) の組で張り、別の家族の行を指せないようにする
+- 予算は、その年度の行が無ければ前の年度の額を使う（毎年入れ直さなくてよい）
+- 種類・出金元は消さずに「使わなくする」（`archived_at`）。記録には残る
 - 特別費の項目・予定は今の `special_items`・`special_plans` のまま。特別費の品目は `category_id` を持たず、
-  `special_item_id`（と予定にひも付くときは `special_plan_id`）を持つ
+  `special_item_id`（と予定にひも付くときは `special_plan_id`）を持つ。特別費の項目を消すと品目も消え、品目の無くなった記録も消す
 - 振替の記録は品目を1つ持つ（金額だけ。種類なし）
+- 記録の保存は関数 `save_money_record(p_record, p_items)` で、記録の詳細と品目を1回で入れ替える（品目を指すものは無い）。
+  日用品の台帳の品を含むときは、台帳の「いつもの値段」を今回の単価にし、「記録するときの種類」が空なら今回の種類を入れる
 - 日用品の台帳 `household_products` に、その品を記録するときの種類 `money_category_id`（小分類）を足す。
   「日用品から選ぶ」の一覧のはじめの絞り込みに使う
-- 数え方（年度・月の集計・差・要因の上位）は mobile・PWA で同じ中身の `moneyUtils.ts`（テストつき）
+- 種類がまだ無い家族は「標準の種類で始める」（§3.1 の並び。家族の私的なデータは入っていない）
+- 数え方（年度・月の集計・差・並び・電卓）は mobile・PWA で同じ中身の `moneyUtils.ts`（テストは `npm run test:money`）
 
 ## 6. 移し替え
 
@@ -170,7 +176,7 @@ money_card_closes カードの照合。 wallet_id / month / statement_amount / c
 | 順 | 中身 | DB |
 | --- | --- | --- |
 | 1 | この設計（docs）と、画面のモックで形を決める | – |
-| 2 | 家計タブ新設（6タブ・`start_tab`）、種類・予算・出金元・記録（詳細＋品目）の入力と一覧、特別費の「済」を品目に、暮らしタブから特別費を外す | `money_categories`・`money_budgets`・`money_wallets`・`money_records`・`money_items`、`special_actuals` の移し替え |
+| 2 | 家計タブ新設（6タブ・`start_tab`）、種類・予算・出金元・記録（詳細＋品目）の入力と一覧、特別費の「済」を品目に、暮らしタブから特別費を外す。「月」は結論と生活費のタイルまで（要因・メモは3）、「年」は今の特別費の面を移す（作り直しは5） | `money_categories`・`money_budgets`・`money_wallets`・`money_records`・`money_items`、`special_actuals` の移し替え |
 | 3 | 月の振り返りと月の締め（カードの照合・メモ） | `money_months`・`money_card_closes` |
 | 4 | 固定費・給料の毎月の自動記録 | `money_recurring` |
 | 5 | 年の振り返り（特別費の年の流れ・見通しを含む。home.md §10.3） | – |
