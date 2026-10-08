@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { StockItem, StockTarget } from '@/types/app';
 import {
@@ -87,6 +87,14 @@ export default function StockBoard({
     activeCategory,
     setCategory,
   );
+  // 選んだカテゴリが帯の外に隠れないよう、帯をそのカテゴリまで寄せる（スワイプで選んだときのため）。
+  const categoryBar = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const bar = categoryBar.current;
+    const selected = bar?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!bar || !selected) return;
+    bar.scrollTo({ left: selected.offsetLeft - (bar.clientWidth - selected.offsetWidth) / 2, behavior: 'smooth' });
+  }, [activeCategory]);
   const detail = categories.flatMap((row) => row.products).find((product) => product.key === detailKey) ?? null;
   const inspectable = board.equipment.filter((item) => item.inspectIntervalMonths !== null);
 
@@ -175,7 +183,7 @@ export default function StockBoard({
       {summary}
 
       {categories.length > 1 && (
-        <div className="shrink-0 -mx-4 flex gap-4 overflow-x-auto border-b border-gray-200 px-4">
+        <div ref={categoryBar} className="relative shrink-0 -mx-4 flex gap-4 overflow-x-auto border-b border-gray-200 px-4">
           {[ALL, ...categories.map((row) => row.category)].map((value) => {
             const selected = value === activeCategory;
             return (

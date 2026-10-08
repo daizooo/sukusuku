@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import type { StockItem, StockTarget } from '@/types/app';
@@ -87,6 +87,15 @@ export default function StockBoard({
     activeCategory,
     setCategory,
   );
+  // 選んだカテゴリが帯の外に隠れないよう、帯をそのカテゴリまで寄せる（スワイプで選んだときのため）。
+  const categoryBar = useRef<ScrollView>(null);
+  const barWidth = useRef(0);
+  const chipLayouts = useRef(new Map<string, { x: number; width: number }>());
+  useEffect(() => {
+    const chip = chipLayouts.current.get(activeCategory);
+    if (!chip) return;
+    categoryBar.current?.scrollTo({ x: Math.max(0, chip.x - (barWidth.current - chip.width) / 2), animated: true });
+  }, [activeCategory]);
   const detail = categories.flatMap((row) => row.products).find((product) => product.key === detailKey) ?? null;
   const inspectable = board.equipment.filter((item) => item.inspectIntervalMonths !== null);
 
@@ -170,7 +179,15 @@ export default function StockBoard({
 
       {categories.length > 1 && (
         <View style={styles.tabsWrap}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+          <ScrollView
+            ref={categoryBar}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabs}
+            onLayout={(event) => {
+              barWidth.current = event.nativeEvent.layout.width;
+            }}
+          >
             {[ALL, ...categories.map((row) => row.category)].map((value) => {
               const selected = value === activeCategory;
               return (
@@ -179,6 +196,10 @@ export default function StockBoard({
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
                   onPress={() => setCategory(value)}
+                  onLayout={(event) => {
+                    const { x, width } = event.nativeEvent.layout;
+                    chipLayouts.current.set(value, { x, width });
+                  }}
                   style={[styles.tab, selected && styles.tabOn]}
                 >
                   <Text style={[styles.tabText, selected && styles.tabTextOn]}>{value === ALL ? 'すべて' : value}</Text>
