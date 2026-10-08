@@ -8,9 +8,9 @@ import { formatBalance, formatShortDate, formatSignedYen, walletBalanceOn } from
 import { ModalShell } from '../modals/TaskForm';
 import { minus, PrimaryButton, type } from './moneyVisual';
 
-// 残高を確定する（docs/kakei.md §9.3）。mobile版の `mobile/src/components/money/BalanceSheet.tsx` と同じ並び・文言。
+// 残高を補正する（docs/kakei.md §9.3）。mobile版の `mobile/src/components/money/BalanceSheet.tsx` と同じ並び・文言。
 // 通帳・銀行のアプリの残高を日付つきで入れる。入れた額と、記録から出した額との差を、入れながら出す。
-// はじめての確定は差を出さない（記録は使い始めの月からなので、はじめの残高になる）。
+// はじめての補正は差を出さない（記録は使い始めの月からなので、はじめの残高になる）。
 // カードの未払いのように、マイナスの残高も入れられる。
 
 interface BalanceModalProps {
@@ -35,11 +35,11 @@ export default function BalanceModal({ wallet, records, balances, onClose, onSub
 
   return (
     <ModalShell
-      title={`${wallet.name}の残高を確定`}
+      title={`${wallet.name}の残高を補正`}
       onClose={onClose}
       footer={
         <PrimaryButton
-          label="確定する"
+          label="補正する"
           disabled={entered === null}
           onClick={() => entered !== null && onSubmit(balanceOn, entered)}
         />
@@ -101,8 +101,8 @@ export default function BalanceModal({ wallet, records, balances, onClose, onSub
           </div>
           <p className={type.faint}>
             {expected.confirmed === null
-              ? 'まだ確定していないので、記録だけから出した額です（参考）'
-              : `${formatShortDate(expected.confirmed.balanceOn)}に確定した ${formatBalance(expected.confirmed.amount)} に、そのあとの記録${expected.count}件を足した額`}
+              ? 'まだ補正していないので、記録の合計です（参考）'
+              : `${formatShortDate(expected.confirmed.balanceOn)}に補正した ${formatBalance(expected.confirmed.amount)} に、そのあとの記録${expected.count}件を足した額`}
           </p>
           {diff !== null && (
             <div className="flex items-center justify-between gap-2">
@@ -112,11 +112,11 @@ export default function BalanceModal({ wallet, records, balances, onClose, onSub
           )}
           {diff !== null && diff !== 0 && (
             <p className={type.faint}>
-              記録の漏れ・二重・金額の違いがないか見直してください。このまま確定すると、これ以後はこの額から数えます
+              記録の漏れ・二重・金額の違いがないか見直してください。このまま補正すると、これ以後はこの額から数えます
             </p>
           )}
           {entered !== null && expected.confirmed === null && (
-            <p className={type.faint}>はじめての確定です。これ以後は、この額に記録を足して残高を出します</p>
+            <p className={type.faint}>はじめての補正です。これ以後は、この額に記録を足して残高を出します</p>
           )}
         </div>
       </div>

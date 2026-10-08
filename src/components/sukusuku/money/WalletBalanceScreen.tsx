@@ -2,24 +2,39 @@
 
 import { useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
-import type { MoneyRecord, MoneyWallet, MoneyWalletBalance, MoneyWalletDraft } from '@/types/app';
+import type {
+  MoneyCategory,
+  MoneyRecord,
+  MoneyWallet,
+  MoneyWalletBalance,
+  MoneyWalletDraft,
+  SpecialItem,
+} from '@/types/app';
 import {
   balanceChecks,
+  cardBilling,
   cardScheduleLabel,
+  dailyBalances,
   dateKeyOfDate,
   formatBalance,
-  formatShortDate,
   formatSignedYen,
+  recordsOfWallet,
   walletBalanceOn,
   walletTypeLabel,
 } from '@/lib/moneyUtils';
 import BalanceModal from './BalanceModal';
-import { cardClass, FullScreen, Hero, minus, PrimaryButton, ScreenHeader, SectionHeader, type, WalletTypeIcon } from './moneyVisual';
+import BalanceTrend from './BalanceTrend';
+import RecordDayList from './RecordDayList';
+import { cardClass, FullScreen, Hero, minus, PrimaryButton, ScreenHeader, SectionHeader, StatRow, type, WalletTypeIcon } from './moneyVisual';
 import { WalletModal } from './WalletPicker';
 
 // 口座の詳細（docs/kakei.md §9.3）。mobile版の `mobile/src/components/money/WalletBalanceScreen.tsx` と同じ並び・文言。
-// 残高（確定した残高 + その後の記録）、「残高を確定する」、確定の履歴（記録との差つき）、出金元の編集・使わなくする。
-// 戻る操作（ブラウザの戻る）は、シートを閉じる → この画面を閉じる、の順。
+// Zaim の口座と同じく「履歴 / 推移 / 残高計算」の3つ。
+// - 履歴: その出金元の記録（支出・収入・振替）。押すと記録の詳細
+// - 推移: 日ごとの残高の折れ線（期間はじめは全期間）と、残高が変わった日の一覧
+// - 残高計算: 残高 ＝ 最後に補正した残高 + そのあとの記録。通帳・銀行のアプリと違うときは「残高を補正する」。
+//   カードは残高（未払い）を「請求済み」と「未請求」に分けて出す
+// 出金元の編集・使わなくするは見出しの鉛筆から。戻る操作（ブラウザの戻る）は、シートを閉じる → この画面を閉じる、の順。
 
 interface WalletBalanceScreenProps {
   wallet: MoneyWallet;
@@ -27,16 +42,31 @@ interface WalletBalanceScreenProps {
   wallets: MoneyWallet[];
   records: MoneyRecord[];
   balances: MoneyWalletBalance[];
+  categories: MoneyCategory[];
+  specialItems: SpecialItem[];
   onClose: () => void;
+  onOpenRecord: (record: MoneyRecord) => void;
   onConfirm: (walletId: string, balanceOn: string, amount: number) => void;
   onDeleteBalance: (balance: MoneyWalletBalance) => void;
   onSaveWallet: (target: MoneyWallet, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onArchiveWallet: (wallet: MoneyWallet) => void;
 }
 
+type Tab = 'history' | 'trend' | 'calc';
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'history', label: '履歴' },
+  { id: 'trend', label: '推移' },
+  { id: 'calc', label: '残高計算' },
+];
+
 const fullDate = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number);
   return `${year}年${month}月${day}日`;
+};
+const monthDayLabel = (dateKey: string) => {
+  const [, month, day] = dateKey.split('-').map(Number);
+  return `${month}月${day}日`;
 };
 
 export default function WalletBalanceScreen({
@@ -44,22 +74,29 @@ export default function WalletBalanceScreen({
   wallets,
   records,
   balances,
+  categories,
+  specialItems,
   onClose,
+  onOpenRecord,
   onConfirm,
   onDeleteBalance,
   onSaveWallet,
   onArchiveWallet,
 }: WalletBalanceScreenProps) {
-  const [confirming, setConfirming] = useState(false);
+  const [tab, setTab] = useState<Tab>('history');
+  const [correcting, setCorrecting] = useState(false);
   const [editing, setEditing] = useState(false);
 
-  const now = walletBalanceOn(wallet.id, dateKeyOfDate(new Date()), records, balances);
+  const today = dateKeyOfDate(new Date());
+  const now = walletBalanceOn(wallet.id, today, records, balances);
   const checks = balanceChecks(wallet.id, records, balances);
+  const mine = recordsOfWallet(records, wallet.id);
+  const points = dailyBalances([wallet.id], records, balances, today);
+  const billing = wallet.type === 'card' ? cardBilling(wallet, now.amount, records, today) : null;
   const payWallet = wallets.find((entry) => entry.id === wallet.payWalletId) ?? null;
-  const schedule = cardScheduleLabel(wallet);
 
   const remove = (balance: MoneyWalletBalance) => {
-    if (window.confirm(`${fullDate(balance.balanceOn)}の確定を取り消しますか？残高は、その前の確定と記録から出し直します。`)) {
+    if (window.confirm(`${fullDate(balance.balanceOn)}の補正を取り消しますか？残高は、その前の補正と記録から出し直します。`)) {
       onDeleteBalance(balance);
     }
   };
@@ -76,68 +113,120 @@ export default function WalletBalanceScreen({
           </button>
         }
       />
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-3 p-4 pb-8">
-        <div className="flex items-center gap-2">
-          <WalletTypeIcon type={wallet.type} size={16} />
-          <span className={type.sub}>
-            {[walletTypeLabel(wallet.type), wallet.isSaving ? '貯金用' : '', schedule, payWallet ? `${payWallet.name}から引き落とし` : '']
-              .filter((part) => part !== '')
-              .join('・')}
-          </span>
-        </div>
+      <div className="shrink-0 flex items-center gap-2 px-4 py-2.5">
+        <WalletTypeIcon type={wallet.type} size={16} />
+        <span className={`min-w-0 flex-1 truncate ${type.sub}`}>
+          {[walletTypeLabel(wallet.type), wallet.isSaving ? '貯金用' : '', cardScheduleLabel(wallet), payWallet ? `${payWallet.name}から引き落とし` : '']
+            .filter((part) => part !== '')
+            .join('・')}
+        </span>
+        <span className={minus(type.amount, now.amount < 0)}>{formatBalance(now.amount)}</span>
+      </div>
+      <div role="tablist" className="shrink-0 flex border-b border-gray-200 px-2">
+        {TABS.map((entry) => {
+          const selected = entry.id === tab;
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setTab(entry.id)}
+              className="flex flex-1 flex-col items-center pt-2"
+            >
+              <span className={`text-[15px] ${selected ? 'font-bold text-gray-900' : 'font-semibold text-gray-400'}`}>{entry.label}</span>
+              <span className={`mt-2 h-[3px] w-8 rounded-full ${selected ? 'bg-blue-600' : 'bg-transparent'}`} />
+            </button>
+          );
+        })}
+      </div>
 
-        <Hero
-          label="残高"
-          value={formatBalance(now.amount)}
-          isMinus={now.amount < 0}
-          note={
-            now.confirmed === null
-              ? 'まだ確定していません。記録だけから出した額です'
-              : `${fullDate(now.confirmed.balanceOn)}に確定した ${formatBalance(now.confirmed.amount)} に、そのあとの記録${now.count}件（${formatSignedYen(now.movement)}）を足した額`
-          }
-        />
-        <PrimaryButton label="残高を確定する" onClick={() => setConfirming(true)} />
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-8">
+        {tab === 'history' &&
+          (mine.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-400">この出金元の記録はまだありません</p>
+          ) : (
+            <RecordDayList records={mine} categories={categories} wallets={wallets} specialItems={specialItems} onOpen={onOpenRecord} />
+          ))}
 
-        <SectionHeader title="確定の履歴" hint="月に1回、通帳・銀行のアプリの残高を入れます" />
-        {checks.length === 0 ? (
-          <p className="py-4 text-center text-sm text-gray-400">まだ確定していません</p>
-        ) : (
-          <div className={`${cardClass} overflow-hidden`}>
-            {checks.map((check, index) => (
-              <div key={check.balance.id} className={`flex items-center gap-3 px-3.5 py-3 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
-                <div className="min-w-0 flex-1">
-                  <p className={type.row}>{fullDate(check.balance.balanceOn)}</p>
-                  <p className={minus(type.sub, check.diff !== null && check.diff !== 0)}>
-                    {check.diff === null
-                      ? 'はじめの残高'
-                      : check.diff === 0
-                        ? `記録と合っていました（${formatBalance(check.expected)}）`
-                        : `記録との差 ${formatSignedYen(check.diff)}（記録では ${formatBalance(check.expected)}）`}
-                  </p>
-                </div>
-                <span className={minus(type.amount, check.balance.amount < 0)}>{formatBalance(check.balance.amount)}</span>
-                <button
-                  type="button"
-                  aria-label={`${formatShortDate(check.balance.balanceOn)}の確定を取り消す`}
-                  onClick={() => remove(check.balance)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <Trash2 size={16} />
-                </button>
+        {tab === 'trend' && <BalanceTrend points={points} asOf={today} />}
+
+        {tab === 'calc' && (
+          <div className="space-y-3 pt-3">
+            <Hero
+              label="残高"
+              value={formatBalance(now.amount)}
+              isMinus={now.amount < 0}
+              note={
+                now.confirmed === null
+                  ? '記録の合計です。記録は使い始めからなので、いまの残高を入れて合わせてください'
+                  : `${fullDate(now.confirmed.balanceOn)}に補正した ${formatBalance(now.confirmed.amount)} に、そのあとの記録${now.count}件（${formatSignedYen(now.movement)}）を足した額`
+              }
+            >
+              {billing !== null && billing.billed + billing.unbilled > 0 && (
+                <>
+                  <StatRow
+                    label="請求済み"
+                    note={billing.payOn ? `${monthDayLabel(billing.payOn)}に引き落とし` : '引き落とし待ち'}
+                    value={formatBalance(-billing.billed)}
+                    isMinus={billing.billed > 0}
+                  />
+                  <StatRow
+                    label="未請求"
+                    note={`${monthDayLabel(billing.closedOn)}の締め日のあとの利用`}
+                    value={formatBalance(-billing.unbilled)}
+                    isMinus={billing.unbilled > 0}
+                  />
+                </>
+              )}
+            </Hero>
+            <PrimaryButton label="残高を補正する" onClick={() => setCorrecting(true)} />
+
+            <SectionHeader title="補正の履歴" hint="通帳・銀行のアプリと違うときに入れます" />
+            {checks.length === 0 ? (
+              <p className="py-4 text-center text-sm text-gray-400">まだ補正していません</p>
+            ) : (
+              <div className={`${cardClass} overflow-hidden`}>
+                {checks.map((check, index) => (
+                  <div
+                    key={check.balance.id}
+                    className={`flex items-center gap-3 px-3.5 py-3 ${index > 0 ? 'border-t border-gray-200' : ''}`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className={type.row}>{fullDate(check.balance.balanceOn)}</p>
+                      <p className={minus(type.sub, check.diff !== null && check.diff !== 0)}>
+                        {check.diff === null
+                          ? 'はじめの残高'
+                          : check.diff === 0
+                            ? `記録と合っていました（${formatBalance(check.expected)}）`
+                            : `記録との差 ${formatSignedYen(check.diff)}（記録では ${formatBalance(check.expected)}）`}
+                      </p>
+                    </div>
+                    <span className={minus(type.amount, check.balance.amount < 0)}>{formatBalance(check.balance.amount)}</span>
+                    <button
+                      type="button"
+                      aria-label={`${monthDayLabel(check.balance.balanceOn)}の補正を取り消す`}
+                      onClick={() => remove(check.balance)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
 
-      {confirming && (
+      {correcting && (
         <BalanceModal
           wallet={wallet}
           records={records}
           balances={balances}
-          onClose={() => setConfirming(false)}
+          onClose={() => setCorrecting(false)}
           onSubmit={(balanceOn, amount) => {
-            setConfirming(false);
+            setCorrecting(false);
             onConfirm(wallet.id, balanceOn, amount);
           }}
         />

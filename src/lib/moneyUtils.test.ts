@@ -3,7 +3,15 @@
 import assert from 'node:assert/strict';
 
 import {
+  addDays,
+  balanceChanges,
   balanceChecks,
+  cardBilling,
+  dailyBalances,
+  filterTrend,
+  formatAxisYen,
+  niceTicks,
+  recordsOfWallet,
   budgetFor,
   buildWalletBalances,
   canPickProductsFor,
@@ -484,7 +492,75 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
   const totals = buildWalletBalances(wallets, rs, [bal('y1', 'bank', '2026-10-10', 100000)], '2026-10-10');
   assert.deepEqual(totals.rows.map((row) => row.wallet.id), ['card', 'bank', 'save', 'gone']);
   assert.equal(totals.total, 0 + 100000 + 50000, 'カード0（支出と引き落としが相殺）+ 口座 + 貯金口座');
-  assert.equal(totals.unconfirmed, 2, 'カードと貯金口座が未確定（使わない出金元は数えない）');
+}
+
+// ---- 口座の推移（docs/kakei.md §9.3） ----
+{
+  const money = (id: string, fields: Partial<MoneyRecord>, amount: number) =>
+    record(id, { ...fields, items: [item({ amount })] });
+  const rs: MoneyRecord[] = [
+    money('t1', { kind: 'income', walletId: 'bank', occurredOn: '2026-10-01' }, 1000),
+    money('t2', { walletId: 'bank', occurredOn: '2026-10-03' }, 300),
+    money('t3', { kind: 'transfer', walletId: 'bank', toWalletId: 'save', occurredOn: '2026-10-03' }, 200),
+    money('t4', { walletId: 'bank', occurredOn: '2026-10-09' }, 5),
+  ];
+  const anchor = (id: string, walletId: string, balanceOn: string, amount: number): MoneyWalletBalance => ({ id, walletId, balanceOn, amount });
+
+  assert.equal(addDays('2026-10-31', 1), '2026-11-01');
+  assert.equal(addDays('2026-03-01', -1), '2026-02-28');
+  assert.equal(addDays('2026-12-31', 1), '2027-01-01');
+
+  const bank = dailyBalances(['bank'], rs, [], '2026-10-05');
+  assert.deepEqual(bank.map((point) => point.date), ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05'], '最初の記録の日から今日まで1日1点（先の記録は入れない）');
+  assert.deepEqual(bank.map((point) => point.amount), [1000, 1000, 500, 500, 500]);
+  assert.deepEqual(bank, [1000, 1000, 500, 500, 500].map((amount, index) => ({ date: addDays('2026-10-01', index), amount })));
+
+  // 補正した日はその額になり、その後はそこから積み上げる（walletBalanceOn と同じ数え方）。
+  const fixed = dailyBalances(['bank'], rs, [anchor('a1', 'bank', '2026-10-02', 2000)], '2026-10-10');
+  assert.deepEqual(fixed.map((point) => point.amount), [1000, 2000, 1500, 1500, 1500, 1500, 1500, 1500, 1495, 1495]);
+  assert.equal(fixed[fixed.length - 1].amount, walletBalanceOn('bank', '2026-10-10', rs, [anchor('a1', 'bank', '2026-10-02', 2000)]).amount);
+
+  // 複数の出金元は合計（振替は出金元から入金先へ動くだけなので、合計は変わらない）。
+  const both = dailyBalances(['bank', 'save'], rs, [], '2026-10-04');
+  assert.deepEqual(both.map((point) => point.amount), [1000, 1000, 700, 700], '振替の200は合計に影響しない');
+  assert.deepEqual(dailyBalances(['bank'], [], [], '2026-10-04'), [], '記録も補正も無ければ空');
+
+  assert.deepEqual(filterTrend(fixed, 'month', '2026-10-10').length, fixed.length, '1ヶ月は30日前から');
+  assert.equal(filterTrend(fixed, 'all', '2026-10-10').length, 10);
+  assert.equal(filterTrend(dailyBalances(['bank'], rs, [], '2026-12-10'), 'month', '2026-12-10')[0].date, '2026-11-10');
+
+  assert.deepEqual(balanceChanges(fixed).map((point) => point.date), ['2026-10-09', '2026-10-03', '2026-10-02', '2026-10-01'], '変わった日だけ新しい順');
+
+  assert.deepEqual(niceTicks(0, 25_000_000), [0, 10_000_000, 20_000_000, 30_000_000], '最大値（2,500万）を含む');
+  assert.deepEqual(niceTicks(-100, 700), [-500, 0, 500, 1000], 'きりのよい間隔（最大値を含むところまで）');
+  assert.deepEqual(niceTicks(5, 5), [5]);
+  assert.equal(formatAxisYen(20_000_000), '2,000万');
+  assert.equal(formatAxisYen(850_000), '85万');
+  assert.equal(formatAxisYen(-9000), '−9,000');
+
+  assert.deepEqual(recordsOfWallet(rs, 'save').map((entry) => entry.id), ['t3'], '入金先の記録も含む');
+  assert.deepEqual(recordsOfWallet(rs, 'bank').map((entry) => entry.id), ['t4', 't3', 't2', 't1'], '新しい順');
+}
+
+// ---- カードの請求（請求済みと未請求。docs/kakei.md §9.3） ----
+{
+  const spend = (id: string, occurredOn: string, amount: number, extra: Partial<MoneyRecord> = {}) =>
+    record(id, { walletId: 'card', occurredOn, items: [item({ amount })], ...extra });
+  // 末日締め・25日払い。9月の利用 1万 は10月25日に落ちる。10月の利用 3千 はまだ請求前。
+  const card = { id: 'card', closeDay: 31, payDay: 25 };
+  const rs = [spend('c1', '2026-09-10', 6000), spend('c2', '2026-09-30', 4000), spend('c3', '2026-10-02', 3000)];
+  const billing = cardBilling(card, -13000, rs, '2026-10-10');
+  assert.deepEqual(billing, { billed: 10000, unbilled: 3000, closedOn: '2026-09-30', payOn: '2026-10-25' }, '残高には先月の請求と今月の利用が両方入る');
+  // 引き落としの振替（口座 → カード）が入ると、請求済みだけが減る。
+  const paid = cardBilling(card, -3000, [...rs, record('p', { kind: 'transfer', walletId: 'bank', toWalletId: 'card', occurredOn: '2026-10-25', items: [item({ amount: 10000 })] })], '2026-10-26');
+  assert.deepEqual(paid, { billed: 0, unbilled: 3000, closedOn: '2026-09-30', payOn: '2026-10-25' }, '引き落としのあとは未請求だけ');
+  // 15日締め・翌10日払い。
+  assert.deepEqual(cardBilling({ id: 'card', closeDay: 15, payDay: 10 }, -500, [spend('d1', '2026-10-16', 500)], '2026-10-20'), { billed: 0, unbilled: 500, closedOn: '2026-10-15', payOn: '2026-11-10' });
+  // 15日締め・25日払いは同じ月に落ちる。年をまたぐ締め日。
+  assert.equal(cardBilling({ id: 'card', closeDay: 15, payDay: 25 }, 0, [], '2026-10-20')?.payOn, '2026-10-25');
+  assert.deepEqual(cardBilling({ id: 'card', closeDay: 31, payDay: 27 }, -100, [], '2027-01-05'), { billed: 100, unbilled: 0, closedOn: '2026-12-31', payOn: '2027-01-27' });
+  assert.equal(cardBilling({ id: 'card', closeDay: null, payDay: null }, -100, rs, '2026-10-10'), null, '締め日が無ければ内訳は出さない');
+  assert.equal(cardBilling({ id: 'card', closeDay: 31, payDay: null }, -100, [], '2026-10-10')?.payOn, null);
 }
 
 console.log('moneyUtils: ok');

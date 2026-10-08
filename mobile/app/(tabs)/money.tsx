@@ -331,7 +331,10 @@ export default function MoneyScreen() {
           wallets={wallets}
           records={records}
           balances={balances}
+          categories={categories}
+          specialItems={specialItems}
           isLoading={isLoading}
+          onOpenRecord={setEditing}
           onConfirm={(walletId, balanceOn, amount) => void confirmBalance(walletId, balanceOn, amount)}
           onDeleteBalance={(balance) => void removeBalance(balance)}
           onSaveWallet={saveWallet}
