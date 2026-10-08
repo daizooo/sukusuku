@@ -286,6 +286,13 @@ export function CategoryIcon({ iconKey, size = 32 }: { iconKey: string; size?: n
   );
 }
 
+/** 見込みの額の印（毎月の記録・カード代金で自動で作り、まだ確かめていない額。docs/kakei.md §3.3）。 */
+export function EstimateBadge() {
+  return (
+    <span className="shrink-0 rounded-md bg-amber-100 px-1.5 py-px text-[10px] font-bold text-amber-800">見込み</span>
+  );
+}
+
 /** 全画面の入力の枠。戻る操作（ブラウザ・スマホ）で onBack を呼ぶ。 */
 export function FullScreen({ onBack, children }: { onBack: () => void; children: ReactNode }) {
   useBackLayer(onBack);

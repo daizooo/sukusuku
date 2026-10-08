@@ -318,6 +318,15 @@ export function PrimaryButton({ label, onPress, disabled }: { label: string; onP
   );
 }
 
+/** 見込みの額の印（毎月の記録・カード代金で自動で作り、まだ確かめていない額。docs/kakei.md §3.3）。 */
+export function EstimateBadge() {
+  return (
+    <View style={styles.estimate}>
+      <Text style={styles.estimateText}>見込み</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   // 月 / 年 の切り替え（小さな2択）。
@@ -368,4 +377,6 @@ const styles = StyleSheet.create({
   primary: { borderRadius: 14, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.moneySoft },
   primaryDisabled: { opacity: 0.5 },
   primaryText: { fontSize: 15, fontWeight: '700', color: colors.moneyText },
+  estimate: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, backgroundColor: colors.moneyEstimateSurface },
+  estimateText: { fontSize: 10, fontWeight: '700', color: colors.moneyEstimate },
 });

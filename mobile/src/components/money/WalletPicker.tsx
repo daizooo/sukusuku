@@ -3,13 +3,15 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View
 import { Check, Pencil, Plus } from 'lucide-react-native';
 import type { MoneyWallet, MoneyWalletDraft, MoneyWalletType } from '@/types/app';
 import { colors } from '@/lib/theme';
-import { WALLET_TYPES } from '@/lib/moneyUtils';
+import { cardScheduleLabel, WALLET_TYPES } from '@/lib/moneyUtils';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 
 // 出金元の選択（docs/kakei.md §3.2）。PWA版の `src/components/sukusuku/money/WalletPicker.tsx` と同じ並び・文言。
 // 種類（財布・カード・口座…）ごとに並べる。ここで出金元を足す・直す・使わなくする。
+// カードは締め日・引き落とし日・引き落とし口座を持てる。そろうと、引き落とし日にカード代金の振替（見込み）が
+// 自動で作られる（docs/kakei.md §3.4）。
 
 interface WalletPickerProps {
   title: string;
@@ -51,6 +53,7 @@ export default function WalletPicker({ title, wallets, selectedId, onPick, onClo
                     <View style={styles.flex}>
                       <Text style={styles.name}>{wallet.name}</Text>
                       {wallet.isSaving && <Text style={styles.sub}>貯金用</Text>}
+                      {cardScheduleLabel(wallet) !== '' && <Text style={styles.sub}>{cardScheduleLabel(wallet)}</Text>}
                     </View>
                     {selected && <Check size={18} color={colors.money} />}
                     <Pressable
@@ -78,6 +81,7 @@ export default function WalletPicker({ title, wallets, selectedId, onPick, onClo
         <WalletSheet
           key={editing === 'new' ? 'new' : editing.id}
           wallet={editing === 'new' ? null : editing}
+          wallets={wallets}
           onClose={() => setEditing(null)}
           onSubmit={async (draft) => {
             const target = editing === 'new' ? null : editing;
@@ -101,13 +105,22 @@ export default function WalletPicker({ title, wallets, selectedId, onPick, onClo
   );
 }
 
+/** 「15」→ 15。1〜31 でなければ null（31 は末日）。 */
+const parseDay = (text: string): number | null => {
+  const value = Number(text.trim());
+  return Number.isInteger(value) && value >= 1 && value <= 31 ? value : null;
+};
+
 export function WalletSheet({
   wallet,
+  wallets,
   onClose,
   onSubmit,
   onArchive,
 }: {
   wallet: MoneyWallet | null;
+  /** 引き落とし口座の候補に使う。 */
+  wallets: MoneyWallet[];
   onClose: () => void;
   onSubmit: (draft: MoneyWalletDraft) => void;
   onArchive?: () => void;
@@ -115,12 +128,31 @@ export function WalletSheet({
   const [name, setName] = useState(wallet?.name ?? '');
   const [type, setType] = useState<MoneyWalletType>(wallet?.type ?? 'card');
   const [isSaving, setIsSaving] = useState(wallet?.isSaving ?? false);
+  const [closeDay, setCloseDay] = useState(wallet?.closeDay ? String(wallet.closeDay) : '');
+  const [payDay, setPayDay] = useState(wallet?.payDay ? String(wallet.payDay) : '');
+  const [payWalletId, setPayWalletId] = useState<string | null>(wallet?.payWalletId ?? null);
   const [error, setError] = useState<string | null>(null);
+  const payChoices = wallets.filter(
+    (entry) => entry.type !== 'card' && entry.id !== wallet?.id && (!entry.archived || entry.id === payWalletId),
+  );
 
   const submit = () => {
     if (name.trim() === '') return setError('名前を入れてください');
+    const close = closeDay.trim() === '' ? null : parseDay(closeDay);
+    const pay = payDay.trim() === '' ? null : parseDay(payDay);
+    if (type === 'card' && ((closeDay.trim() !== '' && close === null) || (payDay.trim() !== '' && pay === null))) {
+      return setError('締め日・引き落とし日は 1〜31 で入れてください（末日は31）');
+    }
     // 貯金は記録なので、貯金用は目印だけ（収支には入れない。月の目標も持たない。docs/kakei.md §4）。
-    onSubmit({ name, type, isSaving, savingTarget: isSaving ? (wallet?.savingTarget ?? null) : null });
+    onSubmit({
+      name,
+      type,
+      isSaving,
+      savingTarget: isSaving ? (wallet?.savingTarget ?? null) : null,
+      closeDay: type === 'card' ? close : null,
+      payDay: type === 'card' ? pay : null,
+      payWalletId: type === 'card' ? payWalletId : null,
+    });
   };
 
   const archive = () =>
@@ -178,6 +210,54 @@ export function WalletSheet({
           </View>
           <Switch value={isSaving} onValueChange={setIsSaving} />
         </View>
+        {type === 'card' && (
+          <>
+            <View style={styles.days}>
+              <View style={[styles.field, styles.flex]}>
+                <Text style={styles.label}>締め日</Text>
+                <TextInput
+                  style={styles.input}
+                  value={closeDay}
+                  onChangeText={setCloseDay}
+                  keyboardType="number-pad"
+                  placeholder="例: 15（末日は31）"
+                  placeholderTextColor={colors.textFaint}
+                />
+              </View>
+              <View style={[styles.field, styles.flex]}>
+                <Text style={styles.label}>引き落とし日</Text>
+                <TextInput
+                  style={styles.input}
+                  value={payDay}
+                  onChangeText={setPayDay}
+                  keyboardType="number-pad"
+                  placeholder="例: 10"
+                  placeholderTextColor={colors.textFaint}
+                />
+              </View>
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>引き落とし口座</Text>
+              <View style={styles.types}>
+                {payChoices.map((entry) => (
+                  <Pressable
+                    key={entry.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: payWalletId === entry.id }}
+                    onPress={() => setPayWalletId(payWalletId === entry.id ? null : entry.id)}
+                    style={[styles.type, payWalletId === entry.id && styles.typeSelected]}
+                  >
+                    <Text style={[styles.typeText, payWalletId === entry.id && styles.typeTextSelected]}>{entry.name}</Text>
+                  </Pressable>
+                ))}
+                {payChoices.length === 0 && <Text style={styles.sub}>口座を出金元に足すと選べます</Text>}
+              </View>
+              <Text style={styles.sub}>
+                3つそろうと、引き落とし日（休日は翌営業日）に、締め日で区切った1か月分の合計で「口座 → カード」の振替を見込みで作ります
+              </Text>
+            </View>
+          </>
+        )}
         {error && <Text style={styles.error}>{error}</Text>}
       </LogModalShell>
     </SheetModal>
@@ -225,6 +305,7 @@ const styles = StyleSheet.create({
   typeText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
   typeTextSelected: { color: colors.moneyText },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  days: { flexDirection: 'row', gap: 12 },
   error: { fontSize: 12, fontWeight: '500', color: colors.danger },
   secondary: { paddingVertical: 10, alignItems: 'center' },
   deleteText: { fontSize: 13, fontWeight: '500', color: colors.danger },

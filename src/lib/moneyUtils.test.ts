@@ -9,8 +9,13 @@ import {
   buildYearSummary,
   buildBudgetTiles,
   buildMonthSummary,
+  cardScheduleLabel,
   categoryPath,
+  estimatesInMonth,
   evaluateCalc,
+  formatDayOfMonth,
+  recurringHistory,
+  recurringScheduleLabel,
   fiscalYearOfMonth,
   formatSignedYen,
   groupsFromItems,
@@ -113,14 +118,17 @@ const record = (id: string, fields: Partial<MoneyRecord>): MoneyRecord => ({
   toWalletId: null,
   store: '',
   createdBy: null,
+  isEstimate: false,
+  recurringId: null,
+  month: null,
   items: [],
   ...fields,
 });
 const wallets: MoneyWallet[] = [
-  { id: 'card', name: 'カード', type: 'card', isSaving: false, savingTarget: null, position: 0, archived: false },
-  { id: 'bank', name: '生活費口座', type: 'bank', isSaving: false, savingTarget: null, position: 1, archived: false },
-  { id: 'save', name: '貯金口座', type: 'bank', isSaving: true, savingTarget: 30000, position: 2, archived: false },
-  { id: 'gone', name: '昔のカード', type: 'card', isSaving: false, savingTarget: null, position: 3, archived: true },
+  { id: 'card', name: 'カード', type: 'card', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, position: 0, archived: false },
+  { id: 'bank', name: '生活費口座', type: 'bank', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, position: 1, archived: false },
+  { id: 'save', name: '貯金口座', type: 'bank', isSaving: true, savingTarget: 30000, closeDay: null, payDay: null, payWalletId: null, position: 2, archived: false },
+  { id: 'gone', name: '昔のカード', type: 'card', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, position: 3, archived: true },
 ];
 const records: MoneyRecord[] = [
   record('r1', {
@@ -362,5 +370,49 @@ assert.deepEqual(saved[0], {
   name: '牛乳',
   memo: '',
 });
+
+// ---- 毎月の記録（docs/kakei.md §3.3・§3.4） ----
+assert.equal(formatDayOfMonth(27), '27日');
+assert.equal(formatDayOfMonth(31), '末日');
+assert.equal(recurringScheduleLabel({ day: 27, months: null, holiday: 'next' }), '毎月27日（休日は翌営業日）');
+assert.equal(recurringScheduleLabel({ day: 10, months: [12, 6], holiday: 'prev' }), '6・12月の10日（休日は前営業日）');
+assert.equal(recurringScheduleLabel({ day: 31, months: null, holiday: 'none' }), '毎月末日（休日もそのまま）');
+assert.equal(cardScheduleLabel({ closeDay: 15, payDay: 10 }), '15日締め・翌10日払い');
+assert.equal(cardScheduleLabel({ closeDay: 31, payDay: 27 }), '末日締め・翌27日払い');
+assert.equal(cardScheduleLabel({ closeDay: 5, payDay: 27 }), '5日締め・27日払い', '締め日より後の引き落とし日は同じ月');
+assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
+{
+  const estimates = estimatesInMonth(
+    [
+      record('e1', { occurredOn: '2026-10-27', isEstimate: true, items: [item({ amount: 8000, categoryId: 'c' })] }),
+      record('e2', { occurredOn: '2026-10-28', items: [item({ amount: 100, categoryId: 'c' })] }),
+      record('e3', { occurredOn: '2026-10-10', kind: 'transfer', isEstimate: true, items: [item({ amount: 5000 })] }),
+      record('e4', { occurredOn: '2026-11-27', isEstimate: true, items: [item({ amount: 8000, categoryId: 'c' })] }),
+    ],
+    '2026-10',
+  );
+  assert.deepEqual(estimates.map((entry) => entry.id), ['e1'], '収支に入る見込みだけ（カード代金の振替は除く）');
+}
+
+{
+  const rule = { kind: 'expense' as const, walletId: 'bank', toWalletId: null, store: '電力', categoryId: 'elec', specialItemId: null };
+  const history = recurringHistory(
+    rule,
+    [
+      record('h1', { occurredOn: '2025-10-27', walletId: 'bank', store: '電力', items: [item({ amount: 9000, categoryId: 'elec' })] }),
+      record('h2', { occurredOn: '2025-10-07', walletId: 'bank', store: '電力', items: [item({ amount: 1, categoryId: 'elec' })] }),
+      record('h3', { occurredOn: '2026-09-28', walletId: 'bank', store: '電力 ', items: [item({ amount: 7000, categoryId: 'elec' }), item({ amount: 500, categoryId: 'elec' }), item({ amount: 99, categoryId: 'other' })] }),
+      record('h4', { occurredOn: '2026-09-28', walletId: 'card', store: '電力', items: [item({ amount: 7000, categoryId: 'elec' })] }),
+      record('h5', { occurredOn: '2026-10-01', walletId: 'bank', store: '電力', isEstimate: true, items: [item({ amount: 7000, categoryId: 'elec' })] }),
+      record('h6', { occurredOn: '2026-08-27', walletId: 'bank', store: 'ガス', items: [item({ amount: 7000, categoryId: 'elec' })] }),
+      record('h7', { occurredOn: '2026-10-08', walletId: 'bank', store: '電力', items: [item({ amount: 7000, categoryId: 'elec' })] }),
+    ],
+    '2026-10-08',
+  );
+  assert.deepEqual(history, [
+    { occurredOn: '2026-09-28', amount: 7500 },
+    { occurredOn: '2025-10-27', amount: 9000 },
+  ], '出金元・お店・種類が同じで、見込みでない過去1年の記録だけ（同じ種類の品目は合計）');
+}
 
 console.log('moneyUtils: ok');

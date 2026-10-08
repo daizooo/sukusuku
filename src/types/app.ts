@@ -624,6 +624,12 @@ export interface MoneyWallet {
   isSaving: boolean;
   /** 貯金の月の目標（円）。 */
   savingTarget: number | null;
+  /** カードの締め日（31 は末日）。カードだけ。docs/kakei.md §3.4。 */
+  closeDay: number | null;
+  /** カードの引き落とし日（31 は末日）。締め日のあとの最初のこの日。 */
+  payDay: number | null;
+  /** カードの引き落とし口座。 */
+  payWalletId: string | null;
   position: number;
   archived: boolean;
 }
@@ -669,6 +675,12 @@ export interface MoneyRecord {
   toWalletId: string | null;
   store: string;
   createdBy: string | null;
+  /** 見込みの額（毎月の記録・カード代金で自動で作ったもの）。額を直すと確定になる。docs/kakei.md §3.3。 */
+  isEstimate: boolean;
+  /** この記録を作った毎月の記録のルール。 */
+  recurringId: string | null;
+  /** 自動で作った記録が、どの月の分か（YYYY-MM）。人が入れた記録は null。 */
+  month: string | null;
   items: MoneyItem[];
 }
 
@@ -682,5 +694,37 @@ export interface MoneyRecordDraft {
   walletId: string | null;
   toWalletId: string | null;
   store: string;
+  /** 見込みのまま残すか。 */
+  isEstimate: boolean;
   items: MoneyItemDraft[];
 }
+
+/** 休日のとき。翌営業日・前営業日・そのまま。 */
+export type MoneyHolidayRule = 'next' | 'prev' | 'none';
+
+/** 毎月の記録のルール（固定費・給料など）。money_recurring に対応。docs/kakei.md §3.3。 */
+export interface MoneyRecurring {
+  id: string;
+  kind: MoneyRecordKind;
+  /** 引き落とし日（毎月◯日。31 は末日）。 */
+  day: number;
+  /** 記録する月（1〜12）。null は毎月。 */
+  months: number[] | null;
+  holiday: MoneyHolidayRule;
+  /** 固定額（fixed）は amount で確定として作る。見込む（estimate）は過去の記録から出す（無ければ amount）。 */
+  amountMode: 'fixed' | 'estimate';
+  amount: number;
+  /** 出金元（収入は入金先）。 */
+  walletId: string | null;
+  /** 振替の入金先。 */
+  toWalletId: string | null;
+  store: string;
+  categoryId: string | null;
+  specialItemId: string | null;
+  /** 品名（任意）。 */
+  name: string;
+  position: number;
+  archived: boolean;
+}
+
+export type MoneyRecurringDraft = Omit<MoneyRecurring, 'id' | 'position' | 'archived'>;
