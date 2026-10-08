@@ -124,7 +124,7 @@ export default function BalanceTrend({ points, asOf }: { points: BalancePoint[];
           );
         })}
       </div>
-      <SectionHeader title="対象期間の履歴" hint="残高が変わった日" />
+      <SectionHeader title="対象期間の履歴" />
       <div className={`${cardClass} overflow-hidden`}>
         {changes.map((point, index) => (
           <div

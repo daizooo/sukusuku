@@ -14,22 +14,20 @@ import { colors } from '@/lib/theme';
 import {
   balanceChecks,
   cardBilling,
-  cardScheduleLabel,
   dailyBalances,
   dateKeyOfDate,
   formatBalance,
   recordsOfWallet,
   walletBalanceOn,
-  walletTypeLabel,
 } from '@/lib/moneyUtils';
 import { WalletSheet } from '@/components/money/WalletPicker';
 import BalanceSheet from '@/components/money/BalanceSheet';
 import BalanceTrend from '@/components/money/BalanceTrend';
 import RecordDayList from '@/components/money/RecordDayList';
-import { ScreenHeader, StatRow, WalletTypeIcon, type } from '@/components/money/moneyVisual';
+import { ScreenHeader, StatRow, type } from '@/components/money/moneyVisual';
 
 // 口座の詳細（docs/kakei.md §9.3）。PWA版の `src/components/sukusuku/money/WalletBalanceScreen.tsx` と同じ並び・文言。
-// 上に残高と「残高を補正」、その下に「履歴 / 推移」の2つ（2026-10-08に、使わない「残高計算」を外した）。
+// 上に残高と「残高を補正」、その下に「履歴 / 推移」の2つ（2026-10-08に、使わない「残高計算」を外した。余計な文字は入れない）。
 // - 履歴: その出金元の記録（支出・収入・振替）に、残高の補正を同じ日の先頭に混ぜる。記録を押すと記録の詳細、補正を押すと取り消し
 // - 推移: 日ごとの残高の折れ線（期間はじめは全期間）と、残高が変わった日の一覧
 // カードは残高（未払い）の下に「請求済み」と「未請求」を添える（一覧の行には出さず、押したあとのここだけ）。
@@ -92,7 +90,6 @@ export default function WalletBalanceScreen({
   const mine = useMemo(() => recordsOfWallet(records, wallet.id), [records, wallet.id]);
   const points = useMemo(() => dailyBalances([wallet.id], records, balances, today), [wallet.id, records, balances, today]);
   const billing = wallet.type === 'card' ? cardBilling(wallet, now.amount, records, today) : null;
-  const payWallet = wallets.find((entry) => entry.id === wallet.payWalletId) ?? null;
 
   const remove = (balance: MoneyWalletBalance) =>
     Alert.alert(`${fullDate(balance.balanceOn)}の補正を取り消しますか？`, '残高は、その前の補正と記録から出し直します。', [
@@ -121,7 +118,6 @@ export default function WalletBalanceScreen({
         <View style={styles.summary}>
           <View style={styles.summaryTop}>
             <View style={styles.flex}>
-              <Text style={type.sub}>残高</Text>
               <Text style={[type.hero, now.amount < 0 && type.minus]}>{formatBalance(now.amount)}</Text>
             </View>
             <Pressable accessibilityRole="button" onPress={() => setCorrecting(true)} style={styles.correct}>
@@ -141,28 +137,11 @@ export default function WalletBalanceScreen({
               {billing.unbilled > 0 && (
                 <StatRow
                   label="未請求"
-                  note={`${monthDayLabel(billing.closedOn)}の締め日のあとの利用`}
                   value={formatBalance(-billing.unbilled)}
                   minus
                 />
               )}
             </View>
-          )}
-          <View style={styles.kind}>
-            <WalletTypeIcon type={wallet.type} size={14} />
-            <Text style={type.faint} numberOfLines={1}>
-              {[
-                walletTypeLabel(wallet.type),
-                wallet.isSaving ? '貯金用' : '',
-                cardScheduleLabel(wallet),
-                payWallet ? `${payWallet.name}から引き落とし` : '',
-              ]
-                .filter((part) => part !== '')
-                .join('・')}
-            </Text>
-          </View>
-          {now.confirmed === null && (
-            <Text style={type.faint}>記録は使い始めからなので、「残高を補正」でいまの残高を入れて合わせてください</Text>
           )}
         </View>
         <View accessibilityRole="tablist" style={styles.tabs}>
@@ -243,7 +222,6 @@ const styles = StyleSheet.create({
   correct: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.moneySoft },
   correctText: { fontSize: 13, fontWeight: '700', color: colors.moneyText },
   billing: { borderTopWidth: 1, borderTopColor: colors.border },
-  kind: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   tabs: {
     flexDirection: 'row',
     paddingHorizontal: 8,

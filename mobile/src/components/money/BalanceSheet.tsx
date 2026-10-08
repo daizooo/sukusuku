@@ -5,14 +5,14 @@ import { CalendarDays } from 'lucide-react-native';
 import type { MoneyRecord, MoneyWallet, MoneyWalletBalance } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { formatDateWithWeekday, toDateString } from '@/lib/dateUtils';
-import { formatBalance, formatShortDate, formatSignedYen, walletBalanceOn } from '@/lib/moneyUtils';
+import { formatBalance, formatSignedYen, formatYen, walletBalanceOn } from '@/lib/moneyUtils';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import { PrimaryButton, type } from '@/components/money/moneyVisual';
 
 // 残高を補正する（docs/kakei.md §9.3）。PWA版の `src/components/sukusuku/money/BalanceModal.tsx` と同じ並び・文言。
 // 通帳・銀行のアプリの残高を日付つきで入れる。入れた額と、記録から出した額との差を、入れながら出す。
-// はじめての補正は差を出さない（記録は使い始めの月からなので、はじめの残高になる）。
+// はじめての補正は、記録から出した額も差も出さない（記録は使い始めの月からなので、はじめの残高になる）。余計な文字は入れない（2026-10-08）。
 // カードの未払いのように、マイナスの残高も入れられる。
 
 interface BalanceSheetProps {
@@ -96,31 +96,20 @@ export default function BalanceSheet({ wallet, records, balances, onClose, onSub
           </View>
         </View>
 
-        <View style={styles.check}>
-          <View style={styles.checkRow}>
-            <Text style={type.sub}>記録から出した額</Text>
-            <Text style={[type.amount, expected.amount < 0 && type.minus]}>{formatBalance(expected.amount)}</Text>
-          </View>
-          <Text style={type.faint}>
-            {expected.confirmed === null
-              ? 'まだ補正していないので、記録の合計です（参考）'
-              : `${formatShortDate(expected.confirmed.balanceOn)}に補正した ${formatBalance(expected.confirmed.amount)} に、そのあとの記録${expected.count}件を足した額`}
-          </Text>
-          {diff !== null && (
+        {expected.confirmed !== null && (
+          <View style={styles.check}>
             <View style={styles.checkRow}>
-              <Text style={type.sub}>差</Text>
-              <Text style={[type.amount, diff !== 0 && type.minus]}>{diff === 0 ? '記録と合っています' : formatSignedYen(diff)}</Text>
+              <Text style={type.sub}>記録から出した額</Text>
+              <Text style={[type.amount, expected.amount < 0 && type.minus]}>{formatBalance(expected.amount)}</Text>
             </View>
-          )}
-          {diff !== null && diff !== 0 && (
-            <Text style={type.faint}>
-              記録の漏れ・二重・金額の違いがないか見直してください。このまま補正すると、これ以後はこの額から数えます
-            </Text>
-          )}
-          {entered !== null && expected.confirmed === null && (
-            <Text style={type.faint}>はじめての補正です。これ以後は、この額に記録を足して残高を出します</Text>
-          )}
-        </View>
+            {diff !== null && (
+              <View style={styles.checkRow}>
+                <Text style={type.sub}>差</Text>
+                <Text style={[type.amount, diff !== 0 && type.minus]}>{diff === 0 ? formatYen(0) : formatSignedYen(diff)}</Text>
+              </View>
+            )}
+          </View>
+        )}
       </LogModalShell>
     </SheetModal>
   );

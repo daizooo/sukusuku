@@ -13,22 +13,20 @@ import type {
 import {
   balanceChecks,
   cardBilling,
-  cardScheduleLabel,
   dailyBalances,
   dateKeyOfDate,
   formatBalance,
   recordsOfWallet,
   walletBalanceOn,
-  walletTypeLabel,
 } from '@/lib/moneyUtils';
 import BalanceModal from './BalanceModal';
 import BalanceTrend from './BalanceTrend';
 import RecordDayList from './RecordDayList';
-import { FullScreen, minus, ScreenHeader, StatRow, type, WalletTypeIcon } from './moneyVisual';
+import { FullScreen, minus, ScreenHeader, StatRow, type } from './moneyVisual';
 import { WalletModal } from './WalletPicker';
 
 // 口座の詳細（docs/kakei.md §9.3）。mobile版の `mobile/src/components/money/WalletBalanceScreen.tsx` と同じ並び・文言。
-// 上に残高と「残高を補正」、その下に「履歴 / 推移」の2つ（2026-10-08に、使わない「残高計算」を外した）。
+// 上に残高と「残高を補正」、その下に「履歴 / 推移」の2つ（2026-10-08に、使わない「残高計算」を外した。余計な文字は入れない）。
 // - 履歴: その出金元の記録（支出・収入・振替）に、残高の補正を同じ日の先頭に混ぜる。記録を押すと記録の詳細、補正を押すと取り消し
 // - 推移: 日ごとの残高の折れ線（期間はじめは全期間）と、残高が変わった日の一覧
 // カードは残高（未払い）の下に「請求済み」と「未請求」を添える（一覧の行には出さず、押したあとのここだけ）。
@@ -90,7 +88,6 @@ export default function WalletBalanceScreen({
   const mine = recordsOfWallet(records, wallet.id);
   const points = dailyBalances([wallet.id], records, balances, today);
   const billing = wallet.type === 'card' ? cardBilling(wallet, now.amount, records, today) : null;
-  const payWallet = wallets.find((entry) => entry.id === wallet.payWalletId) ?? null;
 
   const remove = (balance: MoneyWalletBalance) => {
     if (window.confirm(`${fullDate(balance.balanceOn)}の補正を取り消しますか？残高は、その前の補正と記録から出し直します。`)) {
@@ -113,7 +110,6 @@ export default function WalletBalanceScreen({
       <div className="shrink-0 space-y-2 px-4 pb-2.5 pt-3">
         <div className="flex items-end gap-3">
           <div className="min-w-0 flex-1">
-            <p className={type.sub}>残高</p>
             <p className={minus(type.hero, now.amount < 0)}>{formatBalance(now.amount)}</p>
           </div>
           <button
@@ -137,23 +133,11 @@ export default function WalletBalanceScreen({
             {billing.unbilled > 0 && (
               <StatRow
                 label="未請求"
-                note={`${monthDayLabel(billing.closedOn)}の締め日のあとの利用`}
                 value={formatBalance(-billing.unbilled)}
                 isMinus
               />
             )}
           </div>
-        )}
-        <div className="flex items-center gap-1.5">
-          <WalletTypeIcon type={wallet.type} size={14} />
-          <span className={`min-w-0 flex-1 truncate ${type.faint}`}>
-            {[walletTypeLabel(wallet.type), wallet.isSaving ? '貯金用' : '', cardScheduleLabel(wallet), payWallet ? `${payWallet.name}から引き落とし` : '']
-              .filter((part) => part !== '')
-              .join('・')}
-          </span>
-        </div>
-        {now.confirmed === null && (
-          <p className={type.faint}>記録は使い始めからなので、「残高を補正」でいまの残高を入れて合わせてください</p>
         )}
       </div>
       <div role="tablist" className="shrink-0 flex border-b border-gray-200 px-2">

@@ -84,7 +84,7 @@ export default function MoneyAccountsView({
           label="総残高"
           value={formatBalance(summary.total)}
           isMinus={summary.total < 0}
-          note={usable.length === 0 ? '出金元を足すと、残高が出ます' : '押すと推移'}
+          note={usable.length === 0 ? '出金元を足すと、残高が出ます' : undefined}
         />
       </button>
       {/* 右下の「＋」に一覧の最後が隠れないよう、下を空ける。 */}

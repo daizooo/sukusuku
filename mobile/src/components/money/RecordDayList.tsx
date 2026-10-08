@@ -23,6 +23,7 @@ import { CategoryIcon, EstimateBadge, TransferIcon, WalletTypeIcon, type } from 
 // （「牛乳、卵ほか」）、金額の右に出金元の種類のアイコン。振替は回る矢印のアイコンで、出金元 → 入金先。
 // 毎月の記録・カード代金で自動で作り、まだ額を確かめていないものは金額の左に「見込み」（§3.3）。
 // 口座の履歴では、残高の補正（corrections）も同じ日の先頭に1行で混ぜる（その日の終わりの残高なので）。押すと取り消しの確認。
+// 補正の行は、総額が画面の上にあるので「差」だけを出す（はじめの残高だけは差が無いので、その額）。
 // スクロールは持たない（親のスクロールの中に置く）。
 
 interface RecordDayListProps {
@@ -35,14 +36,6 @@ interface RecordDayListProps {
   corrections?: BalanceCheck[];
   onOpenCorrection?: (check: BalanceCheck) => void;
 }
-
-/** 補正の行の補足（差・はじめの残高）。 */
-const correctionNote = (check: BalanceCheck) =>
-  check.diff === null
-    ? 'はじめの残高'
-    : check.diff === 0
-      ? '記録と合っていました'
-      : `記録との差 ${formatSignedYen(check.diff)}`;
 
 const dayLabel = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number);
@@ -131,13 +124,12 @@ export default function RecordDayList({
                   </View>
                   <View style={styles.flex}>
                     <Text style={type.row} numberOfLines={1}>
-                      残高を補正
-                    </Text>
-                    <Text style={[type.sub, check.diff !== null && check.diff !== 0 && type.minus]} numberOfLines={1}>
-                      {correctionNote(check)}
+                      {check.diff === null ? 'はじめの残高' : '残高を補正'}
                     </Text>
                   </View>
-                  <Text style={[type.amount, check.balance.amount < 0 && type.minus]}>{formatBalance(check.balance.amount)}</Text>
+                  <Text style={[type.amount, check.diff !== null && check.diff !== 0 && type.minus]}>
+                    {check.diff === null ? formatBalance(check.balance.amount) : check.diff === 0 ? formatYen(0) : formatSignedYen(check.diff)}
+                  </Text>
                 </Pressable>
               ))}
               {day.records.map((record, indexInDay) => {

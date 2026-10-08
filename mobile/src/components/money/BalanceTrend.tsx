@@ -133,7 +133,7 @@ export default function BalanceTrend({ points, asOf }: { points: BalancePoint[];
           );
         })}
       </View>
-      <SectionHeader title="対象期間の履歴" hint="残高が変わった日" />
+      <SectionHeader title="対象期間の履歴" />
       <View style={styles.list}>
         {changes.map((point, index) => (
           <View key={point.date} style={[styles.row, index > 0 && styles.rowDivided]}>

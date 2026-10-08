@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { CalendarDays } from 'lucide-react';
 import type { MoneyRecord, MoneyWallet, MoneyWalletBalance } from '@/types/app';
 import { toDateString } from '@/lib/dateUtils';
-import { formatBalance, formatShortDate, formatSignedYen, walletBalanceOn } from '@/lib/moneyUtils';
+import { formatBalance, formatSignedYen, formatYen, walletBalanceOn } from '@/lib/moneyUtils';
 import { ModalShell } from '../modals/TaskForm';
 import { minus, PrimaryButton, type } from './moneyVisual';
 
 // 残高を補正する（docs/kakei.md §9.3）。mobile版の `mobile/src/components/money/BalanceSheet.tsx` と同じ並び・文言。
 // 通帳・銀行のアプリの残高を日付つきで入れる。入れた額と、記録から出した額との差を、入れながら出す。
-// はじめての補正は差を出さない（記録は使い始めの月からなので、はじめの残高になる）。
+// はじめての補正は、記録から出した額も差も出さない（記録は使い始めの月からなので、はじめの残高になる）。余計な文字は入れない（2026-10-08）。
 // カードの未払いのように、マイナスの残高も入れられる。
 
 interface BalanceModalProps {
@@ -94,31 +94,20 @@ export default function BalanceModal({ wallet, records, balances, onClose, onSub
           </div>
         </div>
 
-        <div className="space-y-1 rounded-xl bg-gray-50 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className={type.sub}>記録から出した額</span>
-            <span className={minus(type.amount, expected.amount < 0)}>{formatBalance(expected.amount)}</span>
-          </div>
-          <p className={type.faint}>
-            {expected.confirmed === null
-              ? 'まだ補正していないので、記録の合計です（参考）'
-              : `${formatShortDate(expected.confirmed.balanceOn)}に補正した ${formatBalance(expected.confirmed.amount)} に、そのあとの記録${expected.count}件を足した額`}
-          </p>
-          {diff !== null && (
+        {expected.confirmed !== null && (
+          <div className="space-y-1 rounded-xl bg-gray-50 p-3">
             <div className="flex items-center justify-between gap-2">
-              <span className={type.sub}>差</span>
-              <span className={minus(type.amount, diff !== 0)}>{diff === 0 ? '記録と合っています' : formatSignedYen(diff)}</span>
+              <span className={type.sub}>記録から出した額</span>
+              <span className={minus(type.amount, expected.amount < 0)}>{formatBalance(expected.amount)}</span>
             </div>
-          )}
-          {diff !== null && diff !== 0 && (
-            <p className={type.faint}>
-              記録の漏れ・二重・金額の違いがないか見直してください。このまま補正すると、これ以後はこの額から数えます
-            </p>
-          )}
-          {entered !== null && expected.confirmed === null && (
-            <p className={type.faint}>はじめての補正です。これ以後は、この額に記録を足して残高を出します</p>
-          )}
-        </div>
+            {diff !== null && (
+              <div className="flex items-center justify-between gap-2">
+                <span className={type.sub}>差</span>
+                <span className={minus(type.amount, diff !== 0)}>{diff === 0 ? formatYen(0) : formatSignedYen(diff)}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </ModalShell>
   );
