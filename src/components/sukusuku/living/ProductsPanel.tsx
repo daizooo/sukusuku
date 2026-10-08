@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, Plus } from 'lucide-react';
 import type { HouseholdProduct, HouseholdProductDraft } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
@@ -15,6 +15,7 @@ import { categoryOptions } from '@/lib/stockUtils';
 import { formatPrice } from '@/lib/shoppingUtils';
 import ProductModal from '../modals/ProductModal';
 import type { ShoppingSender } from './useShoppingSender';
+import { useSwipeTabs } from '../ui/useSwipeTabs';
 
 // 暮らしタブの「日用品」の面（docs/home.md §4）。mobile版の
 // `mobile/src/components/living/ProductsPanel.tsx` と同じ項目・並び・文言。
@@ -79,6 +80,16 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
     () => [...products].filter((product) => activeStore === ALL || product.store === activeStore).sort(byStoreThenName),
     [products, activeStore],
   );
+  // お店は、一覧の上の左右スワイプでも切り替える（一覧が指に合わせて動く）。
+  const { handlers: swipeHandlers, attachContent } = useSwipeTabs([ALL, ...stores], activeStore, setStore);
+  // 選んだお店が帯の外に隠れないよう、帯をそのお店まで寄せる（スワイプで選んだときのため）。
+  const storeBar = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const bar = storeBar.current;
+    const selected = bar?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!bar || !selected) return;
+    bar.scrollTo({ left: selected.offsetLeft - (bar.clientWidth - selected.offsetWidth) / 2, behavior: 'smooth' });
+  }, [activeStore]);
   const categories = useMemo(() => categoryOptions(products), [products]);
   const storeOptions = useMemo(() => [...new Set([...stores, ...sender.groupNames])], [stores, sender.groupNames]);
 
@@ -135,7 +146,7 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
       </button>
 
       {stores.length > 0 && (
-        <div className="shrink-0 flex gap-1.5 overflow-x-auto pb-2">
+        <div ref={storeBar} className="relative shrink-0 flex gap-1.5 overflow-x-auto pb-2">
           {[ALL, ...stores].map((value) => {
             const selected = value === activeStore;
             return (
@@ -162,7 +173,7 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
           よく買う日用品を「追加」で登録すると、ここから買い出しリストへ送れます
         </p>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto pb-16">
+        <div ref={attachContent} className="flex-1 min-h-0 overflow-y-auto pb-16" {...swipeHandlers}>
           <ul className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-200 overflow-hidden">
             {visible.map((product) => {
               const sub = [product.store, product.category, product.note].filter((text) => text !== '').join('・');

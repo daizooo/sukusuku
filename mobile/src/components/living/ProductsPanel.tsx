@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight, Plus } from 'lucide-react-native';
 import type { HouseholdProduct, HouseholdProductDraft } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
+import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import {
   deleteHouseholdProduct,
   insertHouseholdProduct,
@@ -78,6 +79,17 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
     () => [...products].filter((product) => activeStore === ALL || product.store === activeStore).sort(byStoreThenName),
     [products, activeStore],
   );
+  // お店は、一覧の上の左右スワイプでも切り替える（一覧が指に合わせて動く）。
+  const swipe = useSwipeTabs([ALL, ...stores], activeStore, setStore);
+  // 選んだお店が帯の外に隠れないよう、帯をそのお店まで寄せる（スワイプで選んだときのため）。
+  const storeBar = useRef<ScrollView>(null);
+  const barWidth = useRef(0);
+  const chipLayouts = useRef(new Map<string, { x: number; width: number }>());
+  useEffect(() => {
+    const chip = chipLayouts.current.get(activeStore);
+    if (!chip) return;
+    storeBar.current?.scrollTo({ x: Math.max(0, chip.x - (barWidth.current - chip.width) / 2), animated: true });
+  }, [activeStore]);
   const categories = useMemo(() => categoryOptions(products), [products]);
   const storeOptions = useMemo(() => [...new Set([...stores, ...sender.groupNames])], [stores, sender.groupNames]);
 
@@ -131,7 +143,15 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
 
       {stores.length > 0 && (
         <View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <ScrollView
+            ref={storeBar}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chips}
+            onLayout={(event) => {
+              barWidth.current = event.nativeEvent.layout.width;
+            }}
+          >
             {[ALL, ...stores].map((value) => {
               const selected = value === activeStore;
               return (
@@ -140,6 +160,10 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
                   onPress={() => setStore(value)}
+                  onLayout={(event) => {
+                    const { x, width } = event.nativeEvent.layout;
+                    chipLayouts.current.set(value, { x, width });
+                  }}
                   style={[styles.chip, selected && { backgroundColor: colors.livingProducts }]}
                 >
                   <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{value || 'すべて'}</Text>
@@ -157,7 +181,11 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
           <Text style={styles.message}>よく買う日用品を「追加」で登録すると、ここから買い出しリストへ送れます</Text>
         </View>
       ) : (
-        <ScrollView style={styles.flex} contentContainerStyle={styles.listContent}>
+        <Animated.ScrollView
+          style={[styles.flex, swipe.style]}
+          contentContainerStyle={styles.listContent}
+          {...swipe.handlers}
+        >
           <View style={styles.card}>
             {visible.map((product, index) => {
               const sub = [product.store, product.category, product.note].filter((text) => text !== '').join('・');
@@ -186,7 +214,7 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
               );
             })}
           </View>
-        </ScrollView>
+        </Animated.ScrollView>
       )}
 
       {editing !== null && (
