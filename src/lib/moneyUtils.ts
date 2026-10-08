@@ -13,8 +13,10 @@ import type {
   MoneyCategoryKind,
   MoneyItem,
   MoneyItemDraft,
+  MoneyHolidayRule,
   MoneyRecord,
   MoneyRecordKind,
+  MoneyRecurring,
   MoneyStore,
   MoneyWallet,
   MoneyWalletType,
@@ -90,6 +92,69 @@ export const WALLET_TYPES: { id: MoneyWalletType; label: string }[] = [
 
 export const walletTypeLabel = (type: MoneyWalletType) =>
   WALLET_TYPES.find((entry) => entry.id === type)?.label ?? '';
+
+// ---- 毎月の記録（固定費・給料・カード代金。docs/kakei.md §3.3・§3.4） ----
+
+/** 毎月◯日（31 は末日）。 */
+export const formatDayOfMonth = (day: number) => (day >= 31 ? '末日' : `${day}日`);
+
+export const HOLIDAY_RULE_LABEL: Record<MoneyHolidayRule, string> = {
+  next: '翌営業日',
+  prev: '前営業日',
+  none: 'そのまま',
+};
+
+/** 「毎月27日（休日は翌営業日）」「6・12月の10日（休日は前営業日）」。 */
+export function recurringScheduleLabel(rule: Pick<MoneyRecurring, 'day' | 'months' | 'holiday'>): string {
+  const when =
+    rule.months === null
+      ? `毎月${formatDayOfMonth(rule.day)}`
+      : `${[...rule.months].sort((a, b) => a - b).join('・')}月の${formatDayOfMonth(rule.day)}`;
+  return `${when}（${rule.holiday === 'none' ? '休日もそのまま' : `休日は${HOLIDAY_RULE_LABEL[rule.holiday]}`}）`;
+}
+
+/** カードの「15日締め・翌10日払い」。設定がそろっていなければ空。 */
+export function cardScheduleLabel(wallet: Pick<MoneyWallet, 'closeDay' | 'payDay'>): string {
+  if (wallet.closeDay === null || wallet.payDay === null) return '';
+  // 締め日のあとの最初の引き落とし日なので、引き落とし日が締め日より後なら同じ月、そうでなければ翌月。
+  const sameMonth = wallet.payDay > wallet.closeDay && wallet.closeDay < 31;
+  return `${formatDayOfMonth(wallet.closeDay)}締め・${sameMonth ? '' : '翌'}${formatDayOfMonth(wallet.payDay)}払い`;
+}
+
+/**
+ * ルールの過去1年の記録（種類・出金元・お店が同じで、見込みでないもの。新しい順）。見込みの額のもとになる
+ * （DBの money_recurring_estimate と同じ選び方。額の出し方はDBだけが持つ）。設定画面で、ルールが過去の記録と
+ * 結びついているかを確かめるのに使う。1件の記録に同じ種類の品目が複数あれば合計する。
+ */
+export function recurringHistory(
+  rule: Pick<MoneyRecurring, 'kind' | 'walletId' | 'toWalletId' | 'store' | 'categoryId' | 'specialItemId'>,
+  records: readonly MoneyRecord[],
+  today: string,
+): { occurredOn: string; amount: number }[] {
+  if (rule.walletId === null) return [];
+  const since = `${Number(today.slice(0, 4)) - 1}${today.slice(4)}`;
+  const matches = (item: MoneyItem) =>
+    rule.categoryId !== null
+      ? item.categoryId === rule.categoryId
+      : rule.specialItemId !== null
+        ? item.specialItemId === rule.specialItemId
+        : true;
+  const history: { occurredOn: string; amount: number }[] = [];
+  for (const record of records) {
+    if (record.kind !== rule.kind || record.isEstimate || record.walletId !== rule.walletId) continue;
+    if (rule.kind === 'transfer' && record.toWalletId !== rule.toWalletId) continue;
+    if (record.store.trim() !== rule.store.trim()) continue;
+    if (record.occurredOn < since || record.occurredOn >= today) continue;
+    const items = record.items.filter(matches);
+    if (items.length === 0) continue;
+    history.push({ occurredOn: record.occurredOn, amount: items.reduce((sum, item) => sum + item.amount, 0) });
+  }
+  return history.sort((x, y) => (x.occurredOn < y.occurredOn ? 1 : x.occurredOn > y.occurredOn ? -1 : 0));
+}
+
+/** その月の、見込みの額のままの記録（振替を除く。収支に入るものだけ）。 */
+export const estimatesInMonth = (records: readonly MoneyRecord[], monthKey: string): MoneyRecord[] =>
+  recordsInMonth(records, monthKey).filter((record) => record.isEstimate && record.kind !== 'transfer');
 
 /**
  * 標準の種類（Zaim のカテゴリをもとにした、どの家族でも使える並び）。docs/kakei.md §3.1。

@@ -8,16 +8,20 @@ import {
   buildMonthSummary,
   buildSpecialReview,
   buildYearSummary,
+  estimatesInMonth,
+  fiscalMonthKeys,
   fiscalYearOfMonth,
   formatSignedYen,
   formatYen,
   iconKeyOf,
   monthKeyOfDate,
+  recordTotal,
   type BudgetTile,
 } from '@/lib/moneyUtils';
 import { buildYearRows } from '@/lib/specialUtils';
 import {
   CategoryIcon,
+  EstimateBadge,
   Hero,
   PeriodBar,
   ProgressBar,
@@ -36,6 +40,7 @@ import {
 //  - 生活費の収支＝収入 − 生活費（特別費以外の支出。種類の名前が「その他」でも生活費）。貯金は記録なので式にも表示にも入れない
 //  - 特別費＝その期間に払った額と、年度の予算の残り（月ならその月までの累計での残り）
 // その下は、月なら生活費の大分類の一覧（予算を超えた順）、年なら月ごとの収支（押すとその月へ）。
+// 見込みの額（毎月の記録で自動で作り、まだ確かめていない額）は実績に入れて数え、件数と額を添えて出す（§3.3・§4.1）。
 
 interface MoneyReviewViewProps {
   period: ReviewPeriod;
@@ -96,6 +101,11 @@ export default function MoneyReviewView({
   const balance = isMonth ? month.balance : year.total.balance;
   const livingDiff = isMonth ? month.livingBudget - month.living : year.total.livingDiff;
   const planned = isMonth ? month.plannedBalance : null;
+  const estimates = useMemo(() => {
+    const keys = isMonth ? [monthKey] : fiscalMonthKeys(fiscalYear).filter((key) => key <= today);
+    const list = keys.flatMap((key) => estimatesInMonth(records, key));
+    return { count: list.length, amount: list.reduce((sum, record) => sum + recordTotal(record), 0) };
+  }, [isMonth, monthKey, fiscalYear, today, records]);
   const months = year.months.filter((row) => row.monthKey <= today && (row.recorded || row.special > 0)).reverse();
 
   return (
@@ -133,6 +143,14 @@ export default function MoneyReviewView({
             noteMinus={livingDiff < 0}
             value={`−${formatYen(living)}`}
           />
+          {estimates.count > 0 && (
+            <div className="flex items-center gap-2 pt-2">
+              <EstimateBadge />
+              <span className={`flex-1 ${type.faint}`}>
+                見込みの額 {estimates.count}件（{formatYen(estimates.amount)}）を含みます。額を確かめて直すと確定します
+              </span>
+            </div>
+          )}
         </Hero>
 
         <div className="mt-3">
@@ -220,6 +238,7 @@ export default function MoneyReviewView({
                         )}
                         {row.special > 0 && <span className={`block ${type.faint}`}>特別費 {formatYen(row.special)}</span>}
                       </span>
+                      {estimatesInMonth(records, row.monthKey).length > 0 && <EstimateBadge />}
                       {row.recorded && <span className={minus(type.amount, row.balance < 0)}>{formatSignedYen(row.balance)}</span>}
                       <ChevronRight size={16} className="text-gray-400" />
                     </button>

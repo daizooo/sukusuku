@@ -9,6 +9,7 @@ import type {
   MoneyCategory,
   MoneyRecord,
   MoneyRecordDraft,
+  MoneyRecurring,
   MoneyStore,
   MoneyWallet,
   MoneyWalletDraft,
@@ -48,7 +49,7 @@ import SpecialPanel from '@/components/living/SpecialPanel';
  * - 振り返り: 月と年は同じ面で、送りの右「月 / 年」で期間を切り替える（§4）。結論は2つ:
  *   生活費の収支（収入 − 特別費以外の支出。貯金は入れない）と、特別費（その期間に払った額と年度の予算の残り）
  * - 特別費: 年度の予定と実績の一覧・設定（「振り返り」の年と同じ年度を見る）
- * - 見出しの右の歯車は「家計の設定」（予算・種類・出金元・お店。docs/kakei.md §3.5）
+ * - 見出しの右の歯車は「家計の設定」（予算・種類・出金元・お店・毎月の記録。docs/kakei.md §3.5）
  *
  * 見出し・切り替え・月の送りは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  */
@@ -74,6 +75,7 @@ export default function MoneyScreen() {
   const [wallets, setWallets] = useState<MoneyWallet[]>([]);
   const [stores, setStores] = useState<MoneyStore[]>([]);
   const [records, setRecords] = useState<MoneyRecord[]>([]);
+  const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
   const [products, setProducts] = useState<HouseholdProduct[]>([]);
   const [specialItems, setSpecialItems] = useState<SpecialItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -96,6 +98,7 @@ export default function MoneyScreen() {
     setWallets(money.wallets);
     setStores(money.stores);
     setRecords(money.records);
+    setRecurring(money.recurring);
     setProducts(loadedProducts);
     setSpecialItems(special.items);
   }, []);
@@ -317,10 +320,15 @@ export default function MoneyScreen() {
           budgets={budgets}
           wallets={wallets}
           stores={stores}
+          recurring={recurring}
+          records={records}
+          specialItems={specialItems}
+          specialActuals={specialActuals}
           onCategories={setCategories}
           onBudgets={setBudgets}
           onWallets={setWallets}
           onStores={setStores}
+          onRecurring={setRecurring}
           onClose={() => setSettingsOpen(false)}
         />
       )}

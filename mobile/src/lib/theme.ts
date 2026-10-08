@@ -122,4 +122,6 @@ export const colors = {
   moneyOverBorder: '#fecaca', // red-200（超えたタイルの枠）
   moneyOverSurface: '#fef2f2', // red-50
   moneyIncome: '#43b02a', // 収入の額（明るい緑。green-500 と lime-600 の間）
+  moneyEstimate: '#92400e', // amber-800（見込みの額の印。docs/kakei.md §3.3）
+  moneyEstimateSurface: '#fef3c7', // amber-100
 } as const;

@@ -41,7 +41,8 @@ interface CategoryPickerProps {
   specialActuals: SpecialActual[];
   onPick: (choice: CategoryChoice) => void;
   onClose: () => void;
-  onEditCategories: () => void;
+  /** 種類と予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
+  onEditCategories?: () => void;
 }
 
 export default function CategoryPicker({
@@ -85,9 +86,11 @@ export default function CategoryPicker({
         icon="back"
         onClose={onClose}
         right={
-          <Pressable accessibilityRole="button" accessibilityLabel="種類と予算を編集" onPress={onEditCategories} hitSlop={8}>
-            <Settings2 size={20} color={colors.textMuted} />
-          </Pressable>
+          onEditCategories && (
+            <Pressable accessibilityRole="button" accessibilityLabel="種類と予算を編集" onPress={onEditCategories} hitSlop={8}>
+              <Settings2 size={20} color={colors.textMuted} />
+            </Pressable>
+          )
         }
       />
       <ScrollView contentContainerStyle={styles.content}>

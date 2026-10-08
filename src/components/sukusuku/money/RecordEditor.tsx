@@ -23,6 +23,7 @@ import {
   evaluateCalc,
   fiscalYearOfMonth,
   formatCalc,
+  formatMonthKey,
   formatYen,
   groupsFromItems,
   iconKeyOf,
@@ -33,6 +34,7 @@ import {
   livingSpendByTop,
   monthKeyOf,
   pressCalcKey,
+  recordTotal,
   storeChoices,
   RECORD_KIND_LABEL,
   sameGroupTarget,
@@ -45,7 +47,7 @@ import ItemsScreen, { blankLine, newLineKey, type ItemsWork } from './ItemsScree
 import ProductPicker, { type PickedProduct } from './ProductPicker';
 import StorePicker from './StorePicker';
 import WalletPicker from './WalletPicker';
-import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
+import { CategoryIcon, EstimateBadge, FullScreen, PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
 
 // 記録の入力（docs/kakei.md §3.2。Zaim を踏襲）。mobile版の `mobile/src/components/money/RecordEditor.tsx` と同じ流れ・文言。
 //
@@ -55,6 +57,9 @@ import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader, StackedScreen } 
 //
 // 画面は全部この1つの全画面の中で重ねる。重ねた画面はそれぞれ戻る操作の層を積み（StackedScreen）、
 // 戻る操作で1つ前の画面へ戻る。品目の書きかけは、種類の選択・日用品から選ぶへ行って戻っても残る。
+//
+// 見込みの額の記録（毎月の記録・カード代金で自動で作ったもの。§3.3）は、額を直すと確定になる。
+// 額が合っていたときは「この額で確定する」。額を変えずに保存したときは見込みのまま。
 
 type Screen =
   | { type: 'detail' }
@@ -123,6 +128,7 @@ export default function RecordEditor({
   const [amountExpr, setAmountExpr] = useState('');
   const [stack, setStack] = useState<Screen[]>([{ type: 'detail' }]);
   const [work, setWork] = useState<ItemsWork | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
 
   const screen = stack[stack.length - 1];
   const push = (next: Screen) => setStack((prev) => [...prev, next]);
@@ -134,6 +140,8 @@ export default function RecordEditor({
   const storeOptions = useMemo(() => storeChoices(stores, records), [stores, records]);
   const total = kind === 'transfer' ? transferAmount : groups.reduce((sum, group) => sum + editorGroupTotal(group), 0);
   const specialKind = kind === 'income' ? 'income' : 'expense';
+  // 見込みのままか。額を直すか「この額で確定する」で確定になる。
+  const stillEstimate = record?.isEstimate === true && !confirmed && total === recordTotal(record);
 
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '';
   const specialName = (id: string | null) => specialItems.find((item) => item.id === id)?.name ?? '';
@@ -309,6 +317,7 @@ export default function RecordEditor({
       walletId,
       toWalletId: kind === 'transfer' ? toWalletId : null,
       store: kind === 'transfer' ? '' : store,
+      isEstimate: stillEstimate,
       items,
     });
   };
@@ -463,6 +472,26 @@ export default function RecordEditor({
           <span className="pb-1.5 text-xs text-gray-400">{kind === 'transfer' ? '金額' : '合計（品目の合計）'}</span>
           <span className="text-[34px] font-bold text-gray-900 tabular-nums">{formatYen(total)}</span>
         </div>
+        {record?.isEstimate && (
+          <div className="mt-3 space-y-2 rounded-xl bg-amber-100 p-3">
+            <div className="flex items-center gap-2">
+              {stillEstimate && <EstimateBadge />}
+              <span className="flex-1 text-[13px] text-amber-800">
+                {stillEstimate ? '見込みの額です。検針票・明細などを見て額を直すと確定します' : '保存すると確定します'}
+              </span>
+            </div>
+            {stillEstimate && (
+              <button type="button" onClick={() => setConfirmed(true)} className="text-sm font-bold text-amber-800">
+                この額で確定する
+              </button>
+            )}
+          </div>
+        )}
+        {record?.month && (
+          <p className="mt-2.5 text-xs text-gray-400">
+            {record.recurringId === null ? 'カード代金' : '毎月の記録'}から自動で作った記録（{formatMonthKey(record.month)}の分）
+          </p>
+        )}
 
         <label className={fieldClass}>
           <span className="sr-only">日付</span>

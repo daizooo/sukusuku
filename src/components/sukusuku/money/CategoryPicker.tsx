@@ -40,7 +40,8 @@ interface CategoryPickerProps {
   specialActuals: SpecialActual[];
   onPick: (choice: CategoryChoice) => void;
   onClose: () => void;
-  onEditCategories: () => void;
+  /** 種類と予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
+  onEditCategories?: () => void;
 }
 
 const chipClass = 'rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50';
@@ -85,9 +86,11 @@ export default function CategoryPicker({
         icon="back"
         onClose={onClose}
         right={
-          <button type="button" aria-label="種類と予算を編集" onClick={onEditCategories} className="text-gray-500">
-            <Settings2 size={20} />
-          </button>
+          onEditCategories && (
+            <button type="button" aria-label="種類と予算を編集" onClick={onEditCategories} className="text-gray-500">
+              <Settings2 size={20} />
+            </button>
+          )
         }
       />
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">

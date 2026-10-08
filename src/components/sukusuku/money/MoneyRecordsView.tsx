@@ -13,12 +13,13 @@ import {
   recordsInMonth,
   topCategoryIdOf,
 } from '@/lib/moneyUtils';
-import { CategoryIcon, Hero, MonthBar, cardClass, incomeAmountClass, type } from './moneyVisual';
+import { CategoryIcon, EstimateBadge, Hero, MonthBar, cardClass, incomeAmountClass, type } from './moneyVisual';
 
 // 家計タブの「記録」（docs/kakei.md §2・§3）。mobile版の `mobile/src/components/money/MoneyRecordsView.tsx` と同じ並び・文言。
 //
 // 結論はその月に使った額（生活費。特別費は「特別費」の面だけで見る）。その下に記録を日ごと（新しい日から）。
 // 1行＝1件の記録（種類・お店・出金元・合計）。押すと記録の詳細。月の送りは固定で、スクロールするのは下だけ。
+// 毎月の記録・カード代金で自動で作り、まだ額を確かめていないものは金額の左に「見込み」（§3.3）。
 
 interface MoneyRecordsViewProps {
   monthKey: string;
@@ -130,6 +131,7 @@ export default function MoneyRecordsView({
                           <span className={`block truncate ${type.row}`}>{title}</span>
                           {sub !== '' && <span className={`block truncate ${type.sub}`}>{sub}</span>}
                         </span>
+                        {record.isEstimate && <EstimateBadge />}
                         <span
                           className={
                             record.kind === 'transfer'

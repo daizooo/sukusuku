@@ -4,7 +4,7 @@ import { Pencil, Plus } from 'lucide-react-native';
 import type { MoneyWallet, MoneyWalletDraft } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
-import { WALLET_TYPES } from '@/lib/moneyUtils';
+import { cardScheduleLabel, WALLET_TYPES } from '@/lib/moneyUtils';
 import { archiveMoneyWallet, insertMoneyWallet, restoreMoneyWallet, updateMoneyWallet } from '@/lib/api/money';
 import { WalletSheet } from '@/components/money/WalletPicker';
 import { ScreenHeader } from '@/components/money/moneyVisual';
@@ -89,6 +89,7 @@ export default function WalletSettings({ familyId, wallets, onWallets, onBack }:
                   <View style={styles.flex}>
                     <Text style={styles.name}>{wallet.name}</Text>
                     {wallet.isSaving && <Text style={styles.sub}>貯金用</Text>}
+                    {cardScheduleLabel(wallet) !== '' && <Text style={styles.sub}>{cardScheduleLabel(wallet)}</Text>}
                   </View>
                   <Pencil size={16} color={colors.textFaint} />
                 </Pressable>
@@ -120,6 +121,7 @@ export default function WalletSettings({ familyId, wallets, onWallets, onBack }:
         <WalletSheet
           key={editing === 'new' ? 'new' : editing.id}
           wallet={editing === 'new' ? null : editing}
+          wallets={wallets}
           onClose={() => setEditing(null)}
           onSubmit={(draft) => void save(editing === 'new' ? null : editing, draft)}
           onArchive={editing === 'new' ? undefined : () => void archive(editing)}
