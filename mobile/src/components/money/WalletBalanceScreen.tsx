@@ -101,7 +101,7 @@ export default function WalletBalanceScreen({
       { text: '取り消す', style: 'destructive', onPress: () => onDeleteBalance(balance) },
     ]);
 
-  // 履歴/推移は、帯と中身の上の左右スワイプでも切り替える（推移のグラフの上は期間の切り替え）。
+  // 履歴/推移は、帯と中身の上の左右スワイプでも切り替える。
   const swipeHandlers = useSwipeTabs(
     TABS.map((entry) => entry.id),
     tab,

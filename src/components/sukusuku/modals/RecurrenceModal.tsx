@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { Recurrence, RecurrenceFreq } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
 import { useBackdropClose } from '../ui/useBackdropClose';
-import { swipeBoundary } from '../ui/useSwipeTabs';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 import { WEEKDAY_LABELS, parseDateString, toDateString } from '@/lib/dateUtils';
 import {
   END_TYPE_OPTIONS,

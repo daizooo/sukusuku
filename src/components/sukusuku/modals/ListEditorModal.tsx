@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { Lock, Pin, PinOff, Trash2, Users } from 'lucide-react';
 import type { ListBoard } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
-import { swipeBoundary } from '../ui/useSwipeTabs';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 
 // リストの編集モード。Google Keepと同じく、一覧でクリックしたカードが画面の中央に
 // 拡大して開き、見出し・項目・グループ・固定・共有・削除までここで済ませる。

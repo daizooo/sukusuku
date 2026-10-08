@@ -8,7 +8,7 @@ import { Trash2, X } from 'lucide-react';
 import type { FeedingMethod } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
 import { useBackdropClose } from '../ui/useBackdropClose';
-import { swipeBoundary } from '../ui/useSwipeTabs';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 
 export type LogAccent = 'milk' | 'diaper' | 'pumping' | 'temperature';
 

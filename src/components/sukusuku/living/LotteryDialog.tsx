@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { useBackLayer } from '@/lib/browserHistory';
-import { swipeBoundary } from '../ui/useSwipeTabs';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 
 // 補助くじの、画面の中央に出す枠（docs/home.md §9.5）。mobile版の
 // `mobile/src/components/living/LotteryDialog.tsx` と同じ組み立て。

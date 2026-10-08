@@ -4,7 +4,8 @@ import type { ReactNode } from 'react';
 import { ArrowDownRight, ArrowLeft, ArrowUpRight, ChartCandlestick, ChevronLeft, ChevronRight, CreditCard, Landmark, PiggyBank, QrCode, RefreshCw, X } from 'lucide-react';
 import type { MoneyWalletType } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
-import { swipeBoundary, useSwipeTabs } from '../ui/useSwipeTabs';
+import { useBackdropClose } from '../ui/useBackdropClose';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 import { formatGainRate, formatMonthKey, formatSignedYen, iconTone, shiftMonth } from '@/lib/moneyUtils';
 import { MONEY_ICON_COMPONENTS } from './moneyIcons';
 import { formatFiscalYear } from '@/lib/specialUtils';
@@ -158,14 +159,8 @@ export function PeriodBar({
   fiscalYear: number;
   onFiscalYear: (fiscalYear: number) => void;
 }) {
-  // 月/年度は、帯の上の左右スワイプでも切り替える。
-  const swipeHandlers = useSwipeTabs(
-    PERIODS.map((entry) => entry.id),
-    period,
-    onPeriod,
-  );
   const toggle = (
-    <div role="tablist" className="flex rounded-full bg-gray-100 p-0.5" {...swipeHandlers}>
+    <div role="tablist" className="flex rounded-full bg-gray-100 p-0.5">
       {PERIODS.map((entry) => {
         const selected = entry.id === period;
         return (
@@ -329,11 +324,15 @@ export function EstimateBadge() {
   );
 }
 
-/** 全画面の入力の枠。戻る操作（ブラウザ・スマホ）で onBack を呼ぶ。 */
+/**
+ * 全画面の入力の枠。戻る操作（ブラウザ・スマホ）で onBack を呼ぶ。
+ * 横幅の広い画面（タブレット・PC）で両脇に出る暗い部分を押しても onBack を呼ぶ。
+ */
 export function FullScreen({ onBack, children }: { onBack: () => void; children: ReactNode }) {
   useBackLayer(onBack);
+  const backdropClose = useBackdropClose(onBack);
   return (
-    <div className="fixed inset-0 z-50 flex justify-center bg-black/30" {...swipeBoundary}>
+    <div className="fixed inset-0 z-50 flex justify-center bg-black/30" {...backdropClose} {...swipeBoundary}>
       <div className="relative flex h-full w-full max-w-md flex-col bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         {children}
       </div>

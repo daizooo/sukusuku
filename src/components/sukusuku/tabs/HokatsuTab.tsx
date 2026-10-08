@@ -238,8 +238,7 @@ export default function HokatsuTab({
   const checkGroups = selected ? checkGroupsFor(selected.name) : [];
   const checkedCount = selected ? countChecked(selected.checklist, selected.name) : 0;
   const checkTotal = selected ? checkTotalFor(selected.name) : 0;
-  // 基本情報/見学チェックリストは、画面のどこでの左右スワイプでも切り替える
-  // （園の切り替えの帯の上では、園を切り替える）。
+  // 基本情報/見学チェックリストは、画面のどこでの左右スワイプでも切り替える（園の切り替えはタップだけ）。
   const swipeHandlers = useSwipeTabs<HokatsuView>(
     ['basic', 'checklist'],
     view,

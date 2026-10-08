@@ -6,7 +6,7 @@ import type { Participant, Task, TaskKind } from '@/types/app';
 import { participantNames, useFamilyRoster } from '@/lib/familyRoster';
 import { useBackLayer } from '@/lib/browserHistory';
 import { useBackdropClose } from '../ui/useBackdropClose';
-import { swipeBoundary } from '../ui/useSwipeTabs';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 import { parseDateString } from '@/lib/dateUtils';
 import { getParticipantColor } from '@/lib/uiUtils';
 import {

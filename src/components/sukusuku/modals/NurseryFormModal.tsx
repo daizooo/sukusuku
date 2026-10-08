@@ -5,7 +5,7 @@ import { Trash2, X } from 'lucide-react';
 import type { Nursery, NurseryStatus } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
 import { useBackdropClose } from '../ui/useBackdropClose';
-import { swipeBoundary } from '../ui/useSwipeTabs';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 
 // 園の情報（連絡先・見学の日時・メモ）を編集する。
 // 見学チェックリストは保活タブの「チェックリスト」側でその場で編集するため、ここでは触らない

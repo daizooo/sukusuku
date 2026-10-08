@@ -12,7 +12,6 @@ import {
   type TrendPeriod,
 } from '@/lib/moneyUtils';
 import { cardClass, minus, SectionHeader, type } from './moneyVisual';
-import { useSwipeTabs } from '../ui/useSwipeTabs';
 
 // 残高の推移（docs/kakei.md §9.3）。mobile版の `mobile/src/components/money/BalanceTrend.tsx` と同じ並び・文言。
 // 折れ線（日ごとの残高）・期間の切り替え（はじめは全期間）・対象期間の履歴（残高が変わった日。新しい順）。
@@ -112,39 +111,31 @@ export default function BalanceTrend({
   const [period, setPeriod] = useState<TrendPeriod>('all');
   const shown = useMemo(() => filterTrend(points, period, asOf), [points, period, asOf]);
   const changes = useMemo(() => balanceChanges(shown), [shown]);
-  // 期間は、グラフと期間の帯の上の左右スワイプでも切り替える。
-  const swipeHandlers = useSwipeTabs(
-    TREND_PERIODS.map((entry) => entry.id),
-    period,
-    setPeriod,
-  );
 
   if (points.length === 0) {
     return <p className="py-8 text-center text-sm text-gray-400">{emptyText}</p>;
   }
   return (
     <div>
-      <div {...swipeHandlers}>
-        <Chart points={shown} />
-        <div role="tablist" className="mt-2 flex justify-center gap-2">
-          {TREND_PERIODS.map((entry) => {
-            const selected = entry.id === period;
-            return (
-              <button
-                key={entry.id}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                onClick={() => setPeriod(entry.id)}
-                className={`rounded-full px-3.5 py-1.5 text-[13px] ${
-                  selected ? 'bg-blue-100 font-bold text-blue-800' : 'bg-gray-100 font-semibold text-gray-500'
-                }`}
-              >
-                {entry.label}
-              </button>
-            );
-          })}
-        </div>
+      <Chart points={shown} />
+      <div role="tablist" className="mt-2 flex justify-center gap-2">
+        {TREND_PERIODS.map((entry) => {
+          const selected = entry.id === period;
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setPeriod(entry.id)}
+              className={`rounded-full px-3.5 py-1.5 text-[13px] ${
+                selected ? 'bg-blue-100 font-bold text-blue-800' : 'bg-gray-100 font-semibold text-gray-500'
+              }`}
+            >
+              {entry.label}
+            </button>
+          );
+        })}
       </div>
       {showHistory && (
         <>

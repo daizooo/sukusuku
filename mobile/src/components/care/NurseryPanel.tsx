@@ -222,8 +222,8 @@ export default function NurseryPanel() {
   const checkedCount = selected ? countChecked(selected.checklist, selected.name) : 0;
   const checkTotal = selected ? checkTotalFor(selected.name) : 0;
   const status = selected ? statusColors(selected.status) : null;
-  // 基本情報/見学チェックリストは、画面のどこでの左右スワイプでも切り替える。
-  // 園の切り替えは横にスクロールする帯なので、スワイプはスクロールに譲る。
+  // 基本情報/見学チェックリストは、画面のどこでの左右スワイプでも切り替える（園の切り替えはタップだけ）。
+  // 園の切り替えは横にスクロールする帯なので、その上のスワイプはスクロールに譲る（swipeBoundary）。
   const swipeHandlers = useSwipeTabs<HokatsuView>(
     ['basic', 'checklist'],
     view,
@@ -248,7 +248,6 @@ export default function NurseryPanel() {
                   value={selected?.id ?? ''}
                   onChange={setSelectedId}
                   fill={false}
-                  swipeable={false}
                   options={nurseries.map((nursery) => ({ id: nursery.id, label: nursery.name }))}
                 />
               </ScrollView>

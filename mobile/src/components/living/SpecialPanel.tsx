@@ -4,7 +4,6 @@ import { Check, Plus } from 'lucide-react-native';
 import type { SpecialActual, SpecialActualDraft, SpecialItem, SpecialKind } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
-import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { toDateString } from '@/lib/dateUtils';
 import {
   deleteSpecialActual,
@@ -217,125 +216,117 @@ export default function SpecialPanel({ familyId, fiscalYear, onFiscalYear, onRec
 
   const income = kind === 'income';
   const remaining = totals.budget - totals.actual;
-  // 特別費/特別収入は、帯と中身の上の左右スワイプでも切り替える。
-  const swipeHandlers = useSwipeTabs(
-    KIND_OPTIONS.map((option) => option.id),
-    kind,
-    setKind,
-  );
 
   return (
     <View style={styles.flex}>
       <YearBar fiscalYear={fiscalYear} onChange={onFiscalYear} />
-      <View style={styles.flex} {...swipeHandlers}>
-        <SegmentedTabs
-          options={KIND_OPTIONS}
-          value={kind}
-          onChange={setKind}
-          accessibilityLabel="特別費か特別収入か"
-          style={styles.kinds}
+      <SegmentedTabs
+        options={KIND_OPTIONS}
+        value={kind}
+        onChange={setKind}
+        accessibilityLabel="特別費か特別収入か"
+        style={styles.kinds}
+      />
+
+      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+        <Hero
+          label={income ? '年度に入った特別収入' : '年度に払った特別費'}
+          value={formatYen(totals.actual)}
+          note={
+            remaining < 0
+              ? `予算 ${formatYen(totals.budget)}・${formatYen(remaining)} 超過`
+              : income
+                ? `予定 ${formatYen(totals.budget)}・まだ ${formatYen(remaining)}`
+                : `予算 ${formatYen(totals.budget)}・残り ${formatYen(remaining)}`
+          }
+        >
+          <View style={styles.progress}>
+            <ProgressBar ratio={totals.budget > 0 ? totals.actual / totals.budget : 0} over={!income && remaining < 0} />
+            {pending > 0 && <Text style={type.faint}>まだ済にしていない予定 {pending}件</Text>}
+          </View>
+        </Hero>
+
+        <SectionHeader
+          title="予定と実績"
+          hint="月ごと"
+          right={
+            <Pressable accessibilityRole="button" onPress={() => setAdding(true)} disabled={!familyId} hitSlop={8} style={styles.add}>
+              <Plus size={14} color={colors.money} />
+              <Text style={type.link}>項目を追加</Text>
+            </Pressable>
+          }
         />
 
-        <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
-          <Hero
-            label={income ? '年度に入った特別収入' : '年度に払った特別費'}
-            value={formatYen(totals.actual)}
-            note={
-              remaining < 0
-                ? `予算 ${formatYen(totals.budget)}・${formatYen(remaining)} 超過`
-                : income
-                  ? `予定 ${formatYen(totals.budget)}・まだ ${formatYen(remaining)}`
-                  : `予算 ${formatYen(totals.budget)}・残り ${formatYen(remaining)}`
-            }
-          >
-            <View style={styles.progress}>
-              <ProgressBar ratio={totals.budget > 0 ? totals.actual / totals.budget : 0} over={!income && remaining < 0} />
-              {pending > 0 && <Text style={type.faint}>まだ済にしていない予定 {pending}件</Text>}
-            </View>
-          </Hero>
-
-          <SectionHeader
-            title="予定と実績"
-            hint="月ごと"
-            right={
-              <Pressable accessibilityRole="button" onPress={() => setAdding(true)} disabled={!familyId} hitSlop={8} style={styles.add}>
-                <Plus size={14} color={colors.money} />
-                <Text style={type.link}>項目を追加</Text>
-              </Pressable>
-            }
-          />
-
-          {isLoading ? (
-            <Text style={styles.message}>読み込み中...</Text>
-          ) : groups.length === 0 ? (
-            <Text style={styles.message}>
-              {hasAnything
-                ? `${formatFiscalYear(fiscalYear)}の${income ? '特別収入' : '特別費'}はありません`
-                : '年に数回の大きな出費や賞与を「項目を追加」で登録すると、年度ごとの予算と実績を見られます'}
-            </Text>
-          ) : (
-            groups.map((group) => (
-              <View key={group.month ?? 'none'} style={styles.group}>
-                <View style={styles.groupHead}>
-                  <Text style={styles.groupTitle}>{monthLabel(group.month)}</Text>
-                  <Text style={type.faint}>
-                    {formatYen(group.actual)} / {formatYen(group.budget)}
-                  </Text>
-                </View>
-                <View style={styles.card}>
-                  {group.rows.map((row, index) => {
-                    const paid = row.actual !== null;
-                    const over = isOverBudget(row);
-                    const sub = [row.item.category, row.tentative ? '月は仮' : '', row.planId === null ? '予定外' : '']
-                      .filter((text) => text !== '')
-                      .join('・');
-                    return (
-                      <Pressable
-                        key={row.key}
-                        accessibilityRole="button"
-                        onPress={() => setEditingRow({ row })}
-                        style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.pressed]}
-                      >
-                        {row.planId !== null ? (
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={paid ? `${row.item.name}は済み。実績を直す` : `${row.item.name}を済にする`}
-                            onPress={() => (paid ? setEditingRow({ row }) : void markPaid(row))}
-                            hitSlop={6}
-                            style={[styles.check, paid && styles.checkDone]}
-                          >
-                            {paid && <Check size={16} color={colors.primaryText} />}
-                          </Pressable>
-                        ) : (
-                          <View style={[styles.check, styles.checkDone]}>
-                            <Check size={16} color={colors.primaryText} />
-                          </View>
-                        )}
-                        <View style={styles.flex}>
-                          <Text style={[type.row, !paid && styles.pendingText]} numberOfLines={1}>
-                            {row.item.name}
-                          </Text>
-                          {sub !== '' && <Text style={type.faint}>{sub}</Text>}
-                        </View>
-                        <View style={styles.rowRight}>
-                          {paid ? (
-                            <Text style={[type.amount, over && type.minus]}>{formatYen(row.actual!)}</Text>
-                          ) : (
-                            <Text style={[type.amount, styles.pendingText]}>{formatYen(row.budget)}</Text>
-                          )}
-                          <Text style={type.faint}>
-                            {paid ? (row.planId !== null ? `予算 ${formatYen(row.budget)}` : '予定外') : 'まだ'}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+        {isLoading ? (
+          <Text style={styles.message}>読み込み中...</Text>
+        ) : groups.length === 0 ? (
+          <Text style={styles.message}>
+            {hasAnything
+              ? `${formatFiscalYear(fiscalYear)}の${income ? '特別収入' : '特別費'}はありません`
+              : '年に数回の大きな出費や賞与を「項目を追加」で登録すると、年度ごとの予算と実績を見られます'}
+          </Text>
+        ) : (
+          groups.map((group) => (
+            <View key={group.month ?? 'none'} style={styles.group}>
+              <View style={styles.groupHead}>
+                <Text style={styles.groupTitle}>{monthLabel(group.month)}</Text>
+                <Text style={type.faint}>
+                  {formatYen(group.actual)} / {formatYen(group.budget)}
+                </Text>
               </View>
-            ))
-          )}
-        </ScrollView>
-      </View>
+              <View style={styles.card}>
+                {group.rows.map((row, index) => {
+                  const paid = row.actual !== null;
+                  const over = isOverBudget(row);
+                  const sub = [row.item.category, row.tentative ? '月は仮' : '', row.planId === null ? '予定外' : '']
+                    .filter((text) => text !== '')
+                    .join('・');
+                  return (
+                    <Pressable
+                      key={row.key}
+                      accessibilityRole="button"
+                      onPress={() => setEditingRow({ row })}
+                      style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.pressed]}
+                    >
+                      {row.planId !== null ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={paid ? `${row.item.name}は済み。実績を直す` : `${row.item.name}を済にする`}
+                          onPress={() => (paid ? setEditingRow({ row }) : void markPaid(row))}
+                          hitSlop={6}
+                          style={[styles.check, paid && styles.checkDone]}
+                        >
+                          {paid && <Check size={16} color={colors.primaryText} />}
+                        </Pressable>
+                      ) : (
+                        <View style={[styles.check, styles.checkDone]}>
+                          <Check size={16} color={colors.primaryText} />
+                        </View>
+                      )}
+                      <View style={styles.flex}>
+                        <Text style={[type.row, !paid && styles.pendingText]} numberOfLines={1}>
+                          {row.item.name}
+                        </Text>
+                        {sub !== '' && <Text style={type.faint}>{sub}</Text>}
+                      </View>
+                      <View style={styles.rowRight}>
+                        {paid ? (
+                          <Text style={[type.amount, over && type.minus]}>{formatYen(row.actual!)}</Text>
+                        ) : (
+                          <Text style={[type.amount, styles.pendingText]}>{formatYen(row.budget)}</Text>
+                        )}
+                        <Text style={type.faint}>
+                          {paid ? (row.planId !== null ? `予算 ${formatYen(row.budget)}` : '予定外') : 'まだ'}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ))
+        )}
+      </ScrollView>
 
       {editingRow !== null && (
         <SpecialActualSheet

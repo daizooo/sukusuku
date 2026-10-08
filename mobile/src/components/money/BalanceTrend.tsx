@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import { colors } from '@/lib/theme';
-import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import {
   balanceChanges,
   filterTrend,
@@ -125,36 +124,27 @@ export default function BalanceTrend({
   const shown = useMemo(() => filterTrend(points, period, asOf), [points, period, asOf]);
   const changes = useMemo(() => balanceChanges(shown), [shown]);
 
-  // 期間は、グラフと期間の帯の上の左右スワイプでも切り替える。
-  const swipeHandlers = useSwipeTabs(
-    TREND_PERIODS.map((entry) => entry.id),
-    period,
-    setPeriod,
-  );
-
   if (points.length === 0) {
     return <Text style={styles.empty}>{emptyText}</Text>;
   }
   return (
     <View>
-      <View {...swipeHandlers}>
-        <Chart points={shown} />
-        <View accessibilityRole="tablist" style={styles.periods}>
-          {TREND_PERIODS.map((entry) => {
-            const selected = entry.id === period;
-            return (
-              <Pressable
-                key={entry.id}
-                accessibilityRole="tab"
-                accessibilityState={{ selected }}
-                onPress={() => setPeriod(entry.id)}
-                style={[styles.chip, selected && styles.chipSelected]}
-              >
-                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{entry.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+      <Chart points={shown} />
+      <View accessibilityRole="tablist" style={styles.periods}>
+        {TREND_PERIODS.map((entry) => {
+          const selected = entry.id === period;
+          return (
+            <Pressable
+              key={entry.id}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+              onPress={() => setPeriod(entry.id)}
+              style={[styles.chip, selected && styles.chipSelected]}
+            >
+              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{entry.label}</Text>
+            </Pressable>
+          );
+        })}
       </View>
       {showHistory && (
         <>
