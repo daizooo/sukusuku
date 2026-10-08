@@ -59,9 +59,20 @@ Deno.serve(async (request) => {
 
   const cronSecret = Deno.env.get('REMINDER_CRON_SECRET');
   if (cronSecret && request.headers.get('x-reminder-secret') === cronSecret) {
+    const body = await request.json().catch(() => ({}));
     // 取れるかだけ確かめる（保存しない）: body: { check: { us: ['ティッカー', …] } }
-    const check = (await request.json().catch(() => ({})))?.check;
-    if (Array.isArray(check?.us)) return json(await runCheck(check.us));
+    if (Array.isArray(body?.check?.us)) return json(await runCheck(body.check.us));
+    // 指定した銘柄の過去1年を作る（アプリを通さずに銘柄を入れたとき）: body: { backfill: '銘柄のid' }
+    if (typeof body?.backfill === 'string') {
+      const { data: security, error } = await supabase
+        .from('money_securities')
+        .select('id, family_id, kind, code, fund_code, currency')
+        .eq('id', body.backfill)
+        .maybeSingle<SecurityRow>();
+      if (error) return json({ error: error.message }, 500);
+      if (!security) return json({ error: 'not found' }, 404);
+      return json(await runBackfill(supabase, security, today));
+    }
     return json(await runDaily(supabase, today));
   }
 

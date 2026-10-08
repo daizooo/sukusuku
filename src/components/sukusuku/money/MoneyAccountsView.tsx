@@ -1,10 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronRight, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import type {
   MoneyCategory,
   MoneyRecord,
+  MoneySecuritiesData,
+  MoneySecurity,
+  MoneySecurityDraft,
   MoneyWallet,
   MoneyWalletBalance,
   MoneyWalletDraft,
@@ -16,6 +19,7 @@ import {
   formatBalance,
   WALLET_TYPES,
 } from '@/lib/moneyUtils';
+import SecuritiesWalletScreen from './SecuritiesWalletScreen';
 import TotalTrendScreen from './TotalTrendScreen';
 import WalletBalanceScreen from './WalletBalanceScreen';
 import { WalletModal } from './WalletPicker';
@@ -28,12 +32,13 @@ import { cardClass, Hero, minus, type, WalletTypeIcon } from './moneyVisual';
 // （「未確定」などの印は出さない。2026-10-08に、出しっぱなしでうるさいので外した）。
 // 出金元を押すと詳細（履歴 / 推移 / 残高計算）。出金元の追加・編集・使わなくする・また使うもこの面から。
 // 総残高に入れるのは使っている出金元だけ。カードは未払いがマイナスで入る（請求済み・未請求の内訳は、押した先の詳細だけに出す）。
-// 証券口座は、銘柄ごとの評価額（docs/kakei.md §9.2）ができるまでは入らない。
+// 証券口座の残高は、記録からではなく保有銘柄の評価額（docs/kakei.md §9.2）。押すと証券口座の詳細（推移と保有銘柄）。
 
 interface MoneyAccountsViewProps {
   wallets: MoneyWallet[];
   records: MoneyRecord[];
   balances: MoneyWalletBalance[];
+  securities: MoneySecuritiesData;
   categories: MoneyCategory[];
   specialItems: SpecialItem[];
   isLoading: boolean;
@@ -43,12 +48,15 @@ interface MoneyAccountsViewProps {
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onArchiveWallet: (wallet: MoneyWallet) => void;
   onRestoreWallet: (wallet: MoneyWallet) => void;
+  onSaveSecurity: (walletId: string, target: MoneySecurity | null, draft: MoneySecurityDraft) => void;
+  onArchiveSecurity: (walletId: string, security: MoneySecurity) => void;
 }
 
 export default function MoneyAccountsView({
   wallets,
   records,
   balances,
+  securities,
   categories,
   specialItems,
   isLoading,
@@ -58,14 +66,16 @@ export default function MoneyAccountsView({
   onSaveWallet,
   onArchiveWallet,
   onRestoreWallet,
+  onSaveSecurity,
+  onArchiveSecurity,
 }: MoneyAccountsViewProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [showTrend, setShowTrend] = useState(false);
   const today = dateKeyOfDate(new Date());
   const summary = useMemo(
-    () => buildWalletBalances(wallets, records, balances, today),
-    [wallets, records, balances, today],
+    () => buildWalletBalances(wallets, records, balances, today, securities),
+    [wallets, records, balances, today, securities],
   );
   const usable = summary.rows.filter((row) => !row.wallet.archived);
   const archived = summary.rows.filter((row) => row.wallet.archived);
@@ -73,22 +83,22 @@ export default function MoneyAccountsView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <button
-        type="button"
-        aria-label="総残高の推移を見る"
-        onClick={() => setShowTrend(true)}
-        disabled={usable.length === 0}
-        className="shrink-0 pt-3 text-left"
-      >
-        <Hero
-          label="総残高"
-          value={formatBalance(summary.total)}
-          isMinus={summary.total < 0}
-          note={usable.length === 0 ? '出金元を足すと、残高が出ます' : undefined}
-        />
-      </button>
-      {/* 右下の「＋」に一覧の最後が隠れないよう、下を空ける。 */}
+      {/* 総残高も一覧と一緒に流れる（固定しない。2026-10-08）。右下の「＋」に一覧の最後が隠れないよう、下を空ける。 */}
       <div className="flex-1 min-h-0 overflow-y-auto pb-24">
+        <button
+          type="button"
+          aria-label="総残高の推移を見る"
+          onClick={() => setShowTrend(true)}
+          disabled={usable.length === 0}
+          className="block w-full pt-3 text-left"
+        >
+          <Hero
+            label="総残高"
+            value={formatBalance(summary.total)}
+            isMinus={summary.total < 0}
+            note={usable.length === 0 ? '出金元を足すと、残高が出ます' : undefined}
+          />
+        </button>
         {isLoading && <p className="py-4 text-center text-sm text-gray-400">読み込み中...</p>}
         {WALLET_TYPES.map((walletType) => {
           const inType = usable.filter((row) => row.wallet.type === walletType.id);
@@ -96,25 +106,25 @@ export default function MoneyAccountsView({
           return (
             <section key={walletType.id} className="mt-5 space-y-1.5">
               <h4 className="text-[13px] font-bold text-gray-700">{walletType.label}</h4>
-              <div className={`${cardClass} overflow-hidden`}>
-                {inType.map((row, index) => (
+              {/* Zaim の「残高」と同じく2列に並べる（2026-10-08）。 */}
+              <div className="grid grid-cols-2 gap-2">
+                {inType.map((row) => (
                   <button
                     key={row.wallet.id}
                     type="button"
                     onClick={() => setOpenId(row.wallet.id)}
-                    className={`flex w-full items-center gap-3 px-3.5 py-3 text-left hover:bg-gray-50 ${
-                      index > 0 ? 'border-t border-gray-200' : ''
-                    }`}
+                    className={`${cardClass} flex min-w-0 flex-col gap-2 p-3 text-left hover:bg-gray-50`}
                   >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100">
-                      <WalletTypeIcon type={row.wallet.type} size={20} />
+                    <span className="flex min-w-0 items-start gap-2">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100">
+                        <WalletTypeIcon type={row.wallet.type} size={18} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className={`line-clamp-2 text-[13px] font-semibold text-gray-900`}>{row.wallet.name}</span>
+                        {row.wallet.isSaving && <span className={`block truncate ${type.faint}`}>貯金用</span>}
+                      </span>
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className={`block truncate ${type.row}`}>{row.wallet.name}</span>
-                      {row.wallet.isSaving && <span className={`block truncate ${type.sub}`}>貯金用</span>}
-                    </span>
-                    <span className={minus(type.amount, row.amount < 0)}>{formatBalance(row.amount)}</span>
-                    <ChevronRight size={16} className="text-gray-400" />
+                    <span className={`${minus(type.amount, row.amount < 0)} self-end`}>{formatBalance(row.amount)}</span>
                   </button>
                 ))}
               </div>
@@ -151,7 +161,20 @@ export default function MoneyAccountsView({
         )}
       </div>
 
-      {opened !== null && (
+      {opened !== null && opened.type === 'securities' && (
+        <SecuritiesWalletScreen
+          key={opened.id}
+          wallet={opened}
+          wallets={wallets}
+          securities={securities}
+          onClose={() => setOpenId(null)}
+          onSaveWallet={onSaveWallet}
+          onArchiveWallet={onArchiveWallet}
+          onSaveSecurity={onSaveSecurity}
+          onArchiveSecurity={onArchiveSecurity}
+        />
+      )}
+      {opened !== null && opened.type !== 'securities' && (
         <WalletBalanceScreen
           key={opened.id}
           wallet={opened}
@@ -169,7 +192,14 @@ export default function MoneyAccountsView({
         />
       )}
       {showTrend && (
-        <TotalTrendScreen wallets={wallets} records={records} balances={balances} today={today} onClose={() => setShowTrend(false)} />
+        <TotalTrendScreen
+          wallets={wallets}
+          records={records}
+          balances={balances}
+          securities={securities}
+          today={today}
+          onClose={() => setShowTrend(false)}
+        />
       )}
       {adding && (
         <WalletModal

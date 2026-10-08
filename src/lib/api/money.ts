@@ -46,7 +46,7 @@ const rowToBudget = (row: BudgetRow): MoneyBudget => ({
   monthlyAmount: row.monthly_amount,
 });
 
-const WALLET_TYPES = ['card', 'cash', 'bank', 'prepaid', 'qr'] as const;
+const WALLET_TYPES = ['card', 'cash', 'bank', 'prepaid', 'qr', 'securities'] as const;
 
 const rowToWallet = (row: WalletRow): MoneyWallet => ({
   id: row.id,

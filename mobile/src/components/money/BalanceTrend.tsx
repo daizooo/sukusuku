@@ -105,14 +105,27 @@ function Chart({ points }: { points: BalancePoint[] }) {
   );
 }
 
-/** 残高の推移。points は全期間の日ごとの残高（古い順）。 */
-export default function BalanceTrend({ points, asOf }: { points: BalancePoint[]; asOf: string }) {
+/**
+ * 残高の推移。points は全期間の日ごとの残高（古い順）。
+ * 証券（評価額。毎日変わる）は、残高が変わった日の一覧を出さない（showHistory={false}）。
+ */
+export default function BalanceTrend({
+  points,
+  asOf,
+  showHistory = true,
+  emptyText = '記録も補正もまだないので、推移は出せません',
+}: {
+  points: BalancePoint[];
+  asOf: string;
+  showHistory?: boolean;
+  emptyText?: string;
+}) {
   const [period, setPeriod] = useState<TrendPeriod>('all');
   const shown = useMemo(() => filterTrend(points, period, asOf), [points, period, asOf]);
   const changes = useMemo(() => balanceChanges(shown), [shown]);
 
   if (points.length === 0) {
-    return <Text style={styles.empty}>記録も補正もまだないので、推移は出せません</Text>;
+    return <Text style={styles.empty}>{emptyText}</Text>;
   }
   return (
     <View>
@@ -133,15 +146,19 @@ export default function BalanceTrend({ points, asOf }: { points: BalancePoint[];
           );
         })}
       </View>
-      <SectionHeader title="対象期間の履歴" />
-      <View style={styles.list}>
-        {changes.map((point, index) => (
-          <View key={point.date} style={[styles.row, index > 0 && styles.rowDivided]}>
-            <Text style={type.row}>{fullDate(point.date)}</Text>
-            <Text style={[type.amount, point.amount < 0 && type.minus]}>{formatBalance(point.amount)}</Text>
+      {showHistory && (
+        <>
+          <SectionHeader title="対象期間の履歴" />
+          <View style={styles.list}>
+            {changes.map((point, index) => (
+              <View key={point.date} style={[styles.row, index > 0 && styles.rowDivided]}>
+                <Text style={type.row}>{fullDate(point.date)}</Text>
+                <Text style={[type.amount, point.amount < 0 && type.minus]}>{formatBalance(point.amount)}</Text>
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
+        </>
+      )}
     </View>
   );
 }

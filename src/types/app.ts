@@ -613,7 +613,7 @@ export interface MoneyBudget {
 }
 
 /** 出金元の種類。 */
-export type MoneyWalletType = 'card' | 'cash' | 'bank' | 'prepaid' | 'qr';
+export type MoneyWalletType = 'card' | 'cash' | 'bank' | 'prepaid' | 'qr' | 'securities';
 
 /** 出金元。money_wallets に対応。 */
 export interface MoneyWallet {
@@ -649,6 +649,72 @@ export interface MoneyWalletBalance {
   amount: number;
   /** 口座の履歴に行として出すか。false でも残高の土台としては同じに効く。 */
   showInHistory: boolean;
+}
+
+/** 証券の銘柄の種類。米国株・米国ETF / 国内の投資信託 / 預り金（docs/kakei.md §9.2）。 */
+export type MoneySecurityKind = 'us_stock' | 'jp_fund' | 'cash';
+
+/** 証券の銘柄。money_securities に対応。価格はサーバーが毎朝取る。 */
+export interface MoneySecurity {
+  id: string;
+  name: string;
+  kind: MoneySecurityKind;
+  /** 米国株はティッカー、国内投信は ISIN コード。預り金は無し。 */
+  code: string | null;
+  /** 国内投信の協会コード。 */
+  fundCode: string | null;
+  currency: 'JPY' | 'USD';
+  position: number;
+  archived: boolean;
+}
+
+/** 預り区分。NISA成長投資枠 / NISAつみたて投資枠 / 特定 / 一般。 */
+export type MoneyHoldingAccount = 'nisa' | 'nisa_tsumitate' | 'tokutei' | 'ippan';
+
+/** 保有（証券口座・銘柄・預り区分ごと）。money_holdings に対応。 */
+export interface MoneyHolding {
+  id: string;
+  walletId: string;
+  securityId: string;
+  account: MoneyHoldingAccount;
+  /** 保有数（株数・口数・預り金の額）。 */
+  quantity: number;
+  /** 取得単価（円。国内投信は1万口あたり）。預り金は無し。 */
+  costPrice: number | null;
+  archived: boolean;
+}
+
+/** 保有ごとの日々の評価額。money_holding_values に対応（サーバーが作る）。 */
+export interface MoneyHoldingValue {
+  holdingId: string;
+  /** YYYY-MM-DD（日本時間）。 */
+  valueOn: string;
+  quantity: number;
+  /** 価格（銘柄の通貨で。国内投信は1万口あたり）。 */
+  price: number;
+  /** 為替（1単位あたりの円。円建ては 1）。 */
+  fx: number;
+  /** 評価額（円）。 */
+  value: number;
+  /** 取得額（円）。 */
+  cost: number | null;
+}
+
+/** 証券のデータ一式（口座の面で使う）。 */
+export interface MoneySecuritiesData {
+  securities: MoneySecurity[];
+  holdings: MoneyHolding[];
+  values: MoneyHoldingValue[];
+}
+
+/** 銘柄の追加・編集の入力。保有は預り区分ごと（保有数 0 の区分は使わなくする）。 */
+export interface MoneySecurityDraft {
+  name: string;
+  kind: MoneySecurityKind;
+  code: string | null;
+  fundCode: string | null;
+  currency: 'JPY' | 'USD';
+  holdings: { account: MoneyHoldingAccount; quantity: number; costPrice: number | null }[];
 }
 
 /** 家計のお店（設定データ）。money_stores に対応。記録は名前の文字列で持つので、直しても過去の記録は変わらない。 */

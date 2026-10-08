@@ -1,10 +1,10 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, CreditCard, Landmark, PiggyBank, QrCode, RefreshCw, X } from 'lucide-react';
+import { ArrowDownRight, ArrowLeft, ArrowUpRight, ChartCandlestick, ChevronLeft, ChevronRight, CreditCard, Landmark, PiggyBank, QrCode, RefreshCw, X } from 'lucide-react';
 import type { MoneyWalletType } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
-import { formatMonthKey, iconTone, shiftMonth } from '@/lib/moneyUtils';
+import { formatGainRate, formatMonthKey, formatSignedYen, iconTone, shiftMonth } from '@/lib/moneyUtils';
 import { MONEY_ICON_COMPONENTS } from './moneyIcons';
 import { formatFiscalYear } from '@/lib/specialUtils';
 
@@ -93,6 +93,7 @@ const WALLET_TYPE_ICONS = {
   card: { Icon: CreditCard, color: '#1b6b4a' },
   prepaid: { Icon: CreditCard, color: '#5b7a99' },
   qr: { Icon: QrCode, color: '#e53935' },
+  securities: { Icon: ChartCandlestick, color: '#4aa8d8' },
 } as const;
 
 /** 出金元の種類のアイコン（記録の一覧で金額の右に出す。Zaim と同じ）。 */
@@ -340,6 +341,26 @@ export function FullScreen({ onBack, children }: { onBack: () => void; children:
 export function StackedScreen({ onBack, children }: { onBack: () => void; children: ReactNode }) {
   useBackLayer(onBack);
   return <div className="flex min-h-0 flex-1 flex-col bg-white">{children}</div>;
+}
+
+/**
+ * 評価損益（証券。docs/kakei.md §9.2.4）。矢印と色で上げ下げを見せる（上げ＝緑、下げ＝赤）。
+ * 「+¥12,345（+3.21%）」。rate が無ければ金額だけ。mobile の `Gain` と同じ。
+ */
+export function Gain({ gain, rate, size = 'row' }: { gain: number; rate: number | null; size?: 'row' | 'sub' }) {
+  const up = gain >= 0;
+  const color = gain === 0 ? 'text-gray-500' : up ? incomeAmountClass : 'text-red-600';
+  const Icon = up ? ArrowUpRight : ArrowDownRight;
+  const base = (size === 'row' ? type.amount : type.sub).replace(/text-gray-\d+/, '');
+  return (
+    <span className={`inline-flex items-center gap-0.5 ${color}`}>
+      <Icon size={size === 'row' ? 16 : 13} />
+      <span className={base}>
+        {formatSignedYen(gain)}
+        {rate !== null ? `（${formatGainRate(rate)}）` : ''}
+      </span>
+    </span>
+  );
 }
 
 /** 全画面の入力の見出し。close は × 、back は ← 。 */

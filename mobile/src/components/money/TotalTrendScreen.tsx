@@ -1,36 +1,33 @@
 import { useMemo } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { MoneyRecord, MoneyWallet, MoneyWalletBalance } from '@/types/app';
+import type { MoneyRecord, MoneySecuritiesData, MoneyWallet, MoneyWalletBalance } from '@/types/app';
 import { colors } from '@/lib/theme';
-import { dailyBalances } from '@/lib/moneyUtils';
+import { totalDailyBalances } from '@/lib/moneyUtils';
 import BalanceTrend from '@/components/money/BalanceTrend';
 import { ScreenHeader, type } from '@/components/money/moneyVisual';
 
 // 総残高の推移（docs/kakei.md §9.3）。PWA版の `src/components/sukusuku/money/TotalTrendScreen.tsx` と同じ並び・文言。
-// 「口座」の総残高を押すと開く。使っている出金元の合計を、日ごとの折れ線と、残高が変わった日の一覧で見る。
+// 「口座」の総残高を押すと開く。使っている出金元の合計（証券口座は評価額。docs/kakei.md §9.2.3）を、日ごとの折れ線と、残高が変わった日の一覧で見る。
 // 戻る操作（スマホの戻るボタン）でこの画面を閉じる。
 
 interface TotalTrendScreenProps {
   wallets: MoneyWallet[];
   records: MoneyRecord[];
   balances: MoneyWalletBalance[];
+  securities: MoneySecuritiesData;
   today: string;
   onClose: () => void;
 }
 
-export default function TotalTrendScreen({ wallets, records, balances, today, onClose }: TotalTrendScreenProps) {
+export default function TotalTrendScreen({ wallets, records, balances, securities, today, onClose }: TotalTrendScreenProps) {
   const insets = useSafeAreaInsets();
   const points = useMemo(
-    () =>
-      dailyBalances(
-        wallets.filter((wallet) => !wallet.archived).map((wallet) => wallet.id),
-        records,
-        balances,
-        today,
-      ),
-    [wallets, records, balances, today],
+    () => totalDailyBalances(wallets, records, balances, securities, today),
+    [wallets, records, balances, securities, today],
   );
+  // 証券の評価額は毎日変わるので、証券口座があるときは「残高が変わった日」の一覧を出さない（毎日の行になる）。
+  const hasSecurities = wallets.some((wallet) => wallet.type === 'securities' && !wallet.archived);
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -38,7 +35,7 @@ export default function TotalTrendScreen({ wallets, records, balances, today, on
         <ScreenHeader title="残高の推移" icon="back" onClose={onClose} />
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={[type.sub, styles.subtitle]}>総残高</Text>
-          <BalanceTrend points={points} asOf={today} />
+          <BalanceTrend points={points} asOf={today} showHistory={!hasSecurities} />
         </ScrollView>
       </View>
     </Modal>
