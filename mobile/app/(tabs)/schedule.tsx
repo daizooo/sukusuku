@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -292,7 +292,8 @@ export default function ScheduleScreen() {
 
   // 矢印ボタンと同じ操作を、画面上どこでの横スワイプでもできるようにする。
   // 一覧表示（list）には日付送りが無いため、それ以外の表示中だけ有効にする。
-  const swipeHandlers = useSwipeNavigation({
+  // 画面の中身は指に合わせて横に動く。
+  const swipe = useSwipeNavigation({
     onSwipeLeft: () => step(1),
     onSwipeRight: () => step(-1),
     enabled: view !== 'list',
@@ -481,8 +482,8 @@ export default function ScheduleScreen() {
   if (!session) return <Redirect href="/login" />;
 
   return (
-    <SafeAreaView style={styles.screen} {...swipeHandlers}>
-      <View style={styles.page}>
+    <SafeAreaView style={styles.screen} {...swipe.handlers}>
+      <Animated.View style={[styles.page, swipe.style]}>
         {/* 月以外（日・リスト）では、戻るボタンだけを左上に出す（文言は付けない）。 */}
         {view !== 'month' && (
           <Pressable
@@ -603,7 +604,7 @@ export default function ScheduleScreen() {
             />
           </View>
         )}
-      </View>
+      </Animated.View>
 
       {/* 月表示では、右下のボタンが「直近のスケジュール」の一覧に重なって隠してしまうため、
           追加ボタンをその見出しの中に置く（UpcomingTasks）。それ以外の表示ではここに置く。 */}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pencil } from 'lucide-react-native';
 import type {
@@ -102,7 +102,7 @@ export default function WalletBalanceScreen({
     ]);
 
   // 履歴/推移は、帯と中身の上の左右スワイプでも切り替える。
-  const swipeHandlers = useSwipeTabs(
+  const swipe = useSwipeTabs(
     TABS.map((entry) => entry.id),
     tab,
     setTab,
@@ -155,7 +155,7 @@ export default function WalletBalanceScreen({
             </View>
           )}
         </View>
-        <View style={styles.flex} {...swipeHandlers}>
+        <View style={styles.flex} {...swipe.handlers}>
           <View accessibilityRole="tablist" style={styles.tabs}>
             {TABS.map((entry) => {
               const selected = entry.id === tab;
@@ -174,7 +174,7 @@ export default function WalletBalanceScreen({
             })}
           </View>
 
-          <ScrollView contentContainerStyle={styles.content}>
+          <Animated.ScrollView style={swipe.style} contentContainerStyle={styles.content}>
             {tab === 'history' &&
               (mine.length === 0 && shownChecks.length === 0 ? (
                 <Text style={styles.empty}>この出金元の記録はまだありません</Text>
@@ -191,7 +191,7 @@ export default function WalletBalanceScreen({
               ))}
 
             {tab === 'trend' && <BalanceTrend points={points} asOf={today} />}
-          </ScrollView>
+          </Animated.ScrollView>
         </View>
       </View>
 

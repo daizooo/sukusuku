@@ -99,7 +99,7 @@ export default function WalletBalanceScreen({
   };
 
   // 履歴/推移は、帯と中身の上の左右スワイプでも切り替える。
-  const swipeHandlers = useSwipeTabs(
+  const { handlers: swipeHandlers, attachContent } = useSwipeTabs(
     TABS.map((entry) => entry.id),
     tab,
     setTab,
@@ -150,7 +150,7 @@ export default function WalletBalanceScreen({
           </div>
         )}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col" {...swipeHandlers}>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden" {...swipeHandlers}>
         <div role="tablist" className="shrink-0 flex border-b border-gray-200 px-2">
           {TABS.map((entry) => {
             const selected = entry.id === tab;
@@ -170,7 +170,7 @@ export default function WalletBalanceScreen({
           })}
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-8">
+        <div ref={attachContent} className="flex-1 min-h-0 overflow-y-auto px-4 pb-8">
           {tab === 'history' &&
             (mine.length === 0 && shownChecks.length === 0 ? (
               <p className="py-8 text-center text-sm text-gray-400">この出金元の記録はまだありません</p>

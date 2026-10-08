@@ -60,7 +60,7 @@ export default function BodyPanel({
   useBackLayer(onBack);
   const [view, setView] = useState<BodyView>('temperature');
   // 体温/身長・体重は、画面のどこでの左右スワイプでも切り替える。
-  const swipeHandlers = useSwipeTabs<BodyView>(['temperature', 'growth'], view, setView);
+  const { handlers: swipeHandlers, attachContent } = useSwipeTabs<BodyView>(['temperature', 'growth'], view, setView);
 
   return (
     <div className="h-full flex flex-col gap-3 p-4 lg:max-w-3xl" {...swipeHandlers}>
@@ -87,7 +87,7 @@ export default function BodyPanel({
       />
 
       {/* スクロールするのは中身だけ。 */}
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pb-6">
+      <div ref={attachContent} className="flex-1 min-h-0 overflow-y-auto space-y-4 pb-6">
         {view === 'temperature' ? (
           <>
             <button onClick={onAddTemperature} className={ADD_BUTTON_CLASS}>

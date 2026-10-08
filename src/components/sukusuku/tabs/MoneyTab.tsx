@@ -291,8 +291,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   };
 
   // 口座/記録/振り返り/特別費は、帯と中身の上の左右スワイプでも切り替える
-  // （中に別の切り替えがある所では、そちらが先に受け持つ）。
-  const viewSwipeHandlers = useSwipeTabs(
+  // 帯の下の中身は指に合わせて横に動く。
+  const { handlers: swipeHandlers, attachContent } = useSwipeTabs(
     VIEWS.map((entry) => entry.id),
     view,
     setView,
@@ -312,7 +312,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           <Settings size={22} />
         </button>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col" {...viewSwipeHandlers}>
+      <div className="flex min-h-0 flex-1 flex-col" {...swipeHandlers}>
         {/* 4つの面の切り替え。等幅に並べ、選んでいる面は濃い文字と青い下線。 */}
         <div role="tablist" className="shrink-0 flex border-b border-gray-200">
           {VIEWS.map((entry) => {
@@ -335,67 +335,69 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           })}
         </div>
 
-        {view === 'records' ? (
-          <MoneyRecordsView
-            monthKey={monthKey}
-            onMonth={setMonthKey}
-            records={records}
-            categories={categories}
-            wallets={wallets}
-            specialItems={specialItems}
-            isLoading={isLoading}
-            onOpen={setEditing}
-          />
-        ) : view === 'review' ? (
-          <MoneyReviewView
-            period={period}
-            onPeriod={changePeriod}
-            monthKey={monthKey}
-            onMonth={setMonthKey}
-            fiscalYear={fiscalYear}
-            onFiscalYear={setFiscalYear}
-            records={records}
-            categories={categories}
-            budgets={budgets}
-            specialItems={specialItems}
-            specialActuals={specialActuals}
-            onSelectMonth={(next) => {
-              setMonthKey(next);
-              setPeriod('month');
-            }}
-            onEditCategories={() => setEditingCategories(true)}
-            onOpenSpecial={() => {
-              // 「特別費」の面は振り返りの年度を見るので、月の振り返りから来たらその月の年度にそろえる。
-              if (period === 'month') setFiscalYear(fiscalYearOfMonth(monthKey));
-              setView('special');
-            }}
-          />
-        ) : view === 'special' ? (
-          <SpecialPanel
-            familyId={familyId}
-            fiscalYear={fiscalYear}
-            onFiscalYear={setFiscalYear}
-            onRecordsChanged={() => void reload().catch(() => {})}
-          />
-        ) : (
-          <MoneyAccountsView
-            wallets={wallets}
-            records={records}
-            balances={balances}
-            securities={securities}
-            categories={categories}
-            specialItems={specialItems}
-            isLoading={isLoading}
-            onOpenRecord={setEditing}
-            onConfirm={(walletId, balanceOn, amount, showInHistory) => void confirmBalance(walletId, balanceOn, amount, showInHistory)}
-            onDeleteBalance={(balance) => void removeBalance(balance)}
-            onSaveWallet={saveWallet}
-            onArchiveWallet={(wallet) => void archiveWallet(wallet)}
-            onRestoreWallet={(wallet) => void restoreWallet(wallet)}
-            onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
-            onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
-          />
-        )}
+        <div ref={attachContent} className="flex min-h-0 flex-1 flex-col">
+          {view === 'records' ? (
+            <MoneyRecordsView
+              monthKey={monthKey}
+              onMonth={setMonthKey}
+              records={records}
+              categories={categories}
+              wallets={wallets}
+              specialItems={specialItems}
+              isLoading={isLoading}
+              onOpen={setEditing}
+            />
+          ) : view === 'review' ? (
+            <MoneyReviewView
+              period={period}
+              onPeriod={changePeriod}
+              monthKey={monthKey}
+              onMonth={setMonthKey}
+              fiscalYear={fiscalYear}
+              onFiscalYear={setFiscalYear}
+              records={records}
+              categories={categories}
+              budgets={budgets}
+              specialItems={specialItems}
+              specialActuals={specialActuals}
+              onSelectMonth={(next) => {
+                setMonthKey(next);
+                setPeriod('month');
+              }}
+              onEditCategories={() => setEditingCategories(true)}
+              onOpenSpecial={() => {
+                // 「特別費」の面は振り返りの年度を見るので、月の振り返りから来たらその月の年度にそろえる。
+                if (period === 'month') setFiscalYear(fiscalYearOfMonth(monthKey));
+                setView('special');
+              }}
+            />
+          ) : view === 'special' ? (
+            <SpecialPanel
+              familyId={familyId}
+              fiscalYear={fiscalYear}
+              onFiscalYear={setFiscalYear}
+              onRecordsChanged={() => void reload().catch(() => {})}
+            />
+          ) : (
+            <MoneyAccountsView
+              wallets={wallets}
+              records={records}
+              balances={balances}
+              securities={securities}
+              categories={categories}
+              specialItems={specialItems}
+              isLoading={isLoading}
+              onOpenRecord={setEditing}
+              onConfirm={(walletId, balanceOn, amount, showInHistory) => void confirmBalance(walletId, balanceOn, amount, showInHistory)}
+              onDeleteBalance={(balance) => void removeBalance(balance)}
+              onSaveWallet={saveWallet}
+              onArchiveWallet={(wallet) => void archiveWallet(wallet)}
+              onRestoreWallet={(wallet) => void restoreWallet(wallet)}
+              onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
+              onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
+            />
+          )}
+        </div>
       </div>
 
       {/* 記録の追加は右下の丸いボタン（Zaim と同じ）。どの面でも同じ場所。 */}

@@ -239,7 +239,7 @@ export default function HokatsuTab({
   const checkedCount = selected ? countChecked(selected.checklist, selected.name) : 0;
   const checkTotal = selected ? checkTotalFor(selected.name) : 0;
   // 基本情報/見学チェックリストは、画面のどこでの左右スワイプでも切り替える（園の切り替えはタップだけ）。
-  const swipeHandlers = useSwipeTabs<HokatsuView>(
+  const { handlers: swipeHandlers, attachContent } = useSwipeTabs<HokatsuView>(
     ['basic', 'checklist'],
     view,
     setView,
@@ -288,7 +288,7 @@ export default function HokatsuTab({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={attachContent} className="flex-1 overflow-y-auto">
         {isLoadingNurseries && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
 
         {!isLoadingNurseries && nurseries.length === 0 && (
