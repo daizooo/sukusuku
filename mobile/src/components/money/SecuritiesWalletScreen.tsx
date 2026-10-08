@@ -13,7 +13,7 @@ import { Gain, ScreenHeader, SectionHeader, type } from '@/components/money/mone
 
 // 証券口座の詳細（docs/kakei.md §9.2.4）。PWA版の `src/components/sukusuku/money/SecuritiesWalletScreen.tsx` と同じ並び・文言。
 // 上に評価額と評価損益、評価額の推移（はじめは全期間。1ヶ月・半年・1年）、下に保有銘柄の一覧
-// （銘柄名・評価額・評価損益。預り区分の違う同じ銘柄は1行）。銘柄を押すと銘柄の詳細。
+// （銘柄名・評価額・評価損益。Zaim と同じく預り区分ごとに1行・同じ並び）。行を押すと銘柄の詳細。
 // 証券口座は記録からではなく評価額で数えるので、補正のボタンは出さない。
 // 出金元の編集は見出しの鉛筆から。戻る操作は、シート・銘柄の詳細を閉じる → この画面を閉じる、の順。
 
@@ -56,7 +56,7 @@ export default function SecuritiesWalletScreen({
       ),
     [wallet.id, securities, today],
   );
-  const opened = securities.securities.find((security) => security.id === openId) ?? null;
+  const opened = rows.find((row) => row.holding.id === openId) ?? null;
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -89,9 +89,9 @@ export default function SecuritiesWalletScreen({
             <View style={styles.card}>
               {rows.map((row, index) => (
                 <Pressable
-                  key={row.security.id}
+                  key={row.holding.id}
                   accessibilityRole="button"
-                  onPress={() => setOpenId(row.security.id)}
+                  onPress={() => setOpenId(row.holding.id)}
                   style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.pressed]}
                 >
                   <Text style={[type.row, styles.flex]} numberOfLines={2}>
@@ -115,15 +115,16 @@ export default function SecuritiesWalletScreen({
 
       {opened !== null && (
         <SecurityScreen
-          key={opened.id}
+          key={opened.holding.id}
           wallet={wallet}
-          security={opened}
+          holding={opened.holding}
+          security={opened.security}
           securities={securities}
           onClose={() => setOpenId(null)}
-          onSave={(draft) => onSaveSecurity(wallet.id, opened, draft)}
+          onSave={(draft) => onSaveSecurity(wallet.id, opened.security, draft)}
           onArchive={() => {
             setOpenId(null);
-            onArchiveSecurity(wallet.id, opened);
+            onArchiveSecurity(wallet.id, opened.security);
           }}
         />
       )}

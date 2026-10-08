@@ -2,13 +2,12 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import { Pencil } from 'lucide-react';
-import type { MoneySecuritiesData, MoneySecurity, MoneySecurityDraft, MoneyWallet } from '@/types/app';
+import type { MoneyHolding, MoneySecuritiesData, MoneySecurity, MoneySecurityDraft, MoneyWallet } from '@/types/app';
 import {
   dateKeyOfDate,
   formatBalance,
   formatQuantity,
-  formatSecurityPrice,
-  holdingAccountLabel,
+  formatYen,
   holdingDailyValues,
   securityRows,
 } from '@/lib/moneyUtils';
@@ -17,10 +16,12 @@ import SecuritySheet from './SecuritySheet';
 import { cardClass, FullScreen, Gain, ScreenHeader, type } from './moneyVisual';
 
 // 銘柄の詳細（docs/kakei.md §9.2.4）。mobile版の `mobile/src/components/money/SecurityScreen.tsx` と同じ並び・文言。
-// 上に評価額と推移、下に詳細（評価損益・現在値・取得単価・保有数。保有数は預り区分ごと）。編集は見出しの鉛筆から。
+// Zaim と同じく保有（預り区分）ごとに開く。上に評価額と推移、下に詳細（評価損益・現在値（投信は基準価額）・取得単価・
+// 保有株数（投信は保有口数）。金額はすべて円）。預り金は推移だけ。編集は見出しの鉛筆から（その銘柄の預り区分をまとめて直す）。
 
 interface SecurityScreenProps {
   wallet: MoneyWallet;
+  holding: MoneyHolding;
   security: MoneySecurity;
   securities: MoneySecuritiesData;
   onClose: () => void;
@@ -28,55 +29,36 @@ interface SecurityScreenProps {
   onArchive: () => void;
 }
 
-export default function SecurityScreen({ wallet, security, securities, onClose, onSave, onArchive }: SecurityScreenProps) {
+export default function SecurityScreen({ wallet, holding, security, securities, onClose, onSave, onArchive }: SecurityScreenProps) {
   const [editing, setEditing] = useState(false);
   const today = dateKeyOfDate(new Date());
   const row = useMemo(
-    () => securityRows(wallet.id, securities, today).find((entry) => entry.security.id === security.id) ?? null,
-    [wallet.id, securities, today, security.id],
+    () => securityRows(wallet.id, securities, today).find((entry) => entry.holding.id === holding.id) ?? null,
+    [wallet.id, securities, today, holding.id],
   );
-  const holdings = securities.holdings.filter((holding) => holding.walletId === wallet.id && holding.securityId === security.id);
-  const points = useMemo(
-    () =>
-      holdingDailyValues(
-        securities.holdings
-          .filter((holding) => holding.walletId === wallet.id && holding.securityId === security.id)
-          .map((holding) => holding.id),
-        securities.values,
-        today,
-      ),
-    [securities, wallet.id, security.id, today],
-  );
-  const shown = row?.holdings ?? [];
-  const isCash = security.kind === 'cash';
-  // 詳細の行（評価損益・現在値・取得単価・保有数。預り金は額だけ）。
-  const details: { key: string; label: string; note?: string; value: ReactNode }[] = [];
-  if (row?.gain != null) {
-    details.push({ key: 'gain', label: '評価損益', value: <Gain gain={row.gain} rate={row.gainRate} /> });
-  }
-  if (!isCash) {
+  const holdings = securities.holdings.filter((entry) => entry.walletId === wallet.id && entry.securityId === security.id);
+  const points = useMemo(() => holdingDailyValues([holding.id], securities.values, today), [holding.id, securities, today]);
+  const isFund = security.kind === 'jp_fund';
+  // 詳細の行（Zaim と同じ項目。預り金は無し）。
+  const details: { key: string; label: string; value: ReactNode }[] = [];
+  if (security.kind !== 'cash') {
+    if (row?.gain != null) {
+      details.push({ key: 'gain', label: '評価損益', value: <Gain gain={row.gain} rate={row.gainRate} /> });
+    }
     details.push({
       key: 'price',
-      label: '現在値',
-      note: security.kind === 'jp_fund' ? '1万口あたり' : undefined,
-      value: <span className={type.amount}>{row?.price != null ? formatSecurityPrice(row.price, security.currency) : '−'}</span>,
+      label: isFund ? '基準価額' : '現在値',
+      value: <span className={type.amount}>{row?.price != null ? formatYen(Math.round(row.price)) : '−'}</span>,
     });
     details.push({
       key: 'cost',
       label: '取得単価',
-      value: <span className={type.amount}>{row?.costPrice != null ? formatSecurityPrice(row.costPrice, 'JPY') : '−'}</span>,
+      value: <span className={type.amount}>{holding.costPrice !== null ? formatYen(Math.round(holding.costPrice)) : '−'}</span>,
     });
-  }
-  for (const holding of shown) {
     details.push({
-      key: holding.id,
-      label: isCash ? '額' : '保有数',
-      note: !isCash && shown.length > 1 ? holdingAccountLabel(holding.account) : undefined,
-      value: (
-        <span className={type.amount}>
-          {isCash ? formatSecurityPrice(holding.quantity, security.currency) : formatQuantity(holding.quantity, security.kind)}
-        </span>
-      ),
+      key: 'quantity',
+      label: isFund ? '保有口数' : '保有株数',
+      value: <span className={type.amount}>{formatQuantity(holding.quantity)}</span>,
     });
   }
 
@@ -98,17 +80,18 @@ export default function SecurityScreen({ wallet, security, securities, onClose, 
       </div>
       <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-4 pb-8 pt-2">
         <BalanceTrend points={points} asOf={today} showHistory={false} emptyText="まだ評価額がありません" />
-        <div className={`${cardClass} overflow-hidden`}>
-          {details.map((detail, index) => (
-            <div key={detail.key} className={`flex items-center gap-3 px-3.5 py-3 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
-              <div className="min-w-0 flex-1">
-                <p className={type.row}>{detail.label}</p>
-                {detail.note !== undefined && <p className={type.faint}>{detail.note}</p>}
+        {details.length > 0 && (
+          <div className={`${cardClass} overflow-hidden`}>
+            {details.map((detail, index) => (
+              <div key={detail.key} className={`flex items-center gap-3 px-3.5 py-3 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
+                <div className="min-w-0 flex-1">
+                  <p className={type.row}>{detail.label}</p>
+                </div>
+                {detail.value}
               </div>
-              {detail.value}
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {editing && (

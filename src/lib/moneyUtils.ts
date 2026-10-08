@@ -1261,11 +1261,11 @@ export const SECURITY_KINDS: { id: MoneySecurityKind; label: string }[] = [
   { id: 'cash', label: '預り金' },
 ];
 
-/** 預り区分（証券のアプリの並び）。 */
+/** 預り区分（Zaim・証券のアプリの並び）。 */
 export const HOLDING_ACCOUNTS: { id: MoneyHoldingAccount; label: string }[] = [
+  { id: 'tokutei', label: '特定' },
   { id: 'nisa', label: 'NISA成長投資枠' },
   { id: 'nisa_tsumitate', label: 'NISAつみたて投資枠' },
-  { id: 'tokutei', label: '特定' },
   { id: 'ippan', label: '一般' },
 ];
 
@@ -1374,30 +1374,26 @@ export function totalDailyBalances(
 }
 
 export interface SecurityRow {
+  holding: MoneyHolding;
   security: MoneySecurity;
-  /** その口座での保有（預り区分ごと。使っているものだけ）。 */
-  holdings: MoneyHolding[];
   /** 評価額（円）。 */
   value: number;
-  /** 取得額（円）。取得単価が1つも無ければ null。 */
+  /** 取得額（円）。取得単価が無ければ null。 */
   cost: number | null;
   /** 評価損益（円）。取得額が無ければ null。 */
   gain: number | null;
   /** 評価損益の割合（評価損益 ÷ 取得額）。取得額が無い・0なら null。 */
   gainRate: number | null;
-  /** 保有数の合計。 */
-  quantity: number;
-  /** 現在値（銘柄の通貨で。国内投信は1万口あたり）。まだ取れていなければ null。 */
+  /** 現在値（円。ドル建ては × 為替。国内投信は1万口あたりの基準価額）。まだ取れていない・預り金は null。 */
   price: number | null;
   /** 現在値の日付（評価額の行の日）。 */
   priceOn: string | null;
-  /** 取得単価（円。保有数で重みをつけた平均。国内投信は1万口あたり）。 */
-  costPrice: number | null;
 }
 
 /**
- * 証券口座の保有銘柄の一覧（評価額の大きい順）。預り区分の違う同じ銘柄は1行にまとめる。
- * 評価額は保有ごとに asOf 以前で最新の行。取得額は今の保有数 × 取得単価。
+ * 証券口座の保有の一覧。Zaim と同じく**預り区分ごとに1行**で、並びは 預り区分（特定 → NISA成長投資枠 →
+ * NISAつみたて投資枠 → 一般）→ 銘柄の並び順。預り金は最後。使わなくした保有は入れない。
+ * 評価額は asOf 以前で最新の行。取得額は今の保有数 × 取得単価。金額はすべて円。
  */
 export function securityRows(
   walletId: string,
@@ -1405,47 +1401,33 @@ export function securityRows(
   asOf: string,
 ): SecurityRow[] {
   const rows: SecurityRow[] = [];
-  for (const security of data.securities) {
-    const holdings = data.holdings.filter(
-      (holding) => holding.walletId === walletId && holding.securityId === security.id && !holding.archived,
-    );
-    if (holdings.length === 0) continue;
-    const unit = securityUnit(security.kind);
-    let value = 0;
-    let quantity = 0;
-    let cost = 0;
-    let costQuantity = 0;
-    let price: number | null = null;
-    let priceOn: string | null = null;
-    for (const holding of holdings) {
-      const latest = latestValue(holding.id, data.values, asOf);
-      value += latest?.value ?? 0;
-      quantity += holding.quantity;
-      if (holding.costPrice !== null) {
-        cost += Math.round((holding.quantity * holding.costPrice) / unit);
-        costQuantity += holding.quantity;
-      }
-      if (latest !== null && (priceOn === null || latest.valueOn >= priceOn)) {
-        price = security.kind === 'cash' ? null : latest.price;
-        priceOn = latest.valueOn;
-      }
-    }
-    const hasCost = costQuantity > 0;
-    const gain = hasCost ? value - cost : null;
+  for (const holding of data.holdings) {
+    if (holding.walletId !== walletId || holding.archived) continue;
+    const security = data.securities.find((entry) => entry.id === holding.securityId);
+    if (!security) continue;
+    const latest = latestValue(holding.id, data.values, asOf);
+    const value = latest?.value ?? 0;
+    const cost =
+      holding.costPrice === null ? null : Math.round((holding.quantity * holding.costPrice) / securityUnit(security.kind));
+    const gain = cost === null ? null : value - cost;
     rows.push({
+      holding,
       security,
-      holdings,
       value,
-      cost: hasCost ? cost : null,
+      cost,
       gain,
-      gainRate: hasCost && cost > 0 && gain !== null ? gain / cost : null,
-      quantity,
-      price,
-      priceOn,
-      costPrice: hasCost ? (cost * unit) / costQuantity : null,
+      gainRate: cost !== null && cost > 0 && gain !== null ? gain / cost : null,
+      price: latest === null || security.kind === 'cash' ? null : latest.price * latest.fx,
+      priceOn: latest?.valueOn ?? null,
     });
   }
-  return rows.sort((a, b) => b.value - a.value);
+  const accountIndex = (account: MoneyHoldingAccount) => HOLDING_ACCOUNTS.findIndex((entry) => entry.id === account);
+  return rows.sort(
+    (a, b) =>
+      Number(a.security.kind === 'cash') - Number(b.security.kind === 'cash') ||
+      accountIndex(a.holding.account) - accountIndex(b.holding.account) ||
+      a.security.position - b.security.position,
+  );
 }
 
 /** 証券口座の評価損益の合計（取得単価のある銘柄だけ）。1つも無ければ null。 */
@@ -1463,19 +1445,5 @@ export function formatGainRate(rate: number): string {
   return `${rate > 0 ? '+' : '−'}${Math.abs(rate * 100).toFixed(2)}%`;
 }
 
-/** 現在値・取得単価（ドルは $123.45、円は ¥12,345）。 */
-export function formatSecurityPrice(value: number, currency: 'JPY' | 'USD'): string {
-  if (currency === 'USD') {
-    return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  }
-  return `¥${Math.round(value).toLocaleString('ja-JP')}`;
-}
-
-/** 保有数（株・口。小数は4桁まで）。 */
-export function formatQuantity(quantity: number, kind: MoneySecurityKind): string {
-  const text = quantity.toLocaleString('ja-JP', { maximumFractionDigits: 4 });
-  if (kind === 'jp_fund') return `${text}口`;
-  if (kind === 'us_stock') return `${text}株`;
-  return text;
-}
-
+/** 保有数（株数・口数。小数は4桁まで）。 */
+export const formatQuantity = (quantity: number): string => quantity.toLocaleString('ja-JP', { maximumFractionDigits: 4 });

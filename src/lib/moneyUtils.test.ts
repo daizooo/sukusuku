@@ -51,7 +51,6 @@ import {
   matchesStore,
   formatGainRate,
   formatQuantity,
-  formatSecurityPrice,
   holdingDailyValues,
   securitiesValueOn,
   securityRows,
@@ -598,7 +597,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
   const val = (holdingId: string, valueOn: string, value: number, price = 0, cost: number | null = null): MoneyHoldingValue => ({
     holdingId, valueOn, quantity: 0, price, fx: 1, value, cost,
   });
-  const securities = [sec('fund', 'jp_fund'), sec('stock', 'us_stock', 'USD'), sec('usd', 'cash', 'USD')];
+  const securities = [{ ...sec('fund', 'jp_fund'), position: 1 }, sec('stock', 'us_stock', 'USD'), { ...sec('usd', 'cash', 'USD'), position: 0 }];
   // 投信を NISA と特定で、米国株を特定で、ドルの預り金を持つ。
   const holdings = [
     hold('h1', 'fund', 'nisa', 100000, 30000),
@@ -637,26 +636,27 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
   assert.deepEqual(sumDailyPoints([], []), []);
 
   const rows = securityRows('sec', data, '2026-10-08');
-  assert.deepEqual(rows.map((row) => row.security.id), ['fund', 'stock', 'usd'], '評価額の大きい順。預り区分の違う同じ銘柄は1行');
-  const fund = rows[0];
-  assert.equal(fund.value, 690000);
-  assert.equal(fund.cost, 300000 + 200000, '取得額 = 保有数 × 取得単価 ÷ 1万口');
-  assert.equal(fund.gain, 190000);
-  assert.equal(fund.gainRate, 0.38);
-  assert.equal(fund.quantity, 150000);
-  assert.equal(fund.price, 46000);
-  assert.equal(fund.priceOn, '2026-10-08');
-  assert.equal(Math.round(fund.costPrice ?? 0), 33333, '取得単価は保有数で重みをつけた平均');
-  const stock = rows[1];
-  assert.equal(stock.holdings.length, 1, '使わなくした保有は一覧に入れない');
+  assert.deepEqual(
+    rows.map((row) => `${row.security.id}:${row.holding.account}`),
+    ['stock:tokutei', 'fund:tokutei', 'fund:nisa', 'usd:tokutei'],
+    '預り区分ごとに1行。特定 → NISA… の順、同じ区分は銘柄の並び順、預り金は最後。使わなくした保有は入れない',
+  );
+  const fundNisa = rows[2];
+  assert.equal(fundNisa.value, 460000);
+  assert.equal(fundNisa.cost, 300000, '取得額 = 保有数 × 取得単価 ÷ 1万口');
+  assert.equal(fundNisa.gain, 160000);
+  assert.equal(Math.round((fundNisa.gainRate ?? 0) * 1000) / 1000, 0.533);
+  assert.equal(fundNisa.price, 46000, '基準価額（1万口あたり）');
+  assert.equal(fundNisa.priceOn, '2026-10-08');
+  const stock = rows[0];
   assert.equal(stock.gain, 240000 - 150000);
-  assert.equal(stock.price, 160);
-  const usd = rows[2];
+  assert.equal(stock.price, 160, 'ドル建ては × 為替の円（ここでは為替 1）');
+  const usd = rows[3];
   assert.equal(usd.cost, null, '預り金は取得額なし');
   assert.equal(usd.gain, null);
   assert.equal(usd.price, null);
 
-  assert.deepEqual(walletGain(rows), { gain: 190000 + 90000, rate: 280000 / 650000 });
+  assert.deepEqual(walletGain(rows), { gain: 90000 + 30000 + 160000, rate: 280000 / 650000 });
   assert.equal(walletGain([]), null);
 
   // 総残高: 証券口座は評価額で数える（記録・補正は見ない）。
@@ -675,10 +675,8 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
 
   assert.equal(formatGainRate(0.38), '+38.00%');
   assert.equal(formatGainRate(-0.05), '−5.00%');
-  assert.equal(formatSecurityPrice(160, 'USD'), '$160.00');
-  assert.equal(formatSecurityPrice(45638, 'JPY'), '¥45,638');
-  assert.equal(formatQuantity(123456, 'jp_fund'), '123,456口');
-  assert.equal(formatQuantity(10.5, 'us_stock'), '10.5株');
+  assert.equal(formatQuantity(123456), '123,456');
+  assert.equal(formatQuantity(10.5), '10.5');
 }
 
 console.log('moneyUtils: ok');
