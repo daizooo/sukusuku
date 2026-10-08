@@ -157,8 +157,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       if (saved.items.some((item) => item.productId !== null)) {
         setProducts(await loadHouseholdProducts(supabase, familyId));
       }
-      // 新しいお店の名前は、DBの save_money_record がお店の設定に登録する。
-      if (saved.store !== '' && !stores.some((entry) => entry.name === saved.store)) {
+      // 「お店に登録して使う」を選んだお店は、DBの save_money_record がお店の設定に登録する（docs/kakei.md §3.5）。
+      if (draft.registerStore && saved.store !== '' && !stores.some((entry) => entry.name === saved.store && !entry.archived)) {
         setStores(await loadMoneyStores(supabase, familyId));
       }
     } catch {

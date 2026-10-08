@@ -198,6 +198,7 @@ export async function saveMoneyRecord(supabase: SupabaseDb, draft: MoneyRecordDr
     wallet_id: draft.walletId,
     to_wallet_id: draft.kind === 'transfer' ? draft.toWalletId : null,
     store: draft.kind === 'transfer' ? '' : draft.store.trim(),
+    register_store: draft.registerStore === true,
     is_estimate: draft.isEstimate,
   };
   const items: Json = draft.items.map((item) => ({
@@ -419,7 +420,7 @@ export async function deleteMoneyWalletBalance(supabase: SupabaseDb, id: string)
 
 // ---- お店（設定データ。docs/kakei.md §3.5） ----
 
-/** お店の設定を読み直す（記録の保存で新しいお店が自動で登録されたあとなど）。 */
+/** お店の設定を読み直す（記録の保存で「お店に登録して使う」を選んだお店が登録されたあとなど）。 */
 export async function loadMoneyStores(supabase: SupabaseDb, familyId: string): Promise<MoneyStore[]> {
   const { data, error } = await supabase.from('money_stores').select('*').eq('family_id', familyId);
   if (error) throw error;
