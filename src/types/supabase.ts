@@ -799,6 +799,139 @@ export type Database = {
           },
         ]
       }
+      money_fx_rates: {
+        Row: {
+          created_at: string
+          currency: string
+          rate: number
+          rate_on: string
+        }
+        Insert: {
+          created_at?: string
+          currency: string
+          rate: number
+          rate_on: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          rate?: number
+          rate_on?: string
+        }
+        Relationships: []
+      }
+      money_holding_values: {
+        Row: {
+          cost: number | null
+          created_at: string
+          family_id: string
+          fx: number
+          holding_id: string
+          price: number
+          quantity: number
+          value: number
+          value_on: string
+        }
+        Insert: {
+          cost?: number | null
+          created_at?: string
+          family_id: string
+          fx: number
+          holding_id: string
+          price: number
+          quantity: number
+          value: number
+          value_on: string
+        }
+        Update: {
+          cost?: number | null
+          created_at?: string
+          family_id?: string
+          fx?: number
+          holding_id?: string
+          price?: number
+          quantity?: number
+          value?: number
+          value_on?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_holding_values_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_holding_values_holding_fkey"
+            columns: ["holding_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_holdings"
+            referencedColumns: ["id", "family_id"]
+          },
+        ]
+      }
+      money_holdings: {
+        Row: {
+          account: string
+          archived_at: string | null
+          cost_price: number | null
+          created_at: string
+          family_id: string
+          id: string
+          quantity: number
+          security_id: string
+          updated_at: string
+          wallet_id: string
+        }
+        Insert: {
+          account?: string
+          archived_at?: string | null
+          cost_price?: number | null
+          created_at?: string
+          family_id: string
+          id?: string
+          quantity?: number
+          security_id: string
+          updated_at?: string
+          wallet_id: string
+        }
+        Update: {
+          account?: string
+          archived_at?: string | null
+          cost_price?: number | null
+          created_at?: string
+          family_id?: string
+          id?: string
+          quantity?: number
+          security_id?: string
+          updated_at?: string
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_holdings_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_holdings_security_fkey"
+            columns: ["security_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_securities"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
+            foreignKeyName: "money_holdings_wallet_fkey"
+            columns: ["wallet_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_wallets"
+            referencedColumns: ["id", "family_id"]
+          },
+        ]
+      }
       money_items: {
         Row: {
           amount: number
@@ -1068,6 +1201,95 @@ export type Database = {
             columns: ["wallet_id", "family_id"]
             isOneToOne: false
             referencedRelation: "money_wallets"
+            referencedColumns: ["id", "family_id"]
+          },
+        ]
+      }
+      money_securities: {
+        Row: {
+          archived_at: string | null
+          code: string | null
+          created_at: string
+          currency: string
+          family_id: string
+          fund_code: string | null
+          id: string
+          kind: string
+          name: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          code?: string | null
+          created_at?: string
+          currency?: string
+          family_id: string
+          fund_code?: string | null
+          id?: string
+          kind: string
+          name: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          code?: string | null
+          created_at?: string
+          currency?: string
+          family_id?: string
+          fund_code?: string | null
+          id?: string
+          kind?: string
+          name?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_securities_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_security_prices: {
+        Row: {
+          created_at: string
+          family_id: string
+          price: number
+          price_on: string
+          security_id: string
+        }
+        Insert: {
+          created_at?: string
+          family_id: string
+          price: number
+          price_on: string
+          security_id: string
+        }
+        Update: {
+          created_at?: string
+          family_id?: string
+          price?: number
+          price_on?: string
+          security_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_security_prices_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_security_prices_security_fkey"
+            columns: ["security_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_securities"
             referencedColumns: ["id", "family_id"]
           },
         ]
@@ -2097,6 +2319,10 @@ export type Database = {
       money_shift_business_day: {
         Args: { p_date: string; p_holiday: string }
         Returns: string
+      }
+      refresh_money_holding_values: {
+        Args: { p_from: string; p_holding_id?: string; p_to: string }
+        Returns: number
       }
       save_money_record: {
         Args: { p_items: Json; p_record: Json }
