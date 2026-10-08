@@ -7,6 +7,7 @@ import { WEEKDAY_LABELS, formatTimeString } from '@/lib/dateUtils';
 import { colors } from '@/lib/theme';
 import GrowthChart from '@/components/log/GrowthChart';
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
+import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 
 // 育児タブの「からだ」。体温と身長・体重（成長）を、1つの画面で記録して振り返る。
 //
@@ -51,9 +52,11 @@ export default function BodyPanel({
   onEditGrowth,
 }: BodyPanelProps) {
   const [view, setView] = useState<BodyView>('temperature');
+  // 体温/身長・体重は、画面のどこでの左右スワイプでも切り替える。
+  const swipeHandlers = useSwipeTabs<BodyView>(['temperature', 'growth'], view, setView);
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} {...swipeHandlers}>
       <View style={styles.header}>
         <Pressable
           accessibilityRole="button"

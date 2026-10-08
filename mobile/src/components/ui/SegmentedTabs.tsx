@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { colors } from '@/lib/theme';
 
 // 表示の切り替え（月/週/日/リストなど）に使う切り替えボタン。
@@ -8,6 +9,8 @@ import { colors } from '@/lib/theme';
 // 押し間違えないよう、どのタブでも高さ44px・太字で揃える。
 // fill=false にすると各ボタンをラベルの幅に合わせるため、絞り込みなど他の操作と
 // 同じ段に並べても、長いラベルだけが省略されることがない。
+// 帯の上で左右にスワイプしても切り替わる（中身の面ごとスワイプさせたいときは、
+// 呼び出し側で面に useSwipeTabs を足す）。横スクロールの中に置くときは swipeable=false。
 
 export interface SegmentedTabOption<T extends string> {
   id: T;
@@ -21,6 +24,7 @@ export default function SegmentedTabs<T extends string>({
   onChange,
   accessibilityLabel,
   fill = true,
+  swipeable = true,
   style,
 }: {
   options: SegmentedTabOption<T>[];
@@ -28,10 +32,22 @@ export default function SegmentedTabs<T extends string>({
   onChange: (id: T) => void;
   accessibilityLabel?: string;
   fill?: boolean;
+  swipeable?: boolean;
   style?: object;
 }) {
+  const swipeHandlers = useSwipeTabs(
+    options.map((option) => option.id),
+    value,
+    onChange,
+    swipeable,
+  );
   return (
-    <View accessibilityRole="tablist" accessibilityLabel={accessibilityLabel} style={[styles.bar, style]}>
+    <View
+      accessibilityRole="tablist"
+      accessibilityLabel={accessibilityLabel}
+      style={[styles.bar, style]}
+      {...swipeHandlers}
+    >
       {options.map((option) => {
         const selected = option.id === value;
         return (

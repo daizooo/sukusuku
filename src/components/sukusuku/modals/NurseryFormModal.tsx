@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Trash2, X } from 'lucide-react';
 import type { Nursery, NurseryStatus } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
+import { useBackdropClose } from '../ui/useBackdropClose';
+import { swipeBoundary } from '../ui/useSwipeTabs';
 
 // 園の情報（連絡先・見学の日時・メモ）を編集する。
 // 見学チェックリストは保活タブの「チェックリスト」側でその場で編集するため、ここでは触らない
@@ -54,13 +56,19 @@ export default function NurseryFormModal({ mode, nursery, onClose, onSubmit, onD
 
   // 戻る操作（ブラウザ・スマホ）でこのモーダルを閉じる。開いている間だけ効かせる。
   useBackLayer(onClose, mode !== null);
+  // 暗い部分を押しても閉じる。
+  const backdropClose = useBackdropClose(onClose);
 
   if (!mode) return null;
 
   const set = (patch: Partial<NurseryDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
 
   return (
-    <div className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+    <div
+      className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4"
+      {...backdropClose}
+      {...swipeBoundary}
+    >
       <div className="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center px-5 py-3 border-b shrink-0">
           <h3 className="font-bold text-gray-800">{mode === 'add' ? '保育園を追加' : draft.name || '保育園を編集'}</h3>

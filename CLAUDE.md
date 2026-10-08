@@ -101,6 +101,13 @@
   - PWA版: タブ・予定タブの面とモーダルを `src/lib/browserHistory.ts` で履歴に積む。
     モーダルの外枠（`ModalShell` / `LogModalShell` など）で `useBackLayer` を呼ぶ。
     新しいモーダルを作るときも同じ枠を使う（自前の枠を作るなら `useBackLayer` を呼ぶ）
+- **モーダルの暗い部分を押すと、戻る操作と同じく閉じる。**
+  mobile は `SheetModal` ほか、PWA版は `ModalShell`・`LogModalShell` ほか（`useBackdropClose`）。
+  モーダルの中身のいちばん外側には `swipeBoundary` を足す（中でのスワイプを下の画面の切り替えへ届かせない）
+- **切り替え（tablist）は左右のスワイプでも切り替える。** `SegmentedTabs` は帯の上で切り替わる。
+  画面・中身を切り替えるものは、帯と中身を包む要素に `useSwipeTabs` を足す
+  （mobile: `mobile/src/hooks/useSwipeTabs.ts`、PWA版: `src/components/sukusuku/ui/useSwipeTabs.ts`）。
+  入れ子では指を置いた場所にいちばん近い（内側の）切り替えが受け持つ
 - アプリを開いたあとの画面にアプリ名の見出しは出さない。各タブに見出しが
   あるため重複し、画面の高さを無駄にする。
 - **数字や英字を出す `Text` には必ず `fontWeight` を指定する。** 指定が無いと

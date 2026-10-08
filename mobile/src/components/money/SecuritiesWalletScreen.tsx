@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronRight, Pencil, Plus } from 'lucide-react-native';
 import type { MoneySecuritiesData, MoneySecurity, MoneySecurityDraft, MoneyWallet, MoneyWalletDraft } from '@/types/app';
 import { colors } from '@/lib/theme';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import { dateKeyOfDate, formatBalance, holdingDailyValues, securityRows, walletGain } from '@/lib/moneyUtils';
 import { WalletSheet } from '@/components/money/WalletPicker';
 import BalanceTrend from '@/components/money/BalanceTrend';
@@ -60,7 +61,7 @@ export default function SecuritiesWalletScreen({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
         <ScreenHeader
           title={wallet.name}
           icon="back"

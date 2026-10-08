@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/lib/theme';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 
 // 入力画面の外枠。PWA版と同じく、画面いっぱいにはせず
 // 「暗くした画面の上に、下から浮かぶ枠」にする。
@@ -11,6 +12,7 @@ import { colors } from '@/lib/theme';
 //     <div className="bg-white w-full max-w-md rounded-t-2xl shadow-xl flex flex-col">
 // 暗くするのは画面の上の帯（アプリの色で塗ってある部分）より下だけ。PWA版も
 // safe-area のぶんは覆わないため、同じ見え方にそろえている。
+// 暗い部分を押すと、戻る操作と同じく閉じる（onClose）。
 
 interface SheetModalProps {
   visible: boolean;
@@ -41,8 +43,13 @@ export default function SheetModal({ visible, onClose, height, children }: Sheet
         // Androidも指定しないと、Modal（別ウィンドウで開く）の中はOSのwindowSoftInputMode
         // が効かず、キーボードが出てもメモ欄などの入力欄が隠れたままになる。
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        {...swipeBoundary}
       >
-        <View style={[styles.backdrop, { top: insets.top }]} pointerEvents="none" />
+        <Pressable
+          accessibilityLabel="閉じる"
+          onPress={onClose}
+          style={[styles.backdrop, { top: insets.top }]}
+        />
         <View
           style={[
             styles.container,

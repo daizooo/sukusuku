@@ -4,6 +4,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { ArrowDownRight, ArrowLeft, ArrowUpRight, ChartCandlestick, ChevronLeft, ChevronRight, CreditCard, Landmark, PiggyBank, QrCode, RefreshCw, X } from 'lucide-react-native';
 import type { MoneyWalletType } from '@/types/app';
 import { colors } from '@/lib/theme';
+import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { formatGainRate, formatMonthKey, formatSignedYen, iconTone, shiftMonth } from '@/lib/moneyUtils';
 import { MONEY_ICON_COMPONENTS } from '@/components/money/moneyIcons';
 import { formatFiscalYear } from '@/lib/specialUtils';
@@ -121,8 +122,14 @@ export function PeriodBar({
   fiscalYear: number;
   onFiscalYear: (fiscalYear: number) => void;
 }) {
+  // 月/年度は、帯の上の左右スワイプでも切り替える。
+  const swipeHandlers = useSwipeTabs(
+    PERIODS.map((entry) => entry.id),
+    period,
+    onPeriod,
+  );
   const toggle = (
-    <View accessibilityRole="tablist" style={styles.segment}>
+    <View accessibilityRole="tablist" style={styles.segment} {...swipeHandlers}>
       {PERIODS.map((entry) => {
         const selected = entry.id === period;
         return (

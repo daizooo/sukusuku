@@ -7,6 +7,8 @@ import type { ReactNode } from 'react';
 import { Trash2, X } from 'lucide-react';
 import type { FeedingMethod } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
+import { useBackdropClose } from '../ui/useBackdropClose';
+import { swipeBoundary } from '../ui/useSwipeTabs';
 
 export type LogAccent = 'milk' | 'diaper' | 'pumping' | 'temperature';
 
@@ -58,9 +60,15 @@ interface LogModalShellProps {
 export function LogModalShell({ title, onClose, subheader, footer, children }: LogModalShellProps) {
   // 戻る操作（ブラウザ・スマホ）でこのモーダルを閉じる。
   useBackLayer(onClose);
+  // 暗い部分を押しても閉じる。
+  const backdropClose = useBackdropClose(onClose);
 
   return (
-    <div className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+    <div
+      className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4"
+      {...backdropClose}
+      {...swipeBoundary}
+    >
       <div
         className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col ${LOG_MODAL_HEIGHT}`}
       >

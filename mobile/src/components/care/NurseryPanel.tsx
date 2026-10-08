@@ -21,6 +21,8 @@ import {
 } from '@/lib/nurseryChecklist';
 import { formatDateWithWeekday, parseDateString } from '@/lib/dateUtils';
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
+import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import CheckItemCard from '@/components/hokatsu/CheckItemCard';
 import NurseryFormModal, { type NurseryDraft } from '@/components/hokatsu/NurseryFormModal';
 
@@ -220,11 +222,19 @@ export default function NurseryPanel() {
   const checkedCount = selected ? countChecked(selected.checklist, selected.name) : 0;
   const checkTotal = selected ? checkTotalFor(selected.name) : 0;
   const status = selected ? statusColors(selected.status) : null;
+  // 基本情報/見学チェックリストは、画面のどこでの左右スワイプでも切り替える。
+  // 園の切り替えは横にスクロールする帯なので、スワイプはスクロールに譲る。
+  const swipeHandlers = useSwipeTabs<HokatsuView>(
+    ['basic', 'checklist'],
+    view,
+    setView,
+    nurseries.length > 0,
+  );
 
   return (
     // 育児タブの中身として出す（外枠・ログインの確認は app/(tabs)/care.tsx）。
     <View style={styles.screen}>
-      <View style={styles.page}>
+      <View style={styles.page} {...swipeHandlers}>
         {/* 上段は園の切り替え、下段は基本情報とチェックリストの切り替え。どちらも固定し、
             スクロールするのは中身だけにする。
             2つの切り替えは見た目を変える（上はピル、下は下線タブ）。同じ形の帯が2段並ぶと
@@ -232,12 +242,13 @@ export default function NurseryPanel() {
         {nurseries.length > 0 && (
           <View style={styles.switchers}>
             <View style={styles.nurseryRow}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.flex}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.flex} {...swipeBoundary}>
                 <SegmentedTabs
                   accessibilityLabel="保育園の切り替え"
                   value={selected?.id ?? ''}
                   onChange={setSelectedId}
                   fill={false}
+                  swipeable={false}
                   options={nurseries.map((nursery) => ({ id: nursery.id, label: nursery.name }))}
                 />
               </ScrollView>

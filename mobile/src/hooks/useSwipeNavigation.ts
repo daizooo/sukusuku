@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react';
-import { PanResponder, type PanResponderInstance } from 'react-native';
+import { PanResponder, type GestureResponderEvent, type PanResponderInstance } from 'react-native';
 
 /**
  * 左右の矢印ボタンで日付・ページを送る画面に、横スワイプでも同じ操作ができるようにする
@@ -17,6 +17,31 @@ const HORIZONTAL_THRESHOLD = 50;
 /** 縦のスクロールを奪わないよう、横方向がこれを超えて動くまでは判定を始めない。 */
 const DIRECTION_LOCK_SLOP = 10;
 
+/**
+ * スワイプを受け持つ場所が入れ子になったとき（家計タブの面の切り替えの中に、振り返りの
+ * 期間の切り替えがある等）、指を置いた場所にいちばん近い（内側の）ものだけを反応させる印。
+ * 触れ始めのイベントは内側から外側へ順に届くので、最初に届いたものが受け持つ。
+ * PanResponder の capture は外側から先に聞かれるため、これが無いと外側が奪ってしまう。
+ */
+let claimed: { event: object; owner: object | null } | null = null;
+
+const claim = (event: GestureResponderEvent, owner: object | null) => {
+  if (claimed?.event === event.nativeEvent) return;
+  claimed = { event: event.nativeEvent, owner };
+};
+
+/**
+ * モーダルの中身のいちばん外側の View に足す。React の木ではモーダルの中も開いた画面の
+ * 子なので、足さないとモーダルの中でのスワイプが下の画面の切り替えまで届いてしまう。
+ */
+export const swipeBoundary = {
+  onTouchStart: (event: GestureResponderEvent) => claim(event, null),
+};
+
+export type SwipeHandlers = PanResponderInstance['panHandlers'] & {
+  onTouchStart: (event: GestureResponderEvent) => void;
+};
+
 export interface UseSwipeNavigationOptions {
   /** 左スワイプ（指を左へ）＝カルーセルで次へ進む向き。矢印の「次へ」ボタンと同じ処理を渡す。 */
   onSwipeLeft?: () => void;
@@ -33,13 +58,17 @@ export function useSwipeNavigation({
   onSwipeLeft,
   onSwipeRight,
   enabled = true,
-}: UseSwipeNavigationOptions): PanResponderInstance['panHandlers'] {
+}: UseSwipeNavigationOptions): SwipeHandlers {
   // 毎回の描画でコールバックが変わっても PanResponder は作り直さなくて済むよう、ref 経由で読む。
   const latest = useRef({ onSwipeLeft, onSwipeRight, enabled });
   latest.current = { onSwipeLeft, onSwipeRight, enabled };
+  const owner = useRef({}).current;
 
   const isHorizontalSwipe = (dx: number, dy: number) =>
-    latest.current.enabled && Math.abs(dx) > DIRECTION_LOCK_SLOP && Math.abs(dx) > Math.abs(dy);
+    latest.current.enabled &&
+    claimed?.owner === owner &&
+    Math.abs(dx) > DIRECTION_LOCK_SLOP &&
+    Math.abs(dx) > Math.abs(dy);
 
   const panResponder = useMemo(
     () =>
@@ -61,5 +90,14 @@ export function useSwipeNavigation({
     [],
   );
 
-  return panResponder.panHandlers;
+  return useMemo(
+    () => ({
+      ...panResponder.panHandlers,
+      // スワイプを止めている間（enabled=false）は受け持たず、外側に譲る。
+      onTouchStart: (event: GestureResponderEvent) => {
+        if (latest.current.enabled) claim(event, owner);
+      },
+    }),
+    [panResponder, owner],
+  );
 }

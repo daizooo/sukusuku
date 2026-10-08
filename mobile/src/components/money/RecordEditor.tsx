@@ -17,6 +17,7 @@ import type {
   SpecialItem,
 } from '@/types/app';
 import { colors } from '@/lib/theme';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import { formatDateWithWeekday, toDateString } from '@/lib/dateUtils';
 import {
   budgetFor,
@@ -605,7 +606,7 @@ export default function RecordEditor({
 
   return (
     <Modal visible animationType="slide" onRequestClose={back}>
-      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>{renderScreen()}</View>
+      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>{renderScreen()}</View>
     </Modal>
   );
 }

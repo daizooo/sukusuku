@@ -7,6 +7,7 @@ import { toDateString } from '@/lib/dateUtils';
 import { formatBalance, formatSignedYen, formatYen, walletBalanceOn } from '@/lib/moneyUtils';
 import { ModalShell } from '../modals/TaskForm';
 import { minus, PrimaryButton, type } from './moneyVisual';
+import { useSwipeTabs } from '../ui/useSwipeTabs';
 
 // 残高を補正する（docs/kakei.md §9.3）。mobile版の `mobile/src/components/money/BalanceSheet.tsx` と同じ並び・文言。
 // 通帳・銀行のアプリの残高を日付つきで入れる。入れた額と、記録から出した額との差を、入れながら出す。
@@ -27,6 +28,8 @@ export default function BalanceModal({ wallet, records, balances, onClose, onSub
   const [text, setText] = useState('');
   // カードは未払いの額が残高（マイナス）なので、はじめからマイナスにしておく。
   const [negative, setNegative] = useState(wallet.type === 'card');
+  // ＋/− は、帯の上の左右スワイプでも切り替える。
+  const signSwipeHandlers = useSwipeTabs([false, true], negative, setNegative);
   // 補正を口座の履歴に行として残すか。
   const [showInHistory, setShowInHistory] = useState(true);
 
@@ -64,7 +67,7 @@ export default function BalanceModal({ wallet, records, balances, onClose, onSub
         <div>
           <span className="mb-1.5 block text-xs font-bold text-gray-700">通帳・銀行のアプリの残高</span>
           <div className="flex items-center gap-2">
-            <div role="tablist" className="flex rounded-full bg-gray-100 p-0.5">
+            <div role="tablist" className="flex rounded-full bg-gray-100 p-0.5" {...signSwipeHandlers}>
               {[
                 { value: false, label: '＋', name: 'プラス' },
                 { value: true, label: '−', name: 'マイナス' },

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pencil } from 'lucide-react-native';
 import type { MoneyHolding, MoneySecuritiesData, MoneySecurity, MoneySecurityDraft, MoneyWallet } from '@/types/app';
 import { colors } from '@/lib/theme';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import {
   dateKeyOfDate,
   formatBalance,
@@ -66,7 +67,7 @@ export default function SecurityScreen({ wallet, holding, security, securities, 
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
         <ScreenHeader
           title={security.name}
           icon="back"

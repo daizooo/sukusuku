@@ -6,6 +6,7 @@ import type { Nursery, NurseryChecklist, NurseryCheckGrade } from '@/types/app';
 import { checkGroupsFor, checkItemNumber, checkTotalFor, countChecked, NURSERY_CHECK_GRADES } from '@/lib/nurseryChecklist';
 import { formatDateWithWeekday, parseDateString } from '@/lib/dateUtils';
 import SegmentedTabs from '../ui/SegmentedTabs';
+import { useSwipeTabs } from '../ui/useSwipeTabs';
 import NurseryFormModal, { type NurseryDraft } from '../modals/NurseryFormModal';
 
 // 園ごとに「基本情報」と「見学チェックリスト」を分けて表示する。
@@ -237,9 +238,17 @@ export default function HokatsuTab({
   const checkGroups = selected ? checkGroupsFor(selected.name) : [];
   const checkedCount = selected ? countChecked(selected.checklist, selected.name) : 0;
   const checkTotal = selected ? checkTotalFor(selected.name) : 0;
+  // 基本情報/見学チェックリストは、画面のどこでの左右スワイプでも切り替える
+  // （園の切り替えの帯の上では、園を切り替える）。
+  const swipeHandlers = useSwipeTabs<HokatsuView>(
+    ['basic', 'checklist'],
+    view,
+    setView,
+    nurseries.length > 0,
+  );
 
   return (
-    <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
+    <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full" {...swipeHandlers}>
       {/* 上段は園の切り替え、下段は基本情報とチェックリストの切り替え。どちらも固定し、
           スクロールするのは中身だけにする。
           2つの切り替えは見た目を変える（上はピル、下は下線タブ）。同じ形の帯が2段並ぶと

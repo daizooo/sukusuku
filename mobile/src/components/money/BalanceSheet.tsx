@@ -4,6 +4,7 @@ import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { CalendarDays } from 'lucide-react-native';
 import type { MoneyRecord, MoneyWallet, MoneyWalletBalance } from '@/types/app';
 import { colors } from '@/lib/theme';
+import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { formatDateWithWeekday, toDateString } from '@/lib/dateUtils';
 import { formatBalance, formatSignedYen, formatYen, walletBalanceOn } from '@/lib/moneyUtils';
 import LogModalShell from '@/components/log/LogModalShell';
@@ -29,6 +30,8 @@ export default function BalanceSheet({ wallet, records, balances, onClose, onSub
   const [text, setText] = useState('');
   // カードは未払いの額が残高（マイナス）なので、はじめからマイナスにしておく。
   const [negative, setNegative] = useState(wallet.type === 'card');
+  // ＋/− は、帯の上の左右スワイプでも切り替える。
+  const signSwipeHandlers = useSwipeTabs([false, true], negative, setNegative);
   // 補正を口座の履歴に行として残すか。
   const [showInHistory, setShowInHistory] = useState(true);
 
@@ -68,7 +71,7 @@ export default function BalanceSheet({ wallet, records, balances, onClose, onSub
         <View style={styles.group}>
           <Text style={styles.label}>通帳・銀行のアプリの残高</Text>
           <View style={styles.amountRow}>
-            <View accessibilityRole="tablist" style={styles.sign}>
+            <View accessibilityRole="tablist" style={styles.sign} {...signSwipeHandlers}>
               {[
                 { value: false, label: '＋' },
                 { value: true, label: '−' },

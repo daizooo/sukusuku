@@ -19,6 +19,7 @@ import type {
   SpecialItem,
 } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
+import { useSwipeTabs } from '../ui/useSwipeTabs';
 import {
   archiveMoneyWallet,
   deleteMoneyRecord,
@@ -289,6 +290,14 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     }
   };
 
+  // 口座/記録/振り返り/特別費は、帯と中身の上の左右スワイプでも切り替える
+  // （中に別の切り替えがある所では、そちらが先に受け持つ）。
+  const viewSwipeHandlers = useSwipeTabs(
+    VIEWS.map((entry) => entry.id),
+    view,
+    setView,
+  );
+
   return (
     <div className="relative p-4 pb-0 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <div className="shrink-0 flex items-center pb-1">
@@ -303,89 +312,91 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           <Settings size={22} />
         </button>
       </div>
-      {/* 4つの面の切り替え。等幅に並べ、選んでいる面は濃い文字と青い下線。 */}
-      <div role="tablist" className="shrink-0 flex border-b border-gray-200">
-        {VIEWS.map((entry) => {
-          const selected = entry.id === view;
-          return (
-            <button
-              key={entry.id}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              onClick={() => setView(entry.id)}
-              className="flex flex-1 flex-col items-center pt-2"
-            >
-              <span className={`text-[15px] ${selected ? 'font-bold text-gray-900' : 'font-semibold text-gray-400'}`}>
-                {entry.label}
-              </span>
-              <span className={`mt-2 h-[3px] w-8 rounded-full ${selected ? 'bg-blue-600' : 'bg-transparent'}`} />
-            </button>
-          );
-        })}
-      </div>
+      <div className="flex min-h-0 flex-1 flex-col" {...viewSwipeHandlers}>
+        {/* 4つの面の切り替え。等幅に並べ、選んでいる面は濃い文字と青い下線。 */}
+        <div role="tablist" className="shrink-0 flex border-b border-gray-200">
+          {VIEWS.map((entry) => {
+            const selected = entry.id === view;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setView(entry.id)}
+                className="flex flex-1 flex-col items-center pt-2"
+              >
+                <span className={`text-[15px] ${selected ? 'font-bold text-gray-900' : 'font-semibold text-gray-400'}`}>
+                  {entry.label}
+                </span>
+                <span className={`mt-2 h-[3px] w-8 rounded-full ${selected ? 'bg-blue-600' : 'bg-transparent'}`} />
+              </button>
+            );
+          })}
+        </div>
 
-      {view === 'records' ? (
-        <MoneyRecordsView
-          monthKey={monthKey}
-          onMonth={setMonthKey}
-          records={records}
-          categories={categories}
-          wallets={wallets}
-          specialItems={specialItems}
-          isLoading={isLoading}
-          onOpen={setEditing}
-        />
-      ) : view === 'review' ? (
-        <MoneyReviewView
-          period={period}
-          onPeriod={changePeriod}
-          monthKey={monthKey}
-          onMonth={setMonthKey}
-          fiscalYear={fiscalYear}
-          onFiscalYear={setFiscalYear}
-          records={records}
-          categories={categories}
-          budgets={budgets}
-          specialItems={specialItems}
-          specialActuals={specialActuals}
-          onSelectMonth={(next) => {
-            setMonthKey(next);
-            setPeriod('month');
-          }}
-          onEditCategories={() => setEditingCategories(true)}
-          onOpenSpecial={() => {
-            // 「特別費」の面は振り返りの年度を見るので、月の振り返りから来たらその月の年度にそろえる。
-            if (period === 'month') setFiscalYear(fiscalYearOfMonth(monthKey));
-            setView('special');
-          }}
-        />
-      ) : view === 'special' ? (
-        <SpecialPanel
-          familyId={familyId}
-          fiscalYear={fiscalYear}
-          onFiscalYear={setFiscalYear}
-          onRecordsChanged={() => void reload().catch(() => {})}
-        />
-      ) : (
-        <MoneyAccountsView
-          wallets={wallets}
-          records={records}
-          balances={balances}
-          securities={securities}
-          categories={categories}
-          specialItems={specialItems}
-          isLoading={isLoading}
-          onOpenRecord={setEditing}
-          onConfirm={(walletId, balanceOn, amount, showInHistory) => void confirmBalance(walletId, balanceOn, amount, showInHistory)}
-          onDeleteBalance={(balance) => void removeBalance(balance)}
-          onSaveWallet={saveWallet}
-          onArchiveWallet={(wallet) => void archiveWallet(wallet)}
-          onRestoreWallet={(wallet) => void restoreWallet(wallet)}
-          onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
-          onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
-        />
-      )}
+        {view === 'records' ? (
+          <MoneyRecordsView
+            monthKey={monthKey}
+            onMonth={setMonthKey}
+            records={records}
+            categories={categories}
+            wallets={wallets}
+            specialItems={specialItems}
+            isLoading={isLoading}
+            onOpen={setEditing}
+          />
+        ) : view === 'review' ? (
+          <MoneyReviewView
+            period={period}
+            onPeriod={changePeriod}
+            monthKey={monthKey}
+            onMonth={setMonthKey}
+            fiscalYear={fiscalYear}
+            onFiscalYear={setFiscalYear}
+            records={records}
+            categories={categories}
+            budgets={budgets}
+            specialItems={specialItems}
+            specialActuals={specialActuals}
+            onSelectMonth={(next) => {
+              setMonthKey(next);
+              setPeriod('month');
+            }}
+            onEditCategories={() => setEditingCategories(true)}
+            onOpenSpecial={() => {
+              // 「特別費」の面は振り返りの年度を見るので、月の振り返りから来たらその月の年度にそろえる。
+              if (period === 'month') setFiscalYear(fiscalYearOfMonth(monthKey));
+              setView('special');
+            }}
+          />
+        ) : view === 'special' ? (
+          <SpecialPanel
+            familyId={familyId}
+            fiscalYear={fiscalYear}
+            onFiscalYear={setFiscalYear}
+            onRecordsChanged={() => void reload().catch(() => {})}
+          />
+        ) : (
+          <MoneyAccountsView
+            wallets={wallets}
+            records={records}
+            balances={balances}
+            securities={securities}
+            categories={categories}
+            specialItems={specialItems}
+            isLoading={isLoading}
+            onOpenRecord={setEditing}
+            onConfirm={(walletId, balanceOn, amount, showInHistory) => void confirmBalance(walletId, balanceOn, amount, showInHistory)}
+            onDeleteBalance={(balance) => void removeBalance(balance)}
+            onSaveWallet={saveWallet}
+            onArchiveWallet={(wallet) => void archiveWallet(wallet)}
+            onRestoreWallet={(wallet) => void restoreWallet(wallet)}
+            onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
+            onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
+          />
+        )}
+      </div>
 
       {/* 記録の追加は右下の丸いボタン（Zaim と同じ）。どの面でも同じ場所。 */}
       <button

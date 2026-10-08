@@ -13,6 +13,7 @@ import type {
   SpecialItem,
 } from '@/types/app';
 import { colors } from '@/lib/theme';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import { budgetFor, formatYen, topCategories } from '@/lib/moneyUtils';
 import { formatFiscalYear } from '@/lib/specialUtils';
 import CategoryEditor from '@/components/money/CategoryEditor';
@@ -94,7 +95,7 @@ export default function MoneySettings({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onRequestClose}>
-      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
         {page === 'menu' && (
           <>
             <ScreenHeader title="家計の設定" onClose={onClose} />

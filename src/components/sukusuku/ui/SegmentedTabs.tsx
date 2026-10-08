@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useSwipeTabs } from './useSwipeTabs';
 
 export interface SegmentedTabOption<T extends string> {
   id: T;
@@ -14,6 +15,8 @@ export interface SegmentedTabOption<T extends string> {
  * スマホで押し間違えないよう、どのタブでも高さ44px・14pxの太字で揃える。
  * fill=false にすると各ボタンをラベルの幅に合わせるため、絞り込みなど他の操作と
  * 同じ段に並べても、長いラベルだけが省略されることがない。
+ * 帯の上で左右にスワイプしても切り替わる（中身の面ごとスワイプさせたいときは、
+ * 呼び出し側で面に useSwipeTabs を足す）。横スクロールの中に置くときは swipeable=false。
  */
 export default function SegmentedTabs<T extends string>({
   options,
@@ -21,6 +24,7 @@ export default function SegmentedTabs<T extends string>({
   onChange,
   ariaLabel,
   fill = true,
+  swipeable = true,
   className = '',
 }: {
   options: SegmentedTabOption<T>[];
@@ -28,10 +32,22 @@ export default function SegmentedTabs<T extends string>({
   onChange: (id: T) => void;
   ariaLabel?: string;
   fill?: boolean;
+  swipeable?: boolean;
   className?: string;
 }) {
+  const swipeHandlers = useSwipeTabs(
+    options.map((option) => option.id),
+    value,
+    onChange,
+    swipeable,
+  );
   return (
-    <div role="tablist" aria-label={ariaLabel} className={`flex bg-gray-200/80 p-1 rounded-xl ${className}`}>
+    <div
+      role="tablist"
+      aria-label={ariaLabel}
+      className={`flex bg-gray-200/80 p-1 rounded-xl ${className}`}
+      {...swipeHandlers}
+    >
       {options.map((option) => {
         const selected = option.id === value;
         return (

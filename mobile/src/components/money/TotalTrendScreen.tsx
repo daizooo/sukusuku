@@ -3,6 +3,7 @@ import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MoneyRecord, MoneySecuritiesData, MoneyWallet, MoneyWalletBalance } from '@/types/app';
 import { colors } from '@/lib/theme';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import { totalDailyBalances } from '@/lib/moneyUtils';
 import BalanceTrend from '@/components/money/BalanceTrend';
 import { ScreenHeader, type } from '@/components/money/moneyVisual';
@@ -31,7 +32,7 @@ export default function TotalTrendScreen({ wallets, records, balances, securitie
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
         <ScreenHeader title="残高の推移" icon="back" onClose={onClose} />
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={[type.sub, styles.subtitle]}>総残高</Text>

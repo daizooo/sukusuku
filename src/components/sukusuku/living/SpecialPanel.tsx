@@ -28,6 +28,7 @@ import {
 import { categoryOptions } from '@/lib/stockUtils';
 import { formatYen } from '@/lib/moneyUtils';
 import SegmentedTabs from '../ui/SegmentedTabs';
+import { useSwipeTabs } from '../ui/useSwipeTabs';
 import SpecialItemModal, { type SpecialItemModalResult } from '../modals/SpecialItemModal';
 import SpecialActualModal from '../modals/SpecialActualModal';
 import { Hero, ProgressBar, SectionHeader, YearBar, cardClass, minus, type } from '../money/moneyVisual';
@@ -214,115 +215,123 @@ export default function SpecialPanel({ familyId, fiscalYear, onFiscalYear, onRec
 
   const income = kind === 'income';
   const remaining = totals.budget - totals.actual;
+  // 特別費/特別収入は、帯と中身の上の左右スワイプでも切り替える。
+  const swipeHandlers = useSwipeTabs(
+    KIND_OPTIONS.map((option) => option.id),
+    kind,
+    setKind,
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <YearBar fiscalYear={fiscalYear} onChange={onFiscalYear} />
-      <SegmentedTabs
-        options={KIND_OPTIONS}
-        value={kind}
-        onChange={setKind}
-        ariaLabel="特別費か特別収入か"
-        className="shrink-0 mb-1.5"
-      />
-
-      {/* 右下の「＋」に一覧の最後が隠れないよう、下を空ける。 */}
-      <div className="flex-1 min-h-0 overflow-y-auto pt-1.5 pb-24">
-        <Hero
-          label={income ? '年度に入った特別収入' : '年度に払った特別費'}
-          value={formatYen(totals.actual)}
-          note={
-            remaining < 0
-              ? `予算 ${formatYen(totals.budget)}・${formatYen(remaining)} 超過`
-              : income
-                ? `予定 ${formatYen(totals.budget)}・まだ ${formatYen(remaining)}`
-                : `予算 ${formatYen(totals.budget)}・残り ${formatYen(remaining)}`
-          }
-        >
-          <div className="space-y-1.5 pt-2">
-            <ProgressBar ratio={totals.budget > 0 ? totals.actual / totals.budget : 0} over={!income && remaining < 0} />
-            {pending > 0 && <p className={type.faint}>まだ済にしていない予定 {pending}件</p>}
-          </div>
-        </Hero>
-
-        <SectionHeader
-          title="予定と実績"
-          hint="月ごと"
-          right={
-            <button type="button" onClick={() => setAdding(true)} className={`flex items-center gap-0.5 ${type.link}`}>
-              <Plus size={14} />
-              項目を追加
-            </button>
-          }
+      <div className="flex min-h-0 flex-1 flex-col" {...swipeHandlers}>
+        <SegmentedTabs
+          options={KIND_OPTIONS}
+          value={kind}
+          onChange={setKind}
+          ariaLabel="特別費か特別収入か"
+          className="shrink-0 mb-1.5"
         />
 
-        {isLoading ? (
-          <p className="py-6 text-center text-[13px] text-gray-400">読み込み中...</p>
-        ) : groups.length === 0 ? (
-          <p className="px-6 py-6 text-center text-[13px] text-gray-400">
-            {hasAnything
-              ? `${formatFiscalYear(fiscalYear)}の${income ? '特別収入' : '特別費'}はありません`
-              : '年に数回の大きな出費や賞与を「項目を追加」で登録すると、年度ごとの予算と実績を見られます'}
-          </p>
-        ) : (
-          groups.map((group) => (
-            <section key={group.month ?? 'none'} className="mb-4">
-              <div className="flex items-baseline justify-between pb-1.5">
-                <h4 className="text-[13px] font-bold text-gray-700">{monthLabel(group.month)}</h4>
-                <span className={type.faint}>
-                  {formatYen(group.actual)} / {formatYen(group.budget)}
-                </span>
-              </div>
-              <ul className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
-                {group.rows.map((row) => {
-                  const paid = row.actual !== null;
-                  const over = isOverBudget(row);
-                  const sub = [row.item.category, row.tentative ? '月は仮' : '', row.planId === null ? '予定外' : '']
-                    .filter((text) => text !== '')
-                    .join('・');
-                  return (
-                    <li key={row.key} className="flex items-center gap-3 px-3.5 py-3 hover:bg-gray-50">
-                      {row.planId !== null ? (
-                        <button
-                          type="button"
-                          aria-label={paid ? `${row.item.name}は済み。実績を直す` : `${row.item.name}を済にする`}
-                          onClick={() => (paid ? setEditingRow(row) : void markPaid(row))}
-                          className={`flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border-2 ${
-                            paid ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 text-transparent hover:border-blue-400'
-                          }`}
-                        >
-                          <Check size={16} />
+        {/* 右下の「＋」に一覧の最後が隠れないよう、下を空ける。 */}
+        <div className="flex-1 min-h-0 overflow-y-auto pt-1.5 pb-24">
+          <Hero
+            label={income ? '年度に入った特別収入' : '年度に払った特別費'}
+            value={formatYen(totals.actual)}
+            note={
+              remaining < 0
+                ? `予算 ${formatYen(totals.budget)}・${formatYen(remaining)} 超過`
+                : income
+                  ? `予定 ${formatYen(totals.budget)}・まだ ${formatYen(remaining)}`
+                  : `予算 ${formatYen(totals.budget)}・残り ${formatYen(remaining)}`
+            }
+          >
+            <div className="space-y-1.5 pt-2">
+              <ProgressBar ratio={totals.budget > 0 ? totals.actual / totals.budget : 0} over={!income && remaining < 0} />
+              {pending > 0 && <p className={type.faint}>まだ済にしていない予定 {pending}件</p>}
+            </div>
+          </Hero>
+
+          <SectionHeader
+            title="予定と実績"
+            hint="月ごと"
+            right={
+              <button type="button" onClick={() => setAdding(true)} className={`flex items-center gap-0.5 ${type.link}`}>
+                <Plus size={14} />
+                項目を追加
+              </button>
+            }
+          />
+
+          {isLoading ? (
+            <p className="py-6 text-center text-[13px] text-gray-400">読み込み中...</p>
+          ) : groups.length === 0 ? (
+            <p className="px-6 py-6 text-center text-[13px] text-gray-400">
+              {hasAnything
+                ? `${formatFiscalYear(fiscalYear)}の${income ? '特別収入' : '特別費'}はありません`
+                : '年に数回の大きな出費や賞与を「項目を追加」で登録すると、年度ごとの予算と実績を見られます'}
+            </p>
+          ) : (
+            groups.map((group) => (
+              <section key={group.month ?? 'none'} className="mb-4">
+                <div className="flex items-baseline justify-between pb-1.5">
+                  <h4 className="text-[13px] font-bold text-gray-700">{monthLabel(group.month)}</h4>
+                  <span className={type.faint}>
+                    {formatYen(group.actual)} / {formatYen(group.budget)}
+                  </span>
+                </div>
+                <ul className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
+                  {group.rows.map((row) => {
+                    const paid = row.actual !== null;
+                    const over = isOverBudget(row);
+                    const sub = [row.item.category, row.tentative ? '月は仮' : '', row.planId === null ? '予定外' : '']
+                      .filter((text) => text !== '')
+                      .join('・');
+                    return (
+                      <li key={row.key} className="flex items-center gap-3 px-3.5 py-3 hover:bg-gray-50">
+                        {row.planId !== null ? (
+                          <button
+                            type="button"
+                            aria-label={paid ? `${row.item.name}は済み。実績を直す` : `${row.item.name}を済にする`}
+                            onClick={() => (paid ? setEditingRow(row) : void markPaid(row))}
+                            className={`flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border-2 ${
+                              paid ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 text-transparent hover:border-blue-400'
+                            }`}
+                          >
+                            <Check size={16} />
+                          </button>
+                        ) : (
+                          <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border-2 border-blue-600 bg-blue-600 text-white">
+                            <Check size={16} />
+                          </span>
+                        )}
+                        <button type="button" onClick={() => setEditingRow(row)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                          <span className="min-w-0 flex-1">
+                            <span className={`block truncate ${paid ? type.row : type.row.replace('text-gray-900', 'text-gray-500')}`}>
+                              {row.item.name}
+                            </span>
+                            {sub !== '' && <span className={`block ${type.faint}`}>{sub}</span>}
+                          </span>
+                          <span className="shrink-0 text-right">
+                            {paid ? (
+                              <span className={`block ${minus(type.amount, over)}`}>{formatYen(row.actual!)}</span>
+                            ) : (
+                              <span className={`block ${type.amount.replace('text-gray-900', 'text-gray-500')}`}>{formatYen(row.budget)}</span>
+                            )}
+                            <span className={`block ${type.faint}`}>
+                              {paid ? (row.planId !== null ? `予算 ${formatYen(row.budget)}` : '予定外') : 'まだ'}
+                            </span>
+                          </span>
                         </button>
-                      ) : (
-                        <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border-2 border-blue-600 bg-blue-600 text-white">
-                          <Check size={16} />
-                        </span>
-                      )}
-                      <button type="button" onClick={() => setEditingRow(row)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                        <span className="min-w-0 flex-1">
-                          <span className={`block truncate ${paid ? type.row : type.row.replace('text-gray-900', 'text-gray-500')}`}>
-                            {row.item.name}
-                          </span>
-                          {sub !== '' && <span className={`block ${type.faint}`}>{sub}</span>}
-                        </span>
-                        <span className="shrink-0 text-right">
-                          {paid ? (
-                            <span className={`block ${minus(type.amount, over)}`}>{formatYen(row.actual!)}</span>
-                          ) : (
-                            <span className={`block ${type.amount.replace('text-gray-900', 'text-gray-500')}`}>{formatYen(row.budget)}</span>
-                          )}
-                          <span className={`block ${type.faint}`}>
-                            {paid ? (row.planId !== null ? `予算 ${formatYen(row.budget)}` : '予定外') : 'まだ'}
-                          </span>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ))
-        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))
+          )}
+        </div>
       </div>
 
       {editingRow !== null && (

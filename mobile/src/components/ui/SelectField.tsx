@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ChevronDown } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 
 // 選択肢から1つ選ぶ欄。Web版の <select> にあたる。
 //
@@ -55,7 +56,7 @@ export default function SelectField<T extends string>({
       </Pressable>
 
       <Modal visible={isOpen} transparent animationType="fade" onRequestClose={() => setIsOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setIsOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setIsOpen(false)} {...swipeBoundary}>
           <Pressable style={styles.sheet} onPress={() => {}}>
             <Text style={styles.sheetTitle}>{accessibilityLabel}</Text>
             <ScrollView>

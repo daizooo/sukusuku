@@ -8,6 +8,7 @@ import { formatCelsius, isFever } from '@/lib/careLogUtils';
 import { useBackLayer } from '@/lib/browserHistory';
 import { WEEKDAY_LABELS, formatTimeString } from '@/lib/dateUtils';
 import SegmentedTabs from '../ui/SegmentedTabs';
+import { useSwipeTabs } from '../ui/useSwipeTabs';
 
 // 育児タブの「からだ」。体温と身長・体重（成長）を、1つの画面で記録して振り返る。
 // mobile版は `mobile/src/components/care/BodyPanel.tsx`。
@@ -58,9 +59,11 @@ export default function BodyPanel({
 }: BodyPanelProps) {
   useBackLayer(onBack);
   const [view, setView] = useState<BodyView>('temperature');
+  // 体温/身長・体重は、画面のどこでの左右スワイプでも切り替える。
+  const swipeHandlers = useSwipeTabs<BodyView>(['temperature', 'growth'], view, setView);
 
   return (
-    <div className="h-full flex flex-col gap-3 p-4 lg:max-w-3xl">
+    <div className="h-full flex flex-col gap-3 p-4 lg:max-w-3xl" {...swipeHandlers}>
       <div className="shrink-0 flex items-center gap-1">
         <button
           type="button"

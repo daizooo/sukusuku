@@ -11,6 +11,8 @@ import type {
   SpecialItem,
 } from '@/types/app';
 import { colors } from '@/lib/theme';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
+import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import {
   balanceChecks,
   cardBilling,
@@ -99,9 +101,16 @@ export default function WalletBalanceScreen({
       { text: '取り消す', style: 'destructive', onPress: () => onDeleteBalance(balance) },
     ]);
 
+  // 履歴/推移は、帯と中身の上の左右スワイプでも切り替える（推移のグラフの上は期間の切り替え）。
+  const swipeHandlers = useSwipeTabs(
+    TABS.map((entry) => entry.id),
+    tab,
+    setTab,
+  );
+
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
         <ScreenHeader
           title={wallet.name}
           icon="back"
@@ -146,42 +155,44 @@ export default function WalletBalanceScreen({
             </View>
           )}
         </View>
-        <View accessibilityRole="tablist" style={styles.tabs}>
-          {TABS.map((entry) => {
-            const selected = entry.id === tab;
-            return (
-              <Pressable
-                key={entry.id}
-                accessibilityRole="tab"
-                accessibilityState={{ selected }}
-                onPress={() => setTab(entry.id)}
-                style={styles.tab}
-              >
-                <Text style={[styles.tabText, selected && styles.tabTextSelected]}>{entry.label}</Text>
-                <View style={[styles.underline, selected && styles.underlineSelected]} />
-              </Pressable>
-            );
-          })}
+        <View style={styles.flex} {...swipeHandlers}>
+          <View accessibilityRole="tablist" style={styles.tabs}>
+            {TABS.map((entry) => {
+              const selected = entry.id === tab;
+              return (
+                <Pressable
+                  key={entry.id}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                  onPress={() => setTab(entry.id)}
+                  style={styles.tab}
+                >
+                  <Text style={[styles.tabText, selected && styles.tabTextSelected]}>{entry.label}</Text>
+                  <View style={[styles.underline, selected && styles.underlineSelected]} />
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <ScrollView contentContainerStyle={styles.content}>
+            {tab === 'history' &&
+              (mine.length === 0 && shownChecks.length === 0 ? (
+                <Text style={styles.empty}>この出金元の記録はまだありません</Text>
+              ) : (
+                <RecordDayList
+                  records={mine}
+                  categories={categories}
+                  wallets={wallets}
+                  specialItems={specialItems}
+                  onOpen={onOpenRecord}
+                  corrections={shownChecks}
+                  onOpenCorrection={(check) => remove(check.balance)}
+                />
+              ))}
+
+            {tab === 'trend' && <BalanceTrend points={points} asOf={today} />}
+          </ScrollView>
         </View>
-
-        <ScrollView contentContainerStyle={styles.content}>
-          {tab === 'history' &&
-            (mine.length === 0 && shownChecks.length === 0 ? (
-              <Text style={styles.empty}>この出金元の記録はまだありません</Text>
-            ) : (
-              <RecordDayList
-                records={mine}
-                categories={categories}
-                wallets={wallets}
-                specialItems={specialItems}
-                onOpen={onOpenRecord}
-                corrections={shownChecks}
-                onOpenCorrection={(check) => remove(check.balance)}
-              />
-            ))}
-
-          {tab === 'trend' && <BalanceTrend points={points} asOf={today} />}
-        </ScrollView>
       </View>
 
       {correcting && (

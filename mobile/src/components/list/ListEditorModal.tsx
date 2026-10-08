@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Lock, Pin, PinOff, Trash2, Users } from 'lucide-react-native';
 import type { ListBoard } from '@/types/app';
 import { colors } from '@/lib/theme';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 
 // リストの編集モード。Google Keepと同じく、一覧でタップしたカードが画面の中央に
 // 拡大して開き、見出し・項目・グループ・共有・固定・削除までここで済ませる。
@@ -77,6 +78,7 @@ export default function ListEditorModal({
         style={styles.overlay}
         // Modalの中はOSのwindowSoftInputModeが効かないため、Androidも指定する（SheetModalと同じ）。
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        {...swipeBoundary}
       >
         {/* 暗い部分を押すと閉じる（Keepと同じ）。カードの外側だけがこの受け口になる。 */}
         <Pressable
