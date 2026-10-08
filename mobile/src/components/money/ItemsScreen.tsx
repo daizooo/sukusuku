@@ -18,6 +18,8 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 // 1つの種類の品目を何行でもまとめて記録する。行＝品名・個数（−＋）・単価・金額。
 // 一覧のいちばん下に空の行を置き、押すとそこに新しく入力する（入れると次の空の行が出る）。
 // 選んだ行（青）の単価を下の電卓で直す（＋−×÷）。電卓はこの画面で初めて出る。
+// 種類は見出しの下に1行で小さく出す（押すと変えられる）。「日用品から選ぶ」は見出しの右に、
+// 日用品の台帳から選ぶ種類（食費・日用品など）のときだけ出す。
 
 /** 品目の画面で書きかけのもの（記録の入力が持ち、ほかの画面へ行って戻っても消えない）。 */
 export interface ItemsWork {
@@ -54,7 +56,7 @@ interface ItemsScreenProps {
   /** 種類のアイコン。 */
   iconKey: string;
   subtitle: string;
-  /** 日用品から選べるか（生活費の種類だけ）。 */
+  /** 「日用品から選ぶ」を出すか（moneyUtils の canPickProductsFor）。 */
   canPickProducts: boolean;
   onChangeCategory: () => void;
   onPickProducts: () => void;
@@ -124,29 +126,32 @@ export default function ItemsScreen({
         title="品目"
         onClose={onClose}
         right={
-          onDelete && (
-            <Pressable accessibilityRole="button" accessibilityLabel="この種類の品目を消す" onPress={onDelete} hitSlop={8}>
-              <Trash2 size={20} color={colors.textMuted} />
-            </Pressable>
-          )
+          <View style={styles.headerRight}>
+            {canPickProducts && (
+              <Pressable accessibilityRole="button" onPress={onPickProducts} hitSlop={6} style={styles.pickProducts}>
+                <ShoppingBasket size={15} color={colors.moneyText} />
+                <Text style={styles.pickProductsText}>日用品から選ぶ</Text>
+              </Pressable>
+            )}
+            {onDelete && (
+              <Pressable accessibilityRole="button" accessibilityLabel="この種類の品目を消す" onPress={onDelete} hitSlop={8}>
+                <Trash2 size={20} color={colors.textMuted} />
+              </Pressable>
+            )}
+          </View>
         }
       />
       <Pressable accessibilityRole="button" accessibilityLabel="種類を変える" onPress={onChangeCategory} style={styles.category}>
-        <CategoryIcon iconKey={iconKey} />
-        <View style={styles.flex}>
-          <Text style={styles.categoryName}>{title}</Text>
-          {subtitle !== '' && <Text style={styles.categorySub}>{subtitle}</Text>}
-        </View>
-        <ChevronRight size={18} color={colors.textFaint} />
+        <CategoryIcon iconKey={iconKey} size={20} />
+        <Text style={styles.categoryName} numberOfLines={1}>
+          {title}
+        </Text>
+        <View style={styles.flex} />
+        {subtitle !== '' && <Text style={styles.categorySub}>{subtitle}</Text>}
+        <ChevronRight size={16} color={colors.textFaint} />
       </Pressable>
 
       <ScrollView style={styles.flex} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
-        {canPickProducts && (
-          <Pressable accessibilityRole="button" onPress={onPickProducts} style={styles.pickProducts}>
-            <ShoppingBasket size={16} color={colors.moneyText} />
-            <Text style={styles.pickProductsText}>日用品から選ぶ</Text>
-          </Pressable>
-        )}
         {work.lines.map((line) => {
           const selected = line.key === work.selected;
           return (
@@ -225,31 +230,31 @@ export default function ItemsScreen({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
+  // 種類は1行で小さく（品目と金額が主）。
   category: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 7,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    backgroundColor: colors.background,
   },
-  categoryName: { fontSize: 16, fontWeight: '700', color: colors.text },
-  categorySub: { fontSize: 12, fontWeight: '500', color: colors.textMuted, marginTop: 2 },
+  categoryName: { flexShrink: 1, fontSize: 13, fontWeight: '600', color: colors.textSubtle },
+  categorySub: { fontSize: 11, fontWeight: '500', color: colors.textMuted },
   list: { paddingBottom: 8 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   pickProducts: {
-    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    margin: 12,
-    marginLeft: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 999,
     backgroundColor: colors.moneySoft,
   },
-  pickProductsText: { fontSize: 14, fontWeight: '700', color: colors.moneyText },
+  pickProductsText: { fontSize: 12, fontWeight: '700', color: colors.moneyText },
   line: {
     flexDirection: 'row',
     alignItems: 'center',

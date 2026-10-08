@@ -876,3 +876,26 @@ export function pressCalcKey(expression: string, key: string): string {
   if (lastNumber.length + key.length > 9) return expression;
   return expression + key;
 }
+
+// ---- 日用品から選ぶ ----
+
+/** 日用品の台帳から選ぶことの多い大分類のアイコン（食費・日用品・子ども費・薬）。 */
+const PRODUCT_ICON_KEYS = ['food', 'grocery', 'daily', 'baby', 'pill'];
+
+/**
+ * 品目の画面に「日用品から選ぶ」を出すか（docs/kakei.md §3.2）。台帳に品があり、
+ * その種類（同じ大分類）で前に記録した品があるか、大分類が食費・日用品などのとき。
+ */
+export function canPickProductsFor(
+  categories: readonly MoneyCategory[],
+  products: readonly { moneyCategoryId: string | null }[],
+  categoryId: string | null,
+): boolean {
+  if (categoryId === null || products.length === 0) return false;
+  const topId = topCategoryIdOf(categories, categoryId);
+  if (topId === null) return false;
+  if (products.some((product) => product.moneyCategoryId !== null && topCategoryIdOf(categories, product.moneyCategoryId) === topId)) {
+    return true;
+  }
+  return PRODUCT_ICON_KEYS.includes(iconKeyOf(categories.find((category) => category.id === topId)));
+}

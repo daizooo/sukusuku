@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Search, Store } from 'lucide-react';
+import { Plus, Search, Store } from 'lucide-react';
 import { normalizeName } from '@/lib/shoppingUtils';
 import { ScreenHeader, StackedScreen } from './moneyVisual';
 
@@ -52,7 +52,7 @@ export default function StorePicker({ value, registered, recent, onPick, onClose
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-8">
         {typed !== '' && !exact && (
           <button type="button" onClick={() => onPick(typed)} className={`${rowClass} font-bold text-blue-600`}>
-            <Store size={18} />「{typed}」にする
+            <Plus size={18} />「{typed}」を追加する
           </button>
         )}
         {matchedRecent.length > 0 && <p className="mt-3 mb-1 text-xs font-bold text-gray-500">最近使ったお店</p>}

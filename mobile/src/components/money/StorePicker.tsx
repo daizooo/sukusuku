@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Search, Store } from 'lucide-react-native';
+import { Plus, Search, Store } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 import { normalizeName } from '@/lib/shoppingUtils';
 import { ScreenHeader } from '@/components/money/moneyVisual';
@@ -48,8 +48,8 @@ export default function StorePicker({ value, registered, recent, onPick, onClose
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {typed !== '' && !exact && (
           <Pressable accessibilityRole="button" onPress={() => onPick(typed)} style={styles.row}>
-            <Store size={18} color={colors.money} />
-            <Text style={[styles.name, styles.use]}>「{typed}」にする</Text>
+            <Plus size={18} color={colors.money} />
+            <Text style={[styles.name, styles.use]}>「{typed}」を追加する</Text>
           </Pressable>
         )}
         {matchedRecent.length > 0 && <Text style={styles.sectionTitle}>最近使ったお店</Text>}
