@@ -2004,6 +2004,7 @@ export type Database = {
         Returns: undefined
       }
       is_family_guardian: { Args: never; Returns: boolean }
+      jp_base_holiday_name: { Args: { p_date: string }; Returns: string }
       jp_holiday_name: { Args: { p_date: string }; Returns: string }
       lottery_delete_my_test_data: { Args: never; Returns: number }
       lottery_open_box: {
@@ -2027,6 +2028,14 @@ export type Database = {
         Returns: string
       }
       money_is_business_day: { Args: { p_date: string }; Returns: boolean }
+      money_recurring_estimate: {
+        Args: {
+          p_month: string
+          p_on: string
+          p_rule: Database["public"]["Tables"]["money_recurring"]["Row"]
+        }
+        Returns: number
+      }
       money_shift_business_day: {
         Args: { p_date: string; p_holiday: string }
         Returns: string
