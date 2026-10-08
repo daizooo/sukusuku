@@ -291,7 +291,7 @@ money_card_closes カードの照合。 wallet_id / month / statement_amount / c
   3・5 は Zaim に頼らないので、消したあとでよい。順は **4 → 6 → 7 → 3 → 5** にする
 
 - 各PRで `src/`（PWA版）も同じPRで追従する（CLAUDE.md）
-- migration は本番DBへ適用してからマージする（適用はユーザーに確認してから）
+- migration は本番DBへ適用してからマージする（削除を含まないものは Claude が MCP で適用する。CLAUDE.md）
 
 ## 8. 未決
 
