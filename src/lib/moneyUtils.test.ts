@@ -172,11 +172,11 @@ const tiles = buildBudgetTiles(records, categories, budgets, '2026-09');
 assert.deepEqual(
   tiles.map((tile) => [tile.category.id, tile.diff, tile.percent]),
   [
-    ['food', 60000 - 70564, 118],
     ['house', 0, 100],
+    ['food', 60000 - 70564, 118],
     ['med', 4500, 10],
   ],
-  '予算を超えた順、残りの少ない順。使っていない使わなくした大分類は出さない',
+  '種類の並び順のまま。使っていない使わなくした大分類は出さない',
 );
 
 assert.deepEqual(

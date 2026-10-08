@@ -1,18 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronRight, Store, Tag, Wallet, type LucideIcon } from 'lucide-react';
-import type { MoneyBudget, MoneyCategory, MoneyStore, MoneyWallet } from '@/types/app';
+import { ChevronRight, Store, Tag, type LucideIcon } from 'lucide-react';
+import type { MoneyBudget, MoneyCategory, MoneyStore } from '@/types/app';
 import { budgetFor, formatYen, topCategories } from '@/lib/moneyUtils';
 import { formatFiscalYear } from '@/lib/specialUtils';
 import CategoryEditor from './CategoryEditor';
 import StoreSettings from './StoreSettings';
-import WalletSettings from './WalletSettings';
 import { FullScreen, ScreenHeader } from './moneyVisual';
 
 // 家計の設定（docs/kakei.md §3.5）。mobile版の `mobile/src/components/money/MoneySettings.tsx` と同じ並び・文言。
 //
-// 予算・種類・出金元・お店を、いつでも編集・追加できる入口。ここで直すのは設定データだけで、記録は変わらない
+// 予算・種類・お店を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
 // （お店の名前を直しても、過去の記録のお店の名前はそのまま）。
 // 戻る操作（ブラウザの戻る）は、開いている設定の面から入口へ、入口から家計タブへ。
 
@@ -21,27 +20,23 @@ interface MoneySettingsProps {
   fiscalYear: number;
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
-  wallets: MoneyWallet[];
   stores: MoneyStore[];
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
   onBudgets: (update: (prev: MoneyBudget[]) => MoneyBudget[]) => void;
-  onWallets: (update: (prev: MoneyWallet[]) => MoneyWallet[]) => void;
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
   onClose: () => void;
 }
 
-type Page = 'menu' | 'categories' | 'wallets' | 'stores';
+type Page = 'menu' | 'categories' | 'stores';
 
 export default function MoneySettings({
   familyId,
   fiscalYear,
   categories,
   budgets,
-  wallets,
   stores,
   onCategories,
   onBudgets,
-  onWallets,
   onStores,
   onClose,
 }: MoneySettingsProps) {
@@ -49,7 +44,6 @@ export default function MoneySettings({
 
   const tops = topCategories(categories, 'living', true).filter((top) => !top.archived);
   const totalBudget = tops.reduce((sum, top) => sum + (budgetFor(budgets, top.id, fiscalYear) ?? 0), 0);
-  const walletCount = wallets.filter((wallet) => !wallet.archived).length;
   const storeCount = stores.filter((store) => !store.archived).length;
 
   const rows: { id: Exclude<Page, 'menu'>; label: string; summary: string; icon: LucideIcon }[] = [
@@ -59,7 +53,6 @@ export default function MoneySettings({
       summary: `生活費の大分類 ${tops.length}個・月の予算 ${formatYen(totalBudget)}（${formatFiscalYear(fiscalYear)}）`,
       icon: Tag,
     },
-    { id: 'wallets', label: '出金元', summary: `カード・財布・口座など ${walletCount}個`, icon: Wallet },
     { id: 'stores', label: 'お店', summary: `登録したお店 ${storeCount}件`, icon: Store },
   ];
 
@@ -72,7 +65,7 @@ export default function MoneySettings({
           <ScreenHeader title="家計の設定" onClose={onClose} />
           <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 p-4">
             <p className="pb-1 text-[13px] leading-relaxed text-gray-500">
-              予算・種類・出金元・お店を、いつでも編集・追加できます。直すのは設定だけで、記録は変わりません。
+              予算・種類・お店を、いつでも編集・追加できます。直すのは設定だけで、記録は変わりません。
             </p>
             {rows.map((row) => {
               const Icon = row.icon;
@@ -97,7 +90,6 @@ export default function MoneySettings({
           </div>
         </>
       )}
-      {page === 'wallets' && <WalletSettings familyId={familyId} wallets={wallets} onWallets={onWallets} onBack={back} />}
       {page === 'stores' && <StoreSettings familyId={familyId} stores={stores} onStores={onStores} onBack={back} />}
       {page === 'categories' && (
         <CategoryEditor

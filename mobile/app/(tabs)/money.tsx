@@ -320,11 +320,9 @@ export default function MoneyScreen() {
           fiscalYear={fiscalYearOfMonth(monthKey)}
           categories={categories}
           budgets={budgets}
-          wallets={wallets}
           stores={stores}
           onCategories={setCategories}
           onBudgets={setBudgets}
-          onWallets={setWallets}
           onStores={setStores}
           onClose={() => setSettingsOpen(false)}
         />

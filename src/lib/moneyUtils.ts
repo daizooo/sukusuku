@@ -473,8 +473,8 @@ export function livingSpendByTop(
 }
 
 /**
- * 生活費のタイル。予算を超えた順（超えた額の大きい順）に、予算どおり・残りの少ない順が続く
- * （予算 − 実績 の小さい順）。使わなくした大分類は、その月に使っていれば出す。
+ * 生活費のタイル。種類の並び（大分類の並び順）のまま（2026-10-08に、予算を超えた順から変えた）。
+ * 使わなくした大分類は、その月に使っていれば出す。
  */
 export function buildBudgetTiles(
   records: readonly MoneyRecord[],
@@ -496,10 +496,7 @@ export function buildBudgetTiles(
         diff: (budget ?? 0) - actual,
         percent: budget !== null && budget > 0 ? Math.round((actual / budget) * 100) : null,
       };
-    })
-    .map((tile, index) => ({ tile, index }))
-    .sort((a, b) => (a.tile.diff !== b.tile.diff ? a.tile.diff - b.tile.diff : a.index - b.index))
-    .map((entry) => entry.tile);
+    });
 }
 
 export interface MonthSummary {
