@@ -292,7 +292,7 @@ export default function ScheduleScreen() {
 
   // 矢印ボタンと同じ操作を、画面上どこでの横スワイプでもできるようにする。
   // 一覧表示（list）には日付送りが無いため、それ以外の表示中だけ有効にする。
-  // 画面の中身は指に合わせて横に動く。
+  // 指に合わせて横に動くのは、月表示はカレンダーだけ（直近のスケジュールは固定）、日表示はその日の中身。
   const swipe = useSwipeNavigation({
     onSwipeLeft: () => step(1),
     onSwipeRight: () => step(-1),
@@ -483,7 +483,7 @@ export default function ScheduleScreen() {
 
   return (
     <SafeAreaView style={styles.screen} {...swipe.handlers}>
-      <Animated.View style={[styles.page, swipe.style]}>
+      <View style={styles.page}>
         {/* 月以外（日・リスト）では、戻るボタンだけを左上に出す（文言は付けない）。 */}
         {view !== 'month' && (
           <Pressable
@@ -532,7 +532,7 @@ export default function ScheduleScreen() {
             どちらも画面全体はスクロールさせない。 */}
         {view === 'month' && (
           <View style={styles.body}>
-            <View style={styles.calendar}>
+            <Animated.View style={[styles.calendar, swipe.style]}>
               <MonthView
                 month={monthStart}
                 today={today}
@@ -543,7 +543,7 @@ export default function ScheduleScreen() {
                 onAddTask={openAddTaskModal}
                 onOpenTask={openTaskDetail}
               />
-            </View>
+            </Animated.View>
             {!isLoadingTodos && tasksInMonth.length === 0 && nextMonthWithTask && (
               <Pressable
                 accessibilityRole="button"
@@ -576,7 +576,7 @@ export default function ScheduleScreen() {
         )}
 
         {view === 'day' && (
-          <ScrollView style={styles.body} contentContainerStyle={styles.scrollContent}>
+          <Animated.ScrollView style={[styles.body, swipe.style]} contentContainerStyle={styles.scrollContent}>
             <DayView
               date={selectedDate}
               today={today}
@@ -589,7 +589,7 @@ export default function ScheduleScreen() {
               onAddTask={openAddTaskModal}
               onOpenLogTab={openLogTabForDate}
             />
-          </ScrollView>
+          </Animated.ScrollView>
         )}
 
         {view === 'list' && (
@@ -604,7 +604,7 @@ export default function ScheduleScreen() {
             />
           </View>
         )}
-      </Animated.View>
+      </View>
 
       {/* 月表示では、右下のボタンが「直近のスケジュール」の一覧に重なって隠してしまうため、
           追加ボタンをその見出しの中に置く（UpcomingTasks）。それ以外の表示ではここに置く。 */}
