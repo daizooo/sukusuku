@@ -19,6 +19,7 @@ import type {
   MoneyRecurring,
   MoneyStore,
   MoneyWallet,
+  MoneyWalletBalance,
   MoneyWalletType,
   SpecialActual,
 } from '@/types/app';
@@ -905,3 +906,294 @@ export function canPickProductsFor(
   }
   return PRODUCT_ICON_KEYS.includes(iconKeyOf(categories.find((category) => category.id === topId)));
 }
+
+// ---- 口座の残高（docs/kakei.md §9.3） ----
+// 残高 = 最後に確定した残高 + その後の記録（支出・収入・振替）。確定した残高が無ければ記録だけから出す。
+// 確定した残高は「その日の終わりの残高」なので、その日の記録は含まれている（足すのは翌日以降の記録）。
+
+/** 今日の日付（YYYY-MM-DD。端末のローカル）。 */
+export const dateKeyOfDate = (date: Date): string => `${monthKeyOfDate(date)}-${pad2(date.getDate())}`;
+
+/** マイナスは「−¥1,234」。残高の表示に使う（formatYen は符号を付けない）。 */
+export const formatBalance = (value: number): string => `${value < 0 ? '−' : ''}${formatYen(value)}`;
+
+/**
+ * 1件の記録が、出金元 walletId の残高に与える増減（円）。
+ * 支出は出金元から減り、収入は入金先に増え、振替は出金元から減って入金先に増える。
+ */
+export function walletDelta(record: Pick<MoneyRecord, 'kind' | 'walletId' | 'toWalletId' | 'items'>, walletId: string): number {
+  const total = recordTotal(record);
+  if (record.kind === 'income') return record.walletId === walletId ? total : 0;
+  const out = record.walletId === walletId ? -total : 0;
+  const into = record.kind === 'transfer' && record.toWalletId === walletId ? total : 0;
+  return out + into;
+}
+
+export interface WalletBalanceResult {
+  /** 残高（円）。 */
+  amount: number;
+  /** 土台にした、最後に確定した残高。まだ確定していなければ null（記録だけから出した額）。 */
+  confirmed: MoneyWalletBalance | null;
+  /** 確定のあとの記録の増減（確定が無ければ記録の全部）。 */
+  movement: number;
+  /** 確定のあとの記録の件数。 */
+  count: number;
+}
+
+/**
+ * 出金元 walletId の、date の終わりの残高。date までの記録だけを数える（先の日付の記録は入れない）。
+ * ignoreOnDate を立てると、date の確定を土台にしない（その日の確定を入れる前の「記録から出した額」を出すとき）。
+ */
+export function walletBalanceOn(
+  walletId: string,
+  date: string,
+  records: readonly MoneyRecord[],
+  balances: readonly MoneyWalletBalance[],
+  ignoreOnDate = false,
+): WalletBalanceResult {
+  let confirmed: MoneyWalletBalance | null = null;
+  for (const balance of balances) {
+    if (balance.walletId !== walletId) continue;
+    if (ignoreOnDate ? balance.balanceOn >= date : balance.balanceOn > date) continue;
+    if (confirmed === null || balance.balanceOn > confirmed.balanceOn) confirmed = balance;
+  }
+  let movement = 0;
+  let count = 0;
+  for (const record of records) {
+    if (record.walletId !== walletId && record.toWalletId !== walletId) continue;
+    if (record.occurredOn > date || (confirmed !== null && record.occurredOn <= confirmed.balanceOn)) continue;
+    movement += walletDelta(record, walletId);
+    count += 1;
+  }
+  return { amount: (confirmed?.amount ?? 0) + movement, confirmed, movement, count };
+}
+
+export interface WalletBalanceRow extends WalletBalanceResult {
+  wallet: MoneyWallet;
+}
+
+export interface WalletBalances {
+  /** 出金元ごと（渡された順）。 */
+  rows: WalletBalanceRow[];
+  /** 総残高。使わなくした出金元は入れない。 */
+  total: number;
+}
+
+/** 出金元ごとの今の残高と総残高。asOf は今日（YYYY-MM-DD）。 */
+export function buildWalletBalances(
+  wallets: readonly MoneyWallet[],
+  records: readonly MoneyRecord[],
+  balances: readonly MoneyWalletBalance[],
+  asOf: string,
+): WalletBalances {
+  const rows = wallets.map((wallet) => ({ wallet, ...walletBalanceOn(wallet.id, asOf, records, balances) }));
+  const counted = rows.filter((row) => !row.wallet.archived);
+  return {
+    rows,
+    total: counted.reduce((sum, row) => sum + row.amount, 0),
+  };
+}
+
+export interface BalanceCheck {
+  balance: MoneyWalletBalance;
+  /** 確定の前の確定と、そのあとの記録から出した額。 */
+  expected: number;
+  /** 確定した額 − 記録から出した額。前の確定が無い（はじめの残高）ときは null。 */
+  diff: number | null;
+}
+
+/** 出金元の確定の履歴（新しい順）。確定のたびの、記録との差つき。 */
+export function balanceChecks(
+  walletId: string,
+  records: readonly MoneyRecord[],
+  balances: readonly MoneyWalletBalance[],
+): BalanceCheck[] {
+  return balances
+    .filter((balance) => balance.walletId === walletId)
+    .sort((a, b) => b.balanceOn.localeCompare(a.balanceOn))
+    .map((balance) => {
+      const before = walletBalanceOn(walletId, balance.balanceOn, records, balances, true);
+      return { balance, expected: before.amount, diff: before.confirmed === null ? null : balance.amount - before.amount };
+    });
+}
+
+// ---- 口座の推移・カードの請求（docs/kakei.md §9.3） ----
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const parseDateKey = (dateKey: string): number => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return Date.UTC(year, month - 1, day);
+};
+const formatDateKey = (ms: number): string => {
+  const date = new Date(ms);
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
+};
+
+/** YYYY-MM-DD の days 日後（前なら負）。 */
+export const addDays = (dateKey: string, days: number): string => formatDateKey(parseDateKey(dateKey) + days * DAY_MS);
+
+export interface BalancePoint {
+  /** YYYY-MM-DD。その日の終わりの残高。 */
+  date: string;
+  amount: number;
+}
+
+/**
+ * 出金元（複数ならその合計）の、日ごとの残高。いちばん古い記録・補正の日から asOf（今日）まで、1日1点。
+ * 数え方は walletBalanceOn と同じ（補正した日はその額、それ以外の日は前の日の残高 + その日の記録）。
+ * 記録も補正も無ければ空。今日より先の記録は入れない。
+ */
+export function dailyBalances(
+  walletIds: readonly string[],
+  records: readonly MoneyRecord[],
+  balances: readonly MoneyWalletBalance[],
+  asOf: string,
+): BalancePoint[] {
+  const ids = new Set(walletIds);
+  const perWallet = new Map<string, { deltas: Map<string, number>; anchors: Map<string, number> }>();
+  let start: string | null = null;
+  const see = (date: string) => {
+    if (date <= asOf && (start === null || date < start)) start = date;
+  };
+  const slot = (walletId: string) => {
+    let entry = perWallet.get(walletId);
+    if (!entry) {
+      entry = { deltas: new Map(), anchors: new Map() };
+      perWallet.set(walletId, entry);
+    }
+    return entry;
+  };
+  for (const record of records) {
+    if (record.occurredOn > asOf) continue;
+    for (const walletId of new Set([record.walletId, record.toWalletId])) {
+      if (walletId === null || !ids.has(walletId)) continue;
+      const entry = slot(walletId);
+      entry.deltas.set(record.occurredOn, (entry.deltas.get(record.occurredOn) ?? 0) + walletDelta(record, walletId));
+      see(record.occurredOn);
+    }
+  }
+  for (const balance of balances) {
+    if (balance.balanceOn > asOf || !ids.has(balance.walletId)) continue;
+    slot(balance.walletId).anchors.set(balance.balanceOn, balance.amount);
+    see(balance.balanceOn);
+  }
+  if (start === null) return [];
+
+  const days = Math.round((parseDateKey(asOf) - parseDateKey(start)) / DAY_MS) + 1;
+  const totals = new Array<number>(days).fill(0);
+  for (const { deltas, anchors } of perWallet.values()) {
+    let amount = 0;
+    for (let index = 0; index < days; index += 1) {
+      const date = addDays(start, index);
+      const anchor = anchors.get(date);
+      amount = anchor !== undefined ? anchor : amount + (deltas.get(date) ?? 0);
+      totals[index] += amount;
+    }
+  }
+  return totals.map((amount, index) => ({ date: addDays(start as string, index), amount }));
+}
+
+export type TrendPeriod = 'month' | 'half' | 'year' | 'all';
+
+export const TREND_PERIODS: { id: TrendPeriod; label: string }[] = [
+  { id: 'month', label: '1ヶ月' },
+  { id: 'half', label: '半年' },
+  { id: 'year', label: '1年' },
+  { id: 'all', label: '全期間' },
+];
+
+/** 表示する期間だけに絞る（asOf から数えて、1ヶ月＝30日・半年＝183日・1年＝365日）。全期間はそのまま。 */
+export function filterTrend(points: readonly BalancePoint[], period: TrendPeriod, asOf: string): BalancePoint[] {
+  const days = { month: 30, half: 183, year: 365, all: 0 }[period];
+  if (days === 0) return [...points];
+  const from = addDays(asOf, -days);
+  return points.filter((point) => point.date >= from);
+}
+
+/** 残高が変わった日（新しい順）。いちばん古い日も入れる。履歴の一覧に使う。 */
+export function balanceChanges(points: readonly BalancePoint[]): BalancePoint[] {
+  return points.filter((point, index) => index === 0 || point.amount !== points[index - 1].amount).reverse();
+}
+
+/** グラフの目盛り（min〜max を含む、きりのよい間隔。2〜6本）。 */
+export function niceTicks(min: number, max: number): number[] {
+  if (min === max) return [min];
+  const raw = (max - min) / 3;
+  const magnitude = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((unit) => unit * magnitude).find((candidate) => candidate >= raw) ?? magnitude * 10;
+  const ticks: number[] = [];
+  // max を超えるところまで（グラフの上端が最大値を含むように）。
+  for (let value = Math.floor(min / step) * step; ; value += step) {
+    ticks.push(Math.round(value));
+    if (value >= max) break;
+  }
+  return ticks;
+}
+
+/** 目盛りの文字（2,000万・500万・8,000）。 */
+export function formatAxisYen(value: number): string {
+  const sign = value < 0 ? '−' : '';
+  const abs = Math.abs(value);
+  if (abs >= 10000) return `${sign}${(abs / 10000).toLocaleString('ja-JP')}万`;
+  return `${sign}${abs.toLocaleString('ja-JP')}`;
+}
+
+export interface CardBilling {
+  /** 請求済み（締め日を過ぎて、引き落とし待ちの額。円）。 */
+  billed: number;
+  /** 未請求（直近の締め日のあとに使った額。円）。 */
+  unbilled: number;
+  /** 直近の締め日（YYYY-MM-DD）。 */
+  closedOn: string;
+  /** 次の引き落とし日（YYYY-MM-DD。休日のずれは入れない）。引き落とし日が未設定なら null。 */
+  payOn: string | null;
+}
+
+const monthDay = (year: number, month: number, day: number): string => {
+  // 月末を超える日（31 や 30 など）は、その月の末日にする。
+  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `${year}-${pad2(month)}-${pad2(Math.min(day, last))}`;
+};
+
+/**
+ * カードの請求の内訳。残高（マイナス＝未払い）が「請求済み」と「未請求」に分かれる。
+ * 引き落としは締め日ごとにまとめて口座から落ちるので、残高には先月の請求と今月の利用が両方入っている。
+ * 締め日が未設定のカードは null。未請求 ＝ 締め日のあとの利用（支出 − 返品。振替は入れない）、請求済み ＝ 未払い − 未請求。
+ */
+export function cardBilling(
+  wallet: Pick<MoneyWallet, 'id' | 'closeDay' | 'payDay'>,
+  amount: number,
+  records: readonly MoneyRecord[],
+  asOf: string,
+): CardBilling | null {
+  if (wallet.closeDay === null) return null;
+  const [year, month] = asOf.split('-').map(Number);
+  const thisClose = monthDay(year, month, wallet.closeDay);
+  const closedOn =
+    thisClose <= asOf
+      ? thisClose
+      : month === 1
+        ? monthDay(year - 1, 12, wallet.closeDay)
+        : monthDay(year, month - 1, wallet.closeDay);
+  const unbilled = records
+    .filter((record) => record.kind !== 'transfer' && record.walletId === wallet.id)
+    .filter((record) => record.occurredOn > closedOn && record.occurredOn <= asOf)
+    .reduce((sum, record) => sum - walletDelta(record, wallet.id), 0);
+  const owed = Math.max(0, -amount);
+  const unbilledOwed = Math.min(Math.max(0, unbilled), owed);
+
+  let payOn: string | null = null;
+  if (wallet.payDay !== null) {
+    // 締め日のあとの最初の引き落とし日（cardScheduleLabel と同じ。引き落とし日が締め日より後なら同じ月、そうでなければ翌月）。
+    const [closeYear, closeMonth] = closedOn.split('-').map(Number);
+    const sameMonth = wallet.payDay > wallet.closeDay && wallet.closeDay < 31;
+    const payMonth = sameMonth ? closeMonth : closeMonth === 12 ? 1 : closeMonth + 1;
+    const payYear = !sameMonth && closeMonth === 12 ? closeYear + 1 : closeYear;
+    payOn = monthDay(payYear, payMonth, wallet.payDay);
+  }
+  return { billed: owed - unbilledOwed, unbilled: unbilledOwed, closedOn, payOn };
+}
+
+/** その出金元に関わる記録（支出・収入・振替の出金元か入金先）。新しい順。 */
+export const recordsOfWallet = (records: readonly MoneyRecord[], walletId: string): MoneyRecord[] =>
+  sortRecordsDesc(records.filter((record) => record.walletId === walletId || record.toWalletId === walletId));
