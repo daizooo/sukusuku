@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import type { StockItem, StockTarget } from '@/types/app';
 import { colors } from '@/lib/theme';
+import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import {
   buildStockBoard,
   daysBetween,
@@ -80,6 +81,12 @@ export default function StockBoard({
   // 絞り込んでいたカテゴリが無くなったら「すべて」へ戻す。
   const activeCategory = categories.some((row) => row.category === category) ? category : ALL;
   const shown = activeCategory === ALL ? categories : categories.filter((row) => row.category === activeCategory);
+  // カテゴリは、一覧の上の左右スワイプでも切り替える（一覧が指に合わせて動く）。
+  const swipe = useSwipeTabs(
+    [ALL, ...categories.map((row) => row.category)],
+    activeCategory,
+    setCategory,
+  );
   const detail = categories.flatMap((row) => row.products).find((product) => product.key === detailKey) ?? null;
   const inspectable = board.equipment.filter((item) => item.inspectIntervalMonths !== null);
 
@@ -182,7 +189,11 @@ export default function StockBoard({
         </View>
       )}
 
-      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+      <Animated.ScrollView
+        style={[styles.flex, swipe.style]}
+        contentContainerStyle={styles.content}
+        {...swipe.handlers}
+      >
         {shown.length === 0 ? (
           <Text style={styles.empty}>備蓄はまだありません</Text>
         ) : (
@@ -196,7 +207,7 @@ export default function StockBoard({
             </View>
           ))
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {detail && (
         <StockProductDetail

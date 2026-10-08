@@ -16,6 +16,7 @@ import StockAttention from './StockAttention';
 import StockBagCheck from './StockBagCheck';
 import StockProductDetail from './StockProductDetail';
 import { readinessColor, Ring } from './stockVisual';
+import { useSwipeTabs } from '../ui/useSwipeTabs';
 
 // 防災備蓄の画面（docs/home.md §10.2.2）。mobile版の
 // `mobile/src/components/living/StockBoard.tsx` と同じ構成・項目・文言にしてある。
@@ -80,6 +81,12 @@ export default function StockBoard({
   // 絞り込んでいたカテゴリが無くなったら「すべて」へ戻す。
   const activeCategory = categories.some((row) => row.category === category) ? category : ALL;
   const shown = activeCategory === ALL ? categories : categories.filter((row) => row.category === activeCategory);
+  // カテゴリは、一覧の上の左右スワイプでも切り替える（一覧が指に合わせて動く）。
+  const { handlers: swipeHandlers, attachContent } = useSwipeTabs(
+    [ALL, ...categories.map((row) => row.category)],
+    activeCategory,
+    setCategory,
+  );
   const detail = categories.flatMap((row) => row.products).find((product) => product.key === detailKey) ?? null;
   const inspectable = board.equipment.filter((item) => item.inspectIntervalMonths !== null);
 
@@ -188,7 +195,7 @@ export default function StockBoard({
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pt-2.5 pb-6">
+      <div ref={attachContent} className="flex-1 min-h-0 overflow-y-auto space-y-3 pt-2.5 pb-6" {...swipeHandlers}>
         {shown.length === 0 ? (
           <p className="py-8 text-center text-sm text-gray-400">備蓄はまだありません</p>
         ) : (
