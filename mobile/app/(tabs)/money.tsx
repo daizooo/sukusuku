@@ -156,8 +156,8 @@ export default function MoneyScreen() {
       if (familyId && saved.items.some((item) => item.productId !== null)) {
         setProducts(await loadHouseholdProducts(supabase, familyId));
       }
-      // 新しいお店の名前は、DBの save_money_record がお店の設定に登録する。
-      if (familyId && saved.store !== '' && !stores.some((entry) => entry.name === saved.store)) {
+      // 「お店に登録して使う」を選んだお店は、DBの save_money_record がお店の設定に登録する（docs/kakei.md §3.5）。
+      if (familyId && draft.registerStore && saved.store !== '' && !stores.some((entry) => entry.name === saved.store && !entry.archived)) {
         setStores(await loadMoneyStores(supabase, familyId));
       }
     } catch {

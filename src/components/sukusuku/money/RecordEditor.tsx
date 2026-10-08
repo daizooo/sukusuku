@@ -120,6 +120,8 @@ export default function RecordEditor({
   );
   const [toWalletId, setToWalletId] = useState<string | null>(record?.toWalletId ?? null);
   const [store, setStore] = useState(record?.store ?? '');
+  // お店の選択で「お店に登録して使う」を選んだか（保存のときにお店の設定に登録する。docs/kakei.md §3.5）。
+  const [registerStore, setRegisterStore] = useState(false);
   const [groups, setGroups] = useState<EditorGroup[]>(() =>
     record && record.kind !== 'transfer' ? groupsFromItems(record.items, newGroupKey) : [],
   );
@@ -318,6 +320,7 @@ export default function RecordEditor({
       walletId,
       toWalletId: kind === 'transfer' ? toWalletId : null,
       store: kind === 'transfer' ? '' : store,
+      registerStore: kind !== 'transfer' && store !== '' && registerStore,
       isEstimate: stillEstimate,
       items,
     });
@@ -393,8 +396,11 @@ export default function RecordEditor({
             value={store}
             registered={storeOptions.registered}
             recent={storeOptions.recent}
-            onPick={(value) => {
+            others={storeOptions.others}
+            canRegister
+            onPick={(value, register) => {
               setStore(value);
+              setRegisterStore(register);
               pop();
             }}
             onClose={back}

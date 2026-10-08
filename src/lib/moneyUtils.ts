@@ -473,24 +473,57 @@ export function recentStores(records: readonly MoneyRecord[], limit = 12): strin
 }
 
 /**
+ * お店の名前を比べるための形（docs/kakei.md §3.5）。全角半角・大文字小文字・ひらがなとカタカナ・
+ * 空白と記号の違いをそろえる（「よかもんね!城南店」と「よかもんね 城南店」を同じに見る）。
+ */
+export function storeKey(name: string): string {
+  return name
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\u3041-\u3096]/g, (char) => String.fromCharCode(char.charCodeAt(0) + 0x60))
+    .replace(/[\s!-\/:-@\[-`{-~、。・「」『』【】〜]/g, '');
+}
+
+/**
+ * お店の名前が、打った名前に当たるか。どちらかがもう片方を含めば当たり
+ * （「コスモス」で「ドラッグストアコスモス」を、「ロッキー城南店」で「ロッキー」を出す。似たお店の警告に使う）。
+ */
+export function matchesStore(name: string, query: string): boolean {
+  const key = storeKey(name);
+  const typed = storeKey(query);
+  if (typed === '') return true;
+  return key.includes(typed) || (key.length >= 2 && typed.includes(key));
+}
+
+/**
  * お店の選択肢（docs/kakei.md §3.5）。まず最近使ったお店（新しい順。登録の有無は問わない）、
- * 続けて登録したお店のうち残りを名前順に。使わなくしたお店は、記録で使っていても候補に出さない。
+ * 続けて登録したお店のうち残りを使った回数の多い順に（同じ回数なら名前順）。
+ * 登録していない前に使ったお店（others。名前順）は、名前で探したときだけ出す。
+ * 使わなくしたお店は、記録で使っていても候補に出さない。
  */
 export function storeChoices(
   stores: readonly MoneyStore[],
   records: readonly MoneyRecord[],
   recentLimit = 12,
-): { registered: string[]; recent: string[] } {
+): { registered: string[]; recent: string[]; others: string[] } {
   const archived = new Set(stores.filter((store) => store.archived).map((store) => store.name));
-  const recent = recentStores(records, Number.MAX_SAFE_INTEGER)
-    .filter((name) => !archived.has(name))
-    .slice(0, recentLimit);
+  const used = recentStores(records, Number.MAX_SAFE_INTEGER).filter((name) => !archived.has(name));
+  const recent = used.slice(0, recentLimit);
   const shown = new Set(recent);
+  const uses = new Map<string, number>();
+  for (const record of records) {
+    const store = record.store.trim();
+    if (store !== '') uses.set(store, (uses.get(store) ?? 0) + 1);
+  }
   const registered = stores
     .filter((store) => !store.archived && !shown.has(store.name))
     .map((store) => store.name)
+    .sort((a, b) => (uses.get(b) ?? 0) - (uses.get(a) ?? 0) || a.localeCompare(b, 'ja'));
+  const registeredNames = new Set(stores.map((store) => store.name));
+  const others = used
+    .filter((name) => !shown.has(name) && !registeredNames.has(name))
     .sort((a, b) => a.localeCompare(b, 'ja'));
-  return { registered, recent };
+  return { registered, recent, others };
 }
 
 /** 前回の出金元（その種類の記録でいちばん新しいもの）。使わなくした出金元は使わない。 */
