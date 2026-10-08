@@ -249,8 +249,18 @@ export async function updateMoneyCategory(
   return rowToCategory(data);
 }
 
-/** 標準の種類（moneyUtils の DEFAULT_CATEGORIES）を入れる。種類がまだ無い家族向け。 */
+/**
+ * 標準の種類（moneyUtils の DEFAULT_CATEGORIES）を入れる。種類がまだ無い家族向け。
+ * 読み込みに失敗して種類が空に見えているときに押されても二重に入らないよう、DBに種類が1つでもあれば何も足さない
+ * （2026-10-08に、プレビューで読み込みに失敗したまま押されて、標準の種類が2回入った）。
+ */
 export async function insertDefaultMoneyCategories(supabase: SupabaseDb, familyId: string): Promise<MoneyCategory[]> {
+  const { count, error: countError } = await supabase
+    .from('money_categories')
+    .select('id', { count: 'exact', head: true })
+    .eq('family_id', familyId);
+  if (countError) throw countError;
+  if ((count ?? 0) > 0) throw new Error('この家族にはもう種類があります');
   const { data: parents, error } = await supabase
     .from('money_categories')
     .insert(

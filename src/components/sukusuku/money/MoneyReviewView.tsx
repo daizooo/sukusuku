@@ -17,6 +17,7 @@ import {
   monthKeyOfDate,
   recordTotal,
   type BudgetTile,
+  type SpecialReview,
 } from '@/lib/moneyUtils';
 import { buildYearRows } from '@/lib/specialUtils';
 import {
@@ -36,10 +37,12 @@ import {
 // 家計タブの「振り返り」（docs/kakei.md §4）。mobile版の `mobile/src/components/money/MoneyReviewView.tsx` と同じ並び・文言。
 //
 // 月と年は同じ面。上の送りの右「月 / 年」で期間を切り替える（2026-10-08に、別々の面から1つにした）。
-// 結論は2つに分ける（特別費は生活費の収支に入れない）:
-//  - 生活費の収支＝収入 − 生活費（特別費以外の支出。種類の名前が「その他」でも生活費）。貯金は記録なので式にも表示にも入れない
-//  - 特別費＝その期間に払った額と、年度の予算の残り（月ならその月までの累計での残り）
-// その下は、月なら生活費の大分類の一覧（予算を超えた順）、年なら月ごとの収支（押すとその月へ）。
+// 結論は生活費の収支（特別費は入れない）＝収入 − 生活費（特別費以外の支出。種類の名前が「その他」でも生活費）。
+// 貯金は記録なので式にも表示にも入れない。
+// その下の「内訳」は、月なら生活費の大分類の一覧（種類の並び順）の最後に特別費の1行、年なら特別費の1行。
+// 特別費の行はその期間に払った額と年度の予算の残り（月ならその月までの累計）だけで、押すと「特別費」の面へ
+// （2026-10-08に、生活費と同じ大きさの結論から内訳の1行にした。大部分は「特別費」の面で見る）。
+// 年は内訳の下に月ごとの収支（押すとその月へ）。
 // 見込みの額（毎月の記録で自動で作り、まだ確かめていない額）は実績に入れて数え、件数と額を添えて出す（§3.3・§4.1）。
 
 interface MoneyReviewViewProps {
@@ -57,6 +60,8 @@ interface MoneyReviewViewProps {
   /** 年の「月ごと」の行を押したとき。その月の月の振り返りへ。 */
   onSelectMonth: (monthKey: string) => void;
   onEditCategories: () => void;
+  /** 内訳の特別費の行を押したとき。「特別費」の面へ。 */
+  onOpenSpecial: () => void;
 }
 
 export default function MoneyReviewView({
@@ -73,6 +78,7 @@ export default function MoneyReviewView({
   specialActuals,
   onSelectMonth,
   onEditCategories,
+  onOpenSpecial,
 }: MoneyReviewViewProps) {
   const isMonth = period === 'month';
   const today = monthKeyOfDate(new Date());
@@ -153,59 +159,33 @@ export default function MoneyReviewView({
           )}
         </Hero>
 
-        <div className="mt-3">
-          <Hero
-            label={isMonth ? '特別費（この月）' : '特別費（年度）'}
-            value={formatYen(special.spent)}
-            note={
-              special.yearBudget > 0 || special.spentToDate > 0
-                ? `生活費の収支には入れない・年度の予算 ${formatYen(special.yearBudget)}`
-                : '「特別費」で予定を決めると、予算の残りが出ます'
-            }
-          >
-            <StatRow
-              label={isMonth ? 'この月までに払った額' : '払った額'}
-              note="年度のはじめから"
-              value={`−${formatYen(special.spentToDate)}`}
-            />
-            <StatRow
-              label="予算の残り"
-              note={special.remaining < 0 ? '予算を超えています' : undefined}
-              noteMinus={special.remaining < 0}
-              value={special.remaining < 0 ? `−${formatYen(special.remaining)}` : formatYen(special.remaining)}
-              isMinus={special.remaining < 0}
-            />
-            {special.yearBudget > 0 && (
-              <div className="py-1.5">
-                <ProgressBar ratio={special.spentToDate / special.yearBudget} over={special.remaining < 0} />
-              </div>
-            )}
-          </Hero>
-        </div>
 
         {isMonth ? (
           <>
             <SectionHeader
-              title="生活費の内訳"
-              hint="予算を超えた順"
+              title="内訳"
               right={
                 <button type="button" onClick={onEditCategories} className={type.link}>
                   種類と予算
                 </button>
               }
             />
-            {tiles.length === 0 ? (
+            {tiles.length === 0 && (
               <p className="py-6 text-center text-[13px] text-gray-400">「種類と予算」で種類と月の予算を決めると、ここに予算との差が出ます</p>
-            ) : (
-              <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
-                {tiles.map((tile) => (
-                  <CategoryRow key={tile.category.id} tile={tile} />
-                ))}
-              </div>
             )}
+            <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
+              {tiles.map((tile) => (
+                <CategoryRow key={tile.category.id} tile={tile} />
+              ))}
+              <SpecialRow special={special} isMonth onClick={onOpenSpecial} />
+            </div>
           </>
         ) : (
           <>
+            <SectionHeader title="内訳" />
+            <div className={`${cardClass} overflow-hidden`}>
+              <SpecialRow special={special} isMonth={false} onClick={onOpenSpecial} />
+            </div>
             <SectionHeader title="月ごと" hint="押すとその月へ" />
             {months.length === 0 ? (
               <p className="py-6 text-center text-[13px] text-gray-400">この年度はまだ記録がありません</p>
@@ -250,6 +230,36 @@ export default function MoneyReviewView({
         )}
       </div>
     </div>
+  );
+}
+
+/** 内訳の特別費の1行。その期間に払った額と、年度の予算の残り。押すと「特別費」の面へ。 */
+function SpecialRow({ special, isMonth, onClick }: { special: SpecialReview; isMonth: boolean; onClick: () => void }) {
+  const over = special.remaining < 0;
+  return (
+    <button
+      type="button"
+      aria-label="特別費を見る"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left hover:bg-gray-50"
+    >
+      <CategoryIcon iconKey="star" />
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-baseline gap-2">
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">特別費</span>
+          <span className={`text-sm font-bold tabular-nums ${special.spent === 0 ? 'text-gray-400' : 'text-gray-900'}`}>
+            {isMonth ? 'この月' : '年度'} {formatYen(special.spent)}
+          </span>
+        </div>
+        {special.yearBudget > 0 && <ProgressBar ratio={special.spentToDate / special.yearBudget} over={over} />}
+        <p className={minus(type.faint, over)}>
+          {special.yearBudget > 0
+            ? `年度 ${formatYen(special.spentToDate)} / ${formatYen(special.yearBudget)}・${over ? `${formatYen(special.remaining)} 超過` : `残り ${formatYen(special.remaining)}`}`
+            : '「特別費」で予定を決めると、予算の残りが出ます'}
+        </p>
+      </div>
+      <ChevronRight size={16} className="text-gray-400" />
+    </button>
   );
 }
 

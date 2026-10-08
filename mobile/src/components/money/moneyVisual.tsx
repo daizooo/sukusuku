@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react-native';
+import { ArrowLeft, ChevronLeft, ChevronRight, CreditCard, Landmark, PiggyBank, QrCode, RefreshCw, X } from 'lucide-react-native';
+import type { MoneyWalletType } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { formatMonthKey, iconTone, shiftMonth } from '@/lib/moneyUtils';
 import { MONEY_ICON_COMPONENTS } from '@/components/money/moneyIcons';
@@ -268,10 +269,36 @@ export function CategoryIcon({ iconKey, size = 32 }: { iconKey: string; size?: n
   const tone = iconTone(iconKey);
   const Icon = MONEY_ICON_COMPONENTS[tone.key] ?? MONEY_ICON_COMPONENTS.other;
   return (
-    <View style={[styles.badge, { width: size, height: size, borderRadius: size / 2, backgroundColor: tone.surface }]}>
-      <Icon size={Math.round(size * 0.55)} color={tone.color} />
+    <View style={[styles.badge, { width: size, height: size, borderRadius: size / 2, backgroundColor: tone.color }]}>
+      <Icon size={Math.round(size * 0.55)} color="#ffffff" />
     </View>
   );
+}
+
+const TRANSFER_COLOR = '#a8a8a8';
+
+/** 振替のアイコン（Zaim と同じく灰色の丸に白い回る矢印。灰色は Zaim より淡く）。 */
+export function TransferIcon({ size = 32 }: { size?: number }) {
+  return (
+    <View style={[styles.badge, { width: size, height: size, borderRadius: size / 2, backgroundColor: TRANSFER_COLOR }]}>
+      <RefreshCw size={Math.round(size * 0.5)} color="#ffffff" />
+    </View>
+  );
+}
+
+/** 出金元の種類のアイコンと色（Zaim と同じく、財布は緑の豚の貯金箱・口座は青い銀行・カードは緑のカード）。 */
+const WALLET_TYPE_ICONS = {
+  cash: { Icon: PiggyBank, color: '#4caf50' },
+  bank: { Icon: Landmark, color: '#1e78c2' },
+  card: { Icon: CreditCard, color: '#1b6b4a' },
+  prepaid: { Icon: CreditCard, color: '#5b7a99' },
+  qr: { Icon: QrCode, color: '#e53935' },
+} as const;
+
+/** 出金元の種類のアイコン（記録の一覧で金額の右に出す。Zaim と同じ）。 */
+export function WalletTypeIcon({ type: walletType, size = 15 }: { type: MoneyWalletType; size?: number }) {
+  const { Icon, color } = WALLET_TYPE_ICONS[walletType];
+  return <Icon size={size} color={color} />;
 }
 
 /** 全画面の入力の見出し。close は × 、back は ← 。 */

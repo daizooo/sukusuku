@@ -27,6 +27,7 @@ import {
   groupItems,
   groupRecordsByDay,
   itemNamesLabel,
+  itemSummary,
   lastWalletId,
   pressCalcKey,
   recentStores,
@@ -188,11 +189,11 @@ const tiles = buildBudgetTiles(records, categories, budgets, '2026-09');
 assert.deepEqual(
   tiles.map((tile) => [tile.category.id, tile.diff, tile.percent]),
   [
-    ['food', 60000 - 70564, 118],
     ['house', 0, 100],
+    ['food', 60000 - 70564, 118],
     ['med', 4500, 10],
   ],
-  '予算を超えた順、残りの少ない順。使っていない使わなくした大分類は出さない',
+  '種類の並び順のまま。使っていない使わなくした大分類は出さない',
 );
 
 assert.deepEqual(
@@ -217,6 +218,11 @@ assert.deepEqual(
   '同じ種類の品目は1つにまとめる',
 );
 assert.equal(itemNamesLabel(groups[0].items), '牛乳 ×2・食パン');
+// 記録の一覧の2行目（品名の要約。docs/kakei.md §3.2）
+assert.equal(itemSummary([{ name: '牛乳' }, { name: ' 卵 ' }]), '牛乳、卵');
+assert.equal(itemSummary([{ name: '牛乳' }, { name: '卵' }, { name: 'パン' }]), '牛乳、卵ほか');
+assert.equal(itemSummary([{ name: '牛乳' }, { name: '牛乳' }, { name: '' }]), '牛乳', '同じ品名・空の品名は数えない');
+assert.equal(itemSummary([{ name: '' }]), '');
 
 assert.deepEqual(
   specialActualsFromRecords(records).map((actual) => [actual.recordId, actual.itemId, actual.planId, actual.occurredOn, actual.amount, actual.note]),

@@ -182,14 +182,14 @@ export const DEFAULT_CATEGORIES: { kind: MoneyCategoryKind; name: string; childr
 export const MONEY_ICONS: { key: string; label: string; color: string; surface: string }[] = [
   { key: 'home', label: '住まい', color: '#b45309', surface: '#fffbeb' },
   { key: 'sofa', label: '家具', color: '#b45309', surface: '#fffbeb' },
-  { key: 'food', label: '食事', color: '#ea580c', surface: '#fff7ed' },
-  { key: 'grocery', label: '買い物', color: '#ea580c', surface: '#fff7ed' },
-  { key: 'cafe', label: 'カフェ', color: '#ea580c', surface: '#fff7ed' },
-  { key: 'drink', label: 'お酒', color: '#ea580c', surface: '#fff7ed' },
+  { key: 'food', label: '食事', color: '#7cb342', surface: '#fff7ed' },
+  { key: 'grocery', label: '買い物', color: '#7cb342', surface: '#fff7ed' },
+  { key: 'cafe', label: 'カフェ', color: '#7cb342', surface: '#fff7ed' },
+  { key: 'drink', label: 'お酒', color: '#7cb342', surface: '#fff7ed' },
   { key: 'power', label: '電気', color: '#ca8a04', surface: '#fefce8' },
   { key: 'gas', label: 'ガス', color: '#ca8a04', surface: '#fefce8' },
   { key: 'water', label: '水道', color: '#ca8a04', surface: '#fefce8' },
-  { key: 'daily', label: '日用品', color: '#059669', surface: '#ecfdf5' },
+  { key: 'daily', label: '日用品', color: '#1e88e5', surface: '#ecfdf5' },
   { key: 'beauty', label: '美容', color: '#db2777', surface: '#fdf2f8' },
   { key: 'clothes', label: '服', color: '#db2777', surface: '#fdf2f8' },
   { key: 'hair', label: '美容院', color: '#db2777', surface: '#fdf2f8' },
@@ -199,14 +199,14 @@ export const MONEY_ICONS: { key: string; label: string; color: string; surface: 
   { key: 'plane', label: '旅行', color: '#0284c7', surface: '#f0f9ff' },
   { key: 'phone', label: '携帯', color: '#4f46e5', surface: '#eef2ff' },
   { key: 'wifi', label: 'ネット', color: '#4f46e5', surface: '#eef2ff' },
-  { key: 'medical', label: '病院', color: '#e11d48', surface: '#fff1f2' },
-  { key: 'pill', label: '薬', color: '#e11d48', surface: '#fff1f2' },
-  { key: 'heart', label: '健康', color: '#e11d48', surface: '#fff1f2' },
+  { key: 'medical', label: '病院', color: '#e53935', surface: '#fff1f2' },
+  { key: 'pill', label: '薬', color: '#e53935', surface: '#fff1f2' },
+  { key: 'heart', label: '健康', color: '#e53935', surface: '#fff1f2' },
   { key: 'ticket', label: 'レジャー', color: '#7c3aed', surface: '#f5f3ff' },
   { key: 'game', label: '遊び', color: '#7c3aed', surface: '#f5f3ff' },
   { key: 'book', label: '本・趣味', color: '#7c3aed', surface: '#f5f3ff' },
   { key: 'sports', label: '運動', color: '#7c3aed', surface: '#f5f3ff' },
-  { key: 'baby', label: '子ども', color: '#0d9488', surface: '#f0fdfa' },
+  { key: 'baby', label: '子ども', color: '#5c6bc0', surface: '#f0fdfa' },
   { key: 'school', label: '学び', color: '#0d9488', surface: '#f0fdfa' },
   { key: 'gift', label: '贈り物', color: '#0d9488', surface: '#f0fdfa' },
   { key: 'pet', label: 'ペット', color: '#65a30d', surface: '#f7fee7' },
@@ -215,6 +215,7 @@ export const MONEY_ICONS: { key: string; label: string; color: string; surface: 
   { key: 'receipt', label: '支払い', color: '#2563eb', surface: '#eff6ff' },
   { key: 'salary', label: '給料', color: '#2563eb', surface: '#eff6ff' },
   { key: 'savings', label: '貯金', color: '#2563eb', surface: '#eff6ff' },
+  { key: 'star', label: '特別', color: '#f5b301', surface: '#fffbeb' },
   { key: 'other', label: 'その他', color: '#6b7280', surface: '#f3f4f6' },
 ];
 
@@ -398,6 +399,14 @@ export function itemNamesLabel(items: readonly Pick<MoneyItem, 'name' | 'quantit
     .join('・');
 }
 
+// 記録の一覧の2行目（docs/kakei.md §2.1。Zaim の履歴と同じ並び）。
+/** 品名の要約（「牛乳、卵」「牛乳、卵ほか」）。品名が1つも無ければ空。 */
+export function itemSummary(items: readonly Pick<MoneyItem, 'name'>[]): string {
+  const names = [...new Set(items.map((item) => item.name.trim()).filter((name) => name !== ''))];
+  if (names.length === 0) return '';
+  return `${names.slice(0, 2).join('、')}${names.length > 2 ? 'ほか' : ''}`;
+}
+
 /** 品目の金額（単価があれば 個数 × 単価）。 */
 export const lineAmount = (line: { quantity: number; unitPrice: number | null; amount: number }) =>
   line.unitPrice === null ? line.amount : line.unitPrice * line.quantity;
@@ -529,8 +538,8 @@ export function livingSpendByTop(
 }
 
 /**
- * 生活費のタイル。予算を超えた順（超えた額の大きい順）に、予算どおり・残りの少ない順が続く
- * （予算 − 実績 の小さい順）。使わなくした大分類は、その月に使っていれば出す。
+ * 生活費のタイル。種類の並び（大分類の並び順）のまま（2026-10-08に、予算を超えた順から変えた）。
+ * 使わなくした大分類は、その月に使っていれば出す。
  */
 export function buildBudgetTiles(
   records: readonly MoneyRecord[],
@@ -552,10 +561,7 @@ export function buildBudgetTiles(
         diff: (budget ?? 0) - actual,
         percent: budget !== null && budget > 0 ? Math.round((actual / budget) * 100) : null,
       };
-    })
-    .map((tile, index) => ({ tile, index }))
-    .sort((a, b) => (a.tile.diff !== b.tile.diff ? a.tile.diff - b.tile.diff : a.index - b.index))
-    .map((entry) => entry.tile);
+    });
 }
 
 export interface MonthSummary {
