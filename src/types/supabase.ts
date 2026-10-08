@@ -892,8 +892,11 @@ export type Database = {
           created_by: string | null
           family_id: string
           id: string
+          is_estimate: boolean
           kind: string
+          month: string | null
           occurred_on: string
+          recurring_id: string | null
           store: string
           to_wallet_id: string | null
           updated_at: string
@@ -904,8 +907,11 @@ export type Database = {
           created_by?: string | null
           family_id: string
           id?: string
+          is_estimate?: boolean
           kind?: string
+          month?: string | null
           occurred_on: string
+          recurring_id?: string | null
           store?: string
           to_wallet_id?: string | null
           updated_at?: string
@@ -916,8 +922,11 @@ export type Database = {
           created_by?: string | null
           family_id?: string
           id?: string
+          is_estimate?: boolean
           kind?: string
+          month?: string | null
           occurred_on?: string
+          recurring_id?: string | null
           store?: string
           to_wallet_id?: string | null
           updated_at?: string
@@ -939,6 +948,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "money_records_recurring_fkey"
+            columns: ["recurring_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_recurring"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
             foreignKeyName: "money_records_to_wallet_fkey"
             columns: ["to_wallet_id", "family_id"]
             isOneToOne: false
@@ -947,6 +963,108 @@ export type Database = {
           },
           {
             foreignKeyName: "money_records_wallet_fkey"
+            columns: ["wallet_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_wallets"
+            referencedColumns: ["id", "family_id"]
+          },
+        ]
+      }
+      money_recurring: {
+        Row: {
+          amount: number
+          amount_mode: string
+          archived_at: string | null
+          category_id: string | null
+          created_at: string
+          day: number
+          family_id: string
+          holiday: string
+          id: string
+          kind: string
+          made_through: string | null
+          months: number[] | null
+          name: string
+          position: number
+          special_item_id: string | null
+          store: string
+          to_wallet_id: string | null
+          updated_at: string
+          wallet_id: string | null
+        }
+        Insert: {
+          amount?: number
+          amount_mode?: string
+          archived_at?: string | null
+          category_id?: string | null
+          created_at?: string
+          day: number
+          family_id: string
+          holiday?: string
+          id?: string
+          kind?: string
+          made_through?: string | null
+          months?: number[] | null
+          name?: string
+          position?: number
+          special_item_id?: string | null
+          store?: string
+          to_wallet_id?: string | null
+          updated_at?: string
+          wallet_id?: string | null
+        }
+        Update: {
+          amount?: number
+          amount_mode?: string
+          archived_at?: string | null
+          category_id?: string | null
+          created_at?: string
+          day?: number
+          family_id?: string
+          holiday?: string
+          id?: string
+          kind?: string
+          made_through?: string | null
+          months?: number[] | null
+          name?: string
+          position?: number
+          special_item_id?: string | null
+          store?: string
+          to_wallet_id?: string | null
+          updated_at?: string
+          wallet_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_recurring_category_fkey"
+            columns: ["category_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_categories"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
+            foreignKeyName: "money_recurring_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_recurring_special_item_fkey"
+            columns: ["special_item_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "special_items"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
+            foreignKeyName: "money_recurring_to_wallet_fkey"
+            columns: ["to_wallet_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_wallets"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
+            foreignKeyName: "money_recurring_wallet_fkey"
             columns: ["wallet_id", "family_id"]
             isOneToOne: false
             referencedRelation: "money_wallets"
@@ -992,11 +1110,15 @@ export type Database = {
       money_wallets: {
         Row: {
           archived_at: string | null
+          card_made_through: string | null
+          close_day: number | null
           created_at: string
           family_id: string
           id: string
           is_saving: boolean
           name: string
+          pay_day: number | null
+          pay_wallet_id: string | null
           position: number
           saving_target: number | null
           type: string
@@ -1004,11 +1126,15 @@ export type Database = {
         }
         Insert: {
           archived_at?: string | null
+          card_made_through?: string | null
+          close_day?: number | null
           created_at?: string
           family_id: string
           id?: string
           is_saving?: boolean
           name: string
+          pay_day?: number | null
+          pay_wallet_id?: string | null
           position?: number
           saving_target?: number | null
           type?: string
@@ -1016,11 +1142,15 @@ export type Database = {
         }
         Update: {
           archived_at?: string | null
+          card_made_through?: string | null
+          close_day?: number | null
           created_at?: string
           family_id?: string
           id?: string
           is_saving?: boolean
           name?: string
+          pay_day?: number | null
+          pay_wallet_id?: string | null
           position?: number
           saving_target?: number | null
           type?: string
@@ -1033,6 +1163,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "families"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_wallets_pay_wallet_fkey"
+            columns: ["pay_wallet_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_wallets"
+            referencedColumns: ["id", "family_id"]
           },
         ]
       }
@@ -1867,6 +2004,8 @@ export type Database = {
         Returns: undefined
       }
       is_family_guardian: { Args: never; Returns: boolean }
+      jp_base_holiday_name: { Args: { p_date: string }; Returns: string }
+      jp_holiday_name: { Args: { p_date: string }; Returns: string }
       lottery_delete_my_test_data: { Args: never; Returns: number }
       lottery_open_box: {
         Args: { p_draw_id: string }
@@ -1879,6 +2018,27 @@ export type Database = {
       lottery_use_rate_up: {
         Args: { p_draw_id: string; p_coupon_id: string }
         Returns: Database["public"]["Tables"]["subsidy_draws"]["Row"]
+      }
+      make_money_recurring_records: {
+        Args: { p_today?: string }
+        Returns: number
+      }
+      money_day_of_month: {
+        Args: { p_day: number; p_month: string }
+        Returns: string
+      }
+      money_is_business_day: { Args: { p_date: string }; Returns: boolean }
+      money_recurring_estimate: {
+        Args: {
+          p_month: string
+          p_on: string
+          p_rule: Database["public"]["Tables"]["money_recurring"]["Row"]
+        }
+        Returns: number
+      }
+      money_shift_business_day: {
+        Args: { p_date: string; p_holiday: string }
+        Returns: string
       }
       save_money_record: {
         Args: { p_items: Json; p_record: Json }

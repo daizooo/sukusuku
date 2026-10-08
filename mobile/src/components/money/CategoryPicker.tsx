@@ -18,7 +18,8 @@ import { CategoryIcon, ScreenHeader } from '@/components/money/moneyVisual';
 
 // 種類の選択（docs/kakei.md §3.1・§3.2）。PWA版の `src/components/sukusuku/money/CategoryPicker.tsx` と同じ並び・文言。
 //
-// 上によく使う小分類。その下に大分類ごとの見出し（今月の残り）と小分類のチップ。押すと大分類も決まる。
+// 上によく使う小分類。その下に大分類ごとの枠（見出しに今月の残り、中に小分類のチップ）。押すと大分類も決まる。
+// 大分類ごとに枠で囲み、見出しに色を付けて、どこからどこまでが同じ大分類かを分かるようにする。
 // 支出なら最後に特別費: その年度の予定（まだ済でないものを上に。選ぶと予算の額が入る）と、予定外の項目。
 // 収入なら収入の種類と、特別収入。
 
@@ -41,7 +42,8 @@ interface CategoryPickerProps {
   specialActuals: SpecialActual[];
   onPick: (choice: CategoryChoice) => void;
   onClose: () => void;
-  onEditCategories: () => void;
+  /** 種類と予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
+  onEditCategories?: () => void;
 }
 
 export default function CategoryPicker({
@@ -85,9 +87,11 @@ export default function CategoryPicker({
         icon="back"
         onClose={onClose}
         right={
-          <Pressable accessibilityRole="button" accessibilityLabel="種類と予算を編集" onPress={onEditCategories} hitSlop={8}>
-            <Settings2 size={20} color={colors.textMuted} />
-          </Pressable>
+          onEditCategories && (
+            <Pressable accessibilityRole="button" accessibilityLabel="種類と予算を編集" onPress={onEditCategories} hitSlop={8}>
+              <Settings2 size={20} color={colors.textMuted} />
+            </Pressable>
+          )
         }
       />
       <ScrollView contentContainerStyle={styles.content}>
@@ -112,7 +116,7 @@ export default function CategoryPicker({
           const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, fiscalYear) : null;
           const remaining = budget === null ? null : budget - (spend.get(top.id) ?? 0);
           return (
-            <View key={top.id} style={styles.section}>
+            <View key={top.id} style={styles.topCard}>
               <View style={styles.topRow}>
                 <CategoryIcon iconKey={iconKeyOf(top)} size={24} />
                 <Text style={[styles.topName, styles.flex]}>{top.name}</Text>
@@ -122,7 +126,7 @@ export default function CategoryPicker({
                   </Text>
                 )}
               </View>
-              <View style={styles.chips}>
+              <View style={[styles.chips, styles.topChips]}>
                 {(children.length > 0 ? children : [top]).map((category) => (
                   <Pressable
                     key={category.id}
@@ -197,7 +201,16 @@ const styles = StyleSheet.create({
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
   section: { gap: 8 },
   sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  topCard: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: colors.neutralSurface,
+  },
+  topChips: { padding: 12 },
   topName: { fontSize: 15, fontWeight: '700', color: colors.text },
   remaining: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
   over: { color: colors.moneyOver },

@@ -1,18 +1,28 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronRight, Store, Tag } from 'lucide-react-native';
-import type { MoneyBudget, MoneyCategory, MoneyStore } from '@/types/app';
+import { CalendarClock, ChevronRight, Store, Tag } from 'lucide-react-native';
+import type {
+  MoneyBudget,
+  MoneyCategory,
+  MoneyRecord,
+  MoneyRecurring,
+  MoneyStore,
+  MoneyWallet,
+  SpecialActual,
+  SpecialItem,
+} from '@/types/app';
 import { colors } from '@/lib/theme';
 import { budgetFor, formatYen, topCategories } from '@/lib/moneyUtils';
 import { formatFiscalYear } from '@/lib/specialUtils';
 import CategoryEditor from '@/components/money/CategoryEditor';
+import RecurringSettings from '@/components/money/RecurringSettings';
 import StoreSettings from '@/components/money/StoreSettings';
 import { ScreenHeader } from '@/components/money/moneyVisual';
 
 // 家計の設定（docs/kakei.md §3.5）。PWA版の `src/components/sukusuku/money/MoneySettings.tsx` と同じ並び・文言。
 //
-// 予算・種類・お店を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
+// 予算・種類・お店・毎月の記録を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
 // （お店の名前を直しても、過去の記録のお店の名前はそのまま）。
 // 戻る操作（スマホの戻るボタン）は、開いている設定の面から入口へ、入口から家計タブへ。
 
@@ -22,13 +32,20 @@ interface MoneySettingsProps {
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   stores: MoneyStore[];
+  /** 毎月の記録の出金元・入金先を選ぶのに使う（出金元そのものは「口座」の面で直す）。 */
+  wallets: MoneyWallet[];
+  recurring: MoneyRecurring[];
+  records: MoneyRecord[];
+  specialItems: SpecialItem[];
+  specialActuals: SpecialActual[];
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
   onBudgets: (update: (prev: MoneyBudget[]) => MoneyBudget[]) => void;
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
+  onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
   onClose: () => void;
 }
 
-type Page = 'menu' | 'categories' | 'stores';
+type Page = 'menu' | 'categories' | 'stores' | 'recurring';
 
 export default function MoneySettings({
   familyId,
@@ -36,17 +53,26 @@ export default function MoneySettings({
   categories,
   budgets,
   stores,
+  wallets,
+  recurring,
+  records,
+  specialItems,
+  specialActuals,
   onCategories,
   onBudgets,
   onStores,
+  onRecurring,
   onClose,
 }: MoneySettingsProps) {
   const insets = useSafeAreaInsets();
   const [page, setPage] = useState<Page>('menu');
+  // 設定の面の中で、さらに奥の画面を開いているときの戻り方（毎月の記録の編集など）。
+  const innerBack = useRef<(() => void) | null>(null);
 
   const tops = topCategories(categories, 'living', true).filter((top) => !top.archived);
   const totalBudget = tops.reduce((sum, top) => sum + (budgetFor(budgets, top.id, fiscalYear) ?? 0), 0);
   const storeCount = stores.filter((store) => !store.archived).length;
+  const recurringCount = recurring.filter((rule) => !rule.archived).length;
 
   const rows: { id: Exclude<Page, 'menu'>; label: string; summary: string; icon: typeof Tag }[] = [
     {
@@ -56,19 +82,25 @@ export default function MoneySettings({
       icon: Tag,
     },
     { id: 'stores', label: 'お店', summary: `登録したお店 ${storeCount}件`, icon: Store },
+    { id: 'recurring', label: '毎月の記録', summary: `固定費・給料など ${recurringCount}件（自動で記録）`, icon: CalendarClock },
   ];
 
   const back = () => setPage('menu');
+  const onRequestClose = () => {
+    if (page === 'menu') return onClose();
+    if (innerBack.current) return innerBack.current();
+    back();
+  };
 
   return (
-    <Modal visible animationType="slide" onRequestClose={page === 'menu' ? onClose : back}>
+    <Modal visible animationType="slide" onRequestClose={onRequestClose}>
       <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         {page === 'menu' && (
           <>
             <ScreenHeader title="家計の設定" onClose={onClose} />
             <View style={styles.content}>
               <Text style={styles.note}>
-                予算・種類・お店を、いつでも編集・追加できます。直すのは設定だけで、記録は変わりません。
+                予算・種類・お店・毎月の記録を、いつでも編集・追加できます。直すのは設定だけで、記録は変わりません。
               </Text>
               {rows.map((row) => {
                 const Icon = row.icon;
@@ -94,6 +126,22 @@ export default function MoneySettings({
           </>
         )}
         {page === 'stores' && <StoreSettings familyId={familyId} stores={stores} onStores={onStores} onBack={back} />}
+        {page === 'recurring' && (
+          <RecurringSettings
+            familyId={familyId}
+            recurring={recurring}
+            wallets={wallets}
+            categories={categories}
+            budgets={budgets}
+            stores={stores}
+            records={records}
+            specialItems={specialItems}
+            specialActuals={specialActuals}
+            onRecurring={onRecurring}
+            onBack={back}
+            backRef={innerBack}
+          />
+        )}
       </View>
       {page === 'categories' && (
         <CategoryEditor

@@ -36,6 +36,20 @@
 最初の一回だけ`main`へ直接pushする例外対応を行った。それ以降は通常のPRフローに
 戻すことで合意している。）
 
+## 本番DB（Supabase）への migration の適用（2026-10-08に決定）
+
+- **削除を含まない migration は、Claude が Supabase の MCP（`apply_migration`）で本番DBに適用する。**
+  ユーザーの確認は待たない。migration を書いたら、PR を作るのと同じ流れで適用まで進める
+  （適用してからアプリを出す。PR はマージ前に適用を済ませておく）
+- **削除を含む文だけは MCP で流さず、SQL Editor で流す SQL としてユーザーに渡す。**
+  `drop`・`delete`・`truncate`・`cron.unschedule` など、行や物を消すもの。関数の本体に `delete` があるもの
+  （`create or replace function` の中身）も同じ。MCP は削除を含む SQL で確認待ちになり、60秒で止まる
+  - `drop ... if exists` で何度流しても同じ結果になるようにしているだけの行は、本番に対象が無いことを
+    確かめてから、その行を外して MCP で適用してよい（リポジトリの migration ファイルはそのまま）
+- 1回の `apply_migration` は小さく分ける（関数・表・cron ごとなど）
+- 適用したら確かめる: 物ができたか（表・列・関数・cron）、`generate_typescript_types` の結果と
+  `src/types/supabase.ts`・`mobile/src/types/supabase.ts` の該当部分が同じか、計算の結果
+
 ## コンフリクトを減らすための設計・実装方針
 
 複数のPRが並行して作業される前提で、マージ時のコンフリクトが極力発生しない

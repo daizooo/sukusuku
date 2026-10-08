@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Pencil, Plus } from 'lucide-react';
 import type { MoneyWallet, MoneyWalletDraft } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
-import { WALLET_TYPES } from '@/lib/moneyUtils';
+import { cardScheduleLabel, WALLET_TYPES } from '@/lib/moneyUtils';
 import { archiveMoneyWallet, insertMoneyWallet, restoreMoneyWallet, updateMoneyWallet } from '@/lib/api/money';
 import { WalletModal } from './WalletPicker';
 import { ScreenHeader, StackedScreen } from './moneyVisual';
@@ -90,6 +90,9 @@ export default function WalletSettings({ familyId, wallets, onWallets, onBack }:
                   <span className="flex-1">
                     <span className="block text-[15px] font-semibold text-gray-900">{wallet.name}</span>
                     {wallet.isSaving && <span className="block text-xs text-gray-400">貯金用</span>}
+                    {cardScheduleLabel(wallet) !== '' && (
+                      <span className="block text-xs text-gray-400">{cardScheduleLabel(wallet)}</span>
+                    )}
                   </span>
                   <Pencil size={16} className="text-gray-400" />
                 </button>
@@ -125,6 +128,7 @@ export default function WalletSettings({ familyId, wallets, onWallets, onBack }:
         <WalletModal
           key={editing === 'new' ? 'new' : editing.id}
           wallet={editing === 'new' ? null : editing}
+          wallets={wallets}
           onClose={() => setEditing(null)}
           onSubmit={(draft) => void save(editing === 'new' ? null : editing, draft)}
           onArchive={editing === 'new' ? undefined : () => void archive(editing)}

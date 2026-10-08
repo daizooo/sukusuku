@@ -13,7 +13,7 @@ import {
   recordsInMonth,
   topCategoryIdOf,
 } from '@/lib/moneyUtils';
-import { CategoryIcon, MonthBar, TransferIcon, WalletTypeIcon, type } from '@/components/money/moneyVisual';
+import { CategoryIcon, EstimateBadge, MonthBar, TransferIcon, WalletTypeIcon, type } from '@/components/money/moneyVisual';
 
 // 家計タブの「記録」（docs/kakei.md §2・§3）。PWA版の `src/components/sukusuku/money/MoneyRecordsView.tsx` と同じ並び・文言。
 //
@@ -21,6 +21,7 @@ import { CategoryIcon, MonthBar, TransferIcon, WalletTypeIcon, type } from '@/co
 // 1行＝1件の記録。Zaim の履歴と同じく、1行目は「小分類 @ お店」（大分類はアイコンで分かる）、2行目は品名の要約
 // （「牛乳、卵ほか」）、金額の右に出金元の種類のアイコン。振替は回る矢印のアイコンで、出金元 → 入金先。
 // 押すと記録の詳細。月の送りは固定で、スクロールするのは下だけ。
+// 毎月の記録・カード代金で自動で作り、まだ額を確かめていないものは金額の左に「見込み」（§3.3）。
 
 interface MoneyRecordsViewProps {
   monthKey: string;
@@ -128,6 +129,7 @@ export default function MoneyRecordsView({
                             </Text>
                           )}
                         </View>
+                        {record.isEstimate && <EstimateBadge />}
                         <Text style={[type.amount, record.kind === 'transfer' && styles.muted, record.kind === 'income' && styles.income]}>
                           {record.kind === 'income' ? '+' : ''}
                           {formatYen(total)}

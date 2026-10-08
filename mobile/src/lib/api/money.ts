@@ -7,6 +7,8 @@ import type {
   MoneyItem,
   MoneyRecord,
   MoneyRecordDraft,
+  MoneyRecurring,
+  MoneyRecurringDraft,
   MoneyStore,
   MoneyWallet,
   MoneyWalletDraft,
@@ -19,6 +21,7 @@ type WalletRow = Tables<'money_wallets'>;
 type StoreRow = Tables<'money_stores'>;
 type RecordRow = Tables<'money_records'>;
 type ItemRow = Tables<'money_items'>;
+type RecurringRow = Tables<'money_recurring'>;
 type SupabaseDb = SupabaseClient<Database>;
 
 // 家計タブの読み書き（種類・予算・出金元・記録。docs/kakei.md §3・§5）。
@@ -49,6 +52,9 @@ const rowToWallet = (row: WalletRow): MoneyWallet => ({
   type: WALLET_TYPES.find((type) => type === row.type) ?? 'cash',
   isSaving: row.is_saving,
   savingTarget: row.saving_target,
+  closeDay: row.close_day,
+  payDay: row.pay_day,
+  payWalletId: row.pay_wallet_id,
   position: row.position,
   archived: row.archived_at !== null,
 });
@@ -80,7 +86,31 @@ const rowToRecord = (row: RecordRow & { money_items: ItemRow[] }): MoneyRecord =
   toWalletId: row.to_wallet_id,
   store: row.store,
   createdBy: row.created_by,
+  isEstimate: row.is_estimate,
+  recurringId: row.recurring_id,
+  month: row.month === null ? null : row.month.slice(0, 7),
   items: [...row.money_items].sort((a, b) => a.position - b.position).map(rowToItem),
+});
+
+const RECORD_KINDS = ['expense', 'income', 'transfer'] as const;
+const HOLIDAY_RULES = ['next', 'prev', 'none'] as const;
+
+const rowToRecurring = (row: RecurringRow): MoneyRecurring => ({
+  id: row.id,
+  kind: RECORD_KINDS.find((kind) => kind === row.kind) ?? 'expense',
+  day: row.day,
+  months: row.months,
+  holiday: HOLIDAY_RULES.find((rule) => rule === row.holiday) ?? 'next',
+  amountMode: row.amount_mode === 'fixed' ? 'fixed' : 'estimate',
+  amount: row.amount,
+  walletId: row.wallet_id,
+  toWalletId: row.to_wallet_id,
+  store: row.store,
+  categoryId: row.category_id,
+  specialItemId: row.special_item_id,
+  name: row.name,
+  position: row.position,
+  archived: row.archived_at !== null,
 });
 
 /** 一度に読む行数（Supabase の Data API は1回に1000行まで）。 */
@@ -109,26 +139,30 @@ export interface MoneyData {
   wallets: MoneyWallet[];
   stores: MoneyStore[];
   records: MoneyRecord[];
+  recurring: MoneyRecurring[];
 }
 
 export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise<MoneyData> {
-  const [categoryResult, budgetResult, walletResult, storeResult, records] = await Promise.all([
+  const [categoryResult, budgetResult, walletResult, storeResult, recurringResult, records] = await Promise.all([
     supabase.from('money_categories').select('*').eq('family_id', familyId),
     supabase.from('money_budgets').select('*').eq('family_id', familyId),
     supabase.from('money_wallets').select('*').eq('family_id', familyId).order('position', { ascending: true }),
     supabase.from('money_stores').select('*').eq('family_id', familyId),
+    supabase.from('money_recurring').select('*').eq('family_id', familyId).order('position', { ascending: true }),
     loadRecords(supabase, familyId),
   ]);
   if (categoryResult.error) throw categoryResult.error;
   if (budgetResult.error) throw budgetResult.error;
   if (walletResult.error) throw walletResult.error;
   if (storeResult.error) throw storeResult.error;
+  if (recurringResult.error) throw recurringResult.error;
   return {
     categories: (categoryResult.data ?? []).map(rowToCategory),
     budgets: (budgetResult.data ?? []).map(rowToBudget),
     wallets: (walletResult.data ?? []).map(rowToWallet),
     stores: (storeResult.data ?? []).map(rowToStore),
     records,
+    recurring: (recurringResult.data ?? []).map(rowToRecurring),
   };
 }
 
@@ -149,6 +183,7 @@ export async function saveMoneyRecord(supabase: SupabaseDb, draft: MoneyRecordDr
     wallet_id: draft.walletId,
     to_wallet_id: draft.kind === 'transfer' ? draft.toWalletId : null,
     store: draft.kind === 'transfer' ? '' : draft.store.trim(),
+    is_estimate: draft.isEstimate,
   };
   const items: Json = draft.items.map((item) => ({
     amount: item.amount,
@@ -280,6 +315,10 @@ const walletFields = (draft: MoneyWalletDraft) => ({
   type: draft.type,
   is_saving: draft.isSaving,
   saving_target: draft.isSaving ? draft.savingTarget : null,
+  // 締め日・引き落とし日・引き落とし口座はカードだけ（docs/kakei.md §3.4）。
+  close_day: draft.type === 'card' ? draft.closeDay : null,
+  pay_day: draft.type === 'card' ? draft.payDay : null,
+  pay_wallet_id: draft.type === 'card' ? draft.payWalletId : null,
 });
 
 export async function insertMoneyWallet(
@@ -363,4 +402,67 @@ export async function setMoneyStoreArchived(supabase: SupabaseDb, id: string, ar
     .single();
   if (error) throw error;
   return rowToStore(data);
+}
+
+// ---- 毎月の記録のルール（docs/kakei.md §3.3） ----
+
+const recurringFields = (draft: MoneyRecurringDraft) => ({
+  kind: draft.kind,
+  day: draft.day,
+  months: draft.months,
+  holiday: draft.holiday,
+  amount_mode: draft.amountMode,
+  amount: draft.amount,
+  wallet_id: draft.walletId,
+  to_wallet_id: draft.kind === 'transfer' ? draft.toWalletId : null,
+  store: draft.kind === 'transfer' ? '' : draft.store.trim(),
+  category_id: draft.kind === 'transfer' ? null : draft.categoryId,
+  special_item_id: draft.kind === 'transfer' ? null : draft.specialItemId,
+  name: draft.name.trim(),
+});
+
+export async function insertMoneyRecurring(
+  supabase: SupabaseDb,
+  familyId: string,
+  draft: MoneyRecurringDraft,
+  position: number,
+): Promise<MoneyRecurring> {
+  const { data, error } = await supabase
+    .from('money_recurring')
+    .insert({ ...recurringFields(draft), family_id: familyId, position })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return rowToRecurring(data);
+}
+
+export async function updateMoneyRecurring(
+  supabase: SupabaseDb,
+  id: string,
+  draft: MoneyRecurringDraft,
+): Promise<MoneyRecurring> {
+  const { data, error } = await supabase
+    .from('money_recurring')
+    .update(recurringFields(draft))
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return rowToRecurring(data);
+}
+
+/** ルールを使わなくする／また使う。作った記録はそのまま残る。 */
+export async function setMoneyRecurringArchived(
+  supabase: SupabaseDb,
+  id: string,
+  archived: boolean,
+): Promise<MoneyRecurring> {
+  const { data, error } = await supabase
+    .from('money_recurring')
+    .update({ archived_at: archived ? new Date().toISOString() : null })
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return rowToRecurring(data);
 }

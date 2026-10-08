@@ -20,11 +20,13 @@ import { colors } from '@/lib/theme';
 import { formatDateWithWeekday, toDateString } from '@/lib/dateUtils';
 import {
   budgetFor,
+  canPickProductsFor,
   categoryPath,
   editorGroupTotal,
   evaluateCalc,
   fiscalYearOfMonth,
   formatCalc,
+  formatMonthKey,
   formatYen,
   groupsFromItems,
   iconKeyOf,
@@ -35,6 +37,7 @@ import {
   livingSpendByTop,
   monthKeyOf,
   pressCalcKey,
+  recordTotal,
   storeChoices,
   RECORD_KIND_LABEL,
   sameGroupTarget,
@@ -47,7 +50,7 @@ import ItemsScreen, { blankLine, newLineKey, type ItemsWork } from '@/components
 import ProductPicker, { type PickedProduct } from '@/components/money/ProductPicker';
 import StorePicker from '@/components/money/StorePicker';
 import WalletPicker from '@/components/money/WalletPicker';
-import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
+import { CategoryIcon, EstimateBadge, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 
 // 記録の入力（docs/kakei.md §3.2。Zaim を踏襲）。PWA版の `src/components/sukusuku/money/RecordEditor.tsx` と同じ流れ・文言。
 //
@@ -57,6 +60,9 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 //
 // 画面は全部この1つの全画面の中で重ねる（戻る操作で1つ前の画面へ）。品目の書きかけは、
 // 種類の選択・日用品から選ぶへ行って戻っても残る。
+//
+// 見込みの額の記録（毎月の記録・カード代金で自動で作ったもの。§3.3）は、額を直すと確定になる。
+// 額が合っていたときは「この額で確定する」。額を変えずに保存したときは見込みのまま。
 
 type Screen =
   | { type: 'detail' }
@@ -126,6 +132,7 @@ export default function RecordEditor({
   const [amountExpr, setAmountExpr] = useState('');
   const [stack, setStack] = useState<Screen[]>([{ type: 'detail' }]);
   const [work, setWork] = useState<ItemsWork | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
 
   const screen = stack[stack.length - 1];
   const push = (next: Screen) => setStack((prev) => [...prev, next]);
@@ -137,6 +144,8 @@ export default function RecordEditor({
   const storeOptions = useMemo(() => storeChoices(stores, records), [stores, records]);
   const total = kind === 'transfer' ? transferAmount : groups.reduce((sum, group) => sum + editorGroupTotal(group), 0);
   const specialKind = kind === 'income' ? 'income' : 'expense';
+  // 見込みのままか。額を直すか「この額で確定する」で確定になる。
+  const stillEstimate = record?.isEstimate === true && !confirmed && total === recordTotal(record);
 
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '';
   const specialName = (id: string | null) => specialItems.find((item) => item.id === id)?.name ?? '';
@@ -332,6 +341,7 @@ export default function RecordEditor({
       walletId,
       toWalletId: kind === 'transfer' ? toWalletId : null,
       store: kind === 'transfer' ? '' : store,
+      isEstimate: stillEstimate,
       items,
     });
   };
@@ -364,7 +374,7 @@ export default function RecordEditor({
             title={groupTitle(work)}
             iconKey={groupIconKey(work)}
             subtitle={groupSubtitle(work)}
-            canPickProducts={work.categoryId !== null && kind === 'expense'}
+            canPickProducts={kind === 'expense' && canPickProductsFor(categories, products, work.categoryId)}
             onChangeCategory={() => push({ type: 'category', purpose: 'change' })}
             onPickProducts={() => push({ type: 'products' })}
             onSave={saveWork}
@@ -483,6 +493,28 @@ export default function RecordEditor({
           <Text style={styles.totalLabel}>{kind === 'transfer' ? '金額' : '合計（品目の合計）'}</Text>
           <Text style={styles.total}>{formatYen(total)}</Text>
         </View>
+        {record?.isEstimate && (
+          <View style={styles.estimate}>
+            <View style={styles.estimateHead}>
+              {stillEstimate && <EstimateBadge />}
+              <Text style={[styles.estimateText, styles.flex]}>
+                {stillEstimate
+                  ? '見込みの額です。検針票・明細などを見て額を直すと確定します'
+                  : '保存すると確定します'}
+              </Text>
+            </View>
+            {stillEstimate && (
+              <Pressable accessibilityRole="button" onPress={() => setConfirmed(true)} hitSlop={8}>
+                <Text style={styles.estimateLink}>この額で確定する</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+        {record?.month && (
+          <Text style={styles.note}>
+            {record.recurringId === null ? 'カード代金' : '毎月の記録'}から自動で作った記録（{formatMonthKey(record.month)}の分）
+          </Text>
+        )}
 
         <Pressable accessibilityRole="button" onPress={openDate} style={styles.field}>
           <CalendarDays size={20} color={colors.textMuted} />
@@ -537,7 +569,7 @@ export default function RecordEditor({
               const names = itemNamesLabel(group.lines);
               return (
                 <Pressable key={group.key} accessibilityRole="button" onPress={() => openGroup(group)} style={styles.group}>
-                  <CategoryIcon iconKey={groupIconKey(group)} />
+                  <CategoryIcon iconKey={groupIconKey(group)} size={24} />
                   <View style={styles.flex}>
                     <Text style={styles.groupTitle}>{groupTitle(group)}</Text>
                     {names !== '' && <Text style={styles.groupNames}>{names}</Text>}
@@ -603,20 +635,25 @@ const styles = StyleSheet.create({
   fieldText: { flex: 1, fontSize: 16, fontWeight: '500', color: colors.text },
   placeholder: { color: colors.textFaint },
   note: { fontSize: 12, fontWeight: '500', color: colors.textFaint, marginTop: 10 },
+  estimate: { marginTop: 12, padding: 12, gap: 8, borderRadius: 12, backgroundColor: colors.moneyEstimateSurface },
+  estimateHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  estimateText: { fontSize: 13, fontWeight: '500', color: colors.moneyEstimate },
+  estimateLink: { fontSize: 14, fontWeight: '700', color: colors.moneyEstimate },
   itemsHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 18, marginBottom: 4 },
   itemsTitle: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
   itemsHint: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
+  // 種類のまとまりの行は小さく（品目が主。docs/kakei.md §3.2）。
   group: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    paddingVertical: 12,
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  groupTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
-  groupNames: { fontSize: 12, fontWeight: '500', color: colors.textFaint, marginTop: 3 },
-  groupTotal: { fontSize: 15, fontWeight: '700', color: colors.text },
+  groupTitle: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
+  groupNames: { fontSize: 11, fontWeight: '500', color: colors.textFaint, marginTop: 1 },
+  groupTotal: { fontSize: 14, fontWeight: '700', color: colors.text },
   addGroup: {
     flexDirection: 'row',
     alignItems: 'center',

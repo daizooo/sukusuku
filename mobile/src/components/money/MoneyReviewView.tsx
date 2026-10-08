@@ -8,17 +8,21 @@ import {
   buildMonthSummary,
   buildSpecialReview,
   buildYearSummary,
+  estimatesInMonth,
+  fiscalMonthKeys,
   fiscalYearOfMonth,
   formatSignedYen,
   formatYen,
   iconKeyOf,
   monthKeyOfDate,
+  recordTotal,
   type BudgetTile,
   type SpecialReview,
 } from '@/lib/moneyUtils';
 import { buildYearRows } from '@/lib/specialUtils';
 import {
   CategoryIcon,
+  EstimateBadge,
   Hero,
   PeriodBar,
   ProgressBar,
@@ -37,6 +41,7 @@ import {
 // 特別費の行はその期間に払った額と年度の予算の残り（月ならその月までの累計）だけで、押すと「特別費」の面へ
 // （2026-10-08に、生活費と同じ大きさの結論から内訳の1行にした。大部分は「特別費」の面で見る）。
 // 年は内訳の下に月ごとの収支（押すとその月へ）。
+// 見込みの額（毎月の記録で自動で作り、まだ確かめていない額）は実績に入れて数え、件数と額を添えて出す（§3.3・§4.1）。
 
 interface MoneyReviewViewProps {
   period: ReviewPeriod;
@@ -100,6 +105,11 @@ export default function MoneyReviewView({
   const balance = isMonth ? month.balance : year.total.balance;
   const livingDiff = isMonth ? month.livingBudget - month.living : year.total.livingDiff;
   const planned = isMonth ? month.plannedBalance : null;
+  const estimates = useMemo(() => {
+    const keys = isMonth ? [monthKey] : fiscalMonthKeys(fiscalYear).filter((key) => key <= today);
+    const list = keys.flatMap((key) => estimatesInMonth(records, key));
+    return { count: list.length, amount: list.reduce((sum, record) => sum + recordTotal(record), 0) };
+  }, [isMonth, monthKey, fiscalYear, today, records]);
   const months = year.months.filter((row) => row.monthKey <= today && (row.recorded || row.special > 0)).reverse();
 
   return (
@@ -136,6 +146,14 @@ export default function MoneyReviewView({
             noteMinus={livingDiff < 0}
             value={`−${formatYen(living)}`}
           />
+          {estimates.count > 0 && (
+            <View style={styles.estimate}>
+              <EstimateBadge />
+              <Text style={[type.faint, styles.flex]}>
+                見込みの額 {estimates.count}件（{formatYen(estimates.amount)}）を含みます。額を確かめて直すと確定します
+              </Text>
+            </View>
+          )}
         </Hero>
 
 
@@ -195,6 +213,7 @@ export default function MoneyReviewView({
                         )}
                         {row.special > 0 && <Text style={type.faint}>特別費 {formatYen(row.special)}</Text>}
                       </View>
+                      {estimatesInMonth(records, row.monthKey).length > 0 && <EstimateBadge />}
                       {row.recorded && (
                         <Text style={[type.amount, row.balance < 0 && type.minus]}>{formatSignedYen(row.balance)}</Text>
                       )}
@@ -291,6 +310,7 @@ const styles = StyleSheet.create({
   // 右下の「＋」に一覧の最後が隠れないよう、下を空ける。
   content: { paddingHorizontal: 16, paddingBottom: 96 },
   gap: { height: 12 },
+  estimate: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8 },
   bar: { paddingVertical: 6 },
   message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
   card: {
