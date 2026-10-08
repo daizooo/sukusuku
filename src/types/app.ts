@@ -709,6 +709,8 @@ export interface MoneyRecordDraft {
   walletId: string | null;
   toWalletId: string | null;
   store: string;
+  /** お店をお店の設定に登録するか（お店の選択で「お店に登録して使う」を選んだとき。docs/kakei.md §3.5）。 */
+  registerStore?: boolean;
   /** 見込みのまま残すか。 */
   isEstimate: boolean;
   items: MoneyItemDraft[];

@@ -374,6 +374,8 @@ function RecurringEditor({
           value={store}
           registered={storeOptions.registered}
           recent={storeOptions.recent}
+          others={storeOptions.others}
+          canRegister={false}
           onPick={(value) => {
             setStore(value);
             setScreen('form');

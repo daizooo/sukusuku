@@ -2,32 +2,49 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Plus, Search, Store } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
-import { normalizeName } from '@/lib/shoppingUtils';
+import { matchesStore } from '@/lib/moneyUtils';
 import { ScreenHeader } from '@/components/money/moneyVisual';
 
 // お店の選択（docs/kakei.md §3.2）。PWA版の `src/components/sukusuku/money/StorePicker.tsx` と同じ。
 // 探す欄と、最近使ったお店、続けて登録したお店の残り（設定データ。docs/kakei.md §3.5）。
-// 位置からの候補は出さない。打った名前をそのまま使える（新しいお店は記録の保存で自動で登録される）。
+// 位置からの候補は出さない。打った名前が候補に無ければ「この記録だけに使う」か「お店に登録して使う」を選ぶ
+// （登録はお店の設定に入る。一度きりのお店で選択画面が膨らまないように、既定は「この記録だけ」）。
+// 似たお店（どちらかがもう片方を含む名前。matchesStore）があれば、同じお店ならそちらを選ぶよう知らせる。
 
 interface StorePickerProps {
   value: string;
-  /** 登録したお店のうち、最近使ったお店に出ていないもの（名前順。使わなくしたものは除く）。 */
+  /** 登録したお店のうち、最近使ったお店に出ていないもの（使った回数の多い順。使わなくしたものは除く）。 */
   registered: string[];
   /** 最近使ったお店（新しい順。使わなくしたものは除く）。 */
   recent: string[];
-  onPick: (store: string) => void;
+  /** 登録していない前に使ったお店（名前で探したときだけ出す）。 */
+  others: string[];
+  /** 新しい名前を「お店に登録して使う」こともできるか（毎月の記録のルールでは、ルールが名前を持つので出さない）。 */
+  canRegister: boolean;
+  /** register: 「お店に登録して使う」を選んだか。 */
+  onPick: (store: string, register: boolean) => void;
   onClose: () => void;
 }
 
-export default function StorePicker({ value, registered, recent, onPick, onClose }: StorePickerProps) {
+export default function StorePicker({ value, registered, recent, others, canRegister, onPick, onClose }: StorePickerProps) {
   const [query, setQuery] = useState(value);
   const typed = query.trim();
-  const { matchedRegistered, matchedRecent } = useMemo(() => {
-    const key = normalizeName(typed);
-    const pick = (stores: string[]) => (key === '' ? stores : stores.filter((store) => normalizeName(store).includes(key)));
-    return { matchedRegistered: pick(registered), matchedRecent: pick(recent) };
-  }, [registered, recent, typed]);
-  const exact = [...matchedRegistered, ...matchedRecent].some((store) => store === typed);
+  const { matchedRegistered, matchedRecent, matchedOthers } = useMemo(() => {
+    const pick = (stores: string[]) => stores.filter((store) => matchesStore(store, typed));
+    return {
+      matchedRegistered: pick(registered),
+      matchedRecent: pick(recent),
+      matchedOthers: typed === '' ? [] : pick(others),
+    };
+  }, [registered, recent, others, typed]);
+  const matched = [...matchedRecent, ...matchedRegistered, ...matchedOthers];
+  const exact = matched.some((store) => store === typed);
+  const row = (store: string, key: string) => (
+    <Pressable key={key} accessibilityRole="button" onPress={() => onPick(store, false)} style={styles.row}>
+      <Store size={18} color={colors.textFaint} />
+      <Text style={styles.name}>{store}</Text>
+    </Pressable>
+  );
 
   return (
     <View style={styles.screen}>
@@ -42,32 +59,37 @@ export default function StorePicker({ value, registered, recent, onPick, onClose
           placeholderTextColor={colors.textFaint}
           autoFocus={value === ''}
           returnKeyType="done"
-          onSubmitEditing={() => onPick(typed)}
+          onSubmitEditing={() => onPick(typed, false)}
         />
       </View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {typed !== '' && !exact && (
-          <Pressable accessibilityRole="button" onPress={() => onPick(typed)} style={styles.row}>
-            <Plus size={18} color={colors.money} />
-            <Text style={[styles.name, styles.use]}>「{typed}」を追加する</Text>
-          </Pressable>
+          <>
+            {matched.length > 0 && (
+              <Text style={styles.similar}>似たお店があります。同じお店なら下から選んでください</Text>
+            )}
+            <Pressable accessibilityRole="button" onPress={() => onPick(typed, false)} style={styles.row}>
+              <Plus size={18} color={colors.money} />
+              <Text style={[styles.name, styles.use]}>
+                「{typed}」を{canRegister ? 'この記録だけに使う' : '使う'}
+              </Text>
+            </Pressable>
+            {canRegister && (
+              <Pressable accessibilityRole="button" onPress={() => onPick(typed, true)} style={styles.row}>
+                <Plus size={18} color={colors.money} />
+                <Text style={[styles.name, styles.use]}>「{typed}」をお店に登録して使う</Text>
+              </Pressable>
+            )}
+          </>
         )}
         {matchedRecent.length > 0 && <Text style={styles.sectionTitle}>最近使ったお店</Text>}
-        {matchedRecent.map((store) => (
-          <Pressable key={`recent-${store}`} accessibilityRole="button" onPress={() => onPick(store)} style={styles.row}>
-            <Store size={18} color={colors.textFaint} />
-            <Text style={styles.name}>{store}</Text>
-          </Pressable>
-        ))}
+        {matchedRecent.map((store) => row(store, `recent-${store}`))}
         {matchedRegistered.length > 0 && <Text style={styles.sectionTitle}>登録したお店</Text>}
-        {matchedRegistered.map((store) => (
-          <Pressable key={`registered-${store}`} accessibilityRole="button" onPress={() => onPick(store)} style={styles.row}>
-            <Store size={18} color={colors.textFaint} />
-            <Text style={styles.name}>{store}</Text>
-          </Pressable>
-        ))}
+        {matchedRegistered.map((store) => row(store, `registered-${store}`))}
+        {matchedOthers.length > 0 && <Text style={styles.sectionTitle}>前に使ったお店</Text>}
+        {matchedOthers.map((store) => row(store, `other-${store}`))}
         {value !== '' && (
-          <Pressable accessibilityRole="button" onPress={() => onPick('')} style={styles.row}>
+          <Pressable accessibilityRole="button" onPress={() => onPick('', false)} style={styles.row}>
             <Text style={styles.clear}>お店を入れない</Text>
           </Pressable>
         )}
@@ -90,6 +112,8 @@ const styles = StyleSheet.create({
   },
   search: { flex: 1, paddingVertical: 10, fontSize: 15, fontWeight: '500', color: colors.text },
   content: { paddingHorizontal: 16, paddingBottom: 32 },
+  // 似たお店の知らせ。色は amber-700（PWA版の text-amber-700 と同じ）。
+  similar: { fontSize: 13, fontWeight: '600', color: colors.milkText, marginTop: 10, marginBottom: 2 },
   sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginTop: 12, marginBottom: 4 },
   row: {
     flexDirection: 'row',
