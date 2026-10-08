@@ -273,7 +273,7 @@ money_months      月のメモ。 family_id / month / note
 money_card_closes カードの照合。 wallet_id / month / statement_amount / closed_at
 money_wallet_balances  補正した残高（0067_money_wallet_balances.sql。§9.3）。 id / family_id / wallet_id / balance_on(日付) /
                   amount(マイナスもある) / show_in_history(履歴に行を出すか。0068) / created_by（wallet_id・balance_on で1行。同じ日に入れ直すと上書き）
-証券（§9.2.2。0069・0070）  money_wallets.type に 'securities'。money_securities・money_holdings・money_security_prices・
+証券（§9.2.2。0070・0071）  money_wallets.type に 'securities'。money_securities・money_holdings・money_security_prices・
                   money_fx_rates・money_holding_values
 ```
 
@@ -360,7 +360,7 @@ money_wallet_balances  補正した残高（0067_money_wallet_balances.sql。§9
   過去の**保有数**は分からないので、**過去1年は今の保有数で作る**（2026-10-08に決定。§9.2.5）
 - Google スプレッドシートを挟む案と、Yahoo!ファイナンスなどの画面から読み取る案は採らない（経路が増えて壊れやすく、規約に触れるおそれ）
 
-#### 9.2.2 データ（migration 0069_money_wallets_securities.sql・0070_money_securities.sql）
+#### 9.2.2 データ（migration 0070_money_wallets_securities.sql・0071_money_securities.sql）
 
 ```
 money_wallets.type に 'securities'（証券口座）を足す（check の作り直し）
