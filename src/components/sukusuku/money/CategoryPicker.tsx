@@ -18,7 +18,8 @@ import { CategoryIcon, ScreenHeader, StackedScreen } from './moneyVisual';
 
 // 種類の選択（docs/kakei.md §3.1・§3.2）。mobile版の `mobile/src/components/money/CategoryPicker.tsx` と同じ並び・文言。
 //
-// 上によく使う小分類。その下に大分類ごとの見出し（今月の残り）と小分類のチップ。押すと大分類も決まる。
+// 上によく使う小分類。その下に大分類ごとの枠（見出しに今月の残り、中に小分類のチップ）。押すと大分類も決まる。
+// 大分類ごとに枠で囲み、見出しに色を付けて、どこからどこまでが同じ大分類かを分かるようにする。
 // 支出なら最後に特別費: その年度の予定（まだ済でないものを上に。選ぶと予算の額が入る）と、予定外の項目。
 // 収入なら収入の種類と、特別収入。
 
@@ -117,8 +118,8 @@ export default function CategoryPicker({
           const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, fiscalYear) : null;
           const remaining = budget === null ? null : budget - (spend.get(top.id) ?? 0);
           return (
-            <section key={top.id} className="space-y-2">
-              <div className="flex items-center gap-2">
+            <section key={top.id} className="overflow-hidden rounded-[14px] border border-gray-200">
+              <div className="flex items-center gap-2 bg-gray-100 px-3 py-2">
                 <CategoryIcon iconKey={iconKeyOf(top)} size={24} />
                 <p className="flex-1 text-[15px] font-bold text-gray-900">{top.name}</p>
                 {remaining !== null && (
@@ -127,7 +128,7 @@ export default function CategoryPicker({
                   </p>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 p-3">
                 {(children.length > 0 ? children : [top]).map((category) => (
                   <button
                     key={category.id}

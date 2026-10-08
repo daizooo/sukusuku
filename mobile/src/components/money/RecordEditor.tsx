@@ -20,6 +20,7 @@ import { colors } from '@/lib/theme';
 import { formatDateWithWeekday, toDateString } from '@/lib/dateUtils';
 import {
   budgetFor,
+  canPickProductsFor,
   categoryPath,
   editorGroupTotal,
   evaluateCalc,
@@ -364,7 +365,7 @@ export default function RecordEditor({
             title={groupTitle(work)}
             iconKey={groupIconKey(work)}
             subtitle={groupSubtitle(work)}
-            canPickProducts={work.categoryId !== null && kind === 'expense'}
+            canPickProducts={kind === 'expense' && canPickProductsFor(categories, products, work.categoryId)}
             onChangeCategory={() => push({ type: 'category', purpose: 'change' })}
             onPickProducts={() => push({ type: 'products' })}
             onSave={saveWork}
@@ -537,7 +538,7 @@ export default function RecordEditor({
               const names = itemNamesLabel(group.lines);
               return (
                 <Pressable key={group.key} accessibilityRole="button" onPress={() => openGroup(group)} style={styles.group}>
-                  <CategoryIcon iconKey={groupIconKey(group)} />
+                  <CategoryIcon iconKey={groupIconKey(group)} size={24} />
                   <View style={styles.flex}>
                     <Text style={styles.groupTitle}>{groupTitle(group)}</Text>
                     {names !== '' && <Text style={styles.groupNames}>{names}</Text>}
@@ -606,17 +607,18 @@ const styles = StyleSheet.create({
   itemsHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 18, marginBottom: 4 },
   itemsTitle: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
   itemsHint: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
+  // 種類のまとまりの行は小さく（品目が主。docs/kakei.md §3.2）。
   group: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    paddingVertical: 12,
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  groupTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
-  groupNames: { fontSize: 12, fontWeight: '500', color: colors.textFaint, marginTop: 3 },
-  groupTotal: { fontSize: 15, fontWeight: '700', color: colors.text },
+  groupTitle: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
+  groupNames: { fontSize: 11, fontWeight: '500', color: colors.textFaint, marginTop: 1 },
+  groupTotal: { fontSize: 14, fontWeight: '700', color: colors.text },
   addGroup: {
     flexDirection: 'row',
     alignItems: 'center',

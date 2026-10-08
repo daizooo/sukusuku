@@ -18,6 +18,8 @@ import { CategoryIcon, PrimaryButton, ScreenHeader, StackedScreen } from './mone
 // 1つの種類の品目を何行でもまとめて記録する。行＝品名・個数（−＋）・単価・金額。
 // 一覧のいちばん下に空の行を置き、押すとそこに新しく入力する（入れると次の空の行が出る）。
 // 選んだ行（青）の単価を下の電卓で直す（＋−×÷）。電卓はこの画面で初めて出る。
+// 種類は見出しの下に1行で小さく出す（押すと変えられる）。「日用品から選ぶ」は見出しの右に、
+// 日用品の台帳から選ぶ種類（食費・日用品など）のときだけ出す。
 
 /** 品目の画面で書きかけのもの（記録の入力が持ち、ほかの画面へ行って戻っても消えない）。 */
 export interface ItemsWork {
@@ -123,38 +125,38 @@ export default function ItemsScreen({
         title="品目"
         onClose={onClose}
         right={
-          onDelete && (
-            <button type="button" aria-label="この種類の品目を消す" onClick={onDelete} className="text-gray-500">
-              <Trash2 size={20} />
-            </button>
-          )
+          <span className="flex items-center gap-3.5">
+            {canPickProducts && (
+              <button
+                type="button"
+                onClick={onPickProducts}
+                className="flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-800 hover:bg-blue-200"
+              >
+                <ShoppingBasket size={15} />
+                日用品から選ぶ
+              </button>
+            )}
+            {onDelete && (
+              <button type="button" aria-label="この種類の品目を消す" onClick={onDelete} className="text-gray-500">
+                <Trash2 size={20} />
+              </button>
+            )}
+          </span>
         }
       />
       <button
         type="button"
         aria-label="種類を変える"
         onClick={onChangeCategory}
-        className="shrink-0 flex items-center gap-3 border-b border-gray-200 px-4 py-3 text-left hover:bg-gray-50"
+        className="shrink-0 flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-4 py-1.5 text-left hover:bg-gray-100"
       >
-        <CategoryIcon iconKey={iconKey} />
-        <span className="flex-1">
-          <span className="block text-base font-bold text-gray-900">{title}</span>
-          {subtitle !== '' && <span className="block text-xs text-gray-500 tabular-nums">{subtitle}</span>}
-        </span>
-        <ChevronRight size={18} className="text-gray-400" />
+        <CategoryIcon iconKey={iconKey} size={20} />
+        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-gray-700">{title}</span>
+        {subtitle !== '' && <span className="text-[11px] text-gray-500 tabular-nums">{subtitle}</span>}
+        <ChevronRight size={16} className="text-gray-400" />
       </button>
 
       <div className="flex-1 min-h-0 overflow-y-auto pb-2">
-        {canPickProducts && (
-          <button
-            type="button"
-            onClick={onPickProducts}
-            className="m-3 ml-4 flex items-center gap-1.5 rounded-full bg-blue-100 px-3.5 py-2 text-sm font-bold text-blue-800 hover:bg-blue-200"
-          >
-            <ShoppingBasket size={16} />
-            日用品から選ぶ
-          </button>
-        )}
         {work.lines.map((line) => {
           const selected = line.key === work.selected;
           return (

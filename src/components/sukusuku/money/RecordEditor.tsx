@@ -18,6 +18,7 @@ import type {
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
 import {
   budgetFor,
+  canPickProductsFor,
   categoryPath,
   editorGroupTotal,
   evaluateCalc,
@@ -338,7 +339,7 @@ export default function RecordEditor({
             title={groupTitle(work)}
             iconKey={groupIconKey(work)}
             subtitle={groupSubtitle(work)}
-            canPickProducts={work.categoryId !== null && kind === 'expense'}
+            canPickProducts={kind === 'expense' && canPickProductsFor(categories, products, work.categoryId)}
             onChangeCategory={() => push({ type: 'category', purpose: 'change' })}
             onPickProducts={() => push({ type: 'products' })}
             onSave={saveWork}
@@ -521,14 +522,14 @@ export default function RecordEditor({
                   key={group.key}
                   type="button"
                   onClick={() => openGroup(group)}
-                  className="flex w-full items-start gap-3 border-b border-gray-200 py-3 text-left hover:bg-gray-50"
+                  className="flex w-full items-center gap-2.5 border-b border-gray-200 py-2 text-left hover:bg-gray-50"
                 >
-                  <CategoryIcon iconKey={groupIconKey(group)} />
+                  <CategoryIcon iconKey={groupIconKey(group)} size={24} />
                   <span className="flex-1">
-                    <span className="block text-[15px] font-semibold text-gray-900">{groupTitle(group)}</span>
-                    {names !== '' && <span className="mt-0.5 block text-xs text-gray-400">{names}</span>}
+                    <span className="block text-[13px] font-semibold text-gray-700">{groupTitle(group)}</span>
+                    {names !== '' && <span className="block text-[11px] text-gray-400">{names}</span>}
                   </span>
-                  <span className="text-[15px] font-bold text-gray-900 tabular-nums">{formatYen(editorGroupTotal(group))}</span>
+                  <span className="text-sm font-bold text-gray-900 tabular-nums">{formatYen(editorGroupTotal(group))}</span>
                 </button>
               );
             })}

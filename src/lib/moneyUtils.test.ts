@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 
 import {
   budgetFor,
+  canPickProductsFor,
   buildSpecialProgress,
   buildSpecialReview,
   buildYearSummary,
@@ -76,6 +77,14 @@ assert.equal(guessIconKey('子ども費'), 'baby');
 assert.equal(guessIconKey('なにか'), 'other');
 assert.equal(iconKeyOf({ name: '食費', icon: 'cafe' }), 'cafe', '決めたアイコンが先');
 assert.equal(iconKeyOf(null), 'other');
+
+// ---- 日用品から選ぶ（docs/kakei.md §3.2） ----
+assert.equal(canPickProductsFor(categories, [], 'grocery'), false, '台帳が空なら出さない');
+assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: null }], 'grocery'), true, '食費は出す');
+assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: null }], 'drug'), false, '医療費は前に記録した品が無ければ出さない');
+assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: 'drug' }], 'drug'), true, '前に記録した品がある種類は出す');
+assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: 'drug' }], 'house'), false);
+assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: null }], null), false);
 
 // ---- 予算（その年度に無ければ前の年度） ----
 const budgets: MoneyBudget[] = [
