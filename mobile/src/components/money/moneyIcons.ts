@@ -27,6 +27,7 @@ import {
   Smartphone,
   Sofa,
   Sparkles,
+  Star,
   Stethoscope,
   Ticket,
   TrainFront,
@@ -76,5 +77,6 @@ export const MONEY_ICON_COMPONENTS: Record<string, LucideIcon> = {
   receipt: Receipt,
   salary: Briefcase,
   savings: PiggyBank,
+  star: Star,
   other: Ellipsis,
 };

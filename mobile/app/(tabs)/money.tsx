@@ -265,6 +265,11 @@ export default function MoneyScreen() {
             setPeriod('month');
           }}
           onEditCategories={() => setEditingCategories(true)}
+          onOpenSpecial={() => {
+            // 「特別費」の面は振り返りの年度を見るので、月の振り返りから来たらその月の年度にそろえる。
+            if (period === 'month') setFiscalYear(fiscalYearOfMonth(monthKey));
+            setView('special');
+          }}
         />
       ) : (
         <SpecialPanel

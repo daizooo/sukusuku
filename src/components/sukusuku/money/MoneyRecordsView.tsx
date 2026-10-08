@@ -72,7 +72,8 @@ export default function MoneyRecordsView({
         : '';
     const title = groups.length > 1 ? `${firstTitle} ほか${groups.length - 1}` : firstTitle;
     return {
-      icon: top ? iconKeyOf(categories.find((category) => category.id === top)) : 'receipt',
+      // 特別費は Zaim と同じく黄色の星。
+      icon: top ? iconKeyOf(categories.find((category) => category.id === top)) : 'star',
       title: record.store.trim() !== '' ? `${title} @ ${record.store.trim()}` : title,
       sub: itemSummary(record.items),
     };

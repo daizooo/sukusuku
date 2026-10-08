@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, CreditCard, Landmark, QrCode, RefreshCw, Wallet, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, CreditCard, Landmark, PiggyBank, QrCode, RefreshCw, X } from 'lucide-react';
 import type { MoneyWalletType } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
 import { formatMonthKey, iconTone, shiftMonth } from '@/lib/moneyUtils';
@@ -74,24 +74,31 @@ function Stepper({
   );
 }
 
-/** 振替のアイコン（回る矢印を淡い灰色で。支出・収入の種類のアイコンと見分けがつくように）。 */
+/** 振替のアイコン（Zaim と同じく灰色の丸に白い回る矢印。灰色は Zaim より淡く）。 */
 export function TransferIcon({ size = 32 }: { size?: number }) {
   return (
     <span
-      className="flex shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-400"
-      style={{ width: size, height: size }}
+      className="flex shrink-0 items-center justify-center rounded-full text-white"
+      style={{ width: size, height: size, backgroundColor: '#a8a8a8' }}
     >
       <RefreshCw size={Math.round(size * 0.5)} />
     </span>
   );
 }
 
-const WALLET_TYPE_ICONS = { card: CreditCard, prepaid: CreditCard, cash: Wallet, bank: Landmark, qr: QrCode } as const;
+/** 出金元の種類のアイコンと色（Zaim と同じく、財布は緑の豚の貯金箱・口座は青い銀行・カードは緑のカード）。 */
+const WALLET_TYPE_ICONS = {
+  cash: { Icon: PiggyBank, color: '#4caf50' },
+  bank: { Icon: Landmark, color: '#1e78c2' },
+  card: { Icon: CreditCard, color: '#1b6b4a' },
+  prepaid: { Icon: CreditCard, color: '#5b7a99' },
+  qr: { Icon: QrCode, color: '#e53935' },
+} as const;
 
 /** 出金元の種類のアイコン（記録の一覧で金額の右に出す。Zaim と同じ）。 */
 export function WalletTypeIcon({ type: walletType, size = 15 }: { type: MoneyWalletType; size?: number }) {
-  const Icon = WALLET_TYPE_ICONS[walletType];
-  return <Icon size={size} className="text-gray-400" />;
+  const { Icon, color } = WALLET_TYPE_ICONS[walletType];
+  return <Icon size={size} color={color} />;
 }
 
 /** 月の送り。 */
@@ -300,7 +307,7 @@ export function CategoryIcon({ iconKey, size = 32 }: { iconKey: string; size?: n
   return (
     <span
       className="flex shrink-0 items-center justify-center rounded-full"
-      style={{ width: size, height: size, backgroundColor: tone.surface, color: tone.color }}
+      style={{ width: size, height: size, backgroundColor: tone.color, color: '#ffffff' }}
     >
       <Icon size={Math.round(size * 0.55)} />
     </span>
