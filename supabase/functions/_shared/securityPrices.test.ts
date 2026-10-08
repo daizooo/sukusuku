@@ -37,6 +37,14 @@ assert.deepEqual(parseTimeSeries({ 'Weekly Time Series': { '2026-10-02': { '4. c
   { on: '2026-10-02', value: 10 },
 ]);
 assert.deepEqual(parseTimeSeries({ Information: 'premium' }), []);
+// 分割・配当を調整した値（TIME_SERIES_WEEKLY_ADJUSTED）
+assert.deepEqual(
+  parseTimeSeries(
+    { 'Weekly Adjusted Time Series': { '2026-04-24': { '4. close': '125.00', '5. adjusted close': '24.80' } } },
+    '5. adjusted close',
+  ),
+  [{ on: '2026-04-24', value: 24.8 }],
+);
 
 assert.equal(alphaVantageNotice(daily), null);
 assert.equal(alphaVantageNotice({ Information: 'premium' }), 'premium');

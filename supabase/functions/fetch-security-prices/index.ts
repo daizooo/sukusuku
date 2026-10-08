@@ -59,6 +59,9 @@ Deno.serve(async (request) => {
 
   const cronSecret = Deno.env.get('REMINDER_CRON_SECRET');
   if (cronSecret && request.headers.get('x-reminder-secret') === cronSecret) {
+    // 取れるかだけ確かめる（保存しない）: body: { check: { us: ['ティッカー', …] } }
+    const check = (await request.json().catch(() => ({})))?.check;
+    if (Array.isArray(check?.us)) return json(await runCheck(check.us));
     return json(await runDaily(supabase, today));
   }
 
@@ -171,6 +174,26 @@ async function runBackfill(supabase: SupabaseClient, security: SecurityRow, toda
   return { today, prices, values, errors };
 }
 
+/** 米国株の過去の終値が取れるかだけ確かめる（銘柄を足す前に。保存しない）。 */
+async function runCheck(symbols: string[]) {
+  const today = () => todayJst(Date.now());
+  const results = [];
+  for (const [i, symbol] of symbols.entries()) {
+    if (i > 0) await sleep(ALPHA_VANTAGE_INTERVAL_MS);
+    const body = await alphaVantage('TIME_SERIES_WEEKLY_ADJUSTED', String(symbol)).catch((e) => String(e));
+    const values = parseTimeSeries(body, '5. adjusted close');
+    results.push({
+      symbol,
+      points: values.length,
+      first: values[0] ?? null,
+      last: values.at(-1) ?? null,
+      yearAgo: values.find((v) => v.on >= addDays(today(), -BACKFILL_DAYS)) ?? null,
+      notice: values.length === 0 ? alphaVantageNotice(body) ?? String(body) : null,
+    });
+  }
+  return { results };
+}
+
 /** 同じ取得元・コードの銘柄をまとめる（取りに行くのは1回）。預り金は取らない。 */
 function groupByCode(securities: SecurityRow[]): SecurityRow[][] {
   const groups = new Map<string, SecurityRow[]>();
@@ -197,12 +220,16 @@ function parseOrThrow(body: unknown, parse: (b: unknown) => DatedValue[]): Dated
   return values;
 }
 
-/** 米国株の過去の終値。日次の全期間を断られたら（無料の鍵で使えないとき）週次にする。 */
+/**
+ * 米国株の過去の終値。日次の全期間は有料なので（無料の鍵では断られる。2026-10-08に確かめた）、
+ * 週次の、分割・配当を調整した終値を使う。分割の前の値がそのままだと、今の保有数を掛けたときに
+ * 跳ねるため（例: 2026年4月に1→5の分割をした銘柄がある）。調整は過去の値だけに効くので、
+ * 直近の値は毎朝取る終値とつながる。
+ */
 async function fetchUsHistory(symbol: string): Promise<DatedValue[]> {
-  const daily = parseTimeSeries(await alphaVantage('TIME_SERIES_DAILY', symbol, '&outputsize=full'));
-  if (daily.length > 0) return daily;
-  await sleep(ALPHA_VANTAGE_INTERVAL_MS);
-  return parseOrThrow(await alphaVantage('TIME_SERIES_WEEKLY', symbol), parseTimeSeries);
+  return parseOrThrow(await alphaVantage('TIME_SERIES_WEEKLY_ADJUSTED', symbol), (body) =>
+    parseTimeSeries(body, '5. adjusted close'),
+  );
 }
 
 /** 投資信託協会の基準価額CSV（設定来）。Shift_JIS。 */

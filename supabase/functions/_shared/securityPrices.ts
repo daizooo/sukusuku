@@ -28,15 +28,18 @@ export const parseGlobalQuote = (body: unknown): DatedValue[] => {
   return on && ISO_DATE.test(on) && value !== null ? [{ on, value }] : [];
 };
 
-/** Alpha Vantage の TIME_SERIES_DAILY・TIME_SERIES_WEEKLY。日付ごとの終値（4. close）を古い順に。 */
-export const parseTimeSeries = (body: unknown): DatedValue[] => {
+/**
+ * Alpha Vantage の TIME_SERIES_*。日付ごとの終値を古い順に。
+ * field は '4. close'（そのときの値）か '5. adjusted close'（分割・配当を調整した値。*_ADJUSTED のとき）。
+ */
+export const parseTimeSeries = (body: unknown, field = '4. close'): DatedValue[] => {
   if (!body || typeof body !== 'object') return [];
   const key = Object.keys(body).find((k) => k.startsWith('Time Series') || k.endsWith('Time Series'));
   if (!key) return [];
   const series = (body as Record<string, Record<string, Record<string, string>>>)[key];
   const out: DatedValue[] = [];
   for (const [on, row] of Object.entries(series ?? {})) {
-    const value = toNumber(row?.['4. close']);
+    const value = toNumber(row?.[field]);
     if (ISO_DATE.test(on) && value !== null) out.push({ on, value });
   }
   return out.sort((a, b) => a.on.localeCompare(b.on));
