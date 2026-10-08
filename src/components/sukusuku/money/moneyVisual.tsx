@@ -1,7 +1,8 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, CreditCard, Landmark, QrCode, RefreshCw, Wallet, X } from 'lucide-react';
+import type { MoneyWalletType } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
 import { formatMonthKey, iconTone, shiftMonth } from '@/lib/moneyUtils';
 import { MONEY_ICON_COMPONENTS } from './moneyIcons';
@@ -71,6 +72,26 @@ function Stepper({
       {right}
     </div>
   );
+}
+
+/** 振替のアイコン（回る矢印を淡い灰色で。支出・収入の種類のアイコンと見分けがつくように）。 */
+export function TransferIcon({ size = 32 }: { size?: number }) {
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-400"
+      style={{ width: size, height: size }}
+    >
+      <RefreshCw size={Math.round(size * 0.5)} />
+    </span>
+  );
+}
+
+const WALLET_TYPE_ICONS = { card: CreditCard, prepaid: CreditCard, cash: Wallet, bank: Landmark, qr: QrCode } as const;
+
+/** 出金元の種類のアイコン（記録の一覧で金額の右に出す。Zaim と同じ）。 */
+export function WalletTypeIcon({ type: walletType, size = 15 }: { type: MoneyWalletType; size?: number }) {
+  const Icon = WALLET_TYPE_ICONS[walletType];
+  return <Icon size={size} className="text-gray-400" />;
 }
 
 /** 月の送り。 */

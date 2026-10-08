@@ -333,6 +333,14 @@ export function itemNamesLabel(items: readonly Pick<MoneyItem, 'name' | 'quantit
     .join('・');
 }
 
+// 記録の一覧の2行目（docs/kakei.md §2.1。Zaim の履歴と同じ並び）。
+/** 品名の要約（「牛乳、卵」「牛乳、卵ほか」）。品名が1つも無ければ空。 */
+export function itemSummary(items: readonly Pick<MoneyItem, 'name'>[]): string {
+  const names = [...new Set(items.map((item) => item.name.trim()).filter((name) => name !== ''))];
+  if (names.length === 0) return '';
+  return `${names.slice(0, 2).join('、')}${names.length > 2 ? 'ほか' : ''}`;
+}
+
 /** 品目の金額（単価があれば 個数 × 単価）。 */
 export const lineAmount = (line: { quantity: number; unitPrice: number | null; amount: number }) =>
   line.unitPrice === null ? line.amount : line.unitPrice * line.quantity;

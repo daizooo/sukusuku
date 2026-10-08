@@ -21,6 +21,7 @@ import {
   groupItems,
   groupRecordsByDay,
   itemNamesLabel,
+  itemSummary,
   lastWalletId,
   pressCalcKey,
   recentStores,
@@ -200,6 +201,11 @@ assert.deepEqual(
   '同じ種類の品目は1つにまとめる',
 );
 assert.equal(itemNamesLabel(groups[0].items), '牛乳 ×2・食パン');
+// 記録の一覧の2行目（品名の要約。docs/kakei.md §3.2）
+assert.equal(itemSummary([{ name: '牛乳' }, { name: ' 卵 ' }]), '牛乳、卵');
+assert.equal(itemSummary([{ name: '牛乳' }, { name: '卵' }, { name: 'パン' }]), '牛乳、卵ほか');
+assert.equal(itemSummary([{ name: '牛乳' }, { name: '牛乳' }, { name: '' }]), '牛乳', '同じ品名・空の品名は数えない');
+assert.equal(itemSummary([{ name: '' }]), '');
 
 assert.deepEqual(
   specialActualsFromRecords(records).map((actual) => [actual.recordId, actual.itemId, actual.planId, actual.occurredOn, actual.amount, actual.note]),

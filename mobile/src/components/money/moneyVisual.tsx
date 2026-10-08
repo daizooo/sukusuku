@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react-native';
+import { ArrowLeft, ChevronLeft, ChevronRight, CreditCard, Landmark, QrCode, RefreshCw, Wallet, X } from 'lucide-react-native';
+import type { MoneyWalletType } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { formatMonthKey, iconTone, shiftMonth } from '@/lib/moneyUtils';
 import { MONEY_ICON_COMPONENTS } from '@/components/money/moneyIcons';
@@ -272,6 +273,23 @@ export function CategoryIcon({ iconKey, size = 32 }: { iconKey: string; size?: n
       <Icon size={Math.round(size * 0.55)} color={tone.color} />
     </View>
   );
+}
+
+/** 振替のアイコン（回る矢印を淡い灰色で。支出・収入の種類のアイコンと見分けがつくように）。 */
+export function TransferIcon({ size = 32 }: { size?: number }) {
+  return (
+    <View style={[styles.badge, { width: size, height: size, borderRadius: size / 2, backgroundColor: colors.neutralSurface }]}>
+      <RefreshCw size={Math.round(size * 0.5)} color={colors.textFaint} />
+    </View>
+  );
+}
+
+const WALLET_TYPE_ICONS = { card: CreditCard, prepaid: CreditCard, cash: Wallet, bank: Landmark, qr: QrCode } as const;
+
+/** 出金元の種類のアイコン（記録の一覧で金額の右に出す。Zaim と同じ）。 */
+export function WalletTypeIcon({ type: walletType, size = 15 }: { type: MoneyWalletType; size?: number }) {
+  const Icon = WALLET_TYPE_ICONS[walletType];
+  return <Icon size={size} color={colors.textFaint} />;
 }
 
 /** 全画面の入力の見出し。close は × 、back は ← 。 */
