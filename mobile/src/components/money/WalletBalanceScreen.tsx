@@ -43,7 +43,7 @@ interface WalletBalanceScreenProps {
   specialItems: SpecialItem[];
   onClose: () => void;
   onOpenRecord: (record: MoneyRecord) => void;
-  onConfirm: (walletId: string, balanceOn: string, amount: number) => void;
+  onConfirm: (walletId: string, balanceOn: string, amount: number, showInHistory: boolean) => void;
   onDeleteBalance: (balance: MoneyWalletBalance) => void;
   onSaveWallet: (target: MoneyWallet, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onArchiveWallet: (wallet: MoneyWallet) => void;
@@ -87,6 +87,8 @@ export default function WalletBalanceScreen({
   const today = dateKeyOfDate(new Date());
   const now = walletBalanceOn(wallet.id, today, records, balances);
   const checks = balanceChecks(wallet.id, records, balances);
+  // 履歴に行として出すのは、「履歴に残す」を選んだ補正だけ（残さない補正も、残高の土台としては同じに効く）。
+  const shownChecks = checks.filter((check) => check.balance.showInHistory);
   const mine = useMemo(() => recordsOfWallet(records, wallet.id), [records, wallet.id]);
   const points = useMemo(() => dailyBalances([wallet.id], records, balances, today), [wallet.id, records, balances, today]);
   const billing = wallet.type === 'card' ? cardBilling(wallet, now.amount, records, today) : null;
@@ -164,7 +166,7 @@ export default function WalletBalanceScreen({
 
         <ScrollView contentContainerStyle={styles.content}>
           {tab === 'history' &&
-            (mine.length === 0 && checks.length === 0 ? (
+            (mine.length === 0 && shownChecks.length === 0 ? (
               <Text style={styles.empty}>この出金元の記録はまだありません</Text>
             ) : (
               <RecordDayList
@@ -173,7 +175,7 @@ export default function WalletBalanceScreen({
                 wallets={wallets}
                 specialItems={specialItems}
                 onOpen={onOpenRecord}
-                corrections={checks}
+                corrections={shownChecks}
                 onOpenCorrection={(check) => remove(check.balance)}
               />
             ))}
@@ -188,9 +190,9 @@ export default function WalletBalanceScreen({
           records={records}
           balances={balances}
           onClose={() => setCorrecting(false)}
-          onSubmit={(balanceOn, amount) => {
+          onSubmit={(balanceOn, amount, showInHistory) => {
             setCorrecting(false);
-            onConfirm(wallet.id, balanceOn, amount);
+            onConfirm(wallet.id, balanceOn, amount, showInHistory);
           }}
         />
       )}

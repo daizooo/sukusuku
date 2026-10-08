@@ -216,9 +216,9 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   };
 
   /** 残高を確定する。同じ出金元・同じ日の確定は上書きされる。 */
-  const confirmBalance = async (walletId: string, balanceOn: string, amount: number) => {
+  const confirmBalance = async (walletId: string, balanceOn: string, amount: number, showInHistory: boolean) => {
     try {
-      const saved = await saveMoneyWalletBalance(supabase, familyId, walletId, balanceOn, amount);
+      const saved = await saveMoneyWalletBalance(supabase, familyId, walletId, balanceOn, amount, showInHistory);
       setBalances((prev) => [
         ...prev.filter((entry) => !(entry.walletId === saved.walletId && entry.balanceOn === saved.balanceOn)),
         saved,
@@ -326,7 +326,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           specialItems={specialItems}
           isLoading={isLoading}
           onOpenRecord={setEditing}
-          onConfirm={(walletId, balanceOn, amount) => void confirmBalance(walletId, balanceOn, amount)}
+          onConfirm={(walletId, balanceOn, amount, showInHistory) => void confirmBalance(walletId, balanceOn, amount, showInHistory)}
           onDeleteBalance={(balance) => void removeBalance(balance)}
           onSaveWallet={saveWallet}
           onArchiveWallet={(wallet) => void archiveWallet(wallet)}

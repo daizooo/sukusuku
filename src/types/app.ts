@@ -647,6 +647,8 @@ export interface MoneyWalletBalance {
   balanceOn: string;
   /** 残高（円）。マイナスもある（カードの未払いなど）。 */
   amount: number;
+  /** 口座の履歴に行として出すか。false でも残高の土台としては同じに効く。 */
+  showInHistory: boolean;
 }
 
 /** 家計のお店（設定データ）。money_stores に対応。記録は名前の文字列で持つので、直しても過去の記録は変わらない。 */

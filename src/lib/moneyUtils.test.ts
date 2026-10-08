@@ -456,7 +456,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
     money('b6', { walletId: 'bank', occurredOn: '2026-10-20' }, 999),
     money('b7', { walletId: null, occurredOn: '2026-10-02' }, 1),
   ];
-  const bal = (id: string, walletId: string, balanceOn: string, amount: number): MoneyWalletBalance => ({ id, walletId, balanceOn, amount });
+  const bal = (id: string, walletId: string, balanceOn: string, amount: number): MoneyWalletBalance => ({ id, walletId, balanceOn, amount, showInHistory: true });
   assert.equal(walletDelta(rs[0], 'bank'), 300000, '収入は入金先に増える');
   assert.equal(walletDelta(rs[1], 'bank'), -7000, '支出は出金元から減る');
   assert.equal(walletDelta(rs[1], 'card'), 0, '関係ない出金元は変わらない');
@@ -504,7 +504,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
     money('t3', { kind: 'transfer', walletId: 'bank', toWalletId: 'save', occurredOn: '2026-10-03' }, 200),
     money('t4', { walletId: 'bank', occurredOn: '2026-10-09' }, 5),
   ];
-  const anchor = (id: string, walletId: string, balanceOn: string, amount: number): MoneyWalletBalance => ({ id, walletId, balanceOn, amount });
+  const anchor = (id: string, walletId: string, balanceOn: string, amount: number): MoneyWalletBalance => ({ id, walletId, balanceOn, amount, showInHistory: true });
 
   assert.equal(addDays('2026-10-31', 1), '2026-11-01');
   assert.equal(addDays('2026-03-01', -1), '2026-02-28');

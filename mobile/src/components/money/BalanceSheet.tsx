@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { CalendarDays } from 'lucide-react-native';
 import type { MoneyRecord, MoneyWallet, MoneyWalletBalance } from '@/types/app';
@@ -20,7 +20,7 @@ interface BalanceSheetProps {
   records: MoneyRecord[];
   balances: MoneyWalletBalance[];
   onClose: () => void;
-  onSubmit: (balanceOn: string, amount: number) => void;
+  onSubmit: (balanceOn: string, amount: number, showInHistory: boolean) => void;
 }
 
 export default function BalanceSheet({ wallet, records, balances, onClose, onSubmit }: BalanceSheetProps) {
@@ -29,6 +29,8 @@ export default function BalanceSheet({ wallet, records, balances, onClose, onSub
   const [text, setText] = useState('');
   // カードは未払いの額が残高（マイナス）なので、はじめからマイナスにしておく。
   const [negative, setNegative] = useState(wallet.type === 'card');
+  // 補正を口座の履歴に行として残すか。
+  const [showInHistory, setShowInHistory] = useState(true);
 
   const digits = text.replace(/[^0-9]/g, '');
   const entered = digits === '' ? null : (negative ? -1 : 1) * Number(digits);
@@ -54,7 +56,7 @@ export default function BalanceSheet({ wallet, records, balances, onClose, onSub
           <PrimaryButton
             label="補正する"
             disabled={entered === null}
-            onPress={() => entered !== null && onSubmit(balanceOn, entered)}
+            onPress={() => entered !== null && onSubmit(balanceOn, entered, showInHistory)}
           />
         }
       >
@@ -96,6 +98,10 @@ export default function BalanceSheet({ wallet, records, balances, onClose, onSub
           </View>
         </View>
 
+        <View style={styles.switchRow}>
+          <Text style={styles.label}>履歴に残す</Text>
+          <Switch value={showInHistory} onValueChange={setShowInHistory} />
+        </View>
         {expected.confirmed !== null && (
           <View style={styles.check}>
             <View style={styles.checkRow}>
@@ -149,5 +155,6 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   check: { gap: 4, padding: 12, borderRadius: 12, backgroundColor: colors.background },
+  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   checkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
 });

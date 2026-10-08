@@ -38,7 +38,7 @@ interface MoneyAccountsViewProps {
   specialItems: SpecialItem[];
   isLoading: boolean;
   onOpenRecord: (record: MoneyRecord) => void;
-  onConfirm: (walletId: string, balanceOn: string, amount: number) => void;
+  onConfirm: (walletId: string, balanceOn: string, amount: number, showInHistory: boolean) => void;
   onDeleteBalance: (balance: MoneyWalletBalance) => void;
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onArchiveWallet: (wallet: MoneyWallet) => void;

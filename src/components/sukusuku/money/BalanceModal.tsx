@@ -18,7 +18,7 @@ interface BalanceModalProps {
   records: MoneyRecord[];
   balances: MoneyWalletBalance[];
   onClose: () => void;
-  onSubmit: (balanceOn: string, amount: number) => void;
+  onSubmit: (balanceOn: string, amount: number, showInHistory: boolean) => void;
 }
 
 export default function BalanceModal({ wallet, records, balances, onClose, onSubmit }: BalanceModalProps) {
@@ -27,6 +27,8 @@ export default function BalanceModal({ wallet, records, balances, onClose, onSub
   const [text, setText] = useState('');
   // カードは未払いの額が残高（マイナス）なので、はじめからマイナスにしておく。
   const [negative, setNegative] = useState(wallet.type === 'card');
+  // 補正を口座の履歴に行として残すか。
+  const [showInHistory, setShowInHistory] = useState(true);
 
   const digits = text.replace(/[^0-9]/g, '');
   const entered = digits === '' ? null : (negative ? -1 : 1) * Number(digits);
@@ -41,7 +43,7 @@ export default function BalanceModal({ wallet, records, balances, onClose, onSub
         <PrimaryButton
           label="補正する"
           disabled={entered === null}
-          onClick={() => entered !== null && onSubmit(balanceOn, entered)}
+          onClick={() => entered !== null && onSubmit(balanceOn, entered, showInHistory)}
         />
       }
     >
@@ -94,6 +96,10 @@ export default function BalanceModal({ wallet, records, balances, onClose, onSub
           </div>
         </div>
 
+        <label className="flex items-center justify-between">
+          <span className="text-xs font-bold text-gray-700">履歴に残す</span>
+          <input type="checkbox" checked={showInHistory} onChange={(event) => setShowInHistory(event.target.checked)} className="h-5 w-5" />
+        </label>
         {expected.confirmed !== null && (
           <div className="space-y-1 rounded-xl bg-gray-50 p-3">
             <div className="flex items-center justify-between gap-2">

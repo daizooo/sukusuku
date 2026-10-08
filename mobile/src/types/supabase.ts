@@ -1115,6 +1115,7 @@ export type Database = {
           created_by: string | null
           family_id: string
           id: string
+          show_in_history: boolean
           updated_at: string
           wallet_id: string
         }
@@ -1125,6 +1126,7 @@ export type Database = {
           created_by?: string | null
           family_id: string
           id?: string
+          show_in_history?: boolean
           updated_at?: string
           wallet_id: string
         }
@@ -1135,6 +1137,7 @@ export type Database = {
           created_by?: string | null
           family_id?: string
           id?: string
+          show_in_history?: boolean
           updated_at?: string
           wallet_id?: string
         }

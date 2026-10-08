@@ -66,6 +66,7 @@ const rowToBalance = (row: BalanceRow): MoneyWalletBalance => ({
   walletId: row.wallet_id,
   balanceOn: row.balance_on,
   amount: row.amount,
+  showInHistory: row.show_in_history,
 });
 
 const rowToStore = (row: StoreRow): MoneyStore => ({
@@ -388,12 +389,20 @@ export async function saveMoneyWalletBalance(
   walletId: string,
   balanceOn: string,
   amount: number,
+  showInHistory: boolean,
 ): Promise<MoneyWalletBalance> {
   const { data: session } = await supabase.auth.getSession();
   const { data, error } = await supabase
     .from('money_wallet_balances')
     .upsert(
-      { family_id: familyId, wallet_id: walletId, balance_on: balanceOn, amount, created_by: session.session?.user.id ?? null },
+      {
+        family_id: familyId,
+        wallet_id: walletId,
+        balance_on: balanceOn,
+        amount,
+        show_in_history: showInHistory,
+        created_by: session.session?.user.id ?? null,
+      },
       { onConflict: 'wallet_id,balance_on' },
     )
     .select('*')

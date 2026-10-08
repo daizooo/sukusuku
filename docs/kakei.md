@@ -265,7 +265,7 @@ money_wallets に  カードの close_day（締め日）・pay_day（引き落�
 money_months      月のメモ。 family_id / month / note
 money_card_closes カードの照合。 wallet_id / month / statement_amount / closed_at
 money_wallet_balances  補正した残高（0067_money_wallet_balances.sql。§9.3）。 id / family_id / wallet_id / balance_on(日付) /
-                  amount(マイナスもある) / created_by（wallet_id・balance_on で1行。同じ日に入れ直すと上書き）
+                  amount(マイナスもある) / show_in_history(履歴に行を出すか。0068) / created_by（wallet_id・balance_on で1行。同じ日に入れ直すと上書き）
 ```
 
 - 全部 `family_id` 単位のRLS（`current_family_id()`）。参照は (id, family_id) の組で張り、別の家族の行を指せないようにする
@@ -365,6 +365,8 @@ money_wallet_balances  補正した残高（0067_money_wallet_balances.sql。§9
   - **残高を補正する**: 詳細の上の「残高を補正」から。日付（今日まで）と通帳・銀行のアプリの残高（マイナスも可。カードは初めからマイナス）を入れる。
     入れながら**記録から出した額**と**差**だけを出す（差 ＝ 入れた額 − 記録から出した額。はじめての補正は出さない）。差があっても補正でき、補正するとこれ以後はその額から数える。
     同じ日に入れ直すと上書き。記録の側は直さない（差を埋める「残高調整」の記録は作らない）
+  - **履歴に残すか選べる**（2026-10-08）: 補正のたびに「履歴に残す」（はじめは入）を選ぶ。残さない補正は、口座の履歴に行が出ないだけで、
+    残高の土台としては同じに効く（列 `show_in_history`。0068）。残さなかった補正は画面に行が無いので、取り消すには同じ日に入れ直す
   - **はじめの残高**: 記録は使い始めの月（取り込んだ分は2026年5月）からなので、最初の補正は差を出さず「はじめの残高」になる。
     案内の文字は出さない（余計な文字を入れない。2026-10-08）
   - **総残高の推移**: 総残高を押すと開く。使っている出金元の合計を、日ごとの折れ線と、残高が変わった日の一覧で見る（期間の切り替えは同じ）
