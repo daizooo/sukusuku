@@ -87,9 +87,10 @@ export default function MoneyAccountsView({
     if (row.wallet.type !== 'card') return [];
     const billing = cardBilling(row.wallet, row.amount, records, today);
     if (billing === null || billing.billed + billing.unbilled === 0) return [];
+    // 0円の行は出さない（引き落としの直後は請求済みが0、締め日の直後は未請求が0）。
     return [
-      `請求済み ${formatYen(billing.billed)}${billing.payOn ? `（${shortDay(billing.payOn)}払い）` : ''}`,
-      `未請求 ${formatYen(billing.unbilled)}`,
+      ...(billing.billed > 0 ? [`請求済み ${formatYen(billing.billed)}${billing.payOn ? `（${shortDay(billing.payOn)}）` : ''}`] : []),
+      ...(billing.unbilled > 0 ? [`未請求 ${formatYen(billing.unbilled)}`] : []),
     ];
   };
 
@@ -138,7 +139,7 @@ export default function MoneyAccountsView({
                         </Text>
                       )}
                       {billingLines(row).map((line) => (
-                        <Text key={line} style={type.sub} numberOfLines={1}>
+                        <Text key={line} style={type.sub}>
                           {line}
                         </Text>
                       ))}
