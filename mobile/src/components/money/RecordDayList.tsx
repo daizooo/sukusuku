@@ -1,8 +1,11 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Scale } from 'lucide-react-native';
 import type { MoneyCategory, MoneyRecord, MoneyWallet, SpecialItem } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { WEEKDAY_LABELS } from '@/lib/dateUtils';
 import {
+  formatBalance,
+  formatSignedYen,
   formatYen,
   groupItems,
   groupRecordsByDay,
@@ -10,6 +13,7 @@ import {
   itemSummary,
   recordTotal,
   topCategoryIdOf,
+  type BalanceCheck,
 } from '@/lib/moneyUtils';
 import { CategoryIcon, EstimateBadge, TransferIcon, WalletTypeIcon, type } from '@/components/money/moneyVisual';
 
@@ -18,6 +22,7 @@ import { CategoryIcon, EstimateBadge, TransferIcon, WalletTypeIcon, type } from 
 // 1行＝1件の記録。Zaim の履歴と同じく、1行目は「小分類 @ お店」（大分類はアイコンで分かる）、2行目は品名の要約
 // （「牛乳、卵ほか」）、金額の右に出金元の種類のアイコン。振替は回る矢印のアイコンで、出金元 → 入金先。
 // 毎月の記録・カード代金で自動で作り、まだ額を確かめていないものは金額の左に「見込み」（§3.3）。
+// 口座の履歴では、残高の補正（corrections）も同じ日の先頭に1行で混ぜる（その日の終わりの残高なので）。押すと取り消しの確認。
 // スクロールは持たない（親のスクロールの中に置く）。
 
 interface RecordDayListProps {
@@ -26,15 +31,43 @@ interface RecordDayListProps {
   wallets: MoneyWallet[];
   specialItems: SpecialItem[];
   onOpen: (record: MoneyRecord) => void;
+  /** 口座の履歴に混ぜる、残高の補正。 */
+  corrections?: BalanceCheck[];
+  onOpenCorrection?: (check: BalanceCheck) => void;
 }
+
+/** 補正の行の補足（差・はじめの残高）。 */
+const correctionNote = (check: BalanceCheck) =>
+  check.diff === null
+    ? 'はじめの残高'
+    : check.diff === 0
+      ? '記録と合っていました'
+      : `記録との差 ${formatSignedYen(check.diff)}`;
 
 const dayLabel = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number);
   return `${month}月${day}日（${WEEKDAY_LABELS[new Date(year, month - 1, day).getDay()]}）`;
 };
 
-export default function RecordDayList({ records, categories, wallets, specialItems, onOpen }: RecordDayListProps) {
-  const days = groupRecordsByDay(records);
+export default function RecordDayList({
+  records,
+  categories,
+  wallets,
+  specialItems,
+  onOpen,
+  corrections = [],
+  onOpenCorrection,
+}: RecordDayListProps) {
+  // 記録のある日と補正のある日を合わせて、新しい日から。
+  const recordDays = groupRecordsByDay(records);
+  const dates = [...new Set([...recordDays.map((day) => day.date), ...corrections.map((check) => check.balance.balanceOn)])].sort(
+    (a, b) => b.localeCompare(a),
+  );
+  const days = dates.map((date) => ({
+    date,
+    records: recordDays.find((day) => day.date === date)?.records ?? [],
+    corrections: corrections.filter((check) => check.balance.balanceOn === date),
+  }));
   const walletOf = (id: string | null) => wallets.find((wallet) => wallet.id === id) ?? null;
   const walletName = (id: string | null) => walletOf(id)?.name ?? '';
 
@@ -85,7 +118,30 @@ export default function RecordDayList({ records, categories, wallets, specialIte
               {spent > 0 && <Text style={type.faint}>{formatYen(spent)}</Text>}
             </View>
             <View style={styles.card}>
-              {day.records.map((record, index) => {
+              {day.corrections.map((check, index) => (
+                <Pressable
+                  key={check.balance.id}
+                  accessibilityRole="button"
+                  accessibilityLabel="残高の補正"
+                  onPress={() => onOpenCorrection?.(check)}
+                  style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.pressed]}
+                >
+                  <View style={styles.correctionIcon}>
+                    <Scale size={16} color="#ffffff" />
+                  </View>
+                  <View style={styles.flex}>
+                    <Text style={type.row} numberOfLines={1}>
+                      残高を補正
+                    </Text>
+                    <Text style={[type.sub, check.diff !== null && check.diff !== 0 && type.minus]} numberOfLines={1}>
+                      {correctionNote(check)}
+                    </Text>
+                  </View>
+                  <Text style={[type.amount, check.balance.amount < 0 && type.minus]}>{formatBalance(check.balance.amount)}</Text>
+                </Pressable>
+              ))}
+              {day.records.map((record, indexInDay) => {
+                const index = day.corrections.length + indexInDay;
                 const { icon, title, sub } = describe(record);
                 const total = recordTotal(record);
                 return (
@@ -130,6 +186,8 @@ export default function RecordDayList({ records, categories, wallets, specialIte
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   walletIcons: { flexDirection: 'row', gap: 3, minWidth: 15 },
+  // 補正の行のアイコン（振替と同じ大きさの、青みの灰の丸に白い天びん）。
+  correctionIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#5b7a99' },
   day: { marginTop: 20 },
   dayHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: 6 },
   dayTitle: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },

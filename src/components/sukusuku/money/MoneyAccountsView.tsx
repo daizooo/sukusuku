@@ -12,13 +12,9 @@ import type {
 } from '@/types/app';
 import {
   buildWalletBalances,
-  cardBilling,
-  cardScheduleLabel,
   dateKeyOfDate,
   formatBalance,
-  formatYen,
   WALLET_TYPES,
-  type WalletBalanceRow,
 } from '@/lib/moneyUtils';
 import TotalTrendScreen from './TotalTrendScreen';
 import WalletBalanceScreen from './WalletBalanceScreen';
@@ -31,7 +27,7 @@ import { cardClass, Hero, minus, type, WalletTypeIcon } from './moneyVisual';
 // 残高＝最後に補正した残高 + その後の記録（支出・収入・振替）。補正は、通帳・銀行のアプリと違うときに詳細から入れる
 // （「未確定」などの印は出さない。2026-10-08に、出しっぱなしでうるさいので外した）。
 // 出金元を押すと詳細（履歴 / 推移 / 残高計算）。出金元の追加・編集・使わなくする・また使うもこの面から。
-// 総残高に入れるのは使っている出金元だけ。カードは未払いがマイナスで入り、請求済み（引き落とし待ち）と未請求に分けて添える。
+// 総残高に入れるのは使っている出金元だけ。カードは未払いがマイナスで入る（請求済み・未請求の内訳は、押した先の詳細だけに出す）。
 // 証券口座は、銘柄ごとの評価額（docs/kakei.md §9.2）ができるまでは入らない。
 
 interface MoneyAccountsViewProps {
@@ -48,11 +44,6 @@ interface MoneyAccountsViewProps {
   onArchiveWallet: (wallet: MoneyWallet) => void;
   onRestoreWallet: (wallet: MoneyWallet) => void;
 }
-
-const shortDay = (dateKey: string) => {
-  const [, month, day] = dateKey.split('-').map(Number);
-  return `${month}/${day}`;
-};
 
 export default function MoneyAccountsView({
   wallets,
@@ -79,20 +70,6 @@ export default function MoneyAccountsView({
   const usable = summary.rows.filter((row) => !row.wallet.archived);
   const archived = summary.rows.filter((row) => row.wallet.archived);
   const opened = wallets.find((wallet) => wallet.id === openId) ?? null;
-
-  const status = (row: WalletBalanceRow) =>
-    [row.wallet.isSaving ? '貯金用' : '', cardScheduleLabel(row.wallet)].filter((part) => part !== '').join('・');
-  /** カードの残高に添える、請求済み（引き落とし待ち）と未請求の2行。締め日が未設定なら出さない。 */
-  const billingLines = (row: WalletBalanceRow): string[] => {
-    if (row.wallet.type !== 'card') return [];
-    const billing = cardBilling(row.wallet, row.amount, records, today);
-    if (billing === null || billing.billed + billing.unbilled === 0) return [];
-    // 0円の行は出さない（引き落としの直後は請求済みが0、締め日の直後は未請求が0）。
-    return [
-      ...(billing.billed > 0 ? [`請求済み ${formatYen(billing.billed)}${billing.payOn ? `（${shortDay(billing.payOn)}）` : ''}`] : []),
-      ...(billing.unbilled > 0 ? [`未請求 ${formatYen(billing.unbilled)}`] : []),
-    ];
-  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -134,12 +111,7 @@ export default function MoneyAccountsView({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className={`block truncate ${type.row}`}>{row.wallet.name}</span>
-                      {status(row) !== '' && <span className={`block truncate ${type.sub}`}>{status(row)}</span>}
-                      {billingLines(row).map((line) => (
-                        <span key={line} className={`block ${type.sub}`}>
-                          {line}
-                        </span>
-                      ))}
+                      {row.wallet.isSaving && <span className={`block truncate ${type.sub}`}>貯金用</span>}
                     </span>
                     <span className={minus(type.amount, row.amount < 0)}>{formatBalance(row.amount)}</span>
                     <ChevronRight size={16} className="text-gray-400" />

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import type {
   MoneyCategory,
   MoneyRecord,
@@ -17,7 +17,6 @@ import {
   dailyBalances,
   dateKeyOfDate,
   formatBalance,
-  formatSignedYen,
   recordsOfWallet,
   walletBalanceOn,
   walletTypeLabel,
@@ -25,15 +24,14 @@ import {
 import BalanceModal from './BalanceModal';
 import BalanceTrend from './BalanceTrend';
 import RecordDayList from './RecordDayList';
-import { cardClass, FullScreen, Hero, minus, PrimaryButton, ScreenHeader, SectionHeader, StatRow, type, WalletTypeIcon } from './moneyVisual';
+import { FullScreen, minus, ScreenHeader, StatRow, type, WalletTypeIcon } from './moneyVisual';
 import { WalletModal } from './WalletPicker';
 
 // 口座の詳細（docs/kakei.md §9.3）。mobile版の `mobile/src/components/money/WalletBalanceScreen.tsx` と同じ並び・文言。
-// Zaim の口座と同じく「履歴 / 推移 / 残高計算」の3つ。
-// - 履歴: その出金元の記録（支出・収入・振替）。押すと記録の詳細
+// 上に残高と「残高を補正」、その下に「履歴 / 推移」の2つ（2026-10-08に、使わない「残高計算」を外した）。
+// - 履歴: その出金元の記録（支出・収入・振替）に、残高の補正を同じ日の先頭に混ぜる。記録を押すと記録の詳細、補正を押すと取り消し
 // - 推移: 日ごとの残高の折れ線（期間はじめは全期間）と、残高が変わった日の一覧
-// - 残高計算: 残高 ＝ 最後に補正した残高 + そのあとの記録。通帳・銀行のアプリと違うときは「残高を補正する」。
-//   カードは残高（未払い）を「請求済み」と「未請求」に分けて出す
+// カードは残高（未払い）の下に「請求済み」と「未請求」を添える（一覧の行には出さず、押したあとのここだけ）。
 // 出金元の編集・使わなくするは見出しの鉛筆から。戻る操作（ブラウザの戻る）は、シートを閉じる → この画面を閉じる、の順。
 
 interface WalletBalanceScreenProps {
@@ -52,12 +50,11 @@ interface WalletBalanceScreenProps {
   onArchiveWallet: (wallet: MoneyWallet) => void;
 }
 
-type Tab = 'history' | 'trend' | 'calc';
+type Tab = 'history' | 'trend';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'history', label: '履歴' },
   { id: 'trend', label: '推移' },
-  { id: 'calc', label: '残高計算' },
 ];
 
 const fullDate = (dateKey: string) => {
@@ -113,14 +110,51 @@ export default function WalletBalanceScreen({
           </button>
         }
       />
-      <div className="shrink-0 flex items-center gap-2 px-4 py-2.5">
-        <WalletTypeIcon type={wallet.type} size={16} />
-        <span className={`min-w-0 flex-1 truncate ${type.sub}`}>
-          {[walletTypeLabel(wallet.type), wallet.isSaving ? '貯金用' : '', cardScheduleLabel(wallet), payWallet ? `${payWallet.name}から引き落とし` : '']
-            .filter((part) => part !== '')
-            .join('・')}
-        </span>
-        <span className={minus(type.amount, now.amount < 0)}>{formatBalance(now.amount)}</span>
+      <div className="shrink-0 space-y-2 px-4 pb-2.5 pt-3">
+        <div className="flex items-end gap-3">
+          <div className="min-w-0 flex-1">
+            <p className={type.sub}>残高</p>
+            <p className={minus(type.hero, now.amount < 0)}>{formatBalance(now.amount)}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCorrecting(true)}
+            className="rounded-full bg-blue-100 px-3.5 py-2 text-[13px] font-bold text-blue-800 hover:bg-blue-200"
+          >
+            残高を補正
+          </button>
+        </div>
+        {billing !== null && billing.billed + billing.unbilled > 0 && (
+          <div className="border-t border-gray-200">
+            {billing.billed > 0 && (
+              <StatRow
+                label="請求済み"
+                note={billing.payOn ? `${monthDayLabel(billing.payOn)}に引き落とし` : '引き落とし待ち'}
+                value={formatBalance(-billing.billed)}
+                isMinus
+              />
+            )}
+            {billing.unbilled > 0 && (
+              <StatRow
+                label="未請求"
+                note={`${monthDayLabel(billing.closedOn)}の締め日のあとの利用`}
+                value={formatBalance(-billing.unbilled)}
+                isMinus
+              />
+            )}
+          </div>
+        )}
+        <div className="flex items-center gap-1.5">
+          <WalletTypeIcon type={wallet.type} size={14} />
+          <span className={`min-w-0 flex-1 truncate ${type.faint}`}>
+            {[walletTypeLabel(wallet.type), wallet.isSaving ? '貯金用' : '', cardScheduleLabel(wallet), payWallet ? `${payWallet.name}から引き落とし` : '']
+              .filter((part) => part !== '')
+              .join('・')}
+          </span>
+        </div>
+        {now.confirmed === null && (
+          <p className={type.faint}>記録は使い始めからなので、「残高を補正」でいまの残高を入れて合わせてください</p>
+        )}
       </div>
       <div role="tablist" className="shrink-0 flex border-b border-gray-200 px-2">
         {TABS.map((entry) => {
@@ -143,80 +177,21 @@ export default function WalletBalanceScreen({
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-8">
         {tab === 'history' &&
-          (mine.length === 0 ? (
+          (mine.length === 0 && checks.length === 0 ? (
             <p className="py-8 text-center text-sm text-gray-400">この出金元の記録はまだありません</p>
           ) : (
-            <RecordDayList records={mine} categories={categories} wallets={wallets} specialItems={specialItems} onOpen={onOpenRecord} />
+            <RecordDayList
+              records={mine}
+              categories={categories}
+              wallets={wallets}
+              specialItems={specialItems}
+              onOpen={onOpenRecord}
+              corrections={checks}
+              onOpenCorrection={(check) => remove(check.balance)}
+            />
           ))}
 
         {tab === 'trend' && <BalanceTrend points={points} asOf={today} />}
-
-        {tab === 'calc' && (
-          <div className="space-y-3 pt-3">
-            <Hero
-              label="残高"
-              value={formatBalance(now.amount)}
-              isMinus={now.amount < 0}
-              note={
-                now.confirmed === null
-                  ? '記録の合計です。記録は使い始めからなので、いまの残高を入れて合わせてください'
-                  : `${fullDate(now.confirmed.balanceOn)}に補正した ${formatBalance(now.confirmed.amount)} に、そのあとの記録${now.count}件（${formatSignedYen(now.movement)}）を足した額`
-              }
-            >
-              {billing !== null && billing.billed + billing.unbilled > 0 && (
-                <>
-                  <StatRow
-                    label="請求済み"
-                    note={billing.payOn ? `${monthDayLabel(billing.payOn)}に引き落とし` : '引き落とし待ち'}
-                    value={formatBalance(-billing.billed)}
-                    isMinus={billing.billed > 0}
-                  />
-                  <StatRow
-                    label="未請求"
-                    note={`${monthDayLabel(billing.closedOn)}の締め日のあとの利用`}
-                    value={formatBalance(-billing.unbilled)}
-                    isMinus={billing.unbilled > 0}
-                  />
-                </>
-              )}
-            </Hero>
-            <PrimaryButton label="残高を補正する" onClick={() => setCorrecting(true)} />
-
-            <SectionHeader title="補正の履歴" hint="通帳・銀行のアプリと違うときに入れます" />
-            {checks.length === 0 ? (
-              <p className="py-4 text-center text-sm text-gray-400">まだ補正していません</p>
-            ) : (
-              <div className={`${cardClass} overflow-hidden`}>
-                {checks.map((check, index) => (
-                  <div
-                    key={check.balance.id}
-                    className={`flex items-center gap-3 px-3.5 py-3 ${index > 0 ? 'border-t border-gray-200' : ''}`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className={type.row}>{fullDate(check.balance.balanceOn)}</p>
-                      <p className={minus(type.sub, check.diff !== null && check.diff !== 0)}>
-                        {check.diff === null
-                          ? 'はじめの残高'
-                          : check.diff === 0
-                            ? `記録と合っていました（${formatBalance(check.expected)}）`
-                            : `記録との差 ${formatSignedYen(check.diff)}（記録では ${formatBalance(check.expected)}）`}
-                      </p>
-                    </div>
-                    <span className={minus(type.amount, check.balance.amount < 0)}>{formatBalance(check.balance.amount)}</span>
-                    <button
-                      type="button"
-                      aria-label={`${monthDayLabel(check.balance.balanceOn)}の補正を取り消す`}
-                      onClick={() => remove(check.balance)}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {correcting && (
