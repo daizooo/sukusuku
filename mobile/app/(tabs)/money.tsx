@@ -67,10 +67,11 @@ import SpecialPanel from '@/components/living/SpecialPanel';
 type View3 = 'records' | 'review' | 'special' | 'accounts';
 
 const VIEWS: { id: View3; label: string }[] = [
+  // 口座を一番左にし、はじめに開く面にする（2026-10-08。docs/kakei.md §2）。
+  { id: 'accounts', label: '口座' },
   { id: 'records', label: '記録' },
   { id: 'review', label: '振り返り' },
   { id: 'special', label: '特別費' },
-  { id: 'accounts', label: '口座' },
 ];
 
 /** 記録の入力。null は閉じている、'new' は新しく記録する。 */
@@ -94,7 +95,7 @@ export default function MoneyScreen() {
   const [products, setProducts] = useState<HouseholdProduct[]>([]);
   const [specialItems, setSpecialItems] = useState<SpecialItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [view, setView] = useState<View3>('records');
+  const [view, setView] = useState<View3>('accounts');
   const [monthKey, setMonthKey] = useState(() => monthKeyOfDate(new Date()));
   const [fiscalYear, setFiscalYear] = useState(() => fiscalYearOfMonth(monthKeyOfDate(new Date())));
   const [period, setPeriod] = useState<ReviewPeriod>('month');

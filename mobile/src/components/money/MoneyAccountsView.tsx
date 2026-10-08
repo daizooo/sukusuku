@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ChevronRight, Plus } from 'lucide-react-native';
+import { Plus } from 'lucide-react-native';
 import type {
   MoneyCategory,
   MoneyRecord,
@@ -83,21 +83,22 @@ export default function MoneyAccountsView({
 
   return (
     <View style={styles.flex}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="総残高の推移を見る"
-        onPress={() => setShowTrend(true)}
-        disabled={usable.length === 0}
-        style={styles.hero}
-      >
-        <Hero
-          label="総残高"
-          value={formatBalance(summary.total)}
-          minus={summary.total < 0}
-          note={usable.length === 0 ? '出金元を足すと、残高が出ます' : undefined}
-        />
-      </Pressable>
+      {/* 総残高も一覧と一緒に流れる（固定しない。2026-10-08）。 */}
       <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="総残高の推移を見る"
+          onPress={() => setShowTrend(true)}
+          disabled={usable.length === 0}
+          style={styles.hero}
+        >
+          <Hero
+            label="総残高"
+            value={formatBalance(summary.total)}
+            minus={summary.total < 0}
+            note={usable.length === 0 ? '出金元を足すと、残高が出ます' : undefined}
+          />
+        </Pressable>
         {isLoading && <Text style={styles.message}>読み込み中...</Text>}
         {WALLET_TYPES.map((walletType) => {
           const inType = usable.filter((row) => row.wallet.type === walletType.id);
@@ -105,29 +106,31 @@ export default function MoneyAccountsView({
           return (
             <View key={walletType.id} style={styles.section}>
               <Text style={styles.sectionTitle}>{walletType.label}</Text>
-              <View style={styles.card}>
-                {inType.map((row, index) => (
+              {/* Zaim の「残高」と同じく2列に並べる（2026-10-08）。 */}
+              <View style={styles.grid}>
+                {inType.map((row) => (
                   <Pressable
                     key={row.wallet.id}
                     accessibilityRole="button"
                     onPress={() => setOpenId(row.wallet.id)}
-                    style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
                   >
-                    <View style={styles.iconBox}>
-                      <WalletTypeIcon type={row.wallet.type} size={20} />
-                    </View>
-                    <View style={styles.flex}>
-                      <Text style={type.row} numberOfLines={1}>
-                        {row.wallet.name}
-                      </Text>
-                      {row.wallet.isSaving && (
-                        <Text style={type.sub} numberOfLines={1}>
-                          貯金用
+                    <View style={styles.tileTop}>
+                      <View style={styles.iconBox}>
+                        <WalletTypeIcon type={row.wallet.type} size={18} />
+                      </View>
+                      <View style={styles.flex}>
+                        <Text style={styles.tileName} numberOfLines={2}>
+                          {row.wallet.name}
                         </Text>
-                      )}
+                        {row.wallet.isSaving && (
+                          <Text style={type.faint} numberOfLines={1}>
+                            貯金用
+                          </Text>
+                        )}
+                      </View>
                     </View>
-                    <Text style={[type.amount, row.amount < 0 && type.minus]}>{formatBalance(row.amount)}</Text>
-                    <ChevronRight size={16} color={colors.textFaint} />
+                    <Text style={[type.amount, styles.tileAmount, row.amount < 0 && type.minus]}>{formatBalance(row.amount)}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -216,7 +219,7 @@ export default function MoneyAccountsView({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  hero: { paddingHorizontal: 16, paddingTop: 12 },
+  hero: { paddingTop: 12 },
   // 右下の「＋」に一覧の最後が隠れないよう、下を空ける。
   content: { paddingHorizontal: 16, paddingBottom: 96 },
   message: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
@@ -232,10 +235,23 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
   pressed: { backgroundColor: colors.background },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tile: {
+    width: '48.5%',
+    gap: 8,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  tileTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  tileName: { fontSize: 13, fontWeight: '600', color: colors.text },
+  tileAmount: { alignSelf: 'flex-end' },
   iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.neutralSurface,
