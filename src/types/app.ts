@@ -636,6 +636,19 @@ export interface MoneyWallet {
 
 export type MoneyWalletDraft = Omit<MoneyWallet, 'id' | 'position' | 'archived'>;
 
+/**
+ * 確定した残高（通帳・銀行のアプリの残高）。money_wallet_balances に対応。
+ * 出金元の残高 = 最後に確定した残高 + その後の記録（docs/kakei.md §9.3）。
+ */
+export interface MoneyWalletBalance {
+  id: string;
+  walletId: string;
+  /** YYYY-MM-DD。その日の終わりの残高（この日の記録も含む）。 */
+  balanceOn: string;
+  /** 残高（円）。マイナスもある（カードの未払いなど）。 */
+  amount: number;
+}
+
 /** 家計のお店（設定データ）。money_stores に対応。記録は名前の文字列で持つので、直しても過去の記録は変わらない。 */
 export interface MoneyStore {
   id: string;

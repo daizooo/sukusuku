@@ -11,6 +11,7 @@ import type {
   MoneyRecurring,
   MoneyStore,
   MoneyWallet,
+  MoneyWalletBalance,
   MoneyWalletDraft,
   SpecialItem,
 } from '@/types/app';
@@ -18,16 +19,20 @@ import { createClient } from '@/lib/supabase/client';
 import {
   archiveMoneyWallet,
   deleteMoneyRecord,
+  deleteMoneyWalletBalance,
   insertMoneyWallet,
   loadMoney,
   loadMoneyStores,
+  restoreMoneyWallet,
   saveMoneyRecord,
+  saveMoneyWalletBalance,
   updateMoneyWallet,
   type MoneyData,
 } from '@/lib/api/money';
 import { loadHouseholdProducts } from '@/lib/api/householdProducts';
 import { loadSpecialExpenses } from '@/lib/api/specialExpenses';
 import { fiscalYearOfMonth, monthKeyOf, monthKeyOfDate, specialActualsFromRecords } from '@/lib/moneyUtils';
+import MoneyAccountsView from '../money/MoneyAccountsView';
 import MoneyRecordsView from '../money/MoneyRecordsView';
 import MoneyReviewView from '../money/MoneyReviewView';
 import RecordEditor from '../money/RecordEditor';
@@ -40,24 +45,26 @@ import SpecialPanel from '../living/SpecialPanel';
  * 家計タブ（docs/kakei.md）。日々の収支の記録と、月・年の振り返り。
  * mobile版の `mobile/app/(tabs)/money.tsx` と同じ項目・並び・文言にしてある。
  *
- * 中は「記録 / 振り返り / 特別費」の3つ。記録の追加は右下の丸いボタン「＋」（Zaim と同じ。§2）。
+ * 中は「記録 / 振り返り / 特別費 / 口座」の4つ。記録の追加は右下の丸いボタン「＋」（Zaim と同じ。§2）。
  * どの面も「送り → 結論（数字を1つ大きく）→ 内訳 → 明細」の順（見た目の決まりは §2.1・moneyVisual）。
  * - 記録: その月に使った額（特別費を除く）と、記録を日ごとに。押すと記録の詳細（RecordEditor。Zaim と同じ流れ）
  * - 振り返り: 月と年は同じ面で、送りの右「月 / 年」で期間を切り替える（§4）。結論は2つ:
  *   生活費の収支（収入 − 特別費以外の支出。貯金は入れない）と、特別費（その期間に払った額と年度の予算の残り）
  * - 特別費: 年度の予定と実績の一覧・設定（「振り返り」の年と同じ年度を見る）
- * - 見出しの右の歯車は「家計の設定」（予算・種類・出金元・お店・毎月の記録。docs/kakei.md §3.5）
+ * - 口座: 総残高と出金元ごとの残高（確定した残高 + その後の記録）。残高の確定、出金元の追加・編集もここ（§9.3）
+ * - 見出しの右の歯車は「家計の設定」（予算・種類・お店・毎月の記録。docs/kakei.md §3.5）
  *
  * 見出し・切り替え・月の送りは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  * 他のタブと違い、読み書きはこのタブの中で完結させる（アプリ全体の状態に持たない）。
  */
 
-type MoneyView = 'records' | 'review' | 'special';
+type MoneyView = 'records' | 'review' | 'special' | 'accounts';
 
 const VIEWS: { id: MoneyView; label: string }[] = [
   { id: 'records', label: '記録' },
   { id: 'review', label: '振り返り' },
   { id: 'special', label: '特別費' },
+  { id: 'accounts', label: '口座' },
 ];
 
 /** 記録の入力。null は閉じている、'new' は新しく記録する。 */
@@ -71,6 +78,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [stores, setStores] = useState<MoneyStore[]>([]);
   const [records, setRecords] = useState<MoneyRecord[]>([]);
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
+  const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   const [products, setProducts] = useState<HouseholdProduct[]>([]);
   const [specialItems, setSpecialItems] = useState<SpecialItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -91,6 +99,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       setStores(money.stores);
       setRecords(money.records);
       setRecurring(money.recurring);
+      setBalances(money.balances);
       setProducts(loadedProducts);
       setSpecialItems(special.items);
     },
@@ -197,6 +206,39 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     }
   };
 
+  const restoreWallet = async (wallet: MoneyWallet) => {
+    try {
+      const saved = await restoreMoneyWallet(supabase, wallet.id);
+      setWallets((prev) => prev.map((entry) => (entry.id === saved.id ? saved : entry)));
+    } catch {
+      failed('保存');
+    }
+  };
+
+  /** 残高を確定する。同じ出金元・同じ日の確定は上書きされる。 */
+  const confirmBalance = async (walletId: string, balanceOn: string, amount: number) => {
+    try {
+      const saved = await saveMoneyWalletBalance(supabase, familyId, walletId, balanceOn, amount);
+      setBalances((prev) => [
+        ...prev.filter((entry) => !(entry.walletId === saved.walletId && entry.balanceOn === saved.balanceOn)),
+        saved,
+      ]);
+    } catch {
+      failed('確定');
+    }
+  };
+
+  const removeBalance = async (balance: MoneyWalletBalance) => {
+    const previous = balances;
+    setBalances((prev) => prev.filter((entry) => entry.id !== balance.id));
+    try {
+      await deleteMoneyWalletBalance(supabase, balance.id);
+    } catch {
+      setBalances(previous);
+      failed('取り消し');
+    }
+  };
+
   return (
     <div className="relative p-4 pb-0 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <div className="shrink-0 flex items-center pb-1">
@@ -268,12 +310,24 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
             setView('special');
           }}
         />
-      ) : (
+      ) : view === 'special' ? (
         <SpecialPanel
           familyId={familyId}
           fiscalYear={fiscalYear}
           onFiscalYear={setFiscalYear}
           onRecordsChanged={() => void reload().catch(() => {})}
+        />
+      ) : (
+        <MoneyAccountsView
+          wallets={wallets}
+          records={records}
+          balances={balances}
+          isLoading={isLoading}
+          onConfirm={(walletId, balanceOn, amount) => void confirmBalance(walletId, balanceOn, amount)}
+          onDeleteBalance={(balance) => void removeBalance(balance)}
+          onSaveWallet={saveWallet}
+          onArchiveWallet={(wallet) => void archiveWallet(wallet)}
+          onRestoreWallet={(wallet) => void restoreWallet(wallet)}
         />
       )}
 

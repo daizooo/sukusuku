@@ -1107,6 +1107,61 @@ export type Database = {
           },
         ]
       }
+      money_wallet_balances: {
+        Row: {
+          amount: number
+          balance_on: string
+          created_at: string
+          created_by: string | null
+          family_id: string
+          id: string
+          updated_at: string
+          wallet_id: string
+        }
+        Insert: {
+          amount: number
+          balance_on: string
+          created_at?: string
+          created_by?: string | null
+          family_id: string
+          id?: string
+          updated_at?: string
+          wallet_id: string
+        }
+        Update: {
+          amount?: number
+          balance_on?: string
+          created_at?: string
+          created_by?: string | null
+          family_id?: string
+          id?: string
+          updated_at?: string
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_wallet_balances_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_wallet_balances_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_wallet_balances_wallet_fkey"
+            columns: ["wallet_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_wallets"
+            referencedColumns: ["id", "family_id"]
+          },
+        ]
+      }
       money_wallets: {
         Row: {
           archived_at: string | null

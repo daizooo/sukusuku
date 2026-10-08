@@ -11,6 +11,7 @@ import type {
   MoneyRecurringDraft,
   MoneyStore,
   MoneyWallet,
+  MoneyWalletBalance,
   MoneyWalletDraft,
 } from '@/types/app';
 import { DEFAULT_CATEGORIES } from '@/lib/moneyUtils';
@@ -22,6 +23,7 @@ type StoreRow = Tables<'money_stores'>;
 type RecordRow = Tables<'money_records'>;
 type ItemRow = Tables<'money_items'>;
 type RecurringRow = Tables<'money_recurring'>;
+type BalanceRow = Tables<'money_wallet_balances'>;
 type SupabaseDb = SupabaseClient<Database>;
 
 // 家計タブの読み書き（種類・予算・出金元・記録。docs/kakei.md §3・§5）。
@@ -57,6 +59,13 @@ const rowToWallet = (row: WalletRow): MoneyWallet => ({
   payWalletId: row.pay_wallet_id,
   position: row.position,
   archived: row.archived_at !== null,
+});
+
+const rowToBalance = (row: BalanceRow): MoneyWalletBalance => ({
+  id: row.id,
+  walletId: row.wallet_id,
+  balanceOn: row.balance_on,
+  amount: row.amount,
 });
 
 const rowToStore = (row: StoreRow): MoneyStore => ({
@@ -140,22 +149,26 @@ export interface MoneyData {
   stores: MoneyStore[];
   records: MoneyRecord[];
   recurring: MoneyRecurring[];
+  balances: MoneyWalletBalance[];
 }
 
 export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise<MoneyData> {
-  const [categoryResult, budgetResult, walletResult, storeResult, recurringResult, records] = await Promise.all([
-    supabase.from('money_categories').select('*').eq('family_id', familyId),
-    supabase.from('money_budgets').select('*').eq('family_id', familyId),
-    supabase.from('money_wallets').select('*').eq('family_id', familyId).order('position', { ascending: true }),
-    supabase.from('money_stores').select('*').eq('family_id', familyId),
-    supabase.from('money_recurring').select('*').eq('family_id', familyId).order('position', { ascending: true }),
-    loadRecords(supabase, familyId),
-  ]);
+  const [categoryResult, budgetResult, walletResult, storeResult, recurringResult, balanceResult, records] =
+    await Promise.all([
+      supabase.from('money_categories').select('*').eq('family_id', familyId),
+      supabase.from('money_budgets').select('*').eq('family_id', familyId),
+      supabase.from('money_wallets').select('*').eq('family_id', familyId).order('position', { ascending: true }),
+      supabase.from('money_stores').select('*').eq('family_id', familyId),
+      supabase.from('money_recurring').select('*').eq('family_id', familyId).order('position', { ascending: true }),
+      supabase.from('money_wallet_balances').select('*').eq('family_id', familyId),
+      loadRecords(supabase, familyId),
+    ]);
   if (categoryResult.error) throw categoryResult.error;
   if (budgetResult.error) throw budgetResult.error;
   if (walletResult.error) throw walletResult.error;
   if (storeResult.error) throw storeResult.error;
   if (recurringResult.error) throw recurringResult.error;
+  if (balanceResult.error) throw balanceResult.error;
   return {
     categories: (categoryResult.data ?? []).map(rowToCategory),
     budgets: (budgetResult.data ?? []).map(rowToBudget),
@@ -163,6 +176,7 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
     stores: (storeResult.data ?? []).map(rowToStore),
     records,
     recurring: (recurringResult.data ?? []).map(rowToRecurring),
+    balances: (balanceResult.data ?? []).map(rowToBalance),
   };
 }
 
@@ -363,6 +377,35 @@ export async function restoreMoneyWallet(supabase: SupabaseDb, id: string): Prom
   const { data, error } = await supabase.from('money_wallets').update({ archived_at: null }).eq('id', id).select('*').single();
   if (error) throw error;
   return rowToWallet(data);
+}
+
+// ---- 確定した残高（docs/kakei.md §9.3） ----
+
+/** 出金元の、その日の終わりの残高を確定する。同じ日の確定があれば上書きする。 */
+export async function saveMoneyWalletBalance(
+  supabase: SupabaseDb,
+  familyId: string,
+  walletId: string,
+  balanceOn: string,
+  amount: number,
+): Promise<MoneyWalletBalance> {
+  const { data: session } = await supabase.auth.getSession();
+  const { data, error } = await supabase
+    .from('money_wallet_balances')
+    .upsert(
+      { family_id: familyId, wallet_id: walletId, balance_on: balanceOn, amount, created_by: session.session?.user.id ?? null },
+      { onConflict: 'wallet_id,balance_on' },
+    )
+    .select('*')
+    .single();
+  if (error) throw error;
+  return rowToBalance(data);
+}
+
+/** 確定した残高を取り消す（入れ間違い）。 */
+export async function deleteMoneyWalletBalance(supabase: SupabaseDb, id: string): Promise<void> {
+  const { error } = await supabase.from('money_wallet_balances').delete().eq('id', id);
+  if (error) throw error;
 }
 
 // ---- お店（設定データ。docs/kakei.md §3.5） ----

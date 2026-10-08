@@ -19,6 +19,7 @@ import type {
   MoneyRecurring,
   MoneyStore,
   MoneyWallet,
+  MoneyWalletBalance,
   MoneyWalletType,
   SpecialActual,
 } from '@/types/app';
@@ -904,4 +905,117 @@ export function canPickProductsFor(
     return true;
   }
   return PRODUCT_ICON_KEYS.includes(iconKeyOf(categories.find((category) => category.id === topId)));
+}
+
+// ---- 口座の残高（docs/kakei.md §9.3） ----
+// 残高 = 最後に確定した残高 + その後の記録（支出・収入・振替）。確定した残高が無ければ記録だけから出す。
+// 確定した残高は「その日の終わりの残高」なので、その日の記録は含まれている（足すのは翌日以降の記録）。
+
+/** 今日の日付（YYYY-MM-DD。端末のローカル）。 */
+export const dateKeyOfDate = (date: Date): string => `${monthKeyOfDate(date)}-${pad2(date.getDate())}`;
+
+/** マイナスは「−¥1,234」。残高の表示に使う（formatYen は符号を付けない）。 */
+export const formatBalance = (value: number): string => `${value < 0 ? '−' : ''}${formatYen(value)}`;
+
+/**
+ * 1件の記録が、出金元 walletId の残高に与える増減（円）。
+ * 支出は出金元から減り、収入は入金先に増え、振替は出金元から減って入金先に増える。
+ */
+export function walletDelta(record: Pick<MoneyRecord, 'kind' | 'walletId' | 'toWalletId' | 'items'>, walletId: string): number {
+  const total = recordTotal(record);
+  if (record.kind === 'income') return record.walletId === walletId ? total : 0;
+  const out = record.walletId === walletId ? -total : 0;
+  const into = record.kind === 'transfer' && record.toWalletId === walletId ? total : 0;
+  return out + into;
+}
+
+export interface WalletBalanceResult {
+  /** 残高（円）。 */
+  amount: number;
+  /** 土台にした、最後に確定した残高。まだ確定していなければ null（記録だけから出した額）。 */
+  confirmed: MoneyWalletBalance | null;
+  /** 確定のあとの記録の増減（確定が無ければ記録の全部）。 */
+  movement: number;
+  /** 確定のあとの記録の件数。 */
+  count: number;
+}
+
+/**
+ * 出金元 walletId の、date の終わりの残高。date までの記録だけを数える（先の日付の記録は入れない）。
+ * ignoreOnDate を立てると、date の確定を土台にしない（その日の確定を入れる前の「記録から出した額」を出すとき）。
+ */
+export function walletBalanceOn(
+  walletId: string,
+  date: string,
+  records: readonly MoneyRecord[],
+  balances: readonly MoneyWalletBalance[],
+  ignoreOnDate = false,
+): WalletBalanceResult {
+  let confirmed: MoneyWalletBalance | null = null;
+  for (const balance of balances) {
+    if (balance.walletId !== walletId) continue;
+    if (ignoreOnDate ? balance.balanceOn >= date : balance.balanceOn > date) continue;
+    if (confirmed === null || balance.balanceOn > confirmed.balanceOn) confirmed = balance;
+  }
+  let movement = 0;
+  let count = 0;
+  for (const record of records) {
+    if (record.walletId !== walletId && record.toWalletId !== walletId) continue;
+    if (record.occurredOn > date || (confirmed !== null && record.occurredOn <= confirmed.balanceOn)) continue;
+    movement += walletDelta(record, walletId);
+    count += 1;
+  }
+  return { amount: (confirmed?.amount ?? 0) + movement, confirmed, movement, count };
+}
+
+export interface WalletBalanceRow extends WalletBalanceResult {
+  wallet: MoneyWallet;
+}
+
+export interface WalletBalances {
+  /** 出金元ごと（渡された順）。 */
+  rows: WalletBalanceRow[];
+  /** 総残高。使わなくした出金元は入れない。 */
+  total: number;
+  /** 総残高に入れた出金元のうち、まだ確定していないものの数。 */
+  unconfirmed: number;
+}
+
+/** 出金元ごとの今の残高と総残高。asOf は今日（YYYY-MM-DD）。 */
+export function buildWalletBalances(
+  wallets: readonly MoneyWallet[],
+  records: readonly MoneyRecord[],
+  balances: readonly MoneyWalletBalance[],
+  asOf: string,
+): WalletBalances {
+  const rows = wallets.map((wallet) => ({ wallet, ...walletBalanceOn(wallet.id, asOf, records, balances) }));
+  const counted = rows.filter((row) => !row.wallet.archived);
+  return {
+    rows,
+    total: counted.reduce((sum, row) => sum + row.amount, 0),
+    unconfirmed: counted.filter((row) => row.confirmed === null).length,
+  };
+}
+
+export interface BalanceCheck {
+  balance: MoneyWalletBalance;
+  /** 確定の前の確定と、そのあとの記録から出した額。 */
+  expected: number;
+  /** 確定した額 − 記録から出した額。前の確定が無い（はじめの残高）ときは null。 */
+  diff: number | null;
+}
+
+/** 出金元の確定の履歴（新しい順）。確定のたびの、記録との差つき。 */
+export function balanceChecks(
+  walletId: string,
+  records: readonly MoneyRecord[],
+  balances: readonly MoneyWalletBalance[],
+): BalanceCheck[] {
+  return balances
+    .filter((balance) => balance.walletId === walletId)
+    .sort((a, b) => b.balanceOn.localeCompare(a.balanceOn))
+    .map((balance) => {
+      const before = walletBalanceOn(walletId, balance.balanceOn, records, balances, true);
+      return { balance, expected: before.amount, diff: before.confirmed === null ? null : balance.amount - before.amount };
+    });
 }

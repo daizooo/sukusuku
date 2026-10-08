@@ -3,8 +3,13 @@
 import assert from 'node:assert/strict';
 
 import {
+  balanceChecks,
   budgetFor,
+  buildWalletBalances,
   canPickProductsFor,
+  formatBalance,
+  walletBalanceOn,
+  walletDelta,
   buildSpecialProgress,
   buildSpecialReview,
   buildYearSummary,
@@ -36,7 +41,7 @@ import {
   storeChoices,
 } from './moneyUtils.ts';
 import { buildYearRows } from './specialUtils.ts';
-import type { MoneyBudget, MoneyCategory, MoneyItem, MoneyRecord, MoneyStore, MoneyWallet, SpecialItem } from '../types/app.ts';
+import type { MoneyBudget, MoneyCategory, MoneyItem, MoneyRecord, MoneyStore, MoneyWallet, MoneyWalletBalance, SpecialItem } from '../types/app.ts';
 
 // ---- 月・年度 ----
 assert.equal(shiftMonth('2026-12', 1), '2027-01');
@@ -428,6 +433,58 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
     { occurredOn: '2026-09-28', amount: 7500 },
     { occurredOn: '2025-10-27', amount: 9000 },
   ], '出金元・お店・種類が同じで、見込みでない過去1年の記録だけ（同じ種類の品目は合計）');
+}
+
+// ---- 口座の残高（docs/kakei.md §9.3） ----
+{
+  const money = (id: string, fields: Partial<MoneyRecord>, amount: number) =>
+    record(id, { ...fields, items: [item({ amount })] });
+  const rs: MoneyRecord[] = [
+    money('b1', { kind: 'income', walletId: 'bank', occurredOn: '2026-09-25' }, 300000),
+    money('b2', { walletId: 'bank', occurredOn: '2026-09-28' }, 7000),
+    money('b3', { kind: 'transfer', walletId: 'bank', toWalletId: 'save', occurredOn: '2026-10-01' }, 50000),
+    money('b4', { walletId: 'card', occurredOn: '2026-10-02' }, 12000),
+    money('b5', { kind: 'transfer', walletId: 'bank', toWalletId: 'card', occurredOn: '2026-10-05' }, 12000),
+    money('b6', { walletId: 'bank', occurredOn: '2026-10-20' }, 999),
+    money('b7', { walletId: null, occurredOn: '2026-10-02' }, 1),
+  ];
+  const bal = (id: string, walletId: string, balanceOn: string, amount: number): MoneyWalletBalance => ({ id, walletId, balanceOn, amount });
+  assert.equal(walletDelta(rs[0], 'bank'), 300000, '収入は入金先に増える');
+  assert.equal(walletDelta(rs[1], 'bank'), -7000, '支出は出金元から減る');
+  assert.equal(walletDelta(rs[1], 'card'), 0, '関係ない出金元は変わらない');
+  assert.equal(walletDelta(rs[2], 'bank'), -50000, '振替は出金元から減る');
+  assert.equal(walletDelta(rs[2], 'save'), 50000, '振替は入金先に増える');
+  assert.equal(formatBalance(-12000), '−¥12,000');
+  assert.equal(formatBalance(300), '¥300');
+
+  // 確定が無ければ、記録だけから出す（今日までの記録。先の日付は入れない）。
+  const none = walletBalanceOn('bank', '2026-10-10', rs, []);
+  assert.deepEqual([none.amount, none.confirmed, none.count], [300000 - 7000 - 50000 - 12000, null, 4]);
+  assert.equal(walletBalanceOn('card', '2026-10-10', rs, []).amount, -12000 + 12000, 'カードは支出でマイナス、引き落としの振替で戻る');
+
+  // 確定のあとの記録だけを足す。確定の日の記録は確定に含まれている。
+  const confirmed = [bal('x1', 'bank', '2026-10-01', 240000), bal('x0', 'bank', '2026-09-01', 5)];
+  const after = walletBalanceOn('bank', '2026-10-10', rs, confirmed);
+  assert.deepEqual([after.amount, after.confirmed?.id, after.movement, after.count], [228000, 'x1', -12000, 1]);
+  assert.equal(walletBalanceOn('bank', '2026-10-25', rs, confirmed).amount, 228000 - 999, '今日までに来た記録は入る');
+  assert.equal(walletBalanceOn('bank', '2026-09-30', rs, confirmed).confirmed?.id, 'x0', '日付より先の確定は土台にしない');
+
+  // 確定の履歴: 前の確定とそのあとの記録から出した額との差。最初の確定は差を持たない。
+  const checks = balanceChecks('bank', rs, confirmed);
+  assert.deepEqual(checks.map((check) => check.balance.id), ['x1', 'x0'], '新しい順');
+  assert.deepEqual([checks[0].expected, checks[0].diff], [5 + 300000 - 7000 - 50000, 240000 - 243005]);
+  assert.deepEqual([checks[1].expected, checks[1].diff], [0, null], '最初の確定は差を持たない（はじめの残高）');
+  assert.equal(
+    walletBalanceOn('bank', '2026-10-01', rs, confirmed, true).amount,
+    checks[0].expected,
+    'ignoreOnDate はその日の確定を土台にしない',
+  );
+
+  // 総残高: 使わなくした出金元は入れない。確定していない出金元の数を出す。
+  const totals = buildWalletBalances(wallets, rs, [bal('y1', 'bank', '2026-10-10', 100000)], '2026-10-10');
+  assert.deepEqual(totals.rows.map((row) => row.wallet.id), ['card', 'bank', 'save', 'gone']);
+  assert.equal(totals.total, 0 + 100000 + 50000, 'カード0（支出と引き落としが相殺）+ 口座 + 貯金口座');
+  assert.equal(totals.unconfirmed, 2, 'カードと貯金口座が未確定（使わない出金元は数えない）');
 }
 
 console.log('moneyUtils: ok');
