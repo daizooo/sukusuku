@@ -49,9 +49,18 @@ import {
   storeChoices,
   storeKey,
   matchesStore,
+  formatGainRate,
+  formatQuantity,
+  formatSecurityPrice,
+  holdingDailyValues,
+  securitiesValueOn,
+  securityRows,
+  sumDailyPoints,
+  totalDailyBalances,
+  walletGain,
 } from './moneyUtils.ts';
 import { buildYearRows } from './specialUtils.ts';
-import type { MoneyBudget, MoneyCategory, MoneyItem, MoneyRecord, MoneyStore, MoneyWallet, MoneyWalletBalance, SpecialItem } from '../types/app.ts';
+import type { MoneyBudget, MoneyCategory, MoneyHolding, MoneyHoldingValue, MoneyItem, MoneyRecord, MoneySecurity, MoneyStore, MoneyWallet, MoneyWalletBalance, SpecialItem } from '../types/app.ts';
 
 // ---- 月・年度 ----
 assert.equal(shiftMonth('2026-12', 1), '2027-01');
@@ -576,6 +585,100 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
   assert.deepEqual(cardBilling({ id: 'card', closeDay: 31, payDay: 27 }, -100, [], '2027-01-05'), { billed: 100, unbilled: 0, closedOn: '2026-12-31', payOn: '2027-01-27' });
   assert.equal(cardBilling({ id: 'card', closeDay: null, payDay: null }, -100, rs, '2026-10-10'), null, '締め日が無ければ内訳は出さない');
   assert.equal(cardBilling({ id: 'card', closeDay: 31, payDay: null }, -100, [], '2026-10-10')?.payOn, null);
+}
+
+// ---- 証券の評価額（docs/kakei.md §9.2） ----
+{
+  const sec = (id: string, kind: MoneySecurity['kind'], currency: 'JPY' | 'USD' = 'JPY'): MoneySecurity => ({
+    id, name: id, kind, code: kind === 'cash' ? null : id, fundCode: null, currency, position: 0, archived: false,
+  });
+  const hold = (id: string, securityId: string, account: MoneyHolding['account'], quantity: number, costPrice: number | null, extra: Partial<MoneyHolding> = {}): MoneyHolding => ({
+    id, walletId: 'sec', securityId, account, quantity, costPrice, archived: false, ...extra,
+  });
+  const val = (holdingId: string, valueOn: string, value: number, price = 0, cost: number | null = null): MoneyHoldingValue => ({
+    holdingId, valueOn, quantity: 0, price, fx: 1, value, cost,
+  });
+  const securities = [sec('fund', 'jp_fund'), sec('stock', 'us_stock', 'USD'), sec('usd', 'cash', 'USD')];
+  // 投信を NISA と特定で、米国株を特定で、ドルの預り金を持つ。
+  const holdings = [
+    hold('h1', 'fund', 'nisa', 100000, 30000),
+    hold('h2', 'fund', 'tokutei', 50000, 40000),
+    hold('h3', 'stock', 'tokutei', 10, 15000),
+    hold('h4', 'usd', 'tokutei', 100, null),
+    hold('h5', 'stock', 'nisa', 5, 10000, { archived: true }),
+  ];
+  const values = [
+    val('h1', '2026-10-06', 450000, 45000),
+    val('h1', '2026-10-08', 460000, 46000),
+    val('h2', '2026-10-08', 230000, 46000),
+    val('h3', '2026-10-07', 240000, 160),
+    val('h4', '2026-10-07', 15800, 1),
+    val('h5', '2026-10-06', 120000, 160),
+    val('h5', '2026-10-07', 0, 0),
+  ];
+  const data = { securities, holdings, values };
+
+  assert.equal(securitiesValueOn(['sec'], holdings, values, '2026-10-08'), 460000 + 230000 + 240000 + 15800, 'その日の行が無い保有は前の日の行。使わなくした保有は 0');
+  assert.equal(securitiesValueOn(['sec'], holdings, values, '2026-10-06'), 450000 + 120000);
+  assert.equal(securitiesValueOn(['other'], holdings, values, '2026-10-08'), 0, 'ほかの口座の保有は入れない');
+
+  assert.deepEqual(holdingDailyValues(['h1', 'h5'], values, '2026-10-08'), [
+    { date: '2026-10-06', amount: 570000 },
+    { date: '2026-10-07', amount: 450000 },
+    { date: '2026-10-08', amount: 460000 },
+  ], '行の無い日は前の日の額');
+  assert.deepEqual(holdingDailyValues(['none'], values, '2026-10-08'), []);
+
+  assert.deepEqual(
+    sumDailyPoints([{ date: '2026-10-07', amount: 10 }, { date: '2026-10-08', amount: 20 }], [{ date: '2026-10-06', amount: 1 }, { date: '2026-10-08', amount: 3 }]),
+    [{ date: '2026-10-06', amount: 1 }, { date: '2026-10-07', amount: 11 }, { date: '2026-10-08', amount: 23 }],
+    '始まる前は 0、抜けは前の日の額',
+  );
+  assert.deepEqual(sumDailyPoints([], []), []);
+
+  const rows = securityRows('sec', data, '2026-10-08');
+  assert.deepEqual(rows.map((row) => row.security.id), ['fund', 'stock', 'usd'], '評価額の大きい順。預り区分の違う同じ銘柄は1行');
+  const fund = rows[0];
+  assert.equal(fund.value, 690000);
+  assert.equal(fund.cost, 300000 + 200000, '取得額 = 保有数 × 取得単価 ÷ 1万口');
+  assert.equal(fund.gain, 190000);
+  assert.equal(fund.gainRate, 0.38);
+  assert.equal(fund.quantity, 150000);
+  assert.equal(fund.price, 46000);
+  assert.equal(fund.priceOn, '2026-10-08');
+  assert.equal(Math.round(fund.costPrice ?? 0), 33333, '取得単価は保有数で重みをつけた平均');
+  const stock = rows[1];
+  assert.equal(stock.holdings.length, 1, '使わなくした保有は一覧に入れない');
+  assert.equal(stock.gain, 240000 - 150000);
+  assert.equal(stock.price, 160);
+  const usd = rows[2];
+  assert.equal(usd.cost, null, '預り金は取得額なし');
+  assert.equal(usd.gain, null);
+  assert.equal(usd.price, null);
+
+  assert.deepEqual(walletGain(rows), { gain: 190000 + 90000, rate: 280000 / 650000 });
+  assert.equal(walletGain([]), null);
+
+  // 総残高: 証券口座は評価額で数える（記録・補正は見ない）。
+  const secWallet: MoneyWallet = { id: 'sec', name: '証券', type: 'securities', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, position: 9, archived: false };
+  const bankWallet: MoneyWallet = { ...secWallet, id: 'bank2', name: '口座', type: 'bank' };
+  const transfer = record('tr', { kind: 'transfer', walletId: 'bank2', toWalletId: 'sec', occurredOn: '2026-10-07', items: [item({ amount: 50000 })] });
+  const summary = buildWalletBalances([bankWallet, secWallet], [transfer], [{ id: 'b', walletId: 'bank2', balanceOn: '2026-10-06', amount: 100000, showInHistory: true }], '2026-10-08', data);
+  assert.deepEqual(summary.rows.map((row) => row.amount), [50000, 945800], '証券口座への振替は口座から減るが、証券口座は評価額');
+  assert.equal(summary.total, 995800);
+  const trend = totalDailyBalances([bankWallet, secWallet], [transfer], [{ id: 'b', walletId: 'bank2', balanceOn: '2026-10-06', amount: 100000, showInHistory: true }], data, '2026-10-08');
+  assert.deepEqual(trend, [
+    { date: '2026-10-06', amount: 100000 + 570000 },
+    { date: '2026-10-07', amount: 50000 + 450000 + 240000 + 15800 },
+    { date: '2026-10-08', amount: 50000 + 945800 },
+  ]);
+
+  assert.equal(formatGainRate(0.38), '+38.00%');
+  assert.equal(formatGainRate(-0.05), '−5.00%');
+  assert.equal(formatSecurityPrice(160, 'USD'), '$160.00');
+  assert.equal(formatSecurityPrice(45638, 'JPY'), '¥45,638');
+  assert.equal(formatQuantity(123456, 'jp_fund'), '123,456口');
+  assert.equal(formatQuantity(10.5, 'us_stock'), '10.5株');
 }
 
 console.log('moneyUtils: ok');

@@ -11,12 +11,18 @@ import type {
   MoneyBudget,
   MoneyCategory,
   MoneyCategoryKind,
+  MoneyHolding,
+  MoneyHoldingAccount,
+  MoneyHoldingValue,
   MoneyItem,
   MoneyItemDraft,
   MoneyHolidayRule,
   MoneyRecord,
   MoneyRecordKind,
   MoneyRecurring,
+  MoneySecuritiesData,
+  MoneySecurity,
+  MoneySecurityKind,
   MoneyStore,
   MoneyWallet,
   MoneyWalletBalance,
@@ -89,6 +95,7 @@ export const WALLET_TYPES: { id: MoneyWalletType; label: string }[] = [
   { id: 'bank', label: '口座' },
   { id: 'prepaid', label: 'プリペイド' },
   { id: 'qr', label: 'QR決済' },
+  { id: 'securities', label: '証券' },
 ];
 
 export const walletTypeLabel = (type: MoneyWalletType) =>
@@ -1012,14 +1019,28 @@ export interface WalletBalances {
   total: number;
 }
 
-/** 出金元ごとの今の残高と総残高。asOf は今日（YYYY-MM-DD）。 */
+/**
+ * 出金元ごとの今の残高と総残高。asOf は今日（YYYY-MM-DD）。
+ * 証券口座は記録からではなく、保有銘柄の評価額で数える（securitiesValueOn。docs/kakei.md §9.2.3）。
+ */
 export function buildWalletBalances(
   wallets: readonly MoneyWallet[],
   records: readonly MoneyRecord[],
   balances: readonly MoneyWalletBalance[],
   asOf: string,
+  securities?: Pick<MoneySecuritiesData, 'holdings' | 'values'>,
 ): WalletBalances {
-  const rows = wallets.map((wallet) => ({ wallet, ...walletBalanceOn(wallet.id, asOf, records, balances) }));
+  const rows = wallets.map((wallet) =>
+    wallet.type === 'securities'
+      ? {
+          wallet,
+          amount: securities ? securitiesValueOn([wallet.id], securities.holdings, securities.values, asOf) : 0,
+          confirmed: null,
+          movement: 0,
+          count: 0,
+        }
+      : { wallet, ...walletBalanceOn(wallet.id, asOf, records, balances) },
+  );
   const counted = rows.filter((row) => !row.wallet.archived);
   return {
     rows,
@@ -1230,3 +1251,231 @@ export function cardBilling(
 /** その出金元に関わる記録（支出・収入・振替の出金元か入金先）。新しい順。 */
 export const recordsOfWallet = (records: readonly MoneyRecord[], walletId: string): MoneyRecord[] =>
   sortRecordsDesc(records.filter((record) => record.walletId === walletId || record.toWalletId === walletId));
+
+// ---- 証券の評価額（銘柄ごと。docs/kakei.md §9.2） ----
+
+/** 銘柄の種類（追加・編集の選択肢の並び）。 */
+export const SECURITY_KINDS: { id: MoneySecurityKind; label: string }[] = [
+  { id: 'us_stock', label: '米国株' },
+  { id: 'jp_fund', label: '投資信託' },
+  { id: 'cash', label: '預り金' },
+];
+
+/** 預り区分（証券のアプリの並び）。 */
+export const HOLDING_ACCOUNTS: { id: MoneyHoldingAccount; label: string }[] = [
+  { id: 'nisa', label: 'NISA成長投資枠' },
+  { id: 'nisa_tsumitate', label: 'NISAつみたて投資枠' },
+  { id: 'tokutei', label: '特定' },
+  { id: 'ippan', label: '一般' },
+];
+
+export const holdingAccountLabel = (account: MoneyHoldingAccount) =>
+  HOLDING_ACCOUNTS.find((entry) => entry.id === account)?.label ?? '';
+
+/** 価格の単位（国内投信は1万口あたり。ほかは1）。 */
+export const securityUnit = (kind: MoneySecurityKind): number => (kind === 'jp_fund' ? 10000 : 1);
+
+/** 保有の、date 以前で最新の評価額の行。まだ無ければ null。 */
+function latestValue(holdingId: string, values: readonly MoneyHoldingValue[], date: string): MoneyHoldingValue | null {
+  let latest: MoneyHoldingValue | null = null;
+  for (const value of values) {
+    if (value.holdingId !== holdingId || value.valueOn > date) continue;
+    if (latest === null || value.valueOn > latest.valueOn) latest = value;
+  }
+  return latest;
+}
+
+/**
+ * 証券口座（複数ならその合計）の、date の評価額（円）。保有ごとに date 以前で最新の行を足す
+ * （その日の行が無い日＝取れなかった日は、前の日の行）。使わなくした保有も、その日の行（0）で数える。
+ */
+export function securitiesValueOn(
+  walletIds: readonly string[],
+  holdings: readonly MoneyHolding[],
+  values: readonly MoneyHoldingValue[],
+  date: string,
+): number {
+  const ids = new Set(walletIds);
+  return holdings
+    .filter((holding) => ids.has(holding.walletId))
+    .reduce((sum, holding) => sum + (latestValue(holding.id, values, date)?.value ?? 0), 0);
+}
+
+/**
+ * 保有（複数ならその合計）の、日ごとの評価額。いちばん古い行の日から asOf（今日）まで、1日1点。
+ * 行の無い日は前の日の行を使う。行が無ければ空。
+ */
+export function holdingDailyValues(
+  holdingIds: readonly string[],
+  values: readonly MoneyHoldingValue[],
+  asOf: string,
+): BalancePoint[] {
+  const ids = new Set(holdingIds);
+  const perHolding = new Map<string, Map<string, number>>();
+  let start: string | null = null;
+  for (const value of values) {
+    if (!ids.has(value.holdingId) || value.valueOn > asOf) continue;
+    let byDate = perHolding.get(value.holdingId);
+    if (!byDate) {
+      byDate = new Map();
+      perHolding.set(value.holdingId, byDate);
+    }
+    byDate.set(value.valueOn, value.value);
+    if (start === null || value.valueOn < start) start = value.valueOn;
+  }
+  if (start === null) return [];
+  const days = Math.round((parseDateKey(asOf) - parseDateKey(start)) / DAY_MS) + 1;
+  const totals = new Array<number>(days).fill(0);
+  for (const byDate of perHolding.values()) {
+    let amount = 0;
+    for (let index = 0; index < days; index += 1) {
+      amount = byDate.get(addDays(start, index)) ?? amount;
+      totals[index] += amount;
+    }
+  }
+  return totals.map((amount, index) => ({ date: addDays(start as string, index), amount }));
+}
+
+/** 日ごとの残高を足し合わせる（どれかの始まりの日から。始まる前の日は 0、途中の抜けは前の日の額）。 */
+export function sumDailyPoints(...lists: readonly (readonly BalancePoint[])[]): BalancePoint[] {
+  const filled = lists.filter((list) => list.length > 0);
+  if (filled.length === 0) return [];
+  if (filled.length === 1) return [...filled[0]];
+  const start = filled.map((list) => list[0].date).sort()[0];
+  const end = filled.map((list) => list[list.length - 1].date).sort().reverse()[0];
+  const days = Math.round((parseDateKey(end) - parseDateKey(start)) / DAY_MS) + 1;
+  const totals = new Array<number>(days).fill(0);
+  for (const list of filled) {
+    const byDate = new Map(list.map((point) => [point.date, point.amount]));
+    let amount = 0;
+    for (let index = 0; index < days; index += 1) {
+      amount = byDate.get(addDays(start, index)) ?? amount;
+      totals[index] += amount;
+    }
+  }
+  return totals.map((amount, index) => ({ date: addDays(start, index), amount }));
+}
+
+/**
+ * 総残高の日ごとの推移。使っている出金元の残高（記録と補正から）に、使っている証券口座の評価額を足す。
+ */
+export function totalDailyBalances(
+  wallets: readonly MoneyWallet[],
+  records: readonly MoneyRecord[],
+  balances: readonly MoneyWalletBalance[],
+  securities: Pick<MoneySecuritiesData, 'holdings' | 'values'>,
+  asOf: string,
+): BalancePoint[] {
+  const usable = wallets.filter((wallet) => !wallet.archived);
+  const plain = usable.filter((wallet) => wallet.type !== 'securities').map((wallet) => wallet.id);
+  const securityWalletIds = new Set(usable.filter((wallet) => wallet.type === 'securities').map((wallet) => wallet.id));
+  const holdingIds = securities.holdings.filter((holding) => securityWalletIds.has(holding.walletId)).map((holding) => holding.id);
+  return sumDailyPoints(dailyBalances(plain, records, balances, asOf), holdingDailyValues(holdingIds, securities.values, asOf));
+}
+
+export interface SecurityRow {
+  security: MoneySecurity;
+  /** その口座での保有（預り区分ごと。使っているものだけ）。 */
+  holdings: MoneyHolding[];
+  /** 評価額（円）。 */
+  value: number;
+  /** 取得額（円）。取得単価が1つも無ければ null。 */
+  cost: number | null;
+  /** 評価損益（円）。取得額が無ければ null。 */
+  gain: number | null;
+  /** 評価損益の割合（評価損益 ÷ 取得額）。取得額が無い・0なら null。 */
+  gainRate: number | null;
+  /** 保有数の合計。 */
+  quantity: number;
+  /** 現在値（銘柄の通貨で。国内投信は1万口あたり）。まだ取れていなければ null。 */
+  price: number | null;
+  /** 現在値の日付（評価額の行の日）。 */
+  priceOn: string | null;
+  /** 取得単価（円。保有数で重みをつけた平均。国内投信は1万口あたり）。 */
+  costPrice: number | null;
+}
+
+/**
+ * 証券口座の保有銘柄の一覧（評価額の大きい順）。預り区分の違う同じ銘柄は1行にまとめる。
+ * 評価額は保有ごとに asOf 以前で最新の行。取得額は今の保有数 × 取得単価。
+ */
+export function securityRows(
+  walletId: string,
+  data: MoneySecuritiesData,
+  asOf: string,
+): SecurityRow[] {
+  const rows: SecurityRow[] = [];
+  for (const security of data.securities) {
+    const holdings = data.holdings.filter(
+      (holding) => holding.walletId === walletId && holding.securityId === security.id && !holding.archived,
+    );
+    if (holdings.length === 0) continue;
+    const unit = securityUnit(security.kind);
+    let value = 0;
+    let quantity = 0;
+    let cost = 0;
+    let costQuantity = 0;
+    let price: number | null = null;
+    let priceOn: string | null = null;
+    for (const holding of holdings) {
+      const latest = latestValue(holding.id, data.values, asOf);
+      value += latest?.value ?? 0;
+      quantity += holding.quantity;
+      if (holding.costPrice !== null) {
+        cost += Math.round((holding.quantity * holding.costPrice) / unit);
+        costQuantity += holding.quantity;
+      }
+      if (latest !== null && (priceOn === null || latest.valueOn >= priceOn)) {
+        price = security.kind === 'cash' ? null : latest.price;
+        priceOn = latest.valueOn;
+      }
+    }
+    const hasCost = costQuantity > 0;
+    const gain = hasCost ? value - cost : null;
+    rows.push({
+      security,
+      holdings,
+      value,
+      cost: hasCost ? cost : null,
+      gain,
+      gainRate: hasCost && cost > 0 && gain !== null ? gain / cost : null,
+      quantity,
+      price,
+      priceOn,
+      costPrice: hasCost ? (cost * unit) / costQuantity : null,
+    });
+  }
+  return rows.sort((a, b) => b.value - a.value);
+}
+
+/** 証券口座の評価損益の合計（取得単価のある銘柄だけ）。1つも無ければ null。 */
+export function walletGain(rows: readonly SecurityRow[]): { gain: number; rate: number | null } | null {
+  const counted = rows.filter((row) => row.cost !== null);
+  if (counted.length === 0) return null;
+  const cost = counted.reduce((sum, row) => sum + (row.cost ?? 0), 0);
+  const gain = counted.reduce((sum, row) => sum + (row.gain ?? 0), 0);
+  return { gain, rate: cost > 0 ? gain / cost : null };
+}
+
+/** 評価損益の割合（+12.34% / −5.00%）。 */
+export function formatGainRate(rate: number): string {
+  if (rate === 0) return '0.00%';
+  return `${rate > 0 ? '+' : '−'}${Math.abs(rate * 100).toFixed(2)}%`;
+}
+
+/** 現在値・取得単価（ドルは $123.45、円は ¥12,345）。 */
+export function formatSecurityPrice(value: number, currency: 'JPY' | 'USD'): string {
+  if (currency === 'USD') {
+    return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `¥${Math.round(value).toLocaleString('ja-JP')}`;
+}
+
+/** 保有数（株・口。小数は4桁まで）。 */
+export function formatQuantity(quantity: number, kind: MoneySecurityKind): string {
+  const text = quantity.toLocaleString('ja-JP', { maximumFractionDigits: 4 });
+  if (kind === 'jp_fund') return `${text}口`;
+  if (kind === 'us_stock') return `${text}株`;
+  return text;
+}
+

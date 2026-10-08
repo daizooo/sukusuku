@@ -5,6 +5,9 @@ import { ChevronRight, Plus } from 'lucide-react';
 import type {
   MoneyCategory,
   MoneyRecord,
+  MoneySecuritiesData,
+  MoneySecurity,
+  MoneySecurityDraft,
   MoneyWallet,
   MoneyWalletBalance,
   MoneyWalletDraft,
@@ -16,6 +19,7 @@ import {
   formatBalance,
   WALLET_TYPES,
 } from '@/lib/moneyUtils';
+import SecuritiesWalletScreen from './SecuritiesWalletScreen';
 import TotalTrendScreen from './TotalTrendScreen';
 import WalletBalanceScreen from './WalletBalanceScreen';
 import { WalletModal } from './WalletPicker';
@@ -28,12 +32,13 @@ import { cardClass, Hero, minus, type, WalletTypeIcon } from './moneyVisual';
 // （「未確定」などの印は出さない。2026-10-08に、出しっぱなしでうるさいので外した）。
 // 出金元を押すと詳細（履歴 / 推移 / 残高計算）。出金元の追加・編集・使わなくする・また使うもこの面から。
 // 総残高に入れるのは使っている出金元だけ。カードは未払いがマイナスで入る（請求済み・未請求の内訳は、押した先の詳細だけに出す）。
-// 証券口座は、銘柄ごとの評価額（docs/kakei.md §9.2）ができるまでは入らない。
+// 証券口座の残高は、記録からではなく保有銘柄の評価額（docs/kakei.md §9.2）。押すと証券口座の詳細（推移と保有銘柄）。
 
 interface MoneyAccountsViewProps {
   wallets: MoneyWallet[];
   records: MoneyRecord[];
   balances: MoneyWalletBalance[];
+  securities: MoneySecuritiesData;
   categories: MoneyCategory[];
   specialItems: SpecialItem[];
   isLoading: boolean;
@@ -43,12 +48,15 @@ interface MoneyAccountsViewProps {
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onArchiveWallet: (wallet: MoneyWallet) => void;
   onRestoreWallet: (wallet: MoneyWallet) => void;
+  onSaveSecurity: (walletId: string, target: MoneySecurity | null, draft: MoneySecurityDraft) => void;
+  onArchiveSecurity: (walletId: string, security: MoneySecurity) => void;
 }
 
 export default function MoneyAccountsView({
   wallets,
   records,
   balances,
+  securities,
   categories,
   specialItems,
   isLoading,
@@ -58,14 +66,16 @@ export default function MoneyAccountsView({
   onSaveWallet,
   onArchiveWallet,
   onRestoreWallet,
+  onSaveSecurity,
+  onArchiveSecurity,
 }: MoneyAccountsViewProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [showTrend, setShowTrend] = useState(false);
   const today = dateKeyOfDate(new Date());
   const summary = useMemo(
-    () => buildWalletBalances(wallets, records, balances, today),
-    [wallets, records, balances, today],
+    () => buildWalletBalances(wallets, records, balances, today, securities),
+    [wallets, records, balances, today, securities],
   );
   const usable = summary.rows.filter((row) => !row.wallet.archived);
   const archived = summary.rows.filter((row) => row.wallet.archived);
@@ -151,7 +161,20 @@ export default function MoneyAccountsView({
         )}
       </div>
 
-      {opened !== null && (
+      {opened !== null && opened.type === 'securities' && (
+        <SecuritiesWalletScreen
+          key={opened.id}
+          wallet={opened}
+          wallets={wallets}
+          securities={securities}
+          onClose={() => setOpenId(null)}
+          onSaveWallet={onSaveWallet}
+          onArchiveWallet={onArchiveWallet}
+          onSaveSecurity={onSaveSecurity}
+          onArchiveSecurity={onArchiveSecurity}
+        />
+      )}
+      {opened !== null && opened.type !== 'securities' && (
         <WalletBalanceScreen
           key={opened.id}
           wallet={opened}
@@ -169,7 +192,14 @@ export default function MoneyAccountsView({
         />
       )}
       {showTrend && (
-        <TotalTrendScreen wallets={wallets} records={records} balances={balances} today={today} onClose={() => setShowTrend(false)} />
+        <TotalTrendScreen
+          wallets={wallets}
+          records={records}
+          balances={balances}
+          securities={securities}
+          today={today}
+          onClose={() => setShowTrend(false)}
+        />
       )}
       {adding && (
         <WalletModal

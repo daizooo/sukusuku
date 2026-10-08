@@ -161,8 +161,8 @@ export function WalletModal({
     onSubmit({
       name,
       type,
-      isSaving,
-      savingTarget: isSaving ? (wallet?.savingTarget ?? null) : null,
+      isSaving: type !== 'securities' && isSaving,
+      savingTarget: type !== 'securities' && isSaving ? (wallet?.savingTarget ?? null) : null,
       closeDay: type === 'card' ? close : null,
       payDay: type === 'card' ? pay : null,
       payWalletId: type === 'card' ? payWalletId : null,
@@ -211,13 +211,15 @@ export function WalletModal({
             ))}
           </div>
         </div>
-        <label className="flex items-center gap-3">
-          <span className="flex-1">
-            <span className="block text-xs font-bold text-gray-700">貯金用</span>
-            <span className="block text-xs text-gray-400">貯金用の口座の目印です（収支には入れません）</span>
-          </span>
-          <input type="checkbox" checked={isSaving} onChange={(event) => setIsSaving(event.target.checked)} className="h-5 w-5" />
-        </label>
+        {type !== 'securities' && (
+          <label className="flex items-center gap-3">
+            <span className="flex-1">
+              <span className="block text-xs font-bold text-gray-700">貯金用</span>
+              <span className="block text-xs text-gray-400">貯金用の口座の目印です（収支には入れません）</span>
+            </span>
+            <input type="checkbox" checked={isSaving} onChange={(event) => setIsSaving(event.target.checked)} className="h-5 w-5" />
+          </label>
+        )}
         {type === 'card' && (
           <>
             <div className="flex gap-3">

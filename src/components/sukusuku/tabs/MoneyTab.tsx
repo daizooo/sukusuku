@@ -9,6 +9,9 @@ import type {
   MoneyRecord,
   MoneyRecordDraft,
   MoneyRecurring,
+  MoneySecuritiesData,
+  MoneySecurity,
+  MoneySecurityDraft,
   MoneyStore,
   MoneyWallet,
   MoneyWalletBalance,
@@ -29,6 +32,7 @@ import {
   updateMoneyWallet,
   type MoneyData,
 } from '@/lib/api/money';
+import { archiveSecurity, loadSecurities, requestSecurityBackfill, saveSecurity } from '@/lib/api/moneySecurities';
 import { loadHouseholdProducts } from '@/lib/api/householdProducts';
 import { loadSpecialExpenses } from '@/lib/api/specialExpenses';
 import { fiscalYearOfMonth, monthKeyOf, monthKeyOfDate, specialActualsFromRecords } from '@/lib/moneyUtils';
@@ -70,6 +74,8 @@ const VIEWS: { id: MoneyView; label: string }[] = [
 /** 記録の入力。null は閉じている、'new' は新しく記録する。 */
 type Editing = MoneyRecord | 'new' | null;
 
+const NO_SECURITIES: MoneySecuritiesData = { securities: [], holdings: [], values: [] };
+
 export default function MoneyTab({ familyId }: { familyId: string }) {
   const supabase = useMemo(() => createClient(), []);
   const [categories, setCategories] = useState<MoneyCategory[]>([]);
@@ -79,6 +85,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [records, setRecords] = useState<MoneyRecord[]>([]);
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
+  const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
   const [products, setProducts] = useState<HouseholdProduct[]>([]);
   const [specialItems, setSpecialItems] = useState<SpecialItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -92,7 +99,12 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
 
   /** 読んだものを画面に入れる。 */
   const apply = useCallback(
-    ([money, loadedProducts, special]: [MoneyData, HouseholdProduct[], { items: SpecialItem[] }]) => {
+    ([money, loadedProducts, special, loadedSecurities]: [
+      MoneyData,
+      HouseholdProduct[],
+      { items: SpecialItem[] },
+      MoneySecuritiesData,
+    ]) => {
       setCategories(money.categories);
       setBudgets(money.budgets);
       setWallets(money.wallets);
@@ -100,6 +112,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       setRecords(money.records);
       setRecurring(money.recurring);
       setBalances(money.balances);
+      setSecurities(loadedSecurities);
       setProducts(loadedProducts);
       setSpecialItems(special.items);
     },
@@ -111,6 +124,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
         loadMoney(supabase, familyId),
         loadHouseholdProducts(supabase, familyId),
         loadSpecialExpenses(supabase, familyId),
+        // 証券が読めなくても、ほかの面は出す。
+        loadSecurities(supabase, familyId).catch(() => NO_SECURITIES),
       ]),
     [supabase, familyId],
   );
@@ -201,6 +216,40 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     try {
       const saved = await archiveMoneyWallet(supabase, wallet.id);
       setWallets((prev) => prev.map((entry) => (entry.id === saved.id ? saved : entry)));
+    } catch {
+      failed('保存');
+    }
+  };
+
+  /**
+   * 銘柄を保存する（docs/kakei.md §9.2）。足したとき・コードを変えたときは、サーバーに過去1年の価格と
+   * 評価額を作らせてから読み直す（数秒かかる。先に保存した分を出しておく）。
+   */
+  const saveSecurityOf = async (walletId: string, target: MoneySecurity | null, draft: MoneySecurityDraft) => {
+    try {
+      const { securityId, needsBackfill } = await saveSecurity(
+        supabase,
+        familyId,
+        walletId,
+        target,
+        draft,
+        securities.holdings,
+        securities.securities.reduce((max, security) => Math.max(max, security.position + 1), 0),
+      );
+      setSecurities(await loadSecurities(supabase, familyId));
+      if (needsBackfill) {
+        await requestSecurityBackfill(supabase, securityId);
+        setSecurities(await loadSecurities(supabase, familyId));
+      }
+    } catch {
+      failed('保存');
+    }
+  };
+
+  const archiveSecurityOf = async (walletId: string, security: MoneySecurity) => {
+    try {
+      await archiveSecurity(supabase, walletId, security);
+      setSecurities(await loadSecurities(supabase, familyId));
     } catch {
       failed('保存');
     }
@@ -322,6 +371,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           wallets={wallets}
           records={records}
           balances={balances}
+          securities={securities}
           categories={categories}
           specialItems={specialItems}
           isLoading={isLoading}
@@ -331,6 +381,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           onSaveWallet={saveWallet}
           onArchiveWallet={(wallet) => void archiveWallet(wallet)}
           onRestoreWallet={(wallet) => void restoreWallet(wallet)}
+          onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
+          onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
         />
       )}
 

@@ -147,8 +147,8 @@ export function WalletSheet({
     onSubmit({
       name,
       type,
-      isSaving,
-      savingTarget: isSaving ? (wallet?.savingTarget ?? null) : null,
+      isSaving: type !== 'securities' && isSaving,
+      savingTarget: type !== 'securities' && isSaving ? (wallet?.savingTarget ?? null) : null,
       closeDay: type === 'card' ? close : null,
       payDay: type === 'card' ? pay : null,
       payWalletId: type === 'card' ? payWalletId : null,
@@ -203,13 +203,15 @@ export function WalletSheet({
             ))}
           </View>
         </View>
-        <View style={styles.switchRow}>
-          <View style={styles.flex}>
-            <Text style={styles.label}>貯金用</Text>
-            <Text style={styles.sub}>貯金用の口座の目印です（収支には入れません）</Text>
+        {type !== 'securities' && (
+          <View style={styles.switchRow}>
+            <View style={styles.flex}>
+              <Text style={styles.label}>貯金用</Text>
+              <Text style={styles.sub}>貯金用の口座の目印です（収支には入れません）</Text>
+            </View>
+            <Switch value={isSaving} onValueChange={setIsSaving} />
           </View>
-          <Switch value={isSaving} onValueChange={setIsSaving} />
-        </View>
+        )}
         {type === 'card' && (
           <>
             <View style={styles.days}>
