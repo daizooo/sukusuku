@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import type { Recurrence, RecurrenceFreq } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
+import { useBackdropClose } from '../ui/useBackdropClose';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 import { WEEKDAY_LABELS, parseDateString, toDateString } from '@/lib/dateUtils';
 import {
   END_TYPE_OPTIONS,
@@ -44,6 +46,8 @@ const FIELD =
 export default function RecurrenceModal({ initial, startDate, onCancel, onDone }: RecurrenceModalProps) {
   // 戻る操作（ブラウザ・スマホ）で閉じる。
   useBackLayer(onCancel);
+  // 暗い部分を押しても閉じる（変えた内容は捨てる）。
+  const backdropClose = useBackdropClose(onCancel);
 
   const start = parseDateString(startDate ?? '') ?? new Date();
 
@@ -76,7 +80,11 @@ export default function RecurrenceModal({ initial, startDate, onCancel, onDone }
   };
 
   return (
-    <div className="absolute inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+    <div
+      className="absolute inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+      {...backdropClose}
+      {...swipeBoundary}
+    >
       <div
         role="dialog"
         aria-label="カスタムの繰り返し"

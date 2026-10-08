@@ -49,6 +49,7 @@ import {
 } from '@/lib/dateUtils';
 import BabyBottleIcon from '../ui/BabyBottleIcon';
 import BodyPanel from './BodyPanel';
+import { useSwipeNavigation } from '../ui/useSwipeNavigation';
 import NextFeedingCard from '../NextFeedingCard';
 import type { NextFeedingInfo } from '@/lib/feedingSchedule';
 import MilkLogModal, { type MilkLogInput } from '../modals/MilkLogModal';
@@ -234,11 +235,21 @@ export default function CareTab({
     closeLogModal();
   };
 
+  // 矢印ボタンと同じ操作を、画面上どこでの横スワイプでもできるようにする（mobile版と同じ）。
+  // 「次の日」ボタンが isToday で押せないのと同じく、今日より先へはスワイプでも進めない。
+  // 「からだ」には日付送りが無いため、記録の一覧を出している間だけ有効にする。
+  // 中身（日付とその日の記録のパネル）は指に合わせて横に動く。
+  const { handlers: swipeHandlers, attachContent } = useSwipeNavigation({
+    onSwipeLeft: isToday ? undefined : () => onChangeLogDate(addDays(logDate, 1)),
+    onSwipeRight: () => onChangeLogDate(addDays(logDate, -1)),
+    enabled: !bodyOpen,
+  });
+
   return (
     // 上から グループ1（生後日数＋次の授乳の琥珀色のカード）、グループ2（日付・記録ボタン・
     // その日の記録をまとめたスレート色のパネル）の順に縦へ並べる。PC幅では中央の1列にする。
     // 「からだ」を開いている間は、この2つの代わりにそれを出す。
-    <div className="p-4 h-full flex flex-col gap-3 lg:max-w-2xl lg:mx-auto lg:w-full">
+    <div className="p-4 h-full flex flex-col gap-3 lg:max-w-2xl lg:mx-auto lg:w-full" {...swipeHandlers}>
       {bodyOpen && (
         // 「からだ」は自分の余白を持つので、こちらの余白と重ならないよう打ち消す。
         <div className="flex-1 min-h-0 -m-4">
@@ -268,7 +279,7 @@ export default function CareTab({
       </div>
 
       {/* グループ2: 日付・記録ボタン・その日の記録を、スレート色の1枚のパネルにまとめる。 */}
-      <div className="flex-1 min-h-0 flex flex-col bg-slate-100 rounded-[20px] overflow-hidden">
+      <div ref={attachContent} className="flex-1 min-h-0 flex flex-col bg-slate-100 rounded-[20px] overflow-hidden">
       <div className="shrink-0 space-y-2 px-3 pt-2.5 pb-2">
         <>
             {/* 日付の送り: 1日区切りで過去の記録を遡る。タブを開いた時点では常に今日なので、

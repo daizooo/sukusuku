@@ -101,6 +101,14 @@
   - PWA版: タブ・予定タブの面とモーダルを `src/lib/browserHistory.ts` で履歴に積む。
     モーダルの外枠（`ModalShell` / `LogModalShell` など）で `useBackLayer` を呼ぶ。
     新しいモーダルを作るときも同じ枠を使う（自前の枠を作るなら `useBackLayer` を呼ぶ）
+- **モーダルの暗い部分を押すと、戻る操作と同じく閉じる。**
+  mobile は `SheetModal` ほか、PWA版は `ModalShell`・`LogModalShell`・`FullScreen`（広い画面の両脇）ほか（`useBackdropClose`）。
+  モーダルの中身のいちばん外側には `swipeBoundary` を足す（中でのスワイプを下の画面へ届かせない）
+- **横スワイプ:** 日付送りのある画面（予定・育児）は左右スワイプで日付を送る（`useSwipeNavigation`）。
+  画面の切り替え（家計の口座/記録/振り返り/特別費、口座の詳細の履歴/推移、からだ、保活、防災備蓄のカテゴリ）は
+  帯と中身を包む要素に `useSwipeTabs` を足す。**面の中にある切り替え（期間・種類・＋/−など）はタップだけ**
+  （スワイプを付けると、外側の切り替えへスワイプで移れなくなる）。
+  mobile: `mobile/src/hooks/`、PWA版: `src/components/sukusuku/ui/`
 - アプリを開いたあとの画面にアプリ名の見出しは出さない。各タブに見出しが
   あるため重複し、画面の高さを無駄にする。
 - **数字や英字を出す `Text` には必ず `fontWeight` を指定する。** 指定が無いと

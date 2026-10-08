@@ -19,6 +19,7 @@ import DayView from '../schedule/DayView';
 import ListView from '../schedule/ListView';
 import UpcomingTasks from '../schedule/UpcomingTasks';
 import { byDateThenTime, tasksOnDate } from '../schedule/utils';
+import { useSwipeNavigation } from '../ui/useSwipeNavigation';
 
 interface ScheduleTabProps {
   /** 日付を解決した予定。繰り返す予定は元の1件のまま（回への展開はここで行う）。 */
@@ -116,8 +117,20 @@ export default function ScheduleTab({
     .filter((t) => t.targetDateObj && t.targetDateObj >= addMonths(monthStart, 1))
     .sort(byDateThenTime)[0]?.targetDateObj;
 
+  // 矢印ボタンと同じ操作を、画面上どこでの横スワイプでもできるようにする（mobile版と同じ）。
+  // 一覧表示（list）には日付送りが無いため、それ以外の表示中だけ有効にする。
+  // 指に合わせて横に動くのは、月表示はカレンダーだけ（直近のスケジュールは固定）、日表示はその日の中身。
+  const { handlers: swipeHandlers, attachContent } = useSwipeNavigation({
+    onSwipeLeft: () => step(1),
+    onSwipeRight: () => step(-1),
+    enabled: view !== 'list',
+  });
+
   return (
-    <div className="p-4 h-full flex flex-col md:max-w-3xl lg:max-w-4xl md:mx-auto md:w-full">
+    <div
+      className="p-4 h-full flex flex-col md:max-w-3xl lg:max-w-4xl md:mx-auto md:w-full"
+      {...swipeHandlers}
+    >
       {/* 面は月（初期表示）・日（日をタップ）・リスト（「直近のスケジュール」の見出しをタップ）の3つ。
           月以外（日・リスト）では、戻るボタンだけを左上に出す（文言は付けない）。
           ブラウザの戻る操作も同じく月へ戻る（SukusukuApp が履歴に積んでいる）。 */}
@@ -188,7 +201,7 @@ export default function ScheduleTab({
           どちらも画面全体はスクロールさせない。 */}
       {view === 'month' && (
         <div className="flex-1 min-h-0 flex flex-col">
-          <div className="flex-[5] min-h-0">
+          <div ref={attachContent} className="flex-[5] min-h-0">
             <MonthView
               month={monthStart}
               today={today}
@@ -224,7 +237,7 @@ export default function ScheduleTab({
       )}
 
       {view === 'day' && (
-        <div className="flex-1 min-h-0 overflow-y-auto pb-24">
+        <div ref={attachContent} className="flex-1 min-h-0 overflow-y-auto pb-24">
           <DayView
             date={selectedDate}
             today={today}

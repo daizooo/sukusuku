@@ -24,6 +24,7 @@ import BalanceTrend from './BalanceTrend';
 import RecordDayList from './RecordDayList';
 import { FullScreen, minus, ScreenHeader, StatRow, type } from './moneyVisual';
 import { WalletModal } from './WalletPicker';
+import { useSwipeTabs } from '../ui/useSwipeTabs';
 
 // 口座の詳細（docs/kakei.md §9.3）。mobile版の `mobile/src/components/money/WalletBalanceScreen.tsx` と同じ並び・文言。
 // 上に残高と「残高を補正」、その下に「履歴 / 推移」の2つ（2026-10-08に、使わない「残高計算」を外した。余計な文字は入れない）。
@@ -97,6 +98,13 @@ export default function WalletBalanceScreen({
     }
   };
 
+  // 履歴/推移は、帯と中身の上の左右スワイプでも切り替える。
+  const { handlers: swipeHandlers, attachContent } = useSwipeTabs(
+    TABS.map((entry) => entry.id),
+    tab,
+    setTab,
+  );
+
   return (
     <FullScreen onBack={onClose}>
       <ScreenHeader
@@ -142,42 +150,44 @@ export default function WalletBalanceScreen({
           </div>
         )}
       </div>
-      <div role="tablist" className="shrink-0 flex border-b border-gray-200 px-2">
-        {TABS.map((entry) => {
-          const selected = entry.id === tab;
-          return (
-            <button
-              key={entry.id}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              onClick={() => setTab(entry.id)}
-              className="flex flex-1 flex-col items-center pt-2"
-            >
-              <span className={`text-[15px] ${selected ? 'font-bold text-gray-900' : 'font-semibold text-gray-400'}`}>{entry.label}</span>
-              <span className={`mt-2 h-[3px] w-8 rounded-full ${selected ? 'bg-blue-600' : 'bg-transparent'}`} />
-            </button>
-          );
-        })}
-      </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden" {...swipeHandlers}>
+        <div role="tablist" className="shrink-0 flex border-b border-gray-200 px-2">
+          {TABS.map((entry) => {
+            const selected = entry.id === tab;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setTab(entry.id)}
+                className="flex flex-1 flex-col items-center pt-2"
+              >
+                <span className={`text-[15px] ${selected ? 'font-bold text-gray-900' : 'font-semibold text-gray-400'}`}>{entry.label}</span>
+                <span className={`mt-2 h-[3px] w-8 rounded-full ${selected ? 'bg-blue-600' : 'bg-transparent'}`} />
+              </button>
+            );
+          })}
+        </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-8">
-        {tab === 'history' &&
-          (mine.length === 0 && shownChecks.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-400">この出金元の記録はまだありません</p>
-          ) : (
-            <RecordDayList
-              records={mine}
-              categories={categories}
-              wallets={wallets}
-              specialItems={specialItems}
-              onOpen={onOpenRecord}
-              corrections={shownChecks}
-              onOpenCorrection={(check) => remove(check.balance)}
-            />
-          ))}
+        <div ref={attachContent} className="flex-1 min-h-0 overflow-y-auto px-4 pb-8">
+          {tab === 'history' &&
+            (mine.length === 0 && shownChecks.length === 0 ? (
+              <p className="py-8 text-center text-sm text-gray-400">この出金元の記録はまだありません</p>
+            ) : (
+              <RecordDayList
+                records={mine}
+                categories={categories}
+                wallets={wallets}
+                specialItems={specialItems}
+                onOpen={onOpenRecord}
+                corrections={shownChecks}
+                onOpenCorrection={(check) => remove(check.balance)}
+              />
+            ))}
 
-        {tab === 'trend' && <BalanceTrend points={points} asOf={today} />}
+          {tab === 'trend' && <BalanceTrend points={points} asOf={today} />}
+        </div>
       </div>
 
       {correcting && (

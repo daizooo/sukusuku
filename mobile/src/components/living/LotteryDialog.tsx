@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { X } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 
 // 補助くじの、画面の中央に出す枠（docs/home.md §9.5）。PWA版の
 // `src/components/sukusuku/living/LotteryDialog.tsx` と同じ組み立て。
@@ -21,7 +22,7 @@ interface LotteryDialogProps {
 export default function LotteryDialog({ title, onClose, fill, footer, children }: LotteryDialogProps) {
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View style={styles.overlay} {...swipeBoundary}>
         <Pressable accessibilityLabel="閉じる" style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.card, fill && styles.cardFill]}>
           {title !== undefined && (

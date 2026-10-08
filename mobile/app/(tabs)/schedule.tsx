@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -292,7 +292,8 @@ export default function ScheduleScreen() {
 
   // 矢印ボタンと同じ操作を、画面上どこでの横スワイプでもできるようにする。
   // 一覧表示（list）には日付送りが無いため、それ以外の表示中だけ有効にする。
-  const swipeHandlers = useSwipeNavigation({
+  // 指に合わせて横に動くのは、月表示はカレンダーだけ（直近のスケジュールは固定）、日表示はその日の中身。
+  const swipe = useSwipeNavigation({
     onSwipeLeft: () => step(1),
     onSwipeRight: () => step(-1),
     enabled: view !== 'list',
@@ -481,7 +482,7 @@ export default function ScheduleScreen() {
   if (!session) return <Redirect href="/login" />;
 
   return (
-    <SafeAreaView style={styles.screen} {...swipeHandlers}>
+    <SafeAreaView style={styles.screen} {...swipe.handlers}>
       <View style={styles.page}>
         {/* 月以外（日・リスト）では、戻るボタンだけを左上に出す（文言は付けない）。 */}
         {view !== 'month' && (
@@ -531,7 +532,7 @@ export default function ScheduleScreen() {
             どちらも画面全体はスクロールさせない。 */}
         {view === 'month' && (
           <View style={styles.body}>
-            <View style={styles.calendar}>
+            <Animated.View style={[styles.calendar, swipe.style]}>
               <MonthView
                 month={monthStart}
                 today={today}
@@ -542,7 +543,7 @@ export default function ScheduleScreen() {
                 onAddTask={openAddTaskModal}
                 onOpenTask={openTaskDetail}
               />
-            </View>
+            </Animated.View>
             {!isLoadingTodos && tasksInMonth.length === 0 && nextMonthWithTask && (
               <Pressable
                 accessibilityRole="button"
@@ -575,7 +576,7 @@ export default function ScheduleScreen() {
         )}
 
         {view === 'day' && (
-          <ScrollView style={styles.body} contentContainerStyle={styles.scrollContent}>
+          <Animated.ScrollView style={[styles.body, swipe.style]} contentContainerStyle={styles.scrollContent}>
             <DayView
               date={selectedDate}
               today={today}
@@ -588,7 +589,7 @@ export default function ScheduleScreen() {
               onAddTask={openAddTaskModal}
               onOpenLogTab={openLogTabForDate}
             />
-          </ScrollView>
+          </Animated.ScrollView>
         )}
 
         {view === 'list' && (

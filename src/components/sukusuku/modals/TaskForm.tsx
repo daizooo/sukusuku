@@ -5,6 +5,8 @@ import { Clock, Lock, MapPin, Repeat, Star, Text, Users, X } from 'lucide-react'
 import type { Participant, Task, TaskKind } from '@/types/app';
 import { participantNames, useFamilyRoster } from '@/lib/familyRoster';
 import { useBackLayer } from '@/lib/browserHistory';
+import { useBackdropClose } from '../ui/useBackdropClose';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 import { parseDateString } from '@/lib/dateUtils';
 import { getParticipantColor } from '@/lib/uiUtils';
 import {
@@ -356,9 +358,15 @@ interface ModalShellProps {
 export function ModalShell({ title, onClose, children, footer }: ModalShellProps) {
   // 戻る操作（ブラウザ・スマホ）でこのモーダルを閉じる。
   useBackLayer(onClose);
+  // 暗い部分を押しても閉じる。
+  const backdropClose = useBackdropClose(onClose);
 
   return (
-    <div className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+    <div
+      className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4"
+      {...backdropClose}
+      {...swipeBoundary}
+    >
       <div className="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center px-5 py-3 border-b border-gray-100 flex-none">
           <h3 className="font-bold text-gray-800">{title}</h3>

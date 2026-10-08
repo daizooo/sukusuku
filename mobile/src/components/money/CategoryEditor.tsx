@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Plus } from 'lucide-reac
 import type { MoneyBudget, MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import { budgetFor, childCategories, formatYen, guessIconKey, iconKeyOf, MONEY_ICONS, topCategories } from '@/lib/moneyUtils';
 import { formatFiscalYear, parseAmountInput } from '@/lib/specialUtils';
 import {
@@ -153,7 +154,7 @@ export default function CategoryEditor({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
         <ScreenHeader title="種類と予算" onClose={onClose} />
         <View style={styles.bar}>
           <Pressable

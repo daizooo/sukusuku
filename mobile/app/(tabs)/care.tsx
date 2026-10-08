@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   BackHandler,
   Pressable,
   RefreshControl,
@@ -227,10 +228,9 @@ export default function CareScreen() {
   // 矢印ボタンと同じ操作を、画面上どこでの横スワイプでもできるようにする。
   // 「次の日」ボタンが isToday で disabled なのと同じく、今日より先へはスワイプでも進めない。
   // 「からだ」には日付送りが無いため、記録の一覧を出している間だけ有効にする。
-  const swipeHandlers = useSwipeNavigation({
-    onSwipeLeft: () => {
-      if (!isToday) setLogDate(addDays(logDate, 1));
-    },
+  // 中身（日付とその日の記録のパネル）は指に合わせて横に動く。
+  const swipe = useSwipeNavigation({
+    onSwipeLeft: isToday ? undefined : () => setLogDate(addDays(logDate, 1)),
     onSwipeRight: () => setLogDate(addDays(logDate, -1)),
     enabled: !bodyOpen,
   });
@@ -704,7 +704,7 @@ export default function CareScreen() {
   if (!session) return <Redirect href="/login" />;
 
   return (
-    <SafeAreaView style={styles.screen} {...swipeHandlers}>
+    <SafeAreaView style={styles.screen} {...swipe.handlers}>
       {!bodyOpen && (
         <>
       {/* グループ1: 生後日数と次の授乳の目安を琥珀色の1枚に。固定し、スクロールは下のパネルの中だけにする。 */}
@@ -734,7 +734,7 @@ export default function CareScreen() {
       ) : (
       <>
       {/* グループ2: 日付・記録ボタン・その日の記録を、スレート色の1枚のパネルにまとめる。 */}
-      <View style={styles.dayPanel}>
+      <Animated.View style={[styles.dayPanel, swipe.style]}>
       {/* 日付送り。タブを開いた時点では常に今日なので、「今日」は今日以外を見ているときだけ出す。 */}
       <View style={styles.header}>
         <Pressable
@@ -933,7 +933,7 @@ export default function CareScreen() {
           </ScrollView>
         </>
       )}
-      </View>
+      </Animated.View>
       </>
       )}
 

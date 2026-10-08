@@ -24,6 +24,7 @@ import {
   withMonthlyValue,
 } from '@/lib/recurrence';
 import { colors } from '@/lib/theme';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import SelectField from '@/components/ui/SelectField';
 
 // 「カスタムの繰り返し」。Googleカレンダーの同名の画面と同じ並び:
@@ -92,7 +93,10 @@ export default function RecurrenceModal({ initial, startDate, onCancel, onDone }
       <KeyboardAvoidingView
         style={styles.backdrop}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        {...swipeBoundary}
       >
+        {/* 暗い部分を押すと、戻る操作と同じく閉じる（変えた内容は捨てる）。 */}
+        <Pressable accessibilityLabel="閉じる" style={StyleSheet.absoluteFill} onPress={onCancel} />
         <View style={styles.card}>
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <Text style={styles.heading}>カスタムの繰り返し</Text>
