@@ -20,3 +20,8 @@ verify_jwt = false
 [functions.send-stock-expiry-reminders]
 # 同上。予定のリマインダーと同じ REMINDER_CRON_SECRET を検証する。
 verify_jwt = false
+
+[functions.fetch-security-prices]
+# pg_cron（REMINDER_CRON_SECRET のヘッダー）とアプリ（ログインの JWT）の両方から呼ぶ。
+# どちらも関数側で確かめるので、Supabase の JWT 検証は使わない。
+verify_jwt = false
