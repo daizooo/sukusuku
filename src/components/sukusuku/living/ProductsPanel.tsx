@@ -2,18 +2,23 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, Plus } from 'lucide-react';
-import type { HouseholdProduct, HouseholdProductDraft } from '@/types/app';
+import type { HouseholdProduct, HouseholdProductCategory, HouseholdProductDraft } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import {
   deleteHouseholdProduct,
+  deleteProductCategory,
   insertHouseholdProduct,
+  insertProductCategory,
   loadHouseholdProducts,
+  loadProductCategories,
   markHouseholdProductAdded,
+  renameProductCategory,
+  reorderProductCategories,
   updateHouseholdProduct,
 } from '@/lib/api/householdProducts';
-import { categoryOptions } from '@/lib/stockUtils';
 import { formatPrice } from '@/lib/shoppingUtils';
 import ProductModal from '../modals/ProductModal';
+import ProductCategoriesModal from '../modals/ProductCategoriesModal';
 import type { ShoppingSender } from './useShoppingSender';
 import { useSwipeTabs } from '../ui/useSwipeTabs';
 
@@ -50,9 +55,21 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
   const [products, setProducts] = useState<HouseholdProduct[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [store, setStore] = useState(ALL);
+  // カテゴリの一覧（家族で共有。docs/home.md §4.1）と、それを直す画面を開いているか。
+  const [categoryList, setCategoryList] = useState<HouseholdProductCategory[]>([]);
+  const [isEditingCategories, setIsEditingCategories] = useState(false);
+  // 編集中の品のカテゴリを、一覧で直した・消した名前に追従させる（前の名前 → 新しい名前。消したら空）。
+  const [categoryRenames, setCategoryRenames] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let isMounted = true;
+    loadProductCategories(supabase, familyId)
+      .then((loaded) => {
+        if (isMounted) setCategoryList(loaded);
+      })
+      .catch(() => {
+        // 読めなかったぶんは空のままにする。
+      });
     loadHouseholdProducts(supabase, familyId)
       .then((loaded) => {
         if (isMounted) setProducts(loaded);
@@ -90,7 +107,12 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
     if (!bar || !selected) return;
     bar.scrollTo({ left: selected.offsetLeft - (bar.clientWidth - selected.offsetWidth) / 2, behavior: 'smooth' });
   }, [activeStore]);
-  const categories = useMemo(() => categoryOptions(products), [products]);
+  const categories = useMemo(() => categoryList.map((category) => category.name), [categoryList]);
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const product of products) counts[product.category] = (counts[product.category] ?? 0) + 1;
+    return counts;
+  }, [products]);
   const storeOptions = useMemo(() => [...new Set([...stores, ...sender.groupNames])], [stores, sender.groupNames]);
 
   const failed = (what: string) => window.alert(`${what}できませんでした。もう一度お試しください。`);
@@ -121,6 +143,63 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
     } catch {
       setProducts(previous);
       failed('削除');
+    }
+  };
+
+  // カテゴリの一覧を直す。名前を直す・消すときは、同じ名前の品も書き換える（API の中で）。
+  // 失敗したら、一覧と品を読み直して画面を DB に合わせる。
+  const reloadAfterFailure = (what: string) => {
+    failed(what);
+    void loadProductCategories(supabase, familyId).then(setCategoryList).catch(() => {});
+    void loadHouseholdProducts(supabase, familyId).then(setProducts).catch(() => {});
+  };
+
+  const addCategory = async (name: string) => {
+    try {
+      const created = await insertProductCategory(supabase, familyId, name, categoryList.length);
+      setCategoryList((prev) => [...prev, created]);
+    } catch {
+      reloadAfterFailure('追加');
+    }
+  };
+
+  const renameCategory = async (category: HouseholdProductCategory, name: string) => {
+    const existing = categoryList.find((row) => row.id !== category.id && row.name === name) ?? null;
+    setCategoryList((prev) =>
+      existing ? prev.filter((row) => row.id !== category.id) : prev.map((row) => (row.id === category.id ? { ...row, name } : row)),
+    );
+    setProducts((prev) => prev.map((product) => (product.category === category.name ? { ...product, category: name } : product)));
+    setCategoryRenames((prev) => ({ ...prev, [category.name]: name }));
+    try {
+      await renameProductCategory(supabase, familyId, category, name, existing);
+    } catch {
+      reloadAfterFailure('保存');
+    }
+  };
+
+  const deleteCategory = async (category: HouseholdProductCategory) => {
+    setCategoryList((prev) => prev.filter((row) => row.id !== category.id));
+    setProducts((prev) => prev.map((product) => (product.category === category.name ? { ...product, category: '' } : product)));
+    setCategoryRenames((prev) => ({ ...prev, [category.name]: '' }));
+    try {
+      await deleteProductCategory(supabase, familyId, category);
+    } catch {
+      reloadAfterFailure('削除');
+    }
+  };
+
+  const moveCategory = async (category: HouseholdProductCategory, offset: -1 | 1) => {
+    const index = categoryList.findIndex((row) => row.id === category.id);
+    const target = index + offset;
+    if (index < 0 || target < 0 || target >= categoryList.length) return;
+    const next = [...categoryList];
+    [next[index], next[target]] = [next[target], next[index]];
+    const renumbered = next.map((row, position) => ({ ...row, position }));
+    setCategoryList(renumbered);
+    try {
+      await reorderProductCategories(supabase, renumbered);
+    } catch {
+      reloadAfterFailure('並べ替え');
     }
   };
 
@@ -212,6 +291,20 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
           onClose={() => onEdit(null)}
           onSubmit={(draft) => void save(draft)}
           onDelete={editing === 'new' ? undefined : () => void remove(editing.id)}
+          categoryRenames={categoryRenames}
+          onEditCategories={() => setIsEditingCategories(true)}
+        />
+      )}
+
+      {isEditingCategories && (
+        <ProductCategoriesModal
+          categories={categoryList}
+          counts={categoryCounts}
+          onClose={() => setIsEditingCategories(false)}
+          onAdd={(name) => void addCategory(name)}
+          onRename={(category, name) => void renameCategory(category, name)}
+          onDelete={(category) => void deleteCategory(category)}
+          onMove={(category, offset) => void moveCategory(category, offset)}
         />
       )}
     </>
