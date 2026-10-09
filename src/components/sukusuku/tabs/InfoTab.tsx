@@ -43,7 +43,7 @@ export default function InfoTab({
           <FamilySection familyId={familyId} userId={userId} />
 
           {/* 通知。授乳の目安・検温のお知らせも同じ枠にまとめる（docs/family-app.md §7-5） */}
-          <NotificationSetting familyId={familyId} userId={userId}>
+          <NotificationSetting>
             <FeedingIntervalSetting
               familyId={familyId}
               settings={feedingSettings}

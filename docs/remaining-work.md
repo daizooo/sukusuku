@@ -25,6 +25,7 @@
 | [what-to-record.md](./what-to-record.md) §8 の7 | 記録した人を一覧（タイムライン）から外し、詳細だけに残す | ✅ `LogTimeline.tsx` に「◯◯が記録」が残っている | §10で決定済み |
 | [what-to-record.md](./what-to-record.md) §8 の9 | 予防接種のスケジュール（`tasks`） | ✅ 初期データ（`seedData.ts`）のみ | |
 | [what-to-record.md](./what-to-record.md) §8 の8 | 母乳の分数を未入力のまま保存できるように | ✅ `leftMinutes ?? 0` が残っている | 優先度を下げてある（§11-4） |
+| [notifications.md](./notifications.md) §11 | `kind = 'webpush'` の行を消す（削除なので SQL Editor で流す）。`VAPID_KEYS`・`VAPID_SUBJECT`（Supabase）と Vercel の `NEXT_PUBLIC_VAPID_PUBLIC_KEY` を消す | ✅ 本番DBに `webpush` が4件 | PWA版の通知を外した（案1。2026-10-09）ので、もう使われない |
 | [calendar.md](./calendar.md) §1 | 繰り返しの「この回だけ」「これ以降」の変更 | ✅ 「まだ無い」と明記 | |
 | [home.md](./home.md) §8 の1 | 学費の目安（特別費とは別の面） | 📄 | 特別費が回ってから決める |
 
@@ -32,7 +33,7 @@
 
 | 設計書 | 論点 | 状況 |
 |---|---|---|
-| [notifications.md](./notifications.md) §11、[native-app-rewrite.md](./native-app-rewrite.md) §7 | **Web Push の扱い。** 2026-09-29に PWA版を畳まない方針へ変わったが、Web Push の送信は撤去済み。PWA版の通知のトグルは今も `kind = 'webpush'` の行を作り、送られない | ✅ 本番DBに `webpush` が4件（`fcm` は2件）。選択肢は ①PWA版の通知を外す ②PWA版にも届くよう Web Push を戻す（`VAPID_KEYS` は残してある） |
+| – | Web Push の扱いは**決定済み**（PWA版の通知を外す。2026-10-09）。残りは§1の手元作業 | – |
 | [kakei.md](./kakei.md) §8 の3 | 「特別費残高」（Zaim の仮想の出金元）を振替で持つか | 年の振り返り（§7 の5）で決める |
 | [home.md](./home.md) §9.7 | 福引の賞の名前（白玉・青玉・赤玉）は仮 | 実機で見てから |
 

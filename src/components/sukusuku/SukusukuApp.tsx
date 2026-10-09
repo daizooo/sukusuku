@@ -62,7 +62,6 @@ import {
 import { getNextBreastSide } from '@/lib/careLogUtils';
 import {
   activePendingNursing,
-  nextFeedingSchedule,
   resolveLastFeeding,
   type NextFeedingInfo,
 } from '@/lib/feedingSchedule';
@@ -78,8 +77,6 @@ import {
   type TemperatureReminderSettings,
 } from '@/lib/api/temperatureReminderSettings';
 import { useHasNursingSession, useNursingAlarmWatcher } from '@/lib/nursingTimer';
-import { useNursingAlarmSync } from '@/lib/nursingAlarmSync';
-import { closeSettledNotifications } from '@/lib/notificationCleanup';
 import { ensureChildId } from '@/lib/api/children';
 import {
   deleteGrowthRecord,
@@ -257,9 +254,6 @@ export default function SukusukuApp({
   // 授乳の経過時間のお知らせ（音・バイブ）。記録タブを開いていなくても鳴らせるよう、
   // アプリ全体で1つだけ見張りを動かす。
   useNursingAlarmWatcher();
-  // 画面が消えている・アプリを閉じている間は上の見張りが間引かれて鳴らせないため、
-  // 鳴らす時刻をサーバーにも預けておき、その分を通知で鳴らしてもらう。
-  useNursingAlarmSync(userId);
   // 記録前の授乳が残っているか。授乳のお知らせを消してよいかの判断に使う。
   const hasNursingSession = useHasNursingSession();
 
@@ -706,41 +700,6 @@ export default function SukusukuApp({
     }),
     [recentMilkLogs, nursing, feedingSettings.intervalMinutes, isLoadingRecentMilk],
   );
-
-  // 済んだ予定のid。お知らせを消してよいかの判断に使う。
-  const doneTaskIds = useMemo(
-    () => todos.filter((task) => task.done).map((task) => task.id),
-    [todos],
-  );
-
-  // 用が済んだお知らせを端末から消す。
-  // 通知は誰かが払うまで残るため、パートナーが記録した分や、アプリを開いたあとも
-  // 「そろそろ次の授乳」「検温のお知らせ」だけが残り続けてしまう。
-  // 読み込み直した記録から用が済んだものを見つけて、こちらから閉じる。
-  useEffect(() => {
-    const now = Date.now();
-    // 記録に入る前の授乳（計測中・記録待ち）も前回の授乳として数える。
-    const last = resolveLastFeeding(nextFeeding.lastFedAt, nextFeeding.pendingNursing);
-    const schedule = nextFeedingSchedule(last.lastFedAt, feedingSettings.intervalMinutes, now);
-    void closeSettledNotifications({
-      // 飲ませている最中なら「そろそろ次の授乳」は済んだ扱い。
-      // まだ一度も記録が無ければ目安の出しようがないので、消さずに残す。
-      isFeedingDue: last.isNursing ? false : (schedule?.isOverdue ?? true),
-      hasNursingSession,
-      lastTemperatureAt: recentTemperatureLogs[0]?.time ?? null,
-      temperatureTimes: temperatureReminderSettings,
-      doneTaskIds,
-      now,
-    });
-  }, [
-    nextFeeding.lastFedAt,
-    nextFeeding.pendingNursing,
-    feedingSettings.intervalMinutes,
-    hasNursingSession,
-    recentTemperatureLogs,
-    temperatureReminderSettings,
-    doneTaskIds,
-  ]);
 
   const memberLabel = (id: string | null): string => {
     if (!id) return '不明';

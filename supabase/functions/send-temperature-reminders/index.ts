@@ -76,7 +76,7 @@ Deno.serve(async (request) => {
 
   const familyIds = [...new Set(due.map((row) => row.family_id))];
   // 送り先はネイティブ版だけ。ブラウザ向けの Web Push は撤去した（フェーズ4の条件D）。
-  // PWA版を開いて通知をオンにすると kind = 'webpush' の行がまた作られるが、
+  // PWA版の通知も撤去したので kind = 'webpush' の行は増えない。残っている古い行も、
   // ここで絞っているので送ろうとして失敗することはない（届かないだけ）。
   const { data: subscriptions, error: subscriptionError } = await supabase
     .from('push_subscriptions')
