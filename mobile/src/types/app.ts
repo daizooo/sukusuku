@@ -481,7 +481,7 @@ export interface SpecialItem {
   name: string;
   /** 周期。1=毎年、n=n年おき、0=1回きり。 */
   cycleYears: number;
-  /** 周期の起点の年度（4月始まり。2026年4月〜2027年3月なら 2026）。毎年なら null でよい。 */
+  /** 周期の起点の年（暦年。毎年なら null でよい）。 */
   baseYear: number | null;
   note: string;
   position: number;
@@ -498,7 +498,7 @@ export interface SpecialActual {
   recordId: string;
   itemId: string;
   planId: string | null;
-  /** YYYY-MM-DD。年度はここから決める。 */
+  /** YYYY-MM-DD。年はここから決める。 */
   occurredOn: string;
   amount: number;
   note: string;
@@ -514,8 +514,6 @@ export interface SpecialItemDraft {
   note: string;
   plans: { id: string | null; month: number | null; amount: number; tentative: boolean }[];
 }
-
-export type SpecialActualDraft = Omit<SpecialActual, 'id' | 'recordId' | 'itemId' | 'planId'>;
 
 /** 補助くじの玉。white＝25%、blue＝50%、red＝75%、gold＝100%（docs/home.md §9）。 */
 export type SubsidyBallId = 'white' | 'blue' | 'red' | 'gold';
@@ -591,6 +589,8 @@ export interface MoneyCategory {
   name: string;
   /** アイコン（moneyUtils の MONEY_ICONS の key）。null は名前から選ぶ。 */
   icon: string | null;
+  /** アイコンの色（#rrggbb）。null は標準（アイコンごとの色）。 */
+  iconColor: string | null;
   position: number;
   /** 使わなくした（選べないが、記録には残る）。 */
   archived: boolean;
@@ -618,8 +618,10 @@ export interface MoneyWallet {
   savingTarget: number | null;
   /** カードの締め日（31 は末日）。カードだけ。docs/kakei.md §3.4。 */
   closeDay: number | null;
-  /** カードの引き落とし日（31 は末日）。締め日のあとの最初のこの日。 */
+  /** カードの引き落とし日（31 は末日）。締め日のあとの最初のこの日（payMonthOffset があるときは、その月のこの日）。 */
   payDay: number | null;
+  /** カードの引き落とし月が、締め日の月の何か月後か（1〜3）。null は締め日のあとに来る最初の引き落とし日。 */
+  payMonthOffset: number | null;
   /** カードの引き落とし口座。 */
   payWalletId: string | null;
   /** アイコンの色（#rrggbb）。null は標準（種類ごとの色）。 */

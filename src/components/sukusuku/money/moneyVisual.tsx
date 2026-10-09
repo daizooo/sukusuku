@@ -8,7 +8,7 @@ import { useBackdropClose } from '../ui/useBackdropClose';
 import { swipeBoundary } from '../ui/useSwipeNavigation';
 import { formatGainRate, formatMonthKey, formatSignedYen, iconTone, shiftMonth } from '@/lib/moneyUtils';
 import { MONEY_ICON_COMPONENTS } from './moneyIcons';
-import { formatFiscalYear } from '@/lib/specialUtils';
+import { formatYear } from '@/lib/specialUtils';
 
 // 家計タブで共通に使う部品と、見た目の決まり（docs/kakei.md §2.1）。
 // mobile版の `mobile/src/components/money/moneyVisual.tsx` と同じ見た目。
@@ -125,25 +125,21 @@ export function MonthBar({ monthKey, onChange }: { monthKey: string; onChange: (
   );
 }
 
-/** 年度の送り（右に期間）。 */
-export function YearBar({ fiscalYear, onChange }: { fiscalYear: number; onChange: (fiscalYear: number) => void }) {
+/** 年の送り（右に期間。1月〜12月）。 */
+export function YearBar({ year, onChange }: { year: number; onChange: (year: number) => void }) {
   return (
     <Stepper
-      label={formatFiscalYear(fiscalYear)}
-      prevLabel="前の年度"
-      nextLabel="次の年度"
-      onPrev={() => onChange(fiscalYear - 1)}
-      onNext={() => onChange(fiscalYear + 1)}
-      right={
-        <span className={type.faint}>
-          {fiscalYear}年4月〜{fiscalYear + 1}年3月
-        </span>
-      }
+      label={formatYear(year)}
+      prevLabel="前の年"
+      nextLabel="次の年"
+      onPrev={() => onChange(year - 1)}
+      onNext={() => onChange(year + 1)}
+      right={<span className={type.faint}>1月〜12月</span>}
     />
   );
 }
 
-/** 振り返りの期間。月か年度。 */
+/** 振り返りの期間。月か年。 */
 export type ReviewPeriod = 'month' | 'year';
 
 const PERIODS: { id: ReviewPeriod; label: string }[] = [
@@ -157,15 +153,15 @@ export function PeriodBar({
   onPeriod,
   monthKey,
   onMonth,
-  fiscalYear,
-  onFiscalYear,
+  year,
+  onYear,
 }: {
   period: ReviewPeriod;
   onPeriod: (period: ReviewPeriod) => void;
   monthKey: string;
   onMonth: (monthKey: string) => void;
-  fiscalYear: number;
-  onFiscalYear: (fiscalYear: number) => void;
+  year: number;
+  onYear: (year: number) => void;
 }) {
   const toggle = (
     <div role="tablist" className="flex rounded-full bg-gray-100 p-0.5">
@@ -199,11 +195,11 @@ export function PeriodBar({
     />
   ) : (
     <Stepper
-      label={formatFiscalYear(fiscalYear)}
-      prevLabel="前の年度"
-      nextLabel="次の年度"
-      onPrev={() => onFiscalYear(fiscalYear - 1)}
-      onNext={() => onFiscalYear(fiscalYear + 1)}
+      label={formatYear(year)}
+      prevLabel="前の年"
+      nextLabel="次の年"
+      onPrev={() => onYear(year - 1)}
+      onNext={() => onYear(year + 1)}
       right={toggle}
     />
   );
@@ -215,16 +211,19 @@ export function Hero({
   value,
   isMinus,
   note,
+  center,
   children,
 }: {
   label: string;
   value: string;
   isMinus?: boolean;
   note?: ReactNode;
+  /** ラベルと数字を中央に寄せる（総残高など）。 */
+  center?: boolean;
   children?: ReactNode;
 }) {
   return (
-    <div className={`${cardClass} p-4`}>
+    <div className={`${cardClass} p-4 ${center ? 'text-center' : ''}`}>
       <p className="text-[13px] font-semibold text-gray-500">{label}</p>
       <p className={minus(type.hero, isMinus)}>{value}</p>
       {note !== undefined && <p className={type.sub}>{note}</p>}

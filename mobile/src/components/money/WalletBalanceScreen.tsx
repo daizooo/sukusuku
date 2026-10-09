@@ -16,9 +16,13 @@ import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import {
   balanceChecks,
   cardBilling,
+  cardPaymentHistory,
+  cardUsagePeriod,
   dailyBalances,
   dateKeyOfDate,
   formatBalance,
+  formatMonthKey,
+  formatYen,
   recordsOfWallet,
   walletBalanceOn,
 } from '@/lib/moneyUtils';
@@ -26,12 +30,13 @@ import { WalletSheet } from '@/components/money/WalletPicker';
 import BalanceSheet from '@/components/money/BalanceSheet';
 import BalanceTrend from '@/components/money/BalanceTrend';
 import RecordDayList from '@/components/money/RecordDayList';
-import { ScreenHeader, StatRow, type } from '@/components/money/moneyVisual';
+import { EstimateBadge, ScreenHeader, StatRow, type } from '@/components/money/moneyVisual';
 
 // 口座の詳細（docs/kakei.md §9.3）。PWA版の `src/components/sukusuku/money/WalletBalanceScreen.tsx` と同じ並び・文言。
 // 上に残高と「残高を補正」、その下に「履歴 / 推移」の2つ（2026-10-08に、使わない「残高計算」を外した。余計な文字は入れない）。
 // - 履歴: その出金元の記録（支出・収入・振替）に、残高の補正を同じ日の先頭に混ぜる。記録を押すと記録の詳細、補正を押すと取り消し
 // - 推移: 日ごとの残高の折れ線（期間はじめは全期間）と、残高が変わった日の一覧
+//   （カードは推移でなく「引き落とし」: これまでの引き落とし額を、引き落とし月ごとに新しい月から。2026-10-09）
 // カードは残高（未払い）の下に「請求済み」と「未請求」を添える（一覧の行には出さず、押したあとのここだけ）。
 // 出金元の編集・使わなくするは見出しの鉛筆から。戻る操作（スマホの戻るボタン）は、シートを閉じる → この画面を閉じる、の順。
 
@@ -57,10 +62,19 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'history', label: '履歴' },
   { id: 'trend', label: '推移' },
 ];
+/** カードは推移の代わりに、これまでの引き落とし額を見る。 */
+const CARD_TABS: { id: Tab; label: string }[] = [
+  { id: 'history', label: '履歴' },
+  { id: 'trend', label: '引き落とし' },
+];
 
 const fullDate = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number);
   return `${year}年${month}月${day}日`;
+};
+const shortDay = (dateKey: string) => {
+  const [, month, day] = dateKey.split('-').map(Number);
+  return `${month}/${day}`;
 };
 const monthDayLabel = (dateKey: string) => {
   const [, month, day] = dateKey.split('-').map(Number);
@@ -93,7 +107,10 @@ export default function WalletBalanceScreen({
   const shownChecks = checks.filter((check) => check.balance.showInHistory);
   const mine = useMemo(() => recordsOfWallet(records, wallet.id), [records, wallet.id]);
   const points = useMemo(() => dailyBalances([wallet.id], records, balances, today), [wallet.id, records, balances, today]);
-  const billing = wallet.type === 'card' ? cardBilling(wallet, now.amount, records, today) : null;
+  const isCard = wallet.type === 'card';
+  const tabs = isCard ? CARD_TABS : TABS;
+  const billing = isCard ? cardBilling(wallet, now.amount, records, today) : null;
+  const payments = useMemo(() => (isCard ? cardPaymentHistory(wallet.id, records, today) : []), [isCard, wallet.id, records, today]);
 
   const remove = (balance: MoneyWalletBalance) =>
     Alert.alert(`${fullDate(balance.balanceOn)}の補正を取り消しますか？`, '残高は、その前の補正と記録から出し直します。', [
@@ -103,7 +120,7 @@ export default function WalletBalanceScreen({
 
   // 履歴/推移は、帯と中身の上の左右スワイプでも切り替える。
   const swipe = useSwipeTabs(
-    TABS.map((entry) => entry.id),
+    tabs.map((entry) => entry.id),
     tab,
     setTab,
   );
@@ -157,7 +174,7 @@ export default function WalletBalanceScreen({
         </View>
         <View style={styles.flex} {...swipe.handlers}>
           <View accessibilityRole="tablist" style={styles.tabs}>
-            {TABS.map((entry) => {
+            {tabs.map((entry) => {
               const selected = entry.id === tab;
               return (
                 <Pressable
@@ -190,7 +207,33 @@ export default function WalletBalanceScreen({
                 />
               ))}
 
-            {tab === 'trend' && <BalanceTrend points={points} asOf={today} />}
+            {tab === 'trend' &&
+              (isCard ? (
+                payments.length === 0 ? (
+                  <Text style={styles.empty}>引き落としの記録はまだありません</Text>
+                ) : (
+                  <View style={styles.paymentCard}>
+                    {payments.map((payment, index) => {
+                      const period = cardUsagePeriod(wallet, payment.monthKey);
+                      return (
+                        <View key={payment.monthKey} style={[styles.paymentRow, index > 0 && styles.paymentDivided]}>
+                          <View style={styles.flex}>
+                            <Text style={type.row}>{formatMonthKey(payment.monthKey)}</Text>
+                            <Text style={type.faint}>
+                              {period ? `ご利用 ${shortDay(period.from)}〜${shortDay(period.to)}・` : ''}
+                              {monthDayLabel(payment.lastOn)}に引き落とし
+                            </Text>
+                          </View>
+                          {payment.estimate && <EstimateBadge />}
+                          <Text style={type.amount}>{formatYen(payment.amount)}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )
+              ) : (
+                <BalanceTrend points={points} asOf={today} />
+              ))}
           </Animated.ScrollView>
         </View>
       </View>
@@ -248,5 +291,15 @@ const styles = StyleSheet.create({
   underline: { marginTop: 8, height: 3, width: 32, borderRadius: 2, backgroundColor: 'transparent' },
   underlineSelected: { backgroundColor: colors.money },
   content: { paddingHorizontal: 16, paddingBottom: 32 },
+  paymentCard: {
+    marginTop: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  paymentRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12 },
+  paymentDivided: { borderTopWidth: 1, borderTopColor: colors.border },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
 });

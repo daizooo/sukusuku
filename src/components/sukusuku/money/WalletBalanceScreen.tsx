@@ -13,16 +13,20 @@ import type {
 import {
   balanceChecks,
   cardBilling,
+  cardPaymentHistory,
+  cardUsagePeriod,
   dailyBalances,
   dateKeyOfDate,
   formatBalance,
+  formatMonthKey,
+  formatYen,
   recordsOfWallet,
   walletBalanceOn,
 } from '@/lib/moneyUtils';
 import BalanceModal from './BalanceModal';
 import BalanceTrend from './BalanceTrend';
 import RecordDayList from './RecordDayList';
-import { FullScreen, minus, ScreenHeader, StatRow, type } from './moneyVisual';
+import { EstimateBadge, FullScreen, minus, ScreenHeader, StatRow, type } from './moneyVisual';
 import { WalletModal } from './WalletPicker';
 import { useSwipeTabs } from '../ui/useSwipeTabs';
 
@@ -30,6 +34,7 @@ import { useSwipeTabs } from '../ui/useSwipeTabs';
 // 上に残高と「残高を補正」、その下に「履歴 / 推移」の2つ（2026-10-08に、使わない「残高計算」を外した。余計な文字は入れない）。
 // - 履歴: その出金元の記録（支出・収入・振替）に、残高の補正を同じ日の先頭に混ぜる。記録を押すと記録の詳細、補正を押すと取り消し
 // - 推移: 日ごとの残高の折れ線（期間はじめは全期間）と、残高が変わった日の一覧
+//   （カードは推移でなく「引き落とし」: これまでの引き落とし額を、引き落とし月ごとに新しい月から。2026-10-09）
 // カードは残高（未払い）の下に「請求済み」と「未請求」を添える（一覧の行には出さず、押したあとのここだけ）。
 // 出金元の編集・使わなくするは見出しの鉛筆から。戻る操作（ブラウザの戻る）は、シートを閉じる → この画面を閉じる、の順。
 
@@ -55,10 +60,19 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'history', label: '履歴' },
   { id: 'trend', label: '推移' },
 ];
+/** カードは推移の代わりに、これまでの引き落とし額を見る。 */
+const CARD_TABS: { id: Tab; label: string }[] = [
+  { id: 'history', label: '履歴' },
+  { id: 'trend', label: '引き落とし' },
+];
 
 const fullDate = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number);
   return `${year}年${month}月${day}日`;
+};
+const shortDay = (dateKey: string) => {
+  const [, month, day] = dateKey.split('-').map(Number);
+  return `${month}/${day}`;
 };
 const monthDayLabel = (dateKey: string) => {
   const [, month, day] = dateKey.split('-').map(Number);
@@ -90,7 +104,10 @@ export default function WalletBalanceScreen({
   const shownChecks = checks.filter((check) => check.balance.showInHistory);
   const mine = recordsOfWallet(records, wallet.id);
   const points = dailyBalances([wallet.id], records, balances, today);
-  const billing = wallet.type === 'card' ? cardBilling(wallet, now.amount, records, today) : null;
+  const isCard = wallet.type === 'card';
+  const tabs = isCard ? CARD_TABS : TABS;
+  const billing = isCard ? cardBilling(wallet, now.amount, records, today) : null;
+  const payments = isCard ? cardPaymentHistory(wallet.id, records, today) : [];
 
   const remove = (balance: MoneyWalletBalance) => {
     if (window.confirm(`${fullDate(balance.balanceOn)}の補正を取り消しますか？残高は、その前の補正と記録から出し直します。`)) {
@@ -100,7 +117,7 @@ export default function WalletBalanceScreen({
 
   // 履歴/推移は、帯と中身の上の左右スワイプでも切り替える。
   const { handlers: swipeHandlers, attachContent } = useSwipeTabs(
-    TABS.map((entry) => entry.id),
+    tabs.map((entry) => entry.id),
     tab,
     setTab,
   );
@@ -152,7 +169,7 @@ export default function WalletBalanceScreen({
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden" {...swipeHandlers}>
         <div role="tablist" className="shrink-0 flex border-b border-gray-200 px-2">
-          {TABS.map((entry) => {
+          {tabs.map((entry) => {
             const selected = entry.id === tab;
             return (
               <button
@@ -186,7 +203,33 @@ export default function WalletBalanceScreen({
               />
             ))}
 
-          {tab === 'trend' && <BalanceTrend points={points} asOf={today} />}
+          {tab === 'trend' &&
+            (isCard ? (
+              payments.length === 0 ? (
+                <p className="py-8 text-center text-sm text-gray-400">引き落としの記録はまだありません</p>
+              ) : (
+                <div className="mt-3 divide-y divide-gray-200 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                  {payments.map((payment) => {
+                    const period = cardUsagePeriod(wallet, payment.monthKey);
+                    return (
+                      <div key={payment.monthKey} className="flex items-center gap-2 px-3.5 py-3">
+                        <div className="min-w-0 flex-1">
+                          <p className={type.row}>{formatMonthKey(payment.monthKey)}</p>
+                          <p className={type.faint}>
+                            {period ? `ご利用 ${shortDay(period.from)}〜${shortDay(period.to)}・` : ''}
+                            {monthDayLabel(payment.lastOn)}に引き落とし
+                          </p>
+                        </div>
+                        {payment.estimate && <EstimateBadge />}
+                        <span className={type.amount}>{formatYen(payment.amount)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : (
+              <BalanceTrend points={points} asOf={today} />
+            ))}
         </div>
       </div>
 

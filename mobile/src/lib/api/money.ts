@@ -35,6 +35,7 @@ export const rowToCategory = (row: CategoryRow): MoneyCategory => ({
   parentId: row.parent_id,
   name: row.name,
   icon: row.icon ?? null,
+  iconColor: row.icon_color ?? null,
   position: row.position,
   archived: row.archived_at !== null,
 });
@@ -56,6 +57,7 @@ export const rowToWallet = (row: WalletRow): MoneyWallet => ({
   savingTarget: row.saving_target,
   closeDay: row.close_day,
   payDay: row.pay_day,
+  payMonthOffset: row.pay_month_offset,
   payWalletId: row.pay_wallet_id,
   iconColor: row.icon_color,
   position: row.position,
@@ -241,7 +243,14 @@ export async function deleteMoneyRecord(supabase: SupabaseDb, id: string): Promi
 export async function insertMoneyCategory(
   supabase: SupabaseDb,
   familyId: string,
-  fields: { kind: MoneyCategoryKind; parentId: string | null; name: string; icon: string | null; position: number },
+  fields: {
+    kind: MoneyCategoryKind;
+    parentId: string | null;
+    name: string;
+    icon: string | null;
+    iconColor?: string | null;
+    position: number;
+  },
 ): Promise<MoneyCategory> {
   const { data, error } = await supabase
     .from('money_categories')
@@ -251,6 +260,7 @@ export async function insertMoneyCategory(
       parent_id: fields.parentId,
       name: fields.name.trim(),
       icon: fields.icon,
+      icon_color: fields.iconColor ?? null,
       position: fields.position,
     })
     .select('*')
@@ -262,13 +272,14 @@ export async function insertMoneyCategory(
 export async function updateMoneyCategory(
   supabase: SupabaseDb,
   id: string,
-  fields: { name?: string; icon?: string | null; position?: number; archived?: boolean },
+  fields: { name?: string; icon?: string | null; iconColor?: string | null; position?: number; archived?: boolean },
 ): Promise<MoneyCategory> {
   const { data, error } = await supabase
     .from('money_categories')
     .update({
       ...(fields.name !== undefined && { name: fields.name.trim() }),
       ...(fields.icon !== undefined && { icon: fields.icon }),
+      ...(fields.iconColor !== undefined && { icon_color: fields.iconColor }),
       ...(fields.position !== undefined && { position: fields.position }),
       ...(fields.archived !== undefined && { archived_at: fields.archived ? new Date().toISOString() : null }),
     })
@@ -348,6 +359,7 @@ const walletFields = (draft: MoneyWalletDraft) => ({
   // 締め日・引き落とし日・引き落とし口座はカードだけ（docs/kakei.md §3.4）。
   close_day: draft.type === 'card' ? draft.closeDay : null,
   pay_day: draft.type === 'card' ? draft.payDay : null,
+  pay_month_offset: draft.type === 'card' && draft.payDay !== null ? draft.payMonthOffset : null,
   pay_wallet_id: draft.type === 'card' ? draft.payWalletId : null,
   icon_color: draft.iconColor,
 });

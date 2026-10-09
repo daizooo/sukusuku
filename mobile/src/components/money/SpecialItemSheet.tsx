@@ -1,36 +1,17 @@
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Minus, Plus, X } from 'lucide-react-native';
-import type { SpecialActualDraft, SpecialItem, SpecialItemDraft, SpecialKind } from '@/types/app';
+import type { SpecialItem, SpecialItemDraft, SpecialKind } from '@/types/app';
 import { colors } from '@/lib/theme';
-import { toDateString } from '@/lib/dateUtils';
-import {
-  FISCAL_MONTHS,
-  MAX_CYCLE_YEARS,
-  cycleLabel,
-  formatFiscalYear,
-  parseAmountInput,
-  parseDateInput,
-  sortPlans,
-} from '@/lib/specialUtils';
+import { YEAR_MONTHS, cycleLabel, formatYear, parseAmountInput, sortPlans } from '@/lib/specialUtils';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import SegmentedTabs from '@/components/ui/SegmentedTabs';
 
-// 特別費の項目を足す・直す（docs/home.md §5.4）。PWA版の
-// `src/components/sukusuku/modals/SpecialItemModal.tsx` と同じ項目・同じ文言。
+// 支出予定・収入予定（特別費）の項目を足す・直す（docs/kakei.md §3.5・§4.3）。PWA版の
+// `src/components/sukusuku/money/SpecialItemModal.tsx` と同じ項目・同じ文言。
 //
-// 足すときは、予定として登録する（周期と、月ごとの予定を入れる）か、すでに払った予定外の出費
-// （金額と日付だけ。予定の無い項目＋実績になる）かを選ぶ。直すときは項目と予定だけ（実績は行から）。
-
-/** 追加・保存の結果。 */
-export type SpecialItemSheetResult =
-  | { type: 'plan'; draft: SpecialItemDraft }
-  | {
-      type: 'unplanned';
-      fields: { kind: SpecialKind; category: string; name: string };
-      actual: SpecialActualDraft;
-    };
+// 周期と、月ごとの予定（月・金額）を入れる。実績は入れない（払った額は家計の記録に、特別費の項目として記録する）。
 
 interface PlanForm {
   id: string | null;
@@ -39,10 +20,7 @@ interface PlanForm {
   tentative: boolean;
 }
 
-type Mode = 'plan' | 'unplanned';
-
 interface FormState {
-  mode: Mode;
   kind: SpecialKind;
   name: string;
   category: string;
@@ -50,14 +28,7 @@ interface FormState {
   baseYear: number;
   plans: PlanForm[];
   note: string;
-  paidAmount: string;
-  paidDate: string;
 }
-
-const MODE_OPTIONS: { id: Mode; label: string }[] = [
-  { id: 'plan', label: '予定として登録' },
-  { id: 'unplanned', label: 'すでに払った（予定外）' },
-];
 
 const KIND_OPTIONS: { id: SpecialKind; label: string }[] = [
   { id: 'expense', label: '支出' },
@@ -69,15 +40,14 @@ const CYCLE_CHOICES = [1, 2, 3, 5, 10, 0];
 
 const emptyPlan = (): PlanForm => ({ id: null, month: null, amount: '', tentative: false });
 
-const initialState = (item: SpecialItem | null, defaultKind: SpecialKind, fiscalYear: number): FormState =>
+const initialState = (item: SpecialItem | null, defaultKind: SpecialKind, year: number): FormState =>
   item
     ? {
-        mode: 'plan',
         kind: item.kind,
         name: item.name,
         category: item.category,
         cycleYears: item.cycleYears,
-        baseYear: item.baseYear ?? fiscalYear,
+        baseYear: item.baseYear ?? year,
         plans: sortPlans(item.plans).map((plan) => ({
           id: plan.id,
           month: plan.month,
@@ -85,20 +55,15 @@ const initialState = (item: SpecialItem | null, defaultKind: SpecialKind, fiscal
           tentative: plan.tentative,
         })),
         note: item.note,
-        paidAmount: '',
-        paidDate: toDateString(new Date()),
       }
     : {
-        mode: 'plan',
         kind: defaultKind,
         name: '',
         category: '',
         cycleYears: 1,
-        baseYear: fiscalYear,
+        baseYear: year,
         plans: [emptyPlan()],
         note: '',
-        paidAmount: '',
-        paidDate: toDateString(new Date()),
       };
 
 interface SpecialItemSheetProps {
@@ -108,10 +73,10 @@ interface SpecialItemSheetProps {
   categories: string[];
   /** 追加するときの種類（いま見ている支出/収入）。 */
   defaultKind: SpecialKind;
-  /** いま見ている年度。起点・予定外の年度の既定に使う。 */
-  fiscalYear: number;
+  /** いま見ている年。周期の起点の既定に使う。 */
+  year: number;
   onClose: () => void;
-  onSubmit: (result: SpecialItemSheetResult) => void;
+  onSubmit: (draft: SpecialItemDraft) => void;
   onDelete?: () => void;
 }
 
@@ -132,12 +97,12 @@ export default function SpecialItemSheet({
   item,
   categories,
   defaultKind,
-  fiscalYear,
+  year,
   onClose,
   onSubmit,
   onDelete,
 }: SpecialItemSheetProps) {
-  const [form, setForm] = useState<FormState>(() => initialState(item, defaultKind, fiscalYear));
+  const [form, setForm] = useState<FormState>(() => initialState(item, defaultKind, year));
   const [error, setError] = useState<string | null>(null);
 
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
@@ -155,18 +120,6 @@ export default function SpecialItemSheet({
   const handleSubmit = () => {
     if (form.name.trim() === '') return setError('名前を入れてください');
 
-    if (form.mode === 'unplanned') {
-      const amount = parseAmountInput(form.paidAmount);
-      if (amount === null) return setError('金額は0以上の整数（円）で入れてください');
-      const occurredOn = parseDateInput(form.paidDate);
-      if (occurredOn === null) return setError('日付は 2026-07-20 の形で入れてください');
-      return onSubmit({
-        type: 'unplanned',
-        fields: { kind: form.kind, category: form.category.trim(), name: form.name.trim() },
-        actual: { occurredOn, amount, note: form.note },
-      });
-    }
-
     if (form.plans.length < minPlans) return setError('予定を1つ以上入れてください');
     const plans: SpecialItemDraft['plans'] = [];
     for (const plan of form.plans) {
@@ -175,38 +128,28 @@ export default function SpecialItemSheet({
       plans.push({ id: plan.id, month: plan.month, amount, tentative: plan.tentative && plan.month !== null });
     }
     onSubmit({
-      type: 'plan',
-      draft: {
-        kind: form.kind,
-        category: form.category.trim(),
-        name: form.name.trim(),
-        cycleYears: form.cycleYears,
-        // 毎年なら起点は持たない（既にある起点はそのまま残す）。
-        baseYear: form.cycleYears === 1 ? (item?.baseYear ?? null) : form.baseYear,
-        note: form.note,
-        plans,
-      },
+      kind: form.kind,
+      category: form.category.trim(),
+      name: form.name.trim(),
+      cycleYears: form.cycleYears,
+      // 毎年なら起点は持たない（既にある起点はそのまま残す）。
+      baseYear: form.cycleYears === 1 ? (item?.baseYear ?? null) : form.baseYear,
+      note: form.note,
+      plans,
     });
   };
 
   const handleDelete = () =>
-    Alert.alert('この項目を削除しますか？', '予定と実績もいっしょに消えます。', [
+    Alert.alert('この項目を削除しますか？', '予定と、この項目で記録した特別費もいっしょに消えます。', [
       { text: 'やめる', style: 'cancel' },
       { text: '削除', style: 'destructive', onPress: () => onDelete?.() },
     ]);
 
-  const unplanned = form.mode === 'unplanned';
-
   return (
     <SheetModal visible onClose={onClose}>
       <LogModalShell
-        title={isEditing ? '項目を編集' : '特別費を追加'}
+        title={isEditing ? '項目を編集' : '予定を追加'}
         onClose={onClose}
-        subheader={
-          !isEditing ? (
-            <SegmentedTabs options={MODE_OPTIONS} value={form.mode} onChange={(mode) => update({ mode })} />
-          ) : undefined
-        }
         footer={
           <>
             <Pressable accessibilityRole="button" onPress={handleSubmit} style={styles.submit}>
@@ -261,133 +204,103 @@ export default function SpecialItemSheet({
           )}
         </View>
 
-        {unplanned ? (
-          <>
-            <View style={styles.field}>
-              <Text style={styles.label}>金額（円）</Text>
-              <TextInput
-                style={styles.input}
-                value={form.paidAmount}
-                onChangeText={(paidAmount) => update({ paidAmount })}
-                keyboardType="number-pad"
-                inputMode="numeric"
-                placeholder="例: 30500"
-                placeholderTextColor={colors.textFaint}
+        <View style={styles.field}>
+          <Text style={styles.label}>周期</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.chips}>
+            {cycleChoices.map((years) => (
+              <Chip
+                key={years}
+                label={cycleLabel(years)}
+                selected={years === form.cycleYears}
+                onPress={() => update({ cycleYears: years })}
               />
+            ))}
+          </ScrollView>
+          {form.cycleYears !== 1 && (
+            <View style={styles.stepRow}>
+              <Text style={styles.stepLabel}>{form.cycleYears === 0 ? '出る年' : '最初に出る年'}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="年を戻す"
+                onPress={() => update({ baseYear: form.baseYear - 1 })}
+                style={styles.stepButton}
+              >
+                <Minus size={14} color={colors.textSubtle} />
+              </Pressable>
+              <Text style={styles.stepValue}>{formatYear(form.baseYear)}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="年を進める"
+                onPress={() => update({ baseYear: form.baseYear + 1 })}
+                style={styles.stepButton}
+              >
+                <Plus size={14} color={colors.textSubtle} />
+              </Pressable>
             </View>
-            <View style={styles.field}>
-              <Text style={styles.label}>日付</Text>
-              <TextInput
-                style={styles.input}
-                value={form.paidDate}
-                onChangeText={(paidDate) => update({ paidDate })}
-                placeholder="2026-07-20"
-                placeholderTextColor={colors.textFaint}
-              />
-              <Text style={styles.hint}>{formatFiscalYear(fiscalYear)}以外の日付なら、その年度に入ります</Text>
-            </View>
-          </>
-        ) : (
-          <>
-            <View style={styles.field}>
-              <Text style={styles.label}>周期</Text>
+          )}
+          <Text style={styles.hint}>
+            {form.cycleYears === 1
+              ? '毎年出ます'
+              : form.cycleYears === 0
+                ? 'その年だけ出ます'
+                : `その年から ${form.cycleYears} 年ごとに出ます（間の年には出ません）`}
+          </Text>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>予定（1年の中で出る回数ぶん）</Text>
+          {form.plans.map((plan, index) => (
+            <View key={plan.id ?? `new-${index}`} style={styles.planBox}>
+              <View style={styles.planHead}>
+                <Text style={styles.planTitle}>{index + 1}回目</Text>
+                {form.plans.length > minPlans && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${index + 1}回目の予定を消す`}
+                    onPress={() => setForm((prev) => ({ ...prev, plans: prev.plans.filter((_, i) => i !== index) }))}
+                    hitSlop={8}
+                  >
+                    <X size={16} color={colors.textFaint} />
+                  </Pressable>
+                )}
+              </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.chips}>
-                {cycleChoices.map((years) => (
+                {[...YEAR_MONTHS, null].map((month) => (
                   <Chip
-                    key={years}
-                    label={cycleLabel(years)}
-                    selected={years === form.cycleYears}
-                    onPress={() => update({ cycleYears: years })}
+                    key={month ?? 'none'}
+                    label={month === null ? '月未定' : `${month}月`}
+                    selected={month === plan.month}
+                    onPress={() => updatePlan(index, { month })}
                   />
                 ))}
               </ScrollView>
-              {form.cycleYears !== 1 && (
-                <View style={styles.stepRow}>
-                  <Text style={styles.stepLabel}>{form.cycleYears === 0 ? '出る年度' : '最初に出る年度'}</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="年度を戻す"
-                    onPress={() => update({ baseYear: form.baseYear - 1 })}
-                    style={styles.stepButton}
-                  >
-                    <Minus size={14} color={colors.textSubtle} />
-                  </Pressable>
-                  <Text style={styles.stepValue}>{formatFiscalYear(form.baseYear)}</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="年度を進める"
-                    onPress={() => update({ baseYear: form.baseYear + 1 })}
-                    style={styles.stepButton}
-                  >
-                    <Plus size={14} color={colors.textSubtle} />
-                  </Pressable>
-                </View>
-              )}
-              <Text style={styles.hint}>
-                {form.cycleYears === 1
-                  ? '毎年出ます'
-                  : form.cycleYears === 0
-                    ? 'その年度だけ出ます'
-                    : `その年度から ${form.cycleYears} 年ごとに出ます（間の年度には出ません）`}
-              </Text>
+              <View style={styles.planRow}>
+                <TextInput
+                  style={[styles.input, styles.flex]}
+                  value={plan.amount}
+                  onChangeText={(amount) => updatePlan(index, { amount })}
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                  placeholder="金額（円）"
+                  placeholderTextColor={colors.textFaint}
+                />
+                <Chip
+                  label="仮"
+                  selected={plan.tentative && plan.month !== null}
+                  onPress={() => updatePlan(index, { tentative: !plan.tentative })}
+                />
+              </View>
             </View>
-
-            <View style={styles.field}>
-              <Text style={styles.label}>予定（年度の中で出る回数ぶん）</Text>
-              {form.plans.map((plan, index) => (
-                <View key={plan.id ?? `new-${index}`} style={styles.planBox}>
-                  <View style={styles.planHead}>
-                    <Text style={styles.planTitle}>{index + 1}回目</Text>
-                    {form.plans.length > minPlans && (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`${index + 1}回目の予定を消す`}
-                        onPress={() => setForm((prev) => ({ ...prev, plans: prev.plans.filter((_, i) => i !== index) }))}
-                        hitSlop={8}
-                      >
-                        <X size={16} color={colors.textFaint} />
-                      </Pressable>
-                    )}
-                  </View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.chips}>
-                    {[...FISCAL_MONTHS, null].map((month) => (
-                      <Chip
-                        key={month ?? 'none'}
-                        label={month === null ? '月未定' : `${month}月`}
-                        selected={month === plan.month}
-                        onPress={() => updatePlan(index, { month })}
-                      />
-                    ))}
-                  </ScrollView>
-                  <View style={styles.planRow}>
-                    <TextInput
-                      style={[styles.input, styles.flex]}
-                      value={plan.amount}
-                      onChangeText={(amount) => updatePlan(index, { amount })}
-                      keyboardType="number-pad"
-                      inputMode="numeric"
-                      placeholder="金額（円）"
-                      placeholderTextColor={colors.textFaint}
-                    />
-                    <Chip
-                      label="仮"
-                      selected={plan.tentative && plan.month !== null}
-                      onPress={() => updatePlan(index, { tentative: !plan.tentative })}
-                    />
-                  </View>
-                </View>
-              ))}
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setForm((prev) => ({ ...prev, plans: [...prev.plans, emptyPlan()] }))}
-                style={styles.addPlan}
-              >
-                <Plus size={14} color={colors.livingSpecial} />
-                <Text style={styles.addPlanText}>予定を追加（年に複数回出るとき）</Text>
-              </Pressable>
-            </View>
-          </>
-        )}
+          ))}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setForm((prev) => ({ ...prev, plans: [...prev.plans, emptyPlan()] }))}
+            style={styles.addPlan}
+          >
+            <Plus size={14} color={colors.livingSpecial} />
+            <Text style={styles.addPlanText}>予定を追加（年に複数回出るとき）</Text>
+          </Pressable>
+        </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>メモ</Text>

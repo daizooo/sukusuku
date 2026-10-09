@@ -102,6 +102,7 @@ export default function MoneyAccountsView({
           className="block w-full pt-3 text-left"
         >
           <Hero
+            center
             label="総残高"
             value={formatBalance(summary.total)}
             isMinus={summary.total < 0}

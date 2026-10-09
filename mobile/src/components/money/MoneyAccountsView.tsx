@@ -103,6 +103,7 @@ export default function MoneyAccountsView({
         >
           <Hero
             label="総残高"
+            center
             value={formatBalance(summary.total)}
             minus={summary.total < 0}
             note={usable.length === 0 ? '出金元を足すと、残高が出ます' : undefined}
