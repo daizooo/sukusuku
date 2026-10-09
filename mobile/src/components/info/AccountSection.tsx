@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
-import { Check, Copy, LogOut, UserCog } from 'lucide-react-native';
+import { LogOut, UserCog } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { listMembers } from '@/lib/api/members';
 import {
@@ -32,7 +31,6 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
   const [saveError, setSaveError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [copied, setCopied] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   // 再読み込みボタン用。値を変えることでeffectを再実行する。
   const [reloadKey, setReloadKey] = useState(0);
@@ -80,12 +78,6 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
       setStartTab(previous);
       setSaveError('保存できませんでした。もう一度お試しください。');
     }
-  };
-
-  const handleCopyInviteCode = async () => {
-    await Clipboard.setStringAsync(familyId);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleSignOut = () => {
@@ -156,26 +148,6 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
             </View>
           </View>
           {saveError !== '' && <Text style={styles.errorBox}>{saveError}</Text>}
-
-          <View>
-            <Text style={styles.rowLabel}>家族の招待コード</Text>
-            <View style={styles.inviteRow}>
-              <Text style={styles.inviteCode}>{familyId}</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="招待コードをコピー"
-                onPress={() => void handleCopyInviteCode()}
-                hitSlop={6}
-                style={styles.copyButton}
-              >
-                {copied ? (
-                  <Check size={16} color={colors.navActive} />
-                ) : (
-                  <Copy size={16} color={colors.navActive} />
-                )}
-              </Pressable>
-            </View>
-          </View>
 
           <Pressable
             accessibilityRole="button"
@@ -266,19 +238,6 @@ const styles = StyleSheet.create({
   tabOptionSelected: { backgroundColor: colors.navActive },
   tabOptionText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   tabOptionTextSelected: { color: colors.primaryText },
-  inviteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: 10,
-    marginTop: 6,
-  },
-  inviteCode: { flex: 1, fontSize: 10, color: colors.textSubtle, fontWeight: '500' },
-  copyButton: { padding: 6, borderRadius: 8 },
 
   signOut: {
     flexDirection: 'row',

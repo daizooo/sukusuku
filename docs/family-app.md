@@ -219,8 +219,28 @@
 各PRで `src/`（PWA版）も追従する。
 
 > **状態（2026-10-09）:** 1〜5・4b は**済**（本番DBに `family_members`、予定の `participants`。アプリ名は「かぞく手帳」）。
-> **7（子のアカウント招待）と 6（`family_profiles`・`users.role` の撤去）は未着手**（本番DBに `member_invites` が無く、
-> `family_profiles` が残り `api/profile.ts` が今も読み書きしている）。7 の `users_update_self` の穴を塞ぐ変更は、先に出すこと。残りの一覧は [remaining-work.md](./remaining-work.md)。
+> **6（`family_profiles`・`users.role` の撤去）は未着手**（`family_profiles` が残り `api/profile.ts` が今も読み書きしている）。
+> **7 は一部が済**（2026-10-09、`0077`）: 招待コード（`member_invites`）、`create_member_invite`・`redeem_member_invite`・`create_my_family`、
+> `users` の更新できる列の絞り込み（下の「家族への参加と `users` の守り」）。**残りは、設定>家族で保護者が招待コードを出す画面（mobile・PWA）**。残りの一覧は [remaining-work.md](./remaining-work.md)。
+
+### 家族への参加と `users` の守り（2026-10-09、`0077_member_invites_users_lockdown.sql`）
+
+それまでは `users_update_self`（自分の行ならどの列も更新できる）のせいで、ログインした人が `users.family_id` に
+他の家族のIDを書けば、その家族の全データを読み書きできた。しかも「招待コード」は家族のID（`families.id`）そのもので、
+一度漏れると使い回せた。
+
+- **`users` をアプリから更新できる列は `start_tab`・`show_care_tab` だけ**（列の権限。`insert` も外した。行の追加はサインアップ時のトリガーが行う）。
+  `family_id`・`role` は下の関数と `service_role`・migration だけが変える
+- `redeem_member_invite(code)`: まだ家族に入っていない人が、招待コードで参加する。`users.family_id`・`role` と
+  `family_members.user_id` を同時に決める（`role` は続柄から: 夫=papa、妻=mama、子=なし）
+- `create_my_family(role)`: まだ家族に入っていない人が家族を作る。夫・妻・子の3人と `children` の行を作り、本人を `role` に合う親に紐づける
+  （表示名は「パパ」「ママ」「こども」。設定の「家族」で直す）
+- `create_member_invite(member_id)`: 保護者が、まだアカウントの無い自分の家族のメンバーに招待コードを出す。
+  12文字の16進、**使い切り・7日で失効**、DBにはハッシュだけ。そのメンバーの前のコードは無効になる
+- `family_members.user_id` の変更は、これらの関数の中でだけ通る（`guard_family_member_columns` が取引の中だけの印を見る）
+- 家族のIDを「招待コード」として画面に出すのをやめた（設定>アカウントの「家族の招待コード」を削除）。PWA版の家族設定の画面は、
+  新規作成のあとにもう一人の親へ渡す招待コードを出し、参加は招待コードで行う
+- 本番DBで、権限・関数・参加の流れ（拒否される場合を含む14項目）を、取り消せる取引の中で確かめてから適用した
 
 ## 6. 検証
 

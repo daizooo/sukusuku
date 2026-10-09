@@ -12,7 +12,7 @@
 
 | 設計書 | 残り | 確認 | 備考 |
 |---|---|---|---|
-| [family-app.md](./family-app.md) §5 の7 | 子のアカウント招待（`member_invites`・`redeem_member_invite`）。あわせて `users_update_self` で `users.family_id` を本人が書き換えられる穴を塞ぐ | ✅ 本番DBに表も関数も無い | 穴のほうはセキュリティなので先に直す。migration は追加のみなので MCP で適用できる |
+| [family-app.md](./family-app.md) §5 の7 | 設定>家族で、保護者が招待コードを出す画面（`create_member_invite` を呼ぶ。mobile・PWA） | ✅ DB・参加の流れは済（`0077`、2026-10-09）。画面が無い | いまは全員がアカウントを持っているので急がない。子や新しい親を入れるときに要る |
 | [family-app.md](./family-app.md) §5 の6 | `family_profiles`・`users.role` の参照を外し、不要な表を drop | ✅ 本番DBに残り、`api/profile.ts` が読み書きしている | 参照を外して1リリース置いてから。drop は SQL Editor 用の SQL として渡す |
 | [calendar.md](./calendar.md) §6 | `tasks.remind_minutes_before` 列を消す | ✅ 本番DBに列が残り、`api/tasks.ts` が参照している | 旧APK・旧Webが使われなくなってから。drop は SQL Editor 用 |
 | [kakei.md](./kakei.md) §7 の3 | 月の振り返りのメモ、カードの月末の照合と「締める」（`money_months`・`money_card_closes`） | ✅ 表が無い | カードの `close_day` などの設定と、引き落としの自動記録は済 |

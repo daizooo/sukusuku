@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Copy, Loader2, LogOut, UserCog } from 'lucide-react';
+import { Loader2, LogOut, UserCog } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { listMembers } from '@/lib/api/members';
 import {
@@ -33,7 +33,6 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
   const [saveError, setSaveError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [copied, setCopied] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   // 再読み込みボタン用。値を変えることでeffectを再実行する。
   const [reloadKey, setReloadKey] = useState(0);
@@ -80,16 +79,6 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
       console.error('Failed to save start tab:', err);
       setStartTab(previous);
       setSaveError('保存できませんでした。もう一度お試しください。');
-    }
-  };
-
-  const handleCopyInviteCode = async () => {
-    try {
-      await navigator.clipboard.writeText(familyId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy invite code:', err);
     }
   };
 
@@ -156,20 +145,6 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
             </div>
           </div>
           {saveError && <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg p-2.5">{saveError}</p>}
-
-          <div className="pt-1">
-            <span className="text-gray-500 text-xs">家族の招待コード</span>
-            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-lg p-2.5 mt-1.5">
-              <code className="flex-1 text-[10px] text-gray-700 break-all font-mono">{familyId}</code>
-              <button
-                onClick={handleCopyInviteCode}
-                className="shrink-0 text-blue-500 hover:bg-blue-50 p-1.5 rounded-lg transition"
-                aria-label="招待コードをコピー"
-              >
-                {copied ? <Check size={16} /> : <Copy size={16} />}
-              </button>
-            </div>
-          </div>
 
           <button
             onClick={handleSignOut}
