@@ -596,12 +596,16 @@ export interface MoneyCategory {
   archived: boolean;
 }
 
-/** 家計の予算。大分類・年（暦年）ごとの月額。money_budgets に対応（列名は fiscal_year のまま）。 */
+/**
+ * 家計の予算。大分類・年（暦年）ごとに1月〜12月の月額を持つ。money_budgets に対応（列名は fiscal_year のまま）。
+ * 年の途中で直しても、直した月より前の月は変わらない（docs/kakei.md §3.1）。
+ */
 export interface MoneyBudget {
   id: string;
   categoryId: string;
   year: number;
-  monthlyAmount: number;
+  /** 1月〜12月の月額（長さ12。null の月は予算なし）。 */
+  monthAmounts: (number | null)[];
 }
 
 /** 出金元の種類。 */

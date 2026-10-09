@@ -44,7 +44,11 @@ export const rowToBudget = (row: BudgetRow): MoneyBudget => ({
   id: row.id,
   categoryId: row.category_id,
   year: row.fiscal_year,
-  monthlyAmount: row.monthly_amount,
+  // 古い行（month_amounts が無い）は、12か月ぜんぶが同じ額。
+  monthAmounts:
+    row.month_amounts !== null && row.month_amounts.length === 12
+      ? row.month_amounts
+      : Array.from({ length: 12 }, () => row.monthly_amount),
 });
 
 const WALLET_TYPES = ['card', 'cash', 'bank', 'prepaid', 'qr', 'securities'] as const;
@@ -329,18 +333,27 @@ export async function insertDefaultMoneyCategories(supabase: SupabaseDb, familyI
   return [...(parents ?? []), ...(childRows ?? [])].map(rowToCategory);
 }
 
-/** 大分類の、その年の月の予算を決める（DBの列名は fiscal_year のまま。中身は暦年）。 */
+/**
+ * 大分類の、その年の1月〜12月の月額を保存する（DBの列名は fiscal_year のまま。中身は暦年）。
+ * monthAmounts は長さ12（null の月は予算なし）。monthly_amount には12月の額を入れる（古いアプリはこの列だけを読む）。
+ */
 export async function saveMoneyBudget(
   supabase: SupabaseDb,
   familyId: string,
   categoryId: string,
   year: number,
-  monthlyAmount: number,
+  monthAmounts: readonly (number | null)[],
 ): Promise<MoneyBudget> {
   const { data, error } = await supabase
     .from('money_budgets')
     .upsert(
-      { family_id: familyId, category_id: categoryId, fiscal_year: year, monthly_amount: monthlyAmount },
+      {
+        family_id: familyId,
+        category_id: categoryId,
+        fiscal_year: year,
+        monthly_amount: monthAmounts[11] ?? 0,
+        month_amounts: monthAmounts as number[],
+      },
       { onConflict: 'category_id,fiscal_year' },
     )
     .select('*')

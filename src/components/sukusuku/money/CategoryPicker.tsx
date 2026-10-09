@@ -118,7 +118,7 @@ export default function CategoryPicker({
 
         {tops.map((top) => {
           const children = childCategories(categories, top.id);
-          const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, year) : null;
+          const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, monthKey) : null;
           const remaining = budget === null ? null : budget - (spend.get(top.id) ?? 0);
           return (
             <section key={top.id} className="overflow-hidden rounded-[14px] border border-gray-200">

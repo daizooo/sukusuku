@@ -113,7 +113,7 @@ export default function CategoryPicker({
 
         {tops.map((top) => {
           const children = childCategories(categories, top.id);
-          const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, year) : null;
+          const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, monthKey) : null;
           const remaining = budget === null ? null : budget - (spend.get(top.id) ?? 0);
           return (
             <View key={top.id} style={styles.topCard}>

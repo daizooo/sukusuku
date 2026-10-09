@@ -109,7 +109,12 @@
 - 名前・並びは家族で変えられる（大分類・小分類の追加・名前の変更・並べ替え・使わなくする）。
   **並べ替えは一覧のまま指（マウス）で動かす**（2026-10-09。リストと同じ操作 `useDragReorder`: 大分類は左の持ち手をつかむ、小分類のチップは長押し。
   以前の「上へ / 下へ」は無くした）
-- **予算は大分類に置く**（年ごとの月額。年は暦年（1月〜12月）で特別費と同じ。2026-10-09に4月始まりの年度から変更。DBの列名 `money_budgets.fiscal_year` は変えず、中身を暦年として読む。それまでの2026年度の行は2026年の予算としてそのまま使う）。**入力は小分類を1タップ**で選ぶ
+- **予算は大分類に置く**（年ごとに1月〜12月の月額を持つ。年は暦年で特別費と同じ。2026-10-09に4月始まりの年度から変更。DBの列名 `money_budgets.fiscal_year` は
+  変えず中身を暦年として読む）。**年の途中で予算を変えても、過去の月は変わらない**（2026-10-09。行は (大分類, 年) で1つのまま、`month_amounts` に
+  12か月ぶんの額を持つ。編集の「反映する月」で選んだ月から年末までだけ書き換える。既定は、今年で予算がすでにあれば今月、それ以外は1月。
+  `monthly_amount` は12月の額で、古いアプリはこの列だけを読む。古いアプリが書いたときは、トリガー `money_budgets_fill_months` が12か月ぶんにそろえる。0083）。
+  その年の行が無い月は、前の年のいちばん近い行の12月の額を使う（毎年入れ直さなくてよい）。一覧に出す「月 ¥X」は、今年なら今月・これからの年は1月・過ぎた年は12月の額。
+  **入力は小分類を1タップ**で選ぶ
   （大分類の見出しの下に小分類のチップを並べ、押すと大分類も決まる。よく使うものを上に）
 
 ### 3.2 1件の記録（2026-10-07に決定。**Zaim を踏襲し、細かい部分だけ変える**）
@@ -280,7 +285,7 @@
 
 ```
 money_categories  種類。 id / family_id / kind('living'|'income') / parent_id(null=大分類) / name / icon / icon_color(0079) / position / archived_at
-money_budgets     予算。 id / family_id / category_id(大分類) / fiscal_year / monthly_amount（category_id・fiscal_year で1行）
+money_budgets     予算。 id / family_id / category_id(大分類) / fiscal_year(暦年) / monthly_amount(12月の額) / month_amounts(1〜12月の月額。0083)（category_id・fiscal_year で1行）
 money_wallets     出金元。 id / family_id / name / type('card'|'cash'|'bank'|'prepaid'|'qr') / is_saving / saving_target /
                   position / archived_at
 money_stores      お店（設定データ）。 id / family_id / name / archived_at（family_id・name で1行。0065_money_stores.sql）
@@ -307,7 +312,7 @@ money_wallet_balances  補正した残高（0067_money_wallet_balances.sql。§9
 ```
 
 - 全部 `family_id` 単位のRLS（`current_family_id()`）。参照は (id, family_id) の組で張り、別の家族の行を指せないようにする
-- 予算は、その年の行が無ければ前の年の額を使う（毎年入れ直さなくてよい）
+- 予算は、その年の行が無い月は前の年の12月の額を使う（毎年入れ直さなくてよい）。1月〜12月の月額は `month_amounts`（0083）
 - 種類・出金元は消さずに「使わなくする」（`archived_at`）。記録には残る
 - 特別費の項目・予定は今の `special_items`・`special_plans` のまま。特別費の品目は `category_id` を持たず、
   `special_item_id`（と予定にひも付くときは `special_plan_id`）を持つ。特別費の項目を消すと品目も消え、品目の無くなった記録も消す

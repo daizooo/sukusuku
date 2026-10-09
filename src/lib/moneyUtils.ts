@@ -355,14 +355,41 @@ export function categoryPath(categories: readonly MoneyCategory[], categoryId: s
   return parent ? `${parent.name} › ${category.name}` : category.name;
 }
 
-/** その年の大分類の月の予算。その年に無ければ、前の年のいちばん近いもの。どこにも無ければ null。 */
-export function budgetFor(budgets: readonly MoneyBudget[], categoryId: string, year: number): number | null {
+/**
+ * その月（YYYY-MM）の大分類の月の予算。予算は年ごとに12か月ぶんを持つので、年の途中で直しても、直した月より前の月は変わらない。
+ * その年の行が無ければ、前の年のいちばん近い行の12月の額（毎年入れ直さなくてよいように）。どこにも無い月は null。
+ */
+export function budgetFor(budgets: readonly MoneyBudget[], categoryId: string, monthKey: string): number | null {
+  const year = yearOfMonth(monthKey);
+  const month = Number(monthKey.slice(5, 7));
   let found: MoneyBudget | null = null;
   for (const budget of budgets) {
     if (budget.categoryId !== categoryId || budget.year > year) continue;
     if (found === null || budget.year > found.year) found = budget;
   }
-  return found?.monthlyAmount ?? null;
+  if (found === null) return null;
+  return found.monthAmounts[found.year === year ? month - 1 : 11] ?? null;
+}
+
+/** その年の1月〜12月の予算（長さ12）。年の途中で直すとき、直す前の月をそのまま残すのに使う。 */
+export const budgetMonths = (budgets: readonly MoneyBudget[], categoryId: string, year: number): (number | null)[] =>
+  Array.from({ length: 12 }, (_, index) => budgetFor(budgets, categoryId, `${year}-${pad2(index + 1)}`));
+
+/** fromMonth（1〜12）から年末までを amount にした12か月ぶん。それより前の月は current のまま。 */
+export const withBudgetFrom = (
+  current: readonly (number | null)[],
+  fromMonth: number,
+  amount: number,
+): (number | null)[] => current.map((value, index) => (index + 1 >= fromMonth ? amount : value));
+
+/**
+ * 「その年の予算」として一覧に出す代表の月。今年なら今月、これからの年なら1月、過ぎた年なら12月
+ * （年の途中で変えた年は、いま効いている額を見せるため）。today は YYYY-MM-DD。
+ */
+export function budgetMonthKey(year: number, today: string): string {
+  const thisYear = yearOfMonth(today);
+  const month = year === thisYear ? Number(today.slice(5, 7)) : year > thisYear ? 1 : 12;
+  return `${year}-${pad2(month)}`;
 }
 
 // ---- 記録 ----
@@ -638,7 +665,7 @@ export function buildBudgetTiles(
     .filter((category) => !category.archived || (spend.get(category.id) ?? 0) > 0)
     .map((category) => {
       const monthly = keys
-        .map((key) => budgetFor(budgets, category.id, yearOfMonth(key)))
+        .map((key) => budgetFor(budgets, category.id, key))
         .filter((value): value is number => value !== null);
       const budget = monthly.length === 0 ? null : monthly.reduce((sum, value) => sum + value, 0);
       const actual = spend.get(category.id) ?? 0;
@@ -689,9 +716,8 @@ export function buildMonthSummary(
       }
     }
   }
-  const year = yearOfMonth(monthKey);
   const livingBudget = topCategories(categories, 'living').reduce(
-    (sum, category) => sum + (budgetFor(budgets, category.id, year) ?? 0),
+    (sum, category) => sum + (budgetFor(budgets, category.id, monthKey) ?? 0),
     0,
   );
   return {
@@ -899,7 +925,7 @@ export function buildCategoryAnalysis(
   const actual = sum(narrowed);
 
   const monthly = monthKeys
-    .map((key) => budgetFor(budgets, topId, yearOfMonth(key)))
+    .map((key) => budgetFor(budgets, topId, key))
     .filter((value): value is number => value !== null);
   const budget = monthly.length === 0 ? null : monthly.reduce((total, value) => total + value, 0);
 

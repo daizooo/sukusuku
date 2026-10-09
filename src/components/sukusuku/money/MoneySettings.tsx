@@ -12,7 +12,7 @@ import type {
   SpecialActual,
   SpecialItem,
 } from '@/types/app';
-import { budgetFor, formatYen, topCategories } from '@/lib/moneyUtils';
+import { budgetFor, budgetMonthKey, dateKeyOfDate, formatYen, topCategories } from '@/lib/moneyUtils';
 import { formatYear } from '@/lib/specialUtils';
 import CategoryEditor from './CategoryEditor';
 import RecurringSettings from './RecurringSettings';
@@ -73,7 +73,7 @@ export default function MoneySettings({
   const [page, setPage] = useState<Page>('menu');
 
   const tops = topCategories(categories, 'living', true).filter((top) => !top.archived);
-  const totalBudget = tops.reduce((sum, top) => sum + (budgetFor(budgets, top.id, year) ?? 0), 0);
+  const totalBudget = tops.reduce((sum, top) => sum + (budgetFor(budgets, top.id, budgetMonthKey(year, dateKeyOfDate(new Date()))) ?? 0), 0);
   const storeCount = stores.filter((store) => !store.archived).length;
   const recurringCount = recurring.filter((rule) => !rule.archived).length;
   const specialExpenseCount = specialItems.filter((item) => item.kind === 'expense').length;

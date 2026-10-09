@@ -813,6 +813,7 @@ export type Database = {
           fiscal_year: number
           id: string
           monthly_amount: number
+          month_amounts: number[] | null
           updated_at: string
         }
         Insert: {
@@ -822,6 +823,7 @@ export type Database = {
           fiscal_year: number
           id?: string
           monthly_amount?: number
+          month_amounts?: number[] | null
           updated_at?: string
         }
         Update: {
@@ -831,6 +833,7 @@ export type Database = {
           fiscal_year?: number
           id?: string
           monthly_amount?: number
+          month_amounts?: number[] | null
           updated_at?: string
         }
         Relationships: [

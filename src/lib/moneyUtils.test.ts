@@ -21,7 +21,10 @@ import {
   niceTicks,
   recordsOfWallet,
   budgetFor,
+  budgetMonthKey,
+  budgetMonths,
   buildWalletBalances,
+  withBudgetFrom,
   canPickProductsFor,
   formatBalance,
   walletBalanceOn,
@@ -123,16 +126,37 @@ assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: null }], null), 
 
 // ---- 予算（その年に無ければ前の年） ----
 const budgets: MoneyBudget[] = [
-  { id: 'b1', categoryId: 'food', year: 2025, monthlyAmount: 55000 },
-  { id: 'b2', categoryId: 'food', year: 2026, monthlyAmount: 60000 },
-  { id: 'b3', categoryId: 'med', year: 2024, monthlyAmount: 5000 },
-  { id: 'b4', categoryId: 'house', year: 2026, monthlyAmount: 85000 },
+  { id: 'b1', categoryId: 'food', year: 2025, monthAmounts: Array(12).fill(55000) },
+  { id: 'b2', categoryId: 'food', year: 2026, monthAmounts: Array(12).fill(60000) },
+  { id: 'b3', categoryId: 'med', year: 2024, monthAmounts: Array(12).fill(5000) },
+  { id: 'b4', categoryId: 'house', year: 2026, monthAmounts: Array(12).fill(85000) },
 ];
-assert.equal(budgetFor(budgets, 'food', 2026), 60000);
-assert.equal(budgetFor(budgets, 'food', 2027), 60000, '翌年は今の額のまま');
-assert.equal(budgetFor(budgets, 'food', 2025), 55000);
-assert.equal(budgetFor(budgets, 'food', 2024), null, '前の年にも無ければ未設定');
-assert.equal(budgetFor(budgets, 'med', 2026), 5000);
+assert.equal(budgetFor(budgets, 'food', '2026-06'), 60000);
+assert.equal(budgetFor(budgets, 'food', '2027-03'), 60000, '翌年は今の額のまま');
+assert.equal(budgetFor(budgets, 'food', '2025-12'), 55000);
+assert.equal(budgetFor(budgets, 'food', '2024-12'), null, '前の年にも無ければ未設定');
+assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
+
+// 年の途中で予算を変えても、それより前の月は変わらない（過去の振り返りがおかしくならない）
+{
+  const current = budgetMonths(budgets, 'food', 2026);
+  assert.deepEqual(current, Array(12).fill(60000));
+  const changed = withBudgetFrom(current, 10, 70000);
+  assert.deepEqual(changed.slice(0, 9), Array(9).fill(60000), '9月までは前の額のまま');
+  assert.deepEqual(changed.slice(9), [70000, 70000, 70000], '10月から年末までが新しい額');
+  const after: MoneyBudget[] = [...budgets.filter((b) => b.id !== 'b2'), { id: 'b2', categoryId: 'food', year: 2026, monthAmounts: changed }];
+  assert.equal(budgetFor(after, 'food', '2026-09'), 60000, '過去の月');
+  assert.equal(budgetFor(after, 'food', '2026-10'), 70000);
+  assert.equal(budgetFor(after, 'food', '2027-02'), 70000, '翌年は年末の額を引き継ぐ');
+  assert.equal(budgetFor(after, 'food', '2025-12'), 55000, '前の年は変わらない');
+  // その年にはじめて決める（それまで予算なし）。前の月は予算なしのまま
+  const first = withBudgetFrom(budgetMonths(budgets, 'house', 2025), 4, 30000);
+  assert.deepEqual(first.slice(0, 3), [null, null, null]);
+  assert.equal(first[3], 30000);
+}
+assert.equal(budgetMonthKey(2026, '2026-10-09'), '2026-10', '今年は今月');
+assert.equal(budgetMonthKey(2027, '2026-10-09'), '2027-01', 'これからの年は1月');
+assert.equal(budgetMonthKey(2025, '2026-10-09'), '2025-12', '過ぎた年は12月');
 
 // ---- 記録 ----
 let seq = 0;
@@ -749,7 +773,7 @@ assert.equal(yearOfMonth('2027-02'), 2027, '2027年2月は2027年');
     cat('out', '外食', 'food', { position: 1 }),
     cat('med', '医療費', null, { position: 1 }),
   ];
-  const buds: MoneyBudget[] = [{ id: 'fb', categoryId: 'food', year: 2026, monthlyAmount: 50000 }];
+  const buds: MoneyBudget[] = [{ id: 'fb', categoryId: 'food', year: 2026, monthAmounts: Array(12).fill(50000) }];
   const rs = [
     record('a1', { occurredOn: '2026-09-02', items: [item({ amount: 3000, categoryId: 'groc' }), item({ amount: 500, categoryId: 'med' })] }),
     record('a2', { occurredOn: '2026-09-20', store: 'ラーメン', items: [item({ amount: 1200, categoryId: 'out' })] }),
