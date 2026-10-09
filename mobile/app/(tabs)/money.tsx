@@ -29,7 +29,6 @@ import {
   deleteMoneyRecord,
   deleteMoneyWalletBalance,
   insertMoneyWallet,
-  loadMoney,
   loadMoneyStores,
   restoreMoneyWallet,
   saveMoneyRecord,
@@ -44,7 +43,7 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadHouseholdProducts } from '@/lib/api/householdProducts';
-import { loadSpecialItems } from '@/lib/api/specialExpenses';
+import { loadMoneyBootstrap } from '@/lib/api/moneyBootstrap';
 import { fiscalYearOfMonth, monthKeyOf, monthKeyOfDate, specialActualsFromRecords } from '@/lib/moneyUtils';
 import MoneyAccountsView from '@/components/money/MoneyAccountsView';
 import MoneyRecordsView from '@/components/money/MoneyRecordsView';
@@ -115,13 +114,12 @@ export default function MoneyScreen() {
   const historyLoading = useRef(false);
 
   const reload = useCallback(async (id: string) => {
-    const [money, loadedProducts, special, loadedSecurities] = await Promise.all([
-      loadMoney(supabase, id),
-      loadHouseholdProducts(supabase, id),
-      loadSpecialItems(supabase, id),
-      // 証券が読めなくても、ほかの面は出す。
-      loadSecurities(supabase, id, historyWanted.current).catch(() => NO_SECURITIES),
-    ]);
+    // 起動で読むものは、DBの money_bootstrap で1回にまとめて読む（docs/kakei.md §9.2.6）。
+    const { money, products: loadedProducts, special, securities: loadedSecurities } = await loadMoneyBootstrap(
+      supabase,
+      id,
+      historyWanted.current,
+    );
     setCategories(money.categories);
     setBudgets(money.budgets);
     setWallets(money.wallets);

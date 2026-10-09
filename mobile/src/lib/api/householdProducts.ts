@@ -11,7 +11,7 @@ type SupabaseDb = SupabaseClient<Database>;
 // 日用品の台帳と、買い出しリストへ送る（暮らしタブ。docs/home.md §4）。
 // PWA版の `src/lib/api/householdProducts.ts` と同じ。
 
-const rowToProduct = (row: ProductRow): HouseholdProduct => ({
+export const rowToProduct = (row: ProductRow): HouseholdProduct => ({
   id: row.id,
   name: row.name,
   category: row.category,

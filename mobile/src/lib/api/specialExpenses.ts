@@ -27,7 +27,7 @@ const rowToPlan = (row: PlanRow): SpecialPlan => ({
   tentative: row.tentative,
 });
 
-const rowToItem = (row: ItemRow, plans: PlanRow[]): SpecialItem => ({
+export const rowToItem = (row: ItemRow, plans: PlanRow[]): SpecialItem => ({
   id: row.id,
   kind: row.kind === 'income' ? 'income' : 'expense',
   category: row.category,

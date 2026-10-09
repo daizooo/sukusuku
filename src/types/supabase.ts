@@ -2341,6 +2341,7 @@ export type Database = {
         Args: { p_today?: string }
         Returns: number
       }
+      money_bootstrap: { Args: { p_family_id: string }; Returns: Json }
       money_day_of_month: {
         Args: { p_day: number; p_month: string }
         Returns: string

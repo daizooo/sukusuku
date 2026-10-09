@@ -25,13 +25,11 @@ import {
   deleteMoneyRecord,
   deleteMoneyWalletBalance,
   insertMoneyWallet,
-  loadMoney,
   loadMoneyStores,
   restoreMoneyWallet,
   saveMoneyRecord,
   saveMoneyWalletBalance,
   updateMoneyWallet,
-  type MoneyData,
 } from '@/lib/api/money';
 import {
   archiveSecurity,
@@ -41,7 +39,7 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadHouseholdProducts } from '@/lib/api/householdProducts';
-import { loadSpecialItems } from '@/lib/api/specialExpenses';
+import { loadMoneyBootstrap, type MoneyBootstrap } from '@/lib/api/moneyBootstrap';
 import { fiscalYearOfMonth, monthKeyOf, monthKeyOfDate, specialActualsFromRecords } from '@/lib/moneyUtils';
 import MoneyAccountsView from '../money/MoneyAccountsView';
 import MoneyRecordsView from '../money/MoneyRecordsView';
@@ -111,12 +109,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
 
   /** 読んだものを画面に入れる。 */
   const apply = useCallback(
-    ([money, loadedProducts, special, loadedSecurities]: [
-      MoneyData,
-      HouseholdProduct[],
-      SpecialItem[],
-      MoneySecuritiesData,
-    ]) => {
+    ({ money, products: loadedProducts, special, securities: loadedSecurities }: MoneyBootstrap) => {
       setCategories(money.categories);
       setBudgets(money.budgets);
       setWallets(money.wallets);
@@ -130,15 +123,9 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     },
     [],
   );
+  // 起動で読むものは、DBの money_bootstrap で1回にまとめて読む（docs/kakei.md §9.2.6）。
   const fetchAll = useCallback(
-    () =>
-      Promise.all([
-        loadMoney(supabase, familyId),
-        loadHouseholdProducts(supabase, familyId),
-        loadSpecialItems(supabase, familyId),
-        // 証券が読めなくても、ほかの面は出す。
-        loadSecurities(supabase, familyId, historyWanted.current).catch(() => NO_SECURITIES),
-      ]),
+    () => loadMoneyBootstrap(supabase, familyId, historyWanted.current),
     [supabase, familyId],
   );
   const reload = () => fetchAll().then(apply);
