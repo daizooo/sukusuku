@@ -16,7 +16,7 @@ import {
   MONEY_ICONS,
   topCategories,
 } from '@/lib/moneyUtils';
-import { formatFiscalYear, parseAmountInput } from '@/lib/specialUtils';
+import { formatYear, parseAmountInput } from '@/lib/specialUtils';
 import {
   insertDefaultMoneyCategories,
   insertMoneyCategory,
@@ -32,13 +32,13 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 //
 // 大分類（予算を置く単位）と小分類の追加・名前の変更・並べ替え・使わなくする。並べ替えは一覧のまま指で動かす
 // （大分類は左の持ち手をつかむ、小分類は長押し。リストと同じ操作。components/list/useDragReorder.ts）。
-// 大分類のアイコンは絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。予算は大分類ごと・年度ごとの月額で、
-// その年度に入れていなければ前の年度の額のまま（ここで直すと、その年度の額になる）。
+// 大分類のアイコンは絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。予算は大分類ごと・年ごとの月額で、
+// その年に入れていなければ前の年の額のまま（ここで直すと、その年の額になる）。
 // 種類がまだ無い家族には「標準の種類で始める」（Zaim のカテゴリをもとにした並び）。
 
 interface CategoryEditorProps {
   familyId: string;
-  fiscalYear: number;
+  year: number;
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
@@ -58,7 +58,7 @@ const KIND_OPTIONS: { id: MoneyCategoryKind; label: string }[] = [
 
 export default function CategoryEditor({
   familyId,
-  fiscalYear: initialYear,
+  year: initialYear,
   categories,
   budgets,
   onCategories,
@@ -66,7 +66,7 @@ export default function CategoryEditor({
   onClose,
 }: CategoryEditorProps) {
   const insets = useSafeAreaInsets();
-  const [fiscalYear, setFiscalYear] = useState(initialYear);
+  const [year, setYear] = useState(initialYear);
   const [kind, setKind] = useState<MoneyCategoryKind>('living');
   const [editing, setEditing] = useState<Editing>(null);
   const [busy, setBusy] = useState(false);
@@ -75,7 +75,7 @@ export default function CategoryEditor({
   const ordered = [...tops.filter((top) => !top.archived), ...tops.filter((top) => top.archived)];
   const totalBudget =
     kind === 'living'
-      ? tops.filter((top) => !top.archived).reduce((sum, top) => sum + (budgetFor(budgets, top.id, fiscalYear) ?? 0), 0)
+      ? tops.filter((top) => !top.archived).reduce((sum, top) => sum + (budgetFor(budgets, top.id, year) ?? 0), 0)
       : 0;
 
   const failed = (what: string) => Alert.alert(`${what}できませんでした`, 'もう一度お試しください。');
@@ -152,8 +152,8 @@ export default function CategoryEditor({
           replace(category);
         }
       }
-      if (result.budget !== null && result.budget !== budgetFor(budgets, category.id, fiscalYear)) {
-        const saved = await saveMoneyBudget(supabase, familyId, category.id, fiscalYear, result.budget);
+      if (result.budget !== null && result.budget !== budgetFor(budgets, category.id, year)) {
+        const saved = await saveMoneyBudget(supabase, familyId, category.id, year, result.budget);
         onBudgets((prev) => [...prev.filter((entry) => entry.id !== saved.id), saved]);
       }
     } catch {
@@ -177,18 +177,18 @@ export default function CategoryEditor({
         <View style={styles.bar}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="前の年度"
-            onPress={() => setFiscalYear((year) => year - 1)}
+            accessibilityLabel="前の年"
+            onPress={() => setYear((current) => current - 1)}
             hitSlop={8}
             style={styles.yearButton}
           >
             <ChevronLeft size={18} color={colors.textSubtle} />
           </Pressable>
-          <Text style={styles.year}>{formatFiscalYear(fiscalYear)}</Text>
+          <Text style={styles.year}>{formatYear(year)}</Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="次の年度"
-            onPress={() => setFiscalYear((year) => year + 1)}
+            accessibilityLabel="次の年"
+            onPress={() => setYear((current) => current + 1)}
             hitSlop={8}
             style={styles.yearButton}
           >
@@ -223,7 +223,7 @@ export default function CategoryEditor({
           <View {...drag.panHandlers} style={styles.list}>
           {ordered.map((top) => {
             const children = childCategories(categories, top.id, true);
-            const budget = kind === 'living' ? budgetFor(budgets, top.id, fiscalYear) : null;
+            const budget = kind === 'living' ? budgetFor(budgets, top.id, year) : null;
             const topSection = `tops-${kind}`;
             return (
               <View
@@ -296,8 +296,8 @@ export default function CategoryEditor({
             category={editing.category}
             isTop={editing.category === null ? editing.parentId === null : editing.category.parentId === null}
             showBudget={kind === 'living'}
-            fiscalYear={fiscalYear}
-            budget={editing.category ? budgetFor(budgets, editing.category.id, fiscalYear) : null}
+            year={year}
+            budget={editing.category ? budgetFor(budgets, editing.category.id, year) : null}
             onClose={() => setEditing(null)}
             onSubmit={(result) => void save(result)}
             onToggleArchive={editing.category ? () => void toggleArchive(editing.category!) : undefined}
@@ -322,7 +322,7 @@ function CategorySheet({
   category,
   isTop,
   showBudget,
-  fiscalYear,
+  year,
   budget,
   onClose,
   onSubmit,
@@ -331,7 +331,7 @@ function CategorySheet({
   category: MoneyCategory | null;
   isTop: boolean;
   showBudget: boolean;
-  fiscalYear: number;
+  year: number;
   budget: number | null;
   onClose: () => void;
   onSubmit: (result: SheetResult) => void;
@@ -443,7 +443,7 @@ function CategorySheet({
         )}
         {withBudget && (
           <View style={styles.field}>
-            <Text style={styles.label}>{formatFiscalYear(fiscalYear)}の月の予算（円）</Text>
+            <Text style={styles.label}>{formatYear(year)}の月の予算（円）</Text>
             <TextInput
               style={styles.input}
               value={amount}
@@ -452,7 +452,7 @@ function CategorySheet({
               placeholder="未設定"
               placeholderTextColor={colors.textFaint}
             />
-            <Text style={styles.hint}>次の年度も、直すまで同じ額を使います</Text>
+            <Text style={styles.hint}>次の年も、直すまで同じ額を使います</Text>
           </View>
         )}
         {error && <Text style={styles.error}>{error}</Text>}

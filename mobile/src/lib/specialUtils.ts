@@ -4,7 +4,7 @@
 // 特別費は年（1月〜12月）で締める（2026-10-09に、4月始まりの年度から変えた）。月の並びも1月→12月。
 // 1つの項目が年に複数回出る（予定が複数行）・n年おきに出る（周期）・1回きり、のどれも
 // 「その年に出る予定の行」を作る形にそろえて、画面はその行を月ごとに並べるだけにする。
-// 生活費の予算だけは今までどおり年度（4月始まり）ごとの月額で持つ（`formatFiscalYear`・moneyUtils の fiscalYearOfMonth）。
+// 生活費の予算も同じく年ごとの月額（2026-10-09にすべて暦年にそろえた）。
 //
 // 実績は2通り。予定にひも付く（「済」を押した。plan_id がある）ものは、その予定の行の実績になる。
 // ひも付かないもの（予定外の出費・予定を消した実績）は、予算0の行として実績の月に並ぶ。
@@ -31,9 +31,6 @@ export function yearOfDate(date: Date): number {
 
 /** 年の表示（特別費・振り返りの年）。 */
 export const formatYear = (year: number) => `${year}年`;
-
-/** 年度の表示（生活費の予算。4月始まり）。 */
-export const formatFiscalYear = (fiscalYear: number) => `${fiscalYear}年度`;
 
 /** 金額の入力を読む。「30,500」「¥30500」「３０５００円」を受け付ける。空・負・小数・読めないものは null。 */
 export function parseAmountInput(text: string): number | null {

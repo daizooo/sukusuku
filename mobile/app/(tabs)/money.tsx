@@ -45,7 +45,7 @@ import {
 } from '@/lib/api/moneySecurities';
 import { loadHouseholdProducts } from '@/lib/api/householdProducts';
 import { loadMoneyBootstrap } from '@/lib/api/moneyBootstrap';
-import { fiscalYearOfMonth, monthKeyOf, monthKeyOfDate, specialActualsFromRecords, yearOfMonth } from '@/lib/moneyUtils';
+import { monthKeyOf, monthKeyOfDate, specialActualsFromRecords, yearOfMonth } from '@/lib/moneyUtils';
 import MoneyAccountsView from '@/components/money/MoneyAccountsView';
 import MoneyRecordsView from '@/components/money/MoneyRecordsView';
 import MoneyReviewView from '@/components/money/MoneyReviewView';
@@ -478,7 +478,6 @@ export default function MoneyScreen() {
       {settingsOpen && familyId && (
         <MoneySettings
           familyId={familyId}
-          fiscalYear={fiscalYearOfMonth(monthKey)}
           year={yearOfMonth(monthKey)}
           categories={categories}
           budgets={budgets}
@@ -503,7 +502,7 @@ export default function MoneyScreen() {
       {editingCategories && familyId && (
         <CategoryEditor
           familyId={familyId}
-          fiscalYear={fiscalYearOfMonth(monthKey)}
+          year={yearOfMonth(monthKey)}
           categories={categories}
           budgets={budgets}
           onCategories={setCategories}

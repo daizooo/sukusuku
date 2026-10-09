@@ -1,8 +1,8 @@
 // 家計タブの数え方（月の集計・予算との差・種類の並び・電卓）。docs/kakei.md §3〜§5。
 // mobile版の `mobile/src/lib/moneyUtils.ts` と同じ中身にしてある（片方を直したらもう片方も直す）。
 //
-// 予算は4月始まりの年度（2026年4月〜2027年3月＝2026年度）ごとの月額で、その年度の予算が無ければ前の年度の額を使う
-// （毎年入れ直さなくてよいように）。振り返りの「年」と特別費は暦年（1月〜12月。2026-10-09に年度から変えた）。
+// 年はすべて暦年（1月〜12月。2026-10-09に、4月始まりの年度から変えた）。予算は大分類・年ごとの月額で、
+// その年の予算が無ければ前の年の額を使う（毎年入れ直さなくてよいように）。
 //
 // 生活費の収支＝収入 − 生活費（特別費以外の支出）。特別費（特別費の項目を持つ品目）は収支に入れず、別枠で数える
 // （docs/kakei.md §4.1）。振替は集計に入れない。貯金は記録なので、収支の式にも表示にも入れない。
@@ -33,10 +33,7 @@ import type { SpecialRow } from '@/lib/specialUtils';
 
 const pad2 = (value: number) => String(value).padStart(2, '0');
 
-// ---- 月・年度 ----
-
-/** 年度の最初の月（生活費の予算の年度）。 */
-const FISCAL_START_MONTH = 4;
+// ---- 月・年 ----
 
 /** YYYY-MM-DD の月（YYYY-MM）。 */
 export const monthKeyOf = (dateKey: string): string => dateKey.slice(0, 7);
@@ -55,12 +52,6 @@ export function shiftMonth(monthKey: string, delta: number): string {
 export function formatMonthKey(monthKey: string): string {
   const [year, month] = monthKey.split('-').map(Number);
   return `${year}年${month}月`;
-}
-
-/** 月（YYYY-MM）が属する年度。2027-02 は 2026。 */
-export function fiscalYearOfMonth(monthKey: string): number {
-  const [year, month] = monthKey.split('-').map(Number);
-  return month >= FISCAL_START_MONTH ? year : year - 1;
 }
 
 /** 「9/14」。 */
@@ -364,12 +355,12 @@ export function categoryPath(categories: readonly MoneyCategory[], categoryId: s
   return parent ? `${parent.name} › ${category.name}` : category.name;
 }
 
-/** その年度の大分類の月の予算。その年度に無ければ、前の年度のいちばん近いもの。どこにも無ければ null。 */
-export function budgetFor(budgets: readonly MoneyBudget[], categoryId: string, fiscalYear: number): number | null {
+/** その年の大分類の月の予算。その年に無ければ、前の年のいちばん近いもの。どこにも無ければ null。 */
+export function budgetFor(budgets: readonly MoneyBudget[], categoryId: string, year: number): number | null {
   let found: MoneyBudget | null = null;
   for (const budget of budgets) {
-    if (budget.categoryId !== categoryId || budget.fiscalYear > fiscalYear) continue;
-    if (found === null || budget.fiscalYear > found.fiscalYear) found = budget;
+    if (budget.categoryId !== categoryId || budget.year > year) continue;
+    if (found === null || budget.year > found.year) found = budget;
   }
   return found?.monthlyAmount ?? null;
 }
@@ -647,7 +638,7 @@ export function buildBudgetTiles(
     .filter((category) => !category.archived || (spend.get(category.id) ?? 0) > 0)
     .map((category) => {
       const monthly = keys
-        .map((key) => budgetFor(budgets, category.id, fiscalYearOfMonth(key)))
+        .map((key) => budgetFor(budgets, category.id, yearOfMonth(key)))
         .filter((value): value is number => value !== null);
       const budget = monthly.length === 0 ? null : monthly.reduce((sum, value) => sum + value, 0);
       const actual = spend.get(category.id) ?? 0;
@@ -698,9 +689,9 @@ export function buildMonthSummary(
       }
     }
   }
-  const fiscalYear = fiscalYearOfMonth(monthKey);
+  const year = yearOfMonth(monthKey);
   const livingBudget = topCategories(categories, 'living').reduce(
-    (sum, category) => sum + (budgetFor(budgets, category.id, fiscalYear) ?? 0),
+    (sum, category) => sum + (budgetFor(budgets, category.id, year) ?? 0),
     0,
   );
   return {
@@ -800,8 +791,8 @@ export interface SpecialProgress {
 }
 
 /**
- * その月に、特別費の年度の予算がどれだけ減ったか（docs/kakei.md §4.1）。月の収支には入れない。
- * rows は specialUtils の buildYearRows(…, 年度, 'expense')。
+ * その月に、特別費の年の予算がどれだけ減ったか（docs/kakei.md §4.1）。月の収支には入れない。
+ * rows は specialUtils の buildYearRows(…, 年, 'expense')。
  */
 export function buildSpecialProgress(rows: readonly SpecialRow[], monthKey: string): SpecialProgress {
   const month = Number(monthKey.slice(5, 7));
@@ -822,19 +813,19 @@ export function buildSpecialProgress(rows: readonly SpecialRow[], monthKey: stri
 }
 
 export interface SpecialReview {
-  /** 年度の特別費の予算（予定の合計）。 */
+  /** 年の特別費の予算（予定の合計）。 */
   yearBudget: number;
-  /** 見ている期間（月、または年度ぜんたい）に払った特別費。 */
+  /** 見ている期間（月、または年ぜんたい）に払った特別費。 */
   spent: number;
-  /** 年度の初めから、見ている期間の終わりまでに払った額。 */
+  /** 年のはじめから、見ている期間の終わりまでに払った額。 */
   spentToDate: number;
-  /** 年度の予算の残り＝予算 − ここまで払った額（マイナスは超えた額）。 */
+  /** 年の予算の残り＝予算 − ここまで払った額（マイナスは超えた額）。 */
   remaining: number;
 }
 
 /**
  * 振り返りの特別費（docs/kakei.md §4.1・§4.2）。monthKey があればその月に払った額と、その月までの累計での予算の残り。
- * null なら年度ぜんたい。rows は specialUtils の buildYearRows(…, 年度, 'expense')。
+ * null なら年ぜんたい。rows は specialUtils の buildYearRows(…, 年, 'expense')。
  */
 export function buildSpecialReview(rows: readonly SpecialRow[], monthKey: string | null): SpecialReview {
   if (monthKey !== null) {
@@ -908,7 +899,7 @@ export function buildCategoryAnalysis(
   const actual = sum(narrowed);
 
   const monthly = monthKeys
-    .map((key) => budgetFor(budgets, topId, fiscalYearOfMonth(key)))
+    .map((key) => budgetFor(budgets, topId, yearOfMonth(key)))
     .filter((value): value is number => value !== null);
   const budget = monthly.length === 0 ? null : monthly.reduce((total, value) => total + value, 0);
 

@@ -14,7 +14,7 @@ import {
   MONEY_ICONS,
   topCategories,
 } from '@/lib/moneyUtils';
-import { formatFiscalYear, parseAmountInput } from '@/lib/specialUtils';
+import { formatYear, parseAmountInput } from '@/lib/specialUtils';
 import {
   insertDefaultMoneyCategories,
   insertMoneyCategory,
@@ -29,13 +29,13 @@ import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader } from './moneyVi
 //
 // 大分類（予算を置く単位）と小分類の追加・名前の変更・並べ替え・使わなくする。並べ替えは一覧のまま動かす
 // （大分類は左の持ち手をつかむ、小分類は長押し。マウスでも指でも。リストと同じ操作。ui/useDragReorder.ts）。
-// 大分類のアイコンは絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。予算は大分類ごと・年度ごとの月額で、
-// その年度に入れていなければ前の年度の額のまま（ここで直すと、その年度の額になる）。
+// 大分類のアイコンは絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。予算は大分類ごと・年ごとの月額で、
+// その年に入れていなければ前の年の額のまま（ここで直すと、その年の額になる）。
 // 種類がまだ無い家族には「標準の種類で始める」（Zaim のカテゴリをもとにした並び）。
 
 interface CategoryEditorProps {
   familyId: string;
-  fiscalYear: number;
+  year: number;
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
@@ -55,7 +55,7 @@ const yearButtonClass =
 
 export default function CategoryEditor({
   familyId,
-  fiscalYear: initialYear,
+  year: initialYear,
   categories,
   budgets,
   onCategories,
@@ -63,7 +63,7 @@ export default function CategoryEditor({
   onClose,
 }: CategoryEditorProps) {
   const supabase = useMemo(() => createClient(), []);
-  const [fiscalYear, setFiscalYear] = useState(initialYear);
+  const [year, setYear] = useState(initialYear);
   const [kind, setKind] = useState<MoneyCategoryKind>('living');
   const [editing, setEditing] = useState<Editing>(null);
   const [busy, setBusy] = useState(false);
@@ -72,7 +72,7 @@ export default function CategoryEditor({
   const ordered = [...tops.filter((top) => !top.archived), ...tops.filter((top) => top.archived)];
   const totalBudget =
     kind === 'living'
-      ? tops.filter((top) => !top.archived).reduce((sum, top) => sum + (budgetFor(budgets, top.id, fiscalYear) ?? 0), 0)
+      ? tops.filter((top) => !top.archived).reduce((sum, top) => sum + (budgetFor(budgets, top.id, year) ?? 0), 0)
       : 0;
 
   const failed = (what: string) => window.alert(`${what}できませんでした。もう一度お試しください。`);
@@ -149,8 +149,8 @@ export default function CategoryEditor({
           replace(category);
         }
       }
-      if (result.budget !== null && result.budget !== budgetFor(budgets, category.id, fiscalYear)) {
-        const saved = await saveMoneyBudget(supabase, familyId, category.id, fiscalYear, result.budget);
+      if (result.budget !== null && result.budget !== budgetFor(budgets, category.id, year)) {
+        const saved = await saveMoneyBudget(supabase, familyId, category.id, year, result.budget);
         onBudgets((prev) => [...prev.filter((entry) => entry.id !== saved.id), saved]);
       }
     } catch {
@@ -171,11 +171,11 @@ export default function CategoryEditor({
     <FullScreen onBack={onClose}>
       <ScreenHeader title="カテゴリと予算" onClose={onClose} />
       <div className="shrink-0 flex items-center gap-2 px-4 py-2.5">
-        <button type="button" aria-label="前の年度" onClick={() => setFiscalYear((year) => year - 1)} className={yearButtonClass}>
+        <button type="button" aria-label="前の年" onClick={() => setYear((current) => current - 1)} className={yearButtonClass}>
           <ChevronLeft size={18} />
         </button>
-        <span className="text-base font-bold text-gray-900 tabular-nums">{formatFiscalYear(fiscalYear)}</span>
-        <button type="button" aria-label="次の年度" onClick={() => setFiscalYear((year) => year + 1)} className={yearButtonClass}>
+        <span className="text-base font-bold text-gray-900 tabular-nums">{formatYear(year)}</span>
+        <button type="button" aria-label="次の年" onClick={() => setYear((current) => current + 1)} className={yearButtonClass}>
           <ChevronRight size={18} />
         </button>
         <span className="flex-1" />
@@ -208,7 +208,7 @@ export default function CategoryEditor({
         )}
         {drag.arrange(`tops-${kind}`, ordered).map((top) => {
           const children = drag.arrange(`children-${top.id}`, childCategories(categories, top.id, true));
-          const budget = kind === 'living' ? budgetFor(budgets, top.id, fiscalYear) : null;
+          const budget = kind === 'living' ? budgetFor(budgets, top.id, year) : null;
           return (
             <div
               key={top.id}
@@ -289,8 +289,8 @@ export default function CategoryEditor({
           category={editing.category}
           isTop={editing.category === null ? editing.parentId === null : editing.category.parentId === null}
           showBudget={kind === 'living'}
-          fiscalYear={fiscalYear}
-          budget={editing.category ? budgetFor(budgets, editing.category.id, fiscalYear) : null}
+          year={year}
+          budget={editing.category ? budgetFor(budgets, editing.category.id, year) : null}
           onClose={() => setEditing(null)}
           onSubmit={(result) => void save(result)}
           onToggleArchive={editing.category ? () => void toggleArchive(editing.category!) : undefined}
@@ -318,7 +318,7 @@ function CategoryModal({
   category,
   isTop,
   showBudget,
-  fiscalYear,
+  year,
   budget,
   onClose,
   onSubmit,
@@ -327,7 +327,7 @@ function CategoryModal({
   category: MoneyCategory | null;
   isTop: boolean;
   showBudget: boolean;
-  fiscalYear: number;
+  year: number;
   budget: number | null;
   onClose: () => void;
   onSubmit: (result: SheetResult) => void;
@@ -447,7 +447,7 @@ function CategoryModal({
         )}
         {withBudget && (
           <label className="block">
-            <span className={labelClass}>{formatFiscalYear(fiscalYear)}の月の予算（円）</span>
+            <span className={labelClass}>{formatYear(year)}の月の予算（円）</span>
             <input
               className={`${inputClass} tabular-nums`}
               value={amount}
@@ -455,7 +455,7 @@ function CategoryModal({
               inputMode="numeric"
               placeholder="未設定"
             />
-            <span className="mt-1 block text-[11px] text-gray-400">次の年度も、直すまで同じ額を使います</span>
+            <span className="mt-1 block text-[11px] text-gray-400">次の年も、直すまで同じ額を使います</span>
           </label>
         )}
         {error && <p className="text-xs text-red-500">{error}</p>}

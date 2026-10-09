@@ -6,7 +6,6 @@ import {
   appliesInYear,
   buildYearRows,
   cycleLabel,
-  formatFiscalYear,
   formatYear,
   groupByMonth,
   isOverBudget,
@@ -25,7 +24,6 @@ assert.equal(yearOf('2026-12-31'), 2026, '12月末は同じ年');
 assert.equal(yearOf('2027-03-31'), 2027, '3月は年度では前でも、年では新しい年');
 assert.equal(yearOfDate(new Date(2026, 2, 31)), 2026);
 assert.equal(formatYear(2026), '2026年');
-assert.equal(formatFiscalYear(2026), '2026年度', '生活費の予算は今までどおり年度');
 
 // ---- 金額の入力 ----
 assert.equal(parseAmountInput('30,500'), 30500);

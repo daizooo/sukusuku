@@ -573,11 +573,11 @@ export interface MoneyCategory {
   archived: boolean;
 }
 
-/** 家計の予算。大分類・年度ごとの月額。money_budgets に対応。 */
+/** 家計の予算。大分類・年（暦年）ごとの月額。money_budgets に対応（列名は fiscal_year のまま）。 */
 export interface MoneyBudget {
   id: string;
   categoryId: string;
-  fiscalYear: number;
+  year: number;
   monthlyAmount: number;
 }
 

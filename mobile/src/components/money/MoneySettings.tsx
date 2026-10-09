@@ -15,7 +15,7 @@ import type {
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import { budgetFor, formatYen, topCategories } from '@/lib/moneyUtils';
-import { formatFiscalYear, formatYear } from '@/lib/specialUtils';
+import { formatYear } from '@/lib/specialUtils';
 import CategoryEditor from '@/components/money/CategoryEditor';
 import RecurringSettings from '@/components/money/RecurringSettings';
 import SpecialSettings from '@/components/money/SpecialSettings';
@@ -30,9 +30,7 @@ import { ScreenHeader } from '@/components/money/moneyVisual';
 
 interface MoneySettingsProps {
   familyId: string;
-  /** 生活費の予算の年度（4月始まり）。 */
-  fiscalYear: number;
-  /** 特別費の予定を最初に見る年（暦年）。 */
+  /** 予算・特別費の予定を最初に見る年（暦年）。 */
   year: number;
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
@@ -57,7 +55,6 @@ type Page = 'menu' | 'categories' | 'special' | 'stores' | 'recurring';
 
 export default function MoneySettings({
   familyId,
-  fiscalYear,
   year,
   categories,
   budgets,
@@ -81,7 +78,7 @@ export default function MoneySettings({
   const innerBack = useRef<(() => void) | null>(null);
 
   const tops = topCategories(categories, 'living', true).filter((top) => !top.archived);
-  const totalBudget = tops.reduce((sum, top) => sum + (budgetFor(budgets, top.id, fiscalYear) ?? 0), 0);
+  const totalBudget = tops.reduce((sum, top) => sum + (budgetFor(budgets, top.id, year) ?? 0), 0);
   const storeCount = stores.filter((store) => !store.archived).length;
   const recurringCount = recurring.filter((rule) => !rule.archived).length;
   const specialExpenseCount = specialItems.filter((item) => item.kind === 'expense').length;
@@ -91,7 +88,7 @@ export default function MoneySettings({
     {
       id: 'categories',
       label: 'カテゴリと予算',
-      summary: `生活費の大分類 ${tops.length}個・月の予算 ${formatYen(totalBudget)}（${formatFiscalYear(fiscalYear)}）`,
+      summary: `生活費の大分類 ${tops.length}個・月の予算 ${formatYen(totalBudget)}（${formatYear(year)}）`,
       icon: Tag,
     },
     {
@@ -175,7 +172,7 @@ export default function MoneySettings({
       {page === 'categories' && (
         <CategoryEditor
           familyId={familyId}
-          fiscalYear={fiscalYear}
+          year={year}
           categories={categories}
           budgets={budgets}
           onCategories={onCategories}

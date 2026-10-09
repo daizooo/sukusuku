@@ -6,7 +6,6 @@ import { colors } from '@/lib/theme';
 import {
   budgetFor,
   childCategories,
-  fiscalYearOfMonth,
   yearOfMonth,
   formatYen,
   frequentCategoryIds,
@@ -60,8 +59,6 @@ export default function CategoryPicker({
   onEditCategories,
 }: CategoryPickerProps) {
   const categoryKind = kind === 'income' ? 'income' : 'living';
-  const fiscalYear = fiscalYearOfMonth(monthKey);
-  // 特別費の予定は暦年（1月〜12月）。生活費の予算だけ年度。
   const year = yearOfMonth(monthKey);
   const tops = useMemo(() => topCategories(categories, categoryKind), [categories, categoryKind]);
   const frequent = useMemo(
@@ -116,7 +113,7 @@ export default function CategoryPicker({
 
         {tops.map((top) => {
           const children = childCategories(categories, top.id);
-          const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, fiscalYear) : null;
+          const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, year) : null;
           const remaining = budget === null ? null : budget - (spend.get(top.id) ?? 0);
           return (
             <View key={top.id} style={styles.topCard}>

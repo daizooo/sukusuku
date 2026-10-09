@@ -41,7 +41,7 @@ import {
 } from '@/lib/api/moneySecurities';
 import { loadHouseholdProducts } from '@/lib/api/householdProducts';
 import { loadMoneyBootstrap, type MoneyBootstrap } from '@/lib/api/moneyBootstrap';
-import { fiscalYearOfMonth, monthKeyOf, monthKeyOfDate, specialActualsFromRecords, yearOfMonth } from '@/lib/moneyUtils';
+import { monthKeyOf, monthKeyOfDate, specialActualsFromRecords, yearOfMonth } from '@/lib/moneyUtils';
 import MoneyAccountsView from '../money/MoneyAccountsView';
 import MoneyRecordsView from '../money/MoneyRecordsView';
 import MoneyReviewView from '../money/MoneyReviewView';
@@ -460,7 +460,6 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       {settingsOpen && (
         <MoneySettings
           familyId={familyId}
-          fiscalYear={fiscalYearOfMonth(monthKey)}
           year={yearOfMonth(monthKey)}
           categories={categories}
           budgets={budgets}
@@ -483,7 +482,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       {editingCategories && (
         <CategoryEditor
           familyId={familyId}
-          fiscalYear={fiscalYearOfMonth(monthKey)}
+          year={yearOfMonth(monthKey)}
           categories={categories}
           budgets={budgets}
           onCategories={setCategories}

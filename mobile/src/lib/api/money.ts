@@ -43,7 +43,7 @@ export const rowToCategory = (row: CategoryRow): MoneyCategory => ({
 export const rowToBudget = (row: BudgetRow): MoneyBudget => ({
   id: row.id,
   categoryId: row.category_id,
-  fiscalYear: row.fiscal_year,
+  year: row.fiscal_year,
   monthlyAmount: row.monthly_amount,
 });
 
@@ -329,18 +329,18 @@ export async function insertDefaultMoneyCategories(supabase: SupabaseDb, familyI
   return [...(parents ?? []), ...(childRows ?? [])].map(rowToCategory);
 }
 
-/** 大分類の、その年度の月の予算を決める。 */
+/** 大分類の、その年の月の予算を決める（DBの列名は fiscal_year のまま。中身は暦年）。 */
 export async function saveMoneyBudget(
   supabase: SupabaseDb,
   familyId: string,
   categoryId: string,
-  fiscalYear: number,
+  year: number,
   monthlyAmount: number,
 ): Promise<MoneyBudget> {
   const { data, error } = await supabase
     .from('money_budgets')
     .upsert(
-      { family_id: familyId, category_id: categoryId, fiscal_year: fiscalYear, monthly_amount: monthlyAmount },
+      { family_id: familyId, category_id: categoryId, fiscal_year: year, monthly_amount: monthlyAmount },
       { onConflict: 'category_id,fiscal_year' },
     )
     .select('*')

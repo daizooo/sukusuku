@@ -38,7 +38,6 @@ import {
   formatDayOfMonth,
   recurringHistory,
   recurringScheduleLabel,
-  fiscalYearOfMonth,
   formatSignedYen,
   groupsFromItems,
   itemsFromGroups,
@@ -69,12 +68,10 @@ import {
 import { buildYearRows } from './specialUtils.ts';
 import type { MoneyBudget, MoneyCategory, MoneyHolding, MoneyHoldingValue, MoneyItem, MoneyRecord, MoneySecurity, MoneyStore, MoneyWallet, MoneyWalletBalance, SpecialItem } from '../types/app.ts';
 
-// ---- 月・年度 ----
+// ---- 月・年 ----
 assert.equal(shiftMonth('2026-12', 1), '2027-01');
 assert.equal(shiftMonth('2026-01', -1), '2025-12');
 assert.equal(shiftMonth('2026-09', -12), '2025-09');
-assert.equal(fiscalYearOfMonth('2026-04'), 2026);
-assert.equal(fiscalYearOfMonth('2027-03'), 2026, '3月は前の年度');
 assert.equal(formatSignedYen(1200), '+¥1,200');
 assert.equal(formatSignedYen(-3800), '−¥3,800');
 assert.equal(formatSignedYen(0), '¥0');
@@ -124,17 +121,17 @@ assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: 'drug' }], 'drug
 assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: 'drug' }], 'house'), false);
 assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: null }], null), false);
 
-// ---- 予算（その年度に無ければ前の年度） ----
+// ---- 予算（その年に無ければ前の年） ----
 const budgets: MoneyBudget[] = [
-  { id: 'b1', categoryId: 'food', fiscalYear: 2025, monthlyAmount: 55000 },
-  { id: 'b2', categoryId: 'food', fiscalYear: 2026, monthlyAmount: 60000 },
-  { id: 'b3', categoryId: 'med', fiscalYear: 2024, monthlyAmount: 5000 },
-  { id: 'b4', categoryId: 'house', fiscalYear: 2026, monthlyAmount: 85000 },
+  { id: 'b1', categoryId: 'food', year: 2025, monthlyAmount: 55000 },
+  { id: 'b2', categoryId: 'food', year: 2026, monthlyAmount: 60000 },
+  { id: 'b3', categoryId: 'med', year: 2024, monthlyAmount: 5000 },
+  { id: 'b4', categoryId: 'house', year: 2026, monthlyAmount: 85000 },
 ];
 assert.equal(budgetFor(budgets, 'food', 2026), 60000);
-assert.equal(budgetFor(budgets, 'food', 2027), 60000, '翌年度は今の額のまま');
+assert.equal(budgetFor(budgets, 'food', 2027), 60000, '翌年は今の額のまま');
 assert.equal(budgetFor(budgets, 'food', 2025), 55000);
-assert.equal(budgetFor(budgets, 'food', 2024), null, '前の年度にも無ければ未設定');
+assert.equal(budgetFor(budgets, 'food', 2024), null, '前の年にも無ければ未設定');
 assert.equal(budgetFor(budgets, 'med', 2026), 5000);
 
 // ---- 記録 ----
@@ -316,7 +313,7 @@ assert.equal(pressCalcKey('12+', '*'), '12*', '演算子は置き換える');
 assert.equal(pressCalcKey('', '+'), '');
 assert.equal(pressCalcKey('12', 'back'), '1');
 
-// ---- 年度の収支 ----
+// ---- 年の収支 ----
 const year = buildYearSummary(records, categories, budgets, 2026, '2026-09');
 assert.equal(year.months.length, 12);
 assert.equal(year.months[0].monthKey, '2026-01');
@@ -353,7 +350,7 @@ assert.equal(
   'upTo より後の月は合計に入れない',
 );
 
-// ---- 特別費の年度の予算の減り ----
+// ---- 特別費の年の予算の減り ----
 const specialItems: SpecialItem[] = [
   {
     id: 'tax',
@@ -395,10 +392,10 @@ assert.deepEqual(buildSpecialProgress(specialRows, '2026-06'), {
   pendingThisMonth: 0,
 });
 
-// 振り返りの特別費: 月はその月に払った額と、その月までの累計での予算の残り。年は年度ぜんたい
+// 振り返りの特別費: 月はその月に払った額と、その月までの累計での予算の残り。年は年ぜんたい
 assert.deepEqual(buildSpecialReview(specialRows, '2026-09'), { yearBudget: 170000, spent: 58000, spentToDate: 78000, remaining: 92000 });
 assert.deepEqual(buildSpecialReview(specialRows, '2026-06'), { yearBudget: 170000, spent: 0, spentToDate: 20000, remaining: 150000 });
-assert.deepEqual(buildSpecialReview(specialRows, null), { yearBudget: 170000, spent: 78000, spentToDate: 78000, remaining: 92000 }, '年度ぜんたい');
+assert.deepEqual(buildSpecialReview(specialRows, null), { yearBudget: 170000, spent: 78000, spentToDate: 78000, remaining: 92000 }, '年ぜんたい');
 assert.equal(buildSpecialReview([], '2026-09').remaining, 0);
 
 // ---- 入力の形との行き来 ----
@@ -742,7 +739,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
 
 // ---- 年（暦年） ----
 assert.deepEqual(yearMonthKeys(2026), ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12']);
-assert.equal(yearOfMonth('2027-02'), 2027, '年度では2026でも、年は2027');
+assert.equal(yearOfMonth('2027-02'), 2027, '2027年2月は2027年');
 
 // ---- 内訳の分析（振り返りの内訳をタップしたとき） ----
 {
@@ -752,7 +749,7 @@ assert.equal(yearOfMonth('2027-02'), 2027, '年度では2026でも、年は2027'
     cat('out', '外食', 'food', { position: 1 }),
     cat('med', '医療費', null, { position: 1 }),
   ];
-  const buds: MoneyBudget[] = [{ id: 'fb', categoryId: 'food', fiscalYear: 2026, monthlyAmount: 50000 }];
+  const buds: MoneyBudget[] = [{ id: 'fb', categoryId: 'food', year: 2026, monthlyAmount: 50000 }];
   const rs = [
     record('a1', { occurredOn: '2026-09-02', items: [item({ amount: 3000, categoryId: 'groc' }), item({ amount: 500, categoryId: 'med' })] }),
     record('a2', { occurredOn: '2026-09-20', store: 'ラーメン', items: [item({ amount: 1200, categoryId: 'out' })] }),
