@@ -5,8 +5,12 @@ import assert from 'node:assert/strict';
 import {
   compactYen,
   costEstimate,
+  formatPriceChange,
   monthlyPurchases,
   newestFirst,
+  priceHistory,
+  priceSummary,
+  priceTrend,
   purchaseTotals,
   resolveUnitPrice,
   type PurchaseLine,
@@ -79,5 +83,38 @@ assert.equal(compactYen(1234), '1,234');
 assert.equal(compactYen(9999), '9,999');
 assert.equal(compactYen(12000), '1.2万');
 assert.equal(compactYen(30000), '3万');
+
+// 値段の推移: 古い順の点（日付・場所・値段）。
+const priced = (on: string, unitPrice: number, store: string): PurchaseLine => ({
+  on,
+  quantity: 1,
+  amount: unitPrice,
+  unitPrice,
+  store,
+});
+const history = [
+  priced('2026-10-08', 648, 'イオン'),
+  priced('2026-08-01', 598, 'コストコ'),
+  priced('2026-09-05', 598, 'イオン'),
+];
+const trend = priceTrend(history);
+assert.deepEqual(trend.map((point) => point.on), ['2026-08-01', '2026-09-05', '2026-10-08']);
+assert.deepEqual(trend[2], { on: '2026-10-08', store: 'イオン', unitPrice: 648 });
+assert.equal(priceSummary([]), null);
+// 要約: 最初→いま の差、最安（同じ値段なら新しいほう）。
+const summary = priceSummary(trend);
+assert.equal(summary?.change, 50);
+assert.deepEqual(summary?.lowest, { on: '2026-09-05', store: 'イオン', unitPrice: 598 });
+assert.equal(summary?.first.store, 'コストコ');
+assert.equal(summary?.latest.unitPrice, 648);
+// 1回だけなら差は0。
+assert.equal(priceSummary(trend.slice(0, 1))?.change, 0);
+
+// 買った記録（新しい順）の値段の差: 1つ前に買ったときとの差。同じ値段・最初の1回は null。
+assert.deepEqual(priceHistory(history).map((row) => row.change), [50, null, null]);
+assert.deepEqual(priceHistory([priced('2026-10-08', 500, 'a'), priced('2026-10-01', 520, 'b')]).map((row) => row.change), [-20, null]);
+
+assert.equal(formatPriceChange(50), '+¥50');
+assert.equal(formatPriceChange(-1200), '−¥1,200');
 
 console.log('productPurchases: ok');

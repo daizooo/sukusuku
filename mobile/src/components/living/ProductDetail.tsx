@@ -1,18 +1,24 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import { Pencil, Plus } from 'lucide-react-native';
 import type { HouseholdProduct } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
 import { toDateString } from '@/lib/dateUtils';
+import { formatAxisYen, niceTicks } from '@/lib/moneyUtils';
 import { loadProductPurchases } from '@/lib/api/householdProducts';
 import {
   MIN_PURCHASES_FOR_COST,
   compactYen,
   costEstimate,
+  formatPriceChange,
   monthlyPurchases,
-  newestFirst,
+  priceHistory,
+  priceSummary,
+  priceTrend,
   purchaseTotals,
+  type PricePoint,
   type PurchaseLine,
 } from '@/lib/productPurchases';
 import { formatPrice } from '@/lib/shoppingUtils';
@@ -38,6 +44,84 @@ interface ProductDetailProps {
 /** 月ごとの棒の高さ（最大）。 */
 const BAR_MAX = 56;
 
+/** 値段の推移の折れ線（買った日ごとの単価）。PWA版の同名の部品と同じ並び。 */
+const CHART_HEIGHT = 120;
+const PAD = { left: 40, right: 10, top: 10, bottom: 22 };
+
+const dayNumber = (key: string) => {
+  const [year, month, day] = key.split('-').map(Number);
+  return Math.round(Date.UTC(year, month - 1, day) / 86_400_000);
+};
+const shortDate = (key: string) => {
+  const [, month, day] = key.split('-').map(Number);
+  return `${month}/${day}`;
+};
+
+function PriceChart({ points }: { points: PricePoint[] }) {
+  const [width, setWidth] = useState(0);
+  const geometry = useMemo(() => {
+    if (width === 0) return null;
+    const ticks = niceTicks(Math.min(...points.map((p) => p.unitPrice)), Math.max(...points.map((p) => p.unitPrice)));
+    const low = ticks[0];
+    const high = ticks[ticks.length - 1];
+    const plotWidth = width - PAD.left - PAD.right;
+    const plotHeight = CHART_HEIGHT - PAD.top - PAD.bottom;
+    const start = dayNumber(points[0].on);
+    const span = dayNumber(points[points.length - 1].on) - start;
+    const x = (on: string) => PAD.left + (span === 0 ? plotWidth / 2 : ((dayNumber(on) - start) / span) * plotWidth);
+    const y = (value: number) => PAD.top + (high === low ? plotHeight / 2 : (1 - (value - low) / (high - low)) * plotHeight);
+    return { ticks, x, y, line: points.map((p) => `${x(p.on)},${y(p.unitPrice)}`).join(' ') };
+  }, [points, width]);
+
+  return (
+    <View style={styles.chart} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+      {geometry && (
+        <Svg width={width} height={CHART_HEIGHT}>
+          {geometry.ticks.map((tick) => (
+            <Line
+              key={tick}
+              x1={PAD.left}
+              x2={width - PAD.right}
+              y1={geometry.y(tick)}
+              y2={geometry.y(tick)}
+              stroke={colors.borderStrong}
+              strokeWidth={1}
+              strokeDasharray="4 4"
+            />
+          ))}
+          {geometry.ticks.map((tick) => (
+            <SvgText
+              key={`label-${tick}`}
+              x={PAD.left - 6}
+              y={geometry.y(tick) + 4}
+              fontSize={10}
+              fontWeight="500"
+              fill={colors.textFaint}
+              textAnchor="end"
+            >
+              {formatAxisYen(tick)}
+            </SvgText>
+          ))}
+          {points.length > 1 && (
+            <Polyline points={geometry.line} fill="none" stroke={colors.livingProducts} strokeWidth={2} strokeLinejoin="round" />
+          )}
+          {points.map((point, index) => (
+            <Circle key={`${point.on}-${index}`} cx={geometry.x(point.on)} cy={geometry.y(point.unitPrice)} r={3.5} fill={colors.livingProducts} />
+          ))}
+          <SvgText x={PAD.left} y={CHART_HEIGHT - 6} fontSize={10} fontWeight="500" fill={colors.textFaint} textAnchor="start">
+            {shortDate(points[0].on)}
+          </SvgText>
+          {points.length > 1 && (
+            <SvgText x={width - PAD.right} y={CHART_HEIGHT - 6} fontSize={10} fontWeight="500" fill={colors.textFaint} textAnchor="end">
+              {shortDate(points[points.length - 1].on)}
+            </SvgText>
+          )}
+        </Svg>
+      )}
+    </View>
+  );
+}
+
 export default function ProductDetail({ product, onClose, onEdit, onSend, banner }: ProductDetailProps) {
   const [lines, setLines] = useState<PurchaseLine[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -60,7 +144,9 @@ export default function ProductDetail({ product, onClose, onEdit, onSend, banner
   const cost = useMemo(() => (lines ? costEstimate(lines, today) : null), [lines, today]);
   const months = useMemo(() => (lines ? monthlyPurchases(lines, today) : []), [lines, today]);
   const maxQuantity = Math.max(1, ...months.map((row) => row.quantity));
-  const records = useMemo(() => (lines ? newestFirst(lines) : []), [lines]);
+  const records = useMemo(() => (lines ? priceHistory(lines) : []), [lines]);
+  const trend = useMemo(() => (lines ? priceTrend(lines) : []), [lines]);
+  const summary = useMemo(() => priceSummary(trend), [trend]);
   const totals = useMemo(() => purchaseTotals(lines ?? []), [lines]);
   const sub = [product.store, product.category].filter((text) => text !== '').join('・');
 
@@ -147,6 +233,22 @@ export default function ProductDetail({ product, onClose, onEdit, onSend, banner
               </View>
             </View>
 
+            {summary && trend.length >= MIN_PURCHASES_FOR_COST && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>値段の推移</Text>
+                <PriceChart points={trend} />
+                <Text style={styles.trendNote}>
+                  {formatPrice(summary.first.unitPrice)}（{shortDate(summary.first.on)}）→ {formatPrice(summary.latest.unitPrice)}（
+                  {shortDate(summary.latest.on)}）
+                  {summary.change !== 0 ? `　${formatPriceChange(summary.change)}` : '　変わらず'}
+                </Text>
+                <Text style={styles.trendNote}>
+                  最安 {formatPrice(summary.lowest.unitPrice)}
+                  {summary.lowest.store !== '' ? `（${summary.lowest.store}・${shortDate(summary.lowest.on)}）` : `（${shortDate(summary.lowest.on)}）`}
+                </Text>
+              </View>
+            )}
+
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>買った記録</Text>
               <View style={styles.card}>
@@ -155,6 +257,9 @@ export default function ProductDetail({ product, onClose, onEdit, onSend, banner
                     <Text style={styles.recordDate}>{row.on.replace(/-/g, '.')}</Text>
                     <Text style={styles.recordQuantity}>{row.quantity}個</Text>
                     <Text style={styles.recordPrice}>{formatPrice(row.unitPrice)}</Text>
+                    <Text style={[styles.recordChange, row.change !== null && row.change > 0 && styles.recordUp]}>
+                      {row.change === null ? '' : formatPriceChange(row.change)}
+                    </Text>
                     <Text style={styles.recordStore} numberOfLines={1}>
                       {row.store}
                     </Text>
@@ -220,7 +325,11 @@ const styles = StyleSheet.create({
   recordDate: { fontSize: 12, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   recordQuantity: { fontSize: 12, fontWeight: '700', color: colors.textSubtle, fontVariant: ['tabular-nums'] },
   recordPrice: { fontSize: 12, fontWeight: '700', color: colors.textSubtle, fontVariant: ['tabular-nums'] },
+  recordChange: { minWidth: 44, fontSize: 10, fontWeight: '700', color: colors.livingProducts, fontVariant: ['tabular-nums'] },
+  recordUp: { color: colors.alertText },
   recordStore: { flex: 1, textAlign: 'right', fontSize: 11, fontWeight: '500', color: colors.textFaint },
+  chart: { height: CHART_HEIGHT },
+  trendNote: { fontSize: 11, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   totals: { fontSize: 11, fontWeight: '700', color: colors.textMuted, textAlign: 'right', fontVariant: ['tabular-nums'] },
   footerButton: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.neutralSurface },
   footerButtonText: { fontSize: 14, fontWeight: '700', color: colors.textSubtle },

@@ -102,3 +102,56 @@ export function compactYen(amount: number): string {
   if (amount < 10_000) return amount.toLocaleString('ja-JP');
   return `${(Math.round(amount / 1000) / 10).toString()}万`;
 }
+
+// ---- 値段の推移（日付・場所・値段） ----
+
+export interface PricePoint {
+  on: string;
+  store: string;
+  unitPrice: number;
+}
+
+/** 値段の推移の点（古い順。同じ日は渡された順）。 */
+export function priceTrend(lines: PurchaseLine[]): PricePoint[] {
+  return newestFirst(lines)
+    .reverse()
+    .map(({ on, store, unitPrice }) => ({ on, store, unitPrice }));
+}
+
+export interface PriceSummary {
+  first: PricePoint;
+  latest: PricePoint;
+  /** 最初に買った値段から、いまの値段までの差（円）。 */
+  change: number;
+  /** いちばん安く買ったとき（同じ値段なら新しいほう）。 */
+  lowest: PricePoint;
+}
+
+/** 値段の要約。買った記録が無いときは null。 */
+export function priceSummary(points: PricePoint[]): PriceSummary | null {
+  if (points.length === 0) return null;
+  const first = points[0];
+  const latest = points[points.length - 1];
+  const lowest = points.reduce((best, point) => (point.unitPrice <= best.unitPrice ? point : best), first);
+  return { first, latest, change: latest.unitPrice - first.unitPrice, lowest };
+}
+
+export interface PriceHistoryRow extends PurchaseLine {
+  /** 1つ前に買ったときの値段との差（円）。1つ前が無い・同じ値段なら null。 */
+  change: number | null;
+}
+
+/** 買った記録（新しい順）に、1つ前に買ったときからの値段の差を付ける。 */
+export function priceHistory(lines: PurchaseLine[]): PriceHistoryRow[] {
+  const sorted = newestFirst(lines);
+  return sorted.map((line, index) => {
+    const previous = sorted[index + 1];
+    const diff = previous ? line.unitPrice - previous.unitPrice : 0;
+    return { ...line, change: diff === 0 ? null : diff };
+  });
+}
+
+/** 値段の差を「+¥50」「−¥20」と書く。 */
+export function formatPriceChange(change: number): string {
+  return `${change > 0 ? '+' : '−'}¥${Math.abs(change).toLocaleString('ja-JP')}`;
+}
