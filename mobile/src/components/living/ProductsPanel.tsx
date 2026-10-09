@@ -19,6 +19,7 @@ import {
 } from '@/lib/api/householdProducts';
 import { formatPrice } from '@/lib/shoppingUtils';
 import ProductSheet from '@/components/living/ProductSheet';
+import ProductDetail from '@/components/living/ProductDetail';
 import ProductCategoriesSheet from '@/components/living/ProductCategoriesSheet';
 import type { ShoppingSender } from '@/components/living/useShoppingSender';
 
@@ -54,6 +55,8 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
   const [products, setProducts] = useState<HouseholdProduct[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [store, setStore] = useState(ALL);
+  // 詳しい画面を開いている品（docs/home.md §4.6）。品は一覧から引くので、直したり消したりすると追従する。
+  const [detailId, setDetailId] = useState<string | null>(null);
   // カテゴリの一覧（家族で共有。docs/home.md §4.1）と、それを直す画面を開いているか。
   const [categoryList, setCategoryList] = useState<HouseholdProductCategory[]>([]);
   const [isEditingCategories, setIsEditingCategories] = useState(false);
@@ -107,6 +110,7 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
     if (!chip) return;
     storeBar.current?.scrollTo({ x: Math.max(0, chip.x - (barWidth.current - chip.width) / 2), animated: true });
   }, [activeStore]);
+  const detail = detailId === null ? null : (products.find((product) => product.id === detailId) ?? null);
   const categories = useMemo(() => categoryList.map((category) => category.name), [categoryList]);
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -276,7 +280,7 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
                 <Pressable
                   key={product.id}
                   accessibilityRole="button"
-                  onPress={() => onEdit(product)}
+                  onPress={() => setDetailId(product.id)}
                   style={[styles.row, index > 0 && styles.rowDivided]}
                 >
                   <View style={styles.flex}>
@@ -298,6 +302,17 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
             })}
           </View>
         </Animated.ScrollView>
+      )}
+
+      {detail && (
+        <ProductDetail
+          key={detail.id}
+          product={detail}
+          onClose={() => setDetailId(null)}
+          onEdit={() => onEdit(detail)}
+          onSend={() => sendProduct(detail)}
+          banner={sender.banner}
+        />
       )}
 
       {editing !== null && (
