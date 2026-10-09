@@ -36,7 +36,6 @@ import {
   getLogTitle,
   getSideLabel,
   isAlertLog,
-  pumpedStockMl,
   summarizeLogs,
 } from '@/lib/careLogUtils';
 import { useNursingTimer } from '@/lib/nursingTimer';
@@ -224,9 +223,6 @@ export default function CareTab({
   // 入力画面に出す「前回の体温」。ボタンの平均とは別に、直前の1件が要る。
   // 「からだ」から開いたときは日が決まっていないので、日をまたいだ直近の1件にする。
   const latestTemperature = getLatestTemperature(bodyOpen ? recentTemperatureLogs : visibleLogs);
-  // 搾乳ストックの残り。飲ませた分と丸ごと捨てた分を除いたパックの合計。
-  // 表示中の日だけでは求まらないため、日付の送りとは関わらず常に今の残りを出す。
-  const stockMl = pumpedStockMl(pumpedBatches);
 
   const closeLogModal = () => setLogModal(null);
 
@@ -362,7 +358,7 @@ export default function CareTab({
 
             {/* 記録ボタン。その日のようすを同じボタンに載せ、「見る」と「記録する」を1つにまとめている。
                 授乳・おむつ・からだの3つ。搾乳は授乳の中（入力画面の「搾った」）へ寄せたので、
-                ここには出さず、代わりに授乳のボタンにいまの搾乳ストックを出す。 */}
+                ここには出さない。 */}
             <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => {
@@ -376,12 +372,9 @@ export default function CareTab({
                   <BabyBottleIcon size={17} className="text-amber-600" />
                   <span className="text-sm font-bold text-gray-800">授乳</span>
                 </span>
-                {/* その日の回数・量・分数は出さない（判断に使うのは体重とおしっこの回数）。
-                    代わりに、次の授乳で使える搾乳ストックの残りを出す。表示中の日だけでは
-                    求まらないため、日付の送りとは関わらず常に今の残りになる。
-                    何パックあるかは飲ませるときに選ぶので、ここは合計だけでよい。 */}
-                <span className="mt-0.5 text-[11px] font-bold text-rose-600 tabular-nums leading-tight text-center">
-                  ストック・{stockMl}ml
+                {/* 量・分数は出さず、その日の回数だけを出す（おむつと同じ並び）。 */}
+                <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
+                  計{summary.milk.count}回
                 </span>
                 {nursingBy && (
                   <span className="text-[10px] font-bold text-amber-600 leading-tight">

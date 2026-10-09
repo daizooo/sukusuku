@@ -445,6 +445,41 @@ export type Database = {
           },
         ]
       }
+      household_product_categories: {
+        Row: {
+          created_at: string
+          family_id: string
+          id: string
+          name: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          family_id: string
+          id?: string
+          name: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          family_id?: string
+          id?: string
+          name?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_product_categories_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       household_products: {
         Row: {
           category: string

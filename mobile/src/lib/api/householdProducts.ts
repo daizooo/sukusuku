@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Tables, TablesUpdate } from '@/types/supabase';
-import type { HouseholdProduct, HouseholdProductDraft } from '@/types/app';
+import type { HouseholdProduct, HouseholdProductCategory, HouseholdProductDraft } from '@/types/app';
 import { planShoppingAdd } from '@/lib/shoppingUtils';
 import { insertItem } from '@/lib/api/lists';
 
@@ -126,4 +126,96 @@ export async function addToShoppingList(
   if (plan.kind === 'duplicate') return { status: 'duplicate', groupName: plan.groupName };
   await insertItem(supabase, { listId, groupId: plan.groupId, title: title.trim(), position: plan.position });
   return { status: 'added', groupName: plan.groupName };
+}
+
+// ---- カテゴリの一覧（docs/home.md §4.1。household_product_categories） ----
+// 品は今までどおりカテゴリを名前の文字列で持つ。名前を直す・消すときは、同じ名前の品も書き換える。
+
+export async function loadProductCategories(
+  supabase: SupabaseDb,
+  familyId: string,
+): Promise<HouseholdProductCategory[]> {
+  const { data, error } = await supabase
+    .from('household_product_categories')
+    .select('id, name, position')
+    .eq('family_id', familyId)
+    .order('position', { ascending: true })
+    .order('name', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function insertProductCategory(
+  supabase: SupabaseDb,
+  familyId: string,
+  name: string,
+  position: number,
+): Promise<HouseholdProductCategory> {
+  const { data, error } = await supabase
+    .from('household_product_categories')
+    .insert({ family_id: familyId, name: name.trim(), position })
+    .select('id, name, position')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 名前を直す。同じ名前の品の category も書き換える。直した名前が一覧に既にあるときは、
+ * そちらへまとめる（この行を消す）。
+ */
+export async function renameProductCategory(
+  supabase: SupabaseDb,
+  familyId: string,
+  category: HouseholdProductCategory,
+  name: string,
+  existing: HouseholdProductCategory | null,
+): Promise<void> {
+  const trimmed = name.trim();
+  if (existing) {
+    const { error } = await supabase.from('household_product_categories').delete().eq('id', category.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from('household_product_categories')
+      .update({ name: trimmed })
+      .eq('id', category.id);
+    if (error) throw error;
+  }
+  const { error } = await supabase
+    .from('household_products')
+    .update({ category: trimmed })
+    .eq('family_id', familyId)
+    .eq('category', category.name);
+  if (error) throw error;
+}
+
+/** 消す。このカテゴリの品は「なし」（空）にする。 */
+export async function deleteProductCategory(
+  supabase: SupabaseDb,
+  familyId: string,
+  category: HouseholdProductCategory,
+): Promise<void> {
+  const { error } = await supabase.from('household_product_categories').delete().eq('id', category.id);
+  if (error) throw error;
+  const { error: productError } = await supabase
+    .from('household_products')
+    .update({ category: '' })
+    .eq('family_id', familyId)
+    .eq('category', category.name);
+  if (productError) throw productError;
+}
+
+/** 並びを保存する（渡した順に 0, 1, 2…）。 */
+export async function reorderProductCategories(
+  supabase: SupabaseDb,
+  categories: HouseholdProductCategory[],
+): Promise<void> {
+  const results = await Promise.all(
+    categories.map((category, position) =>
+      supabase.from('household_product_categories').update({ position }).eq('id', category.id),
+    ),
+  );
+  const failed = results.find((result) => result.error);
+  if (failed?.error) throw failed.error;
 }

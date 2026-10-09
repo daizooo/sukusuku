@@ -468,6 +468,13 @@ export interface HouseholdProduct {
 
 export type HouseholdProductDraft = Omit<HouseholdProduct, 'id' | 'lastAddedAt' | 'moneyCategoryId'>;
 
+/** 日用品のカテゴリの一覧の1行（家族で共有。docs/home.md §4.1）。品は名前の文字列で持つ。 */
+export interface HouseholdProductCategory {
+  id: string;
+  name: string;
+  position: number;
+}
+
 /** 特別費の種類。支出と、特別収入（賞与など）。docs/home.md §5.4。 */
 export type SpecialKind = 'expense' | 'income';
 
