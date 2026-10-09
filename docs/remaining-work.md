@@ -17,8 +17,7 @@
 | [calendar.md](./calendar.md) §6 | `tasks.remind_minutes_before` 列を消す | ✅ 本番DBに列が残り、`api/tasks.ts` が参照している | 旧APK・旧Webが使われなくなってから。drop は SQL Editor 用 |
 | [kakei.md](./kakei.md) §7 の3 | 月の振り返りのメモ、カードの月末の照合と「締める」（`money_months`・`money_card_closes`） | ✅ 表が無い | カードの `close_day` などの設定と、引き落としの自動記録は済 |
 | [kakei.md](./kakei.md) §7 の5 | 年の振り返り（月ごとの棒グラフ、大分類ごとの年間の差、特別費の年の流れ、これから5年の見通し） | 📄 | home.md §6 の4c（見通し）と同じもの |
-| [home.md](./home.md) §10.6 の C | 日用品の作り直し（店ごとのタイル、「入っています」の印、よく送るものを上に） | ✅ タイルの実装が無い | 日用品の詳しい画面（§4.6）は別に済 |
-| [home.md](./home.md) §10.6 の D | 暮らしのメニューを情報のある要約にする | ✅ 「要確認 n」の札だけ | A・C の要約がそろってから |
+| [home.md](./home.md) §10.6 の D | 暮らしのメニューを情報のある要約にする | ✅ 「要確認 n」の札だけ | A の要約がそろってから |
 | [lists.md](./lists.md) §8 のフェーズ3 | リストの項目を「予定にする」で `tasks` へ送る | ✅ 実装が無い | ホームタブは無くなったので、件数の出し先は暮らしタブで決める |
 | [what-to-record.md](./what-to-record.md) §8 の5 | 1日のサマリ画面 | ✅ 実装が無い | 育児タブの形が変わったので、置き場所から決め直す |
 | [what-to-record.md](./what-to-record.md) §8 の6 | うんちを写真に置き換え（Storage） | ✅ 実装が無い | |

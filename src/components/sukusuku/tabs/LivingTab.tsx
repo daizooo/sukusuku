@@ -33,14 +33,13 @@ import StockItemModal from '../modals/StockItemModal';
 import StockTargetModal from '../modals/StockTargetModal';
 import StockRestockModal, { type RestockInput } from '../modals/StockRestockModal';
 import StockBoard from '../living/StockBoard';
-import ProductsPanel, { type EditingProduct } from '../living/ProductsPanel';
 import LivingMenu, { LIVING_SECTIONS, type LivingSection } from '../living/LivingMenu';
 import LotteryPanel from '../living/LotteryPanel';
 import { useShoppingSender } from '../living/useShoppingSender';
 import { shortageTitle } from '@/lib/shoppingUtils';
 
 /**
- * 暮らしタブ（docs/home.md）。防災備蓄（点検盤）と日用品の台帳。
+ * 暮らしタブ（docs/home.md）。防災備蓄（点検盤）と補助くじ。
  * mobile版の `mobile/app/(tabs)/living.tsx` と同じ項目・並び・文言にしてある。
  *
  * 防災備蓄の画面は「点検盤」（docs/home.md §10.2。画面の組み立ては living/StockBoard）。
@@ -48,12 +47,11 @@ import { shortageTitle } from '@/lib/shoppingUtils';
  * 備品（期限なし）。保管場所（寝室／持ち出し）は切り替えで、持ち出しはバッグの中身のチェック表。
  * 必要数は「1人1日あたり × 人数 × 日数」か「決まった数」。人数・日数は家族で1つ（§3.5）。
  *
- * 暮らしタブを開くと、まずアイコンのメニュー（LivingMenu）。防災備蓄・日用品・補助くじは
+ * 暮らしタブを開くと、まずアイコンのメニュー（LivingMenu）。防災備蓄・補助くじは
  * 持つデータも見方も別物で、頻繁に開くタブでもないため、切り替えではなく押して入る形にし、
  * 画面ごとの色・見出し・追加ボタンにする。保管場所（寝室／持ち出し）の切り替えは防災備蓄の中だけ。
  *
- * 「日用品」の画面は、よく買うものの台帳（docs/home.md §4）。行の「＋」で買い出しリストへ送る。
- * 備蓄の不足も「リストへ」で同じリストへ送れる（送る仕組みは living/useShoppingSender）。
+ * 備蓄の不足は「リストへ」で買い出しリストへ送れる（送る仕組みは living/useShoppingSender）。
  *
  * 見出し・要約・面の切り替え・カテゴリは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  * 他のタブと違い、読み書きはこのタブの中で完結させる（アプリ全体の状態に持たない）。
@@ -80,7 +78,6 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
   const [editing, setEditing] = useState<Editing>(null);
   const [editingTarget, setEditingTarget] = useState<EditingTarget>(null);
   const [bagOpen, setBagOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<EditingProduct>(null);
   const sender = useShoppingSender(familyId);
 
   useEffect(() => {
@@ -321,21 +318,10 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
               <Plus size={18} />
             </button>
           </div>
-        ) : section !== 'lottery' && (
-          <button
-            type="button"
-            onClick={() => (section === 'products' ? setEditingProduct('new') : setEditing('new'))}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-sm font-bold transition ${current.accent}`}
-          >
-            <Plus size={16} />
-            追加
-          </button>
-        )}
+        ) : null}
       </div>
 
-      {section === 'products' ? (
-        <ProductsPanel familyId={familyId} sender={sender} editing={editingProduct} onEdit={setEditingProduct} />
-      ) : section === 'lottery' ? (
+      {section === 'lottery' ? (
         <LotteryPanel familyId={familyId} userId={userId} />
       ) : isLoading ? (
         <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>

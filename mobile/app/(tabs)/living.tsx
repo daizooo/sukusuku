@@ -37,14 +37,13 @@ import { SOFT, TONE } from '@/components/living/stockVisual';
 import StockRestockSheet, { type RestockInput } from '@/components/living/StockRestockSheet';
 import StockItemSheet from '@/components/living/StockItemSheet';
 import StockTargetSheet from '@/components/living/StockTargetSheet';
-import ProductsPanel, { type EditingProduct } from '@/components/living/ProductsPanel';
 import LivingMenu, { LIVING_SECTIONS, type LivingSection } from '@/components/living/LivingMenu';
 import LotteryPanel from '@/components/living/LotteryPanel';
 import { useShoppingSender } from '@/components/living/useShoppingSender';
 import { shortageTitle } from '@/lib/shoppingUtils';
 
 /**
- * 暮らしタブ（docs/home.md）。防災備蓄（点検盤）と日用品の台帳。
+ * 暮らしタブ（docs/home.md）。防災備蓄（点検盤）と補助くじ。
  * Web版の `src/components/sukusuku/tabs/LivingTab.tsx` と同じ項目・並び・文言にしてある。
  *
  * 防災備蓄の画面は「点検盤」（docs/home.md §10.2。画面の組み立ては StockBoard）。
@@ -52,12 +51,11 @@ import { shortageTitle } from '@/lib/shoppingUtils';
  * 備品（期限なし）。保管場所（寝室／持ち出し）は切り替えで、持ち出しはバッグの中身のチェック表。
  * 必要数は「1人1日あたり × 人数 × 日数」か「決まった数」。人数・日数は家族で1つ（§3.5）。
  *
- * 暮らしタブを開くと、まずアイコンのメニュー（LivingMenu）。防災備蓄・日用品・補助くじは
+ * 暮らしタブを開くと、まずアイコンのメニュー（LivingMenu）。防災備蓄・補助くじは
  * 持つデータも見方も別物で、頻繁に開くタブでもないため、切り替えではなく押して入る形にし、
  * 画面ごとの色・見出し・追加ボタンにする。保管場所（寝室／持ち出し）の切り替えは防災備蓄の中だけ。
  *
- * 「日用品」の画面は、よく買うものの台帳（docs/home.md §4）。行の「＋」で買い出しリストへ送る。
- * 備蓄の不足も「リストへ」で同じリストへ送れる（送る仕組みは useShoppingSender）。
+ * 備蓄の不足は「リストへ」で買い出しリストへ送れる（送る仕組みは useShoppingSender）。
  *
  * 見出し・要約・面の切り替え・カテゴリは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  */
@@ -84,7 +82,6 @@ export default function LivingScreen() {
   const [restocking, setRestocking] = useState<StockItem | null>(null);
   const [editingTarget, setEditingTarget] = useState<EditingTarget>(null);
   const [bagOpen, setBagOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<EditingProduct>(null);
   const sender = useShoppingSender(familyId);
 
   useEffect(() => {
@@ -356,22 +353,10 @@ export default function LivingScreen() {
               <Plus size={18} color={SOFT.buttonText} />
             </Pressable>
           </View>
-        ) : section !== 'lottery' && (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => (section === 'products' ? setEditingProduct('new') : setEditing('new'))}
-            style={[styles.addButton, { backgroundColor: current.color }]}
-            disabled={!familyId}
-          >
-            <Plus size={16} color={colors.primaryText} />
-            <Text style={styles.addButtonText}>追加</Text>
-          </Pressable>
-        )}
+        ) : null}
       </View>
 
-      {section === 'products' ? (
-        <ProductsPanel familyId={familyId} sender={sender} editing={editingProduct} onEdit={setEditingProduct} />
-      ) : section === 'lottery' ? (
+      {section === 'lottery' ? (
         <LotteryPanel familyId={familyId} userId={session.user.id} />
       ) : isLoading ? (
         <Text style={styles.message}>読み込み中...</Text>
@@ -447,15 +432,6 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 18, fontWeight: '700', color: colors.text },
   back: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  addButtonText: { fontSize: 13, fontWeight: '700', color: colors.primaryText },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   roundButton: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: SOFT.button },
   roundDot: {

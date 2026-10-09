@@ -53,7 +53,7 @@
 | 2 | リスト | 現状のまま |
 | 3 | 育児 | 現状のまま |
 | 4 | **家計** | 新設（id は `money`。`users.start_tab` の check に足す） |
-| 5 | 暮らし | メニューから特別費を外す（防災備蓄・日用品・福引チャンス） |
+| 5 | 暮らし | メニューから特別費を外す（防災備蓄・福引チャンス。日用品は2026-10-09に削除） |
 | 6 | 設定 | 現状のまま |
 
 - 6タブ（375px幅で1枠62px）
@@ -133,14 +133,7 @@
 - お店の選択で、打った名前が候補に無いときは「◯◯をこの記録だけに使う」と「◯◯をお店に登録して使う」（2026-10-08に決定。§3.5）。
   似たお店（どちらかがもう片方を含む名前。全角半角・かな・空白と記号の違いはそろえて比べる）があれば
   「似たお店があります。同じお店なら下から選んでください」と出す（止めはしない）
-- **「日用品から選ぶ」ボタン**（2026-10-07に決定。品目の画面に候補を前もって並べない。シンプルにするため）:
-  品目の画面の見出しの右に「日用品から選ぶ」ボタンだけを置く（2026-10-08に、一覧の上から見出しの右へ移した）。
-  出すのは、台帳に品があり、その種類（同じ大分類）で前に記録した品があるか、大分類が食費・日用品・子ども費・薬のときだけ
-  （`canPickProductsFor`）。「日用品から選ぶ」を押すと**日用品の台帳の一覧画面**
-  （`household_products`。食品も含めた「毎月必ず買うもの」）へ移り、品名で探す・はじめは今の種類の品だけ（「すべて」で全部）。
-  印をつけて個数を決め、「n品を入れる」でまとめて行にする（品名・いつもの値段・個数）。
-  保存すると、台帳の「いつもの値段」を今回の単価に更新し、台帳には「いつ・何個・いくらで買ったか」が残る（docs/home.md §4.5）。
-  台帳に無いものは空の行を押して品名を打つ
+- ~~**「日用品から選ぶ」ボタン**~~ **削除**（2026-10-09。日用品の機能ごと撤去した）。品目は空の行を押して品名を打つ
 - **出金元**: 家族で登録する（カード・財布・口座・プリペイド など。Zaim の「出金元の選択」と同じ並び）。前回のものを既定にする
   - **アイコンの色**（2026-10-09）: 出金元ごとに選べる（編集画面の「アイコンの色」。候補は `WALLET_ICON_COLORS` の11色。左端の「標準」は種類ごとの色に戻す）。
     口座の一覧と記録の一覧のアイコンに効く。`money_wallets.icon_color`（`#rrggbb`。null＝標準。0074_money_wallet_icon_color.sql）
@@ -292,7 +285,7 @@ money_stores      お店（設定データ）。 id / family_id / name / archive
 money_records     記録の詳細。 id / family_id / kind('expense'|'income'|'transfer') / occurred_on / wallet_id /
                   to_wallet_id(振替の入金先) / store / created_by
 money_items       品目（1行）。 id / family_id / record_id / amount / category_id(小分類か大分類) /
-                  special_item_id・special_plan_id(特別費のとき) / product_id(日用品の台帳。任意) / quantity / unit_price /
+                  special_item_id・special_plan_id(特別費のとき) / quantity / unit_price /
                   name / memo / position
 money_recurring   毎月の記録のルール（0066_money_recurring.sql）。 id / family_id / kind / day(1〜31。31は末日) /
                   months(null=毎月) / holiday('next'|'prev'|'none') / amount_mode('fixed'|'estimate') / amount /
@@ -319,9 +312,8 @@ money_wallet_balances  補正した残高（0067_money_wallet_balances.sql。§9
 - 振替の記録は品目を1つ持つ（金額だけ。種類なし）
 - 記録の保存は関数 `save_money_record(p_record, p_items)` で、記録の詳細と品目を1回で入れ替える（品目を指すものは無い）。
   見込みの印は `p_record.is_estimate`（省くと確定。0066）
-  日用品の台帳の品を含むときは、台帳の「いつもの値段」を今回の単価にし、「記録するときの種類」が空なら今回の種類を入れる
-- 日用品の台帳 `household_products` に、その品を記録するときの種類 `money_category_id`（小分類）を足す。
-  「日用品から選ぶ」の一覧のはじめの絞り込みに使う
+  （日用品の台帳の「いつもの値段」を更新する処理と `money_items.product_id`・`household_products` は、
+  2026-10-09に日用品ごと削除した。`0085_drop_household_products.sql`）
 - 種類がまだ無い家族は「標準の種類で始める」（§3.1 の並び。家族の私的なデータは入っていない）
 - 数え方（年・月の集計・差・並び・電卓）は mobile・PWA で同じ中身の `moneyUtils.ts`（テストは `npm run test:money`）
 
@@ -471,7 +463,7 @@ money_holding_values   保有ごとの日々の評価額。 holding_id / value_o
 #### 9.2.6 起動の読み込みを1回にまとめる（2026-10-09）
 
 家計タブの起動は、種類・予算・出金元・お店・定期・残高・記録・日用品の台帳・特別費の項目と予定・証券の銘柄と保有・最新の評価額の
-**13本**を読んでいた。Android の OkHttp は同じホストへの同時リクエストが5本までなので、3回に分かれて走る。DBは速い
+**13本**を読んでいた（日用品の台帳は2026-10-09に削除し、いまは12本。`0084`）。Android の OkHttp は同じホストへの同時リクエストが5本までなので、3回に分かれて走る。DBは速い
 （本番で約40ms、返す JSON は約500kB）ので、**往復をなくす**ほうが効く。
 
 - DBの `money_bootstrap(p_family_id)`（0076）が、この13本を表の行そのままの JSON（`to_jsonb`）で1回で返す。記録は品目を `money_items` に入れた形。

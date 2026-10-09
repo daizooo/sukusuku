@@ -412,31 +412,6 @@ export interface StockTarget {
 
 export type StockTargetDraft = Omit<StockTarget, 'id' | 'position'>;
 
-/** 日用品の台帳（よく買うもの）の1品。household_products に対応（docs/home.md §4）。 */
-export interface HouseholdProduct {
-  id: string;
-  name: string;
-  category: string;
-  /** いつも買うお店。買い出しリストに同じ名前のグループがあればそこへ入れる。 */
-  store: string;
-  /** いつもの値段（円・税込）。 */
-  price: number | null;
-  note: string;
-  /** 最後に買い出しリストへ送った時刻（ISO）。 */
-  lastAddedAt: string | null;
-  /** 家計に記録するときの種類（小分類）。「日用品から選ぶ」のはじめの絞り込みに使う（docs/kakei.md §5）。 */
-  moneyCategoryId: string | null;
-}
-
-export type HouseholdProductDraft = Omit<HouseholdProduct, 'id' | 'lastAddedAt' | 'moneyCategoryId'>;
-
-/** 日用品のカテゴリの一覧の1行（家族で共有。docs/home.md §4.1）。品は名前の文字列で持つ。 */
-export interface HouseholdProductCategory {
-  id: string;
-  name: string;
-  position: number;
-}
-
 /** 特別費の種類。支出と、特別収入（賞与など）。docs/home.md §5.4。 */
 export type SpecialKind = 'expense' | 'income';
 
@@ -715,8 +690,6 @@ export interface MoneyItem {
   categoryId: string | null;
   specialItemId: string | null;
   specialPlanId: string | null;
-  /** 日用品の台帳の品。 */
-  productId: string | null;
   quantity: number;
   /** 単価。個数 × 単価 = 金額。金額だけ入れたものは null。 */
   unitPrice: number | null;

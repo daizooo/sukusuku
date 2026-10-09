@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Settings } from 'lucide-react';
 import type {
-  HouseholdProduct,
   MoneyBudget,
   MoneyCategory,
   MoneyRecord,
@@ -39,7 +38,6 @@ import {
   requestSecurityBackfill,
   saveSecurity,
 } from '@/lib/api/moneySecurities';
-import { loadHouseholdProducts } from '@/lib/api/householdProducts';
 import { loadMoneyBootstrap, type MoneyBootstrap } from '@/lib/api/moneyBootstrap';
 import { monthKeyOf, monthKeyOfDate, specialActualsFromRecords, yearOfMonth } from '@/lib/moneyUtils';
 import MoneyAccountsView from '../money/MoneyAccountsView';
@@ -95,7 +93,6 @@ const MONEY_TABLES = [
   'money_wallets',
   'special_items',
   'special_plans',
-  'household_products',
 ] as const;
 
 export default function MoneyTab({ familyId }: { familyId: string }) {
@@ -108,7 +105,6 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
-  const [products, setProducts] = useState<HouseholdProduct[]>([]);
   const [specialItems, setSpecialItems] = useState<SpecialItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [view, setView] = useState<MoneyView>('accounts');
@@ -125,7 +121,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
 
   /** 読んだものを画面に入れる。 */
   const apply = useCallback(
-    ({ money, products: loadedProducts, special, securities: loadedSecurities }: MoneyBootstrap) => {
+    ({ money, special, securities: loadedSecurities }: MoneyBootstrap) => {
       setCategories(money.categories);
       setBudgets(money.budgets);
       setWallets(money.wallets);
@@ -134,7 +130,6 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       setRecurring(money.recurring);
       setBalances(money.balances);
       setSecurities(loadedSecurities);
-      setProducts(loadedProducts);
       setSpecialItems(special);
     },
     [],
@@ -205,10 +200,6 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       const saved = await saveMoneyRecord(supabase, draft);
       setRecords((prev) => [...prev.filter((record) => record.id !== saved.id), saved]);
       setMonthKey(monthKeyOf(saved.occurredOn));
-      // 日用品の台帳の「いつもの値段」が変わるので読み直す（DBの save_money_record が直す）。
-      if (saved.items.some((item) => item.productId !== null)) {
-        setProducts(await loadHouseholdProducts(supabase, familyId));
-      }
       // 「お店に登録して使う」を選んだお店は、DBの save_money_record がお店の設定に登録する（docs/kakei.md §3.5）。
       if (draft.registerStore && saved.store !== '' && !stores.some((entry) => entry.name === saved.store && !entry.archived)) {
         setStores(await loadMoneyStores(supabase, familyId));
@@ -445,7 +436,6 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           wallets={wallets}
           stores={stores}
           records={records}
-          products={products}
           specialItems={specialItems}
           specialActuals={specialActuals}
           onClose={() => setEditing(null)}

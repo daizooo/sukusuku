@@ -21,14 +21,12 @@ interface StorePickerProps {
   others: string[];
   /** 新しい名前を「お店に登録して使う」こともできるか（毎月の記録のルールでも出す）。 */
   canRegister: boolean;
-  /** 「この○○だけに使う」の○○（既定は「記録」。日用品の編集では「日用品」）。 */
-  subject?: string;
   /** register: 「お店に登録して使う」を選んだか。 */
   onPick: (store: string, register: boolean) => void;
   onClose: () => void;
 }
 
-export default function StorePicker({ value, registered, recent, others, canRegister, subject = '記録', onPick, onClose }: StorePickerProps) {
+export default function StorePicker({ value, registered, recent, others, canRegister, onPick, onClose }: StorePickerProps) {
   const [query, setQuery] = useState(value);
   const typed = query.trim();
   const { matchedRegistered, matchedRecent, matchedOthers } = useMemo(() => {
@@ -73,7 +71,7 @@ export default function StorePicker({ value, registered, recent, others, canRegi
             <Pressable accessibilityRole="button" onPress={() => onPick(typed, false)} style={styles.row}>
               <Plus size={18} color={colors.money} />
               <Text style={[styles.name, styles.use]}>
-                「{typed}」を{canRegister ? `この${subject}だけに使う` : '使う'}
+                「{typed}」を{canRegister ? `この記録だけに使う` : '使う'}
               </Text>
             </Pressable>
             {canRegister && (

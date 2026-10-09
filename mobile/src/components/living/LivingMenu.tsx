@@ -1,13 +1,13 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { ShieldCheck, ShoppingBasket, Ticket, type LucideIcon } from 'lucide-react-native';
+import { ShieldCheck, Ticket, type LucideIcon } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 
-// 暮らしタブのメニュー（docs/home.md §2）。防災備蓄・日用品・補助くじは
+// 暮らしタブのメニュー（docs/home.md §2）。防災備蓄・補助くじは
 // 持つデータも見方も別物で、頻繁に開くタブでもないため、切り替えではなく
 // アイコンを並べたメニューにして、押すとその画面へ入る。Web版の
 // `src/components/sukusuku/living/LivingMenu.tsx` と同じ項目・並び・文言。
 
-export type LivingSection = 'stock' | 'products' | 'lottery';
+export type LivingSection = 'stock' | 'lottery';
 
 export const LIVING_SECTIONS: {
   id: LivingSection;
@@ -25,14 +25,6 @@ export const LIVING_SECTIONS: {
     color: colors.livingStock,
     surface: colors.livingStockSurface,
     Icon: ShieldCheck,
-  },
-  {
-    id: 'products',
-    label: '日用品',
-    hint: 'よく買うものを買い出しリストへ',
-    color: colors.livingProducts,
-    surface: colors.livingProductsSurface,
-    Icon: ShoppingBasket,
   },
   {
     id: 'lottery',

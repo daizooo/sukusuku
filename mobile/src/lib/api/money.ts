@@ -14,7 +14,7 @@ import type {
   MoneyWalletBalance,
   MoneyWalletDraft,
 } from '@/types/app';
-import { DEFAULT_CATEGORIES, type StoreUse } from '@/lib/moneyUtils';
+import { DEFAULT_CATEGORIES } from '@/lib/moneyUtils';
 
 type CategoryRow = Tables<'money_categories'>;
 type BudgetRow = Tables<'money_budgets'>;
@@ -88,7 +88,6 @@ const rowToItem = (row: ItemRow): MoneyItem => ({
   categoryId: row.category_id,
   specialItemId: row.special_item_id,
   specialPlanId: row.special_plan_id,
-  productId: row.product_id,
   quantity: row.quantity,
   unitPrice: row.unit_price,
   name: row.name,
@@ -226,7 +225,6 @@ export async function saveMoneyRecord(supabase: SupabaseDb, draft: MoneyRecordDr
     category_id: item.categoryId,
     special_item_id: item.specialItemId,
     special_plan_id: item.specialPlanId,
-    product_id: item.productId,
     quantity: item.quantity,
     unit_price: item.unitPrice,
     name: item.name.trim(),
@@ -465,36 +463,6 @@ export async function loadMoneyStores(supabase: SupabaseDb, familyId: string): P
   const { data, error } = await supabase.from('money_stores').select('*').eq('family_id', familyId);
   if (error) throw error;
   return (data ?? []).map(rowToStore);
-}
-
-/**
- * 記録で使ったお店を読む（古い順。お店の無い記録は除く）。日用品の編集で、家計の記録と同じお店の候補を出すため。
- * 記録を丸ごと（品目つきで）読まず、お店と日付だけにする。1ページ目で総数が分かるので、残りは並べて読む。
- */
-export async function loadStoreUses(supabase: SupabaseDb, familyId: string): Promise<StoreUse[]> {
-  const readPage = (from: number) =>
-    supabase
-      .from('money_records')
-      .select('store, occurred_on', { count: 'exact' })
-      .eq('family_id', familyId)
-      .neq('store', '')
-      .order('occurred_on', { ascending: true })
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .range(from, from + PAGE - 1);
-
-  const first = await readPage(0);
-  if (first.error) throw first.error;
-  const total = first.count ?? 0;
-  const rest = await Promise.all(
-    Array.from({ length: Math.max(0, Math.ceil(total / PAGE) - 1) }, (_, index) => readPage((index + 1) * PAGE)),
-  );
-  const rows = [...(first.data ?? [])];
-  for (const page of rest) {
-    if (page.error) throw page.error;
-    rows.push(...(page.data ?? []));
-  }
-  return rows.map((row) => ({ store: row.store, occurredOn: row.occurred_on }));
 }
 
 /** お店を足す。同じ名前が使わなくなっていれば、また使えるようにする。 */

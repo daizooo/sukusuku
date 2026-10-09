@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Tables } from '@/types/supabase';
-import type { HouseholdProduct, MoneySecuritiesData, SpecialItem } from '@/types/app';
+import type { MoneySecuritiesData, SpecialItem } from '@/types/app';
 import {
   rowToBalance,
   rowToBudget,
@@ -12,19 +12,17 @@ import {
   type MoneyData,
 } from '@/lib/api/money';
 import { loadSecurityHistory, rowToHolding, rowToSecurity, rowToValue } from '@/lib/api/moneySecurities';
-import { rowToProduct } from '@/lib/api/householdProducts';
 import { rowToItem as rowToSpecialItem } from '@/lib/api/specialExpenses';
 
 type SupabaseDb = SupabaseClient<Database>;
 
 // 家計タブの起動で読むものを、DBの関数 money_bootstrap(p_family_id)（0076）で1回にまとめて読む（docs/kakei.md §9.2.6）。
 // PWA版 の `src/lib/api/moneyBootstrap.ts` と同じ。
-// 種類・予算・出金元・お店・定期・残高・記録（品目つき）・日用品の台帳・特別費の項目と予定・証券の銘柄と保有・
+// 種類・予算・出金元・お店・定期・残高・記録（品目つき）・特別費の項目と予定・証券の銘柄と保有・
 // 保有ごとの最新の評価額を、表の行そのままの JSON で返すので、行 → 画面の型への変換は個別に読むときと同じものを使う。
 
 export interface MoneyBootstrap {
   money: MoneyData;
-  products: HouseholdProduct[];
   special: SpecialItem[];
   securities: MoneySecuritiesData;
 }
@@ -61,7 +59,6 @@ export async function loadMoneyBootstrap(
       recurring: rows<Tables<'money_recurring'>>('recurring').map(rowToRecurring),
       balances: rows<Tables<'money_wallet_balances'>>('balances').map(rowToBalance),
     },
-    products: rows<Tables<'household_products'>>('products').map(rowToProduct),
     special: rows<Tables<'special_items'>>('special_items').map((row) => rowToSpecialItem(row, planRows)),
     securities: {
       securities: rows<Tables<'money_securities'>>('securities').map(rowToSecurity),
