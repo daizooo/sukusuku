@@ -58,7 +58,10 @@ export default function LogModalShell({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface },
+  // flex: 1 は flexBasis が 0 になり、高さを渡さない SheetModal（枠が中身の高さになる）では
+  // 枠ごと高さ 0 に潰れて、暗い背景だけが残る。flexBasis は中身のままにして、
+  // 高さを渡したとき（記録の入力＝640）は伸び、入りきらないときは縮むようにする。
+  screen: { flexGrow: 1, flexShrink: 1, backgroundColor: colors.surface },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -71,7 +74,7 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 16, fontWeight: '700', color: colors.text },
   subheader: { paddingHorizontal: 16, paddingTop: 16 },
-  scroll: { flex: 1 },
+  scroll: { flexGrow: 1, flexShrink: 1 },
   content: { padding: 16, gap: 16, paddingBottom: 24 },
   footer: {
     gap: 4,
