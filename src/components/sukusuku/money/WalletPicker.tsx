@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import { Check, Pencil, Plus } from 'lucide-react';
 import type { MoneyWallet, MoneyWalletDraft, MoneyWalletType } from '@/types/app';
-import { cardScheduleLabel, WALLET_TYPES } from '@/lib/moneyUtils';
+import { cardScheduleLabel, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
 import { ModalShell } from '../modals/TaskForm';
-import { PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
+import { PrimaryButton, ScreenHeader, StackedScreen, WalletTypeIcon } from './moneyVisual';
 
 // 出金元の選択（docs/kakei.md §3.2）。mobile版の `mobile/src/components/money/WalletPicker.tsx` と同じ並び・文言。
 // 種類（財布・カード・口座…）ごとに並べる。ここで出金元を足す・直す・使わなくする。
@@ -141,6 +141,7 @@ export function WalletModal({
 }) {
   const [name, setName] = useState(wallet?.name ?? '');
   const [type, setType] = useState<MoneyWalletType>(wallet?.type ?? 'card');
+  const [iconColor, setIconColor] = useState<string | null>(wallet?.iconColor ?? null);
   const [isSaving, setIsSaving] = useState(wallet?.isSaving ?? false);
   const [closeDay, setCloseDay] = useState(wallet?.closeDay ? String(wallet.closeDay) : '');
   const [payDay, setPayDay] = useState(wallet?.payDay ? String(wallet.payDay) : '');
@@ -166,6 +167,7 @@ export function WalletModal({
       closeDay: type === 'card' ? close : null,
       payDay: type === 'card' ? pay : null,
       payWalletId: type === 'card' ? payWalletId : null,
+      iconColor,
     });
   };
 
@@ -210,6 +212,38 @@ export function WalletModal({
               </button>
             ))}
           </div>
+        </div>
+        <div>
+          <span className={labelClass}>アイコンの色</span>
+          <div className="flex flex-wrap gap-2.5">
+            <button
+              type="button"
+              aria-label="標準の色"
+              aria-pressed={iconColor === null}
+              onClick={() => setIconColor(null)}
+              className={`flex h-[34px] w-[34px] items-center justify-center rounded-full bg-gray-100 ${
+                iconColor === null ? 'ring-[3px] ring-gray-900' : ''
+              }`}
+            >
+              <WalletTypeIcon type={type} size={18} />
+            </button>
+            {WALLET_ICON_COLORS.map((entry) => (
+              <button
+                key={entry.color}
+                type="button"
+                aria-label={entry.label}
+                aria-pressed={iconColor === entry.color}
+                onClick={() => setIconColor(entry.color)}
+                style={{ backgroundColor: entry.color }}
+                className={`flex h-[34px] w-[34px] items-center justify-center rounded-full ${
+                  iconColor === entry.color ? 'ring-[3px] ring-gray-900' : ''
+                }`}
+              >
+                {iconColor === entry.color && <Check size={18} color="#ffffff" />}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-xs text-gray-400">左端は種類ごとの標準の色です</p>
         </div>
         {type !== 'securities' && (
           <label className="flex items-center gap-3">

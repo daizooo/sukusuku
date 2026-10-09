@@ -117,7 +117,7 @@ export default function MoneyAccountsView({
                   >
                     <View style={styles.tileTop}>
                       <View style={styles.iconBox}>
-                        <WalletTypeIcon type={row.wallet.type} size={18} />
+                        <WalletTypeIcon type={row.wallet.type} size={18} color={row.wallet.iconColor} />
                       </View>
                       <View style={styles.flex}>
                         <Text style={styles.tileName} numberOfLines={2}>

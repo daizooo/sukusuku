@@ -1394,6 +1394,7 @@ export type Database = {
           close_day: number | null
           created_at: string
           family_id: string
+          icon_color: string | null
           id: string
           is_saving: boolean
           name: string
@@ -1410,6 +1411,7 @@ export type Database = {
           close_day?: number | null
           created_at?: string
           family_id: string
+          icon_color?: string | null
           id?: string
           is_saving?: boolean
           name: string
@@ -1426,6 +1428,7 @@ export type Database = {
           close_day?: number | null
           created_at?: string
           family_id?: string
+          icon_color?: string | null
           id?: string
           is_saving?: boolean
           name?: string

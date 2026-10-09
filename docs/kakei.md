@@ -133,6 +133,8 @@
   保存すると、台帳の「いつもの値段」を今回の単価に更新し、台帳には「いつ・何個・いくらで買ったか」が残る（docs/home.md §4.5）。
   台帳に無いものは空の行を押して品名を打つ
 - **出金元**: 家族で登録する（カード・財布・口座・プリペイド など。Zaim の「出金元の選択」と同じ並び）。前回のものを既定にする
+  - **アイコンの色**（2026-10-09）: 出金元ごとに選べる（編集画面の「アイコンの色」。候補は `WALLET_ICON_COLORS` の11色。左端の「標準」は種類ごとの色に戻す）。
+    口座の一覧と記録の一覧のアイコンに効く。`money_wallets.icon_color`（`#rrggbb`。null＝標準。0074_money_wallet_icon_color.sql）
 - **お店**: 選ぶ画面で、検索と「最近使ったお店」（前に入れたお店から）。位置からの候補は出さない
 - **振替**: 出金元 → 入金先（例: 生活費用の口座 → 貯金用の口座）。**振替は集計に入れない**（貯金への振替も同じ。
   貯金は自動で算出せず、記録があればしたということ、無ければしなかったということ。2026-10-08に変更）。
@@ -366,6 +368,7 @@ money_wallet_balances  補正した残高（0067_money_wallet_balances.sql。§9
 
 ```
 money_wallets.type に 'securities'（証券口座）を足す（check の作り直し）
+money_wallets に  icon_color（アイコンの色 '#rrggbb'。null＝種類ごとの標準の色）を足す（0074）
 money_securities   銘柄。 id / family_id / name / kind('us_stock'|'jp_fund'|'cash') / code(ティッカー。投信は ISIN) /
                    fund_code(投信の協会コード) / currency('USD'|'JPY') / position / archived_at
                    （cash は預り金。価格は1。ドルの預り金は currency='USD'）

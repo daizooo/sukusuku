@@ -3,10 +3,10 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View
 import { Check, Pencil, Plus } from 'lucide-react-native';
 import type { MoneyWallet, MoneyWalletDraft, MoneyWalletType } from '@/types/app';
 import { colors } from '@/lib/theme';
-import { cardScheduleLabel, WALLET_TYPES } from '@/lib/moneyUtils';
+import { cardScheduleLabel, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
-import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
+import { PrimaryButton, ScreenHeader, WalletTypeIcon } from '@/components/money/moneyVisual';
 
 // 出金元の選択（docs/kakei.md §3.2）。PWA版の `src/components/sukusuku/money/WalletPicker.tsx` と同じ並び・文言。
 // 種類（財布・カード・口座…）ごとに並べる。ここで出金元を足す・直す・使わなくする。
@@ -127,6 +127,7 @@ export function WalletSheet({
 }) {
   const [name, setName] = useState(wallet?.name ?? '');
   const [type, setType] = useState<MoneyWalletType>(wallet?.type ?? 'card');
+  const [iconColor, setIconColor] = useState<string | null>(wallet?.iconColor ?? null);
   const [isSaving, setIsSaving] = useState(wallet?.isSaving ?? false);
   const [closeDay, setCloseDay] = useState(wallet?.closeDay ? String(wallet.closeDay) : '');
   const [payDay, setPayDay] = useState(wallet?.payDay ? String(wallet.payDay) : '');
@@ -152,6 +153,7 @@ export function WalletSheet({
       closeDay: type === 'card' ? close : null,
       payDay: type === 'card' ? pay : null,
       payWalletId: type === 'card' ? payWalletId : null,
+      iconColor,
     });
   };
 
@@ -202,6 +204,33 @@ export function WalletSheet({
               </Pressable>
             ))}
           </View>
+        </View>
+        <View style={styles.field}>
+          <Text style={styles.label}>アイコンの色</Text>
+          <View style={styles.colors}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="標準の色"
+              accessibilityState={{ selected: iconColor === null }}
+              onPress={() => setIconColor(null)}
+              style={[styles.swatch, styles.swatchDefault, iconColor === null && styles.swatchSelected]}
+            >
+              <WalletTypeIcon type={type} size={18} />
+            </Pressable>
+            {WALLET_ICON_COLORS.map((entry) => (
+              <Pressable
+                key={entry.color}
+                accessibilityRole="button"
+                accessibilityLabel={entry.label}
+                accessibilityState={{ selected: iconColor === entry.color }}
+                onPress={() => setIconColor(entry.color)}
+                style={[styles.swatch, { backgroundColor: entry.color }, iconColor === entry.color && styles.swatchSelected]}
+              >
+                {iconColor === entry.color && <Check size={18} color="#ffffff" />}
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.sub}>左端は種類ごとの標準の色です</Text>
         </View>
         {type !== 'securities' && (
           <View style={styles.switchRow}>
@@ -306,6 +335,10 @@ const styles = StyleSheet.create({
   typeSelected: { backgroundColor: colors.moneySoft },
   typeText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
   typeTextSelected: { color: colors.moneyText },
+  colors: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  swatch: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  swatchDefault: { backgroundColor: colors.neutralSurface },
+  swatchSelected: { borderWidth: 3, borderColor: colors.text },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   days: { flexDirection: 'row', gap: 12 },
   error: { fontSize: 12, fontWeight: '500', color: colors.danger },
