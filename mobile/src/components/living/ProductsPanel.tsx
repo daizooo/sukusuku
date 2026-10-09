@@ -1,19 +1,25 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight, Plus } from 'lucide-react-native';
-import type { HouseholdProduct, HouseholdProductDraft } from '@/types/app';
+import type { HouseholdProduct, HouseholdProductCategory, HouseholdProductDraft } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
+import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import {
   deleteHouseholdProduct,
+  deleteProductCategory,
   insertHouseholdProduct,
+  insertProductCategory,
   loadHouseholdProducts,
+  loadProductCategories,
   markHouseholdProductAdded,
+  renameProductCategory,
+  reorderProductCategories,
   updateHouseholdProduct,
 } from '@/lib/api/householdProducts';
-import { categoryOptions } from '@/lib/stockUtils';
 import { formatPrice } from '@/lib/shoppingUtils';
 import ProductSheet from '@/components/living/ProductSheet';
+import ProductCategoriesSheet from '@/components/living/ProductCategoriesSheet';
 import type { ShoppingSender } from '@/components/living/useShoppingSender';
 
 // 暮らしタブの「日用品」の面（docs/home.md §4）。PWA版の
@@ -48,10 +54,22 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
   const [products, setProducts] = useState<HouseholdProduct[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [store, setStore] = useState(ALL);
+  // カテゴリの一覧（家族で共有。docs/home.md §4.1）と、それを直す画面を開いているか。
+  const [categoryList, setCategoryList] = useState<HouseholdProductCategory[]>([]);
+  const [isEditingCategories, setIsEditingCategories] = useState(false);
+  // 編集中の品のカテゴリを、一覧で直した・消した名前に追従させる（前の名前 → 新しい名前。消したら空）。
+  const [categoryRenames, setCategoryRenames] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!familyId) return;
     let isMounted = true;
+    loadProductCategories(supabase, familyId)
+      .then((loaded) => {
+        if (isMounted) setCategoryList(loaded);
+      })
+      .catch(() => {
+        // 読めなかったぶんは空のままにする。
+      });
     loadHouseholdProducts(supabase, familyId)
       .then((loaded) => {
         if (isMounted) setProducts(loaded);
@@ -78,7 +96,23 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
     () => [...products].filter((product) => activeStore === ALL || product.store === activeStore).sort(byStoreThenName),
     [products, activeStore],
   );
-  const categories = useMemo(() => categoryOptions(products), [products]);
+  // お店は、一覧の上の左右スワイプでも切り替える（一覧が指に合わせて動く）。
+  const swipe = useSwipeTabs([ALL, ...stores], activeStore, setStore);
+  // 選んだお店が帯の外に隠れないよう、帯をそのお店まで寄せる（スワイプで選んだときのため）。
+  const storeBar = useRef<ScrollView>(null);
+  const barWidth = useRef(0);
+  const chipLayouts = useRef(new Map<string, { x: number; width: number }>());
+  useEffect(() => {
+    const chip = chipLayouts.current.get(activeStore);
+    if (!chip) return;
+    storeBar.current?.scrollTo({ x: Math.max(0, chip.x - (barWidth.current - chip.width) / 2), animated: true });
+  }, [activeStore]);
+  const categories = useMemo(() => categoryList.map((category) => category.name), [categoryList]);
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const product of products) counts[product.category] = (counts[product.category] ?? 0) + 1;
+    return counts;
+  }, [products]);
   const storeOptions = useMemo(() => [...new Set([...stores, ...sender.groupNames])], [stores, sender.groupNames]);
 
   const failed = (what: string) => Alert.alert(`${what}できませんでした`, 'もう一度お試しください。');
@@ -112,6 +146,67 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
     }
   };
 
+  // カテゴリの一覧を直す。名前を直す・消すときは、同じ名前の品も書き換える（API の中で）。
+  // 失敗したら、一覧と品を読み直して画面を DB に合わせる。
+  const reloadAfterFailure = (what: string) => {
+    failed(what);
+    if (!familyId) return;
+    void loadProductCategories(supabase, familyId).then(setCategoryList).catch(() => {});
+    void loadHouseholdProducts(supabase, familyId).then(setProducts).catch(() => {});
+  };
+
+  const addCategory = async (name: string) => {
+    if (!familyId) return;
+    try {
+      const created = await insertProductCategory(supabase, familyId, name, categoryList.length);
+      setCategoryList((prev) => [...prev, created]);
+    } catch {
+      reloadAfterFailure('追加');
+    }
+  };
+
+  const renameCategory = async (category: HouseholdProductCategory, name: string) => {
+    if (!familyId) return;
+    const existing = categoryList.find((row) => row.id !== category.id && row.name === name) ?? null;
+    setCategoryList((prev) =>
+      existing ? prev.filter((row) => row.id !== category.id) : prev.map((row) => (row.id === category.id ? { ...row, name } : row)),
+    );
+    setProducts((prev) => prev.map((product) => (product.category === category.name ? { ...product, category: name } : product)));
+    setCategoryRenames((prev) => ({ ...prev, [category.name]: name }));
+    try {
+      await renameProductCategory(supabase, familyId, category, name, existing);
+    } catch {
+      reloadAfterFailure('保存');
+    }
+  };
+
+  const deleteCategory = async (category: HouseholdProductCategory) => {
+    if (!familyId) return;
+    setCategoryList((prev) => prev.filter((row) => row.id !== category.id));
+    setProducts((prev) => prev.map((product) => (product.category === category.name ? { ...product, category: '' } : product)));
+    setCategoryRenames((prev) => ({ ...prev, [category.name]: '' }));
+    try {
+      await deleteProductCategory(supabase, familyId, category);
+    } catch {
+      reloadAfterFailure('削除');
+    }
+  };
+
+  const moveCategory = async (category: HouseholdProductCategory, offset: -1 | 1) => {
+    const index = categoryList.findIndex((row) => row.id === category.id);
+    const target = index + offset;
+    if (index < 0 || target < 0 || target >= categoryList.length) return;
+    const next = [...categoryList];
+    [next[index], next[target]] = [next[target], next[index]];
+    const renumbered = next.map((row, position) => ({ ...row, position }));
+    setCategoryList(renumbered);
+    try {
+      await reorderProductCategories(supabase, renumbered);
+    } catch {
+      reloadAfterFailure('並べ替え');
+    }
+  };
+
   const sendProduct = (product: HouseholdProduct) =>
     sender.send(product.name, product.store, () => {
       const at = new Date();
@@ -131,7 +226,15 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
 
       {stores.length > 0 && (
         <View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <ScrollView
+            ref={storeBar}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chips}
+            onLayout={(event) => {
+              barWidth.current = event.nativeEvent.layout.width;
+            }}
+          >
             {[ALL, ...stores].map((value) => {
               const selected = value === activeStore;
               return (
@@ -140,6 +243,10 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
                   onPress={() => setStore(value)}
+                  onLayout={(event) => {
+                    const { x, width } = event.nativeEvent.layout;
+                    chipLayouts.current.set(value, { x, width });
+                  }}
                   style={[styles.chip, selected && { backgroundColor: colors.livingProducts }]}
                 >
                   <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{value || 'すべて'}</Text>
@@ -157,7 +264,11 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
           <Text style={styles.message}>よく買う日用品を「追加」で登録すると、ここから買い出しリストへ送れます</Text>
         </View>
       ) : (
-        <ScrollView style={styles.flex} contentContainerStyle={styles.listContent}>
+        <Animated.ScrollView
+          style={[styles.flex, swipe.style]}
+          contentContainerStyle={styles.listContent}
+          {...swipe.handlers}
+        >
           <View style={styles.card}>
             {visible.map((product, index) => {
               const sub = [product.store, product.category, product.note].filter((text) => text !== '').join('・');
@@ -186,7 +297,7 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
               );
             })}
           </View>
-        </ScrollView>
+        </Animated.ScrollView>
       )}
 
       {editing !== null && (
@@ -198,6 +309,20 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
           onClose={() => onEdit(null)}
           onSubmit={(draft) => void save(draft)}
           onDelete={editing === 'new' ? undefined : () => void remove(editing.id)}
+          categoryRenames={categoryRenames}
+          onEditCategories={() => setIsEditingCategories(true)}
+        />
+      )}
+
+      {isEditingCategories && (
+        <ProductCategoriesSheet
+          categories={categoryList}
+          counts={categoryCounts}
+          onClose={() => setIsEditingCategories(false)}
+          onAdd={(name) => void addCategory(name)}
+          onRename={(category, name) => void renameCategory(category, name)}
+          onDelete={(category) => void deleteCategory(category)}
+          onMove={(category, offset) => void moveCategory(category, offset)}
         />
       )}
     </>

@@ -105,7 +105,7 @@
   mobile は `SheetModal` ほか、PWA版は `ModalShell`・`LogModalShell`・`FullScreen`（広い画面の両脇）ほか（`useBackdropClose`）。
   モーダルの中身のいちばん外側には `swipeBoundary` を足す（中でのスワイプを下の画面へ届かせない）
 - **横スワイプ:** 日付送りのある画面（予定・育児）は左右スワイプで日付を送る（`useSwipeNavigation`）。
-  画面の切り替え（家計の口座/記録/振り返り/特別費、口座の詳細の履歴/推移、からだ、保活、防災備蓄のカテゴリ）は
+  画面の切り替え（家計の口座/記録/振り返り/特別費、口座の詳細の履歴/推移、からだ、保活、防災備蓄のカテゴリ、日用品のお店、福引の履歴の家族）は
   帯と中身を包む要素に `useSwipeTabs` を足す。**面の中にある切り替え（期間・種類・＋/−など）はタップだけ**
   （スワイプを付けると、外側の切り替えへスワイプで移れなくなる）。
   mobile: `mobile/src/hooks/`、PWA版: `src/components/sukusuku/ui/`

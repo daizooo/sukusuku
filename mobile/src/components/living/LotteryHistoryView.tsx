@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { SubsidyDraw } from '@/types/app';
 import { colors } from '@/lib/theme';
+import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { ballOf, formatMonth, groupByMonth } from '@/lib/subsidyLotteryUtils';
 import { formatPrice } from '@/lib/shoppingUtils';
 import LotteryBall from '@/components/living/LotteryBall';
@@ -23,10 +24,34 @@ export default function LotteryHistoryView({ draws, members, myId, isLoading, no
   const [selected, setSelected] = useState(myId);
   const shown = draws.filter((draw) => draw.drawnBy === selected);
   const groups = groupByMonth(shown);
+  // 家族は、一覧の上の左右スワイプでも切り替える（一覧が指に合わせて動く）。
+  const swipe = useSwipeTabs(
+    members.map((member) => member.id),
+    selected,
+    setSelected,
+  );
+  // 選んだ家族が帯の外に隠れないよう、帯をその家族まで寄せる（スワイプで選んだときのため）。
+  const memberBar = useRef<ScrollView>(null);
+  const barWidth = useRef(0);
+  const chipLayouts = useRef(new Map<string, { x: number; width: number }>());
+  useEffect(() => {
+    const chip = chipLayouts.current.get(selected);
+    if (!chip) return;
+    memberBar.current?.scrollTo({ x: Math.max(0, chip.x - (barWidth.current - chip.width) / 2), animated: true });
+  }, [selected]);
 
   return (
     <>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={styles.chipScroll}>
+      <ScrollView
+        ref={memberBar}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chips}
+        style={styles.chipScroll}
+        onLayout={(event) => {
+          barWidth.current = event.nativeEvent.layout.width;
+        }}
+      >
         {members.map((member) => {
           const isSelected = member.id === selected;
           return (
@@ -35,6 +60,10 @@ export default function LotteryHistoryView({ draws, members, myId, isLoading, no
               accessibilityRole="button"
               accessibilityState={{ selected: isSelected }}
               onPress={() => setSelected(member.id)}
+              onLayout={(event) => {
+                const { x, width } = event.nativeEvent.layout;
+                chipLayouts.current.set(member.id, { x, width });
+              }}
               style={[styles.chip, isSelected && styles.chipSelected]}
             >
               <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
@@ -48,11 +77,15 @@ export default function LotteryHistoryView({ draws, members, myId, isLoading, no
       {isLoading ? (
         <Text style={styles.message}>読み込み中...</Text>
       ) : shown.length === 0 ? (
-        <View style={[styles.centered, styles.flex]}>
+        <Animated.View style={[styles.centered, styles.flex, swipe.style]} {...swipe.handlers}>
           <Text style={styles.message}>まだ引いていません</Text>
-        </View>
+        </Animated.View>
       ) : (
-        <ScrollView style={styles.flex} contentContainerStyle={styles.listContent}>
+        <Animated.ScrollView
+          style={[styles.flex, swipe.style]}
+          contentContainerStyle={styles.listContent}
+          {...swipe.handlers}
+        >
           {groups.map((group) => (
             <View key={group.month} style={styles.group}>
               <View style={styles.groupHeader}>
@@ -85,7 +118,7 @@ export default function LotteryHistoryView({ draws, members, myId, isLoading, no
               </View>
             </View>
           ))}
-        </ScrollView>
+        </Animated.ScrollView>
       )}
     </>
   );

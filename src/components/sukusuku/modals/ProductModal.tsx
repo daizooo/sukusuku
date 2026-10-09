@@ -10,6 +10,17 @@ import { ModalShell } from './TaskForm';
 // お店は、買い出しリストのグループ名と同じ書き方にすると、送ったときにそのグループへ入る。
 // 候補には、台帳に既にあるお店と、送り先リストのグループ名を出す。
 
+/** カテゴリを選ばないときのチップ。 */
+const NO_CATEGORY = 'なし';
+
+const followRenames = (name: string, renames: Record<string, string>): string => {
+  let current = name;
+  for (let step = 0; step < 20 && renames[current] !== undefined && renames[current] !== current; step += 1) {
+    current = renames[current];
+  }
+  return current;
+};
+
 interface FormState {
   name: string;
   category: string;
@@ -40,13 +51,17 @@ function toProductDraft(form: FormState): HouseholdProductDraft | string {
 interface ProductModalProps {
   /** null なら追加。呼び出し側で対象が変わるたびに作り直す。 */
   product: HouseholdProduct | null;
-  /** カテゴリの候補（既にある値）。 */
+  /** カテゴリの一覧（家族で共有。docs/home.md §4.1）の名前。ここから選ぶ。 */
   categories: string[];
   /** お店の候補（台帳のお店と、送り先リストのグループ名）。 */
   stores: string[];
   onClose: () => void;
   onSubmit: (draft: HouseholdProductDraft) => void;
   onDelete?: () => void;
+  /** 一覧で直した・消したカテゴリ（前の名前 → 新しい名前。消したら空）。選んでいるカテゴリを追従させる。 */
+  categoryRenames: Record<string, string>;
+  /** カテゴリの一覧を直す画面を開く。 */
+  onEditCategories: () => void;
 }
 
 const inputClass =
@@ -77,14 +92,25 @@ function Chips({ options, value, onPick }: { options: string[]; value: string; o
   );
 }
 
-export default function ProductModal({ product, categories, stores, onClose, onSubmit, onDelete }: ProductModalProps) {
+export default function ProductModal({
+  product,
+  categories,
+  stores,
+  onClose,
+  onSubmit,
+  onDelete,
+  categoryRenames,
+  onEditCategories,
+}: ProductModalProps) {
   const [form, setForm] = useState<FormState>(() => initialState(product));
+  // 一覧で直した・消したカテゴリを、選んでいるカテゴリに当てる（続けて直したときは最後の名前まで辿る）。
+  const category = followRenames(form.category.trim(), categoryRenames);
   const [error, setError] = useState<string | null>(null);
 
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
 
   const handleSubmit = () => {
-    const draft = toProductDraft(form);
+    const draft = toProductDraft({ ...form, category });
     if (typeof draft === 'string') {
       setError(draft);
       return;
@@ -156,16 +182,25 @@ export default function ProductModal({ product, categories, stores, onClose, onS
         </label>
 
         <div>
-          <label className="block">
+          <div className="flex items-center justify-between">
             <span className={labelClass}>カテゴリ</span>
-            <input
-              className={inputClass}
-              value={form.category}
-              onChange={(event) => update({ category: event.target.value })}
-              placeholder="例: 紙類"
-            />
-          </label>
-          <Chips options={categories} value={form.category} onPick={(category) => update({ category })} />
+            <button type="button" onClick={onEditCategories} className="mb-1.5 text-xs font-bold text-blue-500">
+              一覧を編集
+            </button>
+          </div>
+          {/* 一覧から選ぶ（自由に書くと人によって書き方がばらつくため）。一覧に無い前の値は、そのまま残して出す。 */}
+          <Chips
+            options={[
+              NO_CATEGORY,
+              ...categories,
+              ...(category !== '' && !categories.includes(category) ? [category] : []),
+            ]}
+            value={category === '' ? NO_CATEGORY : category}
+            onPick={(category) => update({ category: category === NO_CATEGORY ? '' : category })}
+          />
+          {categories.length === 0 && (
+            <span className="block text-[11px] text-gray-400 mt-1">「一覧を編集」でカテゴリを作ると、ここで選べます</span>
+          )}
         </div>
 
         <label className="block">

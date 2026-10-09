@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SubsidyDraw } from '@/types/app';
 import { ballOf, formatMonth, groupByMonth } from '@/lib/subsidyLotteryUtils';
 import { formatPrice } from '@/lib/shoppingUtils';
 import LotteryBall from './LotteryBall';
+import { useSwipeTabs } from '../ui/useSwipeTabs';
 
 // 補助くじの「履歴」の面（docs/home.md §9）。mobile版の
 // `mobile/src/components/living/LotteryHistoryView.tsx` と同じ項目・並び・文言。
@@ -23,10 +24,24 @@ export default function LotteryHistoryView({ draws, members, myId, isLoading, no
   const [selected, setSelected] = useState(myId);
   const shown = draws.filter((draw) => draw.drawnBy === selected);
   const groups = groupByMonth(shown);
+  // 家族は、一覧の上の左右スワイプでも切り替える（一覧が指に合わせて動く）。
+  const { handlers: swipeHandlers, attachContent } = useSwipeTabs(
+    members.map((member) => member.id),
+    selected,
+    setSelected,
+  );
+  // 選んだ家族が帯の外に隠れないよう、帯をその家族まで寄せる（スワイプで選んだときのため）。
+  const memberBar = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const bar = memberBar.current;
+    const chip = bar?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!bar || !chip) return;
+    bar.scrollTo({ left: chip.offsetLeft - (bar.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' });
+  }, [selected]);
 
   return (
     <>
-      <div className="shrink-0 flex gap-1.5 overflow-x-auto pb-2">
+      <div ref={memberBar} className="relative shrink-0 flex gap-1.5 overflow-x-auto pb-2">
         {members.map((member) => {
           const isSelected = member.id === selected;
           return (
@@ -48,11 +63,11 @@ export default function LotteryHistoryView({ draws, members, myId, isLoading, no
       {isLoading ? (
         <p className="py-8 text-center text-sm text-gray-400">読み込み中...</p>
       ) : shown.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-6">
+        <div ref={attachContent} className="flex flex-1 items-center justify-center px-6" {...swipeHandlers}>
           <p className="text-center text-sm text-gray-400">まだ引いていません</p>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pb-6">
+        <div ref={attachContent} className="flex-1 min-h-0 overflow-y-auto space-y-3 pb-6" {...swipeHandlers}>
           {groups.map((group) => (
             <section key={group.month} className="space-y-1">
               <div className="flex items-baseline justify-between px-1">
