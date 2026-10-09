@@ -742,6 +742,51 @@ export type Database = {
           },
         ]
       }
+      member_invites: {
+        Row: {
+          code_hash: string
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          member_id: string
+          used_at: string | null
+        }
+        Insert: {
+          code_hash: string
+          created_at?: string
+          created_by?: string | null
+          expires_at: string
+          id?: string
+          member_id: string
+          used_at?: string | null
+        }
+        Update: {
+          code_hash?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          member_id?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_invites_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_invites_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "family_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_budgets: {
         Row: {
           category_id: string
@@ -2315,6 +2360,8 @@ export type Database = {
       }
     }
     Functions: {
+      create_member_invite: { Args: { p_member_id: string }; Returns: string }
+      create_my_family: { Args: { p_role: string }; Returns: string }
       current_family_id: { Args: never; Returns: string }
       family_birth_date: { Args: { p_family_id: string }; Returns: string }
       increment_push_failure: {
@@ -2379,6 +2426,7 @@ export type Database = {
         Args: { p_date: string; p_holiday: string }
         Returns: string
       }
+      redeem_member_invite: { Args: { p_code: string }; Returns: string }
       refresh_money_holding_values: {
         Args: { p_from: string; p_holding_id?: string; p_to: string }
         Returns: number

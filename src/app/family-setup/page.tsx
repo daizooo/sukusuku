@@ -17,7 +17,7 @@ export default function FamilySetupPage() {
   const [view, setView] = useState<View>('choose');
   const [role, setRole] = useState<Role>('papa');
   const [inviteCodeInput, setInviteCodeInput] = useState('');
-  const [createdFamilyId, setCreatedFamilyId] = useState('');
+  const [partnerInviteCode, setPartnerInviteCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [copied, setCopied] = useState(false);
@@ -55,24 +55,15 @@ export default function FamilySetupPage() {
         return;
       }
 
-      // families_select_own ポリシーはusers.family_idと一致する行しかSELECTできないため、
-      // insert直後のRETURNINGでは(まだusers.family_id未設定なので)行を取得できない。
-      // そのためIDをクライアント側で生成して事前に確定させる。
-      const newFamilyId = crypto.randomUUID();
-      const { error: familyError } = await supabase.from('families').insert({ id: newFamilyId });
-      if (familyError) {
-        setErrorMessage(familyError.message);
+      // 家族の作成と本人の紐づけは、関数がまとめて行う（users.family_id はアプリから書き換えられない）。
+      const { data: createdFamilyId, error: familyError } = await supabase.rpc('create_my_family', {
+        p_role: role,
+      });
+      if (familyError || !createdFamilyId) {
+        setErrorMessage(familyError?.message ?? '家族を作成できませんでした。');
         return;
       }
-
-      const { error: userError } = await supabase
-        .from('users')
-        .update({ family_id: newFamilyId, role })
-        .eq('id', user.id);
-      if (userError) {
-        setErrorMessage(userError.message);
-        return;
-      }
+      const newFamilyId = createdFamilyId;
 
       try {
         await seedDefaultTasks(supabase, newFamilyId);
@@ -88,7 +79,25 @@ export default function FamilySetupPage() {
         console.error('Failed to seed default nurseries:', seedError);
       }
 
-      setCreatedFamilyId(newFamilyId);
+      // もう一人の親に渡す招待コード。出せなくても家族の作成は済んでいるので、続行する
+      try {
+        const { data: partner } = await supabase
+          .from('family_members')
+          .select('id')
+          .eq('family_id', newFamilyId)
+          .eq('relation', role === 'papa' ? 'wife' : 'husband')
+          .single();
+        if (partner) {
+          const { data: code, error: inviteError } = await supabase.rpc('create_member_invite', {
+            p_member_id: partner.id,
+          });
+          if (inviteError) throw inviteError;
+          setPartnerInviteCode(code ?? '');
+        }
+      } catch (inviteError) {
+        console.error('Failed to create partner invite:', inviteError);
+      }
+
       setView('done');
     } finally {
       setIsLoading(false);
@@ -114,7 +123,8 @@ export default function FamilySetupPage() {
         return;
       }
 
-      const { error } = await supabase.from('users').update({ family_id: trimmedCode, role }).eq('id', user.id);
+      // 参加は招待コードで行う。役割はコードを出した側が決めた続柄から決まる
+      const { error } = await supabase.rpc('redeem_member_invite', { p_code: trimmedCode });
       if (error) {
         setErrorMessage('招待コードが正しくないか、参加に失敗しました。');
         return;
@@ -128,7 +138,7 @@ export default function FamilySetupPage() {
   };
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(createdFamilyId);
+    await navigator.clipboard.writeText(partnerInviteCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -191,23 +201,25 @@ export default function FamilySetupPage() {
 
         {(view === 'create' || view === 'join') && (
           <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1.5">あなたの役割</label>
-              <div className="flex space-x-2">
-                {(['papa', 'mama'] as Role[]).map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setRole(r)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
-                      role === r ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200'
-                    }`}
-                  >
-                    {ROLE_LABEL[r]}
-                  </button>
-                ))}
+            {view === 'create' && (
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">あなたの役割</label>
+                <div className="flex space-x-2">
+                  {(['papa', 'mama'] as Role[]).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setRole(r)}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
+                        role === r ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200'
+                      }`}
+                    >
+                      {ROLE_LABEL[r]}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {view === 'join' && (
               <div>
@@ -239,13 +251,21 @@ export default function FamilySetupPage() {
 
         {view === 'done' && (
           <div className="space-y-4">
-            <p className="text-sm text-gray-700">家族グループを作成しました。以下の招待コードをパートナーに共有してください。</p>
-            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-lg p-3">
-              <code className="flex-1 text-xs text-gray-700 break-all font-mono">{createdFamilyId}</code>
-              <button onClick={handleCopy} className="shrink-0 text-blue-500 hover:bg-blue-50 p-1.5 rounded-lg transition">
-                {copied ? <Check size={16} /> : <Copy size={16} />}
-              </button>
-            </div>
+            {partnerInviteCode ? (
+              <>
+                <p className="text-sm text-gray-700">
+                  家族グループを作成しました。以下の招待コードをパートナーに共有してください（7日間、1回だけ使えます）。
+                </p>
+                <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <code className="flex-1 text-sm text-gray-700 break-all font-mono">{partnerInviteCode}</code>
+                  <button onClick={handleCopy} className="shrink-0 text-blue-500 hover:bg-blue-50 p-1.5 rounded-lg transition">
+                    {copied ? <Check size={16} /> : <Copy size={16} />}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-gray-700">家族グループを作成しました。</p>
+            )}
             <button
               onClick={() => {
                 router.push('/');
