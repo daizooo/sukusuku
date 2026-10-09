@@ -840,6 +840,9 @@ export default function CareScreen() {
                 {nursingBy && (
                   <Text style={styles.recordHint}>{memberLabel(nursingBy)}が授乳中</Text>
                 )}
+                {!nursingBy && nextBreastSide && !timer.hasSession && (
+                  <Text style={styles.recordHint}>次は{getSideLabel(nextBreastSide)}から</Text>
+                )}
               </Pressable>
 
               <Pressable

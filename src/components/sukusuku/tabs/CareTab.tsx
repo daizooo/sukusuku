@@ -381,6 +381,11 @@ export default function CareTab({
                     {memberLabel(nursingBy)}が授乳中
                   </span>
                 )}
+                {!nursingBy && nextBreastSide && !nursingTimer.hasSession && (
+                  <span className="text-[10px] font-bold text-amber-600 leading-tight">
+                    次は{getSideLabel(nextBreastSide)}から
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setLogModal({ type: 'diaper', log: null })}
