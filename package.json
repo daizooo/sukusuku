@@ -22,6 +22,8 @@
     "test:wake-plan": "node --experimental-strip-types supabase/functions/_shared/wakePlan.test.ts",
     "test:stock": "node --experimental-strip-types src/lib/stockUtils.test.ts",
     "test:shopping": "node --experimental-strip-types src/lib/shoppingUtils.test.ts",
+    "test:product-purchases": "node --experimental-strip-types src/lib/productPurchases.test.ts",
+    "test:product-purchases-mobile": "node --experimental-strip-types mobile/src/lib/productPurchases.test.ts",
     "test:lottery": "node --experimental-strip-types src/lib/subsidyLotteryUtils.test.ts",
     "test:stock-expiry": "node --experimental-strip-types supabase/functions/_shared/stockExpiry.test.ts",
     "test:special": "node --experimental-strip-types src/lib/specialUtils.test.ts",

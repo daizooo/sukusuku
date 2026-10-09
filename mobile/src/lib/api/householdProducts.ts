@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Tables, TablesUpdate } from '@/types/supabase';
 import type { HouseholdProduct, HouseholdProductCategory, HouseholdProductDraft } from '@/types/app';
 import { planShoppingAdd } from '@/lib/shoppingUtils';
+import { resolveUnitPrice, type PurchaseLine } from '@/lib/productPurchases';
 import { insertItem } from '@/lib/api/lists';
 
 type ProductRow = Tables<'household_products'>;
@@ -90,6 +91,41 @@ export async function markHouseholdProductAdded(supabase: SupabaseDb, id: string
     .update({ last_added_at: at.toISOString() })
     .eq('id', id);
   if (error) throw error;
+}
+
+/** 家計の記録から読む、その品の買った記録の1行（docs/home.md §4.6）。 */
+interface PurchaseRow {
+  quantity: number;
+  amount: number;
+  unit_price: number | null;
+  money_records: { occurred_on: string; store: string } | { occurred_on: string; store: string }[] | null;
+}
+
+/**
+ * 品ごとの買った記録を読む（docs/home.md §4.6）。家計の品目のうち、台帳から選んだもの
+ * （`product_id` がこの品）だけ。見込みの記録・支出以外の記録は数えない。品名の一致では拾わない。
+ */
+export async function loadProductPurchases(supabase: SupabaseDb, productId: string): Promise<PurchaseLine[]> {
+  const { data, error } = await supabase
+    .from('money_items')
+    .select('quantity, amount, unit_price, money_records!inner(occurred_on, store)')
+    .eq('product_id', productId)
+    .eq('money_records.kind', 'expense')
+    .eq('money_records.is_estimate', false);
+  if (error) throw error;
+  const lines: PurchaseLine[] = [];
+  for (const row of (data ?? []) as PurchaseRow[]) {
+    const record = Array.isArray(row.money_records) ? row.money_records[0] : row.money_records;
+    if (!record) continue;
+    lines.push({
+      on: record.occurred_on,
+      quantity: row.quantity,
+      amount: row.amount,
+      unitPrice: resolveUnitPrice(row.amount, row.quantity, row.unit_price),
+      store: record.store,
+    });
+  }
+  return lines;
 }
 
 export type ShoppingAddResult =

@@ -18,6 +18,7 @@ import {
 } from '@/lib/api/householdProducts';
 import { formatPrice } from '@/lib/shoppingUtils';
 import ProductModal from '../modals/ProductModal';
+import ProductDetail from './ProductDetail';
 import ProductCategoriesModal from '../modals/ProductCategoriesModal';
 import type { ShoppingSender } from './useShoppingSender';
 import { useSwipeTabs } from '../ui/useSwipeTabs';
@@ -55,6 +56,8 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
   const [products, setProducts] = useState<HouseholdProduct[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [store, setStore] = useState(ALL);
+  // 詳しい画面を開いている品（docs/home.md §4.6）。品は一覧から引くので、直したり消したりすると追従する。
+  const [detailId, setDetailId] = useState<string | null>(null);
   // カテゴリの一覧（家族で共有。docs/home.md §4.1）と、それを直す画面を開いているか。
   const [categoryList, setCategoryList] = useState<HouseholdProductCategory[]>([]);
   const [isEditingCategories, setIsEditingCategories] = useState(false);
@@ -107,6 +110,7 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
     if (!bar || !selected) return;
     bar.scrollTo({ left: selected.offsetLeft - (bar.clientWidth - selected.offsetWidth) / 2, behavior: 'smooth' });
   }, [activeStore]);
+  const detail = detailId === null ? null : (products.find((product) => product.id === detailId) ?? null);
   const categories = useMemo(() => categoryList.map((category) => category.name), [categoryList]);
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -258,7 +262,7 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
               const sub = [product.store, product.category, product.note].filter((text) => text !== '').join('・');
               return (
                 <li key={product.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50">
-                  <button type="button" onClick={() => onEdit(product)} className="flex-1 min-w-0 text-left">
+                  <button type="button" onClick={() => setDetailId(product.id)} className="flex-1 min-w-0 text-left">
                     <p className="text-sm font-bold text-gray-900">{product.name}</p>
                     {sub !== '' && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}
                   </button>
@@ -280,6 +284,17 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
             })}
           </ul>
         </div>
+      )}
+
+      {detail && (
+        <ProductDetail
+          key={detail.id}
+          product={detail}
+          onClose={() => setDetailId(null)}
+          onEdit={() => onEdit(detail)}
+          onSend={() => sendProduct(detail)}
+          banner={sender.banner}
+        />
       )}
 
       {editing !== null && (
