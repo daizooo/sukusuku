@@ -278,6 +278,9 @@ Macを考えないなら、Webを出す理由は「あれば便利」程度し�
 
 ### フェーズ4（畳む）に入る条件
 
+> **この節は取り下げ済み（2026-09-29。冒頭とルートの `CLAUDE.md`）。** 経緯として残す。Dの「PWA版・鍵・行の片付け」は
+> 実行せず、Web Push の扱いを決め直す（[notifications.md](./notifications.md) §11、[remaining-work.md](./remaining-work.md)）。
+
 iPhone / Macを考えないことが決まった（§5）ので、**PWAを恒久的に残す理由はもう無い。**
 残っているのは次の4つで、上から順に片付ける。
 

@@ -218,6 +218,10 @@
 
 各PRで `src/`（PWA版）も追従する。
 
+> **状態（2026-10-09）:** 1〜5・4b は**済**（本番DBに `family_members`、予定の `participants`。アプリ名は「かぞく手帳」）。
+> **7（子のアカウント招待）と 6（`family_profiles`・`users.role` の撤去）は未着手**（本番DBに `member_invites` が無く、
+> `family_profiles` が残り `api/profile.ts` が今も読み書きしている）。7 の `users_update_self` の穴を塞ぐ変更は、先に出すこと。残りの一覧は [remaining-work.md](./remaining-work.md)。
+
 ## 6. 検証
 
 - 4タブ化後、全タブで「画面全体がスクロールしない」「戻る操作で1つ前へ」（CLAUDE.md）を確認

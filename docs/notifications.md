@@ -816,6 +816,10 @@ Edge Function ─→ _shared/deliver.ts ─→ FCM HTTP v1（_shared/fcm.ts）
 
 ### これから（PWAを畳むまで）
 
+> **2026-10-09時点の注意:** 「PWAを畳む」方針は2026-09-29に取り下げられた（ルートの `CLAUDE.md`）。以下の3項目は、そのまま実行しない。
+> PWA版の設定タブ（`NotificationSetting.tsx`）は今も `kind = 'webpush'` の行を作るが、送る側が撤去済みで**何も届かない**
+> （本番DBに `webpush` が4件）。①PWA版の通知を外して行を消す ②Web Push を戻す、のどちらにするかを先に決める。残りの一覧は [remaining-work.md](./remaining-work.md)。
+
 **PWA版（`src/`）にはまだ手を付けていない。** そのため、PWA版を開いて通知をオンにすると
 `kind = 'webpush'` の行がまた作られる。送る側が `fcm` で絞っているので**誤って送ろうとして
 失敗することはない**が、その人には何も届かない。
