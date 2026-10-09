@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // ねんね計測の通知に使うサービスワーカー。更新が確実に届くようキャッシュさせない。
+        // 古いService Workerを自分で外させる版を置いている。更新が確実に届くようキャッシュさせない。
         source: "/sw.js",
         headers: [
           { key: "Content-Type", value: "application/javascript; charset=utf-8" },

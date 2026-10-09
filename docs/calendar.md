@@ -246,6 +246,9 @@ Googleカレンダーと同じく、「繰り返し」欄の選択肢から選�
 - `0012_push_notifications.sql` — 購読情報・送信済み記録・通知時刻のビュー
 - `0013_reminder_cron.sql` — `pg_cron` による定期実行の登録
 
+> **未実施（2026-10-09時点）:** `tasks.remind_minutes_before` 列の削除。本番DBに列が残り、`api/tasks.ts`（mobile・PWA）が今も参照している。
+> 旧APK・旧Web版が使われなくなったことを確かめてから、参照を外して別のmigrationで消す。繰り返しの「この回だけ」「これ以降」の変更も未実装。残りの一覧は [remaining-work.md](./remaining-work.md)。
+
 ### 参加者・種別のマイグレーション
 
 `0039_task_participants_kind.sql` で以下を追加。

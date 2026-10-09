@@ -16,11 +16,11 @@
 > | 宛先の取得 | 3つの配信Functionが `kind = 'fcm'` で絞る。`webpush` の行は残っていても使わない |
 > | `send-nursing-alarms` | 送るのをやめ、置き去りの片付けだけになった（§6） |
 > | `VAPID_KEYS` / `VAPID_SUBJECT` | **消していない。** もう読まれないが、戻すときのために置いてある |
-> | PWA版（`src/`） | まだ触っていない。畳むのは次の段（§11「これから」） |
+> | PWA版（`src/`） | **2026-10-09に通知を外した**（トグル・購読・授乳のお知らせの預け・済んだお知らせを消す処理）。`public/sw.js` は、すでに登録済みの端末が自分で登録を外すだけの版にしてある（§11「これから」） |
 >
 > **§1〜§5 と §6 の「なぜサーバーから送るのか」は、当時の記録として残している。**
 > 書いてある手順（VAPIDの鍵の生成、Vercelへの公開鍵の設定など）はもう要らない。
-> PWAを畳むときにまとめて整理する。
+> PWA版は畳まず続けるが、通知はAndroidアプリだけで受け取る（2026-10-09に決定）。
 
 ---
 
@@ -814,19 +814,33 @@ Edge Function ─→ _shared/deliver.ts ─→ FCM HTTP v1（_shared/fcm.ts）
 決まりとして使い続けるため。Web Pushを撤去したいまは見分ける相手がいないが、
 列の形は変えていない。
 
-### これから（PWAを畳むまで）
+### PWA版の通知を外した（2026-10-09）
 
-**PWA版（`src/`）にはまだ手を付けていない。** そのため、PWA版を開いて通知をオンにすると
-`kind = 'webpush'` の行がまた作られる。送る側が `fcm` で絞っているので**誤って送ろうとして
-失敗することはない**が、その人には何も届かない。
+「PWAを畳む」方針は2026-09-29に取り下げられた（ルートの `CLAUDE.md`）が、Web Pushは戻さず、
+**PWA版では通知を受け取らない**ことにした。通知を受け取れるのはAndroidアプリだけ。
 
-残っているのは次の3つ。`docs/native-app-rewrite.md` §7 のフェーズ4の続きで片付ける。
+| | どうなったか |
+| --- | --- |
+| PWA版の設定タブ | 通知のトグルを外した。授乳の間隔・検温の時刻は家族共通の設定なので、同じ枠に残してある（「通知はAndroidアプリで受け取ります」と添えた） |
+| `src/lib/push.ts`・`api/pushSubscriptions.ts` | 削除（購読の作成・保存） |
+| `src/lib/nursingAlarmSync.ts` | 削除。PWA版の授乳は `nursing_alarms` に預けなくなった。**PWA版で授乳を計っている間、パートナーのAndroidに「そろそろ次の授乳」が届きうる**（預ける先の購読がないため。PWA版は開発確認用なので許容した） |
+| `src/lib/notificationCleanup.ts` | 削除（PWA版に出したお知らせを消す処理。出すものが無くなった） |
+| `public/sw.js` | 自分で登録を外すだけの版に置き換えた。登録済みの端末が更新を取りに来たときに外れる。新しく登録するコードはもう無いので、行き渡ったあとは消してよい |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | 不要。`.env.local.example` から外した（Vercelの環境変数に入れていれば消してよい） |
+
+**手元でやること（DB・シークレット。リポジトリからは触らない）:**
 
 | | やること |
 | --- | --- |
-| PWA版 | 通知の設定・`public/sw.js`・`src/lib/push.ts` を外す |
-| `VAPID_KEYS` / `VAPID_SUBJECT` | もう読まれないので消してよい（戻すときのために置いてある） |
-| `kind = 'webpush'` の行 | 消す。`kind` 列そのものを畳むかは、PWAを消すときに決める |
+| `kind = 'webpush'` の行 | 消す。削除なので SQL Editor で流す（下記）。`reminder_deliveries`・`nursing_alarms` などは `on delete cascade` でついて消える |
+| `VAPID_KEYS` / `VAPID_SUBJECT` | もう読まれないので消してよい（Supabase の Edge Function のシークレット）。戻すときはコードをgitの履歴から取り出す |
+| Vercel の `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | 消してよい |
+
+```sql
+delete from public.push_subscriptions where kind = 'webpush';
+```
+
+`kind` 列そのものを畳むかは、決めていない（列の形は変えていない）。
 
 ### 授乳のお知らせはサーバーを通らない
 
@@ -877,7 +891,7 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat /path/to/service-account.json)"
 
 - 鍵は `project_id` / `client_email` / `private_key` だけを使う
 - これで送れるのはFCMのメッセージだけ（`firebase.messaging` のスコープのみ要求している）
-- **`VAPID_KEYS` を消してはいけない。** PWA版の端末が残っている間は両方使う
+- `VAPID_KEYS` は、PWA版の通知を外したので（§11）もう要らない。消してよい
 
 #### 手順4: 端末でオンにする
 
