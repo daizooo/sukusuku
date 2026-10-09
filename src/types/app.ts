@@ -637,6 +637,8 @@ export interface MoneyWallet {
   payDay: number | null;
   /** カードの引き落とし口座。 */
   payWalletId: string | null;
+  /** アイコンの色（#rrggbb）。null は標準（種類ごとの色）。 */
+  iconColor: string | null;
   position: number;
   archived: boolean;
 }

@@ -117,7 +117,7 @@ export default function MoneyAccountsView({
                   >
                     <span className="flex min-w-0 items-start gap-2">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100">
-                        <WalletTypeIcon type={row.wallet.type} size={18} />
+                        <WalletTypeIcon type={row.wallet.type} size={18} color={row.wallet.iconColor} />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className={`line-clamp-2 text-[13px] font-semibold text-gray-900`}>{row.wallet.name}</span>

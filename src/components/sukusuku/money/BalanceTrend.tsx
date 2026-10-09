@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type PointerEvent } from 'react';
 import {
   balanceChanges,
   filterTrend,
@@ -11,15 +11,22 @@ import {
   type BalancePoint,
   type TrendPeriod,
 } from '@/lib/moneyUtils';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 import { cardClass, minus, SectionHeader, type } from './moneyVisual';
 
 // 残高の推移（docs/kakei.md §9.3）。mobile版の `mobile/src/components/money/BalanceTrend.tsx` と同じ並び・文言。
 // 折れ線（日ごとの残高）・期間の切り替え（はじめは全期間）・対象期間の履歴（残高が変わった日。新しい順）。
 // 総残高と出金元ごとの推移で同じものを使う。親のスクロールの中に置く（この中ではスクロールしない）。
+// グラフに触れる（なぞる）と、その日の日付と残高を線の上に出す。指を離しても、次に触れるか期間を変えるまで残す。
+// グラフの中の横の動きは日付の選択に使い、画面の切り替えのスワイプ（useSwipeTabs）へは渡さない。
 
 const WIDTH = 360;
-const HEIGHT = 200;
-const PAD = { left: 52, right: 10, top: 10, bottom: 24 };
+const TOOLTIP_AREA = 44; // 日付と残高の吹き出しを置く、グラフの上の余白
+const HEIGHT = 200 + TOOLTIP_AREA;
+const PAD = { left: 52, right: 10, top: 10 + TOOLTIP_AREA, bottom: 24 };
+const TOOLTIP_WIDTH = 168;
+const TOOLTIP_HEIGHT = 38;
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 const FONT = '#9ca3af'; // gray-400（補足の薄い灰）
 
 const shortDate = (dateKey: string) => {
@@ -30,8 +37,15 @@ const fullDate = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number);
   return `${year}年${String(month).padStart(2, '0')}月${String(day).padStart(2, '0')}日`;
 };
+const fullDateWithWeekday = (dateKey: string) => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return `${fullDate(dateKey)}(${WEEKDAYS[new Date(year, month - 1, day).getDay()]})`;
+};
 
 function Chart({ points }: { points: BalancePoint[] }) {
+  const [selected, setSelected] = useState<{ points: BalancePoint[]; index: number } | null>(null);
+  // 期間を変えて points が入れ替わったら、選んでいた日は捨てる。
+  const selectedIndex = selected && selected.points === points ? selected.index : null;
   const geometry = useMemo(() => {
     if (points.length === 0) return null;
     const values = points.map((point) => point.amount);
@@ -53,8 +67,36 @@ function Chart({ points }: { points: BalancePoint[] }) {
   }, [points]);
   if (geometry === null) return null;
 
+  // 触れた位置にいちばん近い日を選ぶ。
+  const select = (event: PointerEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width === 0) return;
+    const x = ((event.clientX - rect.left) / rect.width) * WIDTH;
+    const ratio = (x - PAD.left) / (WIDTH - PAD.left - PAD.right);
+    const index = Math.min(points.length - 1, Math.max(0, Math.round(ratio * (points.length - 1))));
+    setSelected({ points, index });
+  };
+  const selectedPoint = selectedIndex === null ? null : points[selectedIndex];
+  const tooltipLeft =
+    selectedIndex === null
+      ? 0
+      : Math.min(Math.max(geometry.x(selectedIndex) - TOOLTIP_WIDTH / 2, 4), WIDTH - TOOLTIP_WIDTH - 4);
+
   return (
-    <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="mx-auto w-full max-w-[480px]" role="img" aria-label="残高の推移">
+    <svg
+      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+      className="mx-auto w-full max-w-[480px] touch-pan-y select-none"
+      role="img"
+      aria-label="残高の推移"
+      {...swipeBoundary}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        select(event);
+      }}
+      onPointerMove={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId) || event.pointerType === 'mouse') select(event);
+      }}
+    >
       {geometry.ticks.map((tick) => (
         <g key={tick}>
           <line
@@ -75,6 +117,34 @@ function Chart({ points }: { points: BalancePoint[] }) {
         <polyline points={geometry.line} fill="none" stroke="#2563eb" strokeWidth={2.5} strokeLinejoin="round" />
       ) : (
         <circle cx={geometry.x(0)} cy={geometry.y(points[0].amount)} r={4} fill="#2563eb" />
+      )}
+      {selectedPoint && selectedIndex !== null && (
+        <g pointerEvents="none">
+          <line
+            x1={geometry.x(selectedIndex)}
+            x2={geometry.x(selectedIndex)}
+            y1={PAD.top}
+            y2={HEIGHT - PAD.bottom}
+            stroke="#2563eb"
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+          />
+          <circle
+            cx={geometry.x(selectedIndex)}
+            cy={geometry.y(selectedPoint.amount)}
+            r={5}
+            fill="#ffffff"
+            stroke="#2563eb"
+            strokeWidth={2.5}
+          />
+          <rect x={tooltipLeft} y={0} width={TOOLTIP_WIDTH} height={TOOLTIP_HEIGHT} rx={8} fill="#2563eb" />
+          <text x={tooltipLeft + TOOLTIP_WIDTH / 2} y={15} fontSize={11} fontWeight={600} fill="#ffffff" textAnchor="middle">
+            {fullDateWithWeekday(selectedPoint.date)}
+          </text>
+          <text x={tooltipLeft + TOOLTIP_WIDTH / 2} y={32} fontSize={14} fontWeight={700} fill="#ffffff" textAnchor="middle">
+            {formatBalance(selectedPoint.amount)}
+          </text>
+        </g>
       )}
       {geometry.labels.map((index) => (
         <text

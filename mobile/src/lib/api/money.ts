@@ -57,6 +57,7 @@ const rowToWallet = (row: WalletRow): MoneyWallet => ({
   closeDay: row.close_day,
   payDay: row.pay_day,
   payWalletId: row.pay_wallet_id,
+  iconColor: row.icon_color,
   position: row.position,
   archived: row.archived_at !== null,
 });
@@ -335,6 +336,7 @@ const walletFields = (draft: MoneyWalletDraft) => ({
   close_day: draft.type === 'card' ? draft.closeDay : null,
   pay_day: draft.type === 'card' ? draft.payDay : null,
   pay_wallet_id: draft.type === 'card' ? draft.payWalletId : null,
+  icon_color: draft.iconColor,
 });
 
 export async function insertMoneyWallet(
