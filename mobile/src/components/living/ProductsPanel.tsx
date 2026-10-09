@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight, Plus } from 'lucide-react-native';
-import type { HouseholdProduct, HouseholdProductCategory, HouseholdProductDraft } from '@/types/app';
+import type { HouseholdProduct, HouseholdProductCategory, HouseholdProductDraft, MoneyStore } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
@@ -17,6 +17,8 @@ import {
   reorderProductCategories,
   updateHouseholdProduct,
 } from '@/lib/api/householdProducts';
+import { insertMoneyStore, loadMoneyStores, loadStoreUses } from '@/lib/api/money';
+import { storeChoices as buildStoreChoices, type StoreUse } from '@/lib/moneyUtils';
 import { formatPrice } from '@/lib/shoppingUtils';
 import ProductSheet from '@/components/living/ProductSheet';
 import ProductDetail from '@/components/living/ProductDetail';
@@ -62,6 +64,26 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
   const [isEditingCategories, setIsEditingCategories] = useState(false);
   // 編集中の品のカテゴリを、一覧で直した・消した名前に追従させる（前の名前 → 新しい名前。消したら空）。
   const [categoryRenames, setCategoryRenames] = useState<Record<string, string>>({});
+  // お店の候補は家計の記録と同じ（docs/home.md §4.1）。家計のお店の設定と、記録で使ったお店を、編集を開くたびに読む。
+  const [moneyStores, setMoneyStores] = useState<MoneyStore[]>([]);
+  const [storeUses, setStoreUses] = useState<StoreUse[]>([]);
+  const isEditing = editing !== null;
+  useEffect(() => {
+    if (!isEditing || !familyId) return;
+    let isMounted = true;
+    void Promise.all([loadMoneyStores(supabase, familyId), loadStoreUses(supabase, familyId)])
+      .then(([loadedStores, loadedUses]) => {
+        if (!isMounted) return;
+        setMoneyStores(loadedStores);
+        setStoreUses(loadedUses);
+      })
+      .catch(() => {
+        // 読めなかったぶんは、前に読んだ候補のまま（打って足すことはできる）。
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [isEditing, familyId]);
 
   useEffect(() => {
     if (!familyId) return;
@@ -117,11 +139,17 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
     for (const product of products) counts[product.category] = (counts[product.category] ?? 0) + 1;
     return counts;
   }, [products]);
-  const storeOptions = useMemo(() => [...new Set([...stores, ...sender.groupNames])], [stores, sender.groupNames]);
+  const storeChoices = useMemo(() => {
+    const base = buildStoreChoices(moneyStores, storeUses);
+    // 台帳に前からあるお店のうち、記録にも設定にも無いものは「前に使ったお店」に出す（使わなくしたお店は除く）。
+    const known = new Set([...base.registered, ...base.recent, ...base.others, ...moneyStores.map((entry) => entry.name)]);
+    const fromProducts = stores.filter((name) => !known.has(name));
+    return { ...base, others: [...base.others, ...fromProducts].sort((a, b) => a.localeCompare(b, 'ja')) };
+  }, [moneyStores, storeUses, stores]);
 
   const failed = (what: string) => Alert.alert(`${what}できませんでした`, 'もう一度お試しください。');
 
-  const save = async (draft: HouseholdProductDraft) => {
+  const save = async (draft: HouseholdProductDraft, registerStore: boolean) => {
     const target = editing;
     onEdit(null);
     if (!familyId || target === null) return;
@@ -132,6 +160,12 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
       } else {
         const updated = await updateHouseholdProduct(supabase, target.id, draft);
         setProducts((prev) => prev.map((product) => (product.id === updated.id ? updated : product)));
+      }
+      // 「お店に登録して使う」を選んだお店は、家計のお店の設定にも登録する（docs/kakei.md §3.5）。
+      const storeName = draft.store.trim();
+      if (registerStore && storeName !== '' && !moneyStores.some((entry) => entry.name === storeName && !entry.archived)) {
+        const savedStore = await insertMoneyStore(supabase, familyId, storeName);
+        setMoneyStores((prev) => [...prev.filter((entry) => entry.id !== savedStore.id), savedStore]);
       }
     } catch {
       failed('保存');
@@ -320,9 +354,9 @@ export default function ProductsPanel({ familyId, sender, editing, onEdit }: Pro
           key={editing === 'new' ? 'new' : editing.id}
           product={editing === 'new' ? null : editing}
           categories={categories}
-          stores={storeOptions}
+          storeChoices={storeChoices}
           onClose={() => onEdit(null)}
-          onSubmit={(draft) => void save(draft)}
+          onSubmit={(draft, registerStore) => void save(draft, registerStore)}
           onDelete={editing === 'new' ? undefined : () => void remove(editing.id)}
           categoryRenames={categoryRenames}
           onEditCategories={() => setIsEditingCategories(true)}

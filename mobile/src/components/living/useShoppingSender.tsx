@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
-import type { ListBoard, ListGroup } from '@/types/app';
+import type { ListBoard } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
 import { loadLists } from '@/lib/api/lists';
@@ -24,7 +24,6 @@ const NOTICE_MS = 3000;
 
 export function useShoppingSender(familyId: string | null) {
   const [lists, setLists] = useState<ListBoard[]>([]);
-  const [groups, setGroups] = useState<ListGroup[]>([]);
   const [listId, setListId] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -35,7 +34,6 @@ export function useShoppingSender(familyId: string | null) {
     try {
       const snapshot = await loadLists(supabase, familyId);
       setLists(snapshot.lists);
-      setGroups(snapshot.groups);
     } catch {
       // 読めなくても、送るときにもう一度読む。
     }
@@ -118,8 +116,6 @@ export function useShoppingSender(familyId: string | null) {
   return {
     /** 送り先のリストの名前。まだ決めていなければ null。 */
     listName: target?.name ?? null,
-    /** 送り先のリストのグループ名（日用品のお店の候補に使う）。 */
-    groupNames: target ? groups.filter((group) => group.listId === target.id).map((group) => group.name) : [],
     send,
     openPicker,
     picker,
