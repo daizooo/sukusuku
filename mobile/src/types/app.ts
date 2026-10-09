@@ -736,7 +736,10 @@ export interface MoneyHoldingValue {
 export interface MoneySecuritiesData {
   securities: MoneySecurity[];
   holdings: MoneyHolding[];
+  /** 日々の評価額。historyLoaded が false のうちは、保有ごとの最新の1行だけ（一覧の残高用）。 */
   values: MoneyHoldingValue[];
+  /** values に過去の履歴（推移用）まで入っているか。履歴は推移・銘柄の詳細を開いたときに読む。 */
+  historyLoaded: boolean;
 }
 
 /** 銘柄の追加・編集の入力。保有は預り区分ごと（保有数 0 の区分は使わなくする）。 */

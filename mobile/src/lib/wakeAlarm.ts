@@ -41,6 +41,9 @@ const DAY_MS = 24 * 60 * 60_000;
 const BASICS_KEY = 'sukusuku.wakeAlarm.basics';
 const TEST_KEY = 'sukusuku.wakeAlarm.testAt';
 
+/** 起動直後の予約の組み直しまで待つ時間（最初の画面の読み込みを先に通す）。 */
+const STARTUP_DELAY_MS = 3_000;
+
 /** 設定画面の「テスト鳴動」までの待ち時間。 */
 const TEST_DELAY_MS = 10_000;
 
@@ -208,7 +211,8 @@ export function useWakeAlarmSync(userId: string | null): void {
       }
     };
 
-    void run();
+    // 起動直後の1回は少し待つ。開いた画面が最初の読み込みを済ませるのを邪魔しない（予約の組み直しは急がない）。
+    const startTimer = setTimeout(() => void run(), STARTUP_DELAY_MS);
     const subscription = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
       void dismissWakeRing();
@@ -217,6 +221,7 @@ export function useWakeAlarmSync(userId: string | null): void {
     const unsubscribeCleanup = onNotificationCleanupRequest(() => void run());
     const unsubscribeSettings = onWakeAlarmSettingsChange(() => void run());
     return () => {
+      clearTimeout(startTimer);
       subscription.remove();
       unsubscribeCleanup();
       unsubscribeSettings();

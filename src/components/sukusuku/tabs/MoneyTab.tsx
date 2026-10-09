@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Settings } from 'lucide-react';
 import type {
   HouseholdProduct,
@@ -33,9 +33,15 @@ import {
   updateMoneyWallet,
   type MoneyData,
 } from '@/lib/api/money';
-import { archiveSecurity, loadSecurities, requestSecurityBackfill, saveSecurity } from '@/lib/api/moneySecurities';
+import {
+  archiveSecurity,
+  loadSecurities,
+  loadSecurityHistory,
+  requestSecurityBackfill,
+  saveSecurity,
+} from '@/lib/api/moneySecurities';
 import { loadHouseholdProducts } from '@/lib/api/householdProducts';
-import { loadSpecialExpenses } from '@/lib/api/specialExpenses';
+import { loadSpecialItems } from '@/lib/api/specialExpenses';
 import { fiscalYearOfMonth, monthKeyOf, monthKeyOfDate, specialActualsFromRecords } from '@/lib/moneyUtils';
 import MoneyAccountsView from '../money/MoneyAccountsView';
 import MoneyRecordsView from '../money/MoneyRecordsView';
@@ -76,7 +82,7 @@ const VIEWS: { id: MoneyView; label: string }[] = [
 /** 記録の入力。null は閉じている、'new' は新しく記録する。 */
 type Editing = MoneyRecord | 'new' | null;
 
-const NO_SECURITIES: MoneySecuritiesData = { securities: [], holdings: [], values: [] };
+const NO_SECURITIES: MoneySecuritiesData = { securities: [], holdings: [], values: [], historyLoaded: true };
 
 export default function MoneyTab({ familyId }: { familyId: string }) {
   const supabase = useMemo(() => createClient(), []);
@@ -99,12 +105,16 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [editingCategories, setEditingCategories] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // 評価額の履歴（推移用）は、推移・証券口座の詳細を開くまで読まない。一度読んだら、読み直しでも履歴まで読む。
+  const historyWanted = useRef(false);
+  const historyLoading = useRef(false);
+
   /** 読んだものを画面に入れる。 */
   const apply = useCallback(
     ([money, loadedProducts, special, loadedSecurities]: [
       MoneyData,
       HouseholdProduct[],
-      { items: SpecialItem[] },
+      SpecialItem[],
       MoneySecuritiesData,
     ]) => {
       setCategories(money.categories);
@@ -116,7 +126,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       setBalances(money.balances);
       setSecurities(loadedSecurities);
       setProducts(loadedProducts);
-      setSpecialItems(special.items);
+      setSpecialItems(special);
     },
     [],
   );
@@ -125,9 +135,9 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       Promise.all([
         loadMoney(supabase, familyId),
         loadHouseholdProducts(supabase, familyId),
-        loadSpecialExpenses(supabase, familyId),
+        loadSpecialItems(supabase, familyId),
         // 証券が読めなくても、ほかの面は出す。
-        loadSecurities(supabase, familyId).catch(() => NO_SECURITIES),
+        loadSecurities(supabase, familyId, historyWanted.current).catch(() => NO_SECURITIES),
       ]),
     [supabase, familyId],
   );
@@ -149,6 +159,20 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       isMounted = false;
     };
   }, [fetchAll, apply]);
+
+  const needSecurityHistory = useCallback(async () => {
+    historyWanted.current = true;
+    if (historyLoading.current) return;
+    historyLoading.current = true;
+    try {
+      const values = await loadSecurityHistory(supabase, familyId);
+      setSecurities((prev) => ({ ...prev, values, historyLoaded: true }));
+    } catch {
+      // 読めなかったら「読み込み中」のまま。開き直すと読み直す。
+    } finally {
+      historyLoading.current = false;
+    }
+  }, [supabase, familyId]);
 
   const specialActuals = useMemo(() => specialActualsFromRecords(records), [records]);
 
@@ -238,10 +262,10 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
         securities.holdings,
         securities.securities.reduce((max, security) => Math.max(max, security.position + 1), 0),
       );
-      setSecurities(await loadSecurities(supabase, familyId));
+      setSecurities(await loadSecurities(supabase, familyId, historyWanted.current));
       if (needsBackfill) {
         await requestSecurityBackfill(supabase, securityId);
-        setSecurities(await loadSecurities(supabase, familyId));
+        setSecurities(await loadSecurities(supabase, familyId, historyWanted.current));
       }
     } catch {
       failed('保存');
@@ -251,7 +275,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const archiveSecurityOf = async (walletId: string, security: MoneySecurity) => {
     try {
       await archiveSecurity(supabase, walletId, security);
-      setSecurities(await loadSecurities(supabase, familyId));
+      setSecurities(await loadSecurities(supabase, familyId, historyWanted.current));
     } catch {
       failed('保存');
     }
@@ -395,6 +419,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               onRestoreWallet={(wallet) => void restoreWallet(wallet)}
               onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
               onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
+              onNeedSecurityHistory={needSecurityHistory}
             />
           )}
         </div>

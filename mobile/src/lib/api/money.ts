@@ -127,21 +127,34 @@ const rowToRecurring = (row: RecurringRow): MoneyRecurring => ({
 /** 一度に読む行数（Supabase の Data API は1回に1000行まで）。 */
 const PAGE = 500;
 
-/** 家族の記録をすべて読む（古い順）。 */
+/**
+ * 家族の記録をすべて読む（古い順）。1ページ目で総数が分かるので、残りのページは並べて読む
+ * （順に読むと、記録が増えるほど往復が増えて家計タブの表示が遅くなる）。
+ */
 async function loadRecords(supabase: SupabaseDb, familyId: string): Promise<MoneyRecord[]> {
-  const records: MoneyRecord[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
+  const readPage = (from: number) =>
+    supabase
       .from('money_records')
-      .select('*, money_items(*)')
+      .select('*, money_items(*)', { count: 'exact' })
       .eq('family_id', familyId)
       .order('occurred_on', { ascending: true })
       .order('created_at', { ascending: true })
+      // 同じ日時の記録があってもページをまたいで並びが変わらないよう、最後は id で決める。
+      .order('id', { ascending: true })
       .range(from, from + PAGE - 1);
-    if (error) throw error;
-    records.push(...(data ?? []).map(rowToRecord));
-    if (!data || data.length < PAGE) return records;
+
+  const first = await readPage(0);
+  if (first.error) throw first.error;
+  const total = first.count ?? 0;
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(0, Math.ceil(total / PAGE) - 1) }, (_, index) => readPage((index + 1) * PAGE)),
+  );
+  const rows = [...(first.data ?? [])];
+  for (const page of rest) {
+    if (page.error) throw page.error;
+    rows.push(...(page.data ?? []));
   }
+  return rows.map(rowToRecord);
 }
 
 export interface MoneyData {

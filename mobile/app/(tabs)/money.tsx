@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,9 +36,15 @@ import {
   saveMoneyWalletBalance,
   updateMoneyWallet,
 } from '@/lib/api/money';
-import { archiveSecurity, loadSecurities, requestSecurityBackfill, saveSecurity } from '@/lib/api/moneySecurities';
+import {
+  archiveSecurity,
+  loadSecurities,
+  loadSecurityHistory,
+  requestSecurityBackfill,
+  saveSecurity,
+} from '@/lib/api/moneySecurities';
 import { loadHouseholdProducts } from '@/lib/api/householdProducts';
-import { loadSpecialExpenses } from '@/lib/api/specialExpenses';
+import { loadSpecialItems } from '@/lib/api/specialExpenses';
 import { fiscalYearOfMonth, monthKeyOf, monthKeyOfDate, specialActualsFromRecords } from '@/lib/moneyUtils';
 import MoneyAccountsView from '@/components/money/MoneyAccountsView';
 import MoneyRecordsView from '@/components/money/MoneyRecordsView';
@@ -78,7 +84,7 @@ const VIEWS: { id: View3; label: string }[] = [
 /** 記録の入力。null は閉じている、'new' は新しく記録する。 */
 type Editing = MoneyRecord | 'new' | null;
 
-const NO_SECURITIES: MoneySecuritiesData = { securities: [], holdings: [], values: [] };
+const NO_SECURITIES: MoneySecuritiesData = { securities: [], holdings: [], values: [], historyLoaded: true };
 
 export default function MoneyScreen() {
   const { session, isLoading: isSessionLoading } = useSession();
@@ -104,13 +110,17 @@ export default function MoneyScreen() {
   const [editingCategories, setEditingCategories] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // 評価額の履歴（推移用）は、推移・証券口座の詳細を開くまで読まない。一度読んだら、読み直しでも履歴まで読む。
+  const historyWanted = useRef(false);
+  const historyLoading = useRef(false);
+
   const reload = useCallback(async (id: string) => {
     const [money, loadedProducts, special, loadedSecurities] = await Promise.all([
       loadMoney(supabase, id),
       loadHouseholdProducts(supabase, id),
-      loadSpecialExpenses(supabase, id),
+      loadSpecialItems(supabase, id),
       // 証券が読めなくても、ほかの面は出す。
-      loadSecurities(supabase, id).catch(() => NO_SECURITIES),
+      loadSecurities(supabase, id, historyWanted.current).catch(() => NO_SECURITIES),
     ]);
     setCategories(money.categories);
     setBudgets(money.budgets);
@@ -121,7 +131,7 @@ export default function MoneyScreen() {
     setBalances(money.balances);
     setSecurities(loadedSecurities);
     setProducts(loadedProducts);
-    setSpecialItems(special.items);
+    setSpecialItems(special);
   }, []);
 
   useEffect(() => {
@@ -143,6 +153,21 @@ export default function MoneyScreen() {
       isMounted = false;
     };
   }, [userId, reload]);
+
+  const needSecurityHistory = useCallback(async () => {
+    if (!familyId) return;
+    historyWanted.current = true;
+    if (historyLoading.current) return;
+    historyLoading.current = true;
+    try {
+      const values = await loadSecurityHistory(supabase, familyId);
+      setSecurities((prev) => ({ ...prev, values, historyLoaded: true }));
+    } catch {
+      // 読めなかったら「読み込み中」のまま。開き直すと読み直す。
+    } finally {
+      historyLoading.current = false;
+    }
+  }, [familyId]);
 
   const specialActuals = useMemo(() => specialActualsFromRecords(records), [records]);
 
@@ -243,10 +268,10 @@ export default function MoneyScreen() {
         securities.holdings,
         securities.securities.reduce((max, security) => Math.max(max, security.position + 1), 0),
       );
-      setSecurities(await loadSecurities(supabase, familyId));
+      setSecurities(await loadSecurities(supabase, familyId, historyWanted.current));
       if (needsBackfill) {
         await requestSecurityBackfill(supabase, securityId);
-        setSecurities(await loadSecurities(supabase, familyId));
+        setSecurities(await loadSecurities(supabase, familyId, historyWanted.current));
       }
     } catch {
       failed('保存');
@@ -257,7 +282,7 @@ export default function MoneyScreen() {
     if (!familyId) return;
     try {
       await archiveSecurity(supabase, walletId, security);
-      setSecurities(await loadSecurities(supabase, familyId));
+      setSecurities(await loadSecurities(supabase, familyId, historyWanted.current));
     } catch {
       failed('保存');
     }
@@ -400,6 +425,7 @@ export default function MoneyScreen() {
               onArchiveWallet={(wallet) => void archiveWallet(wallet)}
               onRestoreWallet={(wallet) => void restoreWallet(wallet)}
               onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
+              onNeedSecurityHistory={needSecurityHistory}
               onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
             />
           )}

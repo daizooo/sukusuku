@@ -2346,6 +2346,26 @@ export type Database = {
         Returns: string
       }
       money_is_business_day: { Args: { p_date: string }; Returns: boolean }
+      money_latest_holding_values: {
+        Args: { p_family_id: string }
+        Returns: {
+          cost: number | null
+          created_at: string
+          family_id: string
+          fx: number
+          holding_id: string
+          price: number
+          quantity: number
+          value: number
+          value_on: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "money_holding_values"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       money_recurring_estimate: {
         Args: {
           p_month: string

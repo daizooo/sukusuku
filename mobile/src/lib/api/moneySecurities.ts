@@ -18,7 +18,7 @@ import type {
 type SupabaseDb = SupabaseClient<Database>;
 type SecurityRow = Tables<'money_securities'>;
 type HoldingRow = Tables<'money_holdings'>;
-type ValueRow = Tables<'money_holding_values'>;
+type ValueRow = Pick<Tables<'money_holding_values'>, 'holding_id' | 'value_on' | 'quantity' | 'price' | 'fx' | 'value' | 'cost'>;
 
 const KINDS: MoneySecurityKind[] = ['us_stock', 'jp_fund', 'cash'];
 const ACCOUNTS: MoneyHoldingAccount[] = ['nisa', 'nisa_tsumitate', 'tokutei', 'ippan'];
@@ -57,28 +57,58 @@ const rowToValue = (row: ValueRow): MoneyHoldingValue => ({
 /** 一度に読む行数（Supabase の Data API は1回に1000行まで）。 */
 const PAGE = 1000;
 
-/** 家族の日々の評価額をすべて読む（保有ごとに1日1行。1年で数千行になる）。 */
-async function loadValues(supabase: SupabaseDb, familyId: string): Promise<MoneyHoldingValue[]> {
-  const values: MoneyHoldingValue[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
+/** 推移に要る列だけ読む（family_id・created_at は使わない）。 */
+const VALUE_COLUMNS = 'holding_id, value_on, quantity, price, fx, value, cost';
+
+/**
+ * 家族の日々の評価額をすべて読む（保有ごとに1日1行。1年で数千行になる）。
+ * 1ページ目で総数が分かるので、残りのページは並べて読む（順番に読むと往復が行数に比例して増える）。
+ */
+export async function loadSecurityHistory(supabase: SupabaseDb, familyId: string): Promise<MoneyHoldingValue[]> {
+  const readPage = (from: number) =>
+    supabase
       .from('money_holding_values')
-      .select('*')
+      .select(VALUE_COLUMNS, { count: 'exact' })
       .eq('family_id', familyId)
+      // (value_on, holding_id) は主キーの一部なので、ページをまたいでも並びが変わらない。
       .order('value_on', { ascending: true })
       .order('holding_id', { ascending: true })
       .range(from, from + PAGE - 1);
-    if (error) throw error;
-    values.push(...(data ?? []).map(rowToValue));
-    if (!data || data.length < PAGE) return values;
+
+  const first = await readPage(0);
+  if (first.error) throw first.error;
+  const total = first.count ?? 0;
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(0, Math.ceil(total / PAGE) - 1) }, (_, index) => readPage((index + 1) * PAGE)),
+  );
+  const rows = [...(first.data ?? [])];
+  for (const page of rest) {
+    if (page.error) throw page.error;
+    rows.push(...(page.data ?? []));
   }
+  return rows.map(rowToValue);
 }
 
-export async function loadSecurities(supabase: SupabaseDb, familyId: string): Promise<MoneySecuritiesData> {
+/** 保有ごとの最新の評価額の1行（口座の一覧の残高用。DBの money_latest_holding_values）。 */
+async function loadLatestValues(supabase: SupabaseDb, familyId: string): Promise<MoneyHoldingValue[]> {
+  const { data, error } = await supabase.rpc('money_latest_holding_values', { p_family_id: familyId });
+  if (error) throw error;
+  return (data ?? []).map(rowToValue);
+}
+
+/**
+ * 銘柄・保有と日々の評価額を読む。評価額は、はじめは保有ごとの最新の1行だけ（口座の一覧が早く出るように）。
+ * 推移・銘柄の詳細を開くときに、withHistory を true にするか loadSecurityHistory で履歴まで読む。
+ */
+export async function loadSecurities(
+  supabase: SupabaseDb,
+  familyId: string,
+  withHistory = false,
+): Promise<MoneySecuritiesData> {
   const [securityResult, holdingResult, values] = await Promise.all([
     supabase.from('money_securities').select('*').eq('family_id', familyId).order('position', { ascending: true }),
     supabase.from('money_holdings').select('*').eq('family_id', familyId),
-    loadValues(supabase, familyId),
+    withHistory ? loadSecurityHistory(supabase, familyId) : loadLatestValues(supabase, familyId),
   ]);
   if (securityResult.error) throw securityResult.error;
   if (holdingResult.error) throw holdingResult.error;
@@ -86,6 +116,7 @@ export async function loadSecurities(supabase: SupabaseDb, familyId: string): Pr
     securities: (securityResult.data ?? []).map(rowToSecurity),
     holdings: (holdingResult.data ?? []).map(rowToHolding),
     values,
+    historyLoaded: withHistory,
   };
 }
 
