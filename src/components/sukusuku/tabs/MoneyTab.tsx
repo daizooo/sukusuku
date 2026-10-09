@@ -20,6 +20,7 @@ import type {
 } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { useSwipeTabs } from '../ui/useSwipeTabs';
+import { useFamilyRefresh } from '@/lib/familySync';
 import {
   archiveMoneyWallet,
   deleteMoneyRecord,
@@ -81,6 +82,24 @@ const VIEWS: { id: MoneyView; label: string }[] = [
 type Editing = MoneyRecord | 'new' | null;
 
 const NO_SECURITIES: MoneySecuritiesData = { securities: [], holdings: [], values: [], historyLoaded: true };
+
+/** 家計の読み込み（money_bootstrap と証券の評価額）が読む表。mobile版（mobile/app/(tabs)/money.tsx）と同じ。 */
+const MONEY_TABLES = [
+  'money_budgets',
+  'money_categories',
+  'money_holding_values',
+  'money_holdings',
+  'money_items',
+  'money_records',
+  'money_recurring',
+  'money_securities',
+  'money_stores',
+  'money_wallet_balances',
+  'money_wallets',
+  'special_items',
+  'special_plans',
+  'household_products',
+] as const;
 
 export default function MoneyTab({ familyId }: { familyId: string }) {
   const supabase = useMemo(() => createClient(), []);
@@ -146,6 +165,14 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       isMounted = false;
     };
   }, [fetchAll, apply]);
+
+  // パートナーの端末での変更に追いつかせる。読み込み中の表示には戻さず、届いたら差し替える。
+  // 家計の表が変わったときだけ読む（money_bootstrap が読む表。docs/kakei.md §9.2.6）。
+  useFamilyRefresh(MONEY_TABLES, () => {
+    reload().catch(() => {
+      // 圏外なら前に読んだ分を出したままにする。
+    });
+  });
 
   const needSecurityHistory = useCallback(async () => {
     historyWanted.current = true;

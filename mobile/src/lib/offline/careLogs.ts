@@ -230,13 +230,30 @@ interface OutboxRow {
   payload: string;
 }
 
+/** 送信は1度に1つだけ動かす。前の送信が終わるのを待ってから、次の送信を始める。 */
+let flushQueue: Promise<unknown> = Promise.resolve();
+
 /**
  * 積んである書き込みを古い順に送る。1つでも送れなければそこで止めて、残りは積んだままにする
  * （順番を入れ替えると、追加より先に変更を送ってしまうことがあるため）。
  *
+ * 同時に2つ動くと、同じ積み残しを両方が送って記録が二重に入る。前面復帰などで自動の取り直しが
+ * 増え、圏外ぎみで取り直しが長引いている間に記録を保存することもあるため、順番に1つずつ動かす
+ * （後の送信は、前の送信が送り終えた残りだけを見る）。
+ *
  * @returns 全部送り切れたか
  */
-export async function flushCareLogOutbox(
+export function flushCareLogOutbox(
+  supabase: SupabaseDb,
+  familyId: string,
+  userId: string,
+): Promise<boolean> {
+  const run = flushQueue.then(() => flushOnce(supabase, familyId, userId));
+  flushQueue = run.catch(() => undefined);
+  return run;
+}
+
+async function flushOnce(
   supabase: SupabaseDb,
   familyId: string,
   userId: string,

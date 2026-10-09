@@ -126,6 +126,7 @@ import type { TemperatureLogInput } from './modals/TemperatureLogModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 import type { NurseryDraft } from './modals/NurseryFormModal';
 import type { ListDraft } from './modals/ListEditorModal';
+import { FamilySyncProvider, useFamilyRefresh } from '@/lib/familySync';
 
 // 起動直後に表示するのは最初のタブだけなので、残りのタブは実際に開かれるまで読み込まない。
 // 特にCareTabは成長グラフのためにrecharts(単体で約350KB)を持ち込むため、静的importのままだと
@@ -243,7 +244,17 @@ interface SukusukuAppProps {
   initialLogType: LogType | null;
 }
 
-export default function SukusukuApp({
+// 他の端末での変更を各画面へ届ける台帳係（lib/familySync.tsx）を、アプリ全体の外側に1つだけ置く。
+export default function SukusukuApp(props: SukusukuAppProps) {
+  const supabase = useMemo(() => createClient(), []);
+  return (
+    <FamilySyncProvider supabase={supabase} familyId={props.familyId}>
+      <SukusukuAppContent {...props} />
+    </FamilySyncProvider>
+  );
+}
+
+function SukusukuAppContent({
   familyId,
   userId,
   initialTasks,
@@ -525,21 +536,6 @@ export default function SukusukuApp({
     refreshRecentTemperatureLogs();
   }, [refreshRecentTemperatureLogs]);
 
-  // パートナーの端末で記録された授乳は、この端末では分からないまま古い目安が出続ける。
-  // アプリに戻ってきたときに取り直して、夫婦のどちらが見ても同じ目安になるようにする。
-  // 体温と予定も、済んだお知らせを消す(closeSettledNotifications)ために合わせて取り直す。
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState !== 'visible') return;
-      refreshRecentMilkLogs();
-      refreshNursingStates();
-      refreshRecentTemperatureLogs();
-      refreshTasks();
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [refreshRecentMilkLogs, refreshNursingStates, refreshRecentTemperatureLogs, refreshTasks]);
-
   // 授乳の間隔の設定を読み込む。未設定の家族は既定値(3時間・通知する)のまま。
   useEffect(() => {
     let cancelled = false;
@@ -650,6 +646,79 @@ export default function SukusukuApp({
       cancelled = true;
     };
   }, [supabase, familyId]);
+
+  // 他の端末（パートナー）での変更に追いつかせる（lib/familySync.tsx）。
+  // 読み込みごとに、その画面が読む表を宣言する。その表が変わったときだけ、その分を読み直す。
+  // 読み込み中の表示には戻さず、届いたら差し替える。失敗したら前の表示のまま。
+  // 取り直しの間に日付やタブを切り替えたときは、届いた分を捨てる。
+  const viewRef = useRef({ logDate, scheduleLogRangeKey });
+  useEffect(() => {
+    viewRef.current = { logDate, scheduleLogRangeKey };
+  });
+
+  // 記録: 表示中の日・カレンダーの日表示・搾乳ストック・直近の授乳（次の授乳の目安）・体温。
+  useFamilyRefresh(['care_logs'], () => {
+    listCareLogsByDate(supabase, familyId, logDate)
+      .then((data) => {
+        if (isSameDay(viewRef.current.logDate, logDate)) setLogs(data);
+      })
+      .catch((err: unknown) => console.error('Failed to refresh care logs:', err));
+    if (needsScheduleLogs && scheduleLogFrom !== null && scheduleLogTo !== null) {
+      listCareLogsInRange(supabase, familyId, new Date(scheduleLogFrom), new Date(scheduleLogTo))
+        .then((data) => {
+          if (viewRef.current.scheduleLogRangeKey === scheduleLogRangeKey) setScheduleLogs(data);
+        })
+        .catch((err: unknown) => console.error('Failed to refresh care logs for calendar:', err));
+    }
+    refreshPumpedStock();
+    refreshRecentMilkLogs();
+    refreshRecentTemperatureLogs();
+  });
+  // 「いま授乳中・記録待ち」の印（パートナーが授乳を始めた・終えた）。
+  useFamilyRefresh(['nursing_alarms'], refreshNursingStates);
+  // 予定（済んだお知らせを消す closeSettledNotifications にも使う）。
+  useFamilyRefresh(['tasks'], refreshTasks);
+  useFamilyRefresh(['lists', 'list_groups', 'list_items'], () => {
+    loadLists(supabase, familyId)
+      .then((snapshot) => {
+        setLists(snapshot.lists);
+        setListGroups(snapshot.groups);
+        setListItems(snapshot.items);
+      })
+      .catch((err: unknown) => console.error('Failed to refresh lists:', err));
+  });
+  // 家族メンバー（表示名・子の名前と誕生日）。
+  useFamilyRefresh(['family_members', 'families', 'children'], () => {
+    listFamilyMembers(supabase, familyId)
+      .then(setFamilyMembers)
+      .catch((err: unknown) => console.error('Failed to refresh family members:', err));
+    listMembers(supabase, familyId)
+      .then(setFamilyRoster)
+      .catch((err: unknown) => console.error('Failed to refresh family roster:', err));
+  });
+  useFamilyRefresh(['feeding_settings'], () => {
+    getFeedingSettings(supabase, familyId)
+      .then(setFeedingSettings)
+      .catch((err: unknown) => console.error('Failed to refresh feeding settings:', err));
+  });
+  useFamilyRefresh(['temperature_reminder_settings'], () => {
+    getTemperatureReminderSettings(supabase, familyId)
+      .then(setTemperatureReminderSettings)
+      .catch((err: unknown) =>
+        console.error('Failed to refresh temperature reminder settings:', err),
+      );
+  });
+  useFamilyRefresh(['growth_records', 'children'], () => {
+    if (!childId) return;
+    listGrowthRecords(supabase, childId)
+      .then(setGrowthData)
+      .catch((err: unknown) => console.error('Failed to refresh growth records:', err));
+  });
+  useFamilyRefresh(['nurseries'], () => {
+    listNurseries(supabase, familyId)
+      .then(setNurseries)
+      .catch((err: unknown) => console.error('Failed to refresh nurseries:', err));
+  });
 
   // 次にどちらの乳首から授乳するか。夜中の授乳は前の日の記録になるため、表示中の日の
   // 記録だけでは前回を取りこぼし、おすすめの側が出なくなる。日付にとらわれない直近の授乳も

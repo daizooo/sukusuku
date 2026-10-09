@@ -129,5 +129,14 @@
 - **起動で読むものが多い画面は、家族IDで返すDB関数にまとめる**（例: 家計タブの `money_bootstrap`。13本 → 1本。docs/kakei.md §9.2.6）。
   Android は同じホストへの同時リクエストが5本まで。表の行そのままの JSON で返せば、アプリの変換はそのまま使える
 - **画面で使わない問い合わせは足さない。** 読む列も、使うものだけにする
+- **家族で共有するデータを読む画面は、読み込みを関数にして `useFamilyRefresh(読む表, 読み直す関数)` に渡す**
+  （mobile: `src/lib/familySync.tsx`、PWA: `src/lib/familySync.tsx`。設計は docs/sync.md）。
+  タブは一度開くと残り、読み込みは起動時の1回きりなので、渡さないとパートナーの端末での変更が
+  アプリを開き直すまで出ない（2026-10-09: 妻が記録した授乳が夫の画面に出なかった）。
+  他の端末での変更は、DBの変更台帳 `family_sync` がその表の時刻を更新し、変わった表を読む画面だけが読み直す。
+  - **新しい画面・タブを足すとき・タブを統合するとき**は、読む表を宣言する。足りなければ
+    `npm run check:family-sync`（CI の「family sync check」）が落ちる
+  - **新しい共有表を作るとき**は、その migration の中で `select public.attach_family_sync('public.表名');` を呼ぶ
+    （`family_id` を持たない表は第2引数で親をたどる。0078 の例）。本番では `select * from public.family_sync_missing();` が空であること
 - mobile: 所属（`family_id`）と最初のタブは `src/lib/api/me.ts` が1回の問い合わせで取って使い回す（ログイン時に先読み）。
   タブごとに `users` を取りに行かず、`getMyMembership` を呼ぶ
