@@ -62,7 +62,6 @@ import {
   getNextBreastSide,
   getSideLabel,
   getTemperatureBaseline,
-  pumpedStockMl,
   summarizeLogs,
 } from '@/lib/careLogUtils';
 import {
@@ -824,7 +823,7 @@ export default function CareScreen() {
 
             {/* 記録ボタン。その日のようすを同じボタンに載せ、「見る」と「記録する」を1つに
                 まとめている。授乳・おむつ・からだの3つ。搾乳は授乳の中（入力画面の「搾った」）へ
-                寄せたので、ここには出さず、代わりに授乳のボタンにいまの搾乳ストックを出す。 */}
+                寄せたので、ここには出さない。 */}
             <View style={styles.recordRow}>
               <Pressable
                 accessibilityRole="button"
@@ -836,10 +835,8 @@ export default function CareScreen() {
                   <BabyBottleIcon size={17} color={colors.milk} />
                   <Text style={styles.recordTitle}>授乳</Text>
                 </View>
-                {/* その日の回数・量・分数は出さない（判断に使うのは体重とおしっこの回数）。
-                    代わりに、次の授乳で使える搾乳ストックの残りを出す。表示中の日だけでは
-                    求まらないため、日付の送りとは関わらず常に今の残りになる。 */}
-                <Text style={styles.stockValue}>ストック・{pumpedStockMl(pumpedBatches)}ml</Text>
+                {/* 量・分数は出さず、その日の回数だけを出す（おむつと同じ並び）。 */}
+                <Text style={styles.recordValue}>計{summary.milk.count}回</Text>
                 {nursingBy && (
                   <Text style={styles.recordHint}>{memberLabel(nursingBy)}が授乳中</Text>
                 )}
@@ -1121,14 +1118,6 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   recordHint: { fontSize: 10, fontWeight: '700', color: colors.milkText, marginTop: 1 },
-  stockValue: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.pumpingText,
-    marginTop: 2,
-    textAlign: 'center',
-    fontVariant: ['tabular-nums'],
-  },
 
   pastDayNote: { fontSize: 11, color: colors.textMuted, lineHeight: 17, fontWeight: '500' },
   unsent: { fontSize: 11, color: colors.milkText, fontWeight: '500' },
