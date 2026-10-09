@@ -14,7 +14,7 @@ import {
 import type { CareLog, DynamicTask, Participant, ScheduleView, Task } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
-import { useRefreshOnFocus } from '@/lib/screenFocus';
+import { useFamilyRefresh } from '@/lib/familySync';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
 import { listMembers } from '@/lib/api/members';
@@ -150,11 +150,10 @@ export default function ScheduleScreen() {
     };
   }, [userId]);
 
-  // 他のタブで変えた分に追いつかせる。予定はホームでもチェックを付けられ、子の生年月日は
-  // 設定タブで変わる（出生日基準の予定の日付が動く）。日表示の記録は記録タブで増える。
+  // 他のタブ・相手の端末で変えた分に追いつかせる。予定はホームでもチェックを付けられ、子の生年月日は
+  // 設定タブで変わる（出生日基準の予定の日付が動く）。日表示の記録は記録タブや相手の端末で増える。
   // 読み込み中の表示には戻さず、届いたら差し替える。
-  useRefreshOnFocus(() => {
-    setLogReloadKey((prev) => prev + 1);
+  useFamilyRefresh(['tasks', 'family_members', 'families', 'children'], () => {
     if (!familyId) return;
     void Promise.all([listMembers(supabase, familyId), listTasks(supabase, familyId)])
       .then(([loadedMembers, loadedTasks]) => {
@@ -164,6 +163,9 @@ export default function ScheduleScreen() {
       .catch(() => {
         // 圏外なら前に読んだ分を出したままにする。
       });
+  });
+  useFamilyRefresh(['care_logs'], () => {
+    setLogReloadKey((prev) => prev + 1);
   });
 
   const birthDate = child?.birthDate ?? '';

@@ -6,6 +6,7 @@ import { Check, ChevronDown, ChevronRight, GripVertical, Lock, Pin, PinOff, Plus
 import type { HouseholdProduct, ListBoard, ListGroup, ListItem } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { loadVisibleHouseholdProducts } from '@/lib/api/householdProducts';
+import { useFamilyRefresh } from '@/lib/familySync';
 import { suggestProducts } from '@/lib/shoppingUtils';
 import { useDragReorder } from '../ui/useDragReorder';
 import ListEditorModal, { DEFAULT_GROUP_LABEL, type ListDraft } from '../modals/ListEditorModal';
@@ -536,6 +537,12 @@ export default function ListTab({
       isMounted = false;
     };
   }, []);
+  // 相手の端末で日用品が変わったときに追いつく（lib/familySync.tsx）。届いたら差し替える。
+  useFamilyRefresh(['household_products'], () => {
+    loadVisibleHouseholdProducts(createClient())
+      .then(setProducts)
+      .catch(() => {});
+  });
   const suggestFromProducts = (typed: string) => suggestProducts(products, typed).map((product) => product.name);
 
   // 固定したリストが先。中は並び順（position）で、同じなら読み込んだ順のまま。

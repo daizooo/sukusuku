@@ -27,7 +27,10 @@
     "test:stock-expiry": "node --experimental-strip-types supabase/functions/_shared/stockExpiry.test.ts",
     "test:special": "node --experimental-strip-types src/lib/specialUtils.test.ts",
     "test:money": "node --experimental-strip-types src/lib/moneyUtils.test.ts",
-    "test:security-prices": "node --experimental-strip-types supabase/functions/_shared/securityPrices.test.ts"
+    "test:security-prices": "node --experimental-strip-types supabase/functions/_shared/securityPrices.test.ts",
+    "test:family-sync": "node --experimental-strip-types src/lib/familySyncStamps.test.ts",
+    "test:family-sync-mobile": "node --experimental-strip-types mobile/src/lib/familySyncStamps.test.ts",
+    "check:family-sync": "node scripts/check-family-sync.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

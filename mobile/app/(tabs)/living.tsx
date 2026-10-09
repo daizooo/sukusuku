@@ -9,7 +9,7 @@ import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { toDateString } from '@/lib/dateUtils';
 import { getMyMembership } from '@/lib/api/me';
-import { useRefreshOnFocus } from '@/lib/screenFocus';
+import { useFamilyRefresh } from '@/lib/familySync';
 import {
   deleteStockItem,
   deleteStockTarget,
@@ -115,9 +115,9 @@ export default function LivingScreen() {
     };
   }, [userId]);
 
-  // パートナーの端末での変更に追いつかせる。タブへ戻ったとき・アプリが前面へ戻ったときに読み直す。
-  // 読み込み中の表示には戻さず、届いたら差し替える。
-  useRefreshOnFocus(() => {
+  // パートナーの端末での変更に追いつかせる。読み込み中の表示には戻さず、届いたら差し替える。
+  // 計画（loadStockPlan）は families の列から読む。
+  useFamilyRefresh(['stock_items', 'stock_targets', 'families'], () => {
     if (!familyId) return;
     void Promise.all([
       loadStockItems(supabase, familyId),

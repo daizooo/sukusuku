@@ -6,7 +6,7 @@ import type { StockItem, StockItemDraft, StockTarget, StockTargetDraft } from '@
 import { createClient } from '@/lib/supabase/client';
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
 import { useBackLayer } from '@/lib/browserHistory';
-import { useRefreshOnResume } from '../ui/useRefreshOnResume';
+import { useFamilyRefresh } from '@/lib/familySync';
 import {
   deleteStockItem,
   deleteStockTarget,
@@ -107,9 +107,9 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
     };
   }, [supabase, familyId]);
 
-  // パートナーの端末での変更に追いつかせる。アプリへ戻ってきたときに読み直す。
-  // 読み込み中の表示には戻さず、届いたら差し替える。
-  useRefreshOnResume(() => {
+  // パートナーの端末での変更に追いつかせる。読み込み中の表示には戻さず、届いたら差し替える。
+  // 計画（loadStockPlan）は families の列から読む。
+  useFamilyRefresh(['stock_items', 'stock_targets', 'families'], () => {
     Promise.all([
       loadStockItems(supabase, familyId),
       loadStockTargets(supabase, familyId),

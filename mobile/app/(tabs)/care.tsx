@@ -81,7 +81,8 @@ import {
   resolveLastFeeding,
   type NextFeedingInfo,
 } from '@/lib/feedingSchedule';
-import { useRefreshOnFocus, useRefreshWhileFocused } from '@/lib/screenFocus';
+import { useRefreshWhileFocused } from '@/lib/screenFocus';
+import { useFamilyRefresh } from '@/lib/familySync';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import {
   isNursingForegroundServiceAvailable,
@@ -125,8 +126,8 @@ import TemperatureLogModal, {
 const RECENT_MILK_LIMIT = 30;
 
 /**
- * 「いま授乳中・記録待ち」を読み直す間隔。
- * 授乳の始まり・終わりはパートナーの端末で起きるので、こちらからは待つしかない。
+ * 「いま授乳中・記録待ち」を念のため読み直す間隔。
+ * 授乳の始まり・終わりは台帳で届く（useFamilyRefresh）。これは取りこぼしと、時間切れの印を落とすためのもの。
  */
 const NURSING_POLL_MS = 60_000;
 
@@ -300,17 +301,32 @@ export default function CareScreen() {
     };
   }, [userId]);
 
-  // 子の誕生日・名前と授乳の間隔は設定タブで変わるので、戻ってきたときに読み直す。
-  useRefreshOnFocus(() => {
+  // 子の誕生日・名前、授乳の間隔、家族の名前は、設定タブや相手の端末で変わるので、変わったときに読み直す。
+  useFamilyRefresh(['family_members', 'families', 'children', 'feeding_settings'], () => {
     if (!familyId) return;
-    void Promise.all([getChildMember(supabase, familyId), getFeedingSettings(supabase, familyId)])
-      .then(([child, feeding]) => {
+    void Promise.all([
+      listFamilyMembers(supabase, familyId),
+      getChildMember(supabase, familyId),
+      getFeedingSettings(supabase, familyId),
+    ])
+      .then(([familyMembers, child, feeding]) => {
+        setMembers(familyMembers);
         if (child) {
           setBabyName(child.displayName);
           setBirthDate(child.birthDate);
         }
         setIntervalMinutes(feeding.intervalMinutes);
       })
+      .catch(() => {
+        // 圏外なら前に読んだ分を出したままにする。
+      });
+  });
+
+  // 成長記録（成長曲線）。相手の端末で身長・体重が足されたときに読み直す。
+  useFamilyRefresh(['growth_records', 'children'], () => {
+    if (!childId) return;
+    void listGrowthRecords(supabase, childId)
+      .then(setGrowthData)
       .catch(() => {
         // 圏外なら前に読んだ分を出したままにする。
       });
@@ -429,21 +445,26 @@ export default function CareScreen() {
     void refreshNursingStates();
   }, [refreshNursingStates]);
 
-  // 授乳の始まり・終わりはパートナーの端末で起きるので、見ている間は読み直す。
-  // 印だけを読むと、パートナーが保存して印が消えたとき、記録が届かず古い目安へ戻ってしまう。
-  // 印が消えるのと同じ間隔で、直近の授乳も読み直す。
+  // 印の追加・消去は台帳で届く（下の useFamilyRefresh）。ここは念のための確認で、
+  // 時間がたって古くなった印を画面から落とす役目もある（古い印は読んだ側でも信じない。feedingSchedule.ts）。
   useRefreshWhileFocused(() => {
     void refreshNursingStates();
-    void refreshRecentMilkLogs();
   }, NURSING_POLL_MS);
 
-  // 他の端末での記録に追いつかせる。起動時に読んだきりだと、パートナーが記録した授乳が
-  // アプリを開き直すまで出ない。タブへ戻ったときと、アプリが前面へ戻ったときに取り直す。
-  // 積み残しの送信も sync の中で行うので、圏外で付けた記録もここで送られる。
-  useRefreshOnFocus(() => {
-    void sync({ quiet: true });
-    void refreshRecentMilkLogs();
-    void refreshRecentTemperatureLogs();
+  // 他の端末での記録に追いつかせる。パートナーが記録した授乳・体温などが、アプリを開き直さなくても出る。
+  // onResume: 積み残しの送信も sync の中で行うので、圏外で付けた記録を、前面へ戻った・電波が戻ったときに送る。
+  useFamilyRefresh(
+    ['care_logs'],
+    () => {
+      void sync({ quiet: true });
+      void refreshRecentMilkLogs();
+      void refreshRecentTemperatureLogs();
+    },
+    { onResume: true },
+  );
+
+  // 授乳中・記録待ちの印（パートナーが授乳を始めた・終えた）。
+  useFamilyRefresh(['nursing_alarms'], () => {
     void refreshNursingStates();
   });
 

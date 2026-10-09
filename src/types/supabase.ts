@@ -295,6 +295,24 @@ export type Database = {
           },
         ]
       }
+      family_sync: {
+        Row: {
+          changed: Json
+          family_id: string
+          updated_at: string
+        }
+        Insert: {
+          changed?: Json
+          family_id: string
+          updated_at?: string
+        }
+        Update: {
+          changed?: Json
+          family_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       feeding_reminder_deliveries: {
         Row: {
           care_log_id: string
@@ -2360,10 +2378,15 @@ export type Database = {
       }
     }
     Functions: {
+      attach_family_sync: {
+        Args: { p_resolver?: string; p_table: unknown }
+        Returns: undefined
+      }
       create_member_invite: { Args: { p_member_id: string }; Returns: string }
       create_my_family: { Args: { p_role: string }; Returns: string }
       current_family_id: { Args: never; Returns: string }
       family_birth_date: { Args: { p_family_id: string }; Returns: string }
+      family_sync_missing: { Args: never; Returns: string[] }
       increment_push_failure: {
         Args: { p_subscription_id: string }
         Returns: undefined

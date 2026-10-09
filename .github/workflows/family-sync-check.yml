@@ -1,0 +1,35 @@
+# 「他の端末での変更を画面へ届ける仕組み」（変更台帳。docs/sync.md）の付け忘れを見つける。
+#
+# 新しい共有表を作ったのに台帳へ載せていない、新しい画面が読む表を useFamilyRefresh に
+# 宣言していない、といった付け忘れが、気づかれないままパートナーの端末で「古いまま」になる。
+# 依存を入れず Node だけで数秒で終わるので、mobile/ と src/ のどちらを触る PR でも動かす。
+name: family sync check
+
+on:
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - 'src/**'
+      - 'supabase/migrations/**'
+      - 'scripts/check-family-sync.mjs'
+      - '.github/workflows/family-sync-check.yml'
+
+concurrency:
+  group: family-sync-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - run: node scripts/check-family-sync.mjs
+
+      # 台帳の時刻の比べ方（PWA版・mobile版）。
+      - run: node --experimental-strip-types src/lib/familySyncStamps.test.ts
+      - run: node --experimental-strip-types mobile/src/lib/familySyncStamps.test.ts

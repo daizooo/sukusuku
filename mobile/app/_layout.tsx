@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { SessionProvider, useSession } from '@/lib/session';
+import { FamilySyncProvider } from '@/lib/familySync';
 import { useNursingAlarmWatcher } from '@/lib/nursingTimer';
 import { useNursingStateSync } from '@/lib/nursingState';
 import { useSettledNotificationCleanup } from '@/lib/notificationCleanup';
@@ -30,12 +31,15 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <SessionProvider>
         <StatusBar style="dark" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.background },
-          }}
-        />
+        {/* 他の端末での変更を各画面へ届ける（src/lib/familySync.tsx）。画面より外側に1つだけ置く。 */}
+        <FamilySyncProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.background },
+            }}
+          />
+        </FamilySyncProvider>
         <StatusBarBand />
         <AppEffects />
       </SessionProvider>

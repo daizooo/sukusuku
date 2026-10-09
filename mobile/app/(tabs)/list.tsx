@@ -17,7 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
-import { useRefreshOnFocus } from '@/lib/screenFocus';
+import { useFamilyRefresh } from '@/lib/familySync';
 import {
   deleteDoneItems,
   deleteGroup,
@@ -123,9 +123,8 @@ export default function ListScreen() {
     };
   }, [userId]);
 
-  // パートナーの端末での変更に追いつかせる。タブへ戻ったとき・アプリが前面へ戻ったときに読み直す。
-  // 読み込み中の表示には戻さず、届いたら差し替える。
-  useRefreshOnFocus(() => {
+  // パートナーの端末での変更に追いつかせる。読み込み中の表示には戻さず、届いたら差し替える。
+  useFamilyRefresh(['lists', 'list_groups', 'list_items'], () => {
     if (!familyId) return;
     void loadLists(supabase, familyId)
       .then((snapshot) => {
@@ -135,6 +134,15 @@ export default function ListScreen() {
       })
       .catch(() => {
         // 圏外なら前に読んだ分を出したままにする。
+      });
+  });
+  // 追加欄の候補に出す日用品の台帳（家計・日用品タブで変わる）。
+  useFamilyRefresh(['household_products', 'household_product_categories', 'money_items'], () => {
+    if (!familyId) return;
+    void loadHouseholdProducts(supabase, familyId)
+      .then(setProducts)
+      .catch(() => {
+        // 候補が古いままになるだけ。
       });
   });
 

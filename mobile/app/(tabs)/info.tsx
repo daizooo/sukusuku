@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
+import { useFamilyRefresh } from '@/lib/familySync';
 import {
   DEFAULT_FEEDING_SETTINGS,
   getFeedingSettings,
@@ -67,6 +68,22 @@ export default function InfoScreen() {
       isMounted = false;
     };
   }, [userId]);
+
+  // 相手の端末で変わった授乳の間隔・検温のお知らせの設定に追いつかせる。読み込み中の表示には戻さず、届いたら差し替える。
+  useFamilyRefresh(['feeding_settings', 'temperature_reminder_settings'], () => {
+    if (!familyId) return;
+    void Promise.all([
+      getFeedingSettings(supabase, familyId),
+      getTemperatureReminderSettings(supabase, familyId),
+    ])
+      .then(([feeding, temperature]) => {
+        setFeedingSettings(feeding);
+        setTemperatureReminderSettings(temperature);
+      })
+      .catch(() => {
+        // 圏外なら前に読んだ分を出したままにする。
+      });
+  });
 
   if (isSessionLoading) {
     return (
