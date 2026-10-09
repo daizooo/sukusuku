@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
-import type { LoginRole } from '@/types/app';
 
 type SupabaseDb = SupabaseClient<Database>;
 
@@ -14,7 +13,6 @@ export interface Membership {
   userId: string;
   /** まだ家族に属していなければ null（Web版の /family-setup 相当がこれから要る）。 */
   familyId: string | null;
-  role: LoginRole;
 }
 
 // 所属と「最初に開くタブ」は同じ users の1行なので、1回の問い合わせで両方取って使い回す。
@@ -30,7 +28,7 @@ const meRequests = new Map<string, Promise<Me>>();
 async function fetchMe(supabase: SupabaseDb, userId: string): Promise<Me> {
   const { data, error } = await supabase
     .from('users')
-    .select('family_id, role, start_tab')
+    .select('family_id, start_tab')
     .eq('id', userId)
     .single();
   if (error) throw error;
@@ -38,7 +36,6 @@ async function fetchMe(supabase: SupabaseDb, userId: string): Promise<Me> {
     membership: {
       userId,
       familyId: data.family_id,
-      role: data.role === 'papa' || data.role === 'mama' ? data.role : null,
     },
     startTab: toStartTab(data.start_tab),
   };
