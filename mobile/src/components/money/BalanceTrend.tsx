@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { PanResponder, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import { colors } from '@/lib/theme';
 import {
   balanceChanges,
@@ -17,9 +18,15 @@ import { SectionHeader, type } from '@/components/money/moneyVisual';
 // 残高の推移（docs/kakei.md §9.3）。PWA版の `src/components/sukusuku/money/BalanceTrend.tsx` と同じ並び・文言。
 // 折れ線（日ごとの残高）・期間の切り替え（はじめは全期間）・対象期間の履歴（残高が変わった日。新しい順）。
 // 総残高と出金元ごとの推移で同じものを使う。親のスクロールの中に置く（この中ではスクロールしない）。
+// グラフに触れる（なぞる）と、その日の日付と残高を線の上に出す。指を離しても、次に触れるか期間を変えるまで残す。
+// グラフの中の横の動きは日付の選択に使い、画面の切り替えのスワイプ（useSwipeTabs）へは渡さない。
 
-const CHART_HEIGHT = 200;
-const PAD = { left: 52, right: 10, top: 10, bottom: 24 };
+const TOOLTIP_AREA = 44; // 日付と残高の吹き出しを置く、グラフの上の余白
+const CHART_HEIGHT = 200 + TOOLTIP_AREA;
+const PAD = { left: 52, right: 10, top: 10 + TOOLTIP_AREA, bottom: 24 };
+const TOOLTIP_WIDTH = 168;
+const TOOLTIP_HEIGHT = 38;
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
 const shortDate = (dateKey: string) => {
   const [, month, day] = dateKey.split('-').map(Number);
@@ -29,9 +36,16 @@ const fullDate = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number);
   return `${year}年${String(month).padStart(2, '0')}月${String(day).padStart(2, '0')}日`;
 };
+const fullDateWithWeekday = (dateKey: string) => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return `${fullDate(dateKey)}(${WEEKDAYS[new Date(year, month - 1, day).getDay()]})`;
+};
 
 function Chart({ points }: { points: BalancePoint[] }) {
   const [width, setWidth] = useState(0);
+  const [selected, setSelected] = useState<{ points: BalancePoint[]; index: number } | null>(null);
+  // 期間を変えて points が入れ替わったら、選んでいた日は捨てる。
+  const selectedIndex = selected && selected.points === points ? selected.index : null;
   const geometry = useMemo(() => {
     if (points.length === 0 || width === 0) return null;
     const values = points.map((point) => point.amount);
@@ -52,8 +66,41 @@ function Chart({ points }: { points: BalancePoint[] }) {
     };
   }, [points, width]);
 
+  // 触れた位置（グラフ左端からの x）にいちばん近い日を選ぶ。
+  const latest = useRef({ points, width });
+  latest.current = { points, width };
+  const select = useRef((event: GestureResponderEvent) => {
+    const { points: current, width: currentWidth } = latest.current;
+    const plotWidth = currentWidth - PAD.left - PAD.right;
+    if (current.length === 0 || plotWidth <= 0) return;
+    const ratio = (event.nativeEvent.locationX - PAD.left) / plotWidth;
+    const index = Math.min(current.length - 1, Math.max(0, Math.round(ratio * (current.length - 1))));
+    setSelected({ points: current, index });
+  }).current;
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: select,
+        onPanResponderMove: select,
+      }),
+    [select],
+  );
+
+  const selectedPoint = selectedIndex === null ? null : points[selectedIndex];
+  const tooltipLeft =
+    geometry && selectedIndex !== null
+      ? Math.min(Math.max(geometry.x(selectedIndex) - TOOLTIP_WIDTH / 2, 4), Math.max(width - TOOLTIP_WIDTH - 4, 4))
+      : 0;
+
   return (
-    <View style={styles.chart} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+    <View
+      style={styles.chart}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      {...swipeBoundary}
+      {...panResponder.panHandlers}
+    >
       {geometry && (
         <Svg width={width} height={CHART_HEIGHT}>
           {geometry.ticks.map((tick) => (
@@ -86,6 +133,27 @@ function Chart({ points }: { points: BalancePoint[] }) {
           ) : (
             <Circle cx={geometry.x(0)} cy={geometry.y(points[0].amount)} r={4} fill={colors.money} />
           )}
+          {selectedPoint && selectedIndex !== null && (
+            <>
+              <Line
+                x1={geometry.x(selectedIndex)}
+                x2={geometry.x(selectedIndex)}
+                y1={PAD.top}
+                y2={CHART_HEIGHT - PAD.bottom}
+                stroke={colors.money}
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+              />
+              <Circle
+                cx={geometry.x(selectedIndex)}
+                cy={geometry.y(selectedPoint.amount)}
+                r={5}
+                fill={colors.surface}
+                stroke={colors.money}
+                strokeWidth={2.5}
+              />
+            </>
+          )}
           {geometry.labels.map((index) => (
             <SvgText
               key={`date-${index}`}
@@ -100,6 +168,12 @@ function Chart({ points }: { points: BalancePoint[] }) {
             </SvgText>
           ))}
         </Svg>
+      )}
+      {selectedPoint && (
+        <View pointerEvents="none" style={[styles.tooltip, { left: tooltipLeft }]}>
+          <Text style={styles.tooltipDate}>{fullDateWithWeekday(selectedPoint.date)}</Text>
+          <Text style={styles.tooltipAmount}>{formatBalance(selectedPoint.amount)}</Text>
+        </View>
       )}
     </View>
   );
@@ -165,6 +239,18 @@ export default function BalanceTrend({
 
 const styles = StyleSheet.create({
   chart: { height: CHART_HEIGHT },
+  tooltip: {
+    position: 'absolute',
+    top: 0,
+    width: TOOLTIP_WIDTH,
+    height: TOOLTIP_HEIGHT,
+    borderRadius: 8,
+    backgroundColor: colors.money,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tooltipDate: { fontSize: 11, fontWeight: '600', color: '#ffffff' },
+  tooltipAmount: { fontSize: 14, fontWeight: '700', color: '#ffffff' },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
   periods: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: colors.neutralSurface },
