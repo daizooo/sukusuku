@@ -23,7 +23,7 @@ type ValueRow = Pick<Tables<'money_holding_values'>, 'holding_id' | 'value_on' |
 const KINDS: MoneySecurityKind[] = ['us_stock', 'jp_fund', 'cash'];
 const ACCOUNTS: MoneyHoldingAccount[] = ['nisa', 'nisa_tsumitate', 'tokutei', 'ippan'];
 
-const rowToSecurity = (row: SecurityRow): MoneySecurity => ({
+export const rowToSecurity = (row: SecurityRow): MoneySecurity => ({
   id: row.id,
   name: row.name,
   kind: KINDS.find((kind) => kind === row.kind) ?? 'cash',
@@ -34,7 +34,7 @@ const rowToSecurity = (row: SecurityRow): MoneySecurity => ({
   archived: row.archived_at !== null,
 });
 
-const rowToHolding = (row: HoldingRow): MoneyHolding => ({
+export const rowToHolding = (row: HoldingRow): MoneyHolding => ({
   id: row.id,
   walletId: row.wallet_id,
   securityId: row.security_id,
@@ -44,7 +44,7 @@ const rowToHolding = (row: HoldingRow): MoneyHolding => ({
   archived: row.archived_at !== null,
 });
 
-const rowToValue = (row: ValueRow): MoneyHoldingValue => ({
+export const rowToValue = (row: ValueRow): MoneyHoldingValue => ({
   holdingId: row.holding_id,
   valueOn: row.value_on,
   quantity: Number(row.quantity),

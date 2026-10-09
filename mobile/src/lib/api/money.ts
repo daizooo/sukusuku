@@ -29,7 +29,7 @@ type SupabaseDb = SupabaseClient<Database>;
 // 家計タブの読み書き（種類・予算・出金元・記録。docs/kakei.md §3・§5）。
 // PWA版の `src/lib/api/money.ts` と同じ。
 
-const rowToCategory = (row: CategoryRow): MoneyCategory => ({
+export const rowToCategory = (row: CategoryRow): MoneyCategory => ({
   id: row.id,
   kind: row.kind === 'income' ? 'income' : 'living',
   parentId: row.parent_id,
@@ -39,7 +39,7 @@ const rowToCategory = (row: CategoryRow): MoneyCategory => ({
   archived: row.archived_at !== null,
 });
 
-const rowToBudget = (row: BudgetRow): MoneyBudget => ({
+export const rowToBudget = (row: BudgetRow): MoneyBudget => ({
   id: row.id,
   categoryId: row.category_id,
   fiscalYear: row.fiscal_year,
@@ -48,7 +48,7 @@ const rowToBudget = (row: BudgetRow): MoneyBudget => ({
 
 const WALLET_TYPES = ['card', 'cash', 'bank', 'prepaid', 'qr', 'securities'] as const;
 
-const rowToWallet = (row: WalletRow): MoneyWallet => ({
+export const rowToWallet = (row: WalletRow): MoneyWallet => ({
   id: row.id,
   name: row.name,
   type: WALLET_TYPES.find((type) => type === row.type) ?? 'cash',
@@ -62,7 +62,7 @@ const rowToWallet = (row: WalletRow): MoneyWallet => ({
   archived: row.archived_at !== null,
 });
 
-const rowToBalance = (row: BalanceRow): MoneyWalletBalance => ({
+export const rowToBalance = (row: BalanceRow): MoneyWalletBalance => ({
   id: row.id,
   walletId: row.wallet_id,
   balanceOn: row.balance_on,
@@ -70,7 +70,7 @@ const rowToBalance = (row: BalanceRow): MoneyWalletBalance => ({
   showInHistory: row.show_in_history,
 });
 
-const rowToStore = (row: StoreRow): MoneyStore => ({
+export const rowToStore = (row: StoreRow): MoneyStore => ({
   id: row.id,
   name: row.name,
   archived: row.archived_at !== null,
@@ -89,7 +89,7 @@ const rowToItem = (row: ItemRow): MoneyItem => ({
   memo: row.memo,
 });
 
-const rowToRecord = (row: RecordRow & { money_items: ItemRow[] }): MoneyRecord => ({
+export const rowToRecord = (row: RecordRow & { money_items: ItemRow[] }): MoneyRecord => ({
   id: row.id,
   kind: row.kind === 'income' ? 'income' : row.kind === 'transfer' ? 'transfer' : 'expense',
   occurredOn: row.occurred_on,
@@ -106,7 +106,7 @@ const rowToRecord = (row: RecordRow & { money_items: ItemRow[] }): MoneyRecord =
 const RECORD_KINDS = ['expense', 'income', 'transfer'] as const;
 const HOLIDAY_RULES = ['next', 'prev', 'none'] as const;
 
-const rowToRecurring = (row: RecurringRow): MoneyRecurring => ({
+export const rowToRecurring = (row: RecurringRow): MoneyRecurring => ({
   id: row.id,
   kind: RECORD_KINDS.find((kind) => kind === row.kind) ?? 'expense',
   day: row.day,
