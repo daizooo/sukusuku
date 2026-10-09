@@ -1,4 +1,4 @@
-import type { MemberColor, ProfileFieldKey, UserProfile } from '@/types/app';
+import type { MemberColor } from '@/types/app';
 import { participantColorName } from '@/lib/familyRoster';
 
 // 参加者1人のバッジ配色（家族メンバーの色ごと）。
@@ -53,15 +53,4 @@ export const isPhoneNumberLike = (value: string): boolean => {
 export const toTelHref = (value: string): string => {
   const digits = toHalfWidthDigits(value.trim()).replace(/[^0-9+]/g, '');
   return `tel:${digits}`;
-};
-
-// 設定タブの各セクションはユーザーが自由に項目を追加・削除できるため、
-// 生後日数の計算やホーム画面のクイック発信のように特定の値を必要とする機能は、
-// 項目の並び順やラベルではなくkey(予約識別子)を頼りに値を探す。
-export const getProfileFieldValue = (profile: UserProfile, key: ProfileFieldKey): string => {
-  const field = [...profile.childFields, ...profile.familyFields, ...profile.emergencyFields].find(
-    (f) => f.key === key,
-  );
-  // keyを持つ項目は内容を1つだけ持つ想定だが、念のため最初の入力済みの内容を返す。
-  return field?.values.find((value) => value.trim() !== '') ?? '';
 };

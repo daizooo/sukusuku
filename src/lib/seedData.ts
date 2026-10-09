@@ -1,5 +1,5 @@
 import type { NurseryInput } from '@/lib/api/nurseries';
-import type { Task, UserProfile } from '@/types/app';
+import type { Task } from '@/types/app';
 
 // 家族の新規作成時にSupabaseへ登録する定番項目のテンプレート（idはDB側で採番するため持たない）
 // スケジュール(tasks)と保活メモ(nurseries)のみ、初回セットアップ時の定番項目としてこのテンプレートを使用する。
@@ -111,28 +111,3 @@ export const INITIAL_NURSERIES: NurseryInput[] = [
     checklist: {},
   },
 ];
-
-export const INITIAL_PROFILE: UserProfile = {
-  childFields: [
-    { id: 'baby-name', label: 'お名前', values: [''], key: 'babyName' },
-    { id: 'birth-date', label: 'お誕生日', values: [''], key: 'birthDate' },
-  ],
-  familyFields: [
-    { id: 'mom-name', label: 'ママのお名前', values: [''] },
-    { id: 'mom-workplace', label: 'ママの勤務先', values: [''] },
-    { id: 'dad-name', label: 'パパのお名前', values: [''] },
-    { id: 'dad-workplace', label: 'パパの勤務先', values: [''] },
-    { id: 'address', label: 'ご住所', values: [''] },
-  ],
-  emergencyFields: [
-    { id: 'hospital-name', label: '産院名', values: ['福田病院'] },
-    { id: 'hospital-phone', label: '産院 電話番号', values: ['096-322-2995'], key: 'hospitalPhone' },
-    { id: 'pediatric-name', label: '小児科名', values: ['北野小児科'] },
-    { id: 'pediatric-phone', label: '小児科 電話番号', values: ['096-352-8990'], key: 'pediatricPhone' },
-    { id: 'papa-company-phone', label: 'パパ会社 電話番号', values: ['096-368-4222'], key: 'papaCompanyPhone' },
-    { id: 'papa-contact-phone', label: 'パパ連絡先（携帯）', values: ['080-2742-0550'], key: 'papaContactPhone' },
-    { id: 'mama-company-phone', label: 'ママ会社 電話番号', values: [''], key: 'mamaCompanyPhone' },
-    { id: 'mama-contact-phone', label: 'ママ連絡先（携帯）', values: ['090-9575-3278'], key: 'mamaContactPhone' },
-  ],
-  customFields: [],
-};

@@ -242,41 +242,6 @@ export interface Nursery {
 export interface FamilyMember {
   id: string;
   name: string;
-  role: string | null;
-}
-
-// 設定タブの1項目（見出し + 内容）。各セクションでユーザーが自由に追加・削除できる。
-// keyは特定の機能(生後日数の計算やホーム画面のクイック発信など)からこの項目の値を
-// 参照するための予約識別子。ユーザーが追加した項目には付与されない。
-export interface ProfileField {
-  id: string;
-  label: string;
-  // 1つの見出しに複数の内容を並べられる（例: 「祖父母の連絡先」に2件の電話番号）。
-  // 空配列にはせず、内容が未入力でも空文字を1つ持たせる。
-  // keyを持つ項目(生後日数やクイック発信が参照する項目)は先頭の1件だけを使う。
-  values: string[];
-  key?: ProfileFieldKey;
-}
-
-export type ProfileFieldKey =
-  | 'babyName'
-  | 'birthDate'
-  | 'hospitalPhone'
-  | 'pediatricPhone'
-  | 'papaCompanyPhone'
-  | 'papaContactPhone'
-  | 'mamaCompanyPhone'
-  | 'mamaContactPhone';
-
-export interface UserProfile {
-  // お子様の情報
-  childFields: ProfileField[];
-  // パパ・ママ情報
-  familyFields: ProfileField[];
-  // 緊急連絡先（産院・小児科・パパママの連絡先）
-  emergencyFields: ProfileField[];
-  // どのセクションにも属さない、ユーザーが自由に追加・削除できるカスタム項目
-  customFields: ProfileField[];
 }
 
 /**
@@ -336,9 +301,6 @@ export type TabId = 'schedule' | 'list' | 'care' | 'money' | 'living' | 'info';
 
 // スケジュールタブの表示切り替え。既定は月（カレンダー）。
 export type ScheduleView = 'month' | 'day' | 'list';
-
-// ログイン中のユーザーの役割。users.role (Supabase) に対応。未設定の場合はnull。
-export type LoginRole = 'papa' | 'mama' | null;
 
 
 // ---- かぞく手帳: 家族メンバー・世帯情報（docs/family-app.md §3） ----
