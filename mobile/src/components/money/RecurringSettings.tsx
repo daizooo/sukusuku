@@ -29,7 +29,7 @@ import {
   recurringScheduleLabel,
   storeChoices,
 } from '@/lib/moneyUtils';
-import { insertMoneyRecurring, setMoneyRecurringArchived, updateMoneyRecurring } from '@/lib/api/money';
+import { insertMoneyRecurring, insertMoneyStore, setMoneyRecurringArchived, updateMoneyRecurring } from '@/lib/api/money';
 import CategoryPicker from '@/components/money/CategoryPicker';
 import StorePicker from '@/components/money/StorePicker';
 import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
@@ -52,6 +52,7 @@ interface RecurringSettingsProps {
   specialItems: SpecialItem[];
   specialActuals: SpecialActual[];
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
+  onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
   onBack: () => void;
   /**
    * スマホの戻るボタン。家計の設定の Modal が受けるので、編集を開いているあいだはここに戻り方を入れる
@@ -77,6 +78,7 @@ export default function RecurringSettings({
   specialItems,
   specialActuals,
   onRecurring,
+  onStores,
   onBack,
   backRef,
 }: RecurringSettingsProps) {
@@ -94,7 +96,7 @@ export default function RecurringSettings({
   const put = (saved: MoneyRecurring) =>
     onRecurring((prev) => [...prev.filter((rule) => rule.id !== saved.id), saved].sort(byPosition));
 
-  const save = async (target: MoneyRecurring | null, draft: MoneyRecurringDraft) => {
+  const save = async (target: MoneyRecurring | null, draft: MoneyRecurringDraft, registerStore: boolean) => {
     setEditing(null);
     try {
       put(
@@ -107,6 +109,11 @@ export default function RecurringSettings({
             )
           : await updateMoneyRecurring(supabase, target.id, draft),
       );
+      // 「お店に登録して使う」を選んだお店は、お店の設定にも登録する（docs/kakei.md §3.5）。
+      if (registerStore && draft.store !== '' && !stores.some((entry) => entry.name === draft.store && !entry.archived)) {
+        const savedStore = await insertMoneyStore(supabase, familyId, draft.store);
+        onStores((prev) => [...prev.filter((entry) => entry.id !== savedStore.id), savedStore]);
+      }
     } catch {
       failed();
     }
@@ -134,7 +141,7 @@ export default function RecurringSettings({
         specialItems={specialItems}
         specialActuals={specialActuals}
         onClose={() => setEditing(null)}
-        onSubmit={(draft) => void save(editing === 'new' ? null : editing, draft)}
+        onSubmit={(draft, registerStore) => void save(editing === 'new' ? null : editing, draft, registerStore)}
         onArchive={editing === 'new' ? undefined : () => void setArchived(editing, true)}
         backRef={backRef}
       />
@@ -259,7 +266,7 @@ function RecurringEditor({
   specialItems: SpecialItem[];
   specialActuals: SpecialActual[];
   onClose: () => void;
-  onSubmit: (draft: MoneyRecurringDraft) => void;
+  onSubmit: (draft: MoneyRecurringDraft, registerStore: boolean) => void;
   onArchive?: () => void;
   backRef: MutableRefObject<(() => void) | null>;
 }) {
@@ -273,6 +280,8 @@ function RecurringEditor({
   const [walletId, setWalletId] = useState<string | null>(rule?.walletId ?? null);
   const [toWalletId, setToWalletId] = useState<string | null>(rule?.toWalletId ?? null);
   const [store, setStore] = useState(rule?.store ?? '');
+  // お店の選択で「お店に登録して使う」を選んだか（保存のときにお店の設定に登録する）。
+  const [registerStore, setRegisterStore] = useState(false);
   const [name, setName] = useState(rule?.name ?? '');
   const [day, setDay] = useState(rule ? String(rule.day) : '');
   const [holiday, setHoliday] = useState<MoneyHolidayRule>(rule?.holiday ?? 'next');
@@ -331,7 +340,7 @@ function RecurringEditor({
       categoryId: kind === 'transfer' ? null : categoryId,
       specialItemId: kind === 'transfer' ? null : specialItemId,
       name,
-    });
+    }, kind !== 'transfer' && store !== '' && registerStore);
   };
 
   const archive = () =>
@@ -366,9 +375,10 @@ function RecurringEditor({
         registered={storeOptions.registered}
         recent={storeOptions.recent}
         others={storeOptions.others}
-        canRegister={false}
-        onPick={(value) => {
+        canRegister
+        onPick={(value, register) => {
           setStore(value);
+          setRegisterStore(register);
           setScreen('form');
         }}
         onClose={() => setScreen('form')}
@@ -486,7 +496,7 @@ function RecurringEditor({
           <Text style={styles.sub}>
             {amountMode === 'fixed'
               ? 'この額で確定として記録します（家賃・ローンなど）'
-              : '前年同月の記録があればその額、無ければ直近3回の平均で、「見込み」として記録します'}
+              : '前年同月の記録があればその額、無ければ直近3回の平均で、「見込み」として記録します。記録が1件も無いときは、上に入れた額で「見込み」として記録します'}
           </Text>
           {amountMode === 'estimate' && (
             <Text style={styles.sub}>
