@@ -6,21 +6,21 @@ import { colors } from '@/lib/theme';
 import {
   budgetFor,
   childCategories,
-  fiscalYearOfMonth,
+  yearOfMonth,
   formatYen,
   frequentCategoryIds,
   iconKeyOf,
   livingSpendByTop,
   topCategories,
 } from '@/lib/moneyUtils';
-import { appliesInYear, buildYearRows, formatFiscalYear } from '@/lib/specialUtils';
+import { appliesInYear, buildYearRows, formatYear } from '@/lib/specialUtils';
 import { CategoryIcon, ScreenHeader } from '@/components/money/moneyVisual';
 
 // 種類の選択（docs/kakei.md §3.1・§3.2）。PWA版の `src/components/sukusuku/money/CategoryPicker.tsx` と同じ並び・文言。
 //
 // 上によく使う小分類。その下に大分類ごとの枠（見出しに今月の残り、中に小分類のチップ）。押すと大分類も決まる。
 // 大分類ごとに枠で囲み、見出しに色を付けて、どこからどこまでが同じ大分類かを分かるようにする。
-// 支出なら最後に特別費: その年度の予定（まだ済でないものを上に。選ぶと予算の額が入る）と、予定外の項目。
+// 支出なら最後に特別費: その年の予定（まだ済でないものを上に。選ぶと予算の額が入る）と、予定外の項目。
 // 収入なら収入の種類と、特別収入。
 
 export interface CategoryChoice {
@@ -33,7 +33,7 @@ export interface CategoryChoice {
 
 interface CategoryPickerProps {
   kind: SpecialKind;
-  /** 記録の日付の月（今月の残り・特別費の年度に使う）。 */
+  /** 記録の日付の月（今月の残り・特別費の年に使う）。 */
   monthKey: string;
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
@@ -42,7 +42,7 @@ interface CategoryPickerProps {
   specialActuals: SpecialActual[];
   onPick: (choice: CategoryChoice) => void;
   onClose: () => void;
-  /** 種類と予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
+  /** カテゴリと予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
   onEditCategories?: () => void;
 }
 
@@ -59,21 +59,21 @@ export default function CategoryPicker({
   onEditCategories,
 }: CategoryPickerProps) {
   const categoryKind = kind === 'income' ? 'income' : 'living';
-  const fiscalYear = fiscalYearOfMonth(monthKey);
+  const year = yearOfMonth(monthKey);
   const tops = useMemo(() => topCategories(categories, categoryKind), [categories, categoryKind]);
   const frequent = useMemo(
     () => frequentCategoryIds(records, categories, categoryKind),
     [records, categories, categoryKind],
   );
   const spend = useMemo(() => livingSpendByTop(records, categories, monthKey), [records, categories, monthKey]);
-  // 特別費の予定（まだ済でないものを上に）と、その年度に出る項目。
+  // 特別費の予定（まだ済でないものを上に）と、その年に出る項目。
   const specialRows = useMemo(() => {
-    const rows = buildYearRows(specialItems, specialActuals, fiscalYear, kind).filter((row) => row.planId !== null);
+    const rows = buildYearRows(specialItems, specialActuals, year, kind).filter((row) => row.planId !== null);
     return [...rows.filter((row) => row.actual === null), ...rows.filter((row) => row.actual !== null)];
-  }, [specialItems, specialActuals, fiscalYear, kind]);
+  }, [specialItems, specialActuals, year, kind]);
   const unplannedItems = useMemo(
-    () => specialItems.filter((item) => item.kind === kind && appliesInYear(item, fiscalYear)),
-    [specialItems, kind, fiscalYear],
+    () => specialItems.filter((item) => item.kind === kind && appliesInYear(item, year)),
+    [specialItems, kind, year],
   );
 
   const pickCategory = (categoryId: string) =>
@@ -88,7 +88,7 @@ export default function CategoryPicker({
         onClose={onClose}
         right={
           onEditCategories && (
-            <Pressable accessibilityRole="button" accessibilityLabel="種類と予算を編集" onPress={onEditCategories} hitSlop={8}>
+            <Pressable accessibilityRole="button" accessibilityLabel="カテゴリと予算を編集" onPress={onEditCategories} hitSlop={8}>
               <Settings2 size={20} color={colors.textMuted} />
             </Pressable>
           )
@@ -113,7 +113,7 @@ export default function CategoryPicker({
 
         {tops.map((top) => {
           const children = childCategories(categories, top.id);
-          const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, fiscalYear) : null;
+          const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, monthKey) : null;
           const remaining = budget === null ? null : budget - (spend.get(top.id) ?? 0);
           return (
             <View key={top.id} style={styles.topCard}>
@@ -146,7 +146,7 @@ export default function CategoryPicker({
         {(specialRows.length > 0 || unplannedItems.length > 0) && (
           <View style={styles.section}>
             <Text style={styles.topName}>
-              {kind === 'income' ? '特別収入' : '特別費'}（{formatFiscalYear(fiscalYear)}の予定）
+              {kind === 'income' ? '特別収入' : '特別費'}（{formatYear(year)}の予定）
             </Text>
             {specialRows.map((row) => (
               <Pressable

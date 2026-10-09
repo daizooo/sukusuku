@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Check, Pencil, Plus } from 'lucide-react';
 import type { MoneyWallet, MoneyWalletDraft, MoneyWalletType } from '@/types/app';
-import { cardScheduleLabel, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
+import { cardScheduleLabel, PAY_MONTH_OPTIONS, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
 import { ModalShell } from '../modals/TaskForm';
 import { PrimaryButton, ScreenHeader, StackedScreen, WalletTypeIcon } from './moneyVisual';
 
@@ -145,6 +145,7 @@ export function WalletModal({
   const [isSaving, setIsSaving] = useState(wallet?.isSaving ?? false);
   const [closeDay, setCloseDay] = useState(wallet?.closeDay ? String(wallet.closeDay) : '');
   const [payDay, setPayDay] = useState(wallet?.payDay ? String(wallet.payDay) : '');
+  const [payMonthOffset, setPayMonthOffset] = useState<number | null>(wallet?.payMonthOffset ?? null);
   const [payWalletId, setPayWalletId] = useState<string | null>(wallet?.payWalletId ?? null);
   const [error, setError] = useState<string | null>(null);
   const payChoices = wallets.filter(
@@ -166,6 +167,7 @@ export function WalletModal({
       savingTarget: type !== 'securities' && isSaving ? (wallet?.savingTarget ?? null) : null,
       closeDay: type === 'card' ? close : null,
       payDay: type === 'card' ? pay : null,
+      payMonthOffset: type === 'card' ? payMonthOffset : null,
       payWalletId: type === 'card' ? payWalletId : null,
       iconColor,
     });
@@ -277,6 +279,27 @@ export function WalletModal({
                   placeholder="例: 10"
                 />
               </label>
+            </div>
+            <div>
+              <span className={labelClass}>引き落とし月</span>
+              <div className="flex flex-wrap gap-2">
+                {PAY_MONTH_OPTIONS.map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    aria-pressed={payMonthOffset === option.offset}
+                    onClick={() => setPayMonthOffset(option.offset)}
+                    className={`rounded-full px-3 py-1.5 text-[13px] font-semibold ${
+                      payMonthOffset === option.offset ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-gray-400">
+                自動は、締め日のあとに来る最初の引き落とし日です。「翌々月」は、月末締めの翌々月2日払いなど、締め日の月から数えて払うカード用です
+              </p>
             </div>
             <div>
               <span className={labelClass}>引き落とし口座</span>

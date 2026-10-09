@@ -22,7 +22,6 @@ import {
   categoryPath,
   editorGroupTotal,
   evaluateCalc,
-  fiscalYearOfMonth,
   formatCalc,
   formatMonthKey,
   formatYen,
@@ -169,7 +168,7 @@ export default function RecordEditor({
     if (target.categoryId !== null) {
       const topId = topCategoryIdOf(categories, target.categoryId);
       if (topId === null || kind !== 'expense') return '';
-      const budget = budgetFor(budgets, topId, fiscalYearOfMonth(monthKey));
+      const budget = budgetFor(budgets, topId, monthKey);
       if (budget === null) return '';
       const remaining = budget - (spend.get(topId) ?? 0);
       return remaining < 0 ? `今月 ${formatYen(remaining)} 超過` : `今月 残り ${formatYen(remaining)}`;

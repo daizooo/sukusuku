@@ -1,29 +1,29 @@
-// 特別費の年度の数え方と、予定・実績の突き合わせ（docs/home.md §5.4）。
+// 特別費の年（1月〜12月）の数え方と、予定・実績の突き合わせ（docs/home.md §5.4・docs/kakei.md §4.3）。
 // 実行: npm run test:special
 import assert from 'node:assert/strict';
 
 import {
   appliesInYear,
   buildYearRows,
-  calendarYearOf,
   cycleLabel,
-  fiscalYearOf,
+  formatYear,
   groupByMonth,
   isOverBudget,
   parseAmountInput,
   parseDateInput,
   sortPlans,
+  yearOf,
+  yearOfDate,
   yearTotals,
 } from './specialUtils.ts';
 import type { SpecialActual, SpecialItem } from '../types/app.ts';
 
-// ---- 年度（4月始まり） ----
-assert.equal(fiscalYearOf('2026-04-01'), 2026, '4月1日は新しい年度');
-assert.equal(fiscalYearOf('2027-03-31'), 2026, '翌年3月末は同じ年度');
-assert.equal(fiscalYearOf('2026-03-31'), 2025);
-assert.equal(calendarYearOf(2026, 4), 2026);
-assert.equal(calendarYearOf(2026, 12), 2026);
-assert.equal(calendarYearOf(2026, 1), 2027, '年度の1月は翌年');
+// ---- 年（1月〜12月。2026-10-09に4月始まりの年度から変えた） ----
+assert.equal(yearOf('2026-01-01'), 2026, '1月1日は新しい年');
+assert.equal(yearOf('2026-12-31'), 2026, '12月末は同じ年');
+assert.equal(yearOf('2027-03-31'), 2027, '3月は年度では前でも、年では新しい年');
+assert.equal(yearOfDate(new Date(2026, 2, 31)), 2026);
+assert.equal(formatYear(2026), '2026年');
 
 // ---- 金額の入力 ----
 assert.equal(parseAmountInput('30,500'), 30500);
@@ -50,13 +50,13 @@ assert.equal(cycleLabel(0), '1回きり');
 
 // ---- 周期 ----
 assert.equal(appliesInYear({ cycleYears: 1, baseYear: null }, 2030), true, '毎年は起点が無ければいつでも');
-assert.equal(appliesInYear({ cycleYears: 1, baseYear: 2027 }, 2026), false, '起点より前の年度には出ない');
+assert.equal(appliesInYear({ cycleYears: 1, baseYear: 2027 }, 2026), false, '起点より前の年には出ない');
 assert.equal(appliesInYear({ cycleYears: 1, baseYear: 2027 }, 2028), true);
 assert.equal(appliesInYear({ cycleYears: 2, baseYear: 2026 }, 2026), true);
 assert.equal(appliesInYear({ cycleYears: 2, baseYear: 2026 }, 2027), false, '2年おきは間の年に出ない');
 assert.equal(appliesInYear({ cycleYears: 2, baseYear: 2026 }, 2028), true);
 assert.equal(appliesInYear({ cycleYears: 2, baseYear: 2026 }, 2024), false, '起点より前には出ない');
-assert.equal(appliesInYear({ cycleYears: 0, baseYear: 2026 }, 2026), true, '1回きりはその年度だけ');
+assert.equal(appliesInYear({ cycleYears: 0, baseYear: 2026 }, 2026), true, '1回きりはその年だけ');
 assert.equal(appliesInYear({ cycleYears: 0, baseYear: 2026 }, 2027), false);
 assert.equal(appliesInYear({ cycleYears: 3, baseYear: null }, 2026), false, '起点が無い周期は出さない');
 
@@ -110,7 +110,7 @@ const actuals = [
   actual({ id: 'a1', itemId: 'oil', planId: 'oil-jul', occurredOn: '2026-07-20', amount: 13722 }),
   // 予定外（予定にひも付かない）
   actual({ id: 'a2', itemId: 'trip', occurredOn: '2026-08-05', amount: 8000 }),
-  // 前の年度の実績は、この年度には入らない
+  // 前の年の実績は、この年には入らない
   actual({ id: 'a3', itemId: 'oil', planId: 'oil-jul', occurredOn: '2025-07-20', amount: 99999 }),
   actual({ id: 'a4', itemId: 'bonus', planId: 'bonus-p', occurredOn: '2026-06-10', amount: 410213 }),
 ];
@@ -124,13 +124,13 @@ assert.equal(byKey('plan:sha-p').month, null, '月未定で実績も無ければ
 assert.equal(byKey('plan:trip-p').tentative, true);
 assert.equal(byKey('actual:a2').budget, 0, '予定外の行は予算0');
 assert.equal(byKey('actual:a2').month, 8, '予定外の行は実績の月に置く');
-assert.equal(rows2026.some((row) => row.key === 'actual:a3'), false, '前の年度の実績は入らない');
+assert.equal(rows2026.some((row) => row.key === 'actual:a3'), false, '前の年の実績は入らない');
 
-// 2年おきの車検は、間の年度には出ない
+// 2年おきの車検は、間の年には出ない
 const rows2027 = buildYearRows(items, actuals, 2027, 'expense');
 assert.equal(rows2027.some((row) => row.item.id === 'sha'), false);
 assert.equal(buildYearRows(items, actuals, 2028, 'expense').some((row) => row.item.id === 'sha'), true);
-// 前の年度の実績が、その年度の予定にひも付く
+// 前の年の実績が、その年の予定にひも付く
 assert.equal(buildYearRows(items, actuals, 2025, 'expense').find((r) => r.key === 'plan:oil-jul')!.actual, 99999);
 
 // 収入は別に数える
@@ -140,12 +140,12 @@ assert.deepEqual(yearTotals(income), { budget: 400000, actual: 410213, diff: -10
 // 年間の予算・実績・差異（差異＝予算−実績）
 assert.deepEqual(yearTotals(rows2026), { budget: 14000 + 14000 + 46000 + 50000, actual: 13722 + 8000, diff: 124000 - 21722 });
 
-// 月ごと（4月→3月の順、未定は最後）
+// 月ごと（1月→12月の順、未定は最後）
 const groups = groupByMonth(rows2026);
-assert.deepEqual(groups.map((group) => group.month), [7, 8, 12, 1, null]);
-assert.equal(groups[0].budget, 14000);
-assert.equal(groups[0].actual, 13722);
-assert.equal(groups[1].budget, 0, '予定外だけの月は予算0');
+assert.deepEqual(groups.map((group) => group.month), [1, 7, 8, 12, null]);
+assert.equal(groups[1].budget, 14000);
+assert.equal(groups[1].actual, 13722);
+assert.equal(groups[2].budget, 0, '予定外だけの月は予算0');
 
 // 月未定の予定でも、「済」にしたら実績の月に置く
 const paidLater = buildYearRows(
@@ -169,7 +169,7 @@ assert.equal(isOverBudget(income[0]), false, '収入は超過にしない');
 // ---- 予定の並べ替え ----
 assert.deepEqual(
   sortPlans([{ month: 1 }, { month: null }, { month: 4 }, { month: 12 }]).map((plan) => plan.month),
-  [4, 12, 1, null],
+  [1, 4, 12, null],
 );
 
 console.log('specialUtils: all passed');

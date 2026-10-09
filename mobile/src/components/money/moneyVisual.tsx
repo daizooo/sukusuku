@@ -6,12 +6,12 @@ import type { MoneyWalletType } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { formatGainRate, formatMonthKey, formatSignedYen, iconTone, shiftMonth } from '@/lib/moneyUtils';
 import { MONEY_ICON_COMPONENTS } from '@/components/money/moneyIcons';
-import { formatFiscalYear } from '@/lib/specialUtils';
+import { formatYear } from '@/lib/specialUtils';
 
 // 家計タブで共通に使う部品と、見た目の決まり（docs/kakei.md §2.1）。
 // PWA版の `src/components/sukusuku/money/moneyVisual.tsx` と同じ見た目。
 //
-// どの面も「送り（月・年度）→ 結論（数字を1つ大きく）→ 内訳 → 明細」の順に並べる。
+// どの面も「送り（月・年）→ 結論（数字を1つ大きく）→ 内訳 → 明細」の順に並べる。
 // 文字は4段（結論の数字 / 見出し / 行 / 補足）に絞り、色は意味のあるところだけ
 // （赤＝マイナス・超過、青＝押せるもの）。
 
@@ -79,25 +79,21 @@ export function MonthBar({ monthKey, onChange }: { monthKey: string; onChange: (
   );
 }
 
-/** 年度の送り（右に期間）。 */
-export function YearBar({ fiscalYear, onChange }: { fiscalYear: number; onChange: (fiscalYear: number) => void }) {
+/** 年の送り（右に期間。1月〜12月）。 */
+export function YearBar({ year, onChange }: { year: number; onChange: (year: number) => void }) {
   return (
     <Stepper
-      label={formatFiscalYear(fiscalYear)}
-      prevLabel="前の年度"
-      nextLabel="次の年度"
-      onPrev={() => onChange(fiscalYear - 1)}
-      onNext={() => onChange(fiscalYear + 1)}
-      right={
-        <Text style={type.faint}>
-          {fiscalYear}年4月〜{fiscalYear + 1}年3月
-        </Text>
-      }
+      label={formatYear(year)}
+      prevLabel="前の年"
+      nextLabel="次の年"
+      onPrev={() => onChange(year - 1)}
+      onNext={() => onChange(year + 1)}
+      right={<Text style={type.faint}>1月〜12月</Text>}
     />
   );
 }
 
-/** 振り返りの期間。月か年度。 */
+/** 振り返りの期間。月か年。 */
 export type ReviewPeriod = 'month' | 'year';
 
 const PERIODS: { id: ReviewPeriod; label: string }[] = [
@@ -111,15 +107,15 @@ export function PeriodBar({
   onPeriod,
   monthKey,
   onMonth,
-  fiscalYear,
-  onFiscalYear,
+  year,
+  onYear,
 }: {
   period: ReviewPeriod;
   onPeriod: (period: ReviewPeriod) => void;
   monthKey: string;
   onMonth: (monthKey: string) => void;
-  fiscalYear: number;
-  onFiscalYear: (fiscalYear: number) => void;
+  year: number;
+  onYear: (year: number) => void;
 }) {
   const toggle = (
     <View accessibilityRole="tablist" style={styles.segment}>
@@ -150,11 +146,11 @@ export function PeriodBar({
     />
   ) : (
     <Stepper
-      label={formatFiscalYear(fiscalYear)}
-      prevLabel="前の年度"
-      nextLabel="次の年度"
-      onPrev={() => onFiscalYear(fiscalYear - 1)}
-      onNext={() => onFiscalYear(fiscalYear + 1)}
+      label={formatYear(year)}
+      prevLabel="前の年"
+      nextLabel="次の年"
+      onPrev={() => onYear(year - 1)}
+      onNext={() => onYear(year + 1)}
       right={toggle}
     />
   );
@@ -166,19 +162,22 @@ export function Hero({
   value,
   minus,
   note,
+  center,
   children,
 }: {
   label: string;
   value: string;
   minus?: boolean;
   note?: ReactNode;
+  /** ラベルと数字を中央に寄せる（総残高など）。 */
+  center?: boolean;
   children?: ReactNode;
 }) {
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, center && styles.cardCenter]}>
       <Text style={styles.heroLabel}>{label}</Text>
       <Text style={[type.hero, minus && type.minus]}>{value}</Text>
-      {note !== undefined && <Text style={type.sub}>{note}</Text>}
+      {note !== undefined && <Text style={[type.sub, center && styles.centerText]}>{note}</Text>}
       {children !== undefined && <View style={styles.heroBody}>{children}</View>}
     </View>
   );
@@ -410,6 +409,8 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 2,
   },
+  cardCenter: { alignItems: 'center' },
+  centerText: { textAlign: 'center' },
   heroLabel: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   heroBody: { marginTop: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 4 },
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },

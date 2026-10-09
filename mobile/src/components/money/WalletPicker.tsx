@@ -3,7 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View
 import { Check, Pencil, Plus } from 'lucide-react-native';
 import type { MoneyWallet, MoneyWalletDraft, MoneyWalletType } from '@/types/app';
 import { colors } from '@/lib/theme';
-import { cardScheduleLabel, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
+import { cardScheduleLabel, PAY_MONTH_OPTIONS, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import { PrimaryButton, ScreenHeader, WalletTypeIcon } from '@/components/money/moneyVisual';
@@ -131,6 +131,7 @@ export function WalletSheet({
   const [isSaving, setIsSaving] = useState(wallet?.isSaving ?? false);
   const [closeDay, setCloseDay] = useState(wallet?.closeDay ? String(wallet.closeDay) : '');
   const [payDay, setPayDay] = useState(wallet?.payDay ? String(wallet.payDay) : '');
+  const [payMonthOffset, setPayMonthOffset] = useState<number | null>(wallet?.payMonthOffset ?? null);
   const [payWalletId, setPayWalletId] = useState<string | null>(wallet?.payWalletId ?? null);
   const [error, setError] = useState<string | null>(null);
   const payChoices = wallets.filter(
@@ -152,6 +153,7 @@ export function WalletSheet({
       savingTarget: type !== 'securities' && isSaving ? (wallet?.savingTarget ?? null) : null,
       closeDay: type === 'card' ? close : null,
       payDay: type === 'card' ? pay : null,
+      payMonthOffset: type === 'card' ? payMonthOffset : null,
       payWalletId: type === 'card' ? payWalletId : null,
       iconColor,
     });
@@ -266,6 +268,27 @@ export function WalletSheet({
                   placeholderTextColor={colors.textFaint}
                 />
               </View>
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>引き落とし月</Text>
+              <View style={styles.types}>
+                {PAY_MONTH_OPTIONS.map((option) => (
+                  <Pressable
+                    key={option.label}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: payMonthOffset === option.offset }}
+                    onPress={() => setPayMonthOffset(option.offset)}
+                    style={[styles.type, payMonthOffset === option.offset && styles.typeSelected]}
+                  >
+                    <Text style={[styles.typeText, payMonthOffset === option.offset && styles.typeTextSelected]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.sub}>
+                自動は、締め日のあとに来る最初の引き落とし日です。「翌々月」は、月末締めの翌々月2日払いなど、締め日の月から数えて払うカード用です
+              </Text>
             </View>
             <View style={styles.field}>
               <Text style={styles.label}>引き落とし口座</Text>

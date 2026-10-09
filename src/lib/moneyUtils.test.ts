@@ -6,14 +6,25 @@ import {
   addDays,
   balanceChanges,
   balanceChecks,
+  baseIconKey,
+  buildCategoryAnalysis,
+  buildSpecialAnalysis,
   cardBilling,
+  cardPaymentHistory,
+  cardUsagePeriod,
   dailyBalances,
+  iconTone,
+  yearMonthKeys,
+  yearOfMonth,
   filterTrend,
   formatAxisYen,
   niceTicks,
   recordsOfWallet,
   budgetFor,
+  budgetMonthKey,
+  budgetMonths,
   buildWalletBalances,
+  withBudgetFrom,
   canPickProductsFor,
   formatBalance,
   walletBalanceOn,
@@ -30,7 +41,6 @@ import {
   formatDayOfMonth,
   recurringHistory,
   recurringScheduleLabel,
-  fiscalYearOfMonth,
   formatSignedYen,
   groupsFromItems,
   itemsFromGroups,
@@ -61,12 +71,10 @@ import {
 import { buildYearRows } from './specialUtils.ts';
 import type { MoneyBudget, MoneyCategory, MoneyHolding, MoneyHoldingValue, MoneyItem, MoneyRecord, MoneySecurity, MoneyStore, MoneyWallet, MoneyWalletBalance, SpecialItem } from '../types/app.ts';
 
-// ---- 月・年度 ----
+// ---- 月・年 ----
 assert.equal(shiftMonth('2026-12', 1), '2027-01');
 assert.equal(shiftMonth('2026-01', -1), '2025-12');
 assert.equal(shiftMonth('2026-09', -12), '2025-09');
-assert.equal(fiscalYearOfMonth('2026-04'), 2026);
-assert.equal(fiscalYearOfMonth('2027-03'), 2026, '3月は前の年度');
 assert.equal(formatSignedYen(1200), '+¥1,200');
 assert.equal(formatSignedYen(-3800), '−¥3,800');
 assert.equal(formatSignedYen(0), '¥0');
@@ -78,6 +86,7 @@ const cat = (id: string, name: string, parentId: string | null, extra: Partial<M
   parentId,
   kind: 'living',
   icon: null,
+  iconColor: null,
   position: 0,
   archived: false,
   ...extra,
@@ -115,18 +124,39 @@ assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: 'drug' }], 'drug
 assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: 'drug' }], 'house'), false);
 assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: null }], null), false);
 
-// ---- 予算（その年度に無ければ前の年度） ----
+// ---- 予算（その年に無ければ前の年） ----
 const budgets: MoneyBudget[] = [
-  { id: 'b1', categoryId: 'food', fiscalYear: 2025, monthlyAmount: 55000 },
-  { id: 'b2', categoryId: 'food', fiscalYear: 2026, monthlyAmount: 60000 },
-  { id: 'b3', categoryId: 'med', fiscalYear: 2024, monthlyAmount: 5000 },
-  { id: 'b4', categoryId: 'house', fiscalYear: 2026, monthlyAmount: 85000 },
+  { id: 'b1', categoryId: 'food', year: 2025, monthAmounts: Array(12).fill(55000) },
+  { id: 'b2', categoryId: 'food', year: 2026, monthAmounts: Array(12).fill(60000) },
+  { id: 'b3', categoryId: 'med', year: 2024, monthAmounts: Array(12).fill(5000) },
+  { id: 'b4', categoryId: 'house', year: 2026, monthAmounts: Array(12).fill(85000) },
 ];
-assert.equal(budgetFor(budgets, 'food', 2026), 60000);
-assert.equal(budgetFor(budgets, 'food', 2027), 60000, '翌年度は今の額のまま');
-assert.equal(budgetFor(budgets, 'food', 2025), 55000);
-assert.equal(budgetFor(budgets, 'food', 2024), null, '前の年度にも無ければ未設定');
-assert.equal(budgetFor(budgets, 'med', 2026), 5000);
+assert.equal(budgetFor(budgets, 'food', '2026-06'), 60000);
+assert.equal(budgetFor(budgets, 'food', '2027-03'), 60000, '翌年は今の額のまま');
+assert.equal(budgetFor(budgets, 'food', '2025-12'), 55000);
+assert.equal(budgetFor(budgets, 'food', '2024-12'), null, '前の年にも無ければ未設定');
+assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
+
+// 年の途中で予算を変えても、それより前の月は変わらない（過去の振り返りがおかしくならない）
+{
+  const current = budgetMonths(budgets, 'food', 2026);
+  assert.deepEqual(current, Array(12).fill(60000));
+  const changed = withBudgetFrom(current, 10, 70000);
+  assert.deepEqual(changed.slice(0, 9), Array(9).fill(60000), '9月までは前の額のまま');
+  assert.deepEqual(changed.slice(9), [70000, 70000, 70000], '10月から年末までが新しい額');
+  const after: MoneyBudget[] = [...budgets.filter((b) => b.id !== 'b2'), { id: 'b2', categoryId: 'food', year: 2026, monthAmounts: changed }];
+  assert.equal(budgetFor(after, 'food', '2026-09'), 60000, '過去の月');
+  assert.equal(budgetFor(after, 'food', '2026-10'), 70000);
+  assert.equal(budgetFor(after, 'food', '2027-02'), 70000, '翌年は年末の額を引き継ぐ');
+  assert.equal(budgetFor(after, 'food', '2025-12'), 55000, '前の年は変わらない');
+  // その年にはじめて決める（それまで予算なし）。前の月は予算なしのまま
+  const first = withBudgetFrom(budgetMonths(budgets, 'house', 2025), 4, 30000);
+  assert.deepEqual(first.slice(0, 3), [null, null, null]);
+  assert.equal(first[3], 30000);
+}
+assert.equal(budgetMonthKey(2026, '2026-10-09'), '2026-10', '今年は今月');
+assert.equal(budgetMonthKey(2027, '2026-10-09'), '2027-01', 'これからの年は1月');
+assert.equal(budgetMonthKey(2025, '2026-10-09'), '2025-12', '過ぎた年は12月');
 
 // ---- 記録 ----
 let seq = 0;
@@ -158,10 +188,10 @@ const record = (id: string, fields: Partial<MoneyRecord>): MoneyRecord => ({
   ...fields,
 });
 const wallets: MoneyWallet[] = [
-  { id: 'card', name: 'カード', type: 'card', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, iconColor: null, position: 0, archived: false },
-  { id: 'bank', name: '生活費口座', type: 'bank', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, iconColor: null, position: 1, archived: false },
-  { id: 'save', name: '貯金口座', type: 'bank', isSaving: true, savingTarget: 30000, closeDay: null, payDay: null, payWalletId: null, iconColor: null, position: 2, archived: false },
-  { id: 'gone', name: '昔のカード', type: 'card', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, iconColor: null, position: 3, archived: true },
+  { id: 'card', name: 'カード', type: 'card', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 0, archived: false },
+  { id: 'bank', name: '生活費口座', type: 'bank', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 1, archived: false },
+  { id: 'save', name: '貯金口座', type: 'bank', isSaving: true, savingTarget: 30000, closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 2, archived: false },
+  { id: 'gone', name: '昔のカード', type: 'card', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 3, archived: true },
 ];
 const records: MoneyRecord[] = [
   record('r1', {
@@ -307,11 +337,11 @@ assert.equal(pressCalcKey('12+', '*'), '12*', '演算子は置き換える');
 assert.equal(pressCalcKey('', '+'), '');
 assert.equal(pressCalcKey('12', 'back'), '1');
 
-// ---- 年度の収支 ----
+// ---- 年の収支 ----
 const year = buildYearSummary(records, categories, budgets, 2026, '2026-09');
 assert.equal(year.months.length, 12);
-assert.equal(year.months[0].monthKey, '2026-04');
-assert.equal(year.months[11].monthKey, '2027-03');
+assert.equal(year.months[0].monthKey, '2026-01');
+assert.equal(year.months[11].monthKey, '2026-12');
 const september = year.months.find((row) => row.monthKey === '2026-09')!;
 assert.equal(september.balance, summary.balance, '月の行は月の収支と同じ');
 assert.equal(september.livingDiff, summary.livingBudget - summary.living);
@@ -344,7 +374,7 @@ assert.equal(
   'upTo より後の月は合計に入れない',
 );
 
-// ---- 特別費の年度の予算の減り ----
+// ---- 特別費の年の予算の減り ----
 const specialItems: SpecialItem[] = [
   {
     id: 'tax',
@@ -386,10 +416,10 @@ assert.deepEqual(buildSpecialProgress(specialRows, '2026-06'), {
   pendingThisMonth: 0,
 });
 
-// 振り返りの特別費: 月はその月に払った額と、その月までの累計での予算の残り。年は年度ぜんたい
+// 振り返りの特別費: 月はその月に払った額と、その月までの累計での予算の残り。年は年ぜんたい
 assert.deepEqual(buildSpecialReview(specialRows, '2026-09'), { yearBudget: 170000, spent: 58000, spentToDate: 78000, remaining: 92000 });
 assert.deepEqual(buildSpecialReview(specialRows, '2026-06'), { yearBudget: 170000, spent: 0, spentToDate: 20000, remaining: 150000 });
-assert.deepEqual(buildSpecialReview(specialRows, null), { yearBudget: 170000, spent: 78000, spentToDate: 78000, remaining: 92000 }, '年度ぜんたい');
+assert.deepEqual(buildSpecialReview(specialRows, null), { yearBudget: 170000, spent: 78000, spentToDate: 78000, remaining: 92000 }, '年ぜんたい');
 assert.equal(buildSpecialReview([], '2026-09').remaining, 0);
 
 // ---- 入力の形との行き来 ----
@@ -428,10 +458,10 @@ assert.equal(formatDayOfMonth(31), '末日');
 assert.equal(recurringScheduleLabel({ day: 27, months: null, holiday: 'next' }), '毎月27日（休日は翌営業日）');
 assert.equal(recurringScheduleLabel({ day: 10, months: [12, 6], holiday: 'prev' }), '6・12月の10日（休日は前営業日）');
 assert.equal(recurringScheduleLabel({ day: 31, months: null, holiday: 'none' }), '毎月末日（休日もそのまま）');
-assert.equal(cardScheduleLabel({ closeDay: 15, payDay: 10 }), '15日締め・翌10日払い');
-assert.equal(cardScheduleLabel({ closeDay: 31, payDay: 27 }), '末日締め・翌27日払い');
-assert.equal(cardScheduleLabel({ closeDay: 5, payDay: 27 }), '5日締め・27日払い', '締め日より後の引き落とし日は同じ月');
-assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
+assert.equal(cardScheduleLabel({ closeDay: 15, payDay: 10, payMonthOffset: null }), '15日締め・翌10日払い');
+assert.equal(cardScheduleLabel({ closeDay: 31, payDay: 27, payMonthOffset: null }), '末日締め・翌27日払い');
+assert.equal(cardScheduleLabel({ closeDay: 5, payDay: 27, payMonthOffset: null }), '5日締め・27日払い', '締め日より後の引き落とし日は同じ月');
+assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: null }), '');
 {
   const estimates = estimatesInMonth(
     [
@@ -570,7 +600,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
   const spend = (id: string, occurredOn: string, amount: number, extra: Partial<MoneyRecord> = {}) =>
     record(id, { walletId: 'card', occurredOn, items: [item({ amount })], ...extra });
   // 末日締め・25日払い。9月の利用 1万 は10月25日に落ちる。10月の利用 3千 はまだ請求前。
-  const card = { id: 'card', closeDay: 31, payDay: 25 };
+  const card = { id: 'card', closeDay: 31, payDay: 25, payMonthOffset: null };
   const rs = [spend('c1', '2026-09-10', 6000), spend('c2', '2026-09-30', 4000), spend('c3', '2026-10-02', 3000)];
   const billing = cardBilling(card, -13000, rs, '2026-10-10');
   assert.deepEqual(billing, { billed: 10000, unbilled: 3000, closedOn: '2026-09-30', payOn: '2026-10-25' }, '残高には先月の請求と今月の利用が両方入る');
@@ -578,12 +608,12 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
   const paid = cardBilling(card, -3000, [...rs, record('p', { kind: 'transfer', walletId: 'bank', toWalletId: 'card', occurredOn: '2026-10-25', items: [item({ amount: 10000 })] })], '2026-10-26');
   assert.deepEqual(paid, { billed: 0, unbilled: 3000, closedOn: '2026-09-30', payOn: '2026-10-25' }, '引き落としのあとは未請求だけ');
   // 15日締め・翌10日払い。
-  assert.deepEqual(cardBilling({ id: 'card', closeDay: 15, payDay: 10 }, -500, [spend('d1', '2026-10-16', 500)], '2026-10-20'), { billed: 0, unbilled: 500, closedOn: '2026-10-15', payOn: '2026-11-10' });
+  assert.deepEqual(cardBilling({ id: 'card', closeDay: 15, payDay: 10, payMonthOffset: null }, -500, [spend('d1', '2026-10-16', 500)], '2026-10-20'), { billed: 0, unbilled: 500, closedOn: '2026-10-15', payOn: '2026-11-10' });
   // 15日締め・25日払いは同じ月に落ちる。年をまたぐ締め日。
-  assert.equal(cardBilling({ id: 'card', closeDay: 15, payDay: 25 }, 0, [], '2026-10-20')?.payOn, '2026-10-25');
-  assert.deepEqual(cardBilling({ id: 'card', closeDay: 31, payDay: 27 }, -100, [], '2027-01-05'), { billed: 100, unbilled: 0, closedOn: '2026-12-31', payOn: '2027-01-27' });
-  assert.equal(cardBilling({ id: 'card', closeDay: null, payDay: null }, -100, rs, '2026-10-10'), null, '締め日が無ければ内訳は出さない');
-  assert.equal(cardBilling({ id: 'card', closeDay: 31, payDay: null }, -100, [], '2026-10-10')?.payOn, null);
+  assert.equal(cardBilling({ id: 'card', closeDay: 15, payDay: 25, payMonthOffset: null }, 0, [], '2026-10-20')?.payOn, '2026-10-25');
+  assert.deepEqual(cardBilling({ id: 'card', closeDay: 31, payDay: 27, payMonthOffset: null }, -100, [], '2027-01-05'), { billed: 100, unbilled: 0, closedOn: '2026-12-31', payOn: '2027-01-27' });
+  assert.equal(cardBilling({ id: 'card', closeDay: null, payDay: null, payMonthOffset: null }, -100, rs, '2026-10-10'), null, '締め日が無ければ内訳は出さない');
+  assert.equal(cardBilling({ id: 'card', closeDay: 31, payDay: null, payMonthOffset: null }, -100, [], '2026-10-10')?.payOn, null);
 }
 
 // ---- 証券の評価額（docs/kakei.md §9.2） ----
@@ -660,7 +690,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
   assert.equal(walletGain([]), null);
 
   // 総残高: 証券口座は評価額で数える（記録・補正は見ない）。
-  const secWallet: MoneyWallet = { id: 'sec', name: '証券', type: 'securities', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, iconColor: null, position: 9, archived: false };
+  const secWallet: MoneyWallet = { id: 'sec', name: '証券', type: 'securities', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 9, archived: false };
   const bankWallet: MoneyWallet = { ...secWallet, id: 'bank2', name: '口座', type: 'bank' };
   const transfer = record('tr', { kind: 'transfer', walletId: 'bank2', toWalletId: 'sec', occurredOn: '2026-10-07', items: [item({ amount: 50000 })] });
   const summary = buildWalletBalances([bankWallet, secWallet], [transfer], [{ id: 'b', walletId: 'bank2', balanceOn: '2026-10-06', amount: 100000, showInHistory: true }], '2026-10-08', data);
@@ -677,6 +707,103 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
   assert.equal(formatGainRate(-0.05), '−5.00%');
   assert.equal(formatQuantity(123456), '123,456');
   assert.equal(formatQuantity(10.5), '10.5');
+}
+
+// ---- 翌々月払いのカード（月末締めの翌々月2日払いなど。2026-10-09） ----
+{
+  const eneos = { id: 'card', closeDay: 31, payDay: 2, payMonthOffset: 2 };
+  assert.equal(cardScheduleLabel(eneos), '末日締め・翌々月2日払い');
+  assert.equal(cardScheduleLabel({ closeDay: 15, payDay: 10, payMonthOffset: 1 }), '15日締め・翌10日払い');
+  // 10月10日: 8月の利用は10月2日に落ちて済み。9月の利用が12月2日、10月の利用は未請求
+  const spend = (id: string, occurredOn: string, amount: number) =>
+    record(id, { walletId: 'card', occurredOn, items: [item({ amount })] });
+  const rs = [spend('e1', '2026-09-10', 6000), spend('e2', '2026-09-30', 4000), spend('e3', '2026-10-02', 3000)];
+  assert.deepEqual(cardBilling(eneos, -13000, rs, '2026-10-10'), {
+    billed: 10000,
+    unbilled: 3000,
+    closedOn: '2026-09-30',
+    payOn: '2026-11-02',
+  }, '9月末締めは翌々月＝11月2日');
+  assert.equal(cardBilling(eneos, 0, [], '2026-11-05')?.payOn, '2026-12-02', '10月末締めは12月2日');
+  assert.equal(cardBilling(eneos, 0, [], '2026-12-05')?.payOn, '2027-01-02', '11月末締めは年をまたいで1月2日');
+  assert.equal(cardBilling({ id: 'card', closeDay: 31, payDay: 2, payMonthOffset: null }, 0, [], '2026-11-05')?.payOn, '2026-11-02', '従来は翌月');
+
+  // 引き落とし月に対する利用期間
+  assert.deepEqual(cardUsagePeriod(eneos, '2026-11'), { from: '2026-09-01', to: '2026-09-30' });
+  assert.deepEqual(cardUsagePeriod(eneos, '2027-01'), { from: '2026-11-01', to: '2026-11-30' });
+  assert.deepEqual(cardUsagePeriod(eneos, '2026-04'), { from: '2026-02-01', to: '2026-02-28' }, '2月は末日（28日）');
+  assert.deepEqual(cardUsagePeriod({ closeDay: 15, payDay: 10, payMonthOffset: null }, '2026-11'), { from: '2026-09-16', to: '2026-10-15' });
+  assert.deepEqual(cardUsagePeriod({ closeDay: 5, payDay: 27, payMonthOffset: null }, '2026-10'), { from: '2026-09-06', to: '2026-10-05' }, '締め日より後の引き落とし日は同じ月');
+  assert.equal(cardUsagePeriod({ closeDay: null, payDay: 2, payMonthOffset: 2 }, '2026-11'), null);
+
+  // これまでの引き落とし額（口座 → カードの振替を、引き落とし月ごとに新しい月から）
+  const pay = (id: string, occurredOn: string, amount: number, isEstimate = false) =>
+    record(id, { kind: 'transfer', walletId: 'bank', toWalletId: 'card', occurredOn, isEstimate, items: [item({ amount })] });
+  const history = cardPaymentHistory(
+    'card',
+    [pay('p1', '2026-09-02', 8000), pay('p2', '2026-10-02', 12000), pay('p3', '2026-10-20', 500, true), pay('p4', '2026-12-02', 9999), spend('x', '2026-10-05', 700)],
+    '2026-11-10',
+  );
+  assert.deepEqual(history, [
+    { monthKey: '2026-10', amount: 12500, estimate: true, lastOn: '2026-10-20' },
+    { monthKey: '2026-09', amount: 8000, estimate: false, lastOn: '2026-09-02' },
+  ], '今日より先と、支出（振替でない記録）は入れない');
+}
+
+// ---- アイコンの色 ----
+{
+  assert.equal(iconKeyOf({ icon: 'food', name: '食費', iconColor: null }), 'food');
+  assert.equal(iconKeyOf({ icon: 'food', name: '食費', iconColor: '#e53935' }), 'food|#e53935');
+  assert.equal(iconKeyOf({ icon: null, name: '食費' }), 'food', '色を持たない形でも読める');
+  assert.equal(baseIconKey('food|#e53935'), 'food');
+  assert.equal(iconTone('food|#e53935').color, '#e53935', '選んだ色が効く');
+  assert.equal(iconTone('food').color, '#7cb342', '色なしはアイコンごとの色');
+  assert.equal(iconTone('food|#e53935').key, 'food');
+}
+
+// ---- 年（暦年） ----
+assert.deepEqual(yearMonthKeys(2026), ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12']);
+assert.equal(yearOfMonth('2027-02'), 2027, '2027年2月は2027年');
+
+// ---- 内訳の分析（振り返りの内訳をタップしたとき） ----
+{
+  const cats: MoneyCategory[] = [
+    cat('food', '食費', null, { position: 0 }),
+    cat('groc', '食料品', 'food', { position: 0 }),
+    cat('out', '外食', 'food', { position: 1 }),
+    cat('med', '医療費', null, { position: 1 }),
+  ];
+  const buds: MoneyBudget[] = [{ id: 'fb', categoryId: 'food', year: 2026, monthAmounts: Array(12).fill(50000) }];
+  const rs = [
+    record('a1', { occurredOn: '2026-09-02', items: [item({ amount: 3000, categoryId: 'groc' }), item({ amount: 500, categoryId: 'med' })] }),
+    record('a2', { occurredOn: '2026-09-20', store: 'ラーメン', items: [item({ amount: 1200, categoryId: 'out' })] }),
+    record('a3', { occurredOn: '2026-08-15', items: [item({ amount: 4000, categoryId: 'groc' })] }),
+    record('a4', { occurredOn: '2026-09-25', items: [item({ amount: 700, categoryId: 'food' })] }),
+    record('a5', { occurredOn: '2026-09-26', items: [item({ amount: 20000, specialItemId: 'tax' })] }),
+  ];
+  const analysis = buildCategoryAnalysis(rs, cats, buds, 'food', ['2026-09'], ['2026-08']);
+  assert.equal(analysis.actual, 4900, '食費の大分類。特別費と他の大分類は入らない');
+  assert.equal(analysis.budget, 50000);
+  assert.equal(analysis.diff, 45100);
+  assert.equal(analysis.percent, 10);
+  assert.equal(analysis.previous, 4000, '前の月');
+  assert.deepEqual(analysis.children.map((child) => [child.name, child.amount]), [['食料品', 3000], ['外食', 1200], ['その他', 700]], '小分類ごと（多い順。大分類そのものは「その他」）');
+  assert.deepEqual(analysis.records.map((r) => r.id).sort(), ['a1', 'a2', 'a4']);
+  assert.equal(analysis.records.find((r) => r.id === 'a1')!.items.length, 1, '記録の品目は、この大分類のものだけに絞る');
+  const wholeYear = buildCategoryAnalysis(rs, cats, buds, 'food', ['2026-08', '2026-09'], null);
+  assert.equal(wholeYear.actual, 8900);
+  assert.equal(wholeYear.budget, 100000, '予算は月ごとに足す');
+  assert.equal(wholeYear.previous, null);
+  assert.deepEqual(wholeYear.months.map((m) => m.amount), [4000, 4900]);
+
+  const rows = [
+    { key: 'plan:p1', item: { id: 'tax', kind: 'expense' as const, category: '税金', name: '固定資産税', cycleYears: 1, baseYear: null, note: '', position: 0, plans: [] }, planId: 'p1', month: 9, tentative: false, budget: 60000, actual: 20000, actuals: [{ id: 'm1', recordId: 'a5', itemId: 'tax', planId: 'p1', occurredOn: '2026-09-26', amount: 20000, note: '' }] },
+  ];
+  const specialAnalysis = buildSpecialAnalysis(rs, rows, 2026, '2026-09');
+  assert.equal(specialAnalysis.spent, 20000);
+  assert.equal(specialAnalysis.items[0].name, '固定資産税');
+  assert.equal(specialAnalysis.items[0].spentToDate, 20000);
+  assert.deepEqual(specialAnalysis.records.map((r) => r.id), ['a5'], '特別費の記録だけ');
 }
 
 console.log('moneyUtils: ok');

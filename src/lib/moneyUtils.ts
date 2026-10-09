@@ -1,8 +1,8 @@
 // 家計タブの数え方（月の集計・予算との差・種類の並び・電卓）。docs/kakei.md §3〜§5。
 // mobile版の `mobile/src/lib/moneyUtils.ts` と同じ中身にしてある（片方を直したらもう片方も直す）。
 //
-// 年度は特別費と同じ4月始まり（2026年4月〜2027年3月＝2026年度）。予算は大分類・年度ごとの月額で、
-// その年度の予算が無ければ前の年度の額を使う（毎年入れ直さなくてよいように）。
+// 年はすべて暦年（1月〜12月。2026-10-09に、4月始まりの年度から変えた）。予算は大分類・年ごとの月額で、
+// その年の予算が無ければ前の年の額を使う（毎年入れ直さなくてよいように）。
 //
 // 生活費の収支＝収入 − 生活費（特別費以外の支出）。特別費（特別費の項目を持つ品目）は収支に入れず、別枠で数える
 // （docs/kakei.md §4.1）。振替は集計に入れない。貯金は記録なので、収支の式にも表示にも入れない。
@@ -33,10 +33,7 @@ import type { SpecialRow } from '@/lib/specialUtils';
 
 const pad2 = (value: number) => String(value).padStart(2, '0');
 
-// ---- 月・年度 ----
-
-/** 年度の最初の月（特別費と同じ）。 */
-const FISCAL_START_MONTH = 4;
+// ---- 月・年 ----
 
 /** YYYY-MM-DD の月（YYYY-MM）。 */
 export const monthKeyOf = (dateKey: string): string => dateKey.slice(0, 7);
@@ -55,12 +52,6 @@ export function shiftMonth(monthKey: string, delta: number): string {
 export function formatMonthKey(monthKey: string): string {
   const [year, month] = monthKey.split('-').map(Number);
   return `${year}年${month}月`;
-}
-
-/** 月（YYYY-MM）が属する年度。2027-02 は 2026。 */
-export function fiscalYearOfMonth(monthKey: string): number {
-  const [year, month] = monthKey.split('-').map(Number);
-  return month >= FISCAL_START_MONTH ? year : year - 1;
 }
 
 /** 「9/14」。 */
@@ -139,9 +130,21 @@ export function recurringScheduleLabel(rule: Pick<MoneyRecurring, 'day' | 'month
   return `${when}（${rule.holiday === 'none' ? '休日もそのまま' : `休日は${HOLIDAY_RULE_LABEL[rule.holiday]}`}）`;
 }
 
-/** カードの「15日締め・翌10日払い」。設定がそろっていなければ空。 */
-export function cardScheduleLabel(wallet: Pick<MoneyWallet, 'closeDay' | 'payDay'>): string {
+/** 引き落とし月の選択肢（締め日の月から数える）。null は締め日のあとに来る最初の引き落とし日。 */
+export const PAY_MONTH_OPTIONS: { offset: number | null; label: string }[] = [
+  { offset: null, label: '自動' },
+  { offset: 1, label: '翌月' },
+  { offset: 2, label: '翌々月' },
+];
+
+const payMonthLabel = (offset: number) => (offset === 1 ? '翌' : offset === 2 ? '翌々月' : `${offset}か月後の`);
+
+/** カードの「15日締め・翌10日払い」「末日締め・翌々月2日払い」。設定がそろっていなければ空。 */
+export function cardScheduleLabel(wallet: Pick<MoneyWallet, 'closeDay' | 'payDay' | 'payMonthOffset'>): string {
   if (wallet.closeDay === null || wallet.payDay === null) return '';
+  if (wallet.payMonthOffset !== null) {
+    return `${formatDayOfMonth(wallet.closeDay)}締め・${payMonthLabel(wallet.payMonthOffset)}${formatDayOfMonth(wallet.payDay)}払い`;
+  }
   // 締め日のあとの最初の引き落とし日なので、引き落とし日が締め日より後なら同じ月、そうでなければ翌月。
   const sameMonth = wallet.payDay > wallet.closeDay && wallet.closeDay < 31;
   return `${formatDayOfMonth(wallet.closeDay)}締め・${sameMonth ? '' : '翌'}${formatDayOfMonth(wallet.payDay)}払い`;
@@ -285,13 +288,30 @@ export function guessIconKey(name: string): string {
   return ICON_RULES.find(([pattern]) => pattern.test(name))?.[1] ?? 'other';
 }
 
-/** 種類のアイコン（決めたもの、無ければ名前から）。 */
-export const iconKeyOf = (category: Pick<MoneyCategory, 'icon' | 'name'> | null | undefined): string =>
-  category ? (category.icon ?? guessIconKey(category.name)) : 'other';
+/**
+ * 種類のアイコンの key（決めたもの、無ければ名前から）。色を選んでいる種類は "food|#e53935" の形で色まで持ち回る
+ * （iconTone が色まで読む。key だけを見たいときは baseIconKey）。
+ */
+export const iconKeyOf = (
+  category: Pick<MoneyCategory, 'icon' | 'name'> & { iconColor?: string | null } | null | undefined,
+): string => {
+  if (!category) return 'other';
+  const key = category.icon ?? guessIconKey(category.name);
+  return category.iconColor ? `${key}|${category.iconColor}` : key;
+};
 
-/** アイコンの色（知らない key は「その他」の色）。 */
-export const iconTone = (key: string) =>
-  MONEY_ICONS.find((icon) => icon.key === key) ?? MONEY_ICONS[MONEY_ICONS.length - 1];
+/** iconKeyOf の色を除いた、アイコンの key だけ。 */
+export const baseIconKey = (key: string): string => key.split('|')[0];
+
+/** アイコンの色（知らない key は「その他」の色）。key に色が付いていれば、その色。 */
+export function iconTone(key: string): { key: string; label: string; color: string; surface: string } {
+  const [base, color] = key.split('|');
+  const found = MONEY_ICONS.find((icon) => icon.key === base) ?? MONEY_ICONS[MONEY_ICONS.length - 1];
+  return color ? { ...found, color } : found;
+}
+
+/** アイコンの色の候補（出金元と同じ色）。標準（null）はアイコンごとに決まっている色。 */
+export const CATEGORY_ICON_COLORS = WALLET_ICON_COLORS;
 
 const byPosition = <T extends { position: number; name: string }>(a: T, b: T) =>
   a.position !== b.position ? a.position - b.position : a.name.localeCompare(b.name, 'ja');
@@ -335,14 +355,41 @@ export function categoryPath(categories: readonly MoneyCategory[], categoryId: s
   return parent ? `${parent.name} › ${category.name}` : category.name;
 }
 
-/** その年度の大分類の月の予算。その年度に無ければ、前の年度のいちばん近いもの。どこにも無ければ null。 */
-export function budgetFor(budgets: readonly MoneyBudget[], categoryId: string, fiscalYear: number): number | null {
+/**
+ * その月（YYYY-MM）の大分類の月の予算。予算は年ごとに12か月ぶんを持つので、年の途中で直しても、直した月より前の月は変わらない。
+ * その年の行が無ければ、前の年のいちばん近い行の12月の額（毎年入れ直さなくてよいように）。どこにも無い月は null。
+ */
+export function budgetFor(budgets: readonly MoneyBudget[], categoryId: string, monthKey: string): number | null {
+  const year = yearOfMonth(monthKey);
+  const month = Number(monthKey.slice(5, 7));
   let found: MoneyBudget | null = null;
   for (const budget of budgets) {
-    if (budget.categoryId !== categoryId || budget.fiscalYear > fiscalYear) continue;
-    if (found === null || budget.fiscalYear > found.fiscalYear) found = budget;
+    if (budget.categoryId !== categoryId || budget.year > year) continue;
+    if (found === null || budget.year > found.year) found = budget;
   }
-  return found?.monthlyAmount ?? null;
+  if (found === null) return null;
+  return found.monthAmounts[found.year === year ? month - 1 : 11] ?? null;
+}
+
+/** その年の1月〜12月の予算（長さ12）。年の途中で直すとき、直す前の月をそのまま残すのに使う。 */
+export const budgetMonths = (budgets: readonly MoneyBudget[], categoryId: string, year: number): (number | null)[] =>
+  Array.from({ length: 12 }, (_, index) => budgetFor(budgets, categoryId, `${year}-${pad2(index + 1)}`));
+
+/** fromMonth（1〜12）から年末までを amount にした12か月ぶん。それより前の月は current のまま。 */
+export const withBudgetFrom = (
+  current: readonly (number | null)[],
+  fromMonth: number,
+  amount: number,
+): (number | null)[] => current.map((value, index) => (index + 1 >= fromMonth ? amount : value));
+
+/**
+ * 「その年の予算」として一覧に出す代表の月。今年なら今月、これからの年なら1月、過ぎた年なら12月
+ * （年の途中で変えた年は、いま効いている額を見せるため）。today は YYYY-MM-DD。
+ */
+export function budgetMonthKey(year: number, today: string): string {
+  const thisYear = yearOfMonth(today);
+  const month = year === thisYear ? Number(today.slice(5, 7)) : year > thisYear ? 1 : 12;
+  return `${year}-${pad2(month)}`;
 }
 
 // ---- 記録 ----
@@ -604,14 +651,23 @@ export function buildBudgetTiles(
   records: readonly MoneyRecord[],
   categories: readonly MoneyCategory[],
   budgets: readonly MoneyBudget[],
-  monthKey: string,
+  monthKeys: string | readonly string[],
 ): BudgetTile[] {
-  const fiscalYear = fiscalYearOfMonth(monthKey);
-  const spend = livingSpendByTop(records, categories, monthKey);
+  // 月の振り返りは1か月、年の振り返りは記録のある月ぜんぶ。実績も予算も月ごとに足す。
+  const keys = typeof monthKeys === 'string' ? [monthKeys] : monthKeys;
+  const spend = new Map<string, number>();
+  for (const key of keys) {
+    for (const [topId, amount] of livingSpendByTop(records, categories, key)) {
+      spend.set(topId, (spend.get(topId) ?? 0) + amount);
+    }
+  }
   return topCategories(categories, 'living', true)
     .filter((category) => !category.archived || (spend.get(category.id) ?? 0) > 0)
     .map((category) => {
-      const budget = budgetFor(budgets, category.id, fiscalYear);
+      const monthly = keys
+        .map((key) => budgetFor(budgets, category.id, key))
+        .filter((value): value is number => value !== null);
+      const budget = monthly.length === 0 ? null : monthly.reduce((sum, value) => sum + value, 0);
       const actual = spend.get(category.id) ?? 0;
       return {
         category,
@@ -660,9 +716,8 @@ export function buildMonthSummary(
       }
     }
   }
-  const fiscalYear = fiscalYearOfMonth(monthKey);
   const livingBudget = topCategories(categories, 'living').reduce(
-    (sum, category) => sum + (budgetFor(budgets, category.id, fiscalYear) ?? 0),
+    (sum, category) => sum + (budgetFor(budgets, category.id, monthKey) ?? 0),
     0,
   );
   return {
@@ -675,10 +730,13 @@ export function buildMonthSummary(
   };
 }
 
-/** 年度の月の並び（4月→3月）の YYYY-MM。 */
-export function fiscalMonthKeys(fiscalYear: number): string[] {
-  return Array.from({ length: 12 }, (_, index) => shiftMonth(`${fiscalYear}-04`, index));
+/** 年の月の並び（1月→12月）の YYYY-MM。 */
+export function yearMonthKeys(year: number): string[] {
+  return Array.from({ length: 12 }, (_, index) => `${year}-${pad2(index + 1)}`);
 }
+
+/** 月（YYYY-MM）が属する年（暦年）。 */
+export const yearOfMonth = (monthKey: string): number => Number(monthKey.slice(0, 4));
 
 export interface YearMonthRow {
   monthKey: string;
@@ -703,7 +761,7 @@ export interface YearSummary {
 }
 
 /**
- * 年度の生活費の収支（docs/kakei.md §4.2）。月ごとの 収入・生活費・収支 と年間の合計。特別費は収支に入れず、別に数える。
+ * 年の生活費の収支（docs/kakei.md §4.2）。月ごとの 収入・生活費・収支 と年間の合計。特別費は収支に入れず、別に数える。
  * 記録（特別費を除く）の無い月は数えない（使い始める前の月まで予算が残ったように見えないように）。
  * upTo（YYYY-MM）より後の月は、まだ来ていないので数えない。
  */
@@ -711,12 +769,12 @@ export function buildYearSummary(
   records: readonly MoneyRecord[],
   categories: readonly MoneyCategory[],
   budgets: readonly MoneyBudget[],
-  fiscalYear: number,
+  year: number,
   upTo: string,
 ): YearSummary {
   const total = { income: 0, living: 0, special: 0, balance: 0, livingDiff: 0 };
   let recordedMonths = 0;
-  const months = fiscalMonthKeys(fiscalYear).map((monthKey) => {
+  const months = yearMonthKeys(year).map((monthKey) => {
     const recorded =
       monthKey <= upTo &&
       recordsInMonth(records, monthKey).some((record) => record.items.some((item) => item.specialItemId === null));
@@ -746,21 +804,21 @@ export function buildYearSummary(
 }
 
 export interface SpecialProgress {
-  /** 年度の特別費の予算（予定の合計）。 */
+  /** 年の特別費の予算（予定の合計）。 */
   yearBudget: number;
   /** その月に払った特別費。 */
   spentThisMonth: number;
-  /** 年度の初めからその月までに払った特別費。 */
+  /** 年のはじめからその月までに払った特別費。 */
   spentToDate: number;
-  /** 年度の予算の残り（予算 − ここまで払った額）。 */
+  /** 年の予算の残り（予算 − ここまで払った額）。 */
   remaining: number;
   /** その月の予定で、まだ払っていないもの。 */
   pendingThisMonth: number;
 }
 
 /**
- * その月に、特別費の年度の予算がどれだけ減ったか（docs/kakei.md §4.1）。月の収支には入れない。
- * rows は specialUtils の buildYearRows(…, 年度, 'expense')。
+ * その月に、特別費の年の予算がどれだけ減ったか（docs/kakei.md §4.1）。月の収支には入れない。
+ * rows は specialUtils の buildYearRows(…, 年, 'expense')。
  */
 export function buildSpecialProgress(rows: readonly SpecialRow[], monthKey: string): SpecialProgress {
   const month = Number(monthKey.slice(5, 7));
@@ -781,19 +839,19 @@ export function buildSpecialProgress(rows: readonly SpecialRow[], monthKey: stri
 }
 
 export interface SpecialReview {
-  /** 年度の特別費の予算（予定の合計）。 */
+  /** 年の特別費の予算（予定の合計）。 */
   yearBudget: number;
-  /** 見ている期間（月、または年度ぜんたい）に払った特別費。 */
+  /** 見ている期間（月、または年ぜんたい）に払った特別費。 */
   spent: number;
-  /** 年度の初めから、見ている期間の終わりまでに払った額。 */
+  /** 年のはじめから、見ている期間の終わりまでに払った額。 */
   spentToDate: number;
-  /** 年度の予算の残り＝予算 − ここまで払った額（マイナスは超えた額）。 */
+  /** 年の予算の残り＝予算 − ここまで払った額（マイナスは超えた額）。 */
   remaining: number;
 }
 
 /**
  * 振り返りの特別費（docs/kakei.md §4.1・§4.2）。monthKey があればその月に払った額と、その月までの累計での予算の残り。
- * null なら年度ぜんたい。rows は specialUtils の buildYearRows(…, 年度, 'expense')。
+ * null なら年ぜんたい。rows は specialUtils の buildYearRows(…, 年, 'expense')。
  */
 export function buildSpecialReview(rows: readonly SpecialRow[], monthKey: string | null): SpecialReview {
   if (monthKey !== null) {
@@ -808,6 +866,140 @@ export function buildSpecialReview(rows: readonly SpecialRow[], monthKey: string
   const yearBudget = rows.reduce((sum, row) => sum + row.budget, 0);
   const spent = rows.reduce((sum, row) => sum + row.actuals.reduce((inner, actual) => inner + actual.amount, 0), 0);
   return { yearBudget, spent, spentToDate: spent, remaining: yearBudget - spent };
+}
+
+// ---- 内訳の分析（振り返りの内訳をタップしたとき。docs/kakei.md §4.4） ----
+
+export interface CategoryAnalysis {
+  /** 見ている期間の実績。 */
+  actual: number;
+  /** 期間の予算（月の予算を足したもの）。未設定は null。 */
+  budget: number | null;
+  /** 予算 − 実績（マイナスは超えた額）。予算が無ければ −実績。 */
+  diff: number;
+  /** 使った割合（%）。 */
+  percent: number | null;
+  /** 前の期間（月なら前の月、年なら前の年）の実績。 */
+  previous: number | null;
+  /** 小分類ごとの実績（多い順）。大分類そのものに付けた品目は「その他」。 */
+  children: { id: string; name: string; amount: number }[];
+  /** 年のとき、月ごとの実績（1月→12月、見ている期間に含まれる月だけ）。 */
+  months: { monthKey: string; amount: number }[];
+  /** この大分類の記録（品目をこの大分類のものだけに絞った）。新しい順は RecordDayList が並べる。 */
+  records: MoneyRecord[];
+}
+
+/** 月の集まり（monthKeys）に含まれる記録のうち、keep が true の品目だけを残した記録。品目が残らない記録は落とす。 */
+function narrowRecords(
+  records: readonly MoneyRecord[],
+  monthKeys: readonly string[],
+  keep: (item: MoneyItem, record: MoneyRecord) => boolean,
+): MoneyRecord[] {
+  const months = new Set(monthKeys);
+  const narrowed: MoneyRecord[] = [];
+  for (const record of records) {
+    if (record.kind !== 'expense' || !months.has(monthKeyOf(record.occurredOn))) continue;
+    const items = record.items.filter((item) => keep(item, record));
+    if (items.length > 0) narrowed.push({ ...record, items });
+  }
+  return narrowed;
+}
+
+/**
+ * 内訳の1つの大分類を、見ている期間（monthKeys。月なら1つ、年なら記録のある月）で分析する。
+ * previousKeys は前の期間の月（無ければ null）。
+ */
+export function buildCategoryAnalysis(
+  records: readonly MoneyRecord[],
+  categories: readonly MoneyCategory[],
+  budgets: readonly MoneyBudget[],
+  topId: string,
+  monthKeys: readonly string[],
+  previousKeys: readonly string[] | null,
+): CategoryAnalysis {
+  const inTop = (item: MoneyItem) =>
+    item.specialItemId === null && item.categoryId !== null && topCategoryIdOf(categories, item.categoryId) === topId;
+  const narrowed = narrowRecords(records, monthKeys, (item) => inTop(item));
+  const sum = (list: readonly MoneyRecord[]) =>
+    list.reduce((total, record) => total + record.items.reduce((inner, item) => inner + item.amount, 0), 0);
+  const actual = sum(narrowed);
+
+  const monthly = monthKeys
+    .map((key) => budgetFor(budgets, topId, key))
+    .filter((value): value is number => value !== null);
+  const budget = monthly.length === 0 ? null : monthly.reduce((total, value) => total + value, 0);
+
+  const byChild = new Map<string, number>();
+  for (const record of narrowed) {
+    for (const item of record.items) {
+      const key = item.categoryId === topId || item.categoryId === null ? '' : item.categoryId;
+      byChild.set(key, (byChild.get(key) ?? 0) + item.amount);
+    }
+  }
+  const children = [...byChild.entries()]
+    .map(([id, amount]) => ({
+      id: id === '' ? topId : id,
+      name: id === '' ? 'その他' : (categories.find((category) => category.id === id)?.name ?? 'その他'),
+      amount,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
+  const months = monthKeys.map((key) => ({
+    monthKey: key,
+    amount: sum(narrowed.filter((record) => monthKeyOf(record.occurredOn) === key)),
+  }));
+  const previous = previousKeys === null ? null : sum(narrowRecords(records, previousKeys, (item) => inTop(item)));
+
+  return {
+    actual,
+    budget,
+    diff: (budget ?? 0) - actual,
+    percent: budget !== null && budget > 0 ? Math.round((actual / budget) * 100) : null,
+    previous,
+    children,
+    months,
+    records: narrowed,
+  };
+}
+
+export interface SpecialAnalysis extends SpecialReview {
+  /** 項目ごとの 年の予算と、見ている期間に払った額・年のはじめからの累計。期間に払った額が多い順。 */
+  items: { id: string; name: string; category: string; budget: number; spent: number; spentToDate: number }[];
+  /** 特別費の記録（品目を特別費のものだけに絞った）。 */
+  records: MoneyRecord[];
+}
+
+/**
+ * 内訳の特別費を分析する。rows は specialUtils の buildYearRows(…, 年, 'expense')、monthKey があればその月、
+ * null なら年ぜんたい。year は rows の年。
+ */
+export function buildSpecialAnalysis(
+  records: readonly MoneyRecord[],
+  rows: readonly SpecialRow[],
+  year: number,
+  monthKey: string | null,
+): SpecialAnalysis {
+  const review = buildSpecialReview(rows, monthKey);
+  const expenseItemIds = new Set(rows.map((row) => row.item.id));
+  const periodKeys = monthKey !== null ? [monthKey] : yearMonthKeys(year);
+  const untilKeys = monthKey !== null ? yearMonthKeys(year).filter((key) => key <= monthKey) : yearMonthKeys(year);
+  const spentOf = (itemId: string, keys: readonly string[]) =>
+    narrowRecords(records, keys, (item) => item.specialItemId === itemId).reduce(
+      (total, record) => total + record.items.reduce((inner, item) => inner + item.amount, 0),
+      0,
+    );
+  const byItem = new Map<string, { id: string; name: string; category: string; budget: number }>();
+  for (const row of rows) {
+    const entry = byItem.get(row.item.id) ?? { id: row.item.id, name: row.item.name, category: row.item.category, budget: 0 };
+    entry.budget += row.budget;
+    byItem.set(row.item.id, entry);
+  }
+  const items = [...byItem.values()]
+    .map((entry) => ({ ...entry, spent: spentOf(entry.id, periodKeys), spentToDate: spentOf(entry.id, untilKeys) }))
+    .filter((entry) => entry.budget > 0 || entry.spent > 0)
+    .sort((a, b) => b.spent - a.spent || b.budget - a.budget || a.name.localeCompare(b.name, 'ja'));
+  const narrowed = narrowRecords(records, periodKeys, (item) => item.specialItemId !== null && expenseItemIds.has(item.specialItemId));
+  return { ...review, items, records: narrowed };
 }
 
 // ---- 記録の入力（記録の詳細・品目の画面）の形 ----
@@ -962,7 +1154,7 @@ export function canPickProductsFor(
   if (products.some((product) => product.moneyCategoryId !== null && topCategoryIdOf(categories, product.moneyCategoryId) === topId)) {
     return true;
   }
-  return PRODUCT_ICON_KEYS.includes(iconKeyOf(categories.find((category) => category.id === topId)));
+  return PRODUCT_ICON_KEYS.includes(baseIconKey(iconKeyOf(categories.find((category) => category.id === topId))));
 }
 
 // ---- 口座の残高（docs/kakei.md §9.3） ----
@@ -1233,7 +1425,7 @@ const monthDay = (year: number, month: number, day: number): string => {
  * 締め日が未設定のカードは null。未請求 ＝ 締め日のあとの利用（支出 − 返品。振替は入れない）、請求済み ＝ 未払い − 未請求。
  */
 export function cardBilling(
-  wallet: Pick<MoneyWallet, 'id' | 'closeDay' | 'payDay'>,
+  wallet: Pick<MoneyWallet, 'id' | 'closeDay' | 'payDay' | 'payMonthOffset'>,
   amount: number,
   records: readonly MoneyRecord[],
   asOf: string,
@@ -1257,13 +1449,73 @@ export function cardBilling(
   let payOn: string | null = null;
   if (wallet.payDay !== null) {
     // 締め日のあとの最初の引き落とし日（cardScheduleLabel と同じ。引き落とし日が締め日より後なら同じ月、そうでなければ翌月）。
-    const [closeYear, closeMonth] = closedOn.split('-').map(Number);
+    // 引き落とし月を「締め日の月 + n か月」と決めているカード（翌々月払いなど）は、その月の引き落とし日。
+    const closeMonthKey = monthKeyOf(closedOn);
     const sameMonth = wallet.payDay > wallet.closeDay && wallet.closeDay < 31;
-    const payMonth = sameMonth ? closeMonth : closeMonth === 12 ? 1 : closeMonth + 1;
-    const payYear = !sameMonth && closeMonth === 12 ? closeYear + 1 : closeYear;
+    const payMonthKey = shiftMonth(closeMonthKey, wallet.payMonthOffset ?? (sameMonth ? 0 : 1));
+    const [payYear, payMonth] = payMonthKey.split('-').map(Number);
     payOn = monthDay(payYear, payMonth, wallet.payDay);
   }
   return { billed: owed - unbilledOwed, unbilled: unbilledOwed, closedOn, payOn };
+}
+
+/**
+ * カードの引き落とし月に対する利用期間（前回の締め日の翌日〜今回の締め日。DBの make_money_recurring_records と同じ数え方）。
+ * 締め日が未設定、または引き落とし月の決め方が「自動」で引き落とし日が未設定のカードは null。
+ */
+export function cardUsagePeriod(
+  wallet: Pick<MoneyWallet, 'closeDay' | 'payDay' | 'payMonthOffset'>,
+  payMonthKey: string,
+): { from: string; to: string } | null {
+  if (wallet.closeDay === null) return null;
+  const closeOn = (monthKey: string) => {
+    const [year, month] = monthKey.split('-').map(Number);
+    return monthDay(year, month, wallet.closeDay!);
+  };
+  let to: string;
+  if (wallet.payMonthOffset !== null) {
+    to = closeOn(shiftMonth(payMonthKey, -wallet.payMonthOffset));
+  } else {
+    if (wallet.payDay === null) return null;
+    const [year, month] = payMonthKey.split('-').map(Number);
+    to = closeOn(payMonthKey);
+    if (to >= monthDay(year, month, wallet.payDay)) to = closeOn(shiftMonth(payMonthKey, -1));
+  }
+  const before = closeOn(shiftMonth(monthKeyOf(to), -1));
+  return { from: addDays(before, 1), to };
+}
+
+export interface CardPaymentMonth {
+  /** 引き落とし月（YYYY-MM）。 */
+  monthKey: string;
+  /** その月に引き落とされた額（円）。口座 → カードの振替の合計。 */
+  amount: number;
+  /** 見込みの額のままの振替を含む。 */
+  estimate: boolean;
+  /** その月の最後の引き落とし日。 */
+  lastOn: string;
+}
+
+/**
+ * カードのこれまでの引き落とし額（月ごと。新しい月から）。引き落とし＝カードへの振替（口座 → カード）の合計で、
+ * 自動で作った振替も人が入れた振替も数える。asOf より先の日付は入れない。
+ */
+export function cardPaymentHistory(
+  walletId: string,
+  records: readonly MoneyRecord[],
+  asOf: string,
+): CardPaymentMonth[] {
+  const byMonth = new Map<string, CardPaymentMonth>();
+  for (const record of records) {
+    if (record.kind !== 'transfer' || record.toWalletId !== walletId || record.occurredOn > asOf) continue;
+    const monthKey = monthKeyOf(record.occurredOn);
+    const entry = byMonth.get(monthKey) ?? { monthKey, amount: 0, estimate: false, lastOn: record.occurredOn };
+    entry.amount += record.items.reduce((sum, item) => sum + item.amount, 0);
+    entry.estimate = entry.estimate || record.isEstimate;
+    if (record.occurredOn > entry.lastOn) entry.lastOn = record.occurredOn;
+    byMonth.set(monthKey, entry);
+  }
+  return [...byMonth.values()].sort((a, b) => (a.monthKey < b.monthKey ? 1 : a.monthKey > b.monthKey ? -1 : 0));
 }
 
 /** その出金元に関わる記録（支出・収入・振替の出金元か入金先）。新しい順。 */

@@ -813,6 +813,7 @@ export type Database = {
           fiscal_year: number
           id: string
           monthly_amount: number
+          month_amounts: number[] | null
           updated_at: string
         }
         Insert: {
@@ -822,6 +823,7 @@ export type Database = {
           fiscal_year: number
           id?: string
           monthly_amount?: number
+          month_amounts?: number[] | null
           updated_at?: string
         }
         Update: {
@@ -831,6 +833,7 @@ export type Database = {
           fiscal_year?: number
           id?: string
           monthly_amount?: number
+          month_amounts?: number[] | null
           updated_at?: string
         }
         Relationships: [
@@ -849,6 +852,7 @@ export type Database = {
           created_at: string
           family_id: string
           icon: string | null
+          icon_color: string | null
           id: string
           kind: string
           name: string
@@ -861,6 +865,7 @@ export type Database = {
           created_at?: string
           family_id: string
           icon?: string | null
+          icon_color?: string | null
           id?: string
           kind?: string
           name: string
@@ -873,6 +878,7 @@ export type Database = {
           created_at?: string
           family_id?: string
           icon?: string | null
+          icon_color?: string | null
           id?: string
           kind?: string
           name?: string
@@ -1497,6 +1503,7 @@ export type Database = {
           is_saving: boolean
           name: string
           pay_day: number | null
+          pay_month_offset: number | null
           pay_wallet_id: string | null
           position: number
           saving_target: number | null
@@ -1514,6 +1521,7 @@ export type Database = {
           is_saving?: boolean
           name: string
           pay_day?: number | null
+          pay_month_offset?: number | null
           pay_wallet_id?: string | null
           position?: number
           saving_target?: number | null
@@ -1531,6 +1539,7 @@ export type Database = {
           is_saving?: boolean
           name?: string
           pay_day?: number | null
+          pay_month_offset?: number | null
           pay_wallet_id?: string | null
           position?: number
           saving_target?: number | null

@@ -1,11 +1,24 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, GripVertical, Plus } from 'lucide-react';
 import type { MoneyBudget, MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
-import { budgetFor, childCategories, formatYen, guessIconKey, iconKeyOf, MONEY_ICONS, topCategories } from '@/lib/moneyUtils';
-import { formatFiscalYear, parseAmountInput } from '@/lib/specialUtils';
+import {
+  budgetFor,
+  budgetMonthKey,
+  budgetMonths,
+  CATEGORY_ICON_COLORS,
+  dateKeyOfDate,
+  childCategories,
+  formatYen,
+  guessIconKey,
+  iconKeyOf,
+  MONEY_ICONS,
+  topCategories,
+  withBudgetFrom,
+} from '@/lib/moneyUtils';
+import { formatYear, parseAmountInput } from '@/lib/specialUtils';
 import {
   insertDefaultMoneyCategories,
   insertMoneyCategory,
@@ -13,17 +26,20 @@ import {
   updateMoneyCategory,
 } from '@/lib/api/money';
 import { ModalShell } from '../modals/TaskForm';
+import { useDragReorder } from '../ui/useDragReorder';
 import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader } from './moneyVisual';
 
-// 種類と予算（docs/kakei.md §3.1）。mobile版の `mobile/src/components/money/CategoryEditor.tsx` と同じ並び・文言。
+// カテゴリと予算（docs/kakei.md §3.1）。mobile版の `mobile/src/components/money/CategoryEditor.tsx` と同じ並び・文言。
 //
-// 大分類（予算を置く単位）と小分類の追加・名前の変更・並べ替え・使わなくする。予算は大分類ごと・年度ごとの月額で、
-// その年度に入れていなければ前の年度の額のまま（ここで直すと、その年度の額になる）。
+// 大分類（予算を置く単位）と小分類の追加・名前の変更・並べ替え・使わなくする。並べ替えは一覧のまま動かす
+// （大分類は左の持ち手をつかむ、小分類は長押し。マウスでも指でも。リストと同じ操作。ui/useDragReorder.ts）。
+// 大分類のアイコンは絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。予算は大分類ごと・年ごとの月額で、
+// その年に入れていなければ前の年の額のまま（ここで直すと、その年の額になる）。
 // 種類がまだ無い家族には「標準の種類で始める」（Zaim のカテゴリをもとにした並び）。
 
 interface CategoryEditorProps {
   familyId: string;
-  fiscalYear: number;
+  year: number;
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
@@ -43,7 +59,7 @@ const yearButtonClass =
 
 export default function CategoryEditor({
   familyId,
-  fiscalYear: initialYear,
+  year: initialYear,
   categories,
   budgets,
   onCategories,
@@ -51,16 +67,19 @@ export default function CategoryEditor({
   onClose,
 }: CategoryEditorProps) {
   const supabase = useMemo(() => createClient(), []);
-  const [fiscalYear, setFiscalYear] = useState(initialYear);
+  const [year, setYear] = useState(initialYear);
   const [kind, setKind] = useState<MoneyCategoryKind>('living');
   const [editing, setEditing] = useState<Editing>(null);
   const [busy, setBusy] = useState(false);
 
+  const today = dateKeyOfDate(new Date());
+  // 一覧に出す予算は、今年なら今月の額、これからの年なら1月、過ぎた年なら12月の額（年の途中で変えた年は、いま効いている額）。
+  const shownKey = budgetMonthKey(year, today);
   const tops = useMemo(() => topCategories(categories, kind, true), [categories, kind]);
   const ordered = [...tops.filter((top) => !top.archived), ...tops.filter((top) => top.archived)];
   const totalBudget =
     kind === 'living'
-      ? tops.filter((top) => !top.archived).reduce((sum, top) => sum + (budgetFor(budgets, top.id, fiscalYear) ?? 0), 0)
+      ? tops.filter((top) => !top.archived).reduce((sum, top) => sum + (budgetFor(budgets, top.id, shownKey) ?? 0), 0)
       : 0;
 
   const failed = (what: string) => window.alert(`${what}できませんでした。もう一度お試しください。`);
@@ -84,29 +103,25 @@ export default function CategoryEditor({
       ? topCategories(categories, category.kind, true)
       : childCategories(categories, category.parentId, true);
 
-  /** 並びを1つ動かす。きょうだいの並びを数え直し、変わったものだけ保存する。 */
-  const move = async (category: MoneyCategory, delta: -1 | 1) => {
-    const siblings = siblingsOf(category);
-    const index = siblings.findIndex((entry) => entry.id === category.id);
-    const target = index + delta;
-    if (target < 0 || target >= siblings.length) return;
-    const reordered = [...siblings];
-    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
-    const changed = reordered
-      .map((entry, position) => ({ entry, position }))
-      .filter(({ entry, position }) => entry.position !== position);
+  /** 動かしたあとの並び。きょうだいの並びを数え直し、変わったものだけ保存する。 */
+  const drag = useDragReorder((_sectionKey, orderedIds) => {
+    const changed = orderedIds
+      .map((id, position) => ({ entry: categories.find((category) => category.id === id), position }))
+      .filter(
+        (change): change is { entry: MoneyCategory; position: number } =>
+          change.entry !== undefined && change.entry.position !== change.position,
+      );
+    if (changed.length === 0) return;
     onCategories((prev) =>
       prev.map((entry) => {
         const hit = changed.find((change) => change.entry.id === entry.id);
         return hit ? { ...entry, position: hit.position } : entry;
       }),
     );
-    try {
-      await Promise.all(changed.map(({ entry, position }) => updateMoneyCategory(supabase, entry.id, { position })));
-    } catch {
-      failed('並べ替え');
-    }
-  };
+    void Promise.all(changed.map(({ entry, position }) => updateMoneyCategory(supabase, entry.id, { position }))).catch(() =>
+      failed('並べ替え'),
+    );
+  });
 
   const save = async (result: SheetResult) => {
     const target = editing;
@@ -121,20 +136,34 @@ export default function CategoryEditor({
           parentId: target.parentId,
           name: result.name,
           icon: result.icon,
+          iconColor: result.iconColor,
           position: siblings.reduce((max, entry) => Math.max(max, entry.position + 1), 0),
         });
         const created = category;
         onCategories((prev) => [...prev, created]);
       } else {
         category = target.category;
-        if (result.name.trim() !== category.name || result.icon !== category.icon) {
-          category = await updateMoneyCategory(supabase, category.id, { name: result.name, icon: result.icon });
+        if (
+          result.name.trim() !== category.name ||
+          result.icon !== category.icon ||
+          result.iconColor !== category.iconColor
+        ) {
+          category = await updateMoneyCategory(supabase, category.id, {
+            name: result.name,
+            icon: result.icon,
+            iconColor: result.iconColor,
+          });
           replace(category);
         }
       }
-      if (result.budget !== null && result.budget !== budgetFor(budgets, category.id, fiscalYear)) {
-        const saved = await saveMoneyBudget(supabase, familyId, category.id, fiscalYear, result.budget);
-        onBudgets((prev) => [...prev.filter((entry) => entry.id !== saved.id), saved]);
+      if (result.budget !== null) {
+        // 選んだ月から年末までだけ書き換える。それより前の月の予算は変えない（過去の振り返りが変わらないように）。
+        const current = budgetMonths(budgets, category.id, year);
+        const next = withBudgetFrom(current, result.fromMonth, result.budget);
+        if (next.some((value, index) => value !== current[index])) {
+          const saved = await saveMoneyBudget(supabase, familyId, category.id, year, next);
+          onBudgets((prev) => [...prev.filter((entry) => entry.id !== saved.id), saved]);
+        }
       }
     } catch {
       failed('保存');
@@ -152,13 +181,13 @@ export default function CategoryEditor({
 
   return (
     <FullScreen onBack={onClose}>
-      <ScreenHeader title="種類と予算" onClose={onClose} />
+      <ScreenHeader title="カテゴリと予算" onClose={onClose} />
       <div className="shrink-0 flex items-center gap-2 px-4 py-2.5">
-        <button type="button" aria-label="前の年度" onClick={() => setFiscalYear((year) => year - 1)} className={yearButtonClass}>
+        <button type="button" aria-label="前の年" onClick={() => setYear((current) => current - 1)} className={yearButtonClass}>
           <ChevronLeft size={18} />
         </button>
-        <span className="text-base font-bold text-gray-900 tabular-nums">{formatFiscalYear(fiscalYear)}</span>
-        <button type="button" aria-label="次の年度" onClick={() => setFiscalYear((year) => year + 1)} className={yearButtonClass}>
+        <span className="text-base font-bold text-gray-900 tabular-nums">{formatYear(year)}</span>
+        <button type="button" aria-label="次の年" onClick={() => setYear((current) => current + 1)} className={yearButtonClass}>
           <ChevronRight size={18} />
         </button>
         <span className="flex-1" />
@@ -189,34 +218,54 @@ export default function CategoryEditor({
             <PrimaryButton label="標準の種類で始める" onClick={() => void seed()} disabled={busy} />
           </div>
         )}
-        {ordered.map((top) => {
-          const children = childCategories(categories, top.id, true);
-          const budget = kind === 'living' ? budgetFor(budgets, top.id, fiscalYear) : null;
+        {drag.arrange(`tops-${kind}`, ordered).map((top) => {
+          const children = drag.arrange(`children-${top.id}`, childCategories(categories, top.id, true));
+          const budget = kind === 'living' ? budgetFor(budgets, top.id, shownKey) : null;
           return (
-            <div key={top.id} className={`space-y-2.5 rounded-xl border border-gray-200 bg-white p-3 ${top.archived ? 'opacity-50' : ''}`}>
-              <button
-                type="button"
-                onClick={() => setEditing({ category: top })}
-                className="flex w-full items-center gap-2 text-left"
-              >
-                <CategoryIcon iconKey={iconKeyOf(top)} />
-                <span className="text-[15px] font-bold text-gray-900">{top.name}</span>
-                {top.archived && <span className="text-[11px] font-semibold text-gray-400">使わない</span>}
-                <span className="flex-1" />
-                {kind === 'living' && (
-                  <span className="text-[13px] font-semibold text-gray-700 tabular-nums">
-                    {budget === null ? '予算なし' : `月 ${formatYen(budget)}`}
-                  </span>
-                )}
-                <ChevronRight size={16} className="text-gray-400" />
-              </button>
+            <div
+              key={top.id}
+              ref={drag.dragRef(top.id)}
+              className={`space-y-2.5 rounded-xl border bg-white p-3 ${top.archived ? 'opacity-50' : ''} ${
+                drag.isDragging(top.id) ? 'relative z-20 border-blue-300 shadow-xl' : 'border-gray-200'
+              }`}
+            >
+              <div className="flex items-center">
+                <span
+                  role="button"
+                  aria-label={`${top.name}を並べ替え`}
+                  {...drag.gripProps(`tops-${kind}`, ordered, top.id)}
+                  className="-my-1 -ml-2 flex w-7 flex-none cursor-grab touch-none select-none items-center justify-center self-stretch text-gray-300"
+                >
+                  <GripVertical size={18} />
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setEditing({ category: top })}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                >
+                  <CategoryIcon iconKey={iconKeyOf(top)} />
+                  <span className="text-[15px] font-bold text-gray-900">{top.name}</span>
+                  {top.archived && <span className="text-[11px] font-semibold text-gray-400">使わない</span>}
+                  <span className="flex-1" />
+                  {kind === 'living' && (
+                    <span className="text-[13px] font-semibold text-gray-700 tabular-nums">
+                      {budget === null ? '予算なし' : `月 ${formatYen(budget)}`}
+                    </span>
+                  )}
+                  <ChevronRight size={16} className="text-gray-400" />
+                </button>
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 {children.map((child) => (
                   <button
                     key={child.id}
                     type="button"
+                    ref={drag.dragRef(child.id)}
+                    {...drag.handleProps(`children-${top.id}`, children, child.id)}
                     onClick={() => setEditing({ category: child })}
-                    className={`rounded-full bg-gray-100 px-2.5 py-1.5 text-[13px] text-gray-700 ${child.archived ? 'opacity-50' : ''}`}
+                    className={`select-none rounded-full bg-gray-100 px-2.5 py-1.5 text-[13px] text-gray-700 ${child.archived ? 'opacity-50' : ''} ${
+                      drag.isDragging(child.id) ? 'relative z-20 shadow-lg' : ''
+                    }`}
                   >
                     {child.name}
                   </button>
@@ -252,19 +301,16 @@ export default function CategoryEditor({
           category={editing.category}
           isTop={editing.category === null ? editing.parentId === null : editing.category.parentId === null}
           showBudget={kind === 'living'}
-          fiscalYear={fiscalYear}
-          budget={editing.category ? budgetFor(budgets, editing.category.id, fiscalYear) : null}
+          year={year}
+          budget={editing.category ? budgetFor(budgets, editing.category.id, shownKey) : null}
+          // 今年ですでに予算があるカテゴリは、今月から。それ以外（新しい年・はじめて決める）は年のはじめから。
+          defaultFromMonth={
+            editing.category && year === Number(today.slice(0, 4)) && budgetFor(budgets, editing.category.id, today.slice(0, 7)) !== null
+              ? Number(today.slice(5, 7))
+              : 1
+          }
           onClose={() => setEditing(null)}
           onSubmit={(result) => void save(result)}
-          onMove={
-            editing.category
-              ? (delta) => {
-                  const category = editing.category!;
-                  setEditing(null);
-                  void move(category, delta);
-                }
-              : undefined
-          }
           onToggleArchive={editing.category ? () => void toggleArchive(editing.category!) : undefined}
         />
       )}
@@ -274,10 +320,14 @@ export default function CategoryEditor({
 
 interface SheetResult {
   name: string;
-  /** アイコン（大分類だけ）。null は名前から選ぶ。 */
+  /** アイコン（大分類だけ。小分類は今のまま）。 */
   icon: string | null;
+  /** アイコンの色（大分類だけ）。null は標準（アイコンごとの色）。 */
+  iconColor: string | null;
   /** 大分類の月の予算。入れなかった・小分類は null。 */
   budget: number | null;
+  /** 予算を反映しはじめる月（1〜12）。そこから年末まで。それより前の月は変わらない。 */
+  fromMonth: number;
 }
 
 const inputClass =
@@ -288,26 +338,30 @@ function CategoryModal({
   category,
   isTop,
   showBudget,
-  fiscalYear,
+  year,
   budget,
+  defaultFromMonth,
   onClose,
   onSubmit,
-  onMove,
   onToggleArchive,
 }: {
   category: MoneyCategory | null;
   isTop: boolean;
   showBudget: boolean;
-  fiscalYear: number;
+  year: number;
   budget: number | null;
+  defaultFromMonth: number;
   onClose: () => void;
   onSubmit: (result: SheetResult) => void;
-  onMove?: (delta: -1 | 1) => void;
   onToggleArchive?: () => void;
 }) {
   const [name, setName] = useState(category?.name ?? '');
   const [amount, setAmount] = useState(budget === null ? '' : String(budget));
-  const [icon, setIcon] = useState<string | null>(category?.icon ?? null);
+  const [fromMonth, setFromMonth] = useState(defaultFromMonth);
+  // 自動は無し。決めていない種類は、今の名前から近いものを選んだ状態で始める。
+  const [icon, setIcon] = useState<string>(category ? (category.icon ?? guessIconKey(category.name)) : 'other');
+  const [iconColor, setIconColor] = useState<string | null>(category?.iconColor ?? null);
+  const [pickingColor, setPickingColor] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const withBudget = isTop && showBudget;
 
@@ -315,10 +369,14 @@ function CategoryModal({
     if (name.trim() === '') return setError('名前を入れてください');
     const value = amount.trim() === '' ? null : parseAmountInput(amount);
     if (withBudget && amount.trim() !== '' && value === null) return setError('予算は0以上の整数（円）で入れてください');
-    onSubmit({ name, icon: isTop ? icon : (category?.icon ?? null), budget: withBudget ? value : null });
+    onSubmit({
+      name,
+      icon: isTop ? icon : (category?.icon ?? null),
+      iconColor: isTop ? iconColor : (category?.iconColor ?? null),
+      budget: withBudget ? value : null,
+      fromMonth,
+    });
   };
-
-  const moveClass = 'flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1.5 text-[13px] font-semibold text-gray-700';
 
   return (
     <ModalShell
@@ -352,19 +410,48 @@ function CategoryModal({
         {isTop && (
           <div>
             <span className={labelClass}>アイコン</span>
+            {/* アイコンをタップすると色を選べる（出金元のアイコンの色と同じ候補）。 */}
+            <button
+              type="button"
+              aria-label="アイコンの色を選ぶ"
+              aria-expanded={pickingColor}
+              onClick={() => setPickingColor((open) => !open)}
+              className="flex items-center gap-3 py-1"
+            >
+              <CategoryIcon iconKey={iconColor ? `${icon}|${iconColor}` : icon} size={48} />
+              <span className="text-[13px] font-semibold text-blue-600">タップして色を選ぶ</span>
+            </button>
+            {pickingColor && (
+              <div className="flex flex-wrap gap-2.5 py-1">
+                <button
+                  type="button"
+                  aria-label="標準の色"
+                  aria-pressed={iconColor === null}
+                  onClick={() => setIconColor(null)}
+                  className={`flex h-[34px] w-[34px] items-center justify-center rounded-full bg-gray-100 ${
+                    iconColor === null ? 'ring-[3px] ring-gray-900' : ''
+                  }`}
+                >
+                  <CategoryIcon iconKey={icon} size={26} />
+                </button>
+                {CATEGORY_ICON_COLORS.map((entry) => (
+                  <button
+                    key={entry.color}
+                    type="button"
+                    aria-label={entry.label}
+                    aria-pressed={iconColor === entry.color}
+                    onClick={() => setIconColor(entry.color)}
+                    style={{ backgroundColor: entry.color }}
+                    className={`flex h-[34px] w-[34px] items-center justify-center rounded-full text-white ${
+                      iconColor === entry.color ? 'ring-[3px] ring-gray-900' : ''
+                    }`}
+                  >
+                    {iconColor === entry.color && <Check size={18} />}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex flex-wrap gap-1">
-              <button
-                type="button"
-                aria-label="名前から選ぶ"
-                aria-pressed={icon === null}
-                onClick={() => setIcon(null)}
-                className={`relative flex h-[46px] w-[46px] items-center justify-center rounded-xl border-2 ${
-                  icon === null ? 'border-blue-600' : 'border-transparent'
-                }`}
-              >
-                <CategoryIcon iconKey={guessIconKey(name)} size={34} />
-                <span className="absolute -bottom-0.5 text-[9px] font-bold text-gray-500">自動</span>
-              </button>
               {MONEY_ICONS.map((entry) => (
                 <button
                   key={entry.key}
@@ -376,36 +463,47 @@ function CategoryModal({
                     icon === entry.key ? 'border-blue-600' : 'border-transparent'
                   }`}
                 >
-                  <CategoryIcon iconKey={entry.key} size={34} />
+                  <CategoryIcon iconKey={iconColor ? `${entry.key}|${iconColor}` : entry.key} size={34} />
                 </button>
               ))}
             </div>
           </div>
         )}
         {withBudget && (
-          <label className="block">
-            <span className={labelClass}>{formatFiscalYear(fiscalYear)}の月の予算（円）</span>
-            <input
-              className={`${inputClass} tabular-nums`}
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              inputMode="numeric"
-              placeholder="未設定"
-            />
-            <span className="mt-1 block text-[11px] text-gray-400">次の年度も、直すまで同じ額を使います</span>
-          </label>
-        )}
-        {onMove && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-gray-700">並び</span>
-            <button type="button" onClick={() => onMove(-1)} className={moveClass}>
-              <ArrowUp size={16} />
-              上へ
-            </button>
-            <button type="button" onClick={() => onMove(1)} className={moveClass}>
-              <ArrowDown size={16} />
-              下へ
-            </button>
+          <div className="space-y-3">
+            <label className="block">
+              <span className={labelClass}>{formatYear(year)}の月の予算（円）</span>
+              <input
+                className={`${inputClass} tabular-nums`}
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                inputMode="numeric"
+                placeholder="未設定"
+              />
+            </label>
+            <div>
+              <span className={labelClass}>反映する月</span>
+              <div className="flex flex-wrap gap-1.5">
+                {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                  <button
+                    key={month}
+                    type="button"
+                    aria-pressed={fromMonth === month}
+                    onClick={() => setFromMonth(month)}
+                    className={`rounded-full px-2.5 py-1.5 text-[13px] ${
+                      fromMonth === month ? 'bg-blue-100 font-bold text-blue-800' : 'bg-gray-100 font-semibold text-gray-700'
+                    }`}
+                  >
+                    {month}月
+                  </button>
+                ))}
+              </div>
+              <span className="mt-1 block text-[11px] text-gray-400">
+                {fromMonth === 1
+                  ? `${formatYear(year)}のはじめから、年末まで反映します。次の年も、直すまで同じ額を使います`
+                  : `${fromMonth}月から年末まで反映します。${fromMonth - 1}月までの予算は変わらず、過去の振り返りもそのままです`}
+              </span>
+            </div>
           </div>
         )}
         {error && <p className="text-xs text-red-500">{error}</p>}
