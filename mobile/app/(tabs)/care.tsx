@@ -836,7 +836,7 @@ export default function CareScreen() {
                   <Text style={styles.recordTitle}>授乳</Text>
                 </View>
                 {/* 量・分数は出さず、その日の回数だけを出す（おむつと同じ並び）。 */}
-                <Text style={styles.recordValue}>{summary.milk.count}回</Text>
+                <Text style={styles.recordValue}>計{summary.milk.count}回</Text>
                 {nursingBy && (
                   <Text style={styles.recordHint}>{memberLabel(nursingBy)}が授乳中</Text>
                 )}

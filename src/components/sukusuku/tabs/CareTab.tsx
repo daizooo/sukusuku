@@ -374,7 +374,7 @@ export default function CareTab({
                 </span>
                 {/* 量・分数は出さず、その日の回数だけを出す（おむつと同じ並び）。 */}
                 <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
-                  {summary.milk.count}回
+                  計{summary.milk.count}回
                 </span>
                 {nursingBy && (
                   <span className="text-[10px] font-bold text-amber-600 leading-tight">
