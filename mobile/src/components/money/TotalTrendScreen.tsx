@@ -23,12 +23,14 @@ interface TotalTrendScreenProps {
 
 export default function TotalTrendScreen({ wallets, records, balances, securities, today, onClose }: TotalTrendScreenProps) {
   const insets = useSafeAreaInsets();
-  const points = useMemo(
-    () => totalDailyBalances(wallets, records, balances, securities, today),
-    [wallets, records, balances, securities, today],
-  );
   // 証券の評価額は毎日変わるので、証券口座があるときは「残高が変わった日」の一覧を出さない（毎日の行になる）。
   const hasSecurities = wallets.some((wallet) => wallet.type === 'securities' && !wallet.archived);
+  // 証券口座があるときは、評価額の履歴が読めるまで推移を出さない（最新の1行だけで描くと、過去が崩れる）。
+  const waiting = hasSecurities && !securities.historyLoaded;
+  const points = useMemo(
+    () => (waiting ? [] : totalDailyBalances(wallets, records, balances, securities, today)),
+    [waiting, wallets, records, balances, securities, today],
+  );
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -36,7 +38,7 @@ export default function TotalTrendScreen({ wallets, records, balances, securitie
         <ScreenHeader title="残高の推移" icon="back" onClose={onClose} />
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={[type.sub, styles.subtitle]}>総残高</Text>
-          <BalanceTrend points={points} asOf={today} showHistory={!hasSecurities} />
+          <BalanceTrend points={points} asOf={today} showHistory={!hasSecurities} emptyText={waiting ? '読み込み中...' : undefined} />
         </ScrollView>
       </View>
     </Modal>

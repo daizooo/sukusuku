@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Plus } from 'lucide-react-native';
 import type {
@@ -50,6 +50,8 @@ interface MoneyAccountsViewProps {
   onRestoreWallet: (wallet: MoneyWallet) => void;
   onSaveSecurity: (walletId: string, target: MoneySecurity | null, draft: MoneySecurityDraft) => void;
   onArchiveSecurity: (walletId: string, security: MoneySecurity) => void;
+  /** 推移・証券口座の詳細を開いたときに、評価額の履歴を読ませる（一覧は最新の1行だけで出す）。 */
+  onNeedSecurityHistory: () => void | Promise<void>;
 }
 
 export default function MoneyAccountsView({
@@ -68,6 +70,7 @@ export default function MoneyAccountsView({
   onRestoreWallet,
   onSaveSecurity,
   onArchiveSecurity,
+  onNeedSecurityHistory,
 }: MoneyAccountsViewProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -80,6 +83,12 @@ export default function MoneyAccountsView({
   const usable = summary.rows.filter((row) => !row.wallet.archived);
   const archived = summary.rows.filter((row) => row.wallet.archived);
   const opened = wallets.find((wallet) => wallet.id === openId) ?? null;
+  const needsHistory =
+    (opened !== null && opened.type === 'securities') ||
+    (showTrend && wallets.some((wallet) => wallet.type === 'securities' && !wallet.archived));
+  useEffect(() => {
+    if (needsHistory && !securities.historyLoaded) onNeedSecurityHistory();
+  }, [needsHistory, securities.historyLoaded, onNeedSecurityHistory]);
 
   return (
     <View style={styles.flex}>

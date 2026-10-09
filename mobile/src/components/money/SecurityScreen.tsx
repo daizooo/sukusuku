@@ -40,7 +40,10 @@ export default function SecurityScreen({ wallet, holding, security, securities, 
     [wallet.id, securities, today, holding.id],
   );
   const holdings = securities.holdings.filter((entry) => entry.walletId === wallet.id && entry.securityId === security.id);
-  const points = useMemo(() => holdingDailyValues([holding.id], securities.values, today), [holding.id, securities, today]);
+  const points = useMemo(
+    () => (securities.historyLoaded ? holdingDailyValues([holding.id], securities.values, today) : []),
+    [holding.id, securities, today],
+  );
   const isFund = security.kind === 'jp_fund';
   // 詳細の行（Zaim と同じ項目。預り金は無し）。
   const details: { key: string; label: string; value: ReactNode }[] = [];
@@ -88,7 +91,12 @@ export default function SecurityScreen({ wallet, holding, security, securities, 
           {row?.gain != null && <Gain gain={row.gain} rate={row.gainRate} />}
         </View>
         <ScrollView contentContainerStyle={styles.content}>
-          <BalanceTrend points={points} asOf={today} showHistory={false} emptyText="まだ評価額がありません" />
+          <BalanceTrend
+            points={points}
+            asOf={today}
+            showHistory={false}
+            emptyText={securities.historyLoaded ? 'まだ評価額がありません' : '読み込み中...'}
+          />
 
           {details.length > 0 && (
             <View style={styles.card}>

@@ -48,13 +48,16 @@ export default function SecuritiesWalletScreen({
   const rows = useMemo(() => securityRows(wallet.id, securities, today), [wallet.id, securities, today]);
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   const gain = walletGain(rows);
+  // 推移は履歴が要る。一覧の残高は最新の1行で足りるので、履歴が読めるまでは推移だけ「読み込み中」にする。
   const points = useMemo(
     () =>
-      holdingDailyValues(
-        securities.holdings.filter((holding) => holding.walletId === wallet.id).map((holding) => holding.id),
-        securities.values,
-        today,
-      ),
+      securities.historyLoaded
+        ? holdingDailyValues(
+            securities.holdings.filter((holding) => holding.walletId === wallet.id).map((holding) => holding.id),
+            securities.values,
+            today,
+          )
+        : [],
     [wallet.id, securities, today],
   );
   const opened = rows.find((row) => row.holding.id === openId) ?? null;
@@ -83,7 +86,12 @@ export default function SecuritiesWalletScreen({
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
-          <BalanceTrend points={points} asOf={today} showHistory={false} emptyText="まだ評価額がありません" />
+          <BalanceTrend
+            points={points}
+            asOf={today}
+            showHistory={false}
+            emptyText={securities.historyLoaded ? 'まだ評価額がありません' : '読み込み中...'}
+          />
 
           <SectionHeader title="保有銘柄" />
           {rows.length > 0 && (

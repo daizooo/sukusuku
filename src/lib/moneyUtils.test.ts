@@ -615,7 +615,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
     val('h5', '2026-10-06', 120000, 160),
     val('h5', '2026-10-07', 0, 0),
   ];
-  const data = { securities, holdings, values };
+  const data = { securities, holdings, values, historyLoaded: true };
 
   assert.equal(securitiesValueOn(['sec'], holdings, values, '2026-10-08'), 460000 + 230000 + 240000 + 15800, 'その日の行が無い保有は前の日の行。使わなくした保有は 0');
   assert.equal(securitiesValueOn(['sec'], holdings, values, '2026-10-06'), 450000 + 120000);
