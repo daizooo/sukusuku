@@ -161,7 +161,7 @@ export default function RecordDayList({
                     </Text>
                     <View style={styles.walletIcons}>
                       {walletIcons(record).map((wallet, iconIndex) => (
-                        <WalletTypeIcon key={`${wallet.id}-${iconIndex}`} type={wallet.type} />
+                        <WalletTypeIcon key={`${wallet.id}-${iconIndex}`} type={wallet.type} color={wallet.iconColor} />
                       ))}
                     </View>
                   </Pressable>

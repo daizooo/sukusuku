@@ -158,10 +158,10 @@ const record = (id: string, fields: Partial<MoneyRecord>): MoneyRecord => ({
   ...fields,
 });
 const wallets: MoneyWallet[] = [
-  { id: 'card', name: 'カード', type: 'card', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, position: 0, archived: false },
-  { id: 'bank', name: '生活費口座', type: 'bank', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, position: 1, archived: false },
-  { id: 'save', name: '貯金口座', type: 'bank', isSaving: true, savingTarget: 30000, closeDay: null, payDay: null, payWalletId: null, position: 2, archived: false },
-  { id: 'gone', name: '昔のカード', type: 'card', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, position: 3, archived: true },
+  { id: 'card', name: 'カード', type: 'card', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, iconColor: null, position: 0, archived: false },
+  { id: 'bank', name: '生活費口座', type: 'bank', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, iconColor: null, position: 1, archived: false },
+  { id: 'save', name: '貯金口座', type: 'bank', isSaving: true, savingTarget: 30000, closeDay: null, payDay: null, payWalletId: null, iconColor: null, position: 2, archived: false },
+  { id: 'gone', name: '昔のカード', type: 'card', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, iconColor: null, position: 3, archived: true },
 ];
 const records: MoneyRecord[] = [
   record('r1', {
@@ -660,7 +660,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null }), '');
   assert.equal(walletGain([]), null);
 
   // 総残高: 証券口座は評価額で数える（記録・補正は見ない）。
-  const secWallet: MoneyWallet = { id: 'sec', name: '証券', type: 'securities', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, position: 9, archived: false };
+  const secWallet: MoneyWallet = { id: 'sec', name: '証券', type: 'securities', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, iconColor: null, position: 9, archived: false };
   const bankWallet: MoneyWallet = { ...secWallet, id: 'bank2', name: '口座', type: 'bank' };
   const transfer = record('tr', { kind: 'transfer', walletId: 'bank2', toWalletId: 'sec', occurredOn: '2026-10-07', items: [item({ amount: 50000 })] });
   const summary = buildWalletBalances([bankWallet, secWallet], [transfer], [{ id: 'b', walletId: 'bank2', balanceOn: '2026-10-06', amount: 100000, showInHistory: true }], '2026-10-08', data);

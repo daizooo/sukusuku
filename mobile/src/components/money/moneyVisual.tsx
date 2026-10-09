@@ -296,10 +296,18 @@ const WALLET_TYPE_ICONS = {
   securities: { Icon: ChartCandlestick, color: '#4aa8d8' },
 } as const;
 
-/** 出金元の種類のアイコン（記録の一覧で金額の右に出す。Zaim と同じ）。 */
-export function WalletTypeIcon({ type: walletType, size = 15 }: { type: MoneyWalletType; size?: number }) {
-  const { Icon, color } = WALLET_TYPE_ICONS[walletType];
-  return <Icon size={size} color={color} />;
+/** 出金元の種類のアイコン（記録の一覧で金額の右に出す。Zaim と同じ）。color は出金元ごとに選んだ色（null は種類ごとの色）。 */
+export function WalletTypeIcon({
+  type: walletType,
+  size = 15,
+  color,
+}: {
+  type: MoneyWalletType;
+  size?: number;
+  color?: string | null;
+}) {
+  const { Icon, color: defaultColor } = WALLET_TYPE_ICONS[walletType];
+  return <Icon size={size} color={color ?? defaultColor} />;
 }
 
 /**

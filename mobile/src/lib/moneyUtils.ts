@@ -98,6 +98,24 @@ export const WALLET_TYPES: { id: MoneyWalletType; label: string }[] = [
   { id: 'securities', label: '証券' },
 ];
 
+/**
+ * 出金元のアイコンの色の候補（docs/kakei.md §3.2）。「標準」（null）は種類ごとの色。
+ * 保存するのは #rrggbb（money_wallets.icon_color）。
+ */
+export const WALLET_ICON_COLORS: { color: string; label: string }[] = [
+  { color: '#e53935', label: '赤' },
+  { color: '#f57c00', label: 'オレンジ' },
+  { color: '#f9a825', label: '黄' },
+  { color: '#4caf50', label: '緑' },
+  { color: '#1b6b4a', label: '深緑' },
+  { color: '#00a3a3', label: '水色' },
+  { color: '#1e78c2', label: '青' },
+  { color: '#5e35b1', label: '紫' },
+  { color: '#d81b60', label: 'ピンク' },
+  { color: '#6d4c41', label: '茶' },
+  { color: '#757575', label: '灰' },
+];
+
 export const walletTypeLabel = (type: MoneyWalletType) =>
   WALLET_TYPES.find((entry) => entry.id === type)?.label ?? '';
 

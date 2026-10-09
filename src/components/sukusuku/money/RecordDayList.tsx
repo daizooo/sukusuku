@@ -162,7 +162,7 @@ export default function RecordDayList({
                     </span>
                     <span className="flex min-w-[15px] gap-0.5">
                       {walletIcons(record).map((wallet, iconIndex) => (
-                        <WalletTypeIcon key={`${wallet.id}-${iconIndex}`} type={wallet.type} />
+                        <WalletTypeIcon key={`${wallet.id}-${iconIndex}`} type={wallet.type} color={wallet.iconColor} />
                       ))}
                     </span>
                   </button>
