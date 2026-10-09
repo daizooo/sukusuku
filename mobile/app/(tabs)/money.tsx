@@ -24,6 +24,7 @@ import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { getMyMembership } from '@/lib/api/me';
+import { useRefreshOnFocus } from '@/lib/screenFocus';
 import {
   archiveMoneyWallet,
   deleteMoneyRecord,
@@ -84,6 +85,9 @@ const VIEWS: { id: View3; label: string }[] = [
 type Editing = MoneyRecord | 'new' | null;
 
 const NO_SECURITIES: MoneySecuritiesData = { securities: [], holdings: [], values: [], historyLoaded: true };
+
+/** アプリが前面へ戻ったときに読み直す、前回からの最短の間隔。他のタブより長い（読むものが多い）。 */
+const MONEY_RESUME_MIN_INTERVAL_MS = 5 * 60_000;
 
 export default function MoneyScreen() {
   const { session, isLoading: isSessionLoading } = useSession();
@@ -151,6 +155,16 @@ export default function MoneyScreen() {
       isMounted = false;
     };
   }, [userId, reload]);
+
+  // パートナーの端末での変更に追いつかせる。タブへ戻ったとき・アプリが前面へ戻ったときに読み直す。
+  // 読み込み中の表示には戻さず、届いたら差し替える。
+  // 一覧が大きく読むのに時間がかかるので、前面復帰では前回から5分空いたときだけにする。
+  useRefreshOnFocus(() => {
+    if (!familyId) return;
+    void reload(familyId).catch(() => {
+      // 圏外なら前に読んだ分を出したままにする。
+    });
+  }, MONEY_RESUME_MIN_INTERVAL_MS);
 
   const needSecurityHistory = useCallback(async () => {
     if (!familyId) return;

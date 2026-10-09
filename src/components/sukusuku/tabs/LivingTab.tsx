@@ -6,6 +6,7 @@ import type { StockItem, StockItemDraft, StockTarget, StockTargetDraft } from '@
 import { createClient } from '@/lib/supabase/client';
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
 import { useBackLayer } from '@/lib/browserHistory';
+import { useRefreshOnResume } from '../ui/useRefreshOnResume';
 import {
   deleteStockItem,
   deleteStockTarget,
@@ -105,6 +106,24 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
       isMounted = false;
     };
   }, [supabase, familyId]);
+
+  // パートナーの端末での変更に追いつかせる。アプリへ戻ってきたときに読み直す。
+  // 読み込み中の表示には戻さず、届いたら差し替える。
+  useRefreshOnResume(() => {
+    Promise.all([
+      loadStockItems(supabase, familyId),
+      loadStockTargets(supabase, familyId),
+      loadStockPlan(supabase, familyId),
+    ])
+      .then(([loadedItems, loadedTargets, loadedPlan]) => {
+        setItems(loadedItems);
+        setTargets(loadedTargets);
+        setPlan(loadedPlan);
+      })
+      .catch(() => {
+        // 圏外なら前に読んだ分を出したままにする。
+      });
+  });
 
   const today = toDateStringInTimeZone(new Date());
   const categories = useMemo(() => categoryOptions(items), [items]);

@@ -335,35 +335,46 @@ export default function CareScreen() {
     }
   }, [familyId, range]);
 
-  /** 積み残しを送ってから取り直す。圏外なら控えのまま黙って続ける。 */
-  const sync = useCallback(async () => {
-    if (!familyId || !userId) return;
-    try {
-      const result = await syncCareLogsInRange(
-        supabase,
-        familyId,
-        userId,
-        range.from,
-        range.to,
-      );
-      setLogs(result.logs);
-      setPumpedBatches(result.pumpedBatches);
-      setErrorMessage('');
-    } catch (error) {
-      // 圏外でもここまでで控えは出ているので、止めずに知らせるだけにする。
-      setErrorMessage(
-        `最新の記録を取り直せませんでした（${toMessage(error)}）。端末に控えた分を表示しています。`,
-      );
-    } finally {
-      setUnsentCount(await countUnsentCareLogs(familyId).catch(() => 0));
-      setIsLoading(false);
-    }
-  }, [familyId, userId, range]);
+  /**
+   * 積み残しを送ってから取り直す。圏外なら控えのまま黙って続ける。
+   *
+   * @param options.quiet 自動の取り直し用。失敗しても画面にエラーを出さない（圏外のたびに出ないように）。
+   */
+  const sync = useCallback(
+    async (options?: { quiet?: boolean }) => {
+      if (!familyId || !userId) return;
+      try {
+        const result = await syncCareLogsInRange(
+          supabase,
+          familyId,
+          userId,
+          range.from,
+          range.to,
+        );
+        setLogs(result.logs);
+        setPumpedBatches(result.pumpedBatches);
+        setErrorMessage('');
+      } catch (error) {
+        // 圏外でもここまでで控えは出ているので、止めずに知らせるだけにする。
+        if (!options?.quiet) {
+          setErrorMessage(
+            `最新の記録を取り直せませんでした（${toMessage(error)}）。端末に控えた分を表示しています。`,
+          );
+        }
+      } finally {
+        setUnsentCount(await countUnsentCareLogs(familyId).catch(() => 0));
+        setIsLoading(false);
+      }
+    },
+    [familyId, userId, range],
+  );
 
   useEffect(() => {
     if (!familyId) return;
     setIsLoading(true);
-    void showCached().then(sync).catch(() => setIsLoading(false));
+    void showCached()
+      .then(() => sync())
+      .catch(() => setIsLoading(false));
   }, [familyId, showCached, sync]);
 
   // 常駐通知を出す許可は、記録タブを開いた時点でもらっておく（授乳を始めてからでは遅い）。
@@ -419,9 +430,22 @@ export default function CareScreen() {
   }, [refreshNursingStates]);
 
   // 授乳の始まり・終わりはパートナーの端末で起きるので、見ている間は読み直す。
+  // 印だけを読むと、パートナーが保存して印が消えたとき、記録が届かず古い目安へ戻ってしまう。
+  // 印が消えるのと同じ間隔で、直近の授乳も読み直す。
   useRefreshWhileFocused(() => {
     void refreshNursingStates();
+    void refreshRecentMilkLogs();
   }, NURSING_POLL_MS);
+
+  // 他の端末での記録に追いつかせる。起動時に読んだきりだと、パートナーが記録した授乳が
+  // アプリを開き直すまで出ない。タブへ戻ったときと、アプリが前面へ戻ったときに取り直す。
+  // 積み残しの送信も sync の中で行うので、圏外で付けた記録もここで送られる。
+  useRefreshOnFocus(() => {
+    void sync({ quiet: true });
+    void refreshRecentMilkLogs();
+    void refreshRecentTemperatureLogs();
+    void refreshNursingStates();
+  });
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);

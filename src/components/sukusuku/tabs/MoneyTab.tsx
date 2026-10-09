@@ -20,6 +20,7 @@ import type {
 } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { useSwipeTabs } from '../ui/useSwipeTabs';
+import { useRefreshOnResume } from '../ui/useRefreshOnResume';
 import {
   archiveMoneyWallet,
   deleteMoneyRecord,
@@ -146,6 +147,15 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       isMounted = false;
     };
   }, [fetchAll, apply]);
+
+  // パートナーの端末での変更に追いつかせる。アプリへ戻ってきたときに読み直す。
+  // 読み込み中の表示には戻さず、届いたら差し替える。
+  // 読むものが多いので、前回から5分空いたときだけにする（mobile版と同じ）。
+  useRefreshOnResume(() => {
+    reload().catch(() => {
+      // 圏外なら前に読んだ分を出したままにする。
+    });
+  }, 5 * 60_000);
 
   const needSecurityHistory = useCallback(async () => {
     historyWanted.current = true;

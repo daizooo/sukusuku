@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
+import { useRefreshOnFocus } from '@/lib/screenFocus';
 import {
   deleteDoneItems,
   deleteGroup,
@@ -121,6 +122,21 @@ export default function ListScreen() {
       isMounted = false;
     };
   }, [userId]);
+
+  // パートナーの端末での変更に追いつかせる。タブへ戻ったとき・アプリが前面へ戻ったときに読み直す。
+  // 読み込み中の表示には戻さず、届いたら差し替える。
+  useRefreshOnFocus(() => {
+    if (!familyId) return;
+    void loadLists(supabase, familyId)
+      .then((snapshot) => {
+        setLists(snapshot.lists);
+        setGroups(snapshot.groups);
+        setItems(snapshot.items);
+      })
+      .catch(() => {
+        // 圏外なら前に読んだ分を出したままにする。
+      });
+  });
 
   // 固定したリストが先。中は並び順（position）で、同じなら読み込んだ順のまま。
   const sortedLists = useMemo(

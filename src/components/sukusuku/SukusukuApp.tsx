@@ -126,6 +126,7 @@ import type { TemperatureLogInput } from './modals/TemperatureLogModal';
 import type { GrowthRecordDraft } from '@/lib/growthRecordInput';
 import type { NurseryDraft } from './modals/NurseryFormModal';
 import type { ListDraft } from './modals/ListEditorModal';
+import { useRefreshOnResume } from './ui/useRefreshOnResume';
 
 // 起動直後に表示するのは最初のタブだけなので、残りのタブは実際に開かれるまで読み込まない。
 // 特にCareTabは成長グラフのためにrecharts(単体で約350KB)を持ち込むため、静的importのままだと
@@ -539,6 +540,36 @@ export default function SukusukuApp({
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [refreshRecentMilkLogs, refreshNursingStates, refreshRecentTemperatureLogs, refreshTasks]);
+
+  // 表示中の日の記録・カレンダーの日表示の記録・リスト・搾乳ストックも、戻ってきたときに取り直す
+  // （上の4つだけだと、パートナーが付けた記録が一覧に出ない）。
+  // 取り直しの間に日付やタブを切り替えたときは、届いた分を捨てる。失敗したら前の表示のまま。
+  const viewRef = useRef({ logDate, scheduleLogRangeKey });
+  useEffect(() => {
+    viewRef.current = { logDate, scheduleLogRangeKey };
+  });
+  useRefreshOnResume(() => {
+    listCareLogsByDate(supabase, familyId, logDate)
+      .then((data) => {
+        if (isSameDay(viewRef.current.logDate, logDate)) setLogs(data);
+      })
+      .catch((err: unknown) => console.error('Failed to refresh care logs:', err));
+    if (needsScheduleLogs && scheduleLogFrom !== null && scheduleLogTo !== null) {
+      listCareLogsInRange(supabase, familyId, new Date(scheduleLogFrom), new Date(scheduleLogTo))
+        .then((data) => {
+          if (viewRef.current.scheduleLogRangeKey === scheduleLogRangeKey) setScheduleLogs(data);
+        })
+        .catch((err: unknown) => console.error('Failed to refresh care logs for calendar:', err));
+    }
+    loadLists(supabase, familyId)
+      .then((snapshot) => {
+        setLists(snapshot.lists);
+        setListGroups(snapshot.groups);
+        setListItems(snapshot.items);
+      })
+      .catch((err: unknown) => console.error('Failed to refresh lists:', err));
+    refreshPumpedStock();
+  });
 
   // 授乳の間隔の設定を読み込む。未設定の家族は既定値(3時間・通知する)のまま。
   useEffect(() => {
