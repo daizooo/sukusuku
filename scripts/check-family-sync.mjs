@@ -35,7 +35,7 @@ const NOT_SHARED = new Set([
 // 書き込みの関数（save_money_record、lottery_* など）は、画面が読み込みに使わないので書かない。
 const RPC_TABLES = {
   money_bootstrap: [
-    'household_products', 'money_budgets', 'money_categories', 'money_holdings', 'money_items',
+    'money_budgets', 'money_categories', 'money_holdings', 'money_items',
     'money_records', 'money_recurring', 'money_securities', 'money_stores', 'money_wallet_balances',
     'money_wallets', 'special_items', 'special_plans',
   ],

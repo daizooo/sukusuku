@@ -4,12 +4,12 @@ import type { ListBoard } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
 import { loadLists } from '@/lib/api/lists';
-import { addToShoppingList } from '@/lib/api/householdProducts';
+import { addToShoppingList } from '@/lib/api/shoppingList';
 import { readShoppingListId, writeShoppingListId } from '@/lib/shoppingListPreference';
 import ListPickerSheet from '@/components/living/ListPickerSheet';
 
-// 暮らしタブから買い出しリストへ送る仕組み（docs/home.md §4.2）。日用品の「＋」と、
-// 備蓄の不足の「リストへ」の両方から使う。PWA版の `src/components/sukusuku/living/useShoppingSender.tsx` と同じ。
+// 暮らしタブから買い出しリストへ送る仕組み（docs/home.md §4.2）。備蓄の不足の「リストへ」から使う。
+// PWA版の `src/components/sukusuku/living/useShoppingSender.tsx` と同じ。
 //
 // - 送り先のリストは端末ごとに覚える。まだ決めていない（または消えた）ときは、選んでから送る
 // - 送ったら下に一言出す（どのリストのどのグループに入ったか、既に入っていたか）
@@ -78,12 +78,6 @@ export function useShoppingSender(familyId: string | null) {
     setPicking(true);
   };
 
-  const openPicker = () => {
-    pending.current = null;
-    void reload();
-    setPicking(true);
-  };
-
   const pick = (id: string) => {
     setListId(id);
     void writeShoppingListId(id);
@@ -114,10 +108,7 @@ export function useShoppingSender(familyId: string | null) {
     ) : null;
 
   return {
-    /** 送り先のリストの名前。まだ決めていなければ null。 */
-    listName: target?.name ?? null,
     send,
-    openPicker,
     picker,
     banner,
   };

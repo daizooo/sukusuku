@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ChevronRight, Minus, Plus, ShoppingBasket, Trash2 } from 'lucide-react-native';
+import { ChevronRight, Minus, Plus, Trash2 } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 import {
   editorLineAmount,
@@ -18,8 +18,7 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 // 1つの種類の品目を何行でもまとめて記録する。行＝品名・個数（−＋）・単価・金額。
 // 一覧のいちばん下に空の行を置き、押すとそこに新しく入力する（入れると次の空の行が出る）。
 // 選んだ行（青）の単価を下の電卓で直す（＋−×÷）。電卓はこの画面で初めて出る。
-// 種類は見出しの下に1行で小さく出す（押すと変えられる）。「日用品から選ぶ」は見出しの右に、
-// 日用品の台帳から選ぶ種類（食費・日用品など）のときだけ出す。
+// 種類は見出しの下に1行で小さく出す（押すと変えられる）。
 
 /** 品目の画面で書きかけのもの（記録の入力が持ち、ほかの画面へ行って戻っても消えない）。 */
 export interface ItemsWork {
@@ -44,7 +43,6 @@ export const blankLine = (): EditorLine => ({
   name: '',
   quantity: 1,
   unitPrice: 0,
-  productId: null,
   memo: '',
 });
 
@@ -56,10 +54,7 @@ interface ItemsScreenProps {
   /** 種類のアイコン。 */
   iconKey: string;
   subtitle: string;
-  /** 「日用品から選ぶ」を出すか（moneyUtils の canPickProductsFor）。 */
-  canPickProducts: boolean;
   onChangeCategory: () => void;
-  onPickProducts: () => void;
   onSave: () => void;
   onDelete?: () => void;
   onClose: () => void;
@@ -71,9 +66,7 @@ export default function ItemsScreen({
   title,
   iconKey,
   subtitle,
-  canPickProducts,
   onChangeCategory,
-  onPickProducts,
   onSave,
   onDelete,
   onClose,
@@ -127,12 +120,6 @@ export default function ItemsScreen({
         onClose={onClose}
         right={
           <View style={styles.headerRight}>
-            {canPickProducts && (
-              <Pressable accessibilityRole="button" onPress={onPickProducts} hitSlop={6} style={styles.pickProducts}>
-                <ShoppingBasket size={15} color={colors.moneyText} />
-                <Text style={styles.pickProductsText}>日用品から選ぶ</Text>
-              </Pressable>
-            )}
             {onDelete && (
               <Pressable accessibilityRole="button" accessibilityLabel="この種類の品目を消す" onPress={onDelete} hitSlop={8}>
                 <Trash2 size={20} color={colors.textMuted} />
@@ -245,16 +232,6 @@ const styles = StyleSheet.create({
   categorySub: { fontSize: 11, fontWeight: '500', color: colors.textMuted },
   list: { paddingBottom: 8 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  pickProducts: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: colors.moneySoft,
-  },
-  pickProductsText: { fontSize: 12, fontWeight: '700', color: colors.moneyText },
   line: {
     flexDirection: 'row',
     alignItems: 'center',

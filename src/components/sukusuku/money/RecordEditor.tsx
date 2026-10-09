@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight, ChevronRight, CreditCard, Plus, Store, Trash2 } from 'lucide-react';
 import type {
-  HouseholdProduct,
   MoneyBudget,
   MoneyCategory,
   MoneyRecord,
@@ -18,7 +17,6 @@ import type {
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
 import {
   budgetFor,
-  canPickProductsFor,
   categoryPath,
   editorGroupTotal,
   evaluateCalc,
@@ -43,8 +41,7 @@ import {
 } from '@/lib/moneyUtils';
 import Calculator from './Calculator';
 import CategoryPicker, { type CategoryChoice } from './CategoryPicker';
-import ItemsScreen, { blankLine, newLineKey, type ItemsWork } from './ItemsScreen';
-import ProductPicker, { type PickedProduct } from './ProductPicker';
+import ItemsScreen, { blankLine, type ItemsWork } from './ItemsScreen';
 import StorePicker from './StorePicker';
 import WalletPicker from './WalletPicker';
 import { CategoryIcon, EstimateBadge, FullScreen, PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
@@ -56,7 +53,7 @@ import { CategoryIcon, EstimateBadge, FullScreen, PrimaryButton, ScreenHeader, S
 // 振替は 出金元 → 入金先 と金額だけ。置かないもの: 電話番号・時刻・タグ・写真。
 //
 // 画面は全部この1つの全画面の中で重ねる。重ねた画面はそれぞれ戻る操作の層を積み（StackedScreen）、
-// 戻る操作で1つ前の画面へ戻る。品目の書きかけは、種類の選択・日用品から選ぶへ行って戻っても残る。
+// 戻る操作で1つ前の画面へ戻る。品目の書きかけは、種類の選択へ行って戻っても残る。
 //
 // 見込みの額の記録（毎月の記録・カード代金で自動で作ったもの。§3.3）は、額を直すと確定になる。
 // 額が合っていたときは「この額で確定する」。額を変えずに保存したときは見込みのまま。
@@ -67,7 +64,6 @@ type Screen =
   | { type: 'category'; purpose: 'add' | 'change' }
   | { type: 'wallet'; field: 'walletId' | 'toWalletId' }
   | { type: 'store' }
-  | { type: 'products' }
   | { type: 'amount' };
 
 const KINDS: MoneyRecordKind[] = ['expense', 'income', 'transfer'];
@@ -84,7 +80,6 @@ export interface RecordEditorProps {
   /** 登録したお店（設定データ）。お店の選択画面で先に出す。 */
   stores: MoneyStore[];
   records: MoneyRecord[];
-  products: HouseholdProduct[];
   specialItems: SpecialItem[];
   specialActuals: SpecialActual[];
   onClose: () => void;
@@ -102,7 +97,6 @@ export default function RecordEditor({
   wallets,
   stores,
   records,
-  products,
   specialItems,
   specialActuals,
   onClose,
@@ -268,27 +262,6 @@ export default function RecordEditor({
     pop();
   };
 
-  const pickProducts = (picked: PickedProduct[]) => {
-    if (work) {
-      const lines = picked.map(({ product, quantity }) => ({
-        key: newLineKey(),
-        name: product.name,
-        quantity,
-        unitPrice: product.price ?? 0,
-        productId: product.id,
-        memo: '',
-      }));
-      setWork({
-        ...work,
-        lines: [...work.lines.filter((line) => !isBlankLine(line)), ...lines],
-        selected: null,
-        expr: '',
-        focusKey: null,
-      });
-    }
-    pop();
-  };
-
   const submit = () => {
     if (kind === 'transfer') {
       if (walletId === null || toWalletId === null) return window.alert('出金元と入金先を選んでください');
@@ -303,7 +276,6 @@ export default function RecordEditor({
               categoryId: null,
               specialItemId: null,
               specialPlanId: null,
-              productId: null,
               quantity: 1,
               unitPrice: transferAmount,
               name: '',
@@ -350,9 +322,7 @@ export default function RecordEditor({
             title={groupTitle(work)}
             iconKey={groupIconKey(work)}
             subtitle={groupSubtitle(work)}
-            canPickProducts={kind === 'expense' && canPickProductsFor(categories, products, work.categoryId)}
             onChangeCategory={() => push({ type: 'category', purpose: 'change' })}
-            onPickProducts={() => push({ type: 'products' })}
             onSave={saveWork}
             onDelete={work.groupKey !== null ? deleteWork : undefined}
             onClose={back}
@@ -402,16 +372,6 @@ export default function RecordEditor({
               setRegisterStore(register);
               pop();
             }}
-            onClose={back}
-          />
-        );
-      case 'products':
-        return (
-          <ProductPicker
-            products={products}
-            categoryId={work?.categoryId ?? null}
-            categoryName={categories.find((category) => category.id === work?.categoryId)?.name ?? ''}
-            onPick={pickProducts}
             onClose={back}
           />
         );

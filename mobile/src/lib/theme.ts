@@ -101,11 +101,9 @@ export const colors = {
   holidayBorder: '#fecaca', // red-200
   holidayText: '#dc2626', // red-600
 
-  // 暮らしタブの区分ごとの色（防災備蓄=橙・日用品=緑・補助くじ=紫・特別費=青）。メニューのアイコンと、その中の追加ボタン・チップに使う。
+  // 暮らしタブの区分ごとの色（防災備蓄=橙・補助くじ=紫・特別費=青）。メニューのアイコンと、その中の追加ボタン・チップに使う。
   livingStock: '#ea580c', // orange-600
-  livingProducts: '#059669', // emerald-600
   livingStockSurface: '#fff7ed', // orange-50
-  livingProductsSurface: '#ecfdf5', // emerald-50
   livingLottery: '#9333ea', // purple-600
   livingLotterySurface: '#faf5ff', // purple-50
   livingSpecial: '#2563eb', // blue-600

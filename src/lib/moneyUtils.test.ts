@@ -25,7 +25,6 @@ import {
   budgetMonths,
   buildWalletBalances,
   withBudgetFrom,
-  canPickProductsFor,
   formatBalance,
   walletBalanceOn,
   walletDelta,
@@ -116,14 +115,6 @@ assert.equal(guessIconKey('なにか'), 'other');
 assert.equal(iconKeyOf({ name: '食費', icon: 'cafe' }), 'cafe', '決めたアイコンが先');
 assert.equal(iconKeyOf(null), 'other');
 
-// ---- 日用品から選ぶ（docs/kakei.md §3.2） ----
-assert.equal(canPickProductsFor(categories, [], 'grocery'), false, '台帳が空なら出さない');
-assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: null }], 'grocery'), true, '食費は出す');
-assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: null }], 'drug'), false, '医療費は前に記録した品が無ければ出さない');
-assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: 'drug' }], 'drug'), true, '前に記録した品がある種類は出す');
-assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: 'drug' }], 'house'), false);
-assert.equal(canPickProductsFor(categories, [{ moneyCategoryId: null }], null), false);
-
 // ---- 予算（その年に無ければ前の年） ----
 const budgets: MoneyBudget[] = [
   { id: 'b1', categoryId: 'food', year: 2025, monthAmounts: Array(12).fill(55000) },
@@ -166,7 +157,6 @@ const item = (fields: Partial<MoneyItem>): MoneyItem => ({
   categoryId: null,
   specialItemId: null,
   specialPlanId: null,
-  productId: null,
   quantity: 1,
   unitPrice: null,
   name: '',
@@ -437,7 +427,7 @@ assert.deepEqual(
   ],
   '単価の無い品目は1個あたりに直す（割り切れなければ1個）',
 );
-editorGroups[0].lines.push({ key: 'blank', name: '', quantity: 1, unitPrice: 0, productId: null, memo: '' });
+editorGroups[0].lines.push({ key: 'blank', name: '', quantity: 1, unitPrice: 0, memo: '' });
 const saved = itemsFromGroups(editorGroups);
 assert.equal(saved.length, 4, '空の行は保存しない');
 assert.deepEqual(saved[0], {
@@ -445,7 +435,6 @@ assert.deepEqual(saved[0], {
   categoryId: 'grocery',
   specialItemId: null,
   specialPlanId: null,
-  productId: null,
   quantity: 2,
   unitPrice: 198,
   name: '牛乳',

@@ -463,98 +463,6 @@ export type Database = {
           },
         ]
       }
-      household_product_categories: {
-        Row: {
-          created_at: string
-          family_id: string
-          id: string
-          name: string
-          position: number
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          family_id: string
-          id?: string
-          name: string
-          position?: number
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          family_id?: string
-          id?: string
-          name?: string
-          position?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "household_product_categories_family_id_fkey"
-            columns: ["family_id"]
-            isOneToOne: false
-            referencedRelation: "families"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      household_products: {
-        Row: {
-          category: string
-          created_at: string
-          family_id: string
-          id: string
-          last_added_at: string | null
-          money_category_id: string | null
-          name: string
-          note: string
-          price: number | null
-          store: string
-          updated_at: string
-        }
-        Insert: {
-          category?: string
-          created_at?: string
-          family_id: string
-          id?: string
-          last_added_at?: string | null
-          money_category_id?: string | null
-          name: string
-          note?: string
-          price?: number | null
-          store?: string
-          updated_at?: string
-        }
-        Update: {
-          category?: string
-          created_at?: string
-          family_id?: string
-          id?: string
-          last_added_at?: string | null
-          money_category_id?: string | null
-          name?: string
-          note?: string
-          price?: number | null
-          store?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "household_products_money_category_id_fkey"
-            columns: ["money_category_id"]
-            isOneToOne: false
-            referencedRelation: "money_categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "household_products_family_id_fkey"
-            columns: ["family_id"]
-            isOneToOne: false
-            referencedRelation: "families"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       list_groups: {
         Row: {
           created_at: string
@@ -1046,7 +954,6 @@ export type Database = {
           memo: string
           name: string
           position: number
-          product_id: string | null
           quantity: number
           record_id: string
           special_item_id: string | null
@@ -1062,7 +969,6 @@ export type Database = {
           memo?: string
           name?: string
           position?: number
-          product_id?: string | null
           quantity?: number
           record_id: string
           special_item_id?: string | null
@@ -1078,7 +984,6 @@ export type Database = {
           memo?: string
           name?: string
           position?: number
-          product_id?: string | null
           quantity?: number
           record_id?: string
           special_item_id?: string | null
@@ -1092,13 +997,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "money_categories"
             referencedColumns: ["id", "family_id"]
-          },
-          {
-            foreignKeyName: "money_items_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "household_products"
-            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "money_items_record_fkey"

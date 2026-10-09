@@ -1,9 +1,9 @@
 'use client';
 
-import { ShieldCheck, ShoppingBasket, Ticket, type LucideIcon } from 'lucide-react';
+import { ShieldCheck, Ticket, type LucideIcon } from 'lucide-react';
 
 /**
- * 暮らしタブのメニュー（docs/home.md §2）。防災備蓄・日用品・補助くじは
+ * 暮らしタブのメニュー（docs/home.md §2）。防災備蓄・補助くじは
  * 持つデータも見方も別物で、頻繁に開くタブでもないため、切り替えではなく
  * アイコンを並べたメニューにして、押すとその画面へ入る。
  * mobile版の `mobile/src/components/living/LivingMenu.tsx` と同じ項目・並び・文言。
@@ -11,7 +11,7 @@ import { ShieldCheck, ShoppingBasket, Ticket, type LucideIcon } from 'lucide-rea
  * Tailwind が拾えるよう、色のクラスは区分ごとに全文で書く。
  */
 
-export type LivingSection = 'stock' | 'products' | 'lottery';
+export type LivingSection = 'stock' | 'lottery';
 
 export const LIVING_SECTIONS: {
   id: LivingSection;
@@ -21,9 +21,6 @@ export const LIVING_SECTIONS: {
   /** アイコンの色と下地。 */
   icon: string;
   surface: string;
-  /** 画面の中の追加ボタン・絞り込みチップの色。 */
-  accent: string;
-  chip: string;
   Icon: LucideIcon;
 }[] = [
   {
@@ -32,19 +29,7 @@ export const LIVING_SECTIONS: {
     hint: '期限切れと不足に気づく',
     icon: 'text-orange-600',
     surface: 'bg-orange-50 group-hover:bg-orange-100',
-    accent: 'bg-orange-600 hover:bg-orange-700',
-    chip: 'bg-orange-600 text-white',
     Icon: ShieldCheck,
-  },
-  {
-    id: 'products',
-    label: '日用品',
-    hint: 'よく買うものを買い出しリストへ',
-    icon: 'text-emerald-600',
-    surface: 'bg-emerald-50 group-hover:bg-emerald-100',
-    accent: 'bg-emerald-600 hover:bg-emerald-700',
-    chip: 'bg-emerald-600 text-white',
-    Icon: ShoppingBasket,
   },
   {
     id: 'lottery',
@@ -52,8 +37,6 @@ export const LIVING_SECTIONS: {
     hint: '家族のお金で買ってもらえるかも・・・',
     icon: 'text-purple-600',
     surface: 'bg-purple-50 group-hover:bg-purple-100',
-    accent: 'bg-purple-600 hover:bg-purple-700',
-    chip: 'bg-purple-600 text-white',
     Icon: Ticket,
   },
 ];

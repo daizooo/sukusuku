@@ -530,7 +530,7 @@ export function frequentCategoryIds(
     .map(([id]) => id);
 }
 
-/** お店を使った記録（お店の候補を出すのに要る分だけ。日用品の編集では記録を丸ごと読まずにこれだけ読む）。 */
+/** お店を使った記録（お店の候補を出すのに要る分だけ）。 */
 export type StoreUse = Pick<MoneyRecord, 'store' | 'occurredOn'>;
 
 /** 最近使ったお店（新しい順・重複なし）。 */
@@ -1013,7 +1013,6 @@ export interface EditorLine {
   name: string;
   quantity: number;
   unitPrice: number;
-  productId: string | null;
   memo: string;
 }
 
@@ -1049,7 +1048,6 @@ export function groupsFromItems(items: readonly MoneyItem[], nextKey: () => stri
         name: item.name,
         quantity: item.unitPrice === null && !divisible ? 1 : item.quantity,
         unitPrice: item.unitPrice ?? (divisible ? item.amount / item.quantity : item.amount),
-        productId: item.productId,
         memo: item.memo,
       };
     }),
@@ -1066,7 +1064,6 @@ export function itemsFromGroups(groups: readonly EditorGroup[]): MoneyItemDraft[
         categoryId: group.categoryId,
         specialItemId: group.specialItemId,
         specialPlanId: group.specialPlanId,
-        productId: line.productId,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         name: line.name.trim(),
@@ -1135,29 +1132,6 @@ export function pressCalcKey(expression: string, key: string): string {
   // 桁が増えすぎないように（1億円まで）。
   if (lastNumber.length + key.length > 9) return expression;
   return expression + key;
-}
-
-// ---- 日用品から選ぶ ----
-
-/** 日用品の台帳から選ぶことの多い大分類のアイコン（食費・日用品・子ども費・薬）。 */
-const PRODUCT_ICON_KEYS = ['food', 'grocery', 'daily', 'baby', 'pill'];
-
-/**
- * 品目の画面に「日用品から選ぶ」を出すか（docs/kakei.md §3.2）。台帳に品があり、
- * その種類（同じ大分類）で前に記録した品があるか、大分類が食費・日用品などのとき。
- */
-export function canPickProductsFor(
-  categories: readonly MoneyCategory[],
-  products: readonly { moneyCategoryId: string | null }[],
-  categoryId: string | null,
-): boolean {
-  if (categoryId === null || products.length === 0) return false;
-  const topId = topCategoryIdOf(categories, categoryId);
-  if (topId === null) return false;
-  if (products.some((product) => product.moneyCategoryId !== null && topCategoryIdOf(categories, product.moneyCategoryId) === topId)) {
-    return true;
-  }
-  return PRODUCT_ICON_KEYS.includes(baseIconKey(iconKeyOf(categories.find((category) => category.id === topId))));
 }
 
 // ---- 口座の残高（docs/kakei.md §9.3） ----
