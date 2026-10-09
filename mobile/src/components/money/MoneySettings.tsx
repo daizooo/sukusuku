@@ -139,6 +139,7 @@ export default function MoneySettings({
             specialItems={specialItems}
             specialActuals={specialActuals}
             onRecurring={onRecurring}
+            onStores={onStores}
             onBack={back}
             backRef={innerBack}
           />

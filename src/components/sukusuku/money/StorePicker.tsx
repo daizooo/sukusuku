@@ -19,7 +19,7 @@ interface StorePickerProps {
   recent: string[];
   /** 登録していない前に使ったお店（名前で探したときだけ出す）。 */
   others: string[];
-  /** 新しい名前を「お店に登録して使う」こともできるか（毎月の記録のルールでは、ルールが名前を持つので出さない）。 */
+  /** 新しい名前を「お店に登録して使う」こともできるか（毎月の記録のルールでも出す）。 */
   canRegister: boolean;
   /** register: 「お店に登録して使う」を選んだか。 */
   onPick: (store: string, register: boolean) => void;
