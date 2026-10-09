@@ -44,7 +44,7 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadHouseholdProducts } from '@/lib/api/householdProducts';
-import { loadSpecialExpenses } from '@/lib/api/specialExpenses';
+import { loadSpecialItems } from '@/lib/api/specialExpenses';
 import { fiscalYearOfMonth, monthKeyOf, monthKeyOfDate, specialActualsFromRecords } from '@/lib/moneyUtils';
 import MoneyAccountsView from '@/components/money/MoneyAccountsView';
 import MoneyRecordsView from '@/components/money/MoneyRecordsView';
@@ -118,7 +118,7 @@ export default function MoneyScreen() {
     const [money, loadedProducts, special, loadedSecurities] = await Promise.all([
       loadMoney(supabase, id),
       loadHouseholdProducts(supabase, id),
-      loadSpecialExpenses(supabase, id),
+      loadSpecialItems(supabase, id),
       // 証券が読めなくても、ほかの面は出す。
       loadSecurities(supabase, id, historyWanted.current).catch(() => NO_SECURITIES),
     ]);
@@ -131,7 +131,7 @@ export default function MoneyScreen() {
     setBalances(money.balances);
     setSecurities(loadedSecurities);
     setProducts(loadedProducts);
-    setSpecialItems(special.items);
+    setSpecialItems(special);
   }, []);
 
   useEffect(() => {

@@ -47,41 +47,38 @@ export interface ListsSnapshot {
 }
 
 export async function loadLists(supabase: SupabaseDb, familyId: string): Promise<ListsSnapshot> {
-  const { data: listRows, error: listError } = await supabase
-    .from('lists')
-    .select('*')
-    .eq('family_id', familyId)
-    // 固定したリストが先。中は position の順（画面側の並びと同じ）。
-    .order('is_pinned', { ascending: false })
-    .order('position', { ascending: true })
-    .order('created_at', { ascending: true });
-  if (listError) throw listError;
-
-  const lists = (listRows ?? []).map(rowToList);
-  if (lists.length === 0) return { lists, groups: [], items: [] };
-
-  const listIds = lists.map((list) => list.id);
-  const [groupResult, itemResult] = await Promise.all([
+  // グループと項目は、リストの一覧を待たずに並べて読む（待つと往復が1つ増える）。
+  // 見える行はDBのRLSがリストの見え方（家族・自分だけのリスト）に合わせて絞る。念のため、読んだリストのものだけ使う。
+  const [listResult, groupResult, itemResult] = await Promise.all([
+    supabase
+      .from('lists')
+      .select('*')
+      .eq('family_id', familyId)
+      // 固定したリストが先。中は position の順（画面側の並びと同じ）。
+      .order('is_pinned', { ascending: false })
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true }),
     supabase
       .from('list_groups')
       .select('*')
-      .in('list_id', listIds)
       .order('position', { ascending: true })
       .order('created_at', { ascending: true }),
     supabase
       .from('list_items')
       .select('*')
-      .in('list_id', listIds)
       .order('position', { ascending: true })
       .order('created_at', { ascending: true }),
   ]);
+  if (listResult.error) throw listResult.error;
   if (groupResult.error) throw groupResult.error;
   if (itemResult.error) throw itemResult.error;
 
+  const lists = (listResult.data ?? []).map(rowToList);
+  const listIds = new Set(lists.map((list) => list.id));
   return {
     lists,
-    groups: (groupResult.data ?? []).map(rowToGroup),
-    items: (itemResult.data ?? []).map(rowToItem),
+    groups: (groupResult.data ?? []).filter((row) => listIds.has(row.list_id)).map(rowToGroup),
+    items: (itemResult.data ?? []).filter((row) => listIds.has(row.list_id)).map(rowToItem),
   };
 }
 

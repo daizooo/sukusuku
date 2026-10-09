@@ -61,6 +61,21 @@ const itemFields = (draft: SpecialItemDraft): TablesUpdate<'special_items'> => (
   note: draft.note.trim(),
 });
 
+/**
+ * 項目と予定だけ読む（実績は読まない）。家計タブは実績を記録から数える（specialActualsFromRecords）ので、
+ * 起動のたびに実績（品目）の問い合わせを足さなくてよい。
+ */
+export async function loadSpecialItems(supabase: SupabaseDb, familyId: string): Promise<SpecialItem[]> {
+  const [itemResult, planResult] = await Promise.all([
+    supabase.from('special_items').select('*').eq('family_id', familyId).order('position', { ascending: true }),
+    supabase.from('special_plans').select('*').eq('family_id', familyId),
+  ]);
+  if (itemResult.error) throw itemResult.error;
+  if (planResult.error) throw planResult.error;
+  const plans = planResult.data ?? [];
+  return (itemResult.data ?? []).map((row) => rowToItem(row, plans));
+}
+
 export async function loadSpecialExpenses(
   supabase: SupabaseDb,
   familyId: string,

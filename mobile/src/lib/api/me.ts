@@ -17,18 +17,60 @@ export interface Membership {
   role: LoginRole;
 }
 
-export async function getMyMembership(supabase: SupabaseDb, userId: string): Promise<Membership> {
+// 所属と「最初に開くタブ」は同じ users の1行なので、1回の問い合わせで両方取って使い回す。
+// 各タブ・起動の入口・裏の処理（通知の掃除など）がそれぞれ取りに行くと、同じ問い合わせが何度も走り、
+// どのタブもデータを読み始める前にこの往復を待つことになる。ログインしたところで先に取っておく（prefetchMe）。
+interface Me {
+  membership: Membership;
+  startTab: StartTab;
+}
+
+const meRequests = new Map<string, Promise<Me>>();
+
+async function fetchMe(supabase: SupabaseDb, userId: string): Promise<Me> {
   const { data, error } = await supabase
     .from('users')
-    .select('family_id, role')
+    .select('family_id, role, start_tab')
     .eq('id', userId)
     .single();
   if (error) throw error;
   return {
-    userId,
-    familyId: data.family_id,
-    role: data.role === 'papa' || data.role === 'mama' ? data.role : null,
+    membership: {
+      userId,
+      familyId: data.family_id,
+      role: data.role === 'papa' || data.role === 'mama' ? data.role : null,
+    },
+    startTab: toStartTab(data.start_tab),
   };
+}
+
+function loadMe(supabase: SupabaseDb, userId: string): Promise<Me> {
+  const cached = meRequests.get(userId);
+  if (cached) return cached;
+  const request = fetchMe(supabase, userId);
+  meRequests.set(userId, request);
+  // 読めなかったとき・まだ家族に属していないときは覚えない（次に呼んだときに取り直す）。
+  request.then(
+    (me) => {
+      if (me.membership.familyId === null) meRequests.delete(userId);
+    },
+    () => meRequests.delete(userId),
+  );
+  return request;
+}
+
+/** 控えた所属を捨てる（ログアウトしたとき。次にログインした人の分を取り直す）。 */
+export function clearMyMembershipCache(): void {
+  meRequests.clear();
+}
+
+/** ログインしたところで先に取っておく。画面が開く頃には届いている。失敗は無視してよい（開いた画面が取り直す）。 */
+export function prefetchMe(supabase: SupabaseDb, userId: string): void {
+  loadMe(supabase, userId).catch(() => {});
+}
+
+export async function getMyMembership(supabase: SupabaseDb, userId: string): Promise<Membership> {
+  return (await loadMe(supabase, userId)).membership;
 }
 
 /** アプリを開いたときに最初に出すタブ。users.start_tab に対応（docs/family-app.md §3.4）。 */
@@ -59,9 +101,7 @@ const toStartTab = (value: string | null | undefined): StartTab =>
   START_TABS.find((tab) => tab === value) ?? 'schedule';
 
 export async function getMyStartTab(supabase: SupabaseDb, userId: string): Promise<StartTab> {
-  const { data, error } = await supabase.from('users').select('start_tab').eq('id', userId).single();
-  if (error) throw error;
-  return toStartTab(data.start_tab);
+  return (await loadMe(supabase, userId)).startTab;
 }
 
 export async function updateMyStartTab(
@@ -71,4 +111,6 @@ export async function updateMyStartTab(
 ): Promise<void> {
   const { error } = await supabase.from('users').update({ start_tab: tab }).eq('id', userId);
   if (error) throw error;
+  // 控えていた最初のタブが古くなったので、次に読むときに取り直す。
+  meRequests.delete(userId);
 }

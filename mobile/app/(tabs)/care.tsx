@@ -255,26 +255,36 @@ export default function CareScreen() {
         const membership = await getMyMembership(supabase, userId);
         if (!isMounted) return;
         setFamilyId(membership.familyId);
-        if (!membership.familyId) return;
-        const familyMembers = await listFamilyMembers(supabase, membership.familyId);
-        if (isMounted) setMembers(familyMembers);
-        // 名前・誕生日は設定タブの「家族」の子（docs/family-app.md §3）。
-        const [child, feeding] = await Promise.all([
-          getChildMember(supabase, membership.familyId),
-          getFeedingSettings(supabase, membership.familyId),
+        const { familyId: ownFamilyId } = membership;
+        if (!ownFamilyId) return;
+        // どれも家族のIDだけで取れるので、順に待たずに並べて読む。
+        // 「次の授乳」の見出しは名前・誕生日・間隔が揃えば出せるので、成長記録を待たずに読み込み中を解く。
+        await Promise.all([
+          listFamilyMembers(supabase, ownFamilyId).then((familyMembers) => {
+            if (isMounted) setMembers(familyMembers);
+          }),
+          // 名前・誕生日は設定タブの「家族」の子（docs/family-app.md §3）。
+          Promise.all([getChildMember(supabase, ownFamilyId), getFeedingSettings(supabase, ownFamilyId)])
+            .then(([child, feeding]) => {
+              if (!isMounted) return;
+              if (child) {
+                setBabyName(child.displayName);
+                // 見出しの月齢と、成長曲線の生後ヶ月を自動で埋めるのに使う。
+                setBirthDate(child.birthDate);
+              }
+              setIntervalMinutes(feeding.intervalMinutes);
+            })
+            .finally(() => {
+              if (isMounted) setIsLoadingFamily(false);
+            }),
+          // 成長記録は日付の送りとは関わらないので、ここで1回だけ読む。
+          ensureChildId(supabase, ownFamilyId).then(async (id) => {
+            if (!isMounted) return;
+            setChildId(id);
+            const records = await listGrowthRecords(supabase, id);
+            if (isMounted) setGrowthData(records);
+          }),
         ]);
-        if (isMounted && child) {
-          setBabyName(child.displayName);
-          // 見出しの月齢と、成長曲線の生後ヶ月を自動で埋めるのに使う。
-          setBirthDate(child.birthDate);
-        }
-        if (isMounted) setIntervalMinutes(feeding.intervalMinutes);
-        // 成長記録は日付の送りとは関わらないので、ここで1回だけ読む。
-        const id = await ensureChildId(supabase, membership.familyId);
-        if (!isMounted) return;
-        setChildId(id);
-        const records = await listGrowthRecords(supabase, id);
-        if (isMounted) setGrowthData(records);
       } catch (error) {
         // 圏外でも端末の控えは出せるようにしたいので、ここでは止めない。
         if (isMounted) setErrorMessage(toMessage(error));
