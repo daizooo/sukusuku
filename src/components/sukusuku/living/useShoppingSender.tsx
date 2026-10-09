@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { ListBoard, ListGroup } from '@/types/app';
+import type { ListBoard } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { loadLists } from '@/lib/api/lists';
 import { addToShoppingList } from '@/lib/api/householdProducts';
@@ -25,7 +25,6 @@ const NOTICE_MS = 3000;
 export function useShoppingSender(familyId: string) {
   const supabase = useMemo(() => createClient(), []);
   const [lists, setLists] = useState<ListBoard[]>([]);
-  const [groups, setGroups] = useState<ListGroup[]>([]);
   // 端末に覚えた送り先。サーバー側の描画では読めず null になるが、リストを読み終えるまでは
   // どちらでも「未設定」と出るので、表示は食い違わない。
   const [listId, setListId] = useState<string | null>(() => readShoppingListId());
@@ -37,7 +36,6 @@ export function useShoppingSender(familyId: string) {
     try {
       const snapshot = await loadLists(supabase, familyId);
       setLists(snapshot.lists);
-      setGroups(snapshot.groups);
     } catch {
       // 読めなくても、送るときにもう一度読む。
     }
@@ -49,7 +47,6 @@ export function useShoppingSender(familyId: string) {
       .then((snapshot) => {
         if (!isMounted) return;
         setLists(snapshot.lists);
-        setGroups(snapshot.groups);
       })
       .catch(() => {
         // 読めなくても、送るときにもう一度読む。
@@ -131,8 +128,6 @@ export function useShoppingSender(familyId: string) {
   return {
     /** 送り先のリストの名前。まだ決めていなければ null。 */
     listName: target?.name ?? null,
-    /** 送り先のリストのグループ名（日用品のお店の候補に使う）。 */
-    groupNames: target ? groups.filter((group) => group.listId === target.id).map((group) => group.name) : [],
     send,
     openPicker,
     picker,

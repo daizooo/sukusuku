@@ -399,7 +399,7 @@ export const recordTotal = (record: Pick<MoneyRecord, 'items'>): number =>
   record.items.reduce((sum, item) => sum + item.amount, 0);
 
 /** 新しい順（日付が同じなら入った順の逆）。 */
-export function sortRecordsDesc(records: readonly MoneyRecord[]): MoneyRecord[] {
+export function sortRecordsDesc<T extends { occurredOn: string }>(records: readonly T[]): T[] {
   return records
     .map((record, index) => ({ record, index }))
     .sort((a, b) =>
@@ -530,8 +530,11 @@ export function frequentCategoryIds(
     .map(([id]) => id);
 }
 
+/** お店を使った記録（お店の候補を出すのに要る分だけ。日用品の編集では記録を丸ごと読まずにこれだけ読む）。 */
+export type StoreUse = Pick<MoneyRecord, 'store' | 'occurredOn'>;
+
 /** 最近使ったお店（新しい順・重複なし）。 */
-export function recentStores(records: readonly MoneyRecord[], limit = 12): string[] {
+export function recentStores(records: readonly StoreUse[], limit = 12): string[] {
   const seen = new Set<string>();
   const stores: string[] = [];
   for (const record of sortRecordsDesc(records)) {
@@ -575,7 +578,7 @@ export function matchesStore(name: string, query: string): boolean {
  */
 export function storeChoices(
   stores: readonly MoneyStore[],
-  records: readonly MoneyRecord[],
+  records: readonly StoreUse[],
   recentLimit = 12,
 ): { registered: string[]; recent: string[]; others: string[] } {
   const archived = new Set(stores.filter((store) => store.archived).map((store) => store.name));
