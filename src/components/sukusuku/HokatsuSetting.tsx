@@ -21,10 +21,10 @@ export default function HokatsuSetting({ children }: HokatsuSettingProps) {
   const toggle = () => setVisible(!visible);
 
   return (
-    <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+    <section className="bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100">
       <div className="flex items-center gap-2">
         <ClipboardCheck size={18} className="text-blue-500" />
-        <h3 className="flex-1 font-bold text-gray-800">保活</h3>
+        <h3 className="flex-1 font-extrabold text-gray-900">保活</h3>
         <span className="text-xs font-medium text-gray-500">表示する</span>
         <button
           type="button"
@@ -47,7 +47,7 @@ export default function HokatsuSetting({ children }: HokatsuSettingProps) {
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="mt-3 pt-3 w-full border-t border-gray-100 flex items-center justify-between text-sm font-medium text-blue-600"
+          className="mt-2 pt-2 w-full border-t border-gray-100 flex items-center justify-between text-sm font-bold text-blue-600"
         >
           見学チェックリストを開く
           <ChevronRight size={18} className="text-gray-400" />

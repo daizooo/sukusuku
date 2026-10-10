@@ -37,9 +37,9 @@ export default function InfoTab({
   hokatsuPanel,
 }: InfoTabProps) {
   return (
-    <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
+    <div className="px-4 pt-3 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <div className="flex-1 overflow-y-auto">
-        <div className="space-y-6 pb-6">
+        <div className="space-y-3 pb-6">
           <FamilySection familyId={familyId} userId={userId} />
 
           {/* 通知。授乳の目安・検温のお知らせも同じ枠にまとめる（docs/family-app.md §7-5） */}

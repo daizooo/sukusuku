@@ -96,9 +96,9 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
   };
 
   return (
-    <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-      <div className="flex items-center justify-between mb-4 border-b pb-2">
-        <h3 className="font-bold text-gray-800 flex items-center">
+    <section className="bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100">
+      <div className="flex items-center justify-between mb-2.5 border-b pb-1.5">
+        <h3 className="font-extrabold text-gray-900 flex items-center">
           <UserCog size={18} className="mr-2 text-blue-500" /> アカウント
         </h3>
       </div>
@@ -115,19 +115,19 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
           </button>
         </div>
       ) : (
-        <div className="space-y-4 text-sm">
+        <div className="space-y-2 text-sm">
           <div className="flex justify-between items-center py-1">
-            <span className="text-gray-500 text-xs">お名前</span>
-            <span className="font-medium text-gray-700">{name || '未設定'}</span>
+            <span className="text-gray-500 text-xs font-semibold">お名前</span>
+            <span className="font-bold text-gray-900">{name || '未設定'}</span>
           </div>
 
           <div className="flex justify-between items-center py-1">
-            <span className="text-gray-500 text-xs">メールアドレス</span>
-            <span className="font-medium text-gray-700 text-xs break-all text-right ml-2">{email || '未取得'}</span>
+            <span className="text-gray-500 text-xs font-semibold">メールアドレス</span>
+            <span className="font-bold text-gray-900 text-xs break-all text-right ml-2">{email || '未取得'}</span>
           </div>
 
           <div className="flex justify-between items-center gap-2 py-1">
-            <span className="text-gray-500 text-xs">最初に開くタブ</span>
+            <span className="text-gray-500 text-xs font-semibold">最初に開くタブ</span>
             <div className="flex flex-wrap justify-end gap-1">
               {START_TABS.map((tab) => (
                 <button

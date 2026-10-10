@@ -137,11 +137,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 20,
-    gap: 12,
+    padding: 14,
+    gap: 8,
   },
   // この端末で受け取るかどうかのトグルが、授乳の目安・検温を含む通知すべての入り口。
   header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sectionTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.textSubtle },
+  sectionTitle: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.text },
   error: { fontSize: 12, fontWeight: '400', color: colors.danger },
 });

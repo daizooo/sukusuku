@@ -259,7 +259,7 @@ export default function MoneyReviewView({
                         ) : (
                           <Text style={type.faint}>生活費の記録なし</Text>
                         )}
-                        {row.special > 0 && <Text style={type.faint}>特別費 {formatYen(row.special)}</Text>}
+                        {row.special > 0 && <Text style={type.faint}>特別費 −{formatYen(row.special)}</Text>}
                       </View>
                       {estimatesInMonth(records, row.monthKey).length > 0 && <EstimateBadge />}
                       {row.recorded && (
@@ -324,7 +324,7 @@ function SpecialRow({
             特別費
           </Text>
           <Text style={[styles.rowHeadline, special.spent === 0 && styles.muted]}>
-            {isMonth ? 'この月' : '年'} {formatYen(special.spent)}
+            {isMonth ? 'この月' : '年'} {special.spent > 0 ? `−${formatYen(special.spent)}` : formatYen(special.spent)}
           </Text>
         </View>
         {special.yearBudget > 0 ? (

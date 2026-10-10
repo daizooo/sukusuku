@@ -40,10 +40,10 @@ export default function FeedingIntervalSetting({
 
   return (
     // 「通知」の枠（NotificationSetting）の中に置く。上の項目とは線で区切る。
-    <section className="border-t border-gray-100 pt-3 mt-3">
+    <section className="border-t border-gray-100 pt-2 mt-2">
       <div className="flex items-center gap-2">
         <BabyBottleIcon size={16} className="text-amber-600" />
-        <span className="flex-1 text-sm font-medium text-gray-800">授乳の間隔</span>
+        <span className="flex-1 text-sm font-bold text-gray-900">授乳の間隔</span>
         {FEEDING_INTERVAL_OPTIONS.map((minutes) => (
           <button
             key={minutes}
