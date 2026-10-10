@@ -296,8 +296,8 @@ export interface ListItem {
   position: number;
 }
 
-// 予定・リスト・育児・設定の4つ（docs/family-app.md §4.1）。
-export type TabId = 'schedule' | 'list' | 'care' | 'money' | 'living' | 'info';
+// 予定・リスト・育児・家計・設定の5つ（docs/family-app.md §4.1）。
+export type TabId = 'schedule' | 'list' | 'care' | 'money' | 'info';
 
 // スケジュールタブの表示切り替え。既定は月（カレンダー）。
 export type ScheduleView = 'month' | 'day' | 'list';

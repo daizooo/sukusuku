@@ -17,7 +17,7 @@ export const TAB_PARAM = 'tab';
 /** 育児タブで開く入力画面の種類。開いたら消す（更新のたびに開き直さないため）。 */
 export const OPEN_LOG_PARAM = 'open';
 
-const TAB_IDS: TabId[] = ['schedule', 'list', 'care', 'money', 'living', 'info'];
+const TAB_IDS: TabId[] = ['schedule', 'list', 'care', 'money', 'info'];
 
 // 4タブにまとめる前のタブ（docs/family-app.md §4.1）。前に届いた通知や、
 // 開いたままの画面のURLから来ても、まとめた先のタブを開く。

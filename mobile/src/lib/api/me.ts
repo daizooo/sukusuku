@@ -71,16 +71,15 @@ export async function getMyMembership(supabase: SupabaseDb, userId: string): Pro
 }
 
 /** アプリを開いたときに最初に出すタブ。users.start_tab に対応（docs/family-app.md §3.4）。 */
-export type StartTab = 'schedule' | 'list' | 'care' | 'money' | 'living' | 'settings';
+export type StartTab = 'schedule' | 'list' | 'care' | 'money' | 'settings';
 
-export const START_TABS: StartTab[] = ['schedule', 'list', 'care', 'money', 'living', 'settings'];
+export const START_TABS: StartTab[] = ['schedule', 'list', 'care', 'money', 'settings'];
 
 export const START_TAB_LABEL: Record<StartTab, string> = {
   schedule: '予定',
   list: 'リスト',
   care: '育児',
   money: '家計',
-  living: '暮らし',
   settings: '設定',
 };
 
@@ -90,10 +89,10 @@ export const START_TAB_ROUTE: Record<StartTab, string> = {
   list: '/list',
   care: '/care',
   money: '/money',
-  living: '/living',
   settings: '/info',
 };
 
+// 暮らしタブ（'living'）は廃止した。本番DBの users.start_tab に残っていても、予定から始める。
 const toStartTab = (value: string | null | undefined): StartTab =>
   START_TABS.find((tab) => tab === value) ?? 'schedule';
 

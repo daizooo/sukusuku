@@ -6,6 +6,8 @@ import { Check, ChevronDown, ChevronRight, GripVertical, Lock, Pin, PinOff, Plus
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
 import { useDragReorder } from '../ui/useDragReorder';
 import ListEditorModal, { DEFAULT_GROUP_LABEL, type ListDraft } from '../modals/ListEditorModal';
+import StockEntryRow from '../living/StockEntryRow';
+import StockScreen from './StockScreen';
 
 /**
  * 買い出し・やりたいこと・やることなどのリスト（docs/lists.md）。
@@ -30,6 +32,8 @@ import ListEditorModal, { DEFAULT_GROUP_LABEL, type ListDraft } from '../modals/
  * 仕組みは ui/useDragReorder.ts。動かせるのは同じ枠の中だけ。
  */
 interface ListTabProps {
+  /** 防災備蓄の入口（一覧の下の細い1行）と、その画面で使う。 */
+  familyId: string;
   lists: ListBoard[];
   groups: ListGroup[];
   items: ListItem[];
@@ -467,6 +471,7 @@ function ListOverviewCard({
 }
 
 export default function ListTab({
+  familyId,
   lists,
   groups,
   items,
@@ -494,6 +499,8 @@ export default function ListTab({
   // 今の編集が「新しく作ったリスト」か。見出しへ入力を移し、何も書かずに閉じたら消す。
   const [isNewList, setIsNewList] = useState(false);
   const [showDone, setShowDone] = useState(false);
+  // 防災備蓄の画面を開いているか。開いているあいだはリストの一覧の代わりにその画面を出す（戻る操作で一覧へ戻る）。
+  const [stockOpen, setStockOpen] = useState(false);
 
   // 固定したリストが先。中は並び順（position）で、同じなら読み込んだ順のまま。
   const sortedLists = useMemo(
@@ -615,6 +622,10 @@ export default function ListTab({
     if (next !== list.name) patchList(list, { name: next });
   };
 
+  if (stockOpen) {
+    return <StockScreen familyId={familyId} onClose={() => setStockOpen(false)} />;
+  }
+
   if (isLoading) {
     return (
       <div className="p-4 h-full">
@@ -625,18 +636,21 @@ export default function ListTab({
 
   if (lists.length === 0) {
     return (
-      <div className="p-4 h-full flex flex-col items-center justify-center text-center space-y-3">
-        <p className="text-sm text-gray-400">リストはまだありません</p>
-        <button
-          onClick={onAddDefaultLists}
-          className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 hover:bg-blue-100 transition"
-        >
-          よく使う3つのリストを作る
-          <span className="block font-normal text-[10px] text-blue-400 mt-1">買い出し・やりたいこと・やること</span>
-        </button>
-        <button onClick={() => void createList()} className="text-xs font-bold text-gray-500 px-4 py-2">
-          自分でリストを作る
-        </button>
+      <div className="p-4 h-full flex flex-col">
+        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-3">
+          <p className="text-sm text-gray-400">リストはまだありません</p>
+          <button
+            onClick={onAddDefaultLists}
+            className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 hover:bg-blue-100 transition"
+          >
+            よく使う3つのリストを作る
+            <span className="block font-normal text-[10px] text-blue-400 mt-1">買い出し・やりたいこと・やること</span>
+          </button>
+          <button onClick={() => void createList()} className="text-xs font-bold text-gray-500 px-4 py-2">
+            自分でリストを作る
+          </button>
+        </div>
+        <StockEntryRow familyId={familyId} onOpen={() => setStockOpen(true)} />
       </div>
     );
   }
@@ -668,6 +682,9 @@ export default function ListTab({
             <p className="text-[10px] text-gray-300 text-center pt-3">長押しで並べ替え</p>
           )}
         </div>
+
+      {/* 防災備蓄の入口。一覧のスクロールの外に、目立たせず固定する（docs/home.md §2）。 */}
+      <StockEntryRow familyId={familyId} onOpen={() => setStockOpen(true)} />
 
       {/* 編集モード: 開いたカードを画面の中央に拡大して出す（Keepと同じ）。
           見出し・項目・グループ・固定・共有・削除をここで済ませる。 */}
