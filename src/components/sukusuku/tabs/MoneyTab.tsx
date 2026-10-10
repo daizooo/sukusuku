@@ -415,7 +415,7 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
       </div>
 
       {/* 福引チャンスと家計の設定。＋の左に小さなピルで置く（福引は紫で福引らしさを出し、設定は控えめなグレー）。 */}
-      <div className="absolute bottom-[27px] right-[82px] z-20 flex h-[34px] items-center overflow-hidden rounded-full border border-gray-200 bg-white shadow-md">
+      <div className="absolute bottom-[23px] right-[74px] z-20 flex h-[34px] items-center overflow-hidden rounded-full border border-gray-200 bg-white shadow-md">
         <button
           type="button"
           aria-label="福引チャンス"
@@ -439,9 +439,9 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
         type="button"
         aria-label="記録を追加"
         onClick={() => setEditing('new')}
-        className="absolute bottom-4 right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition-all hover:bg-blue-700 hover:scale-105 active:scale-95"
+        className="absolute bottom-4 right-4 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition-all hover:bg-blue-700 hover:scale-105 active:scale-95"
       >
-        <Plus size={28} />
+        <Plus size={24} />
       </button>
 
       {editing !== null && (

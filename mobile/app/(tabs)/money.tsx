@@ -452,7 +452,7 @@ export default function MoneyScreen() {
         disabled={!familyId}
         style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
       >
-        <Plus size={28} color={colors.primaryText} />
+        <Plus size={24} color={colors.primaryText} />
       </Pressable>
 
       {editing !== null && (
@@ -522,20 +522,20 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     bottom: 16,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.money,
     elevation: 6,
   },
   fabPressed: { opacity: 0.85 },
-  // ＋（右16・幅56）の左、＋と同じ高さの中心（下から44）に置く小さなピル。大きさは設定タブのボタン（36）に近づけた。
+  // ＋（右16・幅48）の左、＋と同じ高さの中心（下から40）に置く小さなピル。大きさは設定タブのボタン（36）に近づけた。
   pill: {
     position: 'absolute',
-    right: 82,
-    bottom: 27,
+    right: 74,
+    bottom: 23,
     height: 34,
     flexDirection: 'row',
     alignItems: 'center',
