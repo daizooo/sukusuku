@@ -52,16 +52,21 @@ function Stepper({
   right?: ReactNode;
 }) {
   return (
-    <View style={styles.stepper}>
+    // 右に何も置かないとき（月の送り）は中央に寄せる。置くとき（年・期間）は左に寄せて、右に並べる。
+    <View style={[styles.stepper, !right && styles.stepperCentered]}>
       <Pressable accessibilityRole="button" accessibilityLabel={prevLabel} onPress={onPrev} hitSlop={8} style={styles.stepButton}>
         <ChevronLeft size={18} color={colors.textSubtle} />
       </Pressable>
-      <Text style={styles.stepLabel}>{label}</Text>
+      <Text style={[styles.stepLabel, !right && styles.stepLabelCentered]}>{label}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel={nextLabel} onPress={onNext} hitSlop={8} style={styles.stepButton}>
         <ChevronRight size={18} color={colors.textSubtle} />
       </Pressable>
-      <View style={styles.flex} />
-      {right}
+      {right ? (
+        <>
+          <View style={styles.flex} />
+          {right}
+        </>
+      ) : null}
     </View>
   );
 }
@@ -392,6 +397,7 @@ const styles = StyleSheet.create({
   segmentText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   segmentTextSelected: { fontWeight: '700', color: colors.text },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
+  stepperCentered: { justifyContent: 'center' },
   stepButton: {
     width: 30,
     height: 30,
@@ -401,6 +407,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutralSurface,
   },
   stepLabel: { fontSize: 17, fontWeight: '700', color: colors.text },
+  // 中央に寄せるときは、月の桁数（9月/10月）が変わっても ‹ › の位置が動かないよう幅をそろえる。
+  stepLabelCentered: { minWidth: 120, textAlign: 'center' },
   card: {
     borderRadius: 16,
     borderWidth: 1,

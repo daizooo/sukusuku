@@ -431,7 +431,7 @@ export default function MoneyScreen() {
           onPress={() => router.push('/lottery')}
           style={styles.pillLottery}
         >
-          <Ticket size={20} color={colors.livingLottery} />
+          <Ticket size={18} color={colors.livingLottery} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -440,7 +440,7 @@ export default function MoneyScreen() {
           disabled={!familyId}
           style={styles.pillSettings}
         >
-          <Settings size={20} color={colors.textMuted} />
+          <Settings size={18} color={colors.textMuted} />
         </Pressable>
       </View>
 
@@ -531,12 +531,12 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   fabPressed: { opacity: 0.85 },
-  // ＋（右16・幅56）の左、＋と同じ高さの中心に置く小さなピル。
+  // ＋（右16・幅56）の左、＋と同じ高さの中心（下から44）に置く小さなピル。大きさは設定タブのボタン（36）に近づけた。
   pill: {
     position: 'absolute',
     right: 82,
-    bottom: 24,
-    height: 40,
+    bottom: 27,
+    height: 34,
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 20,
@@ -546,8 +546,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     elevation: 4,
   },
-  pillLottery: { width: 46, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.livingLotterySurface },
-  pillSettings: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center' },
+  pillLottery: { width: 40, height: 34, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.livingLotterySurface },
+  pillSettings: { width: 38, height: 34, alignItems: 'center', justifyContent: 'center' },
   // 3つの面の切り替え。等幅に並べ、選んでいる面は濃い文字と青い下線。
   views: {
     flexDirection: 'row',
