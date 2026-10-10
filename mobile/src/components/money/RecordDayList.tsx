@@ -5,7 +5,6 @@ import { colors } from '@/lib/theme';
 import { WEEKDAY_LABELS } from '@/lib/dateUtils';
 import {
   formatBalance,
-  formatSignedYen,
   formatYen,
   groupItems,
   groupRecordsByDay,
@@ -128,7 +127,7 @@ export default function RecordDayList({
                     </Text>
                   </View>
                   <Text style={[styles.amount, check.diff !== null && check.diff > 0 && styles.income]}>
-                    {check.diff === null ? formatBalance(check.balance.amount) : check.diff === 0 ? formatYen(0) : formatSignedYen(check.diff)}
+                    {formatBalance(check.diff === null ? check.balance.amount : check.diff)}
                   </Text>
                 </Pressable>
               ))}

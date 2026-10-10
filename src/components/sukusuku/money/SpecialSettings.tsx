@@ -51,8 +51,8 @@ export default function SpecialSettings({ familyId, year: initialYear, items, on
   );
   const categories = useMemo(() => categoryOptions(items), [items]);
   const label = kind === 'income' ? '収入予定' : '支出予定';
-  // 支出予定は「−」をつけた黒、収入予定は「+」をつけた緑（0円は符号なし）。
-  const signed = (amount: number) => (amount === 0 ? formatYen(0) : kind === 'income' ? `+${formatYen(amount)}` : `−${formatYen(amount)}`);
+  // 支出予定は「−」をつけた黒、収入予定は緑（「+」はつけない。0円は符号なし）。
+  const signed = (amount: number) => (amount === 0 ? formatYen(0) : kind === 'income' ? formatYen(amount) : `−${formatYen(amount)}`);
   const plusClass = kind === 'income' ? incomeAmountClass : 'text-gray-900';
 
   const failed = (what: string) => window.alert(`${what}できませんでした。もう一度お試しください。`);

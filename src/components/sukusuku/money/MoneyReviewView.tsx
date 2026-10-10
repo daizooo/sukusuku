@@ -154,7 +154,7 @@ export default function MoneyReviewView({
         <Hero
           compact
           label={isMonth ? '生活費の収支' : '生活費の収支（年）'}
-          value={formatSignedYen(balance)}
+          value={formatBalance(balance)}
           plus={balance > 0}
           note={
             planned !== null
@@ -162,7 +162,7 @@ export default function MoneyReviewView({
               : `収入 − 特別費以外の支出・記録のある${yearSummary.recordedMonths}か月ぶん`
           }
         >
-          <StatRow compact label="収入" value={`+${formatYen(income)}`} plus={income > 0} />
+          <StatRow compact label="収入" value={formatYen(income)} plus={income > 0} />
           <StatRow
             compact
             label="生活費"
@@ -268,7 +268,7 @@ export default function MoneyReviewView({
                         <span
                           className={`text-[17px] font-extrabold tabular-nums ${row.balance > 0 ? incomeAmountClass : 'text-gray-900'}`}
                         >
-                          {formatSignedYen(row.balance)}
+                          {formatBalance(row.balance)}
                         </span>
                       )}
                       <ChevronRight size={16} className="text-gray-400" />

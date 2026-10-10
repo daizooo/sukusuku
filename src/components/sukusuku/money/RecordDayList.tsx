@@ -5,7 +5,6 @@ import type { MoneyCategory, MoneyRecord, MoneyWallet, SpecialItem } from '@/typ
 import { WEEKDAY_LABELS } from '@/lib/dateUtils';
 import {
   formatBalance,
-  formatSignedYen,
   formatYen,
   groupItems,
   groupRecordsByDay,
@@ -130,7 +129,7 @@ export default function RecordDayList({
                   </span>
                   <span className={`min-w-0 flex-1 truncate ${rowTitle}`}>{check.diff === null ? 'はじめの残高' : '残高を補正'}</span>
                   <span className={check.diff !== null && check.diff > 0 ? amount.replace('text-gray-900', incomeAmountClass) : amount}>
-                    {check.diff === null ? formatBalance(check.balance.amount) : check.diff === 0 ? formatYen(0) : formatSignedYen(check.diff)}
+                    {formatBalance(check.diff === null ? check.balance.amount : check.diff)}
                   </span>
                 </button>
               ))}
