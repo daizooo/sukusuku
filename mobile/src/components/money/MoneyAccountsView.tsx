@@ -105,7 +105,7 @@ export default function MoneyAccountsView({
             label="総残高"
             center
             value={formatBalance(summary.total)}
-            minus={summary.total < 0}
+            compact
             note={usable.length === 0 ? '出金元を足すと、残高が出ます' : undefined}
           />
         </Pressable>
@@ -115,8 +115,11 @@ export default function MoneyAccountsView({
           if (inType.length === 0) return null;
           return (
             <View key={walletType.id} style={styles.section}>
-              <Text style={styles.sectionTitle}>{walletType.label}</Text>
-              {/* Zaim の「残高」と同じく2列に並べる（2026-10-08）。 */}
+              <View style={styles.sectionHead}>
+                <Text style={styles.sectionTitle}>{walletType.label}</Text>
+                <Text style={styles.sectionSum}>{formatBalance(inType.reduce((sum, row) => sum + row.amount, 0))}</Text>
+              </View>
+              {/* Zaim の「残高」と同じく2列に並べる（2026-10-08）。金額は大きく太く、プラスは緑・マイナスは「−」と黒（2026-10-10）。 */}
               <View style={styles.grid}>
                 {inType.map((row) => (
                   <Pressable
@@ -126,21 +129,12 @@ export default function MoneyAccountsView({
                     style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
                   >
                     <View style={styles.tileTop}>
-                      <View style={styles.iconBox}>
-                        <WalletTypeIcon type={row.wallet.type} size={18} color={row.wallet.iconColor} />
-                      </View>
-                      <View style={styles.flex}>
-                        <Text style={styles.tileName} numberOfLines={2}>
-                          {row.wallet.name}
-                        </Text>
-                        {row.wallet.isSaving && (
-                          <Text style={type.faint} numberOfLines={1}>
-                            貯金用
-                          </Text>
-                        )}
-                      </View>
+                      <WalletTypeIcon type={row.wallet.type} size={20} color={row.wallet.iconColor} />
+                      <Text style={styles.tileName} numberOfLines={2}>
+                        {row.wallet.name}
+                      </Text>
                     </View>
-                    <Text style={[type.amount, styles.tileAmount, row.amount < 0 && type.minus]}>{formatBalance(row.amount)}</Text>
+                    <Text style={[styles.tileAmount, row.amount > 0 && styles.tilePlus]}>{formatBalance(row.amount)}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -229,12 +223,14 @@ export default function MoneyAccountsView({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  hero: { paddingTop: 12 },
+  hero: { paddingTop: 6 },
   // 右下の「＋」に一覧の最後が隠れないよう、下を空ける。
   content: { paddingHorizontal: 16, paddingBottom: 96 },
   message: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
-  section: { marginTop: 20, gap: 6 },
-  sectionTitle: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },
+  section: { marginTop: 8, gap: 3 },
+  sectionHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: 4 },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
+  sectionSum: { fontSize: 12, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   card: {
     borderRadius: 16,
     borderWidth: 1,
@@ -245,27 +241,24 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
   pressed: { backgroundColor: colors.background },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tile: {
     width: '48.5%',
-    gap: 8,
-    padding: 12,
-    borderRadius: 16,
+    justifyContent: 'space-between',
+    gap: 2,
+    paddingHorizontal: 10,
+    paddingTop: 7,
+    paddingBottom: 6,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  tileTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  tileName: { fontSize: 13, fontWeight: '600', color: colors.text },
-  tileAmount: { alignSelf: 'flex-end' },
-  iconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.neutralSurface,
-  },
+  tileTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  tileName: { flex: 1, fontSize: 13, fontWeight: '700', lineHeight: 16, color: colors.textMuted },
+  // 金額は名前より大きく太く。プラスは明るい緑、マイナスは「−」をつけて黒（Zaim と同じ）。
+  tileAmount: { alignSelf: 'flex-end', fontSize: 21, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
+  tilePlus: { color: colors.moneyIncome },
   archivedName: { opacity: 0.7 },
   add: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 16 },
   addText: { fontSize: 15, fontWeight: '700', color: colors.money },

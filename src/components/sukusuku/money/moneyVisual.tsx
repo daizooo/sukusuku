@@ -223,6 +223,7 @@ export function Hero({
   isMinus,
   note,
   center,
+  compact,
   children,
 }: {
   label: string;
@@ -231,12 +232,14 @@ export function Hero({
   note?: ReactNode;
   /** ラベルと数字を中央に寄せる（総残高など）。 */
   center?: boolean;
+  /** 余白と数字を少し詰める（口座の面。1画面に収めるため）。 */
+  compact?: boolean;
   children?: ReactNode;
 }) {
   return (
-    <div className={`${cardClass} p-4 ${center ? 'text-center' : ''}`}>
+    <div className={`${cardClass} ${compact ? 'pb-2.5 pt-2' : 'p-4'} ${center ? 'text-center' : ''}`}>
       <p className="text-[13px] font-semibold text-gray-500">{label}</p>
-      <p className={minus(type.hero, isMinus)}>{value}</p>
+      <p className={minus(compact ? type.hero.replace('text-[34px]', 'text-[32px]') : type.hero, isMinus)}>{value}</p>
       {note !== undefined && <p className={type.sub}>{note}</p>}
       {children !== undefined && <div className="mt-3 border-t border-gray-200 pt-1">{children}</div>}
     </div>

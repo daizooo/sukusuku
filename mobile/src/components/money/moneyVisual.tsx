@@ -173,6 +173,7 @@ export function Hero({
   minus,
   note,
   center,
+  compact,
   children,
 }: {
   label: string;
@@ -181,12 +182,14 @@ export function Hero({
   note?: ReactNode;
   /** ラベルと数字を中央に寄せる（総残高など）。 */
   center?: boolean;
+  /** 余白と数字を少し詰める（口座の面。1画面に収めるため）。 */
+  compact?: boolean;
   children?: ReactNode;
 }) {
   return (
-    <View style={[styles.card, center && styles.cardCenter]}>
+    <View style={[styles.card, center && styles.cardCenter, compact && styles.cardCompact]}>
       <Text style={styles.heroLabel}>{label}</Text>
-      <Text style={[type.hero, minus && type.minus]}>{value}</Text>
+      <Text style={[type.hero, compact && styles.heroCompact, minus && type.minus]}>{value}</Text>
       {note !== undefined && <Text style={[type.sub, center && styles.centerText]}>{note}</Text>}
       {children !== undefined && <View style={styles.heroBody}>{children}</View>}
     </View>
@@ -421,6 +424,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   cardCenter: { alignItems: 'center' },
+  cardCompact: { paddingTop: 8, paddingBottom: 10 },
+  heroCompact: { fontSize: 32 },
   centerText: { textAlign: 'center' },
   heroLabel: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   heroBody: { marginTop: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 4 },

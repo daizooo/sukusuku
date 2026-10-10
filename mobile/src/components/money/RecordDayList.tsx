@@ -127,7 +127,7 @@ export default function RecordDayList({
                       {check.diff === null ? 'はじめの残高' : '残高を補正'}
                     </Text>
                   </View>
-                  <Text style={[type.amount, check.diff !== null && check.diff !== 0 && type.minus]}>
+                  <Text style={[type.amount, check.diff !== null && check.diff > 0 && styles.income]}>
                     {check.diff === null ? formatBalance(check.balance.amount) : check.diff === 0 ? formatYen(0) : formatSignedYen(check.diff)}
                   </Text>
                 </Pressable>
@@ -156,7 +156,6 @@ export default function RecordDayList({
                     </View>
                     {record.isEstimate && <EstimateBadge />}
                     <Text style={[type.amount, record.kind === 'transfer' && styles.muted, record.kind === 'income' && styles.income]}>
-                      {record.kind === 'income' ? '+' : ''}
                       {formatYen(total)}
                     </Text>
                     <View style={styles.walletIcons}>

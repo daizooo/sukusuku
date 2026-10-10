@@ -15,7 +15,7 @@ import {
   topCategoryIdOf,
   type BalanceCheck,
 } from '@/lib/moneyUtils';
-import { CategoryIcon, EstimateBadge, TransferIcon, WalletTypeIcon, cardClass, incomeAmountClass, minus, type } from './moneyVisual';
+import { CategoryIcon, EstimateBadge, TransferIcon, WalletTypeIcon, cardClass, incomeAmountClass, type } from './moneyVisual';
 
 // 記録を日ごと（新しい日から）に並べる一覧（docs/kakei.md §2.1）。家計タブの「記録」と、口座の詳細の「履歴」で同じものを使う。
 // mobile版の `mobile/src/components/money/RecordDayList.tsx` と同じ並び・文言。
@@ -125,7 +125,7 @@ export default function RecordDayList({
                     <Scale size={16} />
                   </span>
                   <span className={`min-w-0 flex-1 truncate ${type.row}`}>{check.diff === null ? 'はじめの残高' : '残高を補正'}</span>
-                  <span className={minus(type.amount, check.diff !== null && check.diff !== 0)}>
+                  <span className={check.diff !== null && check.diff > 0 ? type.amount.replace('text-gray-900', incomeAmountClass) : type.amount}>
                     {check.diff === null ? formatBalance(check.balance.amount) : check.diff === 0 ? formatYen(0) : formatSignedYen(check.diff)}
                   </span>
                 </button>
@@ -157,7 +157,6 @@ export default function RecordDayList({
                             : type.amount
                       }
                     >
-                      {record.kind === 'income' ? '+' : ''}
                       {formatYen(recordTotal(record))}
                     </span>
                     <span className="flex min-w-[15px] gap-0.5">
