@@ -72,7 +72,7 @@ function Stepper({
         <ChevronLeft size={18} />
       </button>
       {/* 中央に寄せるときは、月の桁数（9月/10月）が変わっても ‹ › の位置が動かないよう幅をそろえる。 */}
-      <span className={`text-[17px] font-bold text-gray-900 tabular-nums ${centered ? 'min-w-[120px] text-center' : ''}`}>
+      <span className={`text-[17px] font-bold text-gray-900 tabular-nums ${centered ? 'min-w-[104px] text-center' : ''}`}>
         {label}
       </span>
       <button type="button" aria-label={nextLabel} onClick={onNext} className={buttonClass}>
@@ -164,7 +164,8 @@ const PERIODS: { id: ReviewPeriod; label: string }[] = [
 
 /**
  * 振り返りの送り（‹ 2026年10月 ›）。年月は中央、右端に切り替えのボタンを1つだけ置く（同じ面で月も年も見る）。
- * 最初は月の表示なので「年」だけ、年の表示では「月」だけ（2026-10-10。「月 / 年」の2つ並びをやめた）。
+ * 最初は月の表示なので「年で見る」だけ、年の表示では「月で見る」だけ（2026-10-10。「月 / 年」の2つ並びをやめ、
+ * 文字は今の表示ではなく行き先を示す）。
  */
 export function PeriodBar({
   period,
@@ -187,9 +188,9 @@ export function PeriodBar({
       type="button"
       aria-label={other.id === 'year' ? '年の表示に切り替える' : '月の表示に切り替える'}
       onClick={() => onPeriod(other.id)}
-      className="rounded-full bg-gray-100 px-3.5 py-1.5 text-[13px] font-bold text-gray-500 hover:bg-gray-200"
+      className="rounded-full bg-gray-100 px-[9px] py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-200"
     >
-      {other.label}
+      {other.id === 'year' ? '年で見る' : '月で見る'}
     </button>
   );
   return period === 'month' ? (
