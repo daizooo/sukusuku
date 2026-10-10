@@ -415,22 +415,22 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
       </div>
 
       {/* 福引チャンスと家計の設定。＋の左に小さなピルで置く（福引は紫で福引らしさを出し、設定は控えめなグレー）。 */}
-      <div className="absolute bottom-[23px] right-[74px] z-20 flex h-[34px] items-center overflow-hidden rounded-full border border-gray-200 bg-white shadow-md">
+      <div className="absolute bottom-[17px] right-[68px] z-20 flex h-10 items-center overflow-hidden rounded-full border border-gray-200 bg-white shadow-md">
         <button
           type="button"
           aria-label="福引チャンス"
           onClick={() => setLotteryOpen(true)}
-          className="flex h-[34px] w-10 items-center justify-center bg-purple-50 text-purple-600 hover:bg-purple-100"
+          className="flex h-10 w-11 items-center justify-center bg-purple-50 text-purple-600 hover:bg-purple-100"
         >
-          <Ticket size={18} />
+          <Ticket size={20} />
         </button>
         <button
           type="button"
           aria-label="家計の設定"
           onClick={() => setSettingsOpen(true)}
-          className="flex h-[34px] w-[38px] items-center justify-center text-gray-500 hover:bg-gray-50"
+          className="flex h-10 w-11 items-center justify-center text-gray-500 hover:bg-gray-50"
         >
-          <Settings size={18} />
+          <Settings size={20} />
         </button>
       </div>
 
@@ -439,9 +439,9 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
         type="button"
         aria-label="記録を追加"
         onClick={() => setEditing('new')}
-        className="absolute bottom-4 right-4 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition-all hover:bg-blue-700 hover:scale-105 active:scale-95"
+        className="absolute bottom-4 right-4 z-20 flex h-[42px] w-[42px] items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition-all hover:bg-blue-700 hover:scale-105 active:scale-95"
       >
-        <Plus size={24} />
+        <Plus size={22} />
       </button>
 
       {editing !== null && (

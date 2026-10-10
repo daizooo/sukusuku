@@ -114,7 +114,8 @@ const PERIODS: { id: ReviewPeriod; label: string }[] = [
 
 /**
  * 振り返りの送り（‹ 2026年10月 ›）。年月は中央、右端に切り替えのボタンを1つだけ置く（同じ面で月も年も見る）。
- * 最初は月の表示なので「年」だけ、年の表示では「月」だけ（2026-10-10。「月 / 年」の2つ並びをやめた）。
+ * 最初は月の表示なので「年で見る」だけ、年の表示では「月で見る」だけ（2026-10-10。「月 / 年」の2つ並びをやめ、
+ * 文字は今の表示ではなく行き先を示す）。
  */
 export function PeriodBar({
   period,
@@ -139,7 +140,7 @@ export function PeriodBar({
       onPress={() => onPeriod(other.id)}
       style={styles.periodSwitch}
     >
-      <Text style={styles.periodSwitchText}>{other.label}</Text>
+      <Text style={styles.periodSwitchText}>{other.id === 'year' ? '年で見る' : '月で見る'}</Text>
     </Pressable>
   );
   return period === 'month' ? (
@@ -395,8 +396,8 @@ const styles = StyleSheet.create({
   gain: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   flex: { flex: 1 },
   // 月 / 年 の切り替え（小さな2択）。
-  periodSwitch: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.neutralSurface },
-  periodSwitchText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  periodSwitch: { paddingHorizontal: 9, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.neutralSurface },
+  periodSwitchText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
   // 中央に寄せるとき、左右を同じ幅（flex 1）にして年月を真ん中に置く。右は端に寄せる。
   stepSide: { flex: 1, alignItems: 'flex-end' },
@@ -410,7 +411,7 @@ const styles = StyleSheet.create({
   },
   stepLabel: { fontSize: 17, fontWeight: '700', color: colors.text },
   // 中央に寄せるときは、月の桁数（9月/10月）が変わっても ‹ › の位置が動かないよう幅をそろえる。
-  stepLabelCentered: { minWidth: 120, textAlign: 'center' },
+  stepLabelCentered: { minWidth: 104, textAlign: 'center' },
   card: {
     borderRadius: 16,
     borderWidth: 1,
