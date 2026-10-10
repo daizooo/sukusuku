@@ -260,41 +260,6 @@ export type Database = {
           },
         ]
       }
-      family_profiles: {
-        Row: {
-          child_fields: Json
-          custom_fields: Json
-          emergency_fields: Json
-          family_fields: Json
-          family_id: string
-          updated_at: string
-        }
-        Insert: {
-          child_fields?: Json
-          custom_fields?: Json
-          emergency_fields?: Json
-          family_fields?: Json
-          family_id: string
-          updated_at?: string
-        }
-        Update: {
-          child_fields?: Json
-          custom_fields?: Json
-          emergency_fields?: Json
-          family_fields?: Json
-          family_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "family_profiles_family_id_fkey"
-            columns: ["family_id"]
-            isOneToOne: true
-            referencedRelation: "families"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       family_sync: {
         Row: {
           changed: Json
@@ -2189,7 +2154,6 @@ export type Database = {
           family_id: string | null
           id: string
           name: string | null
-          role: string | null
           show_care_tab: boolean
           start_tab: string
           workplace: string | null
@@ -2199,7 +2163,6 @@ export type Database = {
           family_id?: string | null
           id: string
           name?: string | null
-          role?: string | null
           show_care_tab?: boolean
           start_tab?: string
           workplace?: string | null
@@ -2209,7 +2172,6 @@ export type Database = {
           family_id?: string | null
           id?: string
           name?: string | null
-          role?: string | null
           show_care_tab?: boolean
           start_tab?: string
           workplace?: string | null
