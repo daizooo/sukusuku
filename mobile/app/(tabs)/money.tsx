@@ -62,9 +62,9 @@ import { type ReviewPeriod } from '@/components/money/moneyVisual';
  * - 振り返り: 月と年（暦年）は同じ面で、送りの右「月 / 年」で期間を切り替える（§4）。結論は生活費の収支
  *   （収入 − 特別費以外の支出。貯金は入れない）。内訳の行（大分類・特別費）を押すと、簡単な分析と絞った記録の一覧（§4.4）
  * - 口座: 総残高と出金元ごとの残高（確定した残高 + その後の記録）。残高の確定、出金元の追加・編集もここ（§9.3）
- * - 見出しは出さない（2026-10-10。各タブに見出しがあるが、家計は切り替えの帯が見出しを兼ねる）。帯の右端に小さなグレーの
-   *   アイコンを2つ置く。チケットは「福引チャンス」（暮らしタブの廃止で移した。docs/home.md §9）、歯車は「家計の設定」
-   *   （カテゴリと予算・特別費の予定・お店・毎月の記録。docs/kakei.md §3.5）
+ * - 見出しは出さない（2026-10-10。切り替えの帯が見出しを兼ねる）。右下の＋の左に小さなピルを置き、中に「福引チャンス」
+ *   （紫のチケット。暮らしタブの廃止で移した。docs/home.md §9）と「家計の設定」（グレーの歯車。カテゴリと予算・特別費の予定・
+ *   お店・毎月の記録。docs/kakei.md §3.5）を並べる。＋はどの面にも出ているので、どの面からも入れる
  *
  * 見出し・切り替え・月の送りは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  */
@@ -349,44 +349,22 @@ export default function MoneyScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.body} {...viewSwipe.handlers}>
-        <View style={styles.views}>
-          <View accessibilityRole="tablist" style={styles.viewTabs}>
-            {VIEWS.map((entry) => {
-              const selected = entry.id === view;
-              return (
-                <Pressable
-                  key={entry.id}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected }}
-                  onPress={() => setView(entry.id)}
-                  style={styles.viewTab}
-                >
-                  <Text style={[styles.viewText, selected && styles.viewTextSelected]}>{entry.label}</Text>
-                  <View style={[styles.underline, selected && styles.underlineSelected]} />
-                </Pressable>
-              );
-            })}
-          </View>
-          {/* 福引チャンスと家計の設定。目立たせないよう、帯の右端に小さなグレーで置く。 */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="福引チャンス"
-            onPress={() => router.push('/lottery')}
-            hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
-            style={styles.barIcon}
-          >
-            <Ticket size={20} color={colors.textFaint} />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="家計の設定"
-            onPress={() => setSettingsOpen(true)}
-            disabled={!familyId}
-            hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
-            style={styles.barIcon}
-          >
-            <Settings size={20} color={colors.textFaint} />
-          </Pressable>
+        <View accessibilityRole="tablist" style={styles.views}>
+          {VIEWS.map((entry) => {
+            const selected = entry.id === view;
+            return (
+              <Pressable
+                key={entry.id}
+                accessibilityRole="tab"
+                accessibilityState={{ selected }}
+                onPress={() => setView(entry.id)}
+                style={styles.viewTab}
+              >
+                <Text style={[styles.viewText, selected && styles.viewTextSelected]}>{entry.label}</Text>
+                <View style={[styles.underline, selected && styles.underlineSelected]} />
+              </Pressable>
+            );
+          })}
         </View>
 
         <Animated.View style={[styles.body, viewSwipe.style]}>
@@ -443,6 +421,27 @@ export default function MoneyScreen() {
             />
           )}
         </Animated.View>
+      </View>
+
+      {/* 福引チャンスと家計の設定。＋の左に小さなピルで置く（福引は紫で福引らしさを出し、設定は控えめなグレー）。 */}
+      <View style={styles.pill}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="福引チャンス"
+          onPress={() => router.push('/lottery')}
+          style={styles.pillLottery}
+        >
+          <Ticket size={20} color={colors.livingLottery} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="家計の設定"
+          onPress={() => setSettingsOpen(true)}
+          disabled={!familyId}
+          style={styles.pillSettings}
+        >
+          <Settings size={20} color={colors.textMuted} />
+        </Pressable>
       </View>
 
       {/* 記録の追加は右下の丸いボタン（Zaim と同じ）。どの面でも同じ場所。 */}
@@ -532,18 +531,31 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   fabPressed: { opacity: 0.85 },
+  // ＋（右16・幅56）の左、＋と同じ高さの中心に置く小さなピル。
+  pill: {
+    position: 'absolute',
+    right: 82,
+    bottom: 24,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+    elevation: 4,
+  },
+  pillLottery: { width: 46, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.livingLotterySurface },
+  pillSettings: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center' },
   // 3つの面の切り替え。等幅に並べ、選んでいる面は濃い文字と青い下線。
   views: {
     flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 8,
     paddingTop: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  viewTabs: { flex: 1, flexDirection: 'row' },
-  // 帯の右端のアイコン（福引・設定）。押しやすいよう、見た目より広く押せる。
-  barIcon: { paddingHorizontal: 9, paddingVertical: 8, alignSelf: 'flex-start' },
   viewTab: { flex: 1, paddingTop: 8, alignItems: 'center' },
   viewText: { fontSize: 15, fontWeight: '600', color: colors.textFaint },
   viewTextSelected: { color: colors.text, fontWeight: '700' },
