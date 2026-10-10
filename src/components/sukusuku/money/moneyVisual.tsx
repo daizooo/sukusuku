@@ -240,7 +240,7 @@ export function Hero({
   children?: ReactNode;
 }) {
   return (
-    <div className={`${cardClass} ${compact ? 'pb-2.5 pt-2' : 'p-4'} ${center ? 'text-center' : ''}`}>
+    <div className={`${cardClass} ${compact ? 'px-4 pb-2.5 pt-2' : 'p-4'} ${center ? 'text-center' : ''}`}>
       <p className="text-[13px] font-semibold text-gray-500">{label}</p>
       <p className={minus(plus ? (compact ? type.hero.replace('text-[34px]', 'text-[32px]') : type.hero).replace('text-gray-900', incomeAmountClass) : compact ? type.hero.replace('text-[34px]', 'text-[32px]') : type.hero, isMinus)}>{value}</p>
       {note !== undefined && <p className={type.sub}>{note}</p>}

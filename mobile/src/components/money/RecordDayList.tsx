@@ -15,7 +15,7 @@ import {
   topCategoryIdOf,
   type BalanceCheck,
 } from '@/lib/moneyUtils';
-import { CategoryIcon, EstimateBadge, TransferIcon, WalletTypeIcon, type } from '@/components/money/moneyVisual';
+import { CategoryIcon, EstimateBadge, TransferIcon, WalletTypeIcon } from '@/components/money/moneyVisual';
 
 // 記録を日ごと（新しい日から）に並べる一覧（docs/kakei.md §2.1）。家計タブの「記録」と、口座の詳細の「履歴」で同じものを使う。
 // PWA版の `src/components/sukusuku/money/RecordDayList.tsx` と同じ並び・文言。
@@ -108,7 +108,7 @@ export default function RecordDayList({
           <View key={day.date} style={styles.day}>
             <View style={styles.dayHead}>
               <Text style={styles.dayTitle}>{dayLabel(day.date)}</Text>
-              {spent > 0 && <Text style={type.faint}>{formatYen(spent)}</Text>}
+              {spent > 0 && <Text style={styles.daySum}>{formatYen(spent)}</Text>}
             </View>
             <View style={styles.card}>
               {day.corrections.map((check, index) => (
@@ -120,14 +120,14 @@ export default function RecordDayList({
                   style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.pressed]}
                 >
                   <View style={styles.correctionIcon}>
-                    <Scale size={16} color="#ffffff" />
+                    <Scale size={14} color="#ffffff" />
                   </View>
                   <View style={styles.flex}>
-                    <Text style={type.row} numberOfLines={1}>
+                    <Text style={styles.title} numberOfLines={1}>
                       {check.diff === null ? 'はじめの残高' : '残高を補正'}
                     </Text>
                   </View>
-                  <Text style={[type.amount, check.diff !== null && check.diff > 0 && styles.income]}>
+                  <Text style={[styles.amount, check.diff !== null && check.diff > 0 && styles.income]}>
                     {check.diff === null ? formatBalance(check.balance.amount) : check.diff === 0 ? formatYen(0) : formatSignedYen(check.diff)}
                   </Text>
                 </Pressable>
@@ -143,19 +143,19 @@ export default function RecordDayList({
                     onPress={() => onOpen(record)}
                     style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.pressed]}
                   >
-                    {icon === null ? <TransferIcon /> : <CategoryIcon iconKey={icon} />}
+                    {icon === null ? <TransferIcon size={28} /> : <CategoryIcon iconKey={icon} size={28} />}
                     <View style={styles.flex}>
-                      <Text style={type.row} numberOfLines={1}>
+                      <Text style={styles.title} numberOfLines={1}>
                         {title}
                       </Text>
                       {sub !== '' && (
-                        <Text style={type.sub} numberOfLines={1}>
+                        <Text style={styles.sub} numberOfLines={1}>
                           {sub}
                         </Text>
                       )}
                     </View>
                     {record.isEstimate && <EstimateBadge />}
-                    <Text style={[type.amount, record.kind === 'transfer' && styles.muted, record.kind === 'income' && styles.income]}>
+                    <Text style={[styles.amount, record.kind === 'transfer' && styles.muted, record.kind === 'income' && styles.income]}>
                       {formatYen(total)}
                     </Text>
                     <View style={styles.walletIcons}>
@@ -178,10 +178,11 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   walletIcons: { flexDirection: 'row', gap: 3, minWidth: 15 },
   // 補正の行のアイコン（振替と同じ大きさの、青みの灰の丸に白い天びん）。
-  correctionIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#5b7a99' },
-  day: { marginTop: 20 },
-  dayHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: 6 },
-  dayTitle: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },
+  correctionIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#5b7a99' },
+  day: { marginTop: 10 },
+  dayHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: 4, paddingBottom: 4 },
+  dayTitle: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
+  daySum: { fontSize: 12, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   card: {
     borderRadius: 16,
     borderWidth: 1,
@@ -189,7 +190,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     overflow: 'hidden',
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 7 },
+  // 名前は太く濃く、補足は小さく灰、金額は大きく極太（収入は緑・支出は黒。符号はつけない）。
+  title: { fontSize: 14, fontWeight: '700', color: colors.text },
+  sub: { fontSize: 11, fontWeight: '500', color: colors.textMuted },
+  amount: { fontSize: 17, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
   pressed: { backgroundColor: colors.background },
   muted: { color: colors.textMuted },
