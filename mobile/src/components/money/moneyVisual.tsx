@@ -43,6 +43,7 @@ function Stepper({
   onPrev,
   onNext,
   right,
+  centered,
 }: {
   label: string;
   prevLabel: string;
@@ -50,18 +51,27 @@ function Stepper({
   onPrev: () => void;
   onNext: () => void;
   right?: ReactNode;
+  /** 年月を中央に寄せ、right は右端に置く（記録・振り返りの送り）。無いときは左に寄せ、right をその右に並べる。 */
+  centered?: boolean;
 }) {
   return (
     <View style={styles.stepper}>
+      {centered ? <View style={styles.flex} /> : null}
       <Pressable accessibilityRole="button" accessibilityLabel={prevLabel} onPress={onPrev} hitSlop={8} style={styles.stepButton}>
         <ChevronLeft size={18} color={colors.textSubtle} />
       </Pressable>
-      <Text style={styles.stepLabel}>{label}</Text>
+      <Text style={[styles.stepLabel, centered && styles.stepLabelCentered]}>{label}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel={nextLabel} onPress={onNext} hitSlop={8} style={styles.stepButton}>
         <ChevronRight size={18} color={colors.textSubtle} />
       </Pressable>
-      <View style={styles.flex} />
-      {right}
+      {centered ? (
+        <View style={styles.stepSide}>{right}</View>
+      ) : right ? (
+        <>
+          <View style={styles.flex} />
+          {right}
+        </>
+      ) : null}
     </View>
   );
 }
@@ -75,6 +85,7 @@ export function MonthBar({ monthKey, onChange }: { monthKey: string; onChange: (
       nextLabel="次の月"
       onPrev={() => onChange(shiftMonth(monthKey, -1))}
       onNext={() => onChange(shiftMonth(monthKey, 1))}
+      centered
     />
   );
 }
@@ -101,7 +112,10 @@ const PERIODS: { id: ReviewPeriod; label: string }[] = [
   { id: 'year', label: '年' },
 ];
 
-/** 振り返りの送り（‹ 2026年10月 ›）。右の「月 / 年」で期間を切り替える（同じ面で月も年も見る）。 */
+/**
+ * 振り返りの送り（‹ 2026年10月 ›）。年月は中央、右端に切り替えのボタンを1つだけ置く（同じ面で月も年も見る）。
+ * 最初は月の表示なので「年」だけ、年の表示では「月」だけ（2026-10-10。「月 / 年」の2つ並びをやめた）。
+ */
 export function PeriodBar({
   period,
   onPeriod,
@@ -117,23 +131,16 @@ export function PeriodBar({
   year: number;
   onYear: (year: number) => void;
 }) {
-  const toggle = (
-    <View accessibilityRole="tablist" style={styles.segment}>
-      {PERIODS.map((entry) => {
-        const selected = entry.id === period;
-        return (
-          <Pressable
-            key={entry.id}
-            accessibilityRole="tab"
-            accessibilityState={{ selected }}
-            onPress={() => onPeriod(entry.id)}
-            style={[styles.segmentItem, selected && styles.segmentItemSelected]}
-          >
-            <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>{entry.label}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
+  const other = period === 'month' ? PERIODS[1] : PERIODS[0];
+  const switchButton = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={other.id === 'year' ? '年の表示に切り替える' : '月の表示に切り替える'}
+      onPress={() => onPeriod(other.id)}
+      style={styles.periodSwitch}
+    >
+      <Text style={styles.periodSwitchText}>{other.label}</Text>
+    </Pressable>
   );
   return period === 'month' ? (
     <Stepper
@@ -142,7 +149,8 @@ export function PeriodBar({
       nextLabel="次の月"
       onPrev={() => onMonth(shiftMonth(monthKey, -1))}
       onNext={() => onMonth(shiftMonth(monthKey, 1))}
-      right={toggle}
+      right={switchButton}
+      centered
     />
   ) : (
     <Stepper
@@ -151,7 +159,8 @@ export function PeriodBar({
       nextLabel="次の年"
       onPrev={() => onYear(year - 1)}
       onNext={() => onYear(year + 1)}
-      right={toggle}
+      right={switchButton}
+      centered
     />
   );
 }
@@ -386,12 +395,11 @@ const styles = StyleSheet.create({
   gain: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   flex: { flex: 1 },
   // 月 / 年 の切り替え（小さな2択）。
-  segment: { flexDirection: 'row', borderRadius: 999, backgroundColor: colors.neutralSurface, padding: 2 },
-  segmentItem: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 999 },
-  segmentItemSelected: { backgroundColor: colors.surface },
-  segmentText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
-  segmentTextSelected: { fontWeight: '700', color: colors.text },
+  periodSwitch: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.neutralSurface },
+  periodSwitchText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
+  // 中央に寄せるとき、左右を同じ幅（flex 1）にして年月を真ん中に置く。右は端に寄せる。
+  stepSide: { flex: 1, alignItems: 'flex-end' },
   stepButton: {
     width: 30,
     height: 30,
@@ -401,6 +409,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutralSurface,
   },
   stepLabel: { fontSize: 17, fontWeight: '700', color: colors.text },
+  // 中央に寄せるときは、月の桁数（9月/10月）が変わっても ‹ › の位置が動かないよう幅をそろえる。
+  stepLabelCentered: { minWidth: 120, textAlign: 'center' },
   card: {
     borderRadius: 16,
     borderWidth: 1,

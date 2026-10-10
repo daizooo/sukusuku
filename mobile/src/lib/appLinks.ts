@@ -19,7 +19,8 @@ export const parseLogType = (value: string | string[] | undefined): LogType | nu
 
 /** お知らせの飛び先。開くタブと、育児タブなら開く入力画面。 */
 export interface NotificationTarget {
-  tab: TabId;
+  /** 開くタブ。備蓄の期限のお知らせだけは、タブではなく備蓄の画面（app/stock.tsx）。 */
+  tab: TabId | 'stock';
   openLog?: LogType;
 }
 
@@ -37,9 +38,9 @@ export const notificationTarget = (kind: unknown): NotificationTarget => {
     // 検温のお知らせは体温の入力画面へ
     case 'temperature':
       return { tab: 'care', openLog: 'temperature' };
-    // 備蓄の期限のお知らせは暮らしタブ（備蓄の期限順の一覧）へ
+    // 備蓄の期限のお知らせは備蓄の画面（備蓄の期限順の一覧）へ
     case 'stock':
-      return { tab: 'living' };
+      return { tab: 'stock' };
     default:
       return { tab: 'schedule' };
   }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Backpack, ChevronLeft, Plus } from 'lucide-react';
+import { Backpack, ChevronLeft, Plus, ShieldCheck } from 'lucide-react';
 import type { StockItem, StockItemDraft, StockTarget, StockTargetDraft } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
@@ -33,48 +33,38 @@ import StockItemModal from '../modals/StockItemModal';
 import StockTargetModal from '../modals/StockTargetModal';
 import StockRestockModal, { type RestockInput } from '../modals/StockRestockModal';
 import StockBoard from '../living/StockBoard';
-import LivingMenu, { LIVING_SECTIONS, type LivingSection } from '../living/LivingMenu';
-import LotteryPanel from '../living/LotteryPanel';
 import { useShoppingSender } from '../living/useShoppingSender';
 import { shortageTitle } from '@/lib/shoppingUtils';
 
 /**
- * 暮らしタブ（docs/home.md）。防災備蓄（点検盤）と補助くじ。
- * mobile版の `mobile/app/(tabs)/living.tsx` と同じ項目・並び・文言にしてある。
+ * 防災備蓄の画面（docs/home.md §10.2）。リストタブの下の「防災備蓄」の行から開く
+ * （以前は暮らしタブのメニュー。2026-10-10に暮らしタブを廃止）。戻る操作（ブラウザの戻る・左上の矢印）で
+ * リストタブの一覧へ戻る。mobile版の `mobile/app/stock.tsx` と同じ項目・並び・文言にしてある。
  *
- * 防災備蓄の画面は「点検盤」（docs/home.md §10.2。画面の組み立ては living/StockBoard）。
+ * 画面の組み立ては「点検盤」（docs/home.md §10.2。living/StockBoard）。
  * 上に備えの状況、その下に要対応（不足・期限が近い・点検の時期）、目標ごとの塊（期限順と必要数を1つに）、
  * 備品（期限なし）。保管場所（寝室／持ち出し）は切り替えで、持ち出しはバッグの中身のチェック表。
  * 必要数は「1人1日あたり × 人数 × 日数」か「決まった数」。人数・日数は家族で1つ（§3.5）。
  *
- * 暮らしタブを開くと、まずアイコンのメニュー（LivingMenu）。防災備蓄・補助くじは
- * 持つデータも見方も別物で、頻繁に開くタブでもないため、切り替えではなく押して入る形にし、
- * 画面ごとの色・見出し・追加ボタンにする。保管場所（寝室／持ち出し）の切り替えは防災備蓄の中だけ。
- *
  * 備蓄の不足は「リストへ」で買い出しリストへ送れる（送る仕組みは living/useShoppingSender）。
  *
  * 見出し・要約・面の切り替え・カテゴリは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
- * 他のタブと違い、読み書きはこのタブの中で完結させる（アプリ全体の状態に持たない）。
+ * 他のタブと違い、読み書きはこの画面の中で完結させる（アプリ全体の状態に持たない）。
  */
 
 /** 編集の対象。null は閉じている、'new' は追加。 */
 type Editing = StockItem | 'new' | null;
 type EditingTarget = StockTarget | 'new' | null;
 
-/** 人数・日数の上限（DBの check と同じ）。 */
-
-export default function LivingTab({ familyId, userId }: { familyId: string; userId: string }) {
+export default function StockScreen({ familyId, onClose }: { familyId: string; onClose: () => void }) {
   const supabase = useMemo(() => createClient(), []);
   const [items, setItems] = useState<StockItem[]>([]);
   const [targets, setTargets] = useState<StockTarget[]>([]);
   const [plan, setPlan] = useState<StockPlan>(DEFAULT_STOCK_PLAN);
   const [isLoading, setIsLoading] = useState(true);
-  // 開いている画面。null はメニュー（docs/home.md §2）。
-  const [section, setSection] = useState<LivingSection | null>(null);
-  // 防災備蓄の保管場所の切り替え。追加するロットの保管場所の初期値にもなる。
   const [restocking, setRestocking] = useState<StockItem | null>(null);
-  // 戻る操作は、開いている画面からメニューへ戻す（メニューのときは1つ前のタブへ）。
-  useBackLayer(() => setSection(null), section !== null);
+  // 戻る操作（ブラウザの戻る）は、リストタブの一覧へ戻す。
+  useBackLayer(onClose);
   const [editing, setEditing] = useState<Editing>(null);
   const [editingTarget, setEditingTarget] = useState<EditingTarget>(null);
   const [bagOpen, setBagOpen] = useState(false);
@@ -125,7 +115,6 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
   const today = toDateStringInTimeZone(new Date());
   const categories = useMemo(() => categoryOptions(items), [items]);
   const stockBoard = useMemo(() => buildStockBoard(items, targets, plan, today), [items, targets, plan, today]);
-  const { counts } = stockBoard;
   const bagDue = stockBoard.attention.bag?.due === true;
 
   const failed = (what: string) => window.alert(`${what}できませんでした。もう一度お試しください。`);
@@ -269,61 +258,43 @@ export default function LivingTab({ familyId, userId }: { familyId: string; user
     }
   };
 
-  if (section === null) {
-    return (
-      <div className="relative p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
-        <h2 className="shrink-0 pb-3 text-lg font-bold text-gray-900">暮らし</h2>
-        <LivingMenu
-          onOpen={setSection}
-          attention={{ stock: isLoading ? 0 : counts.short + counts.expired + counts.soon + counts.inspect }}
-        />
-      </div>
-    );
-  }
-
-  const current = LIVING_SECTIONS.find((entry) => entry.id === section) ?? LIVING_SECTIONS[0];
-
   return (
     <div className="relative p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <div className="shrink-0 flex items-center justify-between pb-2">
         <button
           type="button"
-          aria-label="暮らしのメニューへ戻る"
-          onClick={() => setSection(null)}
+          aria-label="戻る"
+          onClick={onClose}
           className="flex items-center gap-1.5 -ml-1 rounded-lg py-1 pr-2 hover:bg-gray-100 transition"
         >
           <ChevronLeft size={22} className="text-gray-500" />
-          <current.Icon size={20} className={current.icon} />
-          <h2 className="text-lg font-bold text-gray-900">{current.label}</h2>
+          <ShieldCheck size={20} className="text-orange-600" />
+          <h2 className="text-lg font-bold text-gray-900">防災備蓄</h2>
         </button>
-        {section === 'stock' ? (
-          // 防災備蓄は、持ち出しバッグの点検と追加だけ（淡い橙の丸。点検の時期はバッグに赤い点）。
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              aria-label={bagDue ? '持ち出しバッグを点検する（点検の時期です）' : '持ち出しバッグを点検する'}
-              onClick={() => setBagOpen(true)}
-              disabled={isLoading}
-              className="relative flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-orange-800 hover:bg-orange-200"
-            >
-              <Backpack size={17} />
-              {bagDue && <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-gray-50 bg-red-400" />}
-            </button>
-            <button
-              type="button"
-              aria-label="備蓄を追加"
-              onClick={() => setEditing('new')}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-orange-800 hover:bg-orange-200"
-            >
-              <Plus size={18} />
-            </button>
-          </div>
-        ) : null}
+        {/* 持ち出しバッグの点検と追加だけ（淡い橙の丸。点検の時期はバッグに赤い点）。 */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label={bagDue ? '持ち出しバッグを点検する（点検の時期です）' : '持ち出しバッグを点検する'}
+            onClick={() => setBagOpen(true)}
+            disabled={isLoading}
+            className="relative flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-orange-800 hover:bg-orange-200"
+          >
+            <Backpack size={17} />
+            {bagDue && <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-gray-50 bg-red-400" />}
+          </button>
+          <button
+            type="button"
+            aria-label="備蓄を追加"
+            onClick={() => setEditing('new')}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-orange-800 hover:bg-orange-200"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
       </div>
 
-      {section === 'lottery' ? (
-        <LotteryPanel familyId={familyId} userId={userId} />
-      ) : isLoading ? (
+      {isLoading ? (
         <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>
       ) : (
         <StockBoard

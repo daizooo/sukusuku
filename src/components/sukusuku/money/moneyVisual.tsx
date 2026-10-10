@@ -51,6 +51,7 @@ function Stepper({
   onPrev,
   onNext,
   right,
+  centered,
 }: {
   label: string;
   prevLabel: string;
@@ -58,20 +59,33 @@ function Stepper({
   onPrev: () => void;
   onNext: () => void;
   right?: ReactNode;
+  /** 年月を中央に寄せ、right は右端に置く（記録・振り返りの送り）。無いときは左に寄せ、right をその右に並べる。 */
+  centered?: boolean;
 }) {
   const buttonClass =
     'flex h-[30px] w-[30px] items-center justify-center rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200';
   return (
     <div className="shrink-0 flex items-center gap-2 py-2.5">
+      {/* 中央に寄せるとき、左右を同じ幅（flex-1）にして年月を真ん中に置く。右は端に寄せる。 */}
+      {centered ? <span className="flex-1" /> : null}
       <button type="button" aria-label={prevLabel} onClick={onPrev} className={buttonClass}>
         <ChevronLeft size={18} />
       </button>
-      <span className="text-[17px] font-bold text-gray-900 tabular-nums">{label}</span>
+      {/* 中央に寄せるときは、月の桁数（9月/10月）が変わっても ‹ › の位置が動かないよう幅をそろえる。 */}
+      <span className={`text-[17px] font-bold text-gray-900 tabular-nums ${centered ? 'min-w-[120px] text-center' : ''}`}>
+        {label}
+      </span>
       <button type="button" aria-label={nextLabel} onClick={onNext} className={buttonClass}>
         <ChevronRight size={18} />
       </button>
-      <span className="flex-1" />
-      {right}
+      {centered ? (
+        <div className="flex flex-1 justify-end">{right}</div>
+      ) : right ? (
+        <>
+          <span className="flex-1" />
+          {right}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -121,6 +135,7 @@ export function MonthBar({ monthKey, onChange }: { monthKey: string; onChange: (
       nextLabel="次の月"
       onPrev={() => onChange(shiftMonth(monthKey, -1))}
       onNext={() => onChange(shiftMonth(monthKey, 1))}
+      centered
     />
   );
 }
@@ -147,7 +162,10 @@ const PERIODS: { id: ReviewPeriod; label: string }[] = [
   { id: 'year', label: '年' },
 ];
 
-/** 振り返りの送り（‹ 2026年10月 ›）。右の「月 / 年」で期間を切り替える（同じ面で月も年も見る）。 */
+/**
+ * 振り返りの送り（‹ 2026年10月 ›）。年月は中央、右端に切り替えのボタンを1つだけ置く（同じ面で月も年も見る）。
+ * 最初は月の表示なので「年」だけ、年の表示では「月」だけ（2026-10-10。「月 / 年」の2つ並びをやめた）。
+ */
 export function PeriodBar({
   period,
   onPeriod,
@@ -163,26 +181,16 @@ export function PeriodBar({
   year: number;
   onYear: (year: number) => void;
 }) {
-  const toggle = (
-    <div role="tablist" className="flex rounded-full bg-gray-100 p-0.5">
-      {PERIODS.map((entry) => {
-        const selected = entry.id === period;
-        return (
-          <button
-            key={entry.id}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            onClick={() => onPeriod(entry.id)}
-            className={`rounded-full px-3.5 py-1 text-[13px] ${
-              selected ? 'bg-white font-bold text-gray-900 shadow-sm' : 'font-semibold text-gray-500'
-            }`}
-          >
-            {entry.label}
-          </button>
-        );
-      })}
-    </div>
+  const other = period === 'month' ? PERIODS[1] : PERIODS[0];
+  const switchButton = (
+    <button
+      type="button"
+      aria-label={other.id === 'year' ? '年の表示に切り替える' : '月の表示に切り替える'}
+      onClick={() => onPeriod(other.id)}
+      className="rounded-full bg-gray-100 px-3.5 py-1.5 text-[13px] font-bold text-gray-500 hover:bg-gray-200"
+    >
+      {other.label}
+    </button>
   );
   return period === 'month' ? (
     <Stepper
@@ -191,7 +199,8 @@ export function PeriodBar({
       nextLabel="次の月"
       onPrev={() => onMonth(shiftMonth(monthKey, -1))}
       onNext={() => onMonth(shiftMonth(monthKey, 1))}
-      right={toggle}
+      right={switchButton}
+      centered
     />
   ) : (
     <Stepper
@@ -200,7 +209,8 @@ export function PeriodBar({
       nextLabel="次の年"
       onPrev={() => onYear(year - 1)}
       onNext={() => onYear(year + 1)}
-      right={toggle}
+      right={switchButton}
+      centered
     />
   );
 }

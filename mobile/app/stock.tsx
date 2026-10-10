@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Redirect, useFocusEffect } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Redirect, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Backpack, ChevronLeft, Plus } from 'lucide-react-native';
+import { Backpack, ChevronLeft, Plus, ShieldCheck } from 'lucide-react-native';
 import type { StockItem, StockItemDraft, StockTarget, StockTargetDraft } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
@@ -37,23 +37,18 @@ import { SOFT, TONE } from '@/components/living/stockVisual';
 import StockRestockSheet, { type RestockInput } from '@/components/living/StockRestockSheet';
 import StockItemSheet from '@/components/living/StockItemSheet';
 import StockTargetSheet from '@/components/living/StockTargetSheet';
-import LivingMenu, { LIVING_SECTIONS, type LivingSection } from '@/components/living/LivingMenu';
-import LotteryPanel from '@/components/living/LotteryPanel';
 import { useShoppingSender } from '@/components/living/useShoppingSender';
 import { shortageTitle } from '@/lib/shoppingUtils';
 
 /**
- * 暮らしタブ（docs/home.md）。防災備蓄（点検盤）と補助くじ。
- * Web版の `src/components/sukusuku/tabs/LivingTab.tsx` と同じ項目・並び・文言にしてある。
+ * 防災備蓄の画面（docs/home.md §10.2）。リストタブの下の「防災備蓄」の行から開く
+ * （以前は暮らしタブのメニュー。2026-10-10に暮らしタブを廃止）。戻る操作（端末の戻るボタン・左上の矢印）で
+ * 前の画面へ戻る。Web版の `src/components/sukusuku/tabs/StockScreen.tsx` と同じ項目・並び・文言にしてある。
  *
- * 防災備蓄の画面は「点検盤」（docs/home.md §10.2。画面の組み立ては StockBoard）。
- * 上に備えの状況、その下に要対応（不足・期限が近い・点検の時期）、目標ごとの塊（期限順と必要数を1つに）、
- * 備品（期限なし）。保管場所（寝室／持ち出し）は切り替えで、持ち出しはバッグの中身のチェック表。
- * 必要数は「1人1日あたり × 人数 × 日数」か「決まった数」。人数・日数は家族で1つ（§3.5）。
- *
- * 暮らしタブを開くと、まずアイコンのメニュー（LivingMenu）。防災備蓄・補助くじは
- * 持つデータも見方も別物で、頻繁に開くタブでもないため、切り替えではなく押して入る形にし、
- * 画面ごとの色・見出し・追加ボタンにする。保管場所（寝室／持ち出し）の切り替えは防災備蓄の中だけ。
+ * 画面の組み立ては「点検盤」（StockBoard）。上に備えの状況、その下に要対応（不足・期限が近い・点検の時期）、
+ * 目標ごとの塊（期限順と必要数を1つに）、備品（期限なし）。保管場所（寝室／持ち出し）は切り替えで、
+ * 持ち出しはバッグの中身のチェック表。必要数は「1人1日あたり × 人数 × 日数」か「決まった数」。
+ * 人数・日数は家族で1つ（§3.5）。
  *
  * 備蓄の不足は「リストへ」で買い出しリストへ送れる（送る仕組みは useShoppingSender）。
  *
@@ -64,9 +59,7 @@ import { shortageTitle } from '@/lib/shoppingUtils';
 type Editing = StockItem | 'new' | null;
 type EditingTarget = StockTarget | 'new' | null;
 
-/** 人数・日数の上限（DBの check と同じ）。 */
-
-export default function LivingScreen() {
+export default function StockScreen() {
   const { session, isLoading: isSessionLoading } = useSession();
   const userId = session?.user.id ?? null;
 
@@ -76,9 +69,6 @@ export default function LivingScreen() {
   const [editing, setEditing] = useState<Editing>(null);
   const [targets, setTargets] = useState<StockTarget[]>([]);
   const [plan, setPlan] = useState<StockPlan>(DEFAULT_STOCK_PLAN);
-  // 開いている画面。null はメニュー（docs/home.md §2）。
-  const [section, setSection] = useState<LivingSection | null>(null);
-  // 防災備蓄の保管場所の切り替え。追加するロットの保管場所の初期値にもなる。
   const [restocking, setRestocking] = useState<StockItem | null>(null);
   const [editingTarget, setEditingTarget] = useState<EditingTarget>(null);
   const [bagOpen, setBagOpen] = useState(false);
@@ -134,7 +124,6 @@ export default function LivingScreen() {
   const today = toDateString(new Date());
   const categories = useMemo(() => categoryOptions(items), [items]);
   const stockBoard = useMemo(() => buildStockBoard(items, targets, plan, today), [items, targets, plan, today]);
-  const { counts } = stockBoard;
   const bagDue = stockBoard.attention.bag?.due === true;
 
   const failed = (what: string) => Alert.alert(`${what}できませんでした`, 'もう一度お試しください。');
@@ -279,18 +268,6 @@ export default function LivingScreen() {
     }
   };
 
-  // 戻る操作は、開いている画面からメニューへ戻す（メニューのときは何もしない＝1つ前のタブへ）。
-  useFocusEffect(
-    useCallback(() => {
-      if (section === null) return undefined;
-      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-        setSection(null);
-        return true;
-      });
-      return () => subscription.remove();
-    }, [section]),
-  );
-
   if (isSessionLoading) {
     return (
       <SafeAreaView style={[styles.screen, styles.centered]}>
@@ -300,65 +277,48 @@ export default function LivingScreen() {
   }
   if (!session) return <Redirect href="/login" />;
 
-  if (section === null) {
-    return (
-      <SafeAreaView style={styles.screen}>
-        <View style={styles.header}>
-          <Text style={styles.title}>暮らし</Text>
-        </View>
-        <LivingMenu
-          onOpen={setSection}
-          attention={{ stock: isLoading ? 0 : counts.short + counts.expired + counts.soon + counts.inspect }}
-        />
-      </SafeAreaView>
-    );
-  }
-
-  const current = LIVING_SECTIONS.find((entry) => entry.id === section) ?? LIVING_SECTIONS[0];
+  /** 前の画面へ戻る。通知から開いたときなど戻り先が無ければ、リストタブへ。 */
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/list'));
 
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="暮らしのメニューへ戻る"
-          onPress={() => setSection(null)}
+          accessibilityLabel="戻る"
+          onPress={goBack}
           hitSlop={8}
           style={styles.back}
         >
           <ChevronLeft size={22} color={colors.textMuted} />
-          <current.Icon size={20} color={current.color} />
-          <Text style={styles.title}>{current.label}</Text>
+          <ShieldCheck size={20} color={colors.livingStock} />
+          <Text style={styles.title}>防災備蓄</Text>
         </Pressable>
-        {section === 'stock' ? (
-          // 防災備蓄は、持ち出しバッグの点検と追加だけ（淡い橙の丸。点検の時期はバッグに赤い点）。
-          <View style={styles.headerActions}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={bagDue ? '持ち出しバッグを点検する（点検の時期です）' : '持ち出しバッグを点検する'}
-              onPress={() => setBagOpen(true)}
-              disabled={isLoading}
-              style={styles.roundButton}
-            >
-              <Backpack size={17} color={SOFT.buttonText} />
-              {bagDue && <View style={styles.roundDot} />}
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="備蓄を追加"
-              onPress={() => setEditing('new')}
-              disabled={!familyId}
-              style={styles.roundButton}
-            >
-              <Plus size={18} color={SOFT.buttonText} />
-            </Pressable>
-          </View>
-        ) : null}
+        {/* 持ち出しバッグの点検と追加だけ（淡い橙の丸。点検の時期はバッグに赤い点）。 */}
+        <View style={styles.headerActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={bagDue ? '持ち出しバッグを点検する（点検の時期です）' : '持ち出しバッグを点検する'}
+            onPress={() => setBagOpen(true)}
+            disabled={isLoading}
+            style={styles.roundButton}
+          >
+            <Backpack size={17} color={SOFT.buttonText} />
+            {bagDue && <View style={styles.roundDot} />}
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="備蓄を追加"
+            onPress={() => setEditing('new')}
+            disabled={!familyId}
+            style={styles.roundButton}
+          >
+            <Plus size={18} color={SOFT.buttonText} />
+          </Pressable>
+        </View>
       </View>
 
-      {section === 'lottery' ? (
-        <LotteryPanel familyId={familyId} userId={session.user.id} />
-      ) : isLoading ? (
+      {isLoading ? (
         <Text style={styles.message}>読み込み中...</Text>
       ) : (
         <StockBoard

@@ -42,6 +42,7 @@ import ListEditorModal from '@/components/list/ListEditorModal';
 import ListOverviewCard from '@/components/list/ListOverviewCard';
 import { AddRow, GroupHeader, ItemRow, UngroupedHeader } from '@/components/list/ListRows';
 import { useDragReorder } from '@/components/list/useDragReorder';
+import StockEntryRow from '@/components/living/StockEntryRow';
 
 /**
  * 買い出し・やりたいこと・やることなどのリスト（docs/lists.md）。
@@ -706,6 +707,8 @@ export default function ListScreen() {
         {/* 長押しで動かせることは見ただけでは分からないので、小さく添える。 */}
         {sortedLists.length > 1 && <Text style={styles.holdHint}>長押しで並べ替え</Text>}
       </ScrollView>
+      {/* 防災備蓄の入口。一覧のスクロールの外に、目立たせず固定する（docs/home.md §2）。 */}
+      <StockEntryRow familyId={familyId} />
       {editor}
     </SafeAreaView>
   );

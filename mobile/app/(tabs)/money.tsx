@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Redirect } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Plus, Settings } from 'lucide-react-native';
+import { Plus, Settings, Ticket } from 'lucide-react-native';
 import type {
   MoneyBudget,
   MoneyCategory,
@@ -62,7 +62,9 @@ import { type ReviewPeriod } from '@/components/money/moneyVisual';
  * - 振り返り: 月と年（暦年）は同じ面で、送りの右「月 / 年」で期間を切り替える（§4）。結論は生活費の収支
  *   （収入 − 特別費以外の支出。貯金は入れない）。内訳の行（大分類・特別費）を押すと、簡単な分析と絞った記録の一覧（§4.4）
  * - 口座: 総残高と出金元ごとの残高（確定した残高 + その後の記録）。残高の確定、出金元の追加・編集もここ（§9.3）
- * - 見出しの右の歯車は「家計の設定」（カテゴリと予算・特別費の予定・お店・毎月の記録。docs/kakei.md §3.5）
+ * - 見出しは出さない（2026-10-10。切り替えの帯が見出しを兼ねる）。右下の＋の左に小さなピルを置き、中に「福引チャンス」
+ *   （紫のチケット。暮らしタブの廃止で移した。docs/home.md §9）と「家計の設定」（グレーの歯車。カテゴリと予算・特別費の予定・
+ *   お店・毎月の記録。docs/kakei.md §3.5）を並べる。＋はどの面にも出ているので、どの面からも入れる
  *
  * 見出し・切り替え・月の送りは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  */
@@ -346,19 +348,6 @@ export default function MoneyScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.title}>家計</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="家計の設定"
-          onPress={() => setSettingsOpen(true)}
-          disabled={!familyId}
-          hitSlop={10}
-          style={styles.settings}
-        >
-          <Settings size={22} color={colors.textSubtle} />
-        </Pressable>
-      </View>
       <View style={styles.body} {...viewSwipe.handlers}>
         <View accessibilityRole="tablist" style={styles.views}>
           {VIEWS.map((entry) => {
@@ -434,6 +423,27 @@ export default function MoneyScreen() {
         </Animated.View>
       </View>
 
+      {/* 福引チャンスと家計の設定。＋の左に小さなピルで置く（福引は紫で福引らしさを出し、設定は控えめなグレー）。 */}
+      <View style={styles.pill}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="福引チャンス"
+          onPress={() => router.push('/lottery')}
+          style={styles.pillLottery}
+        >
+          <Ticket size={18} color={colors.livingLottery} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="家計の設定"
+          onPress={() => setSettingsOpen(true)}
+          disabled={!familyId}
+          style={styles.pillSettings}
+        >
+          <Settings size={18} color={colors.textMuted} />
+        </Pressable>
+      </View>
+
       {/* 記録の追加は右下の丸いボタン（Zaim と同じ）。どの面でも同じ場所。 */}
       <Pressable
         accessibilityRole="button"
@@ -442,7 +452,7 @@ export default function MoneyScreen() {
         disabled={!familyId}
         style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
       >
-        <Plus size={28} color={colors.primaryText} />
+        <Plus size={24} color={colors.primaryText} />
       </Pressable>
 
       {editing !== null && (
@@ -508,26 +518,41 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   body: { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
-  settings: { marginLeft: 'auto', padding: 2 },
-  title: { fontSize: 18, fontWeight: '700', color: colors.text },
   fab: {
     position: 'absolute',
     right: 16,
     bottom: 16,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.money,
     elevation: 6,
   },
   fabPressed: { opacity: 0.85 },
+  // ＋（右16・幅48）の左、＋と同じ高さの中心（下から40）に置く小さなピル。大きさは設定タブのボタン（36）に近づけた。
+  pill: {
+    position: 'absolute',
+    right: 74,
+    bottom: 23,
+    height: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+    elevation: 4,
+  },
+  pillLottery: { width: 40, height: 34, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.livingLotterySurface },
+  pillSettings: { width: 38, height: 34, alignItems: 'center', justifyContent: 'center' },
   // 3つの面の切り替え。等幅に並べ、選んでいる面は濃い文字と青い下線。
   views: {
     flexDirection: 'row',
     paddingHorizontal: 8,
+    paddingTop: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
