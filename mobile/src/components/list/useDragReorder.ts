@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
 import {
-  Animated,
   PanResponder,
   Vibration,
   type GestureResponderEvent,
@@ -90,7 +89,9 @@ export function useDragReorder(
 ): DragReorder {
   const layouts = useRef(new Map<string, Rect>()).current;
   const drag = useRef<DragState | null>(null);
-  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  // 持っている枠の動き。通常の View に当てるので Animated.Value ではなく数値で持つ
+  // （Animated.Value を通常の View の transform に入れると、Android ではネイティブ側で変換できず落ちる）。
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
   const delta = useRef({ x: 0, y: 0 });
   /** 持ち手に触れた指の画面上の位置。ここからの差が動かした量になる。 */
   const gripOrigin = useRef({ x: 0, y: 0 });
@@ -111,7 +112,7 @@ export function useDragReorder(
     const current = drag.current;
     drag.current = null;
     delta.current = { x: 0, y: 0 };
-    pan.setValue({ x: 0, y: 0 });
+    setOffset({ x: 0, y: 0 });
     const ids = activeRef.current?.ids ?? current?.initial ?? [];
     setActive(null);
     if (!current) return;
@@ -125,7 +126,7 @@ export function useDragReorder(
     const current = drag.current;
     if (!current) return;
     delta.current = { x: dx, y: dy };
-    pan.setValue({ x: dx, y: dy });
+    setOffset({ x: dx, y: dy });
 
     setActive((prev) => {
       if (!prev) return prev;
@@ -181,7 +182,7 @@ export function useDragReorder(
     const slots = ids.map((rowId) => layouts.get(rowId) ?? { x: 0, y: 0, width: 0, height: 0 });
     drag.current = { sectionKey, id, initial: ids, slots };
     delta.current = { x: 0, y: 0 };
-    pan.setValue({ x: 0, y: 0 });
+    setOffset({ x: 0, y: 0 });
     setActive({ sectionKey, id, ids });
     // 持ち上がったことを指に返す（Web版の navigator.vibrate(10) と同じ）。
     Vibration.vibrate(10);
@@ -229,10 +230,10 @@ export function useDragReorder(
       // 持っている枠は指に付いてくる。
       if (id === current.id) {
         return {
-          transform: pan.getTranslateTransform(),
+          transform: [{ translateX: offset.x }, { translateY: offset.y }],
           zIndex: 20,
           elevation: 8,
-        } as unknown as ViewStyle;
+        };
       }
 
       // ほかの枠は、入れ替わったぶんだけ置き場所を移す。
