@@ -219,7 +219,7 @@
 各PRで `src/`（PWA版）も追従する。
 
 > **状態（2026-10-09）:** 1〜5・4b は**済**（本番DBに `family_members`、予定の `participants`。アプリ名は「かぞく手帳」）。
-> **6（`family_profiles`・`users.role` の撤去）は、参照を外すところまで済**（2026-10-09、`0078`。下の「撤去の手順」）。**表と列を落とすのは未実施**。
+> **6（`family_profiles`・`users.role` の撤去）は済**（参照を外したのが2026-10-09の `0078`、表と列を落としたのが2026-10-10の `0079`。下の「撤去の手順」）。
 > **7 は一部が済**（2026-10-09、`0077`）: 招待コード（`member_invites`）、`create_member_invite`・`redeem_member_invite`・`create_my_family`、
 > `users` の更新できる列の絞り込み（下の「家族への参加と `users` の守り」）。**残りは、設定>家族で保護者が招待コードを出す画面（mobile・PWA）**。残りの一覧は [remaining-work.md](./remaining-work.md)。
 
@@ -231,16 +231,9 @@
 - DB の関数も使わない: `family_birth_date` は子メンバーの誕生日だけを読む（`family_profiles` への切り替え先を外した）。
   `redeem_member_invite`・`create_my_family` は `users.role` を書かない（夫・妻は `family_members.relation` で分かる）
 
-**残り（削除なので SQL Editor で流す。順序に注意）:**
-1. **`family_profiles` は、先に落としてよい。** 古いアプリも読み書きしていない（使われていなかった）。1行（旧データ）が消えるので、
-   控えが要れば先に `select * from public.family_profiles;` で取っておく。
-   `drop table if exists public.family_profiles;`
-2. **`users.role` は、全員が新しいアプリ（`0078` 以降のビルド）に入れ替わってから。** 古い mobile のビルドは
-   `users` から `role` を読む（`select family_id, role, start_tab`）ので、列を落とすとその端末は所属を読めなくなる。
-   家族の端末すべてが、この変更を含むビルドであることを確かめる（設定タブのバージョン表示）。
-   `alter table public.users drop constraint if exists users_role_check;`
-   `alter table public.users drop column if exists role;`
-3. 落としたら、`src/types/supabase.ts`・`mobile/src/types/supabase.ts` を再生成して該当部分を直す
+**落とした（2026-10-10、`0079_drop_family_profiles_and_user_role.sql`）:** `family_profiles` の表と `users.role` の列・制約。
+削除なので SQL Editor で流した。順序は、全員の端末が `0078` 以降のビルドになってから
+（古い mobile のビルドは `users` から `role` を読むため）。型（`src/types/supabase.ts`・`mobile/src/types/supabase.ts`）も更新した。
 
 ### 家族への参加と `users` の守り（2026-10-09、`0077_member_invites_users_lockdown.sql`）
 
