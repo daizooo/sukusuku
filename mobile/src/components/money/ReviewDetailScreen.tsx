@@ -196,7 +196,7 @@ function SpecialBody({
     <>
       <Hero
         label={`${periodLabel}に払った特別費`}
-        value={formatYen(special.spent)}
+        value={special.spent > 0 ? `−${formatYen(special.spent)}` : formatYen(special.spent)}
         note={
           special.yearBudget > 0
             ? `${year}年の予算 ${formatYen(special.yearBudget)}・${over ? `${formatYen(special.remaining)} 超過` : `残り ${formatYen(special.remaining)}`}`
@@ -225,10 +225,10 @@ function SpecialBody({
                     <Text style={[type.row, styles.flex]} numberOfLines={1}>
                       {item.name}
                     </Text>
-                    <Text style={[type.amount, itemOver && type.minus]}>{formatYen(item.spent)}</Text>
+                    <Text style={type.amount}>{item.spent > 0 ? `−${formatYen(item.spent)}` : formatYen(item.spent)}</Text>
                   </View>
                   {item.budget > 0 && <ProgressBar ratio={item.spentToDate / item.budget} over={itemOver} />}
-                  <Text style={[type.faint, itemOver && type.minus]}>
+                  <Text style={type.faint}>
                     {item.budget > 0 ? `年 ${formatYen(item.spentToDate)} / ${formatYen(item.budget)}` : '予定外'}
                     {item.category !== '' ? `・${item.category}` : ''}
                   </Text>

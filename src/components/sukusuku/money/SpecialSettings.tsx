@@ -10,7 +10,7 @@ import { categoryOptions } from '@/lib/stockUtils';
 import { formatYen } from '@/lib/moneyUtils';
 import SegmentedTabs from '../ui/SegmentedTabs';
 import SpecialItemModal from './SpecialItemModal';
-import { cardClass, ScreenHeader, SectionHeader, type, YearBar } from './moneyVisual';
+import { cardClass, incomeAmountClass, ScreenHeader, SectionHeader, type, YearBar } from './moneyVisual';
 
 // 特別費の予定（家計の設定。docs/kakei.md §3.5・§4.3）。mobile版の `mobile/src/components/money/SpecialSettings.tsx` と同じ並び・文言。
 //
@@ -51,6 +51,9 @@ export default function SpecialSettings({ familyId, year: initialYear, items, on
   );
   const categories = useMemo(() => categoryOptions(items), [items]);
   const label = kind === 'income' ? '収入予定' : '支出予定';
+  // 支出予定は「−」をつけた黒、収入予定は緑（「+」はつけない。0円は符号なし）。
+  const signed = (amount: number) => (amount === 0 ? formatYen(0) : kind === 'income' ? formatYen(amount) : `−${formatYen(amount)}`);
+  const plusClass = kind === 'income' ? incomeAmountClass : 'text-gray-900';
 
   const failed = (what: string) => window.alert(`${what}できませんでした。もう一度お試しください。`);
   const nextPosition = () => items.reduce((max, item) => Math.max(max, item.position + 1), 0);
@@ -98,14 +101,15 @@ export default function SpecialSettings({ familyId, year: initialYear, items, on
         className="mx-4 mb-1.5 shrink-0"
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-1.5">
-        <div className="space-y-0.5 py-2">
+        <div className="py-1">
           <p className={type.sub}>
             {formatYear(year)}の{label}
           </p>
-          <p className={type.hero}>{formatYen(total)}</p>
+          <p className={`text-[32px] leading-tight font-bold tabular-nums ${plusClass}`}>{signed(total)}</p>
         </div>
 
         <SectionHeader
+          compact
           title="予定"
           hint="月ごと"
           right={
@@ -124,10 +128,10 @@ export default function SpecialSettings({ familyId, year: initialYear, items, on
           </p>
         ) : (
           groups.map((group) => (
-            <section key={group.month ?? 'none'} className="mb-4">
-              <div className="flex items-baseline justify-between pb-1.5">
-                <h4 className="text-[13px] font-bold text-gray-700">{monthLabel(group.month)}</h4>
-                <span className={type.faint}>{formatYen(group.budget)}</span>
+            <section key={group.month ?? 'none'} className="mb-2">
+              <div className="flex items-baseline justify-between px-1 pb-1">
+                <h4 className="text-xs font-bold text-gray-700">{monthLabel(group.month)}</h4>
+                <span className="text-xs font-bold tabular-nums text-gray-500">{signed(group.budget)}</span>
               </div>
               <ul className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
                 {group.rows.map((row) => {
@@ -138,13 +142,13 @@ export default function SpecialSettings({ familyId, year: initialYear, items, on
                         type="button"
                         aria-label={`${row.item.name}を編集`}
                         onClick={() => setEditing(row.item)}
-                        className="flex w-full items-center gap-3 px-3.5 py-3 text-left hover:bg-gray-50"
+                        className="flex w-full items-center gap-2.5 px-3 py-[7px] text-left hover:bg-gray-50"
                       >
                         <span className="min-w-0 flex-1">
-                          <span className={`block truncate ${type.row}`}>{row.item.name}</span>
-                          {sub !== '' && <span className={`block ${type.faint}`}>{sub}</span>}
+                          <span className="block truncate text-sm font-bold text-gray-900">{row.item.name}</span>
+                          {sub !== '' && <span className="block text-[11px] font-medium text-gray-500">{sub}</span>}
                         </span>
-                        <span className={type.amount}>{formatYen(row.budget)}</span>
+                        <span className={`text-[17px] font-extrabold tabular-nums ${plusClass}`}>{signed(row.budget)}</span>
                       </button>
                     </li>
                   );
@@ -156,7 +160,7 @@ export default function SpecialSettings({ familyId, year: initialYear, items, on
 
         {others.length > 0 && (
           <>
-            <SectionHeader title={`${formatYear(year)}は予定のない項目`} />
+            <SectionHeader compact title={`${formatYear(year)}は予定のない項目`} />
             <ul className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
               {others.map((item) => (
                 <li key={item.id}>
@@ -164,9 +168,9 @@ export default function SpecialSettings({ familyId, year: initialYear, items, on
                     type="button"
                     aria-label={`${item.name}を編集`}
                     onClick={() => setEditing(item)}
-                    className="flex w-full items-center gap-3 px-3.5 py-3 text-left hover:bg-gray-50"
+                    className="flex w-full items-center gap-2.5 px-3 py-[7px] text-left hover:bg-gray-50"
                   >
-                    <span className={`min-w-0 flex-1 truncate ${type.row}`}>{item.name}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">{item.name}</span>
                     <span className={type.faint}>{item.category}</span>
                   </button>
                 </li>

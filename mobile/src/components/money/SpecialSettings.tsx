@@ -50,6 +50,9 @@ export default function SpecialSettings({ familyId, year: initialYear, items, on
   );
   const categories = useMemo(() => categoryOptions(items), [items]);
   const label = kind === 'income' ? '収入予定' : '支出予定';
+  // 支出予定は「−」をつけた黒、収入予定は緑（「+」はつけない。0円は符号なし）。
+  const signed = (amount: number) => (amount === 0 ? formatYen(0) : kind === 'income' ? formatYen(amount) : `−${formatYen(amount)}`);
+  const plus = kind === 'income' ? styles.plus : undefined;
 
   const failed = (what: string) => Alert.alert(`${what}できませんでした`, 'もう一度お試しください。');
   const nextPosition = () => items.reduce((max, item) => Math.max(max, item.position + 1), 0);
@@ -101,10 +104,11 @@ export default function SpecialSettings({ familyId, year: initialYear, items, on
           <Text style={type.sub}>
             {formatYear(year)}の{label}
           </Text>
-          <Text style={type.hero}>{formatYen(total)}</Text>
+          <Text style={[type.hero, styles.heroCompact, plus]}>{signed(total)}</Text>
         </View>
 
         <SectionHeader
+          compact
           title="予定"
           hint="月ごと"
           right={
@@ -126,7 +130,7 @@ export default function SpecialSettings({ familyId, year: initialYear, items, on
             <View key={group.month ?? 'none'} style={styles.group}>
               <View style={styles.groupHead}>
                 <Text style={styles.groupTitle}>{monthLabel(group.month)}</Text>
-                <Text style={type.faint}>{formatYen(group.budget)}</Text>
+                <Text style={styles.groupSum}>{signed(group.budget)}</Text>
               </View>
               <View style={styles.card}>
                 {group.rows.map((row, index) => {
@@ -140,12 +144,12 @@ export default function SpecialSettings({ familyId, year: initialYear, items, on
                       style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.pressed]}
                     >
                       <View style={styles.flex}>
-                        <Text style={type.row} numberOfLines={1}>
+                        <Text style={styles.name} numberOfLines={1}>
                           {row.item.name}
                         </Text>
-                        {sub !== '' && <Text style={type.faint}>{sub}</Text>}
+                        {sub !== '' && <Text style={styles.sub}>{sub}</Text>}
                       </View>
-                      <Text style={type.amount}>{formatYen(row.budget)}</Text>
+                      <Text style={[styles.amount, plus]}>{signed(row.budget)}</Text>
                     </Pressable>
                   );
                 })}
@@ -156,7 +160,7 @@ export default function SpecialSettings({ familyId, year: initialYear, items, on
 
         {others.length > 0 && (
           <>
-            <SectionHeader title={`${formatYear(year)}は予定のない項目`} />
+            <SectionHeader compact title={`${formatYear(year)}は予定のない項目`} />
             <View style={styles.card}>
               {others.map((item, index) => (
                 <Pressable
@@ -166,7 +170,7 @@ export default function SpecialSettings({ familyId, year: initialYear, items, on
                   onPress={() => setEditing(item)}
                   style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.pressed]}
                 >
-                  <Text style={[type.row, styles.flex]} numberOfLines={1}>
+                  <Text style={[styles.name, styles.flex]} numberOfLines={1}>
                     {item.name}
                   </Text>
                   <Text style={type.faint}>{item.category}</Text>
@@ -197,12 +201,15 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   kinds: { marginHorizontal: 16, marginBottom: 6 },
   content: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 32 },
-  summary: { gap: 2, paddingVertical: 8 },
+  summary: { gap: 0, paddingVertical: 4 },
+  heroCompact: { fontSize: 32 },
+  plus: { color: colors.moneyIncome },
   add: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
-  group: { marginBottom: 16 },
-  groupHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: 6 },
-  groupTitle: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },
+  group: { marginBottom: 8 },
+  groupHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: 4, paddingBottom: 4 },
+  groupTitle: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
+  groupSum: { fontSize: 12, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 16,
@@ -210,7 +217,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     overflow: 'hidden',
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 7 },
+  // 名前は太く濃く、補足は小さく灰、金額は大きく極太（記録の一覧と同じ）。
+  name: { fontSize: 14, fontWeight: '700', color: colors.text },
+  sub: { fontSize: 11, fontWeight: '500', color: colors.textMuted },
+  amount: { fontSize: 17, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
   pressed: { backgroundColor: colors.background },
 });

@@ -152,7 +152,7 @@ export default function MoneyReviewView({
         <Hero
           compact
           label={isMonth ? '生活費の収支' : '生活費の収支（年）'}
-          value={formatSignedYen(balance)}
+          value={formatBalance(balance)}
           plus={balance > 0}
           note={
             planned !== null
@@ -160,7 +160,7 @@ export default function MoneyReviewView({
               : `収入 − 特別費以外の支出・記録のある${yearSummary.recordedMonths}か月ぶん`
           }
         >
-          <StatRow compact label="収入" value={`+${formatYen(income)}`} plus={income > 0} />
+          <StatRow compact label="収入" value={formatYen(income)} plus={income > 0} />
           <StatRow
             compact
             label="生活費"
@@ -259,11 +259,11 @@ export default function MoneyReviewView({
                         ) : (
                           <Text style={type.faint}>生活費の記録なし</Text>
                         )}
-                        {row.special > 0 && <Text style={type.faint}>特別費 {formatYen(row.special)}</Text>}
+                        {row.special > 0 && <Text style={type.faint}>特別費 −{formatYen(row.special)}</Text>}
                       </View>
                       {estimatesInMonth(records, row.monthKey).length > 0 && <EstimateBadge />}
                       {row.recorded && (
-                        <Text style={[styles.monthBalance, row.balance > 0 && styles.plus]}>{formatSignedYen(row.balance)}</Text>
+                        <Text style={[styles.monthBalance, row.balance > 0 && styles.plus]}>{formatBalance(row.balance)}</Text>
                       )}
                       <ChevronRight size={16} color={colors.textFaint} />
                     </Pressable>
@@ -324,7 +324,7 @@ function SpecialRow({
             特別費
           </Text>
           <Text style={[styles.rowHeadline, special.spent === 0 && styles.muted]}>
-            {isMonth ? 'この月' : '年'} {formatYen(special.spent)}
+            {isMonth ? 'この月' : '年'} {special.spent > 0 ? `−${formatYen(special.spent)}` : formatYen(special.spent)}
           </Text>
         </View>
         {special.yearBudget > 0 ? (

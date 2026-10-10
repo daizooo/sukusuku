@@ -12,12 +12,12 @@ interface NotificationSettingProps {
 // 家族で共通の設定なので、Web版からも変えられる。
 export default function NotificationSetting({ children }: NotificationSettingProps) {
   return (
-    <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+    <section className="bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100">
       <div className="flex items-center gap-2">
         <BellRing size={18} className="text-blue-500" />
-        <h3 className="flex-1 font-bold text-gray-800">通知</h3>
+        <h3 className="flex-1 font-extrabold text-gray-900">通知</h3>
       </div>
-      <p className="text-xs text-gray-500 mt-2">
+      <p className="text-xs text-gray-500 mt-1.5">
         通知はAndroidアプリで受け取ります。この画面では届きません。
       </p>
       {children}

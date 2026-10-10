@@ -154,7 +154,7 @@ export default function MoneyReviewView({
         <Hero
           compact
           label={isMonth ? '生活費の収支' : '生活費の収支（年）'}
-          value={formatSignedYen(balance)}
+          value={formatBalance(balance)}
           plus={balance > 0}
           note={
             planned !== null
@@ -162,7 +162,7 @@ export default function MoneyReviewView({
               : `収入 − 特別費以外の支出・記録のある${yearSummary.recordedMonths}か月ぶん`
           }
         >
-          <StatRow compact label="収入" value={`+${formatYen(income)}`} plus={income > 0} />
+          <StatRow compact label="収入" value={formatYen(income)} plus={income > 0} />
           <StatRow
             compact
             label="生活費"
@@ -261,14 +261,14 @@ export default function MoneyReviewView({
                         ) : (
                           <span className={`block ${type.faint}`}>生活費の記録なし</span>
                         )}
-                        {row.special > 0 && <span className={`block ${type.faint}`}>特別費 {formatYen(row.special)}</span>}
+                        {row.special > 0 && <span className={`block ${type.faint}`}>特別費 −{formatYen(row.special)}</span>}
                       </span>
                       {estimatesInMonth(records, row.monthKey).length > 0 && <EstimateBadge />}
                       {row.recorded && (
                         <span
                           className={`text-[17px] font-extrabold tabular-nums ${row.balance > 0 ? incomeAmountClass : 'text-gray-900'}`}
                         >
-                          {formatSignedYen(row.balance)}
+                          {formatBalance(row.balance)}
                         </span>
                       )}
                       <ChevronRight size={16} className="text-gray-400" />
@@ -318,7 +318,7 @@ function SpecialRow({ special, isMonth, onClick }: { special: SpecialAnalysis; i
         <div className="flex items-baseline gap-2">
           <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">特別費</span>
           <span className={`text-[15px] font-extrabold tabular-nums ${special.spent === 0 ? 'text-gray-400' : 'text-gray-900'}`}>
-            {isMonth ? 'この月' : '年'} {formatYen(special.spent)}
+            {isMonth ? 'この月' : '年'} {special.spent > 0 ? `−${formatYen(special.spent)}` : formatYen(special.spent)}
           </span>
         </div>
         {special.yearBudget > 0 ? (

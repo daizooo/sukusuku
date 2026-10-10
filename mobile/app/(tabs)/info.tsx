@@ -135,6 +135,6 @@ export default function InfoScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   centered: { alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16, gap: 24, paddingBottom: 32 },
+  content: { paddingHorizontal: 16, paddingTop: 12, gap: 12, paddingBottom: 24 },
   message: { fontSize: 14, fontWeight: '400', color: colors.textFaint, textAlign: 'center' },
 });

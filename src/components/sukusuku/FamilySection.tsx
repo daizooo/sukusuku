@@ -94,8 +94,8 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
   };
 
   return (
-    <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-      <h3 className="font-bold text-gray-800 mb-4 flex items-center border-b pb-2">
+    <section className="bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100">
+      <h3 className="font-extrabold text-gray-900 mb-2.5 flex items-center border-b pb-1.5">
         <Users size={18} className="mr-2 text-blue-500" /> 家族
         {showEdit && <EditButton label="家族の情報を編集" onClick={startEdit} />}
       </h3>
@@ -116,9 +116,9 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
           </button>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {household && (
-            <div className="border border-gray-200 rounded-xl p-3 space-y-1.5">
+            <div className="border border-gray-200 rounded-xl p-2.5 space-y-1">
               <div className="flex items-center gap-2 mb-1">
                 <Home size={16} className="text-gray-500" />
                 <span className="font-bold text-gray-900">自宅</span>
@@ -139,7 +139,7 @@ export default function FamilySection({ familyId, userId }: FamilySectionProps) 
               : '';
             const isChild = member.relation === 'child';
             return (
-              <div key={member.id} className="border border-gray-200 rounded-xl p-3 space-y-1.5">
+              <div key={member.id} className="border border-gray-200 rounded-xl p-2.5 space-y-1">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-bold text-gray-900">{formatFullName(member) || member.displayName}</span>
                   <span className="text-[11px] font-semibold text-gray-500 bg-gray-50 rounded-md px-1.5">
@@ -222,8 +222,8 @@ function EditButton({ label, onClick }: { label: string; onClick: () => void }) 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-3 text-sm">
-      <span className="w-24 shrink-0 text-xs font-medium text-gray-500 pt-0.5">{label}</span>
-      <span className={`flex-1 min-w-0 break-words ${value ? 'text-gray-700' : 'text-gray-400'}`}>
+      <span className="w-24 shrink-0 text-xs font-semibold text-gray-500 pt-0.5">{label}</span>
+      <span className={`flex-1 min-w-0 break-words ${value ? 'font-bold text-gray-900' : 'text-gray-400'}`}>
         {value || '未設定'}
       </span>
     </div>

@@ -68,9 +68,9 @@ export default function FeedingIntervalSetting({
 
 const styles = StyleSheet.create({
   // 「通知」の枠（NotificationSetting）の中に置く。上の項目とは線で区切る。
-  section: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
+  section: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  label: { flex: 1, fontSize: 14, fontWeight: '500', color: colors.textSubtle },
+  label: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.text },
   options: { flexDirection: 'row', gap: 6 },
   option: {
     borderRadius: 8,

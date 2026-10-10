@@ -18,7 +18,6 @@ import {
   SectionHeader,
   StatRow,
   cardClass,
-  minus,
   type,
 } from './moneyVisual';
 
@@ -198,7 +197,7 @@ function SpecialBody({
     <>
       <Hero
         label={`${periodLabel}に払った特別費`}
-        value={formatYen(special.spent)}
+        value={special.spent > 0 ? `−${formatYen(special.spent)}` : formatYen(special.spent)}
         note={
           special.yearBudget > 0
             ? `${year}年の予算 ${formatYen(special.yearBudget)}・${over ? `${formatYen(special.remaining)} 超過` : `残り ${formatYen(special.remaining)}`}`
@@ -225,10 +224,10 @@ function SpecialBody({
                 <div key={item.id} className="space-y-1.5 px-3.5 py-2.5">
                   <div className="flex items-baseline gap-2">
                     <span className={`min-w-0 flex-1 truncate ${type.row}`}>{item.name}</span>
-                    <span className={minus(type.amount, itemOver)}>{formatYen(item.spent)}</span>
+                    <span className={type.amount}>{item.spent > 0 ? `−${formatYen(item.spent)}` : formatYen(item.spent)}</span>
                   </div>
                   {item.budget > 0 && <ProgressBar ratio={item.spentToDate / item.budget} over={itemOver} />}
-                  <p className={minus(type.faint, itemOver)}>
+                  <p className={type.faint}>
                     {item.budget > 0 ? `年 ${formatYen(item.spentToDate)} / ${formatYen(item.budget)}` : '予定外'}
                     {item.category !== '' ? `・${item.category}` : ''}
                   </p>
