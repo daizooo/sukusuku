@@ -431,7 +431,7 @@ export default function MoneyScreen() {
           onPress={() => router.push('/lottery')}
           style={styles.pillLottery}
         >
-          <Ticket size={18} color={colors.livingLottery} />
+          <Ticket size={20} color={colors.livingLottery} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -440,7 +440,7 @@ export default function MoneyScreen() {
           disabled={!familyId}
           style={styles.pillSettings}
         >
-          <Settings size={18} color={colors.textMuted} />
+          <Settings size={20} color={colors.textMuted} />
         </Pressable>
       </View>
 
@@ -452,7 +452,7 @@ export default function MoneyScreen() {
         disabled={!familyId}
         style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
       >
-        <Plus size={24} color={colors.primaryText} />
+        <Plus size={22} color={colors.primaryText} />
       </Pressable>
 
       {editing !== null && (
@@ -522,21 +522,21 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     bottom: 16,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.money,
     elevation: 6,
   },
   fabPressed: { opacity: 0.85 },
-  // ＋（右16・幅48）の左、＋と同じ高さの中心（下から40）に置く小さなピル。大きさは設定タブのボタン（36）に近づけた。
+  // ＋（右16・幅42）の左、＋と同じ高さの中心（下から37）に置くピル。＋（42）とピルの高さ（40）をほぼそろえた。
   pill: {
     position: 'absolute',
-    right: 74,
-    bottom: 23,
-    height: 34,
+    right: 68,
+    bottom: 17,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 20,
@@ -546,8 +546,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     elevation: 4,
   },
-  pillLottery: { width: 40, height: 34, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.livingLotterySurface },
-  pillSettings: { width: 38, height: 34, alignItems: 'center', justifyContent: 'center' },
+  pillLottery: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.livingLotterySurface },
+  pillSettings: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center' },
   // 3つの面の切り替え。等幅に並べ、選んでいる面は濃い文字と青い下線。
   views: {
     flexDirection: 'row',
