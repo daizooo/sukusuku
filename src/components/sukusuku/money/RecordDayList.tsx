@@ -15,7 +15,7 @@ import {
   topCategoryIdOf,
   type BalanceCheck,
 } from '@/lib/moneyUtils';
-import { CategoryIcon, EstimateBadge, TransferIcon, WalletTypeIcon, cardClass, incomeAmountClass, minus, type } from './moneyVisual';
+import { CategoryIcon, EstimateBadge, TransferIcon, WalletTypeIcon, cardClass, incomeAmountClass } from './moneyVisual';
 
 // 記録を日ごと（新しい日から）に並べる一覧（docs/kakei.md §2.1）。家計タブの「記録」と、口座の詳細の「履歴」で同じものを使う。
 // mobile版の `mobile/src/components/money/RecordDayList.tsx` と同じ並び・文言。
@@ -41,6 +41,10 @@ const dayLabel = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number);
   return `${month}月${day}日（${WEEKDAY_LABELS[new Date(year, month - 1, day).getDay()]}）`;
 };
+
+// 名前は太く濃く、金額は大きく極太（収入は緑・支出は黒。符号はつけない）。mobile版の RecordDayList の styles と同じ。
+const rowTitle = 'text-sm font-bold text-gray-900';
+const amount = 'text-[17px] font-extrabold text-gray-900 tabular-nums';
 
 export default function RecordDayList({
   records,
@@ -105,10 +109,10 @@ export default function RecordDayList({
           .filter((item) => item.specialItemId === null)
           .reduce((sum, item) => sum + item.amount, 0);
         return (
-          <section key={day.date} className="mt-5">
-            <div className="flex items-baseline justify-between pb-1.5">
-              <h4 className="text-[13px] font-bold text-gray-700">{dayLabel(day.date)}</h4>
-              {spent > 0 && <span className={type.faint}>{formatYen(spent)}</span>}
+          <section key={day.date} className="mt-2.5">
+            <div className="flex items-baseline justify-between px-1 pb-1">
+              <h4 className="text-xs font-bold text-gray-700">{dayLabel(day.date)}</h4>
+              {spent > 0 && <span className="text-xs font-bold tabular-nums text-gray-500">{formatYen(spent)}</span>}
             </div>
             <div className={`${cardClass} overflow-hidden`}>
               {day.corrections.map((check, index) => (
@@ -117,15 +121,15 @@ export default function RecordDayList({
                   type="button"
                   aria-label="残高の補正"
                   onClick={() => onOpenCorrection?.(check)}
-                  className={`flex w-full items-center gap-3 px-3.5 py-3 text-left hover:bg-gray-50 ${
+                  className={`flex w-full items-center gap-2.5 px-3 py-[7px] text-left hover:bg-gray-50 ${
                     index > 0 ? 'border-t border-gray-200' : ''
                   }`}
                 >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#5b7a99] text-white">
-                    <Scale size={16} />
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#5b7a99] text-white">
+                    <Scale size={14} />
                   </span>
-                  <span className={`min-w-0 flex-1 truncate ${type.row}`}>{check.diff === null ? 'はじめの残高' : '残高を補正'}</span>
-                  <span className={minus(type.amount, check.diff !== null && check.diff !== 0)}>
+                  <span className={`min-w-0 flex-1 truncate ${rowTitle}`}>{check.diff === null ? 'はじめの残高' : '残高を補正'}</span>
+                  <span className={check.diff !== null && check.diff > 0 ? amount.replace('text-gray-900', incomeAmountClass) : amount}>
                     {check.diff === null ? formatBalance(check.balance.amount) : check.diff === 0 ? formatYen(0) : formatSignedYen(check.diff)}
                   </span>
                 </button>
@@ -138,26 +142,25 @@ export default function RecordDayList({
                     key={record.id}
                     type="button"
                     onClick={() => onOpen(record)}
-                    className={`flex w-full items-center gap-3 px-3.5 py-3 text-left hover:bg-gray-50 ${
+                    className={`flex w-full items-center gap-2.5 px-3 py-[7px] text-left hover:bg-gray-50 ${
                       index > 0 ? 'border-t border-gray-200' : ''
                     }`}
                   >
-                    {icon === null ? <TransferIcon /> : <CategoryIcon iconKey={icon} />}
+                    {icon === null ? <TransferIcon size={28} /> : <CategoryIcon iconKey={icon} size={28} />}
                     <span className="min-w-0 flex-1">
-                      <span className={`block truncate ${type.row}`}>{title}</span>
-                      {sub !== '' && <span className={`block truncate ${type.sub}`}>{sub}</span>}
+                      <span className={`block truncate ${rowTitle}`}>{title}</span>
+                      {sub !== '' && <span className="block truncate text-[11px] font-medium text-gray-500">{sub}</span>}
                     </span>
                     {record.isEstimate && <EstimateBadge />}
                     <span
                       className={
                         record.kind === 'transfer'
-                          ? type.amount.replace('text-gray-900', 'text-gray-500')
+                          ? amount.replace('text-gray-900', 'text-gray-500')
                           : record.kind === 'income'
-                            ? type.amount.replace('text-gray-900', incomeAmountClass)
-                            : type.amount
+                            ? amount.replace('text-gray-900', incomeAmountClass)
+                            : amount
                       }
                     >
-                      {record.kind === 'income' ? '+' : ''}
                       {formatYen(recordTotal(record))}
                     </span>
                     <span className="flex min-w-[15px] gap-0.5">

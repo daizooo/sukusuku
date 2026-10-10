@@ -10,6 +10,7 @@ import {
   buildSpecialAnalysis,
   buildYearSummary,
   estimatesInMonth,
+  formatBalance,
   formatSignedYen,
   formatYen,
   iconKeyOf,
@@ -149,26 +150,27 @@ export default function MoneyReviewView({
       />
       <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
         <Hero
+          compact
           label={isMonth ? '生活費の収支' : '生活費の収支（年）'}
           value={formatSignedYen(balance)}
-          minus={balance < 0}
+          plus={balance > 0}
           note={
             planned !== null
               ? `収入 − 特別費以外の支出・予算どおりなら ${formatSignedYen(planned)}`
               : `収入 − 特別費以外の支出・記録のある${yearSummary.recordedMonths}か月ぶん`
           }
         >
-          <StatRow label="収入" note="給与・臨時収入など" value={`+${formatYen(income)}`} />
+          <StatRow compact label="収入" value={`+${formatYen(income)}`} plus={income > 0} />
           <StatRow
+            compact
             label="生活費"
             note={
               isMonth
-                ? `予算 ${formatYen(month.livingBudget)}（${livingDiff < 0 ? `${formatYen(livingDiff)} 超過` : `残り ${formatYen(livingDiff)}`}）`
+                ? `予算 ${formatYen(month.livingBudget)}（${livingDiff < 0 ? `${formatBalance(livingDiff)} 超過` : `残り ${formatYen(livingDiff)}`}）`
                 : livingDiff < 0
                   ? `予算より ${formatYen(livingDiff)} 多い`
                   : `予算より ${formatYen(livingDiff)} 少ない`
             }
-            noteMinus={livingDiff < 0}
             value={`−${formatYen(living)}`}
           />
           {estimates.count > 0 && (
@@ -185,6 +187,7 @@ export default function MoneyReviewView({
         {isMonth ? (
           <>
             <SectionHeader
+              compact
               title="内訳"
               hint="押すと分析と記録"
               right={
@@ -211,6 +214,7 @@ export default function MoneyReviewView({
         ) : (
           <>
             <SectionHeader
+              compact
               title="内訳"
               hint="押すと分析と記録"
               right={
@@ -230,7 +234,7 @@ export default function MoneyReviewView({
               ))}
               <SpecialRow special={special} isMonth={false} divided={tiles.length > 0} onPress={() => setDetail({ type: 'special' })} />
             </View>
-            <SectionHeader title="月ごと" hint="押すとその月へ" />
+            <SectionHeader compact title="月ごと" hint="押すとその月へ" />
             {months.length === 0 ? (
               <Text style={styles.message}>この年はまだ記録がありません</Text>
             ) : (
@@ -248,13 +252,10 @@ export default function MoneyReviewView({
                       <Text style={styles.month}>{number}月</Text>
                       <View style={styles.flex}>
                         {row.recorded ? (
-                          <>
-                            <Text style={type.faint}>収入 {formatYen(row.income)}</Text>
-                            <Text style={[type.faint, row.livingDiff < 0 && type.minus]}>
-                              生活費 {formatYen(row.living)}
-                              {row.livingDiff < 0 ? '（予算超え）' : ''}
-                            </Text>
-                          </>
+                          <Text style={type.faint} numberOfLines={1}>
+                            収入 {formatYen(row.income)}・生活費 {formatYen(row.living)}
+                            {row.livingDiff < 0 ? '（予算超え）' : ''}
+                          </Text>
                         ) : (
                           <Text style={type.faint}>生活費の記録なし</Text>
                         )}
@@ -262,7 +263,7 @@ export default function MoneyReviewView({
                       </View>
                       {estimatesInMonth(records, row.monthKey).length > 0 && <EstimateBadge />}
                       {row.recorded && (
-                        <Text style={[type.amount, row.balance < 0 && type.minus]}>{formatSignedYen(row.balance)}</Text>
+                        <Text style={[styles.monthBalance, row.balance > 0 && styles.plus]}>{formatSignedYen(row.balance)}</Text>
                       )}
                       <ChevronRight size={16} color={colors.textFaint} />
                     </Pressable>
@@ -316,7 +317,7 @@ function SpecialRow({
       onPress={onPress}
       style={({ pressed }) => [styles.row, styles.categoryRow, divided && styles.rowDivided, pressed && styles.pressed]}
     >
-      <CategoryIcon iconKey="star" />
+      <CategoryIcon iconKey="star" size={28} />
       <View style={styles.rowBody}>
         <View style={styles.rowTop}>
           <Text style={styles.rowName} numberOfLines={1}>
@@ -326,12 +327,18 @@ function SpecialRow({
             {isMonth ? 'この月' : '年'} {formatYen(special.spent)}
           </Text>
         </View>
-        {special.yearBudget > 0 && <ProgressBar ratio={special.spentToDate / special.yearBudget} over={over} />}
-        <Text style={[type.faint, over && type.minus]}>
-          {special.yearBudget > 0
-            ? `年 ${formatYen(special.spentToDate)} / ${formatYen(special.yearBudget)}・${over ? `${formatYen(special.remaining)} 超過` : `残り ${formatYen(special.remaining)}`}`
-            : '「家計の設定」の「特別費の予定」で予定を決めると、予算の残りが出ます'}
-        </Text>
+        {special.yearBudget > 0 ? (
+          <View style={styles.rowBar}>
+            <View style={styles.flex}>
+              <ProgressBar ratio={special.spentToDate / special.yearBudget} over={over} />
+            </View>
+            <Text style={type.faint}>
+              {`年 ${formatYen(special.spentToDate)} / ${formatYen(special.yearBudget)}・${over ? `${formatBalance(special.remaining)} 超過` : `残り ${formatYen(special.remaining)}`}`}
+            </Text>
+          </View>
+        ) : (
+          <Text style={type.faint}>「家計の設定」の「特別費の予定」で予定を決めると、予算の残りが出ます</Text>
+        )}
       </View>
       <ChevronRight size={16} color={colors.textFaint} />
     </Pressable>
@@ -342,14 +349,13 @@ function SpecialRow({
 function CategoryRow({ tile, divided, onPress }: { tile: BudgetTile; divided: boolean; onPress: () => void }) {
   const over = tile.budget !== null && tile.diff < 0;
   const quiet = tile.budget === null || tile.diff === 0;
+  // 残りの額が大きく、予算を超えたら「残り −¥1,234」（符号をつけた黒。超えたことは帯の赤で見せる）。
   const headline =
     tile.budget === null
       ? '予算なし'
-      : tile.diff < 0
-        ? `${formatYen(tile.diff)} 超過`
-        : tile.diff === 0
-          ? '予算どおり'
-          : `残り ${formatYen(tile.diff)}`;
+      : tile.diff === 0
+        ? '予算どおり'
+        : `残り ${formatBalance(tile.diff)}`;
   return (
     <Pressable
       accessibilityRole="button"
@@ -357,20 +363,24 @@ function CategoryRow({ tile, divided, onPress }: { tile: BudgetTile; divided: bo
       onPress={onPress}
       style={({ pressed }) => [styles.row, styles.categoryRow, divided && styles.rowDivided, pressed && styles.pressed]}
     >
-      <CategoryIcon iconKey={iconKeyOf(tile.category)} />
+      <CategoryIcon iconKey={iconKeyOf(tile.category)} size={28} />
       <View style={styles.rowBody}>
         <View style={styles.rowTop}>
           <Text style={styles.rowName} numberOfLines={1}>
             {tile.category.name}
           </Text>
-          <Text style={[styles.rowHeadline, over && type.minus, quiet && styles.muted]}>{headline}</Text>
+          <Text style={[styles.rowHeadline, quiet && styles.muted]}>{headline}</Text>
         </View>
-        <ProgressBar ratio={tile.budget ? tile.actual / tile.budget : 0} over={over} />
-        <Text style={type.faint}>
-          {formatYen(tile.actual)}
-          {tile.budget !== null ? ` / ${formatYen(tile.budget)}` : ''}
-          {tile.percent !== null ? `・${tile.percent}%` : ''}
-        </Text>
+        <View style={styles.rowBar}>
+          <View style={styles.flex}>
+            <ProgressBar ratio={tile.budget ? tile.actual / tile.budget : 0} over={over} />
+          </View>
+          <Text style={type.faint}>
+            {formatYen(tile.actual)}
+            {tile.budget !== null ? ` / ${formatYen(tile.budget)}` : ''}
+            {tile.percent !== null ? `・${tile.percent}%` : ''}
+          </Text>
+        </View>
       </View>
       <ChevronRight size={16} color={colors.textFaint} />
     </Pressable>
@@ -392,14 +402,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     overflow: 'hidden',
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12 },
-  categoryRow: { gap: 12, paddingVertical: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 9 },
+  categoryRow: { gap: 10, paddingHorizontal: 12, paddingVertical: 7 },
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
   pressed: { backgroundColor: colors.background },
   month: { width: 40, fontSize: 15, fontWeight: '700', color: colors.text },
-  rowBody: { flex: 1, gap: 4 },
+  monthBalance: { fontSize: 17, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
+  plus: { color: colors.moneyIncome },
+  rowBody: { flex: 1, gap: 3 },
+  // 帯と「実績 / 予算・割合」を同じ行に（行の高さを抑える）。帯は残りの幅いっぱい。
+  rowBar: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowTop: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   rowName: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text },
-  rowHeadline: { fontSize: 14, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  rowHeadline: { fontSize: 15, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   muted: { color: colors.textFaint },
 });

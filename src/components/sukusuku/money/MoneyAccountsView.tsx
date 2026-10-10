@@ -23,7 +23,7 @@ import SecuritiesWalletScreen from './SecuritiesWalletScreen';
 import TotalTrendScreen from './TotalTrendScreen';
 import WalletBalanceScreen from './WalletBalanceScreen';
 import { WalletModal } from './WalletPicker';
-import { cardClass, Hero, minus, type, WalletTypeIcon } from './moneyVisual';
+import { cardClass, Hero, incomeAmountClass, type, WalletTypeIcon } from './moneyVisual';
 
 // 家計タブの「口座」（docs/kakei.md §7 の7・§9.3）。mobile版の `mobile/src/components/money/MoneyAccountsView.tsx` と同じ並び・文言。
 //
@@ -99,13 +99,13 @@ export default function MoneyAccountsView({
           aria-label="総残高の推移を見る"
           onClick={() => setShowTrend(true)}
           disabled={usable.length === 0}
-          className="block w-full pt-3 text-left"
+          className="block w-full pt-1.5 text-left"
         >
           <Hero
             center
             label="総残高"
             value={formatBalance(summary.total)}
-            isMinus={summary.total < 0}
+            compact
             note={usable.length === 0 ? '出金元を足すと、残高が出ます' : undefined}
           />
         </button>
@@ -114,27 +114,31 @@ export default function MoneyAccountsView({
           const inType = usable.filter((row) => row.wallet.type === walletType.id);
           if (inType.length === 0) return null;
           return (
-            <section key={walletType.id} className="mt-5 space-y-1.5">
-              <h4 className="text-[13px] font-bold text-gray-700">{walletType.label}</h4>
-              {/* Zaim の「残高」と同じく2列に並べる（2026-10-08）。 */}
-              <div className="grid grid-cols-2 gap-2">
+            <section key={walletType.id} className="mt-2 space-y-[3px]">
+              <h4 className="flex items-baseline justify-between px-1 text-xs font-bold text-gray-700">
+                <span>{walletType.label}</span>
+                <span className="tabular-nums text-gray-500">{formatBalance(inType.reduce((sum, row) => sum + row.amount, 0))}</span>
+              </h4>
+              {/* Zaim の「残高」と同じく2列に並べる（2026-10-08）。金額は大きく太く、プラスは緑・マイナスは「−」と黒（2026-10-10）。 */}
+              <div className="grid grid-cols-2 gap-1.5">
                 {inType.map((row) => (
                   <button
                     key={row.wallet.id}
                     type="button"
                     onClick={() => setOpenId(row.wallet.id)}
-                    className={`${cardClass} flex min-w-0 flex-col gap-2 p-3 text-left hover:bg-gray-50`}
+                    className="flex min-w-0 flex-col justify-between gap-0.5 rounded-xl border border-gray-200 bg-white px-2.5 pb-1.5 pt-[7px] text-left hover:bg-gray-50"
                   >
-                    <span className="flex min-w-0 items-start gap-2">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100">
-                        <WalletTypeIcon type={row.wallet.type} size={18} color={row.wallet.iconColor} />
+                    <span className="flex min-w-0 items-start gap-1.5">
+                      <span className="shrink-0">
+                        <WalletTypeIcon type={row.wallet.type} size={20} color={row.wallet.iconColor} />
                       </span>
-                      <span className="min-w-0 flex-1">
-                        <span className={`line-clamp-2 text-[13px] font-semibold text-gray-900`}>{row.wallet.name}</span>
-                        {row.wallet.isSaving && <span className={`block truncate ${type.faint}`}>貯金用</span>}
-                      </span>
+                      <span className="line-clamp-2 min-w-0 flex-1 text-[13px] font-bold leading-4 text-gray-500">{row.wallet.name}</span>
                     </span>
-                    <span className={`${minus(type.amount, row.amount < 0)} self-end`}>{formatBalance(row.amount)}</span>
+                    <span
+                      className={`self-end text-[21px] font-extrabold tabular-nums ${row.amount > 0 ? incomeAmountClass : 'text-gray-900'}`}
+                    >
+                      {formatBalance(row.amount)}
+                    </span>
                   </button>
                 ))}
               </div>

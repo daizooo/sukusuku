@@ -173,22 +173,28 @@ export function Hero({
   minus,
   note,
   center,
+  compact,
+  plus,
   children,
 }: {
   label: string;
   value: string;
   minus?: boolean;
+  /** プラスの額（明るい緑）。 */
+  plus?: boolean;
   note?: ReactNode;
   /** ラベルと数字を中央に寄せる（総残高など）。 */
   center?: boolean;
+  /** 余白と数字を少し詰める（口座の面。1画面に収めるため）。 */
+  compact?: boolean;
   children?: ReactNode;
 }) {
   return (
-    <View style={[styles.card, center && styles.cardCenter]}>
+    <View style={[styles.card, center && styles.cardCenter, compact && styles.cardCompact]}>
       <Text style={styles.heroLabel}>{label}</Text>
-      <Text style={[type.hero, minus && type.minus]}>{value}</Text>
+      <Text style={[type.hero, compact && styles.heroCompact, plus && styles.plus, minus && type.minus]}>{value}</Text>
       {note !== undefined && <Text style={[type.sub, center && styles.centerText]}>{note}</Text>}
-      {children !== undefined && <View style={styles.heroBody}>{children}</View>}
+      {children !== undefined && <View style={[styles.heroBody, compact && styles.heroBodyCompact]}>{children}</View>}
     </View>
   );
 }
@@ -200,28 +206,45 @@ export function StatRow({
   noteMinus,
   value,
   minus,
+  plus,
+  compact,
 }: {
   label: string;
   note?: string;
   noteMinus?: boolean;
   value: string;
   minus?: boolean;
+  /** プラスの額（明るい緑）。 */
+  plus?: boolean;
+  /** 余白を詰め、金額を大きく太くする（振り返りの面）。 */
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.statRow}>
+    <View style={[styles.statRow, compact && styles.statRowCompact]}>
       <View style={styles.flex}>
         <Text style={styles.statLabel}>{label}</Text>
         {note !== undefined && <Text style={[type.faint, noteMinus && type.minus]}>{note}</Text>}
       </View>
-      <Text style={[type.amount, minus && type.minus]}>{value}</Text>
+      <Text style={[type.amount, compact && styles.statAmountCompact, plus && styles.plus, minus && type.minus]}>{value}</Text>
     </View>
   );
 }
 
 /** 区切りの見出し（左に見出しと一言、右に操作）。 */
-export function SectionHeader({ title, hint, right }: { title: string; hint?: string; right?: ReactNode }) {
+export function SectionHeader({
+  title,
+  hint,
+  right,
+  compact,
+}: {
+  title: string;
+  hint?: string;
+  right?: ReactNode;
+  /** 上下の余白を詰める（振り返りの面）。 */
+  compact?: boolean;
+}) {
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, compact && styles.sectionCompact]}>
       <Text style={type.title}>{title}</Text>
       {hint !== undefined && <Text style={type.faint}>{hint}</Text>}
       <View style={styles.flex} />
@@ -421,12 +444,19 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   cardCenter: { alignItems: 'center' },
+  cardCompact: { paddingTop: 8, paddingBottom: 10 },
+  heroCompact: { fontSize: 32 },
+  plus: { color: colors.moneyIncome },
+  heroBodyCompact: { marginTop: 6, paddingTop: 0 },
   centerText: { textAlign: 'center' },
   heroLabel: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   heroBody: { marginTop: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 4 },
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
+  statRowCompact: { paddingVertical: 4 },
+  statAmountCompact: { fontSize: 18, fontWeight: '800' },
   statLabel: { fontSize: 14, fontWeight: '600', color: colors.textSubtle },
   section: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 24, marginBottom: 10 },
+  sectionCompact: { marginTop: 14, marginBottom: 6 },
   bar: { height: 6, borderRadius: 3, backgroundColor: colors.neutralSurface, overflow: 'hidden' },
   barFill: { height: 6, borderRadius: 3, backgroundColor: colors.moneyRing },
   ringText: { fontSize: 11, fontWeight: '700', color: colors.money },

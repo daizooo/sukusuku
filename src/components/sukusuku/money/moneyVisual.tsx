@@ -223,22 +223,28 @@ export function Hero({
   isMinus,
   note,
   center,
+  compact,
+  plus,
   children,
 }: {
   label: string;
   value: string;
   isMinus?: boolean;
+  /** プラスの額（明るい緑）。 */
+  plus?: boolean;
   note?: ReactNode;
   /** ラベルと数字を中央に寄せる（総残高など）。 */
   center?: boolean;
+  /** 余白と数字を少し詰める（口座の面。1画面に収めるため）。 */
+  compact?: boolean;
   children?: ReactNode;
 }) {
   return (
-    <div className={`${cardClass} p-4 ${center ? 'text-center' : ''}`}>
+    <div className={`${cardClass} ${compact ? 'px-4 pb-2.5 pt-2' : 'p-4'} ${center ? 'text-center' : ''}`}>
       <p className="text-[13px] font-semibold text-gray-500">{label}</p>
-      <p className={minus(type.hero, isMinus)}>{value}</p>
+      <p className={minus(plus ? (compact ? type.hero.replace('text-[34px]', 'text-[32px]') : type.hero).replace('text-gray-900', incomeAmountClass) : compact ? type.hero.replace('text-[34px]', 'text-[32px]') : type.hero, isMinus)}>{value}</p>
       {note !== undefined && <p className={type.sub}>{note}</p>}
-      {children !== undefined && <div className="mt-3 border-t border-gray-200 pt-1">{children}</div>}
+      {children !== undefined && <div className={`${compact ? 'mt-1.5' : 'mt-3 pt-1'} border-t border-gray-200`}>{children}</div>}
     </div>
   );
 }
@@ -250,28 +256,46 @@ export function StatRow({
   noteMinus,
   value,
   isMinus,
+  plus,
+  compact,
 }: {
   label: string;
   note?: string;
   noteMinus?: boolean;
   value: string;
   isMinus?: boolean;
+  /** プラスの額（明るい緑）。 */
+  plus?: boolean;
+  /** 余白を詰め、金額を大きく太くする（振り返りの面）。 */
+  compact?: boolean;
 }) {
+  const amount = compact ? 'text-[18px] font-extrabold text-gray-900 tabular-nums' : type.amount;
   return (
-    <div className="flex items-center gap-2 py-2">
+    <div className={`flex items-center gap-2 ${compact ? 'py-1' : 'py-2'}`}>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-gray-700">{label}</p>
         {note !== undefined && <p className={minus(type.faint, noteMinus)}>{note}</p>}
       </div>
-      <span className={minus(type.amount, isMinus)}>{value}</span>
+      <span className={minus(plus ? amount.replace('text-gray-900', incomeAmountClass) : amount, isMinus)}>{value}</span>
     </div>
   );
 }
 
 /** 区切りの見出し（左に見出しと一言、右に操作）。 */
-export function SectionHeader({ title, hint, right }: { title: string; hint?: string; right?: ReactNode }) {
+export function SectionHeader({
+  title,
+  hint,
+  right,
+  compact,
+}: {
+  title: string;
+  hint?: string;
+  right?: ReactNode;
+  /** 上下の余白を詰める（振り返りの面）。 */
+  compact?: boolean;
+}) {
   return (
-    <div className="mt-6 mb-2.5 flex items-baseline gap-1.5">
+    <div className={`${compact ? 'mt-3.5 mb-1.5' : 'mt-6 mb-2.5'} flex items-baseline gap-1.5`}>
       <h3 className={type.title}>{title}</h3>
       {hint !== undefined && <span className={type.faint}>{hint}</span>}
       <span className="flex-1" />
