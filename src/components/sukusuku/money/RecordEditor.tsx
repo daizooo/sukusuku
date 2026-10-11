@@ -86,6 +86,15 @@ export interface RecordEditorProps {
   onEditCategories: () => void;
 }
 
+/**
+ * 自動で作った記録の作り元の言い方（「◯◯から」。分からないときは空）。削除した固定項目の記録は作り元が外れるので、言わない。
+ */
+function autoRecordSource(record: MoneyRecord, wallets: MoneyWallet[]): string {
+  if (record.recurringId !== null) return record.kind === 'income' ? '固定収入から' : '固定支出から';
+  const toCard = record.kind === 'transfer' && wallets.some((wallet) => wallet.id === record.toWalletId && wallet.type === 'card');
+  return toCard ? 'カード代金から' : '';
+}
+
 export default function RecordEditor({
   record,
   categories,
@@ -429,7 +438,7 @@ export default function RecordEditor({
         )}
         {record?.month && (
           <p className="mt-2.5 text-xs text-gray-400">
-            {record.recurringId === null ? 'カード代金' : '固定費'}から自動で作った記録（{formatMonthKey(record.month)}の分）
+            {autoRecordSource(record, wallets)}自動で作った記録（{formatMonthKey(record.month)}の分）
           </p>
         )}
 

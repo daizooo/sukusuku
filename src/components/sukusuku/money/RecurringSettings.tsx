@@ -31,14 +31,20 @@ import {
   storeChoices,
   WEEK_OF_MONTH_OPTIONS,
 } from '@/lib/moneyUtils';
-import { insertMoneyRecurring, insertMoneyStore, setMoneyRecurringArchived, updateMoneyRecurring } from '@/lib/api/money';
+import {
+  deleteMoneyRecurring,
+  insertMoneyRecurring,
+  insertMoneyStore,
+  setMoneyRecurringArchived,
+  updateMoneyRecurring,
+} from '@/lib/api/money';
 import CategoryPicker from './CategoryPicker';
 import StorePicker from './StorePicker';
 import { EstimateBadge, PrimaryButton, ScreenHeader, StackedScreen, incomeAmountClass } from './moneyVisual';
 
 // 毎月の記録の設定（docs/kakei.md §3.3・§3.4・§3.5）。mobile版の `mobile/src/components/money/RecurringSettings.tsx` と同じ並び・文言。
 //
-// 口座から落ちる固定費・口座に入る給料などを、項目ごとのルールにする。サーバーが毎朝、その日に当たる記録を作る
+// 口座から落ちる固定支出・口座に入る給料などを、項目ごとのルールにする。サーバーが毎朝、その日に当たる記録を作る
 // （DBの make_money_recurring_records）。額を見込むものは、過去1年の記録（種類・出金元・お店が同じもの）から出す。
 // カード代金はここではなく、出金元のカードに締め日・引き落とし日・引き落とし口座を入れると作られる（一覧だけ出す）。
 // 直すのはルールだけで、もう作った記録は変わらない。
@@ -48,7 +54,7 @@ import { EstimateBadge, PrimaryButton, ScreenHeader, StackedScreen, incomeAmount
 // 履歴は、その年の収入の記録を見込み／確定つきで年ごとに出す（見込み額の変更の版は持たない）。
 
 interface RecurringSettingsProps {
-  /** 'expense'＝固定費（支出・振替）、'income'＝固定収入（給与・賞与）。 */
+  /** 'expense'＝固定支出（支出・振替）、'income'＝固定収入（給与・賞与）。 */
   mode: 'expense' | 'income';
   familyId: string;
   recurring: MoneyRecurring[];
@@ -125,12 +131,30 @@ export default function RecurringSettings({
     }
   };
 
+  // 使わなくした古い項目を「また使う」にするためだけに残している（新しく使わなくすることはできない。削除する）。
   const setArchived = async (rule: MoneyRecurring, value: boolean) => {
     setEditing(null);
     try {
       put(await setMoneyRecurringArchived(supabase, rule.id, value));
     } catch {
       failed();
+    }
+  };
+
+  const remove = async (rule: MoneyRecurring) => {
+    if (
+      !window.confirm(
+        `この${isIncome ? '固定収入' : '固定支出'}を削除しますか？これから先は作らなくなります。作った記録は残ります。`,
+      )
+    ) {
+      return;
+    }
+    setEditing(null);
+    try {
+      await deleteMoneyRecurring(supabase, rule.id);
+      onRecurring((prev) => prev.filter((entry) => entry.id !== rule.id));
+    } catch {
+      window.alert('削除できませんでした。もう一度お試しください。');
     }
   };
 
@@ -152,7 +176,7 @@ export default function RecurringSettings({
             setTemplate(null);
           }}
           onSubmit={(draft, registerStore) => void save(editing === 'new' ? null : editing, draft, registerStore)}
-          onArchive={editing === 'new' ? undefined : () => void setArchived(editing, true)}
+          onDelete={editing === 'new' ? undefined : () => void remove(editing)}
           onAddSimilar={
             editing === 'new'
               ? undefined
@@ -164,12 +188,12 @@ export default function RecurringSettings({
         />
       ) : (
         <>
-          <ScreenHeader title={isIncome ? '固定収入' : '固定費'} icon="back" onClose={onBack} />
+          <ScreenHeader title={isIncome ? '固定収入' : '固定支出'} icon="back" onClose={onBack} />
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             <p className="text-[13px] leading-relaxed text-gray-500">
               {isIncome
                 ? '給与・賞与を登録すると、振込日に見込みの額で自動で記録します（毎朝。休日は営業日にずらします）。給与明細などを見て額を直すと確定します。賞与は1回ごとに、月と日と額を足します。'
-                : '口座から落ちる固定費を登録すると、その日に自動で記録します（毎朝。休日は営業日にずらします）。額を見込むものは「見込み」の印つきで記録し、額を直すと確定します。'}
+                : '口座から落ちる固定支出を登録すると、その日に自動で記録します（毎朝。休日は営業日にずらします）。額を見込むものは「見込み」の印つきで記録し、額を直すと確定します。'}
             </p>
             {usable.length === 0 && (
               <p className="py-4 text-center text-sm text-gray-400">
@@ -214,7 +238,7 @@ export default function RecurringSettings({
               className="flex items-center gap-2 py-2.5 text-[15px] font-bold text-blue-600"
             >
               <Plus size={18} />
-              {isIncome ? '固定収入を足す' : '固定費を足す'}
+              {isIncome ? '固定収入を足す' : '固定支出を足す'}
             </button>
 
             {isIncome && <IncomeHistory records={records} categories={categories} />}
@@ -242,7 +266,7 @@ export default function RecurringSettings({
             {archived.length > 0 && (
               <section className="space-y-1.5">
                 <p className="text-xs font-bold text-gray-500">
-                  {isIncome ? '使わない固定収入（作った記録は残っています）' : '使わない固定費（作った記録は残っています）'}
+                  {isIncome ? '使わない固定収入（作った記録は残っています）' : '使わない固定支出（作った記録は残っています）'}
                 </p>
                 {archived.map((rule) => (
                   <div key={rule.id} className="flex items-center gap-2.5 rounded-lg border border-gray-200 px-3 py-3 opacity-70">
@@ -255,6 +279,9 @@ export default function RecurringSettings({
                       className="text-[13px] font-bold text-blue-600"
                     >
                       また使う
+                    </button>
+                    <button type="button" onClick={() => void remove(rule)} className="text-[13px] font-bold text-red-500">
+                      削除
                     </button>
                   </div>
                 ))}
@@ -336,7 +363,7 @@ function RecurringEditor({
   records,
   onClose,
   onSubmit,
-  onArchive,
+  onDelete,
   onAddSimilar,
 }: {
   mode: 'expense' | 'income';
@@ -350,7 +377,7 @@ function RecurringEditor({
   records: MoneyRecord[];
   onClose: () => void;
   onSubmit: (draft: MoneyRecurringDraft, registerStore: boolean) => void;
-  onArchive?: () => void;
+  onDelete?: () => void;
   /** 固定収入で、同じ名前・入金先でもう1回（月・日・額）を足す。 */
   onAddSimilar?: (source: MoneyRecurring) => void;
 }) {
@@ -437,10 +464,6 @@ function RecurringEditor({
     }, kind !== 'transfer' && store !== '' && registerStore);
   };
 
-  const archive = () => {
-    if (window.confirm(`この${isIncome ? '固定収入' : '固定費'}を使わなくしますか？これから先は作らなくなります。作った記録は残ります。`)) onArchive?.();
-  };
-
   const walletChips = (selected: string | null, onPick: (id: string) => void, exclude: string | null) => (
     <div className="flex flex-wrap gap-2">
       {usableWallets
@@ -485,7 +508,7 @@ function RecurringEditor({
         />
       ) : (
         <>
-          <ScreenHeader title={`${isIncome ? '固定収入' : '固定費'}を${rule ? '編集' : '足す'}`} icon="back" onClose={onClose} />
+          <ScreenHeader title={`${isIncome ? '固定収入' : '固定支出'}を${rule ? '編集' : '足す'}`} icon="back" onClose={onClose} />
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {!isIncome && (
               <div className="flex flex-wrap gap-2">
@@ -640,9 +663,9 @@ function RecurringEditor({
                 同じ名前でもう1回（月・日）を足す
               </button>
             )}
-            {onArchive && (
-              <button type="button" onClick={archive} className="w-full py-2 text-sm text-red-500">
-                使わなくする
+            {onDelete && (
+              <button type="button" onClick={onDelete} className="w-full py-2 text-sm text-red-500">
+                削除
               </button>
             )}
           </div>
