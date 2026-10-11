@@ -25,6 +25,8 @@ export interface ItemsWork {
   /** 直している種類のまとまり。新しい種類なら null。 */
   groupKey: string | null;
   categoryId: string | null;
+  /** 削除したカテゴリの名前（categoryId が null のとき）。 */
+  categoryName: string;
   lines: EditorLine[];
   selected: string | null;
   /** 選んだ行の電卓の式。 */

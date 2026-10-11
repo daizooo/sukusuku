@@ -913,6 +913,7 @@ export type Database = {
         Row: {
           amount: number
           category_id: string | null
+          category_name: string
           created_at: string
           family_id: string
           id: string
@@ -926,6 +927,7 @@ export type Database = {
         Insert: {
           amount?: number
           category_id?: string | null
+          category_name?: string
           created_at?: string
           family_id: string
           id?: string
@@ -939,6 +941,7 @@ export type Database = {
         Update: {
           amount?: number
           category_id?: string | null
+          category_name?: string
           created_at?: string
           family_id?: string
           id?: string

@@ -24,6 +24,7 @@ import {
 } from '@/lib/moneyUtils';
 import {
   insertDefaultMoneyCategories,
+  deleteMoneyCategory,
   insertMoneyCategory,
   saveMoneyBudget,
   updateMoneyCategory,
@@ -35,7 +36,7 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 
 // カテゴリ・予算（docs/kakei.md §3.1）。PWA版の `src/components/sukusuku/money/CategoryEditor.tsx` と同じ並び・文言。
 //
-// 大分類（予算を置く単位）と小分類の追加・名前の変更・並べ替え・使わなくする。並べ替えは一覧のまま指で動かす
+// 大分類（予算を置く単位）と小分類の追加・名前の変更・並べ替え・削除。並べ替えは一覧のまま指で動かす
 // （大分類は左の持ち手をつかむ、小分類は長押し。リストと同じ操作。components/list/useDragReorder.ts）。
 // 大分類のアイコンは絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。予算は大分類ごと・年ごとの月額で、
 // その年に入れていなければ前の年の額のまま（ここで直すと、その年の額になる）。
@@ -174,14 +175,30 @@ export default function CategoryEditor({
     }
   };
 
-  const toggleArchive = async (category: MoneyCategory) => {
+  const removeCategory = async (category: MoneyCategory) => {
     setEditing(null);
     try {
-      replace(await updateMoneyCategory(supabase, category.id, { archived: !category.archived }));
+      await deleteMoneyCategory(supabase, category.id);
+      // 大分類を消すと、小分類と予算も一緒に消える（DBの cascade）。
+      const gone = new Set([category.id, ...categories.filter((entry) => entry.parentId === category.id).map((entry) => entry.id)]);
+      onCategories((prev) => prev.filter((entry) => !gone.has(entry.id)));
+      onBudgets((prev) => prev.filter((entry) => !gone.has(entry.categoryId)));
     } catch {
-      failed('保存');
+      failed('削除');
     }
   };
+
+  const confirmDelete = (category: MoneyCategory) =>
+    Alert.alert(
+      `「${category.name}」を削除しますか？`,
+      category.parentId === null
+        ? '小分類と予算も消えます。これまでの記録には、名前だけが残ります。'
+        : 'これまでの記録には、名前だけが残ります。',
+      [
+        { text: 'やめる', style: 'cancel' },
+        { text: '削除する', style: 'destructive', onPress: () => void removeCategory(category) },
+      ],
+    );
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -320,7 +337,7 @@ export default function CategoryEditor({
             }
             onClose={() => setEditing(null)}
             onSubmit={(result) => void save(result)}
-            onToggleArchive={editing.category ? () => void toggleArchive(editing.category!) : undefined}
+            onDelete={editing.category ? () => confirmDelete(editing.category!) : undefined}
           />
         )}
       </View>
@@ -349,7 +366,7 @@ function CategorySheet({
   defaultFromMonth,
   onClose,
   onSubmit,
-  onToggleArchive,
+  onDelete,
 }: {
   category: MoneyCategory | null;
   isTop: boolean;
@@ -359,7 +376,7 @@ function CategorySheet({
   defaultFromMonth: number;
   onClose: () => void;
   onSubmit: (result: SheetResult) => void;
-  onToggleArchive?: () => void;
+  onDelete?: () => void;
 }) {
   const [name, setName] = useState(category?.name ?? '');
   const [amount, setAmount] = useState(budget === null ? '' : String(budget));
@@ -392,11 +409,9 @@ function CategorySheet({
         footer={
           <>
             <PrimaryButton label="保存する" onPress={submit} />
-            {onToggleArchive && category && (
-              <Pressable accessibilityRole="button" onPress={onToggleArchive} style={styles.secondary}>
-                <Text style={category.archived ? styles.secondaryText : styles.deleteText}>
-                  {category.archived ? 'また使う' : '使わなくする（記録には残ります）'}
-                </Text>
+            {onDelete && category && (
+              <Pressable accessibilityRole="button" onPress={onDelete} style={styles.secondary}>
+                <Text style={styles.deleteText}>削除する（記録には名前だけ残ります）</Text>
               </Pressable>
             )}
           </>
@@ -596,6 +611,5 @@ const styles = StyleSheet.create({
   lifted: { opacity: 0.9, elevation: 8 },
   error: { fontSize: 12, fontWeight: '500', color: colors.danger },
   secondary: { paddingVertical: 10, alignItems: 'center' },
-  secondaryText: { fontSize: 13, fontWeight: '700', color: colors.money },
   deleteText: { fontSize: 13, fontWeight: '500', color: colors.danger },
 });

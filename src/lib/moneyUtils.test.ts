@@ -158,6 +158,7 @@ const item = (fields: Partial<MoneyItem>): MoneyItem => ({
   id: `i${(seq += 1)}`,
   amount: 0,
   categoryId: null,
+  categoryName: '',
   quantity: 1,
   unitPrice: null,
   name: '',
@@ -228,6 +229,26 @@ assert.equal('special' in summary, false, '特別費は別枠にしない（大�
 assert.equal(summary.livingBudget, 60000 + 5000 + 85000, '使わなくした大分類・収入・予算のない特別費は予算に入れない');
 assert.equal(summary.balance, summary.income - summary.living, '収支＝収入 − 支出（特別費を含む。振替は入れない）');
 assert.equal(summary.plannedBalance, summary.income - summary.livingBudget);
+
+// 削除したカテゴリの品目（名前だけ残っている）は、月の合計には数えるが、大分類のタイルには出さない
+{
+  const withDeleted = [
+    ...records,
+    record('rd', {
+      occurredOn: '2026-09-27',
+      walletId: 'card',
+      items: [item({ amount: 1234, categoryName: '旧カテゴリ' })],
+    }),
+  ];
+  assert.equal(buildMonthSummary(withDeleted, categories, budgets, '2026-09').living, summary.living + 1234);
+  assert.deepEqual(
+    buildBudgetTiles(withDeleted, categories, budgets, '2026-09').map((tile) => tile.actual),
+    buildBudgetTiles(records, categories, budgets, '2026-09').map((tile) => tile.actual),
+  );
+  const [deletedGroup] = groupItems(withDeleted[withDeleted.length - 1].items);
+  assert.equal(deletedGroup.key, 'deleted:旧カテゴリ');
+  assert.equal(deletedGroup.categoryName, '旧カテゴリ');
+}
 
 const tiles = buildBudgetTiles(records, categories, budgets, '2026-09');
 assert.deepEqual(
@@ -442,6 +463,7 @@ assert.equal(saved.length, 4, '空の行は保存しない');
 assert.deepEqual(saved[0], {
   amount: 396,
   categoryId: 'grocery',
+  categoryName: '',
   quantity: 2,
   unitPrice: 198,
   name: '牛乳',

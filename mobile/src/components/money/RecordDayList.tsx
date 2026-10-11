@@ -75,7 +75,7 @@ export default function RecordDayList({
     // 小分類だけ（大分類はアイコンで分かる）。
     const firstTitle = first?.categoryId
       ? (categories.find((category) => category.id === first.categoryId)?.name ?? '')
-      : '';
+      : (first?.categoryName ?? '');
     const title = groups.length > 1 ? `${firstTitle} ほか${groups.length - 1}` : firstTitle;
     return {
       icon: top ? iconKeyOf(categories.find((category) => category.id === top)) : 'star',
