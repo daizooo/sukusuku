@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,7 +41,7 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadMoneyBootstrap } from '@/lib/api/moneyBootstrap';
-import { monthKeyOf, monthKeyOfDate, yearOfMonth } from '@/lib/moneyUtils';
+import { fixedBudgetRows, monthKeyOf, monthKeyOfDate, yearOfMonth } from '@/lib/moneyUtils';
 import MoneyAccountsView from '@/components/money/MoneyAccountsView';
 import MoneyRecordsView from '@/components/money/MoneyRecordsView';
 import MoneyReviewView from '@/components/money/MoneyReviewView';
@@ -108,6 +108,11 @@ export default function MoneyScreen() {
   const [stores, setStores] = useState<MoneyStore[]>([]);
   const [records, setRecords] = useState<MoneyRecord[]>([]);
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
+  // 手入力の予算（budgets）に、固定費から出した月ごとの額を足した予算。画面にはこちらを渡す（docs/kakei.md §3.1）。
+  const allBudgets = useMemo(
+    () => [...budgets, ...fixedBudgetRows(recurring, categories)],
+    [budgets, recurring, categories],
+  );
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
   const [isLoading, setIsLoading] = useState(true);
@@ -382,7 +387,7 @@ export default function MoneyScreen() {
               onYear={setYear}
               records={records}
               categories={categories}
-              budgets={budgets}
+              budgets={allBudgets}
               wallets={wallets}
               onSelectMonth={(next) => {
                 setMonthKey(next);
@@ -427,7 +432,7 @@ export default function MoneyScreen() {
           key={editing === 'new' ? 'new' : editing.id}
           record={editing === 'new' ? null : editing}
           categories={categories}
-          budgets={budgets}
+          budgets={allBudgets}
           wallets={wallets}
           stores={stores}
           records={records}
@@ -445,7 +450,7 @@ export default function MoneyScreen() {
           familyId={familyId}
           year={yearOfMonth(monthKey)}
           categories={categories}
-          budgets={budgets}
+          budgets={allBudgets}
           stores={stores}
           wallets={wallets}
           recurring={recurring}
@@ -463,7 +468,7 @@ export default function MoneyScreen() {
           familyId={familyId}
           year={yearOfMonth(monthKey)}
           categories={categories}
-          budgets={budgets}
+          budgets={allBudgets}
           onCategories={setCategories}
           onBudgets={setBudgets}
           onClose={() => setEditingCategories(false)}

@@ -384,32 +384,76 @@ export function categoryPath(categories: readonly MoneyCategory[], categoryId: s
   return parent ? `${parent.name} › ${category.name}` : category.name;
 }
 
+/** 固定費から出した予算の行の年。実在しない年で、「どの年も同じ月ごとの額」を表す（budgetFor が手入力の予算に足す）。 */
+export const FIXED_BUDGET_YEAR = 0;
+
 /**
- * その月（YYYY-MM）の大分類の月の予算。予算は年ごとに12か月ぶんを持つので、年の途中で直しても、直した月より前の月は変わらない。
+ * 固定費（支出のルール）から、大分類ごとの1月〜12月の予算に足す額を出す（2026-10-11）。
+ * 種類（小分類でも、その大分類）が決まっていて、使っていて、額が入っているルールを、記録する月（null は毎月）に足す。
+ * 額を見込むルールは、ルールに入れた額（過去の記録が無いときの額）。生活費の大分類のものだけ。
+ * 返す行は FIXED_BUDGET_YEAR で、手入力の予算の行といっしょに budgets に並べて使う。
+ */
+export function fixedBudgetRows(
+  recurring: readonly MoneyRecurring[],
+  categories: readonly MoneyCategory[],
+): MoneyBudget[] {
+  const byId = new Map(categories.map((category) => [category.id, category]));
+  const sums = new Map<string, number[]>();
+  for (const rule of recurring) {
+    if (rule.archived || rule.kind !== 'expense' || rule.categoryId === null || rule.amount <= 0) continue;
+    const category = byId.get(rule.categoryId);
+    const top = category && category.parentId !== null ? byId.get(category.parentId) : category;
+    if (!top || top.kind !== 'living') continue;
+    const months = sums.get(top.id) ?? Array.from({ length: 12 }, () => 0);
+    for (const month of rule.months ?? Array.from({ length: 12 }, (_, index) => index + 1)) {
+      if (month >= 1 && month <= 12) months[month - 1] += rule.amount;
+    }
+    sums.set(top.id, months);
+  }
+  return [...sums].map(([categoryId, monthAmounts]) => ({
+    id: `fixed:${categoryId}`,
+    categoryId,
+    year: FIXED_BUDGET_YEAR,
+    monthAmounts,
+  }));
+}
+
+/**
+ * その月（YYYY-MM）の大分類の、手入力の月の予算（固定費は含まない）。予算は年ごとに12か月ぶんを持つので、
+ * 年の途中で直しても、直した月より前の月は変わらない。
  * その年の行が無ければ、前の年のいちばん近い行の12月の額（毎年入れ直さなくてよいように）。どこにも無い月は null。
  */
-export function budgetFor(budgets: readonly MoneyBudget[], categoryId: string, monthKey: string): number | null {
+export function manualBudgetFor(budgets: readonly MoneyBudget[], categoryId: string, monthKey: string): number | null {
   const year = yearOfMonth(monthKey);
   const month = Number(monthKey.slice(5, 7));
   let found: MoneyBudget | null = null;
   for (const budget of budgets) {
-    if (budget.categoryId !== categoryId || budget.year > year) continue;
+    if (budget.categoryId !== categoryId || budget.year === FIXED_BUDGET_YEAR || budget.year > year) continue;
     if (found === null || budget.year > found.year) found = budget;
   }
   if (found === null) return null;
   return found.monthAmounts[found.year === year ? month - 1 : 11] ?? null;
 }
 
-/** その年の1月〜12月の予算（長さ12）。年の途中で直すとき、直す前の月をそのまま残すのに使う。 */
-export const budgetMonths = (budgets: readonly MoneyBudget[], categoryId: string, year: number): (number | null)[] =>
-  Array.from({ length: 12 }, (_, index) => budgetFor(budgets, categoryId, `${year}-${pad2(index + 1)}`));
+/** その月（YYYY-MM）の大分類に、固定費から足される額（無ければ 0）。 */
+export function fixedBudgetFor(budgets: readonly MoneyBudget[], categoryId: string, monthKey: string): number {
+  const row = budgets.find((budget) => budget.categoryId === categoryId && budget.year === FIXED_BUDGET_YEAR);
+  return row?.monthAmounts[Number(monthKey.slice(5, 7)) - 1] ?? 0;
+}
 
-/** fromMonth（1〜12）から年末までを amount にした12か月ぶん。それより前の月は current のまま。 */
-export const withBudgetFrom = (
-  current: readonly (number | null)[],
-  fromMonth: number,
-  amount: number,
-): (number | null)[] => current.map((value, index) => (index + 1 >= fromMonth ? amount : value));
+/**
+ * その月（YYYY-MM）の大分類の月の予算＝手入力の額＋その月の固定費（2026-10-11）。
+ * どちらも無い月は null（予算なし）。
+ */
+export function budgetFor(budgets: readonly MoneyBudget[], categoryId: string, monthKey: string): number | null {
+  const manual = manualBudgetFor(budgets, categoryId, monthKey);
+  const fixed = fixedBudgetFor(budgets, categoryId, monthKey);
+  return manual === null && fixed === 0 ? null : (manual ?? 0) + fixed;
+}
+
+/** その年の1月〜12月の、手入力の予算（長さ12）。編集の初期値。 */
+export const budgetMonths = (budgets: readonly MoneyBudget[], categoryId: string, year: number): (number | null)[] =>
+  Array.from({ length: 12 }, (_, index) => manualBudgetFor(budgets, categoryId, `${year}-${pad2(index + 1)}`));
 
 /**
  * 「その年の予算」として一覧に出す代表の月。今年なら今月、これからの年なら1月、過ぎた年なら12月

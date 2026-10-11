@@ -37,7 +37,7 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadMoneyBootstrap, type MoneyBootstrap } from '@/lib/api/moneyBootstrap';
-import { monthKeyOf, monthKeyOfDate, yearOfMonth } from '@/lib/moneyUtils';
+import { fixedBudgetRows, monthKeyOf, monthKeyOfDate, yearOfMonth } from '@/lib/moneyUtils';
 import MoneyAccountsView from '../money/MoneyAccountsView';
 import MoneyRecordsView from '../money/MoneyRecordsView';
 import MoneyReviewView from '../money/MoneyReviewView';
@@ -103,6 +103,11 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
   const [stores, setStores] = useState<MoneyStore[]>([]);
   const [records, setRecords] = useState<MoneyRecord[]>([]);
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
+  // 手入力の予算（budgets）に、固定費から出した月ごとの額を足した予算。画面にはこちらを渡す（docs/kakei.md §3.1）。
+  const allBudgets = useMemo(
+    () => [...budgets, ...fixedBudgetRows(recurring, categories)],
+    [budgets, recurring, categories],
+  );
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
   const [isLoading, setIsLoading] = useState(true);
@@ -373,7 +378,7 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
               onYear={setYear}
               records={records}
               categories={categories}
-              budgets={budgets}
+              budgets={allBudgets}
               wallets={wallets}
               onSelectMonth={(next) => {
                 setMonthKey(next);
@@ -416,7 +421,7 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
           key={editing === 'new' ? 'new' : editing.id}
           record={editing === 'new' ? null : editing}
           categories={categories}
-          budgets={budgets}
+          budgets={allBudgets}
           wallets={wallets}
           stores={stores}
           records={records}
@@ -434,7 +439,7 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
           familyId={familyId}
           year={yearOfMonth(monthKey)}
           categories={categories}
-          budgets={budgets}
+          budgets={allBudgets}
           stores={stores}
           wallets={wallets}
           recurring={recurring}
@@ -452,7 +457,7 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
           familyId={familyId}
           year={yearOfMonth(monthKey)}
           categories={categories}
-          budgets={budgets}
+          budgets={allBudgets}
           onCategories={setCategories}
           onBudgets={setBudgets}
           onClose={() => setEditingCategories(false)}

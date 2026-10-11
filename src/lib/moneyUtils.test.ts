@@ -23,7 +23,8 @@ import {
   budgetMonthKey,
   budgetMonths,
   buildWalletBalances,
-  withBudgetFrom,
+  fixedBudgetFor,
+  fixedBudgetRows,
   formatBalance,
   walletBalanceOn,
   walletDelta,
@@ -67,7 +68,7 @@ import {
   incomeRecordsInYear,
   recurringDayLabel,
 } from './moneyUtils.ts';
-import type { MoneyBudget, MoneyCategory, MoneyHolding, MoneyHoldingValue, MoneyItem, MoneyRecord, MoneySecurity, MoneyStore, MoneyWallet, MoneyWalletBalance } from '../types/app.ts';
+import type { MoneyBudget, MoneyCategory, MoneyHolding, MoneyHoldingValue, MoneyItem, MoneyRecord, MoneyRecurring, MoneySecurity, MoneyStore, MoneyWallet, MoneyWalletBalance } from '../types/app.ts';
 
 // ---- 月・年 ----
 assert.equal(shiftMonth('2026-12', 1), '2027-01');
@@ -131,22 +132,57 @@ assert.equal(budgetFor(budgets, 'food', '2025-12'), 55000);
 assert.equal(budgetFor(budgets, 'food', '2024-12'), null, '前の年にも無ければ未設定');
 assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
 
-// 年の途中で予算を変えても、それより前の月は変わらない（過去の振り返りがおかしくならない）
+// 月ごとに予算を決められる。直した月以外は変わらない（過去の振り返りがおかしくならない）
 {
   const current = budgetMonths(budgets, 'food', 2026);
   assert.deepEqual(current, Array(12).fill(60000));
-  const changed = withBudgetFrom(current, 10, 70000);
-  assert.deepEqual(changed.slice(0, 9), Array(9).fill(60000), '9月までは前の額のまま');
-  assert.deepEqual(changed.slice(9), [70000, 70000, 70000], '10月から年末までが新しい額');
+  const changed = current.map((value, index) => (index === 9 ? 70000 : value));
   const after: MoneyBudget[] = [...budgets.filter((b) => b.id !== 'b2'), { id: 'b2', categoryId: 'food', year: 2026, monthAmounts: changed }];
   assert.equal(budgetFor(after, 'food', '2026-09'), 60000, '過去の月');
   assert.equal(budgetFor(after, 'food', '2026-10'), 70000);
-  assert.equal(budgetFor(after, 'food', '2027-02'), 70000, '翌年は年末の額を引き継ぐ');
+  assert.equal(budgetFor(after, 'food', '2026-11'), 60000, '直していない月はそのまま');
+  assert.equal(budgetFor(after, 'food', '2027-02'), 60000, '翌年は年末（12月）の額を引き継ぐ');
   assert.equal(budgetFor(after, 'food', '2025-12'), 55000, '前の年は変わらない');
-  // その年にはじめて決める（それまで予算なし）。前の月は予算なしのまま
-  const first = withBudgetFrom(budgetMonths(budgets, 'house', 2025), 4, 30000);
+  // その年にはじめて決める（それまで予算なし）。決めない月は予算なしのまま
+  const first = budgetMonths(budgets, 'house', 2025).map((value, index) => (index === 3 ? 30000 : value));
   assert.deepEqual(first.slice(0, 3), [null, null, null]);
   assert.equal(first[3], 30000);
+}
+
+// 固定費は、その種類の月の予算に自動で足される
+{
+  const cats = [
+    { id: 'house', kind: 'living', parentId: null },
+    { id: 'rent', kind: 'living', parentId: 'house' },
+    { id: 'food', kind: 'living', parentId: null },
+    { id: 'salary', kind: 'income', parentId: null },
+  ] as unknown as MoneyCategory[];
+  const rule = (over: Partial<MoneyRecurring>): MoneyRecurring =>
+    ({ kind: 'expense', months: null, amount: 0, categoryId: null, archived: false, ...over }) as MoneyRecurring;
+  const rows = fixedBudgetRows(
+    [
+      rule({ id: 'r1', categoryId: 'rent', amount: 80000 }), // 小分類 → 大分類 house へ。毎月
+      rule({ id: 'r2', categoryId: 'house', amount: 30000, months: [5] }), // 5月だけ（自動車税など）
+      rule({ id: 'r3', categoryId: 'house', amount: 9999, archived: true }), // 使わない
+      rule({ id: 'r4', categoryId: 'salary', amount: 300000, kind: 'income' }), // 収入は対象外
+      rule({ id: 'r5', categoryId: null, amount: 1000 }), // 種類なし
+      rule({ id: 'r6', categoryId: 'food', amount: 0 }), // 額なし
+    ],
+    cats,
+  );
+  assert.equal(rows.length, 1, '固定費がある大分類の行だけ');
+  const withFixed: MoneyBudget[] = [
+    ...budgets,
+    ...rows,
+  ];
+  assert.equal(fixedBudgetFor(withFixed, 'house', '2026-04'), 80000);
+  assert.equal(fixedBudgetFor(withFixed, 'house', '2026-05'), 110000, '決まった月だけ足される');
+  assert.equal(fixedBudgetFor(withFixed, 'food', '2026-05'), 0);
+  assert.equal(budgetFor(withFixed, 'house', '2026-04'), 85000 + 80000, '手入力の予算＋固定費');
+  assert.equal(budgetFor(withFixed, 'house', '2026-05'), 85000 + 110000);
+  assert.equal(budgetFor(withFixed, 'house', '2025-05'), 110000, '手入力が無い月は固定費だけ（どの年も同じ）');
+  assert.equal(budgetFor(withFixed, 'food', '2026-06'), 60000, '固定費の無い種類は今まで通り');
+  assert.deepEqual(budgetMonths(withFixed, 'house', 2026), Array(12).fill(85000), '編集の初期値に固定費は入らない');
 }
 assert.equal(budgetMonthKey(2026, '2026-10-09'), '2026-10', '今年は今月');
 assert.equal(budgetMonthKey(2027, '2026-10-09'), '2027-01', 'これからの年は1月');
