@@ -8,7 +8,7 @@
 -- 何度流しても同じ結果になる（大分類は同じ名前があれば作らず、小分類は同じ名前があれば足さない）。
 --
 -- この migration は追加だけ。special_items・special_plans と、money_items・money_recurring の special_* の列は
--- 消さない（古いアプリがまだ読むため）。アプリ（PWA・mobile）を出したあとの後片付けは別の migration（0087）で行う。
+-- 消さない（古いアプリがまだ読むため）。アプリ（PWA・mobile）を出したあとの後片付けは別の migration（0088）で行う。
 -- 特別費の記録は、2026-10-11 に記録をすべて削除したので、付け替える品目は無い（money_items は 0 件）。
 -- 固定費のルール（money_recurring）も特別費の項目を指すものは 0 件。
 

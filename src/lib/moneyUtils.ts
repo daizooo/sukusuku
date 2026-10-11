@@ -715,7 +715,7 @@ export function parseAmountInput(text: string): number | null {
 
 export interface YearMonthRow {
   monthKey: string;
-  /** その月に記録があるか。無い月は数えない（使い始める前の月・まだ来ていない月）。 */
+  /** その月を数えるか。記録（振替だけは除く）があり、集計の開始月以降で、まだ来ていない月でないこと。 */
   recorded: boolean;
   income: number;
   living: number;
@@ -723,20 +723,28 @@ export interface YearMonthRow {
   balance: number;
   /** 予算 − 実績。 */
   livingDiff: number;
+  /** 年初からこの月までの収支の累計（数える月だけを足す。数えない月は、その前までの累計のまま）。 */
+  cumulative: number;
 }
 
 export interface YearSummary {
   months: YearMonthRow[];
   /** 記録のある月だけの合計。 */
-  total: Omit<YearMonthRow, 'monthKey' | 'recorded'>;
-  /** 記録のある月の数。 */
+  total: Omit<YearMonthRow, 'monthKey' | 'recorded' | 'cumulative'>;
+  /** 数える月の数。 */
   recordedMonths: number;
+  /** 数える月の平均（円に丸める）。数える月が無ければ null。 */
+  average: { income: number; living: number; balance: number } | null;
 }
 
+/** 月（YYYY-MM）が集計の開始月（YYYY-MM。null は全部の月を数える）以降か。 */
+export const isCountedMonth = (monthKey: string, startMonth: string | null): boolean =>
+  startMonth === null || monthKey >= startMonth;
+
 /**
- * 年の収支（docs/kakei.md §4.2・§0.4）。月ごとの 収入・支出・収支 と年間の合計。
- * 記録の無い月は数えない（使い始める前の月まで予算が残ったように見えないように）。
- * upTo（YYYY-MM）より後の月は、まだ来ていないので数えない。
+ * 年の収支（docs/kakei.md §4.2・§0.4）。月ごとの 収入・支出・収支・年初からの累計 と、年間の合計・月平均。
+ * 数えるのは、集計の開始月（startMonth。YYYY-MM）以降で、記録のある月だけ（記録の無い月・振替だけの月は数えない。
+ * 使い始める前の月まで予算が残ったように見えないように）。upTo（YYYY-MM）より後の月は、まだ来ていないので数えない。
  */
 export function buildYearSummary(
   records: readonly MoneyRecord[],
@@ -744,13 +752,19 @@ export function buildYearSummary(
   budgets: readonly MoneyBudget[],
   year: number,
   upTo: string,
+  startMonth: string | null = null,
 ): YearSummary {
   const total = { income: 0, living: 0, balance: 0, livingDiff: 0 };
   let recordedMonths = 0;
+  let cumulative = 0;
   const months = yearMonthKeys(year).map((monthKey) => {
-    const recorded = monthKey <= upTo && recordsInMonth(records, monthKey).length > 0;
-    if (!recorded) return { monthKey, recorded, income: 0, living: 0, balance: 0, livingDiff: 0 };
+    const recorded =
+      monthKey <= upTo &&
+      isCountedMonth(monthKey, startMonth) &&
+      recordsInMonth(records, monthKey).some((record) => record.kind !== 'transfer');
+    if (!recorded) return { monthKey, recorded, income: 0, living: 0, balance: 0, livingDiff: 0, cumulative };
     const summary = buildMonthSummary(records, categories, budgets, monthKey);
+    cumulative += summary.balance;
     const row = {
       monthKey,
       recorded,
@@ -758,6 +772,7 @@ export function buildYearSummary(
       living: summary.living,
       balance: summary.balance,
       livingDiff: summary.livingBudget - summary.living,
+      cumulative,
     };
     recordedMonths += 1;
     total.income += row.income;
@@ -766,7 +781,66 @@ export function buildYearSummary(
     total.livingDiff += row.livingDiff;
     return row;
   });
-  return { months, total, recordedMonths };
+  const average =
+    recordedMonths === 0
+      ? null
+      : {
+          income: Math.round(total.income / recordedMonths),
+          living: Math.round(total.living / recordedMonths),
+          balance: Math.round(total.balance / recordedMonths),
+        };
+  return { months, total, recordedMonths, average };
+}
+
+/** その月の年初からの収支の累計。その月を数えない（開始月より前・記録なし）ときは null。 */
+export function yearToDateBalance(
+  records: readonly MoneyRecord[],
+  categories: readonly MoneyCategory[],
+  budgets: readonly MoneyBudget[],
+  monthKey: string,
+  startMonth: string | null,
+): number | null {
+  const summary = buildYearSummary(records, categories, budgets, yearOfMonth(monthKey), monthKey, startMonth);
+  const row = summary.months.find((entry) => entry.monthKey === monthKey);
+  return row && row.recorded ? row.cumulative : null;
+}
+
+export interface YearComparison {
+  /** 比べた月の数（今年の数える月のうち、前の年の同じ月も数えられるもの）。 */
+  months: number;
+  /** 今年のその月ぶんの収支の合計。 */
+  balance: number;
+  /** 前の年の同じ月ぶんの収支の合計。 */
+  previousBalance: number;
+  /** balance − previousBalance。 */
+  diff: number;
+}
+
+/**
+ * 前の年の同じ月ぶんとの比べ（docs/kakei.md §0.4）。今年の数える月のうち、前の年の同じ月も数えられるものだけを比べる
+ * （使い始めの年は12か月ぶんそろわないので、月数をそろえて比べる）。比べられる月が無ければ null。
+ */
+export function compareWithPreviousYear(
+  records: readonly MoneyRecord[],
+  categories: readonly MoneyCategory[],
+  budgets: readonly MoneyBudget[],
+  year: number,
+  upTo: string,
+  startMonth: string | null,
+): YearComparison | null {
+  const current = buildYearSummary(records, categories, budgets, year, upTo, startMonth);
+  const previous = buildYearSummary(records, categories, budgets, year - 1, `${year - 1}-12`, startMonth);
+  let months = 0;
+  let balance = 0;
+  let previousBalance = 0;
+  current.months.forEach((row, index) => {
+    const before = previous.months[index];
+    if (!row.recorded || !before.recorded) return;
+    months += 1;
+    balance += row.balance;
+    previousBalance += before.balance;
+  });
+  return months === 0 ? null : { months, balance, previousBalance, diff: balance - previousBalance };
 }
 
 // ---- 内訳の分析（振り返りの内訳をタップしたとき。docs/kakei.md §4.4） ----

@@ -1261,6 +1261,35 @@ export type Database = {
           },
         ]
       }
+      money_settings: {
+        Row: {
+          created_at: string
+          family_id: string
+          start_month: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          family_id: string
+          start_month?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          family_id?: string
+          start_month?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_settings_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: true
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_stores: {
         Row: {
           archived_at: string | null

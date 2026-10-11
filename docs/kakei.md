@@ -59,6 +59,13 @@
   月ごとに、収支の棒と年初からの累計の折れ線を重ねる。大分類ごとの年間の増減（特別費もその1行）。**前年との比べ**は、前の年の記録がある年から出す
 - **集計の開始月**を家計の設定に1つ持つ（値は**2026年11月**）。年と累計は、開始月以降の**記録のある月だけ**を数える（§4.2）。
   それ以前の月は、月の画面では見られる。2026年の年は11月と12月の2か月分になる
+- **実装のメモ**（2026-10-11）
+  - 数える月＝開始月以降で、**振替だけではない記録のある月**（`buildYearSummary` の `recorded`）。月平均・累計・前年比はすべてこの月だけで数える
+  - 月の累計は `yearToDateBalance`。開始月より前の月・記録の無い月は null で、月の画面に累計を出さない（開始月より前の月には、その旨を一言出す）
+  - 前年との比べは `compareWithPreviousYear`: 今年の数える月のうち、前の年の同じ月も数えられるものだけを、月数をそろえて比べる
+    （使い始めの年は12か月ぶんそろわないため。比べられる月が無ければ出さない）
+  - 年の画面は、結論の下に「月ごとの推移」（棒＝月の収支、線＝年初からの累計。`YearFlowChart`）、その下に内訳、月ごと
+  - 開始月は家計の設定の「集計の開始月」で変えられる（`StartMonthSettings`）。`money_settings`（家族ごとに1行）。他の端末の変更は family_sync で届く
 
 ### 0.5 切り替え（2026-10-11）
 
@@ -76,8 +83,8 @@
 | --- | --- | --- |
 | 1 | この設計（docs） | – |
 | 2 | 特別費をカテゴリへ収納: 大分類「特別費」と小分類を作る（**0086。2026-10-11に本番へ適用済み**。追加だけで、特別費の表・列は消さない）。アプリ（mobile・PWA）は特別費の別枠を外し、家計の設定の「特別費の予定」・振り返りの特別費の1行・分析・記録の入力の「予定から選ぶ」をなくした（**実装済み**）。収入の項目（賞与）は収入の大分類「給与」の小分類にした | 0086（適用済み） |
-| 2b | 後片付け: `money_items.special_item_id`・`special_plan_id`、`money_recurring.special_item_id` の列と `special_items`・`special_plans` の表を消し、`save_money_record`・`make_money_recurring_records`・`money_recurring_estimate`・`money_bootstrap` から外す（0087）。**アプリを出し、特別費の予定を固定費に登録し終えてから**。削除を含むので SQL Editor で流す | 0087（未） |
-| 3 | 収支の数え方（収入 − 生活費 − 特別費）、月・年の画面、累計・月平均、集計の開始月 | 開始月の設定 |
+| 2b | 後片付け: `money_items.special_item_id`・`special_plan_id`、`money_recurring.special_item_id` の列と `special_items`・`special_plans` の表を消し、`save_money_record`・`make_money_recurring_records`・`money_recurring_estimate`・`money_bootstrap` から外す（0088）。**アプリを出し、特別費の予定を固定費に登録し終えてから**。削除を含むので SQL Editor で流す | 0088（未） |
+| 3 | 収支の数え方（収入 − 生活費 − 特別費）、月・年の画面、累計・月平均・前年の同じ月ぶんとの比べ、月ごとの収支と累計のグラフ、集計の開始月（**実装済み**。0087 `money_settings`。**2026-10-11に本番へ適用済み**。開始月は2026年11月を入れた） | 0087（適用済み） |
 | 4 | 固定収入（給与・賞与）の設定と履歴 | §0.3 |
 
 ---
@@ -392,6 +399,7 @@ money_wallets に  カードの close_day（締め日）・pay_day（引き落�
 （§7 の3 以降）
 money_months      月のメモ。 family_id / month / note
 money_card_closes カードの照合。 wallet_id / month / statement_amount / closed_at
+money_settings    家計の設定。 family_id(主キー) / start_month(集計の開始月。月の初日。null＝全部の月を数える。0087。§0.4)
 money_wallet_balances  補正した残高（0067_money_wallet_balances.sql。§9.3）。 id / family_id / wallet_id / balance_on(日付) /
                   amount(マイナスもある) / show_in_history(履歴に行を出すか。0068) / created_by（wallet_id・balance_on で1行。同じ日に入れ直すと上書き）
 証券（§9.2.2。0070・0071）  money_wallets.type に 'securities'。money_securities・money_holdings・money_security_prices・

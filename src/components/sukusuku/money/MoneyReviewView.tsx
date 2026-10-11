@@ -8,15 +8,20 @@ import {
   buildMonthSummary,
   buildCategoryAnalysis,
   buildYearSummary,
+  compareWithPreviousYear,
   estimatesInMonth,
   formatBalance,
+  formatMonthKey,
+  formatSignedYen,
   formatYear,
   formatYen,
   iconKeyOf,
+  isCountedMonth,
   monthKeyOfDate,
   recordTotal,
   shiftMonth,
   yearMonthKeys,
+  yearToDateBalance,
   type BudgetTile,
 } from '@/lib/moneyUtils';
 import {
@@ -33,6 +38,7 @@ import {
   type ReviewPeriod,
 } from './moneyVisual';
 import ReviewDetailScreen, { type ReviewDetail } from './ReviewDetailScreen';
+import YearFlowChart from './YearFlowChart';
 
 // 家計タブの「振り返り」（docs/kakei.md §4）。mobile版の `mobile/src/components/money/MoneyReviewView.tsx` と同じ並び・文言。
 //
@@ -40,6 +46,8 @@ import ReviewDetailScreen, { type ReviewDetail } from './ReviewDetailScreen';
 // 年は暦年（1月〜12月。2026-10-09に年度から変えた。予算の月額も年ごと）。
 // 結論は収支＝収入 − 支出（生活費と特別費。特別費は大分類「特別費」のカテゴリなので、生活費と同じに数える。2026-10-11。§0）。
 // 貯金は記録なので式にも表示にも入れない。
+// 月には年初からの累計、年には月平均・前年の同じ月ぶんとの比べ・月ごとの収支と累計のグラフを添える（§0.4）。
+// 年と累計は、集計の開始月（家計の設定）以降の記録のある月だけを数える。
 // その下の「内訳」は、大分類の一覧（種類の並び順。特別費もその1行）。
 // 内訳の行を押すと、簡単な分析と、その行に絞った記録の一覧が開く（ReviewDetailScreen。§4.4）。
 // 年は内訳の下に月ごとの収支（押すとその月へ）。
@@ -56,6 +64,8 @@ interface MoneyReviewViewProps {
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   wallets: MoneyWallet[];
+  /** 年・累計を数え始める月（YYYY-MM）。null は全部の月を数える。 */
+  startMonth: string | null;
   /** 年の「月ごと」の行を押したとき。その月の月の振り返りへ。 */
   onSelectMonth: (monthKey: string) => void;
   onEditCategories: () => void;
@@ -74,6 +84,7 @@ export default function MoneyReviewView({
   categories,
   budgets,
   wallets,
+  startMonth,
   onSelectMonth,
   onEditCategories,
   onOpenRecord,
@@ -87,8 +98,17 @@ export default function MoneyReviewView({
     [records, categories, budgets, monthKey],
   );
   const yearSummary = useMemo(
-    () => buildYearSummary(records, categories, budgets, year, today),
-    [records, categories, budgets, year, today],
+    () => buildYearSummary(records, categories, budgets, year, today, startMonth),
+    [records, categories, budgets, year, today, startMonth],
+  );
+  // 月: 年初からの累計。年: 前の年の同じ月ぶんとの比べ。
+  const ytd = useMemo(
+    () => (isMonth ? yearToDateBalance(records, categories, budgets, monthKey, startMonth) : null),
+    [isMonth, records, categories, budgets, monthKey, startMonth],
+  );
+  const comparison = useMemo(
+    () => (isMonth ? null : compareWithPreviousYear(records, categories, budgets, year, today, startMonth)),
+    [isMonth, records, categories, budgets, year, today, startMonth],
   );
   // 見ている期間の月。月なら1つ、年なら記録のある月だけ（記録の無い月の予算は数えない）。
   const periodKeys = useMemo(
@@ -134,10 +154,42 @@ export default function MoneyReviewView({
           label={isMonth ? '収支' : '収支（年）'}
           value={formatBalance(balance)}
           plus={balance > 0}
-          note={isMonth ? '収入 − 支出（生活費と特別費）' : `収入 − 支出・記録のある${yearSummary.recordedMonths}か月ぶん`}
+          note="収入 − 支出（生活費と特別費）"
         >
           <StatRow compact label="収入" value={formatYen(income)} plus={income > 0} />
           <StatRow compact label="支出" value={`−${formatYen(living)}`} />
+          {ytd !== null && (
+            <StatRow
+              compact
+              label="年初からの累計"
+              note={startMonth !== null && startMonth.slice(0, 4) === monthKey.slice(0, 4) ? `${formatMonthKey(startMonth)}から` : undefined}
+              value={formatBalance(ytd)}
+              plus={ytd > 0}
+            />
+          )}
+          {isMonth && startMonth !== null && !isCountedMonth(monthKey, startMonth) && (
+            <p className={`pt-2 ${type.faint}`}>
+              集計の開始月（{formatMonthKey(startMonth)}）より前の月です。年と累計には入りません
+            </p>
+          )}
+          {!isMonth && yearSummary.average !== null && (
+            <StatRow
+              compact
+              label="月平均"
+              note={`記録のある${yearSummary.recordedMonths}か月ぶん`}
+              value={formatBalance(yearSummary.average.balance)}
+              plus={yearSummary.average.balance > 0}
+            />
+          )}
+          {comparison !== null && (
+            <StatRow
+              compact
+              label="前年の同じ月より"
+              note={`前年 ${formatBalance(comparison.previousBalance)}（${comparison.months}か月ぶん）`}
+              value={formatSignedYen(comparison.diff)}
+              isMinus={comparison.diff < 0}
+            />
+          )}
           {estimates.count > 0 && (
             <div className="flex items-center gap-2 pt-2">
               <EstimateBadge />
@@ -176,6 +228,14 @@ export default function MoneyReviewView({
           </>
         ) : (
           <>
+            {yearSummary.recordedMonths > 0 && (
+              <>
+                <SectionHeader compact title="月ごとの推移" hint="棒は月の収支・線は年初からの累計" />
+                <div className={`${cardClass} overflow-hidden`}>
+                  <YearFlowChart months={yearSummary.months} />
+                </div>
+              </>
+            )}
             <SectionHeader
               compact
               title="内訳"
@@ -197,7 +257,11 @@ export default function MoneyReviewView({
             </div>
             <SectionHeader compact title="月ごと" hint="押すとその月へ" />
             {months.length === 0 ? (
-              <p className="py-6 text-center text-[13px] text-gray-400">この年はまだ記録がありません</p>
+              <p className="py-6 text-center text-[13px] text-gray-400">
+                {startMonth !== null && startMonth > today
+                  ? `集計の開始月（${formatMonthKey(startMonth)}）から数えます`
+                  : 'この年はまだ記録がありません'}
+              </p>
             ) : (
               <div className={`${cardClass} overflow-hidden`}>
                 {months.map((row, index) => {

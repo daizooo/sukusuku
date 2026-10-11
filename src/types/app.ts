@@ -625,6 +625,12 @@ export interface MoneyStore {
   archived: boolean;
 }
 
+/** 家計の設定（家族ごとに1つ）。money_settings に対応。docs/kakei.md §0.4。 */
+export interface MoneySettings {
+  /** 年・累計を数え始める月（YYYY-MM）。null は全部の月を数える。 */
+  startMonth: string | null;
+}
+
 /** 記録の種類。支出・収入・振替。 */
 export type MoneyRecordKind = 'expense' | 'income' | 'transfer';
 
