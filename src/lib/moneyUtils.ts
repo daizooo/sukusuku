@@ -457,12 +457,14 @@ export function groupRecordsByDay(records: readonly MoneyRecord[]): { date: stri
 export interface ItemGroup<T extends Omit<MoneyItem, 'id'>> {
   key: string;
   categoryId: string | null;
+  /** 削除したカテゴリの名前（categoryId が null のとき）。 */
+  categoryName: string;
   items: T[];
   total: number;
 }
 
-export const itemGroupKey = (item: Pick<MoneyItem, 'categoryId'>) =>
-  item.categoryId !== null ? `category:${item.categoryId}` : 'none';
+export const itemGroupKey = (item: Pick<MoneyItem, 'categoryId' | 'categoryName'>) =>
+  item.categoryId !== null ? `category:${item.categoryId}` : item.categoryName !== '' ? `deleted:${item.categoryName}` : 'none';
 
 /** 品目を種類ごとにまとめる。最初に出てきた順。 */
 export function groupItems<T extends Omit<MoneyItem, 'id'>>(items: readonly T[]): ItemGroup<T>[] {
@@ -477,6 +479,7 @@ export function groupItems<T extends Omit<MoneyItem, 'id'>>(items: readonly T[])
       groups.push({
         key,
         categoryId: item.categoryId,
+        categoryName: item.categoryName,
         items: [item],
         total: item.amount,
       });
@@ -709,7 +712,8 @@ export function buildMonthSummary(
     if (record.kind === 'transfer') continue;
     for (const item of record.items) {
       if (record.kind === 'income') income += item.amount;
-      else if (item.categoryId !== null) living += item.amount;
+      // 削除したカテゴリの品目（名前だけ残っている）も合計には数える。
+      else if (item.categoryId !== null || item.categoryName !== '') living += item.amount;
     }
   }
   const livingBudget = topCategories(categories, 'living').reduce(
@@ -978,6 +982,8 @@ export interface EditorLine {
 export interface EditorGroup {
   key: string;
   categoryId: string | null;
+  /** 削除したカテゴリの名前（categoryId が null のとき）。 */
+  categoryName: string;
   lines: EditorLine[];
 }
 
@@ -994,6 +1000,7 @@ export function groupsFromItems(items: readonly MoneyItem[], nextKey: () => stri
   return groupItems(items).map((group) => ({
     key: nextKey(),
     categoryId: group.categoryId,
+    categoryName: group.categoryName,
     lines: group.items.map((item) => {
       // 金額だけの品目（単価なし）は、1個あたりに直す。割り切れなければ1個として扱う。
       const divisible = item.amount % item.quantity === 0;
@@ -1016,6 +1023,7 @@ export function itemsFromGroups(groups: readonly EditorGroup[]): MoneyItemDraft[
       .map((line) => ({
         amount: editorLineAmount(line),
         categoryId: group.categoryId,
+        categoryName: group.categoryId === null ? group.categoryName : '',
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         name: line.name.trim(),
@@ -1025,8 +1033,10 @@ export function itemsFromGroups(groups: readonly EditorGroup[]): MoneyItemDraft[
 }
 
 /** 同じ種類のまとまりか。 */
-export const sameGroupTarget = (a: Pick<EditorGroup, 'categoryId'>, b: Pick<EditorGroup, 'categoryId'>) =>
-  a.categoryId === b.categoryId;
+export const sameGroupTarget = (
+  a: Pick<EditorGroup, 'categoryId' | 'categoryName'>,
+  b: Pick<EditorGroup, 'categoryId' | 'categoryName'>,
+) => a.categoryId === b.categoryId && (a.categoryId !== null || a.categoryName === b.categoryName);
 
 // ---- 電卓（品目の金額。＋−×÷） ----
 

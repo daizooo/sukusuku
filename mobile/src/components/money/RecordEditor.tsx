@@ -140,8 +140,8 @@ export default function RecordEditor({
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '';
 
   /** まとまりの見出し（「食費 › 食料品」「特別費 › 車検」）。 */
-  const groupTitle = (target: Pick<EditorGroup, 'categoryId'>) =>
-    target.categoryId !== null ? categoryPath(categories, target.categoryId) : '';
+  const groupTitle = (target: Pick<EditorGroup, 'categoryId' | 'categoryName'>) =>
+    target.categoryId !== null ? categoryPath(categories, target.categoryId) : target.categoryName;
 
   /** まとまりのアイコン（大分類のアイコン）。 */
   const groupIconKey = (target: Pick<EditorGroup, 'categoryId'>) => {
@@ -194,6 +194,7 @@ export default function RecordEditor({
     setWork({
       groupKey: group.key,
       categoryId: group.categoryId,
+      categoryName: group.categoryName,
       lines,
       selected: null,
       expr: '',
@@ -204,7 +205,7 @@ export default function RecordEditor({
 
   /** 種類を選んだ（品目の追加、または品目の画面で種類を変えた）。 */
   const pickCategory = (choice: CategoryChoice, purpose: 'add' | 'change') => {
-    const target = { categoryId: choice.categoryId };
+    const target = { categoryId: choice.categoryId, categoryName: '' };
     if (purpose === 'change' && work) {
       setWork({ ...work, ...target });
       pop();
@@ -228,7 +229,7 @@ export default function RecordEditor({
     const lines = work.lines.filter((line) => !isBlankLine(line));
     setGroups((prev) => {
       let next = prev.filter((group) => group.key !== work.groupKey);
-      const target = { categoryId: work.categoryId };
+      const target = { categoryId: work.categoryId, categoryName: work.categoryName };
       const same = next.find((group) => sameGroupTarget(group, target));
       if (same) {
         // 同じ種類のまとまりがほかにあれば、そこへ足す（種類を変えた結果、同じになったとき）。
@@ -274,6 +275,7 @@ export default function RecordEditor({
             {
               amount: transferAmount,
               categoryId: null,
+              categoryName: '',
               quantity: 1,
               unitPrice: transferAmount,
               name: '',

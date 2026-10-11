@@ -86,6 +86,7 @@ const rowToItem = (row: ItemRow): MoneyItem => ({
   id: row.id,
   amount: row.amount,
   categoryId: row.category_id,
+  categoryName: row.category_name,
   quantity: row.quantity,
   unitPrice: row.unit_price,
   name: row.name,
@@ -222,6 +223,7 @@ export async function saveMoneyRecord(supabase: SupabaseDb, draft: MoneyRecordDr
   const items: Json = draft.items.map((item) => ({
     amount: item.amount,
     category_id: item.categoryId,
+    category_name: item.categoryId === null ? item.categoryName : '',
     quantity: item.quantity,
     unit_price: item.unitPrice,
     name: item.name.trim(),
@@ -287,6 +289,15 @@ export async function updateMoneyCategory(
     .single();
   if (error) throw error;
   return rowToCategory(data);
+}
+
+/**
+ * 種類（大分類・小分類）を消す。大分類を消すと小分類と予算も消える（外部キーの cascade）。
+ * 記録の品目には消した種類の名前だけが残る（DBのトリガ money_categories_keep_name。docs/kakei.md §3.1）。
+ */
+export async function deleteMoneyCategory(supabase: SupabaseDb, id: string): Promise<void> {
+  const { error } = await supabase.from('money_categories').delete().eq('id', id);
+  if (error) throw error;
 }
 
 /**

@@ -633,6 +633,8 @@ export interface MoneyItem {
   id: string;
   amount: number;
   categoryId: string | null;
+  /** 削除したカテゴリの名前（categoryId が null のとき。名前だけ残す。docs/kakei.md §3.1）。それ以外は ''。 */
+  categoryName: string;
   quantity: number;
   /** 単価。個数 × 単価 = 金額。金額だけ入れたものは null。 */
   unitPrice: number | null;

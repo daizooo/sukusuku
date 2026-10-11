@@ -201,7 +201,7 @@
 | **収入** | 給料・賞与・臨時収入。給料と賞与は設定の**固定収入**から見込みの記録を自動で作る（2026-10-11。§0.3） | – |
 | **貯金** | **記録として残すだけ**（振替など）。集計・表示・目標は持たない（2026-10-08。§3.2） | – |
 
-- 名前・並びは家族で変えられる（大分類・小分類の追加・名前の変更・並べ替え・使わなくする）。
+- 名前・並びは家族で変えられる（大分類・小分類の追加・名前の変更・並べ替え・**削除**）。
   **並べ替えは一覧のまま指（マウス）で動かす**（2026-10-09。リストと同じ操作 `useDragReorder`: 大分類は左の持ち手をつかむ、小分類のチップは長押し。
   以前の「上へ / 下へ」は無くした）
   画面の上に操作のヒントを出す。mobile は持ち上げた枠を `Animated.Value` の transform で動かしていて Android で落ちたため、数値の transform に直した（2026-10-10）
@@ -299,7 +299,7 @@
 
 | 設定 | できること | 作り |
 | --- | --- | --- |
-| カテゴリ・予算 | 大分類・小分類の追加・名前・アイコンと色・並び・使わなくする。大分類ごと・年ごとの月の予算（2026-10-09に「種類と予算」から名前を変えた。2026-10-11に「カテゴリと予算」から「カテゴリ・予算」へ） | `CategoryEditor`（§3.1） |
+| カテゴリ・予算 | 大分類・小分類の追加・名前・アイコンと色・並び・削除。大分類ごと・年ごとの月の予算（2026-10-09に「種類と予算」から名前を変えた。2026-10-11に「カテゴリと予算」から「カテゴリ・予算」へ） | `CategoryEditor`（§3.1） |
 | ~~特別費の予定~~ | **画面ごと廃止**（2026-10-11。特別費はカテゴリに収納。§0.2） | ~~`SpecialSettings`~~ |
 | 固定収入 | 給与・賞与のルール（振込日・入金先・見込み額。賞与は回ごとに月・日・額）の追加・編集・使わなくする／また使う。賞与は「同じ名前でもう1回」で回を足す。下に、その年の収入の記録（見込みの印つき。年は送れる）（2026-10-11） | `RecurringSettings`（mode が income。`money_recurring`。§0.3） |
 | 固定費 | 固定費（特別費のうち決まっているものを含む。収入以外）のルールの追加・編集・使わなくする／また使う。カード代金は一覧だけ（設定は出金元のカード） | `RecurringSettings`（`money_recurring`。§3.3） |
@@ -382,7 +382,7 @@
 ## 5. データ（§7 の2 で確定。migration 0063_money.sql・0064_money_category_icon.sql）
 
 ```
-money_categories  種類。 id / family_id / kind('living'|'income') / parent_id(null=大分類) / name / icon / icon_color(0079) / position / archived_at
+money_categories  種類。 id / family_id / kind('living'|'income') / parent_id(null=大分類) / name / icon / icon_color(0079) / position / archived_at（0090 から使わない。それ以前に使わなくしたものは灰色で残り、削除できる）
 money_budgets     予算。 id / family_id / category_id(大分類) / fiscal_year(暦年) / monthly_amount(12月の額) / month_amounts(1〜12月の月額。0083)（category_id・fiscal_year で1行）
 money_wallets     出金元。 id / family_id / name / type('card'|'cash'|'bank'|'prepaid'|'qr') / is_saving / saving_target /
                   position / archived_at
@@ -391,7 +391,7 @@ money_records     記録の詳細。 id / family_id / kind('expense'|'income'|'t
                   to_wallet_id(振替の入金先) / store / created_by
 money_items       品目（1行）。 id / family_id / record_id / amount / category_id(小分類か大分類) /
                   special_item_id・special_plan_id(特別費のとき) / quantity / unit_price /
-                  name / memo / position
+                  name / memo / position / category_name(削除したカテゴリの名前。0090)
 money_recurring   毎月の記録のルール（0066_money_recurring.sql）。 id / family_id / kind / day(1〜31。31は末日) /
                   months(null=毎月) / holiday('next'|'prev'|'none') / amount_mode('fixed'|'estimate') / amount /
                   wallet_id / to_wallet_id / store / category_id か special_item_id / name(品名) / position / archived_at /
@@ -413,7 +413,16 @@ money_wallet_balances  補正した残高（0067_money_wallet_balances.sql。§9
 
 - 全部 `family_id` 単位のRLS（`current_family_id()`）。参照は (id, family_id) の組で張り、別の家族の行を指せないようにする
 - 予算は、その年の行が無い月は前の年の12月の額を使う（毎年入れ直さなくてよい）。1月〜12月の月額は `month_amounts`（0083）
-- 種類・出金元は消さずに「使わなくする」（`archived_at`）。記録には残る
+- 出金元は消さずに「使わなくする」（`archived_at`）。記録には残る
+- **種類（大分類・小分類）は削除する**（2026-10-11。0090。以前の「使わなくする」は取りやめた）。確認を出してから消す
+  - 大分類を消すと、小分類と予算（`money_budgets`）も一緒に消える（外部キーの cascade）
+  - **記録の品目には、消した種類の名前だけを残す**（`money_items.category_name`。`category_id` は外れて null）。DBのトリガ
+    `money_categories_keep_name` が、消す前に品目へ名前を写す（cascade で消える小分類にも効く）。記録の編集で保存しても名前は保たれる
+    （`save_money_record` が `category_name` を受ける。種類を選び直せば名前は空になる）
+  - 名前だけの品目は、**月の支出の合計には数える**が、大分類のタイル（予算）・内訳には出さない（種類として扱わない）。
+    記録の一覧・詳細では、名前をそのまま見出しにする（アイコンは付かない）
+  - 固定費・固定収入のルールがその種類を指していれば、種類だけが外れる（`on delete set null`。種類のないルールは記録を作らない）
+  - 要検討（記録が増えてから）: 名前だけの品目を内訳にまとめて出すか、消すときに別の種類へ付け替える選択を出すか
 - ~~特別費の項目・予定は今の `special_items`・`special_plans` のまま。特別費の品目は `category_id` を持たず、`special_item_id` を持つ~~
   → **2026-10-11にカテゴリへ収納する**（§0.2）。特別費の項目は `money_categories` の小分類（親は大分類「特別費」）に移し、
   `money_items.special_item_id`・`special_plan_id` と `money_recurring.special_item_id` は `category_id` に置き換えて、`special_items`・`special_plans` は消す

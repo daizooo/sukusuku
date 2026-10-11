@@ -21,6 +21,7 @@ import {
   parseAmountInput,
 } from '@/lib/moneyUtils';
 import {
+  deleteMoneyCategory,
   insertDefaultMoneyCategories,
   insertMoneyCategory,
   saveMoneyBudget,
@@ -32,7 +33,7 @@ import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader } from './moneyVi
 
 // カテゴリ・予算（docs/kakei.md §3.1）。mobile版の `mobile/src/components/money/CategoryEditor.tsx` と同じ並び・文言。
 //
-// 大分類（予算を置く単位）と小分類の追加・名前の変更・並べ替え・使わなくする。並べ替えは一覧のまま動かす
+// 大分類（予算を置く単位）と小分類の追加・名前の変更・並べ替え・削除。並べ替えは一覧のまま動かす
 // （大分類は左の持ち手をつかむ、小分類は長押し。マウスでも指でも。リストと同じ操作。ui/useDragReorder.ts）。
 // 大分類のアイコンは絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。予算は大分類ごと・年ごとの月額で、
 // その年に入れていなければ前の年の額のまま（ここで直すと、その年の額になる）。
@@ -171,12 +172,21 @@ export default function CategoryEditor({
     }
   };
 
-  const toggleArchive = async (category: MoneyCategory) => {
+  const removeCategory = async (category: MoneyCategory) => {
+    const message =
+      category.parentId === null
+        ? `「${category.name}」を削除しますか？小分類と予算も消えます。これまでの記録には、名前だけが残ります。`
+        : `「${category.name}」を削除しますか？これまでの記録には、名前だけが残ります。`;
+    if (!window.confirm(message)) return;
     setEditing(null);
     try {
-      replace(await updateMoneyCategory(supabase, category.id, { archived: !category.archived }));
+      await deleteMoneyCategory(supabase, category.id);
+      // 大分類を消すと、小分類と予算も一緒に消える（DBの cascade）。
+      const gone = new Set([category.id, ...categories.filter((entry) => entry.parentId === category.id).map((entry) => entry.id)]);
+      onCategories((prev) => prev.filter((entry) => !gone.has(entry.id)));
+      onBudgets((prev) => prev.filter((entry) => !gone.has(entry.categoryId)));
     } catch {
-      failed('保存');
+      failed('削除');
     }
   };
 
@@ -315,7 +325,7 @@ export default function CategoryEditor({
           }
           onClose={() => setEditing(null)}
           onSubmit={(result) => void save(result)}
-          onToggleArchive={editing.category ? () => void toggleArchive(editing.category!) : undefined}
+          onDelete={editing.category ? () => void removeCategory(editing.category!) : undefined}
         />
       )}
     </FullScreen>
@@ -347,7 +357,7 @@ function CategoryModal({
   defaultFromMonth,
   onClose,
   onSubmit,
-  onToggleArchive,
+  onDelete,
 }: {
   category: MoneyCategory | null;
   isTop: boolean;
@@ -357,7 +367,7 @@ function CategoryModal({
   defaultFromMonth: number;
   onClose: () => void;
   onSubmit: (result: SheetResult) => void;
-  onToggleArchive?: () => void;
+  onDelete?: () => void;
 }) {
   const [name, setName] = useState(category?.name ?? '');
   const [amount, setAmount] = useState(budget === null ? '' : String(budget));
@@ -389,13 +399,9 @@ function CategoryModal({
       footer={
         <div className="space-y-1">
           <PrimaryButton label="保存する" onClick={submit} />
-          {onToggleArchive && category && (
-            <button
-              type="button"
-              onClick={onToggleArchive}
-              className={`w-full py-2 text-sm ${category.archived ? 'font-bold text-blue-600' : 'text-red-500'}`}
-            >
-              {category.archived ? 'また使う' : '使わなくする（記録には残ります）'}
+          {onDelete && category && (
+            <button type="button" onClick={onDelete} className="w-full py-2 text-sm text-red-500">
+              削除する（記録には名前だけ残ります）
             </button>
           )}
         </div>
