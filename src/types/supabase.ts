@@ -921,8 +921,6 @@ export type Database = {
           position: number
           quantity: number
           record_id: string
-          special_item_id: string | null
-          special_plan_id: string | null
           unit_price: number | null
         }
         Insert: {
@@ -936,8 +934,6 @@ export type Database = {
           position?: number
           quantity?: number
           record_id: string
-          special_item_id?: string | null
-          special_plan_id?: string | null
           unit_price?: number | null
         }
         Update: {
@@ -951,8 +947,6 @@ export type Database = {
           position?: number
           quantity?: number
           record_id?: string
-          special_item_id?: string | null
-          special_plan_id?: string | null
           unit_price?: number | null
         }
         Relationships: [
@@ -969,20 +963,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "money_records"
             referencedColumns: ["id", "family_id"]
-          },
-          {
-            foreignKeyName: "money_items_special_item_fkey"
-            columns: ["special_item_id", "family_id"]
-            isOneToOne: false
-            referencedRelation: "special_items"
-            referencedColumns: ["id", "family_id"]
-          },
-          {
-            foreignKeyName: "money_items_special_plan_id_fkey"
-            columns: ["special_plan_id"]
-            isOneToOne: false
-            referencedRelation: "special_plans"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -1086,7 +1066,6 @@ export type Database = {
           months: number[] | null
           name: string
           position: number
-          special_item_id: string | null
           store: string
           to_wallet_id: string | null
           updated_at: string
@@ -1109,7 +1088,6 @@ export type Database = {
           months?: number[] | null
           name?: string
           position?: number
-          special_item_id?: string | null
           store?: string
           to_wallet_id?: string | null
           updated_at?: string
@@ -1132,7 +1110,6 @@ export type Database = {
           months?: number[] | null
           name?: string
           position?: number
-          special_item_id?: string | null
           store?: string
           to_wallet_id?: string | null
           updated_at?: string
@@ -1154,13 +1131,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "families"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "money_recurring_special_item_fkey"
-            columns: ["special_item_id", "family_id"]
-            isOneToOne: false
-            referencedRelation: "special_items"
-            referencedColumns: ["id", "family_id"]
           },
           {
             foreignKeyName: "money_recurring_to_wallet_fkey"
@@ -1264,35 +1234,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "money_securities"
             referencedColumns: ["id", "family_id"]
-          },
-        ]
-      }
-      money_settings: {
-        Row: {
-          created_at: string
-          family_id: string
-          start_month: string | null
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          family_id: string
-          start_month?: string | null
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          family_id?: string
-          start_month?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "money_settings_family_id_fkey"
-            columns: ["family_id"]
-            isOneToOne: true
-            referencedRelation: "families"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -1683,94 +1624,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tasks"
             referencedColumns: ["id"]
-          },
-        ]
-      }
-      special_items: {
-        Row: {
-          base_year: number | null
-          category: string
-          created_at: string
-          cycle_years: number
-          family_id: string
-          id: string
-          kind: string
-          name: string
-          note: string
-          position: number
-          updated_at: string
-        }
-        Insert: {
-          base_year?: number | null
-          category?: string
-          created_at?: string
-          cycle_years?: number
-          family_id: string
-          id?: string
-          kind?: string
-          name: string
-          note?: string
-          position?: number
-          updated_at?: string
-        }
-        Update: {
-          base_year?: number | null
-          category?: string
-          created_at?: string
-          cycle_years?: number
-          family_id?: string
-          id?: string
-          kind?: string
-          name?: string
-          note?: string
-          position?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "special_items_family_id_fkey"
-            columns: ["family_id"]
-            isOneToOne: false
-            referencedRelation: "families"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      special_plans: {
-        Row: {
-          amount: number
-          created_at: string
-          family_id: string
-          id: string
-          item_id: string
-          month: number | null
-          tentative: boolean
-        }
-        Insert: {
-          amount?: number
-          created_at?: string
-          family_id: string
-          id?: string
-          item_id: string
-          month?: number | null
-          tentative?: boolean
-        }
-        Update: {
-          amount?: number
-          created_at?: string
-          family_id?: string
-          id?: string
-          item_id?: string
-          month?: number | null
-          tentative?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "special_plans_item_fkey"
-            columns: ["item_id", "family_id"]
-            isOneToOne: false
-            referencedRelation: "special_items"
-            referencedColumns: ["id", "family_id"]
           },
         ]
       }
