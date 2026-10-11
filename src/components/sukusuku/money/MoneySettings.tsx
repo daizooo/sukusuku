@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarClock, ChevronRight, Flag, Store, Tag, type LucideIcon } from 'lucide-react';
+import { CalendarClock, ChevronRight, Store, Tag, type LucideIcon } from 'lucide-react';
 import type {
   MoneyBudget,
   MoneyCategory,
@@ -10,10 +10,9 @@ import type {
   MoneyStore,
   MoneyWallet,
 } from '@/types/app';
-import { budgetFor, budgetMonthKey, dateKeyOfDate, formatMonthKey, formatYear, formatYen, topCategories } from '@/lib/moneyUtils';
+import { budgetFor, budgetMonthKey, dateKeyOfDate, formatYear, formatYen, topCategories } from '@/lib/moneyUtils';
 import CategoryEditor from './CategoryEditor';
 import RecurringSettings from './RecurringSettings';
-import StartMonthSettings from './StartMonthSettings';
 import StoreSettings from './StoreSettings';
 import { FullScreen, ScreenHeader } from './moneyVisual';
 
@@ -34,17 +33,14 @@ interface MoneySettingsProps {
   wallets: MoneyWallet[];
   recurring: MoneyRecurring[];
   records: MoneyRecord[];
-  /** 年・累計を数え始める月（YYYY-MM）。null は全部の月を数える。 */
-  startMonth: string | null;
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
   onBudgets: (update: (prev: MoneyBudget[]) => MoneyBudget[]) => void;
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
-  onStartMonth: (startMonth: string | null) => void;
   onClose: () => void;
 }
 
-type Page = 'menu' | 'categories' | 'stores' | 'recurring' | 'start';
+type Page = 'menu' | 'categories' | 'stores' | 'recurring';
 
 export default function MoneySettings({
   familyId,
@@ -55,12 +51,10 @@ export default function MoneySettings({
   wallets,
   recurring,
   records,
-  startMonth,
   onCategories,
   onBudgets,
   onStores,
   onRecurring,
-  onStartMonth,
   onClose,
 }: MoneySettingsProps) {
   const [page, setPage] = useState<Page>('menu');
@@ -79,12 +73,6 @@ export default function MoneySettings({
     },
     { id: 'recurring', label: '固定費', summary: `給料なども含む ${recurringCount}件（自動で記録）`, icon: CalendarClock },
     { id: 'stores', label: 'よく行くお店', summary: `登録したお店 ${storeCount}件`, icon: Store },
-    {
-      id: 'start',
-      label: '集計の開始月',
-      summary: startMonth === null ? 'すべての月を数える' : `${formatMonthKey(startMonth)}から（年と累計に入る月）`,
-      icon: Flag,
-    },
   ];
 
   const back = () => setPage('menu');
@@ -96,7 +84,7 @@ export default function MoneySettings({
           <ScreenHeader title="家計の設定" onClose={onClose} />
           <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 p-4">
             <p className="pb-1 text-[13px] leading-relaxed text-gray-500">
-              カテゴリ・予算・固定費・よく行くお店・集計の開始月を、いつでも編集・追加できます。直すのは設定だけで、記録は変わりません。
+              カテゴリ・予算・固定費・よく行くお店を、いつでも編集・追加できます。直すのは設定だけで、記録は変わりません。
             </p>
             {rows.map((row) => {
               const Icon = row.icon;
@@ -120,9 +108,6 @@ export default function MoneySettings({
             })}
           </div>
         </>
-      )}
-      {page === 'start' && (
-        <StartMonthSettings familyId={familyId} startMonth={startMonth} onSaved={onStartMonth} onBack={back} />
       )}
       {page === 'stores' && <StoreSettings familyId={familyId} stores={stores} onStores={onStores} onBack={back} />}
       {page === 'recurring' && (

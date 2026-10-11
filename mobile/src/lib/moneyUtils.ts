@@ -715,7 +715,7 @@ export function parseAmountInput(text: string): number | null {
 
 export interface YearMonthRow {
   monthKey: string;
-  /** その月を数えるか。記録（振替だけは除く）があり、集計の開始月以降で、まだ来ていない月でないこと。 */
+  /** その月を数えるか。記録（振替だけは除く）があり、まだ来ていない月でないこと。 */
   recorded: boolean;
   income: number;
   living: number;
@@ -737,14 +737,11 @@ export interface YearSummary {
   average: { income: number; living: number; balance: number } | null;
 }
 
-/** 月（YYYY-MM）が集計の開始月（YYYY-MM。null は全部の月を数える）以降か。 */
-export const isCountedMonth = (monthKey: string, startMonth: string | null): boolean =>
-  startMonth === null || monthKey >= startMonth;
-
 /**
  * 年の収支（docs/kakei.md §4.2・§0.4）。月ごとの 収入・支出・収支・年初からの累計 と、年間の合計・月平均。
- * 数えるのは、集計の開始月（startMonth。YYYY-MM）以降で、記録のある月だけ（記録の無い月・振替だけの月は数えない。
- * 使い始める前の月まで予算が残ったように見えないように）。upTo（YYYY-MM）より後の月は、まだ来ていないので数えない。
+ * 数えるのは記録のある月だけ（記録の無い月・振替だけの月は数えない。使い始める前の月まで予算が残ったように見えないように）。
+ * 記録は2026年10月から（それより前の記録は切り替えで削除した）なので、年は自然に10月から数える。
+ * upTo（YYYY-MM）より後の月は、まだ来ていないので数えない。
  */
 export function buildYearSummary(
   records: readonly MoneyRecord[],
@@ -752,7 +749,6 @@ export function buildYearSummary(
   budgets: readonly MoneyBudget[],
   year: number,
   upTo: string,
-  startMonth: string | null = null,
 ): YearSummary {
   const total = { income: 0, living: 0, balance: 0, livingDiff: 0 };
   let recordedMonths = 0;
@@ -760,7 +756,6 @@ export function buildYearSummary(
   const months = yearMonthKeys(year).map((monthKey) => {
     const recorded =
       monthKey <= upTo &&
-      isCountedMonth(monthKey, startMonth) &&
       recordsInMonth(records, monthKey).some((record) => record.kind !== 'transfer');
     if (!recorded) return { monthKey, recorded, income: 0, living: 0, balance: 0, livingDiff: 0, cumulative };
     const summary = buildMonthSummary(records, categories, budgets, monthKey);
@@ -792,15 +787,14 @@ export function buildYearSummary(
   return { months, total, recordedMonths, average };
 }
 
-/** その月の年初からの収支の累計。その月を数えない（開始月より前・記録なし）ときは null。 */
+/** その月の年初からの収支の累計。その月を数えない（記録なし・振替だけ）ときは null。 */
 export function yearToDateBalance(
   records: readonly MoneyRecord[],
   categories: readonly MoneyCategory[],
   budgets: readonly MoneyBudget[],
   monthKey: string,
-  startMonth: string | null,
 ): number | null {
-  const summary = buildYearSummary(records, categories, budgets, yearOfMonth(monthKey), monthKey, startMonth);
+  const summary = buildYearSummary(records, categories, budgets, yearOfMonth(monthKey), monthKey);
   const row = summary.months.find((entry) => entry.monthKey === monthKey);
   return row && row.recorded ? row.cumulative : null;
 }
@@ -826,10 +820,9 @@ export function compareWithPreviousYear(
   budgets: readonly MoneyBudget[],
   year: number,
   upTo: string,
-  startMonth: string | null,
 ): YearComparison | null {
-  const current = buildYearSummary(records, categories, budgets, year, upTo, startMonth);
-  const previous = buildYearSummary(records, categories, budgets, year - 1, `${year - 1}-12`, startMonth);
+  const current = buildYearSummary(records, categories, budgets, year, upTo);
+  const previous = buildYearSummary(records, categories, budgets, year - 1, `${year - 1}-12`);
   let months = 0;
   let balance = 0;
   let previousBalance = 0;

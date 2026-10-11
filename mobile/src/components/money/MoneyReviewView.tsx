@@ -11,12 +11,10 @@ import {
   compareWithPreviousYear,
   estimatesInMonth,
   formatBalance,
-  formatMonthKey,
   formatSignedYen,
   formatYear,
   formatYen,
   iconKeyOf,
-  isCountedMonth,
   monthKeyOfDate,
   recordTotal,
   shiftMonth,
@@ -45,7 +43,7 @@ import {
 // 結論は収支＝収入 − 支出（生活費と特別費。特別費は大分類「特別費」のカテゴリなので、生活費と同じに数える。2026-10-11。§0）。
 // 貯金は記録なので式にも表示にも入れない。
 // 月には年初からの累計、年には月平均・前年の同じ月ぶんとの比べ・月ごとの収支と累計のグラフを添える（§0.4）。
-// 年と累計は、集計の開始月（家計の設定）以降の記録のある月だけを数える。
+// 年と累計は、記録のある月だけを数える（記録は2026年10月から）。
 // その下の「内訳」は、大分類の一覧（種類の並び順。特別費もその1行）。
 // 内訳の行を押すと、簡単な分析と、その行に絞った記録の一覧が開く（ReviewDetailScreen。§4.4）。
 // 年は内訳の下に月ごとの収支（押すとその月へ）。
@@ -62,8 +60,6 @@ interface MoneyReviewViewProps {
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   wallets: MoneyWallet[];
-  /** 年・累計を数え始める月（YYYY-MM）。null は全部の月を数える。 */
-  startMonth: string | null;
   /** 年の「月ごと」の行を押したとき。その月の月の振り返りへ。 */
   onSelectMonth: (monthKey: string) => void;
   onEditCategories: () => void;
@@ -82,7 +78,6 @@ export default function MoneyReviewView({
   categories,
   budgets,
   wallets,
-  startMonth,
   onSelectMonth,
   onEditCategories,
   onOpenRecord,
@@ -97,17 +92,17 @@ export default function MoneyReviewView({
     [records, categories, budgets, monthKey],
   );
   const yearSummary = useMemo(
-    () => buildYearSummary(records, categories, budgets, year, today, startMonth),
-    [records, categories, budgets, year, today, startMonth],
+    () => buildYearSummary(records, categories, budgets, year, today),
+    [records, categories, budgets, year, today],
   );
   // 月: 年初からの累計。年: 前の年の同じ月ぶんとの比べ。
   const ytd = useMemo(
-    () => (isMonth ? yearToDateBalance(records, categories, budgets, monthKey, startMonth) : null),
-    [isMonth, records, categories, budgets, monthKey, startMonth],
+    () => (isMonth ? yearToDateBalance(records, categories, budgets, monthKey) : null),
+    [isMonth, records, categories, budgets, monthKey],
   );
   const comparison = useMemo(
-    () => (isMonth ? null : compareWithPreviousYear(records, categories, budgets, year, today, startMonth)),
-    [isMonth, records, categories, budgets, year, today, startMonth],
+    () => (isMonth ? null : compareWithPreviousYear(records, categories, budgets, year, today)),
+    [isMonth, records, categories, budgets, year, today],
   );
   // 見ている期間の月。月なら1つ、年なら記録のある月だけ（記録の無い月の予算は数えない）。
   const periodKeys = useMemo(
@@ -161,15 +156,9 @@ export default function MoneyReviewView({
             <StatRow
               compact
               label="年初からの累計"
-              note={startMonth !== null && startMonth.slice(0, 4) === monthKey.slice(0, 4) ? `${formatMonthKey(startMonth)}から` : undefined}
               value={formatBalance(ytd)}
               plus={ytd > 0}
             />
-          )}
-          {isMonth && startMonth !== null && !isCountedMonth(monthKey, startMonth) && (
-            <Text style={[type.faint, styles.notCounted]}>
-              集計の開始月（{formatMonthKey(startMonth)}）より前の月です。年と累計には入りません
-            </Text>
           )}
           {!isMonth && yearSummary.average !== null && (
             <StatRow
@@ -258,11 +247,7 @@ export default function MoneyReviewView({
             </View>
             <SectionHeader compact title="月ごと" hint="押すとその月へ" />
             {months.length === 0 ? (
-              <Text style={styles.message}>
-                {startMonth !== null && startMonth > today
-                  ? `集計の開始月（${formatMonthKey(startMonth)}）から数えます`
-                  : 'この年はまだ記録がありません'}
-              </Text>
+              <Text style={styles.message}>この年はまだ記録がありません</Text>
             ) : (
               <View style={styles.card}>
                 {months.map((row, index) => {
@@ -366,7 +351,6 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 96 },
   gap: { height: 12 },
   estimate: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8 },
-  notCounted: { paddingTop: 8 },
   bar: { paddingVertical: 6 },
   message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
   card: {

@@ -63,7 +63,6 @@ import {
   totalDailyBalances,
   walletGain,
   compareWithPreviousYear,
-  isCountedMonth,
   yearToDateBalance,
 } from './moneyUtils.ts';
 import type { MoneyBudget, MoneyCategory, MoneyHolding, MoneyHoldingValue, MoneyItem, MoneyRecord, MoneySecurity, MoneyStore, MoneyWallet, MoneyWalletBalance } from '../types/app.ts';
@@ -355,7 +354,7 @@ assert.equal(
   'upTo より後の月は合計に入れない',
 );
 
-// ---- 集計の開始月・年初からの累計・月平均・前年比（docs/kakei.md §0.4） ----
+// ---- 年初からの累計・月平均・前年比（docs/kakei.md §0.4） ----
 {
   const earn = (id: string, occurredOn: string, income: number, spent: number) => [
     record(`${id}-in`, { occurredOn, kind: 'income', walletId: 'bank', items: [item({ amount: income, categoryId: 'salary' })] }),
@@ -364,48 +363,42 @@ assert.equal(
   const flow: MoneyRecord[] = [
     ...earn('n25', '2025-11-25', 300000, 250000), // +50,000
     ...earn('d25', '2025-12-25', 700000, 300000), // +400,000（賞与の月）
-    ...earn('o26', '2026-10-25', 300000, 20000), // +280,000（開始月より前の中途半端な月）
+    ...earn('o26', '2026-10-25', 300000, 20000), // +280,000
     ...earn('n26', '2026-11-25', 300000, 350000), // −50,000（支出が多い月）
     ...earn('d26', '2026-12-25', 700000, 300000), // +400,000
     record('t26', { occurredOn: '2026-12-26', kind: 'transfer', walletId: 'bank', toWalletId: 'save', items: [item({ amount: 100000 })] }),
     record('t27', { occurredOn: '2027-01-05', kind: 'transfer', walletId: 'bank', toWalletId: 'save', items: [item({ amount: 100000 })] }),
   ];
-  assert.equal(isCountedMonth('2026-11', '2026-11'), true);
-  assert.equal(isCountedMonth('2026-10', '2026-11'), false);
-  assert.equal(isCountedMonth('2020-01', null), true, '開始月が無ければ全部数える');
 
-  const fromNovember = buildYearSummary(flow, categories, budgets, 2026, '2026-12', '2026-11');
-  assert.equal(fromNovember.recordedMonths, 2, '開始月より前の月は数えない');
-  assert.equal(fromNovember.months.find((row) => row.monthKey === '2026-10')!.recorded, false);
-  assert.equal(fromNovember.total.balance, -50000 + 400000);
+  const y2026 = buildYearSummary(flow, categories, budgets, 2026, '2026-12');
+  assert.equal(y2026.recordedMonths, 3, '記録のある月だけを数える（2026年は10月から）');
+  assert.equal(y2026.total.balance, 280000 - 50000 + 400000);
   assert.deepEqual(
-    fromNovember.months.filter((row) => row.monthKey >= '2026-10').map((row) => [row.monthKey, row.cumulative]),
-    [['2026-10', 0], ['2026-11', -50000], ['2026-12', 350000]],
+    y2026.months.filter((row) => row.monthKey >= '2026-09').map((row) => [row.monthKey, row.cumulative]),
+    [['2026-09', 0], ['2026-10', 280000], ['2026-11', 230000], ['2026-12', 630000]],
     '年初からの累計は、数える月だけを足す',
   );
-  assert.deepEqual(fromNovember.average, { income: 500000, living: 325000, balance: 175000 }, '月平均は数える月で割る');
-  const everything = buildYearSummary(flow, categories, budgets, 2026, '2026-12', null);
-  assert.equal(everything.recordedMonths, 3, '開始月が無ければ10月も数える');
-  assert.equal(everything.months.find((row) => row.monthKey === '2026-12')!.cumulative, 280000 - 50000 + 400000);
+  assert.deepEqual(y2026.average, { income: 433333, living: 223333, balance: 210000 }, '月平均は数える月で割る（円に丸める）');
 
   // 振替だけの月は数えない
-  const jan27 = buildYearSummary(flow, categories, budgets, 2027, '2027-01', '2026-11');
+  const jan27 = buildYearSummary(flow, categories, budgets, 2027, '2027-01');
   assert.equal(jan27.recordedMonths, 0);
   assert.equal(jan27.average, null, '数える月が無ければ平均は無い');
 
-  assert.equal(yearToDateBalance(flow, categories, budgets, '2026-11', '2026-11'), -50000);
-  assert.equal(yearToDateBalance(flow, categories, budgets, '2026-12', '2026-11'), 350000);
-  assert.equal(yearToDateBalance(flow, categories, budgets, '2026-10', '2026-11'), null, '開始月より前の月に累計は出さない');
-  assert.equal(yearToDateBalance(flow, categories, budgets, '2027-01', '2026-11'), null, '振替だけの月');
+  assert.equal(yearToDateBalance(flow, categories, budgets, '2026-10'), 280000);
+  assert.equal(yearToDateBalance(flow, categories, budgets, '2026-11'), 230000);
+  assert.equal(yearToDateBalance(flow, categories, budgets, '2026-12'), 630000);
+  assert.equal(yearToDateBalance(flow, categories, budgets, '2026-09'), null, '記録の無い月に累計は出さない');
+  assert.equal(yearToDateBalance(flow, categories, budgets, '2027-01'), null, '振替だけの月');
 
   // 前の年の同じ月ぶんとの比べ
-  assert.deepEqual(compareWithPreviousYear(flow, categories, budgets, 2026, '2026-12', null), {
+  assert.deepEqual(compareWithPreviousYear(flow, categories, budgets, 2026, '2026-12'), {
     months: 2,
     balance: -50000 + 400000,
     previousBalance: 50000 + 400000,
     diff: -100000,
   }, '今年の10月は前年の10月が無いので比べない。11・12月だけを比べる');
-  assert.equal(compareWithPreviousYear(flow, categories, budgets, 2026, '2026-12', '2026-11'), null, '前の年が開始月より前なら比べない');
+  assert.equal(compareWithPreviousYear(flow, categories, budgets, 2025, '2025-12'), null, '前の年に記録が無ければ比べない');
 }
 
 // ---- 入力の形との行き来 ----

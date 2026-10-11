@@ -9,7 +9,6 @@ import type {
   MoneyRecordDraft,
   MoneyRecurring,
   MoneyRecurringDraft,
-  MoneySettings,
   MoneyStore,
   MoneyWallet,
   MoneyWalletBalance,
@@ -25,7 +24,6 @@ type RecordRow = Tables<'money_records'>;
 type ItemRow = Tables<'money_items'>;
 type RecurringRow = Tables<'money_recurring'>;
 type BalanceRow = Tables<'money_wallet_balances'>;
-type SettingsRow = Tables<'money_settings'>;
 type SupabaseDb = SupabaseClient<Database>;
 
 // 家計タブの読み書き（種類・予算・出金元・記録。docs/kakei.md §3・§5）。
@@ -76,11 +74,6 @@ export const rowToBalance = (row: BalanceRow): MoneyWalletBalance => ({
   balanceOn: row.balance_on,
   amount: row.amount,
   showInHistory: row.show_in_history,
-});
-
-/** 設定の行が無い（まだ決めていない）ときは、全部の月を数える。 */
-export const rowToSettings = (row: SettingsRow | null): MoneySettings => ({
-  startMonth: row?.start_month ? row.start_month.slice(0, 7) : null,
 });
 
 export const rowToStore = (row: StoreRow): MoneyStore => ({
@@ -174,11 +167,10 @@ export interface MoneyData {
   records: MoneyRecord[];
   recurring: MoneyRecurring[];
   balances: MoneyWalletBalance[];
-  settings: MoneySettings;
 }
 
 export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise<MoneyData> {
-  const [categoryResult, budgetResult, walletResult, storeResult, recurringResult, balanceResult, settingsResult, records] =
+  const [categoryResult, budgetResult, walletResult, storeResult, recurringResult, balanceResult, records] =
     await Promise.all([
       supabase.from('money_categories').select('*').eq('family_id', familyId),
       supabase.from('money_budgets').select('*').eq('family_id', familyId),
@@ -186,7 +178,6 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
       supabase.from('money_stores').select('*').eq('family_id', familyId),
       supabase.from('money_recurring').select('*').eq('family_id', familyId).order('position', { ascending: true }),
       supabase.from('money_wallet_balances').select('*').eq('family_id', familyId),
-      supabase.from('money_settings').select('*').eq('family_id', familyId).maybeSingle(),
       loadRecords(supabase, familyId),
     ]);
   if (categoryResult.error) throw categoryResult.error;
@@ -195,7 +186,6 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
   if (storeResult.error) throw storeResult.error;
   if (recurringResult.error) throw recurringResult.error;
   if (balanceResult.error) throw balanceResult.error;
-  if (settingsResult.error) throw settingsResult.error;
   return {
     categories: (categoryResult.data ?? []).map(rowToCategory),
     budgets: (budgetResult.data ?? []).map(rowToBudget),
@@ -204,7 +194,6 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
     records,
     recurring: (recurringResult.data ?? []).map(rowToRecurring),
     balances: (balanceResult.data ?? []).map(rowToBalance),
-    settings: rowToSettings(settingsResult.data),
   };
 }
 
@@ -364,24 +353,6 @@ export async function saveMoneyBudget(
     .single();
   if (error) throw error;
   return rowToBudget(data);
-}
-
-/** 集計の開始月（YYYY-MM。null は全部の月を数える）を保存する。 */
-export async function saveMoneyStartMonth(
-  supabase: SupabaseDb,
-  familyId: string,
-  startMonth: string | null,
-): Promise<MoneySettings> {
-  const { data, error } = await supabase
-    .from('money_settings')
-    .upsert(
-      { family_id: familyId, start_month: startMonth === null ? null : `${startMonth}-01` },
-      { onConflict: 'family_id' },
-    )
-    .select('*')
-    .single();
-  if (error) throw error;
-  return rowToSettings(data);
 }
 
 // ---- 出金元 ----

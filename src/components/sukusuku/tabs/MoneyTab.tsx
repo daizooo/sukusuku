@@ -90,7 +90,6 @@ const MONEY_TABLES = [
   'money_records',
   'money_recurring',
   'money_securities',
-  'money_settings',
   'money_stores',
   'money_wallet_balances',
   'money_wallets',
@@ -104,8 +103,6 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
   const [stores, setStores] = useState<MoneyStore[]>([]);
   const [records, setRecords] = useState<MoneyRecord[]>([]);
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
-  // 年・累計を数え始める月（YYYY-MM）。null は全部の月を数える（docs/kakei.md §0.4）。
-  const [startMonth, setStartMonth] = useState<string | null>(null);
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
   const [isLoading, setIsLoading] = useState(true);
@@ -132,7 +129,6 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
       setStores(money.stores);
       setRecords(money.records);
       setRecurring(money.recurring);
-      setStartMonth(money.settings.startMonth);
       setBalances(money.balances);
       setSecurities(loadedSecurities);
     },
@@ -379,7 +375,6 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
               categories={categories}
               budgets={budgets}
               wallets={wallets}
-              startMonth={startMonth}
               onSelectMonth={(next) => {
                 setMonthKey(next);
                 setPeriod('month');
@@ -448,8 +443,6 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
           onBudgets={setBudgets}
           onStores={setStores}
           onRecurring={setRecurring}
-          startMonth={startMonth}
-          onStartMonth={setStartMonth}
           onClose={() => setSettingsOpen(false)}
         />
       )}

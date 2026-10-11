@@ -38,7 +38,7 @@ const NOT_SHARED = new Set([
 const RPC_TABLES = {
   money_bootstrap: [
     'money_budgets', 'money_categories', 'money_holdings', 'money_items',
-    'money_records', 'money_recurring', 'money_securities', 'money_settings', 'money_stores', 'money_wallet_balances',
+    'money_records', 'money_recurring', 'money_securities', 'money_stores', 'money_wallet_balances',
     'money_wallets',
   ],
   money_latest_holding_values: ['money_holding_values'],
