@@ -41,7 +41,7 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadMoneyBootstrap } from '@/lib/api/moneyBootstrap';
-import { fixedBudgetRows, monthKeyOf, monthKeyOfDate, yearOfMonth } from '@/lib/moneyUtils';
+import { dateKeyOfDate, fixedBudgetRows, monthKeyOf, monthKeyOfDate, yearOfMonth } from '@/lib/moneyUtils';
 import MoneyAccountsView from '@/components/money/MoneyAccountsView';
 import MoneyRecordsView from '@/components/money/MoneyRecordsView';
 import MoneyReviewView from '@/components/money/MoneyReviewView';
@@ -108,10 +108,10 @@ export default function MoneyScreen() {
   const [stores, setStores] = useState<MoneyStore[]>([]);
   const [records, setRecords] = useState<MoneyRecord[]>([]);
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
-  // 手入力の予算（budgets）に、固定費から出した月ごとの額を足した予算。画面にはこちらを渡す（docs/kakei.md §3.1）。
+  // 手入力の予算（budgets）に、固定費から出した月ごとの額（記録と同じ額）を足した予算。画面にはこちらを渡す（docs/kakei.md §3.1）。
   const allBudgets = useMemo(
-    () => [...budgets, ...fixedBudgetRows(recurring, categories)],
-    [budgets, recurring, categories],
+    () => [...budgets, ...fixedBudgetRows(recurring, categories, records, dateKeyOfDate(new Date()))],
+    [budgets, recurring, categories, records],
   );
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);

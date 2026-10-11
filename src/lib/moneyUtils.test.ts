@@ -23,6 +23,7 @@ import {
   budgetMonthKey,
   budgetMonths,
   buildWalletBalances,
+  estimateRecurringAmount,
   fixedBudgetFor,
   fixedBudgetRows,
   formatBalance,
@@ -36,6 +37,7 @@ import {
   estimatesInMonth,
   evaluateCalc,
   formatDayOfMonth,
+  recurringDateOf,
   recurringHistory,
   recurringScheduleLabel,
   formatSignedYen,
@@ -149,38 +151,88 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
   assert.equal(first[3], 30000);
 }
 
-// 固定費は、その種類の月の予算に自動で足される
+// 固定費は、その種類の月の予算に自動で足される（額は記録を作るDBと同じ決め方）
 {
   const cats = [
     { id: 'house', kind: 'living', parentId: null },
     { id: 'rent', kind: 'living', parentId: 'house' },
     { id: 'food', kind: 'living', parentId: null },
+    { id: 'util', kind: 'living', parentId: null },
+    { id: 'elec', kind: 'living', parentId: 'util' },
     { id: 'salary', kind: 'income', parentId: null },
   ] as unknown as MoneyCategory[];
   const rule = (over: Partial<MoneyRecurring>): MoneyRecurring =>
-    ({ kind: 'expense', months: null, amount: 0, categoryId: null, archived: false, ...over }) as MoneyRecurring;
+    ({
+      kind: 'expense', months: null, amount: 0, categoryId: null, archived: false, walletId: 'w1', toWalletId: null,
+      store: '', day: 25, weekOfMonth: null, weekday: null, holiday: 'none', amountMode: 'fixed', createdAt: '2026-04-10', ...over,
+    }) as MoneyRecurring;
+  const rec = (id: string, occurredOn: string, amount: number, over: Partial<MoneyRecord> = {}): MoneyRecord =>
+    ({
+      id, kind: 'expense', occurredOn, walletId: 'w1', toWalletId: null, store: '電力', createdBy: null, isEstimate: false,
+      recurringId: null, month: null, items: [{ id: `i-${id}`, amount, categoryId: 'elec', name: '' }], ...over,
+    }) as unknown as MoneyRecord;
+  const today = '2026-10-11';
+
+  // 日取り（DBの money_rule_date・money_shift_business_day と同じ）
+  assert.equal(recurringDateOf(2026, 10, rule({ day: 25, holiday: 'next' })), '2026-10-26', '日曜 → 翌営業日');
+  assert.equal(recurringDateOf(2026, 10, rule({ day: 25, holiday: 'prev' })), '2026-10-23', '日曜 → 前営業日');
+  assert.equal(recurringDateOf(2026, 10, rule({ day: 25, holiday: 'none' })), '2026-10-25', 'そのまま');
+  assert.equal(recurringDateOf(2026, 11, rule({ day: 31 })), '2026-11-30', '31 は末日');
+  assert.equal(recurringDateOf(2026, 10, rule({ weekOfMonth: 2, weekday: 5 })), '2026-10-09', '第2金曜日');
+  assert.equal(recurringDateOf(2026, 10, rule({ weekOfMonth: 5, weekday: 5 })), '2026-10-30', '最終金曜日');
+  assert.equal(recurringDateOf(2026, 12, rule({ day: 31, holiday: 'next' })), '2027-01-04', '12/31〜1/3 は休業日');
+  assert.equal(recurringDateOf(2026, 12, rule({ day: 31, holiday: 'prev' })), '2026-12-30');
+
+  // 固定額
+  const rent = rule({ id: 'r1', categoryId: 'rent', amount: 80000 }); // 小分類 → 大分類 house へ。毎月
+  const tax = rule({ id: 'r2', categoryId: 'house', amount: 30000, months: [5] }); // 5月だけ（自動車税など）
+  // 見込み（前年同月 → 直近3回の平均 → ルールの額）
+  const power = rule({ id: 'r3', categoryId: 'elec', store: '電力', amountMode: 'estimate', amount: 6000, createdAt: '2025-01-01' });
+  const history = [
+    rec('h1', '2025-08-25', 9000),
+    rec('h2', '2026-07-24', 7000),
+    rec('h3', '2026-08-25', 8000),
+    rec('h4', '2026-09-25', 8500, { recurringId: 'r3', month: '2026-09' }), // 確定した記録（9月のぶんは数えない）
+    rec('h5', '2026-08-25', 99999, { store: '別の店' }), // お店が違う
+    rec('h6', '2026-08-26', 99999, { isEstimate: true }), // 見込みの記録は数えない
+  ];
+  assert.equal(estimateRecurringAmount(power, '2026-08', history), 9000, '前年同月の記録があればその額');
+  assert.equal(estimateRecurringAmount(power, '2026-11', history), Math.round((8500 + 8000 + 7000) / 3), '無ければ直近3回の平均');
+  assert.equal(estimateRecurringAmount(power, '2026-09', history), 7500, '確定した当月の記録は数えない（作った時点と同じ）');
+  assert.equal(estimateRecurringAmount(power, '2026-11', []), 6000, '記録が1件も無ければルールの額');
+
   const rows = fixedBudgetRows(
     [
-      rule({ id: 'r1', categoryId: 'rent', amount: 80000 }), // 小分類 → 大分類 house へ。毎月
-      rule({ id: 'r2', categoryId: 'house', amount: 30000, months: [5] }), // 5月だけ（自動車税など）
-      rule({ id: 'r3', categoryId: 'house', amount: 9999, archived: true }), // 使わない
-      rule({ id: 'r4', categoryId: 'salary', amount: 300000, kind: 'income' }), // 収入は対象外
-      rule({ id: 'r5', categoryId: null, amount: 1000 }), // 種類なし
-      rule({ id: 'r6', categoryId: 'food', amount: 0 }), // 額なし
+      rent, tax, power,
+      rule({ id: 'r4', categoryId: 'house', amount: 9999, archived: true }), // 使わない
+      rule({ id: 'r5', categoryId: 'salary', amount: 300000, kind: 'income' }), // 収入は対象外
+      rule({ id: 'r6', categoryId: null, amount: 1000 }), // 種類なし
+      rule({ id: 'r7', categoryId: 'food', amount: 0 }), // 額なし
+      rule({ id: 'r8', categoryId: 'food', amount: 1000, walletId: null }), // 出金元なし（記録は作られない）
     ],
     cats,
+    [
+      ...history,
+      // 10月のぶんは見込みのまま作られている → その記録の額
+      rec('m10', '2026-10-25', 7777, { isEstimate: true, recurringId: 'r3', month: '2026-10' }),
+    ],
+    today,
   );
-  assert.equal(rows.length, 1, '固定費がある大分類の行だけ');
-  const withFixed: MoneyBudget[] = [
-    ...budgets,
-    ...rows,
-  ];
+  const withFixed: MoneyBudget[] = [...budgets, ...rows];
+  assert.deepEqual(new Set(rows.map((row) => row.categoryId)), new Set(['house', 'util']), '固定費がある大分類の行だけ');
+  assert.ok(rows.every((row) => row.fixed === true));
+  assert.equal(fixedBudgetFor(withFixed, 'house', '2026-03'), 0, 'ルールを作る前の月は足さない');
   assert.equal(fixedBudgetFor(withFixed, 'house', '2026-04'), 80000);
   assert.equal(fixedBudgetFor(withFixed, 'house', '2026-05'), 110000, '決まった月だけ足される');
+  assert.equal(fixedBudgetFor(withFixed, 'house', '2027-05'), 110000, '来年も');
+  assert.equal(fixedBudgetFor(withFixed, 'house', '2029-05'), 110000, 'その先は直近の年の同じ月');
   assert.equal(fixedBudgetFor(withFixed, 'food', '2026-05'), 0);
+  assert.equal(fixedBudgetFor(withFixed, 'util', '2026-08'), 9000, '見込みのルール（前年同月）');
+  assert.equal(fixedBudgetFor(withFixed, 'util', '2026-10'), 7777, '見込みのままの記録があれば、その記録の額');
+  assert.equal(fixedBudgetFor(withFixed, 'util', '2026-11'), Math.round((8500 + 8000 + 7000) / 3), '記録がまだ無い月は同じ計算で見込む（見込みのままの記録は数えない）');
   assert.equal(budgetFor(withFixed, 'house', '2026-04'), 85000 + 80000, '手入力の予算＋固定費');
   assert.equal(budgetFor(withFixed, 'house', '2026-05'), 85000 + 110000);
-  assert.equal(budgetFor(withFixed, 'house', '2025-05'), 110000, '手入力が無い月は固定費だけ（どの年も同じ）');
+  assert.equal(budgetFor(withFixed, 'util', '2026-08'), 9000, '手入力が無い月は固定費だけ');
   assert.equal(budgetFor(withFixed, 'food', '2026-06'), 60000, '固定費の無い種類は今まで通り');
   assert.deepEqual(budgetMonths(withFixed, 'house', 2026), Array(12).fill(85000), '編集の初期値に固定費は入らない');
 }
