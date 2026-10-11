@@ -42,7 +42,7 @@ interface CategoryPickerProps {
   specialActuals: SpecialActual[];
   onPick: (choice: CategoryChoice) => void;
   onClose: () => void;
-  /** カテゴリと予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
+  /** カテゴリ・予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
   onEditCategories?: () => void;
 }
 
@@ -88,7 +88,7 @@ export default function CategoryPicker({
         onClose={onClose}
         right={
           onEditCategories && (
-            <Pressable accessibilityRole="button" accessibilityLabel="カテゴリと予算を編集" onPress={onEditCategories} hitSlop={8}>
+            <Pressable accessibilityRole="button" accessibilityLabel="カテゴリ・予算を編集" onPress={onEditCategories} hitSlop={8}>
               <Settings2 size={20} color={colors.textMuted} />
             </Pressable>
           )

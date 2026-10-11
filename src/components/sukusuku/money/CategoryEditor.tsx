@@ -29,7 +29,7 @@ import { ModalShell } from '../modals/TaskForm';
 import { useDragReorder } from '../ui/useDragReorder';
 import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader } from './moneyVisual';
 
-// カテゴリと予算（docs/kakei.md §3.1）。mobile版の `mobile/src/components/money/CategoryEditor.tsx` と同じ並び・文言。
+// カテゴリ・予算（docs/kakei.md §3.1）。mobile版の `mobile/src/components/money/CategoryEditor.tsx` と同じ並び・文言。
 //
 // 大分類（予算を置く単位）と小分類の追加・名前の変更・並べ替え・使わなくする。並べ替えは一覧のまま動かす
 // （大分類は左の持ち手をつかむ、小分類は長押し。マウスでも指でも。リストと同じ操作。ui/useDragReorder.ts）。
@@ -181,7 +181,7 @@ export default function CategoryEditor({
 
   return (
     <FullScreen onBack={onClose}>
-      <ScreenHeader title="カテゴリと予算" onClose={onClose} />
+      <ScreenHeader title="カテゴリ・予算" onClose={onClose} />
       <div className="shrink-0 flex items-center gap-2 px-4 py-2.5">
         <button type="button" aria-label="前の年" onClick={() => setYear((current) => current - 1)} className={yearButtonClass}>
           <ChevronLeft size={18} />
@@ -207,6 +207,9 @@ export default function CategoryEditor({
       </div>
       {kind === 'living' && tops.length > 0 && (
         <p className="shrink-0 px-4 pb-1.5 text-xs font-semibold text-gray-500 tabular-nums">月の予算の合計 {formatYen(totalBudget)}</p>
+      )}
+      {tops.length > 0 && (
+        <p className="shrink-0 px-4 pb-1.5 text-[11px] text-gray-400">並べ替え: 大分類は左の持ち手、小分類は長押ししてそのまま動かす</p>
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pt-2 pb-8 space-y-2.5">

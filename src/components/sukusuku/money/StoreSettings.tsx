@@ -63,7 +63,7 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
 
   return (
     <StackedScreen onBack={onBack}>
-      <ScreenHeader title="お店" icon="back" onClose={onBack} />
+      <ScreenHeader title="よく行くお店" icon="back" onClose={onBack} />
       <div className="shrink-0 mx-4 mt-4 mb-1 flex items-center gap-2 rounded-xl bg-gray-100 px-3">
         <Search size={18} className="text-gray-400" />
         <input

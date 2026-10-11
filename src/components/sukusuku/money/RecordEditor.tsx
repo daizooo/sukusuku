@@ -455,7 +455,7 @@ export default function RecordEditor({
         )}
         {record?.month && (
           <p className="mt-2.5 text-xs text-gray-400">
-            {record.recurringId === null ? 'カード代金' : '毎月の記録'}から自動で作った記録（{formatMonthKey(record.month)}の分）
+            {record.recurringId === null ? 'カード代金' : '固定費'}から自動で作った記録（{formatMonthKey(record.month)}の分）
           </p>
         )}
 

@@ -59,7 +59,7 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="お店" icon="back" onClose={onBack} />
+      <ScreenHeader title="よく行くお店" icon="back" onClose={onBack} />
       <View style={styles.searchBox}>
         <Search size={18} color={colors.textFaint} />
         <TextInput
