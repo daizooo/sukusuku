@@ -6,9 +6,8 @@ import type { MoneyWalletType } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
 import { useBackdropClose } from '../ui/useBackdropClose';
 import { swipeBoundary } from '../ui/useSwipeNavigation';
-import { formatGainRate, formatMonthKey, formatSignedYen, iconTone, shiftMonth } from '@/lib/moneyUtils';
+import { formatGainRate, formatMonthKey, formatSignedYen, formatYear, iconTone, shiftMonth } from '@/lib/moneyUtils';
 import { MONEY_ICON_COMPONENTS } from './moneyIcons';
-import { formatYear } from '@/lib/specialUtils';
 
 // 家計タブで共通に使う部品と、見た目の決まり（docs/kakei.md §2.1）。
 // mobile版の `mobile/src/components/money/moneyVisual.tsx` と同じ見た目。

@@ -11,7 +11,6 @@ import type {
   MoneyWallet,
   MoneyWalletBalance,
   MoneyWalletDraft,
-  SpecialItem,
 } from '@/types/app';
 import {
   buildWalletBalances,
@@ -40,7 +39,6 @@ interface MoneyAccountsViewProps {
   balances: MoneyWalletBalance[];
   securities: MoneySecuritiesData;
   categories: MoneyCategory[];
-  specialItems: SpecialItem[];
   isLoading: boolean;
   onOpenRecord: (record: MoneyRecord) => void;
   onConfirm: (walletId: string, balanceOn: string, amount: number, showInHistory: boolean) => void;
@@ -60,7 +58,6 @@ export default function MoneyAccountsView({
   balances,
   securities,
   categories,
-  specialItems,
   isLoading,
   onOpenRecord,
   onConfirm,
@@ -196,7 +193,6 @@ export default function MoneyAccountsView({
           records={records}
           balances={balances}
           categories={categories}
-          specialItems={specialItems}
           onClose={() => setOpenId(null)}
           onOpenRecord={onOpenRecord}
           onConfirm={onConfirm}

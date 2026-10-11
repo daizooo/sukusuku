@@ -1,45 +1,36 @@
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Settings2 } from 'lucide-react-native';
-import type { MoneyBudget, MoneyCategory, MoneyRecord, SpecialActual, SpecialItem, SpecialKind } from '@/types/app';
+import type { MoneyBudget, MoneyCategory, MoneyRecord } from '@/types/app';
 import { colors } from '@/lib/theme';
 import {
   budgetFor,
   childCategories,
-  yearOfMonth,
   formatYen,
   frequentCategoryIds,
   iconKeyOf,
   livingSpendByTop,
   topCategories,
 } from '@/lib/moneyUtils';
-import { appliesInYear, buildYearRows, formatYear } from '@/lib/specialUtils';
 import { CategoryIcon, ScreenHeader } from '@/components/money/moneyVisual';
 
 // 種類の選択（docs/kakei.md §3.1・§3.2）。PWA版の `src/components/sukusuku/money/CategoryPicker.tsx` と同じ並び・文言。
 //
 // 上によく使う小分類。その下に大分類ごとの枠（見出しに今月の残り、中に小分類のチップ）。押すと大分類も決まる。
 // 大分類ごとに枠で囲み、見出しに色を付けて、どこからどこまでが同じ大分類かを分かるようにする。
-// 支出なら最後に特別費: その年の予定（まだ済でないものを上に。選ぶと予算の額が入る）と、予定外の項目。
-// 収入なら収入の種類と、特別収入。
+// 特別費も大分類のひとつ（大分類「特別費」。小分類が項目。2026-10-11。docs/kakei.md §0.2）。
 
 export interface CategoryChoice {
-  categoryId: string | null;
-  specialItemId: string | null;
-  specialPlanId: string | null;
-  /** 特別費の予定を選んだときの予算の額。 */
-  amount: number | null;
+  categoryId: string;
 }
 
 interface CategoryPickerProps {
-  kind: SpecialKind;
-  /** 記録の日付の月（今月の残り・特別費の年に使う）。 */
+  kind: 'expense' | 'income';
+  /** 記録の日付の月（今月の残りに使う）。 */
   monthKey: string;
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   records: MoneyRecord[];
-  specialItems: SpecialItem[];
-  specialActuals: SpecialActual[];
   onPick: (choice: CategoryChoice) => void;
   onClose: () => void;
   /** カテゴリ・予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
@@ -52,32 +43,18 @@ export default function CategoryPicker({
   categories,
   budgets,
   records,
-  specialItems,
-  specialActuals,
   onPick,
   onClose,
   onEditCategories,
 }: CategoryPickerProps) {
   const categoryKind = kind === 'income' ? 'income' : 'living';
-  const year = yearOfMonth(monthKey);
   const tops = useMemo(() => topCategories(categories, categoryKind), [categories, categoryKind]);
   const frequent = useMemo(
     () => frequentCategoryIds(records, categories, categoryKind),
     [records, categories, categoryKind],
   );
   const spend = useMemo(() => livingSpendByTop(records, categories, monthKey), [records, categories, monthKey]);
-  // 特別費の予定（まだ済でないものを上に）と、その年に出る項目。
-  const specialRows = useMemo(() => {
-    const rows = buildYearRows(specialItems, specialActuals, year, kind).filter((row) => row.planId !== null);
-    return [...rows.filter((row) => row.actual === null), ...rows.filter((row) => row.actual !== null)];
-  }, [specialItems, specialActuals, year, kind]);
-  const unplannedItems = useMemo(
-    () => specialItems.filter((item) => item.kind === kind && appliesInYear(item, year)),
-    [specialItems, kind, year],
-  );
-
-  const pickCategory = (categoryId: string) =>
-    onPick({ categoryId, specialItemId: null, specialPlanId: null, amount: null });
+  const pickCategory = (categoryId: string) => onPick({ categoryId });
   const nameOf = (id: string) => categories.find((category) => category.id === id)?.name ?? '';
 
   return (
@@ -143,52 +120,6 @@ export default function CategoryPicker({
           );
         })}
 
-        {(specialRows.length > 0 || unplannedItems.length > 0) && (
-          <View style={styles.section}>
-            <Text style={styles.topName}>
-              {kind === 'income' ? '特別収入' : '特別費'}（{formatYear(year)}の予定）
-            </Text>
-            {specialRows.map((row) => (
-              <Pressable
-                key={row.key}
-                accessibilityRole="button"
-                onPress={() =>
-                  onPick({ categoryId: null, specialItemId: row.item.id, specialPlanId: row.planId, amount: row.budget })
-                }
-                style={styles.planRow}
-              >
-                <View style={styles.flex}>
-                  <Text style={styles.planName}>{row.item.name}</Text>
-                  <Text style={styles.planSub}>
-                    {row.month === null ? '月未定' : `${row.month}月`}
-                    {row.actual !== null ? '・済' : ''}
-                  </Text>
-                </View>
-                <Text style={styles.planAmount}>予算 {formatYen(row.budget)}</Text>
-              </Pressable>
-            ))}
-            {unplannedItems.length > 0 && (
-              <>
-                <Text style={styles.subTitle}>予定外として記録</Text>
-                <View style={styles.chips}>
-                  {unplannedItems.map((item) => (
-                    <Pressable
-                      key={item.id}
-                      accessibilityRole="button"
-                      onPress={() => onPick({ categoryId: null, specialItemId: item.id, specialPlanId: null, amount: null })}
-                      style={styles.chip}
-                    >
-                      <Text style={styles.chipText}>{item.name}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </>
-            )}
-          </View>
-        )}
-        <Text style={styles.hint}>
-          {kind === 'income' ? '特別収入' : '特別費'}の項目は「年」から足せます
-        </Text>
       </ScrollView>
     </View>
   );
@@ -226,17 +157,4 @@ const styles = StyleSheet.create({
   chipStrong: { borderColor: colors.moneySoft, backgroundColor: colors.moneySoft },
   chipText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
   chipTextStrong: { color: colors.moneyText },
-  planRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  planName: { fontSize: 14, fontWeight: '700', color: colors.text },
-  planSub: { fontSize: 12, fontWeight: '500', color: colors.textFaint, marginTop: 2 },
-  planAmount: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
-  subTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginTop: 4 },
-  hint: { fontSize: 12, fontWeight: '500', color: colors.textFaint },
 });

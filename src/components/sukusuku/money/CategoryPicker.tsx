@@ -2,43 +2,34 @@
 
 import { useMemo } from 'react';
 import { Settings2 } from 'lucide-react';
-import type { MoneyBudget, MoneyCategory, MoneyRecord, SpecialActual, SpecialItem, SpecialKind } from '@/types/app';
+import type { MoneyBudget, MoneyCategory, MoneyRecord } from '@/types/app';
 import {
   budgetFor,
   childCategories,
-  yearOfMonth,
   formatYen,
   frequentCategoryIds,
   iconKeyOf,
   livingSpendByTop,
   topCategories,
 } from '@/lib/moneyUtils';
-import { appliesInYear, buildYearRows, formatYear } from '@/lib/specialUtils';
 import { CategoryIcon, ScreenHeader, StackedScreen } from './moneyVisual';
 
 // 種類の選択（docs/kakei.md §3.1・§3.2）。mobile版の `mobile/src/components/money/CategoryPicker.tsx` と同じ並び・文言。
 //
 // 上によく使う小分類。その下に大分類ごとの枠（見出しに今月の残り、中に小分類のチップ）。押すと大分類も決まる。
 // 大分類ごとに枠で囲み、見出しに色を付けて、どこからどこまでが同じ大分類かを分かるようにする。
-// 支出なら最後に特別費: その年の予定（まだ済でないものを上に。選ぶと予算の額が入る）と、予定外の項目。
-// 収入なら収入の種類と、特別収入。
+// 特別費も大分類のひとつ（大分類「特別費」。小分類が項目。2026-10-11。docs/kakei.md §0.2）。
 
 export interface CategoryChoice {
-  categoryId: string | null;
-  specialItemId: string | null;
-  specialPlanId: string | null;
-  /** 特別費の予定を選んだときの予算の額。 */
-  amount: number | null;
+  categoryId: string;
 }
 
 interface CategoryPickerProps {
-  kind: SpecialKind;
+  kind: 'expense' | 'income';
   monthKey: string;
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   records: MoneyRecord[];
-  specialItems: SpecialItem[];
-  specialActuals: SpecialActual[];
   onPick: (choice: CategoryChoice) => void;
   onClose: () => void;
   /** カテゴリ・予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
@@ -53,31 +44,18 @@ export default function CategoryPicker({
   categories,
   budgets,
   records,
-  specialItems,
-  specialActuals,
   onPick,
   onClose,
   onEditCategories,
 }: CategoryPickerProps) {
   const categoryKind = kind === 'income' ? 'income' : 'living';
-  const year = yearOfMonth(monthKey);
   const tops = useMemo(() => topCategories(categories, categoryKind), [categories, categoryKind]);
   const frequent = useMemo(
     () => frequentCategoryIds(records, categories, categoryKind),
     [records, categories, categoryKind],
   );
   const spend = useMemo(() => livingSpendByTop(records, categories, monthKey), [records, categories, monthKey]);
-  const specialRows = useMemo(() => {
-    const rows = buildYearRows(specialItems, specialActuals, year, kind).filter((row) => row.planId !== null);
-    return [...rows.filter((row) => row.actual === null), ...rows.filter((row) => row.actual !== null)];
-  }, [specialItems, specialActuals, year, kind]);
-  const unplannedItems = useMemo(
-    () => specialItems.filter((item) => item.kind === kind && appliesInYear(item, year)),
-    [specialItems, kind, year],
-  );
-
-  const pickCategory = (categoryId: string) =>
-    onPick({ categoryId, specialItemId: null, specialPlanId: null, amount: null });
+  const pickCategory = (categoryId: string) => onPick({ categoryId });
   const nameOf = (id: string) => categories.find((category) => category.id === id)?.name ?? '';
 
   return (
@@ -148,50 +126,6 @@ export default function CategoryPicker({
           );
         })}
 
-        {(specialRows.length > 0 || unplannedItems.length > 0) && (
-          <section className="space-y-2">
-            <p className="text-[15px] font-bold text-gray-900">
-              {kind === 'income' ? '特別収入' : '特別費'}（{formatYear(year)}の予定）
-            </p>
-            {specialRows.map((row) => (
-              <button
-                key={row.key}
-                type="button"
-                onClick={() =>
-                  onPick({ categoryId: null, specialItemId: row.item.id, specialPlanId: row.planId, amount: row.budget })
-                }
-                className="flex w-full items-center gap-2 border-b border-gray-200 py-2.5 text-left hover:bg-gray-50"
-              >
-                <span className="flex-1">
-                  <span className="block text-sm font-bold text-gray-900">{row.item.name}</span>
-                  <span className="block text-xs text-gray-400">
-                    {row.month === null ? '月未定' : `${row.month}月`}
-                    {row.actual !== null ? '・済' : ''}
-                  </span>
-                </span>
-                <span className="text-[13px] font-semibold text-gray-500 tabular-nums">予算 {formatYen(row.budget)}</span>
-              </button>
-            ))}
-            {unplannedItems.length > 0 && (
-              <>
-                <p className="pt-1 text-xs font-bold text-gray-500">予定外として記録</p>
-                <div className="flex flex-wrap gap-2">
-                  {unplannedItems.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => onPick({ categoryId: null, specialItemId: item.id, specialPlanId: null, amount: null })}
-                      className={chipClass}
-                    >
-                      {item.name}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </section>
-        )}
-        <p className="text-xs text-gray-400">{kind === 'income' ? '特別収入' : '特別費'}の項目は「年」から足せます</p>
       </div>
     </StackedScreen>
   );

@@ -33,11 +33,13 @@ const NOT_SHARED = new Set([
 
 // 画面の読み込みで使う DB関数（rpc）が読む表。関数の中身は画面のコードからは見えないので、ここに書く。
 // 書き込みの関数（save_money_record、lottery_* など）は、画面が読み込みに使わないので書かない。
+// money_bootstrap は special_items・special_plans も返すが、特別費をカテゴリへ収納した（2026-10-11。docs/kakei.md §0.2）ので、
+// 画面は読まない（関数からの削除は後片付けの migration 0089）。
 const RPC_TABLES = {
   money_bootstrap: [
     'money_budgets', 'money_categories', 'money_holdings', 'money_items',
     'money_records', 'money_recurring', 'money_securities', 'money_stores', 'money_wallet_balances',
-    'money_wallets', 'special_items', 'special_plans',
+    'money_wallets',
   ],
   money_latest_holding_values: ['money_holding_values'],
 };

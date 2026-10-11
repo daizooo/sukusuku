@@ -434,7 +434,7 @@ special_actuals 実績。 id / item_id / occurred_on(date) / amount / note
 
 #### 仕組み（フェーズ4a）
 
-- 年度・周期・予定と実績の突き合わせは `specialUtils.ts`（mobile・PWAで同じ中身。`npm run test:special`）、
+- **（2026-10-11に廃止。特別費はカテゴリに収納した。docs/kakei.md §0.2）** 年度・周期・予定と実績の突き合わせは `specialUtils.ts`（mobile・PWAで同じ中身。`npm run test:special`）、
   読み書きは `api/specialExpenses.ts`、画面は `living/SpecialPanel`・`SpecialItemSheet`（PWAは `…Modal`）・
   `SpecialActualSheet`
 - 予定にひも付く実績は `special_actuals.plan_id` で持つ（「済」で入る）。ひも付かない実績・

@@ -412,61 +412,6 @@ export interface StockTarget {
 
 export type StockTargetDraft = Omit<StockTarget, 'id' | 'position'>;
 
-/** 特別費の種類。支出と、特別収入（賞与など）。docs/home.md §5.4。 */
-export type SpecialKind = 'expense' | 'income';
-
-/** 特別費の予定（1回ぶん）。special_plans に対応。 */
-export interface SpecialPlan {
-  id: string;
-  /** 発生する月（1〜12）。月が決まっていないものは null。 */
-  month: number | null;
-  amount: number;
-  /** 月がまだ仮のもの。 */
-  tentative: boolean;
-}
-
-/** 特別費の項目。special_items に対応（予定は special_plans から集めて持つ）。 */
-export interface SpecialItem {
-  id: string;
-  kind: SpecialKind;
-  category: string;
-  name: string;
-  /** 周期。1=毎年、n=n年おき、0=1回きり。 */
-  cycleYears: number;
-  /** 周期の起点の年（暦年。毎年なら null でよい）。 */
-  baseYear: number | null;
-  note: string;
-  position: number;
-  plans: SpecialPlan[];
-}
-
-/**
- * 特別費の実績。家計の品目のうち特別費の項目を持つもの（money_items。docs/kakei.md §3.2）を、
- * 特別費の画面の形にしたもの。planId があれば予定の実績、無ければ予定外。id は品目の id。
- */
-export interface SpecialActual {
-  id: string;
-  /** 品目が入っている記録（money_records）の id。 */
-  recordId: string;
-  itemId: string;
-  planId: string | null;
-  /** YYYY-MM-DD。年はここから決める。 */
-  occurredOn: string;
-  amount: number;
-  note: string;
-}
-
-/** 項目の編集内容。plans の id は既存の予定を残すためのもの（新しい予定は無い）。 */
-export interface SpecialItemDraft {
-  kind: SpecialKind;
-  category: string;
-  name: string;
-  cycleYears: number;
-  baseYear: number | null;
-  note: string;
-  plans: { id: string | null; month: number | null; amount: number; tentative: boolean }[];
-}
-
 /** 補助くじの玉。white＝25%、blue＝50%、red＝75%、gold＝100%（docs/home.md §9）。 */
 export type SubsidyBallId = 'white' | 'blue' | 'red' | 'gold';
 
@@ -530,7 +475,7 @@ export interface LotteryCoupon {
   isTest: boolean;
 }
 
-/** 家計の種類のまとまり。生活費と収入（docs/kakei.md §3.1）。特別費は special_items を使う。 */
+/** 家計の種類のまとまり。生活費と収入（docs/kakei.md §3.1）。特別費は生活費の大分類「特別費」（§0.2）。 */
 export type MoneyCategoryKind = 'living' | 'income';
 
 /** 家計の種類。money_categories に対応。parentId が null なら大分類（予算を置く単位）。 */
@@ -683,13 +628,11 @@ export interface MoneyStore {
 /** 記録の種類。支出・収入・振替。 */
 export type MoneyRecordKind = 'expense' | 'income' | 'transfer';
 
-/** 品目。money_items に対応。種類（categoryId）か特別費（specialItemId）を持つ。振替はどちらも無い。 */
+/** 品目。money_items に対応。種類（categoryId）を持つ。振替は無い。特別費も大分類「特別費」の種類。 */
 export interface MoneyItem {
   id: string;
   amount: number;
   categoryId: string | null;
-  specialItemId: string | null;
-  specialPlanId: string | null;
   quantity: number;
   /** 単価。個数 × 単価 = 金額。金額だけ入れたものは null。 */
   unitPrice: number | null;
@@ -742,8 +685,12 @@ export type MoneyHolidayRule = 'next' | 'prev' | 'none';
 export interface MoneyRecurring {
   id: string;
   kind: MoneyRecordKind;
-  /** 引き落とし日（毎月◯日。31 は末日）。 */
+  /** 引き落とし日（毎月◯日。31 は末日）。weekOfMonth があるときは使わない（1 を入れる）。 */
   day: number;
+  /** 第何週か（1〜4＝第1〜第4、5＝最終）。weekday とセット。null は day で決める。 */
+  weekOfMonth: number | null;
+  /** 曜日（0＝日〜6＝土）。weekOfMonth とセット。 */
+  weekday: number | null;
   /** 記録する月（1〜12）。null は毎月。 */
   months: number[] | null;
   holiday: MoneyHolidayRule;
@@ -756,7 +703,6 @@ export interface MoneyRecurring {
   toWalletId: string | null;
   store: string;
   categoryId: string | null;
-  specialItemId: string | null;
   /** 品名（任意）。 */
   name: string;
   position: number;

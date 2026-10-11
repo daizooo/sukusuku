@@ -8,7 +8,6 @@ import {
   balanceChecks,
   baseIconKey,
   buildCategoryAnalysis,
-  buildSpecialAnalysis,
   cardBilling,
   cardPaymentHistory,
   cardUsagePeriod,
@@ -28,8 +27,6 @@ import {
   formatBalance,
   walletBalanceOn,
   walletDelta,
-  buildSpecialProgress,
-  buildSpecialReview,
   buildYearSummary,
   buildBudgetTiles,
   buildMonthSummary,
@@ -54,7 +51,6 @@ import {
   pressCalcKey,
   recentStores,
   shiftMonth,
-  specialActualsFromRecords,
   storeChoices,
   storeKey,
   matchesStore,
@@ -66,9 +62,12 @@ import {
   sumDailyPoints,
   totalDailyBalances,
   walletGain,
+  compareWithPreviousYear,
+  yearToDateBalance,
+  incomeRecordsInYear,
+  recurringDayLabel,
 } from './moneyUtils.ts';
-import { buildYearRows } from './specialUtils.ts';
-import type { MoneyBudget, MoneyCategory, MoneyHolding, MoneyHoldingValue, MoneyItem, MoneyRecord, MoneySecurity, MoneyStore, MoneyWallet, MoneyWalletBalance, SpecialItem } from '../types/app.ts';
+import type { MoneyBudget, MoneyCategory, MoneyHolding, MoneyHoldingValue, MoneyItem, MoneyRecord, MoneySecurity, MoneyStore, MoneyWallet, MoneyWalletBalance } from '../types/app.ts';
 
 // ---- 月・年 ----
 assert.equal(shiftMonth('2026-12', 1), '2027-01');
@@ -99,6 +98,10 @@ const categories: MoneyCategory[] = [
   cat('house', '住居費', null, { position: 0 }),
   cat('old', '昔の種類', null, { position: 3, archived: true }),
   cat('salary', '給料', null, { kind: 'income' }),
+  cat('bonus', '賞与', 'salary', { kind: 'income' }),
+  // 特別費も大分類のひとつ（docs/kakei.md §0.2）。予算は置かない
+  cat('special', '特別費', null, { position: 4 }),
+  cat('tax', '自動車税', 'special'),
 ];
 assert.equal(categoryPath(categories, 'grocery'), '食費 › 食料品');
 assert.equal(categoryPath(categories, 'food'), '食費');
@@ -155,8 +158,6 @@ const item = (fields: Partial<MoneyItem>): MoneyItem => ({
   id: `i${(seq += 1)}`,
   amount: 0,
   categoryId: null,
-  specialItemId: null,
-  specialPlanId: null,
   quantity: 1,
   unitPrice: null,
   name: '',
@@ -212,20 +213,20 @@ const records: MoneyRecord[] = [
   record('r6', {
     occurredOn: '2026-09-10',
     walletId: 'bank',
-    items: [item({ amount: 58000, specialItemId: 'tax', specialPlanId: 'plan1', memo: '年払い' })],
+    items: [item({ amount: 58000, categoryId: 'tax', memo: '年払い' })],
   }),
-  record('r7', { occurredOn: '2026-09-20', kind: 'income', items: [item({ amount: 400000, specialItemId: 'bonus' })] }),
+  record('r7', { occurredOn: '2026-09-20', kind: 'income', items: [item({ amount: 400000, categoryId: 'bonus' })] }),
   record('r8', { occurredOn: '2026-08-31', walletId: 'card', store: 'スーパー', items: [item({ amount: 1000, categoryId: 'grocery' })] }),
   record('r9', { occurredOn: '2026-09-02', walletId: 'card', store: '', items: [item({ amount: 85000, categoryId: 'house' })] }),
 ];
 
 const summary = buildMonthSummary(records, categories, budgets, '2026-09');
-assert.equal(summary.income, 300000, '特別収入は月の収入に入れない');
-assert.equal(summary.living, 396 + 168 + 500 + 70000 + 85000);
+assert.equal(summary.income, 300000 + 400000, '賞与も月の収入に入れる');
+assert.equal(summary.living, 396 + 168 + 500 + 70000 + 85000 + 58000, '特別費も生活費と同じ支出に入れる');
 assert.equal('saving' in summary, false, '貯金は記録なので、集計にも表示にも入れない（貯金用の口座への振替も数えない）');
-assert.equal(summary.special, 58000, '特別費は別枠');
-assert.equal(summary.livingBudget, 60000 + 5000 + 85000, '使わなくした大分類・収入は予算に入れない');
-assert.equal(summary.balance, summary.income - summary.living, '生活費の収支＝収入 − 特別費以外の支出（特別費・振替は入れない）');
+assert.equal('special' in summary, false, '特別費は別枠にしない（大分類「特別費」のカテゴリ）');
+assert.equal(summary.livingBudget, 60000 + 5000 + 85000, '使わなくした大分類・収入・予算のない特別費は予算に入れない');
+assert.equal(summary.balance, summary.income - summary.living, '収支＝収入 − 支出（特別費を含む。振替は入れない）');
 assert.equal(summary.plannedBalance, summary.income - summary.livingBudget);
 
 const tiles = buildBudgetTiles(records, categories, budgets, '2026-09');
@@ -235,8 +236,9 @@ assert.deepEqual(
     ['house', 0, 100],
     ['food', 60000 - 70564, 118],
     ['med', 4500, 10],
+    ['special', -58000, null],
   ],
-  '種類の並び順のまま。使っていない使わなくした大分類は出さない',
+  '種類の並び順のまま。特別費も大分類のひとつ（予算なし）。使っていない使わなくした大分類は出さない',
 );
 
 assert.deepEqual(
@@ -266,14 +268,6 @@ assert.equal(itemSummary([{ name: '牛乳' }, { name: ' 卵 ' }]), '牛乳、卵
 assert.equal(itemSummary([{ name: '牛乳' }, { name: '卵' }, { name: 'パン' }]), '牛乳、卵ほか');
 assert.equal(itemSummary([{ name: '牛乳' }, { name: '牛乳' }, { name: '' }]), '牛乳', '同じ品名・空の品名は数えない');
 assert.equal(itemSummary([{ name: '' }]), '');
-
-assert.deepEqual(
-  specialActualsFromRecords(records).map((actual) => [actual.recordId, actual.itemId, actual.planId, actual.occurredOn, actual.amount, actual.note]),
-  [
-    ['r6', 'tax', 'plan1', '2026-09-10', 58000, '年払い'],
-    ['r7', 'bonus', null, '2026-09-20', 400000, ''],
-  ],
-);
 
 assert.deepEqual(frequentCategoryIds(records, categories, 'living', 2), ['grocery', 'eatout'], '多い順、同じ回数なら最近使った順');
 assert.deepEqual(recentStores(records), ['レストラン', 'スーパー']);
@@ -342,20 +336,18 @@ assert.equal(year.recordedMonths, 2, '記録のある月だけを数える');
 assert.equal(year.months[0].recorded, false);
 assert.equal(year.total.livingDiff, september.livingDiff + august.livingDiff, '記録の無い月の予算は差に入れない');
 assert.equal(year.total.balance, year.months.reduce((sum, row) => sum + row.balance, 0));
-assert.equal(september.special, 58000, '年の月の行にも、その月の特別費を出す');
-assert.equal(year.total.special, 58000, '特別費は年の合計にも別に数える（収支には入れない）');
-assert.equal(year.total.balance, year.total.income - year.total.living, '年の収支も 収入 − 生活費');
-// 生活費の記録が無く、特別費だけの月も、特別費は年に数える
+assert.equal(year.total.balance, year.total.income - year.total.living, '年の収支も 収入 − 支出');
+// 特別費だけの月も、普通の記録のある月として数える（特別費は別枠にしない）
 const specialOnly = buildYearSummary(
-  [record('s1', { occurredOn: '2026-07-10', items: [item({ amount: 30000, specialItemId: 'tax' })] })],
+  [record('s1', { occurredOn: '2026-07-10', items: [item({ amount: 30000, categoryId: 'tax' })] })],
   categories,
   budgets,
   2026,
   '2026-09',
 );
-assert.equal(specialOnly.total.special, 30000);
-assert.equal(specialOnly.recordedMonths, 0, '特別費だけの月は、生活費の収支を数える月には入れない');
-assert.equal(specialOnly.months.find((row) => row.monthKey === '2026-07')!.special, 30000);
+assert.equal(specialOnly.total.living, 30000);
+assert.equal(specialOnly.recordedMonths, 1);
+assert.equal(specialOnly.months.find((row) => row.monthKey === '2026-07')!.balance, -30000);
 
 assert.equal(year.months.find((row) => row.monthKey === '2026-10')!.recorded, false, 'まだ来ていない月は数えない');
 assert.equal(
@@ -364,53 +356,70 @@ assert.equal(
   'upTo より後の月は合計に入れない',
 );
 
-// ---- 特別費の年の予算の減り ----
-const specialItems: SpecialItem[] = [
-  {
-    id: 'tax',
-    kind: 'expense',
-    category: '税金',
-    name: '自動車税',
-    cycleYears: 1,
-    baseYear: null,
-    note: '',
-    position: 0,
-    plans: [
-      { id: 'plan1', month: 9, amount: 60000, tentative: false },
-      { id: 'plan2', month: 9, amount: 10000, tentative: false },
-    ],
-  },
-  { id: 'trip', kind: 'expense', category: '旅行', name: '旅行', cycleYears: 1, baseYear: null, note: '', position: 1, plans: [{ id: 'plan3', month: 12, amount: 100000, tentative: false }] },
-];
-const specialRows = buildYearRows(
-  specialItems,
-  [
-    ...specialActualsFromRecords(records),
-    { id: 'old', recordId: 'r0', itemId: 'trip', planId: null, occurredOn: '2026-05-03', amount: 20000, note: '' },
-  ],
-  2026,
-  'expense',
-);
-assert.deepEqual(buildSpecialProgress(specialRows, '2026-09'), {
-  yearBudget: 170000,
-  spentThisMonth: 58000,
-  spentToDate: 78000,
-  remaining: 92000,
-  pendingThisMonth: 1,
-});
-assert.deepEqual(buildSpecialProgress(specialRows, '2026-06'), {
-  yearBudget: 170000,
-  spentThisMonth: 0,
-  spentToDate: 20000,
-  remaining: 150000,
-  pendingThisMonth: 0,
-});
+// ---- 年初からの累計・月平均・前年比（docs/kakei.md §0.4） ----
+{
+  const earn = (id: string, occurredOn: string, income: number, spent: number) => [
+    record(`${id}-in`, { occurredOn, kind: 'income', walletId: 'bank', items: [item({ amount: income, categoryId: 'salary' })] }),
+    record(`${id}-out`, { occurredOn, walletId: 'bank', items: [item({ amount: spent, categoryId: 'grocery' })] }),
+  ];
+  const flow: MoneyRecord[] = [
+    ...earn('n25', '2025-11-25', 300000, 250000), // +50,000
+    ...earn('d25', '2025-12-25', 700000, 300000), // +400,000（賞与の月）
+    ...earn('o26', '2026-10-25', 300000, 20000), // +280,000
+    ...earn('n26', '2026-11-25', 300000, 350000), // −50,000（支出が多い月）
+    ...earn('d26', '2026-12-25', 700000, 300000), // +400,000
+    record('t26', { occurredOn: '2026-12-26', kind: 'transfer', walletId: 'bank', toWalletId: 'save', items: [item({ amount: 100000 })] }),
+    record('t27', { occurredOn: '2027-01-05', kind: 'transfer', walletId: 'bank', toWalletId: 'save', items: [item({ amount: 100000 })] }),
+  ];
 
-// 振り返りの特別費: 月はその月に払った額と、その月までの累計での予算の残り。年は年ぜんたい
-assert.deepEqual(buildSpecialReview(specialRows, '2026-09'), { yearBudget: 170000, spent: 58000, spentToDate: 78000, remaining: 92000 });
-assert.deepEqual(buildSpecialReview(specialRows, '2026-06'), { yearBudget: 170000, spent: 0, spentToDate: 20000, remaining: 150000 });
-assert.deepEqual(buildSpecialReview(specialRows, null), { yearBudget: 170000, spent: 78000, spentToDate: 78000, remaining: 92000 }, '年ぜんたい');
-assert.equal(buildSpecialReview([], '2026-09').remaining, 0);
+  const y2026 = buildYearSummary(flow, categories, budgets, 2026, '2026-12');
+  assert.equal(y2026.recordedMonths, 3, '記録のある月だけを数える（2026年は10月から）');
+  assert.equal(y2026.total.balance, 280000 - 50000 + 400000);
+  assert.deepEqual(
+    y2026.months.filter((row) => row.monthKey >= '2026-09').map((row) => [row.monthKey, row.cumulative]),
+    [['2026-09', 0], ['2026-10', 280000], ['2026-11', 230000], ['2026-12', 630000]],
+    '年初からの累計は、数える月だけを足す',
+  );
+  assert.deepEqual(y2026.average, { income: 433333, living: 223333, balance: 210000 }, '月平均は数える月で割る（円に丸める）');
+
+  // 振替だけの月は数えない
+  const jan27 = buildYearSummary(flow, categories, budgets, 2027, '2027-01');
+  assert.equal(jan27.recordedMonths, 0);
+  assert.equal(jan27.average, null, '数える月が無ければ平均は無い');
+
+  assert.equal(yearToDateBalance(flow, categories, budgets, '2026-10'), 280000);
+  assert.equal(yearToDateBalance(flow, categories, budgets, '2026-11'), 230000);
+  assert.equal(yearToDateBalance(flow, categories, budgets, '2026-12'), 630000);
+  assert.equal(yearToDateBalance(flow, categories, budgets, '2026-09'), null, '記録の無い月に累計は出さない');
+  assert.equal(yearToDateBalance(flow, categories, budgets, '2027-01'), null, '振替だけの月');
+
+  // 前の年の同じ月ぶんとの比べ
+  assert.deepEqual(compareWithPreviousYear(flow, categories, budgets, 2026, '2026-12'), {
+    months: 2,
+    balance: -50000 + 400000,
+    previousBalance: 50000 + 400000,
+    diff: -100000,
+  }, '今年の10月は前年の10月が無いので比べない。11・12月だけを比べる');
+  assert.equal(compareWithPreviousYear(flow, categories, budgets, 2025, '2025-12'), null, '前の年に記録が無ければ比べない');
+}
+
+// ---- 固定収入の履歴（その年の収入の記録。docs/kakei.md §0.3） ----
+{
+  const income = (id: string, occurredOn: string, amount: number, isEstimate: boolean, kind: MoneyRecord['kind'] = 'income') =>
+    record(id, { occurredOn, kind, isEstimate, walletId: 'bank', items: [item({ amount, categoryId: 'bonus' })] });
+  const list = incomeRecordsInYear(
+    [
+      income('b1', '2026-06-10', 400000, false),
+      income('s1', '2026-10-25', 300000, true),
+      income('x1', '2026-10-26', 5000, false, 'expense'),
+      income('t1', '2026-10-27', 5000, false, 'transfer'),
+      income('p1', '2025-12-10', 250000, false),
+    ],
+    2026,
+  );
+  assert.deepEqual(list.map((entry) => entry.id), ['s1', 'b1'], 'その年の収入だけ。新しい日から（支出・振替・ほかの年は入れない）');
+  assert.equal(list[0].isEstimate, true, '見込みか確定かが分かる');
+}
 
 // ---- 入力の形との行き来 ----
 let key = 0;
@@ -433,8 +442,6 @@ assert.equal(saved.length, 4, '空の行は保存しない');
 assert.deepEqual(saved[0], {
   amount: 396,
   categoryId: 'grocery',
-  specialItemId: null,
-  specialPlanId: null,
   quantity: 2,
   unitPrice: 198,
   name: '牛乳',
@@ -447,6 +454,12 @@ assert.equal(formatDayOfMonth(31), '末日');
 assert.equal(recurringScheduleLabel({ day: 27, months: null, holiday: 'next' }), '毎月27日（休日は翌営業日）');
 assert.equal(recurringScheduleLabel({ day: 10, months: [12, 6], holiday: 'prev' }), '6・12月の10日（休日は前営業日）');
 assert.equal(recurringScheduleLabel({ day: 31, months: null, holiday: 'none' }), '毎月末日（休日もそのまま）');
+// 「第◯◯曜日」の日取り（賞与など。docs/kakei.md §0.3）
+assert.equal(recurringDayLabel({ day: 1, weekOfMonth: 2, weekday: 5 }), '第2金曜日');
+assert.equal(recurringDayLabel({ day: 1, weekOfMonth: 5, weekday: 5 }), '最終金曜日');
+assert.equal(recurringDayLabel({ day: 27, weekOfMonth: null, weekday: null }), '27日');
+assert.equal(recurringScheduleLabel({ day: 1, weekOfMonth: 2, weekday: 5, months: [12, 6], holiday: 'prev' }), '6・12月の第2金曜日（休日は前営業日）');
+assert.equal(recurringScheduleLabel({ day: 1, weekOfMonth: 1, weekday: 1, months: null, holiday: 'next' }), '毎月第1月曜日（休日は翌営業日）');
 assert.equal(cardScheduleLabel({ closeDay: 15, payDay: 10, payMonthOffset: null }), '15日締め・翌10日払い');
 assert.equal(cardScheduleLabel({ closeDay: 31, payDay: 27, payMonthOffset: null }), '末日締め・翌27日払い');
 assert.equal(cardScheduleLabel({ closeDay: 5, payDay: 27, payMonthOffset: null }), '5日締め・27日払い', '締め日より後の引き落とし日は同じ月');
@@ -465,7 +478,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
 }
 
 {
-  const rule = { kind: 'expense' as const, walletId: 'bank', toWalletId: null, store: '電力', categoryId: 'elec', specialItemId: null };
+  const rule = { kind: 'expense' as const, walletId: 'bank', toWalletId: null, store: '電力', categoryId: 'elec' };
   const history = recurringHistory(
     rule,
     [
@@ -761,6 +774,8 @@ assert.equal(yearOfMonth('2027-02'), 2027, '2027年2月は2027年');
     cat('groc', '食料品', 'food', { position: 0 }),
     cat('out', '外食', 'food', { position: 1 }),
     cat('med', '医療費', null, { position: 1 }),
+    cat('sp', '特別費', null, { position: 2 }),
+    cat('tax', '自動車税', 'sp'),
   ];
   const buds: MoneyBudget[] = [{ id: 'fb', categoryId: 'food', year: 2026, monthAmounts: Array(12).fill(50000) }];
   const rs = [
@@ -768,10 +783,10 @@ assert.equal(yearOfMonth('2027-02'), 2027, '2027年2月は2027年');
     record('a2', { occurredOn: '2026-09-20', store: 'ラーメン', items: [item({ amount: 1200, categoryId: 'out' })] }),
     record('a3', { occurredOn: '2026-08-15', items: [item({ amount: 4000, categoryId: 'groc' })] }),
     record('a4', { occurredOn: '2026-09-25', items: [item({ amount: 700, categoryId: 'food' })] }),
-    record('a5', { occurredOn: '2026-09-26', items: [item({ amount: 20000, specialItemId: 'tax' })] }),
+    record('a5', { occurredOn: '2026-09-26', items: [item({ amount: 20000, categoryId: 'tax' })] }),
   ];
   const analysis = buildCategoryAnalysis(rs, cats, buds, 'food', ['2026-09'], ['2026-08']);
-  assert.equal(analysis.actual, 4900, '食費の大分類。特別費と他の大分類は入らない');
+  assert.equal(analysis.actual, 4900, '食費の大分類。ほかの大分類は入らない');
   assert.equal(analysis.budget, 50000);
   assert.equal(analysis.diff, 45100);
   assert.equal(analysis.percent, 10);
@@ -785,14 +800,12 @@ assert.equal(yearOfMonth('2027-02'), 2027, '2027年2月は2027年');
   assert.equal(wholeYear.previous, null);
   assert.deepEqual(wholeYear.months.map((m) => m.amount), [4000, 4900]);
 
-  const rows = [
-    { key: 'plan:p1', item: { id: 'tax', kind: 'expense' as const, category: '税金', name: '固定資産税', cycleYears: 1, baseYear: null, note: '', position: 0, plans: [] }, planId: 'p1', month: 9, tentative: false, budget: 60000, actual: 20000, actuals: [{ id: 'm1', recordId: 'a5', itemId: 'tax', planId: 'p1', occurredOn: '2026-09-26', amount: 20000, note: '' }] },
-  ];
-  const specialAnalysis = buildSpecialAnalysis(rs, rows, 2026, '2026-09');
-  assert.equal(specialAnalysis.spent, 20000);
-  assert.equal(specialAnalysis.items[0].name, '固定資産税');
-  assert.equal(specialAnalysis.items[0].spentToDate, 20000);
-  assert.deepEqual(specialAnalysis.records.map((r) => r.id), ['a5'], '特別費の記録だけ');
+  // 特別費も大分類のひとつなので、同じ分析で見られる
+  const special = buildCategoryAnalysis(rs, cats, buds, 'sp', ['2026-09'], ['2026-08']);
+  assert.equal(special.actual, 20000);
+  assert.equal(special.budget, null, '特別費は予算を置かない');
+  assert.deepEqual(special.children.map((child) => [child.name, child.amount]), [['自動車税', 20000]]);
+  assert.deepEqual(special.records.map((r) => r.id), ['a5'], '特別費の記録だけ');
 }
 
 console.log('moneyUtils: ok');

@@ -1,6 +1,6 @@
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { MoneyCategory, MoneyRecord, MoneyWallet, SpecialItem } from '@/types/app';
+import type { MoneyCategory, MoneyRecord, MoneyWallet } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import {
@@ -8,7 +8,6 @@ import {
   formatYen,
   iconKeyOf,
   type CategoryAnalysis,
-  type SpecialAnalysis,
 } from '@/lib/moneyUtils';
 import RecordDayList from '@/components/money/RecordDayList';
 import { CategoryIcon, Hero, ProgressBar, ScreenHeader, SectionHeader, StatRow, type } from '@/components/money/moneyVisual';
@@ -17,22 +16,17 @@ import { CategoryIcon, Hero, ProgressBar, ScreenHeader, SectionHeader, StatRow, 
 // 上に結論（実績と予算）、簡単な分析（前の期間との比べ・小分類ごとの割合・月ごと）、下にその行に絞った記録の一覧。
 // 記録を押すと、この画面を閉じて記録の詳細を開く。
 
-export type ReviewDetail = { type: 'category'; category: MoneyCategory } | { type: 'special' };
+export type ReviewDetail = { type: 'category'; category: MoneyCategory };
 
 interface ReviewDetailScreenProps {
   detail: ReviewDetail;
   /** 「9月」「2026年」。 */
   periodLabel: string;
   isMonth: boolean;
-  /** 大分類の分析（detail.type が category のとき）。 */
+  /** 大分類の分析。 */
   analysis: CategoryAnalysis | null;
-  /** 特別費の分析（detail.type が special のとき）。 */
-  special: SpecialAnalysis;
-  /** 特別費の年。 */
-  year: number;
   categories: MoneyCategory[];
   wallets: MoneyWallet[];
-  specialItems: SpecialItem[];
   onClose: () => void;
   onOpenRecord: (record: MoneyRecord) => void;
 }
@@ -44,18 +38,14 @@ export default function ReviewDetailScreen({
   periodLabel,
   isMonth,
   analysis,
-  special,
-  year,
   categories,
   wallets,
-  specialItems,
   onClose,
   onOpenRecord,
 }: ReviewDetailScreenProps) {
   const insets = useSafeAreaInsets();
-  const isSpecial = detail.type === 'special';
-  const title = isSpecial ? '特別費' : detail.category.name;
-  const records = isSpecial ? special.records : (analysis?.records ?? []);
+  const title = detail.category.name;
+  const records = analysis?.records ?? [];
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -64,14 +54,10 @@ export default function ReviewDetailScreen({
           title={`${title}（${periodLabel}）`}
           icon="back"
           onClose={onClose}
-          right={<CategoryIcon iconKey={isSpecial ? 'star' : iconKeyOf(detail.category)} size={28} />}
+          right={<CategoryIcon iconKey={iconKeyOf(detail.category)} size={28} />}
         />
         <ScrollView contentContainerStyle={styles.content}>
-          {isSpecial ? (
-            <SpecialBody special={special} year={year} isMonth={isMonth} periodLabel={periodLabel} />
-          ) : (
-            analysis !== null && <CategoryBody analysis={analysis} isMonth={isMonth} periodLabel={periodLabel} />
-          )}
+          {analysis !== null && <CategoryBody analysis={analysis} isMonth={isMonth} periodLabel={periodLabel} />}
 
           <SectionHeader title="記録" hint={`${records.length}件`} />
           {records.length === 0 ? (
@@ -81,7 +67,6 @@ export default function ReviewDetailScreen({
               records={records}
               categories={categories}
               wallets={wallets}
-              specialItems={specialItems}
               onOpen={onOpenRecord}
             />
           )}
@@ -173,68 +158,6 @@ function CategoryBody({
                 <ProgressBar ratio={childTotal > 0 ? child.amount / childTotal : 0} />
               </View>
             ))}
-          </View>
-        </>
-      )}
-    </>
-  );
-}
-
-function SpecialBody({
-  special,
-  year,
-  isMonth,
-  periodLabel,
-}: {
-  special: SpecialAnalysis;
-  year: number;
-  isMonth: boolean;
-  periodLabel: string;
-}) {
-  const over = special.remaining < 0;
-  return (
-    <>
-      <Hero
-        label={`${periodLabel}に払った特別費`}
-        value={special.spent > 0 ? `−${formatYen(special.spent)}` : formatYen(special.spent)}
-        note={
-          special.yearBudget > 0
-            ? `${year}年の予算 ${formatYen(special.yearBudget)}・${over ? `${formatYen(special.remaining)} 超過` : `残り ${formatYen(special.remaining)}`}`
-            : '予定はありません'
-        }
-      >
-        {special.yearBudget > 0 && (
-          <View style={styles.progress}>
-            <ProgressBar ratio={special.spentToDate / special.yearBudget} over={over} />
-            <Text style={type.faint}>
-              {isMonth ? `${Number(periodLabel.replace('月', ''))}月までに` : '年のはじめから'} {formatYen(special.spentToDate)} / {formatYen(special.yearBudget)}
-            </Text>
-          </View>
-        )}
-      </Hero>
-
-      {special.items.length > 0 && (
-        <>
-          <SectionHeader title="項目ごと" hint={`${year}年の予算と比べて`} />
-          <View style={styles.card}>
-            {special.items.map((item, index) => {
-              const itemOver = item.budget > 0 && item.spentToDate > item.budget;
-              return (
-                <View key={item.id} style={[styles.childRow, index > 0 && styles.divided]}>
-                  <View style={styles.childTop}>
-                    <Text style={[type.row, styles.flex]} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <Text style={type.amount}>{item.spent > 0 ? `−${formatYen(item.spent)}` : formatYen(item.spent)}</Text>
-                  </View>
-                  {item.budget > 0 && <ProgressBar ratio={item.spentToDate / item.budget} over={itemOver} />}
-                  <Text style={type.faint}>
-                    {item.budget > 0 ? `年 ${formatYen(item.spentToDate)} / ${formatYen(item.budget)}` : '予定外'}
-                    {item.category !== '' ? `・${item.category}` : ''}
-                  </Text>
-                </View>
-              );
-            })}
           </View>
         </>
       )}

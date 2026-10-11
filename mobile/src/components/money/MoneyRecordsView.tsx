@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { MoneyCategory, MoneyRecord, MoneyWallet, SpecialItem } from '@/types/app';
+import type { MoneyCategory, MoneyRecord, MoneyWallet } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { recordsInMonth } from '@/lib/moneyUtils';
 import { MonthBar } from '@/components/money/moneyVisual';
@@ -17,7 +17,6 @@ interface MoneyRecordsViewProps {
   records: MoneyRecord[];
   categories: MoneyCategory[];
   wallets: MoneyWallet[];
-  specialItems: SpecialItem[];
   isLoading: boolean;
   onOpen: (record: MoneyRecord) => void;
 }
@@ -28,7 +27,6 @@ export default function MoneyRecordsView({
   records,
   categories,
   wallets,
-  specialItems,
   isLoading,
   onOpen,
 }: MoneyRecordsViewProps) {
@@ -43,7 +41,7 @@ export default function MoneyRecordsView({
         ) : inMonth.length === 0 ? (
           <Text style={styles.message}>この月の記録はまだありません。右下の「＋」で記録します</Text>
         ) : (
-          <RecordDayList records={inMonth} categories={categories} wallets={wallets} specialItems={specialItems} onOpen={onOpen} />
+          <RecordDayList records={inMonth} categories={categories} wallets={wallets} onOpen={onOpen} />
         )}
       </ScrollView>
     </View>

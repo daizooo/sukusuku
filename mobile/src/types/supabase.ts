@@ -1091,6 +1091,8 @@ export type Database = {
           to_wallet_id: string | null
           updated_at: string
           wallet_id: string | null
+          week_of_month: number | null
+          weekday: number | null
         }
         Insert: {
           amount?: number
@@ -1112,6 +1114,8 @@ export type Database = {
           to_wallet_id?: string | null
           updated_at?: string
           wallet_id?: string | null
+          week_of_month?: number | null
+          weekday?: number | null
         }
         Update: {
           amount?: number
@@ -1133,6 +1137,8 @@ export type Database = {
           to_wallet_id?: string | null
           updated_at?: string
           wallet_id?: string | null
+          week_of_month?: number | null
+          weekday?: number | null
         }
         Relationships: [
           {
@@ -1258,6 +1264,35 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "money_securities"
             referencedColumns: ["id", "family_id"]
+          },
+        ]
+      }
+      money_settings: {
+        Row: {
+          created_at: string
+          family_id: string
+          start_month: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          family_id: string
+          start_month?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          family_id?: string
+          start_month?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_settings_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: true
+            referencedRelation: "families"
+            referencedColumns: ["id"]
           },
         ]
       }

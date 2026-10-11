@@ -2,27 +2,26 @@
 
 import { useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import type { MoneyBudget, MoneyCategory, MoneyRecord, MoneyWallet, SpecialActual, SpecialItem } from '@/types/app';
+import type { MoneyBudget, MoneyCategory, MoneyRecord, MoneyWallet } from '@/types/app';
 import {
   buildBudgetTiles,
   buildMonthSummary,
   buildCategoryAnalysis,
-  buildSpecialAnalysis,
   buildYearSummary,
+  compareWithPreviousYear,
   estimatesInMonth,
   formatBalance,
   formatSignedYen,
+  formatYear,
   formatYen,
   iconKeyOf,
   monthKeyOfDate,
   recordTotal,
   shiftMonth,
   yearMonthKeys,
-  yearOfMonth,
+  yearToDateBalance,
   type BudgetTile,
-  type SpecialAnalysis,
 } from '@/lib/moneyUtils';
-import { buildYearRows, formatYear } from '@/lib/specialUtils';
 import {
   CategoryIcon,
   EstimateBadge,
@@ -37,17 +36,18 @@ import {
   type ReviewPeriod,
 } from './moneyVisual';
 import ReviewDetailScreen, { type ReviewDetail } from './ReviewDetailScreen';
+import YearFlowChart from './YearFlowChart';
 
 // 家計タブの「振り返り」（docs/kakei.md §4）。mobile版の `mobile/src/components/money/MoneyReviewView.tsx` と同じ並び・文言。
 //
 // 月と年は同じ面。上の送りの右「月 / 年」で期間を切り替える（2026-10-08に、別々の面から1つにした）。
 // 年は暦年（1月〜12月。2026-10-09に年度から変えた。予算の月額も年ごと）。
-// 結論は生活費の収支（特別費は入れない）＝収入 − 生活費（特別費以外の支出。種類の名前が「その他」でも生活費）。
+// 結論は収支＝収入 − 支出（生活費と特別費。特別費は大分類「特別費」のカテゴリなので、生活費と同じに数える。2026-10-11。§0）。
 // 貯金は記録なので式にも表示にも入れない。
-// その下の「内訳」は、月なら生活費の大分類の一覧（種類の並び順）の最後に特別費の1行、年なら特別費の1行。
-// 特別費の行はその期間に払った額と年の予算の残り（月ならその月までの累計）だけ（2026-10-08に、生活費と同じ大きさの
-// 結論から内訳の1行にした）。特別費の予定は「家計の設定」で編集する（2026-10-09）。
-// 内訳の行（生活費の大分類・特別費）を押すと、簡単な分析と、その行に絞った記録の一覧が開く（ReviewDetailScreen。§4.4）。
+// 月には年初からの累計、年には月平均・前年の同じ月ぶんとの比べ・月ごとの収支と累計のグラフを添える（§0.4）。
+// 年と累計は、記録のある月だけを数える（記録は2026年10月から）。
+// その下の「内訳」は、大分類の一覧（種類の並び順。特別費もその1行）。
+// 内訳の行を押すと、簡単な分析と、その行に絞った記録の一覧が開く（ReviewDetailScreen。§4.4）。
 // 年は内訳の下に月ごとの収支（押すとその月へ）。
 // 見込みの額（毎月の記録で自動で作り、まだ確かめていない額）は実績に入れて数え、件数と額を添えて出す（§3.3・§4.1）。
 
@@ -62,8 +62,6 @@ interface MoneyReviewViewProps {
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   wallets: MoneyWallet[];
-  specialItems: SpecialItem[];
-  specialActuals: SpecialActual[];
   /** 年の「月ごと」の行を押したとき。その月の月の振り返りへ。 */
   onSelectMonth: (monthKey: string) => void;
   onEditCategories: () => void;
@@ -82,15 +80,12 @@ export default function MoneyReviewView({
   categories,
   budgets,
   wallets,
-  specialItems,
-  specialActuals,
   onSelectMonth,
   onEditCategories,
   onOpenRecord,
 }: MoneyReviewViewProps) {
   const isMonth = period === 'month';
   const today = monthKeyOfDate(new Date());
-  const viewYear = isMonth ? yearOfMonth(monthKey) : year;
   const [detail, setDetail] = useState<ReviewDetail | null>(null);
 
   const month = useMemo(
@@ -101,6 +96,15 @@ export default function MoneyReviewView({
     () => buildYearSummary(records, categories, budgets, year, today),
     [records, categories, budgets, year, today],
   );
+  // 月: 年初からの累計。年: 前の年の同じ月ぶんとの比べ。
+  const ytd = useMemo(
+    () => (isMonth ? yearToDateBalance(records, categories, budgets, monthKey) : null),
+    [isMonth, records, categories, budgets, monthKey],
+  );
+  const comparison = useMemo(
+    () => (isMonth ? null : compareWithPreviousYear(records, categories, budgets, year, today)),
+    [isMonth, records, categories, budgets, year, today],
+  );
   // 見ている期間の月。月なら1つ、年なら記録のある月だけ（記録の無い月の予算は数えない）。
   const periodKeys = useMemo(
     () => (isMonth ? [monthKey] : yearSummary.months.filter((row) => row.recorded).map((row) => row.monthKey)),
@@ -110,26 +114,15 @@ export default function MoneyReviewView({
     () => (periodKeys.length === 0 ? [] : buildBudgetTiles(records, categories, budgets, periodKeys)),
     [periodKeys, records, categories, budgets],
   );
-  const specialRows = useMemo(
-    () => buildYearRows(specialItems, specialActuals, viewYear, 'expense'),
-    [specialItems, specialActuals, viewYear],
-  );
-  const special = useMemo(
-    () => buildSpecialAnalysis(records, specialRows, viewYear, isMonth ? monthKey : null),
-    [records, specialRows, viewYear, isMonth, monthKey],
-  );
-
   const income = isMonth ? month.income : yearSummary.total.income;
   const living = isMonth ? month.living : yearSummary.total.living;
   const balance = isMonth ? month.balance : yearSummary.total.balance;
-  const livingDiff = isMonth ? month.livingBudget - month.living : yearSummary.total.livingDiff;
-  const planned = isMonth ? month.plannedBalance : null;
   const estimates = useMemo(() => {
     const keys = isMonth ? [monthKey] : yearMonthKeys(year).filter((key) => key <= today);
     const list = keys.flatMap((key) => estimatesInMonth(records, key));
     return { count: list.length, amount: list.reduce((sum, record) => sum + recordTotal(record), 0) };
   }, [isMonth, monthKey, year, today, records]);
-  const months = yearSummary.months.filter((row) => row.monthKey <= today && (row.recorded || row.special > 0)).reverse();
+  const months = yearSummary.months.filter((row) => row.monthKey <= today && row.recorded).reverse();
 
   // 内訳の行を押したときの分析。前の期間（月なら前の月、年なら前の年の同じ月ぶん）と比べる。
   const analysis = useMemo(() => {
@@ -153,28 +146,39 @@ export default function MoneyReviewView({
       <div className="flex-1 min-h-0 overflow-y-auto pb-24">
         <Hero
           compact
-          label={isMonth ? '生活費の収支' : '生活費の収支（年）'}
+          label={isMonth ? '収支' : '収支（年）'}
           value={formatBalance(balance)}
           plus={balance > 0}
-          note={
-            planned !== null
-              ? `収入 − 特別費以外の支出・予算どおりなら ${formatSignedYen(planned)}`
-              : `収入 − 特別費以外の支出・記録のある${yearSummary.recordedMonths}か月ぶん`
-          }
+          note="収入 − 支出（生活費と特別費）"
         >
           <StatRow compact label="収入" value={formatYen(income)} plus={income > 0} />
-          <StatRow
-            compact
-            label="生活費"
-            note={
-              isMonth
-                ? `予算 ${formatYen(month.livingBudget)}（${livingDiff < 0 ? `${formatBalance(livingDiff)} 超過` : `残り ${formatYen(livingDiff)}`}）`
-                : livingDiff < 0
-                  ? `予算より ${formatYen(livingDiff)} 多い`
-                  : `予算より ${formatYen(livingDiff)} 少ない`
-            }
-            value={`−${formatYen(living)}`}
-          />
+          <StatRow compact label="支出" value={`−${formatYen(living)}`} />
+          {ytd !== null && (
+            <StatRow
+              compact
+              label="年初からの累計"
+              value={formatBalance(ytd)}
+              plus={ytd > 0}
+            />
+          )}
+          {!isMonth && yearSummary.average !== null && (
+            <StatRow
+              compact
+              label="月平均"
+              note={`記録のある${yearSummary.recordedMonths}か月ぶん`}
+              value={formatBalance(yearSummary.average.balance)}
+              plus={yearSummary.average.balance > 0}
+            />
+          )}
+          {comparison !== null && (
+            <StatRow
+              compact
+              label="前年の同じ月より"
+              note={`前年 ${formatBalance(comparison.previousBalance)}（${comparison.months}か月ぶん）`}
+              value={formatSignedYen(comparison.diff)}
+              isMinus={comparison.diff < 0}
+            />
+          )}
           {estimates.count > 0 && (
             <div className="flex items-center gap-2 pt-2">
               <EstimateBadge />
@@ -209,11 +213,18 @@ export default function MoneyReviewView({
                   onClick={() => setDetail({ type: 'category', category: tile.category })}
                 />
               ))}
-              <SpecialRow special={special} isMonth onClick={() => setDetail({ type: 'special' })} />
             </div>
           </>
         ) : (
           <>
+            {yearSummary.recordedMonths > 0 && (
+              <>
+                <SectionHeader compact title="月ごとの推移" hint="棒は月の収支・線は年初からの累計" />
+                <div className={`${cardClass} overflow-hidden`}>
+                  <YearFlowChart months={yearSummary.months} />
+                </div>
+              </>
+            )}
             <SectionHeader
               compact
               title="内訳"
@@ -232,7 +243,6 @@ export default function MoneyReviewView({
                   onClick={() => setDetail({ type: 'category', category: tile.category })}
                 />
               ))}
-              <SpecialRow special={special} isMonth={false} onClick={() => setDetail({ type: 'special' })} />
             </div>
             <SectionHeader compact title="月ごと" hint="押すとその月へ" />
             {months.length === 0 ? (
@@ -255,13 +265,11 @@ export default function MoneyReviewView({
                       <span className="min-w-0 flex-1">
                         {row.recorded ? (
                           <span className={`block truncate ${type.faint}`}>
-                            収入 {formatYen(row.income)}・生活費 {formatYen(row.living)}
-                            {row.livingDiff < 0 ? '（予算超え）' : ''}
+                            収入 {formatYen(row.income)}・支出 {formatYen(row.living)}
                           </span>
                         ) : (
-                          <span className={`block ${type.faint}`}>生活費の記録なし</span>
+                          <span className={`block ${type.faint}`}>記録なし</span>
                         )}
-                        {row.special > 0 && <span className={`block ${type.faint}`}>特別費 −{formatYen(row.special)}</span>}
                       </span>
                       {estimatesInMonth(records, row.monthKey).length > 0 && <EstimateBadge />}
                       {row.recorded && (
@@ -287,11 +295,8 @@ export default function MoneyReviewView({
           periodLabel={periodLabel}
           isMonth={isMonth}
           analysis={analysis}
-          special={special}
-          year={viewYear}
           categories={categories}
           wallets={wallets}
-          specialItems={specialItems}
           onClose={() => setDetail(null)}
           onOpenRecord={(record) => {
             setDetail(null);
@@ -300,42 +305,6 @@ export default function MoneyReviewView({
         />
       )}
     </div>
-  );
-}
-
-/** 内訳の特別費の1行。その期間に払った額と、年の予算の残り。押すと分析と記録。 */
-function SpecialRow({ special, isMonth, onClick }: { special: SpecialAnalysis; isMonth: boolean; onClick: () => void }) {
-  const over = special.remaining < 0;
-  return (
-    <button
-      type="button"
-      aria-label="特別費の分析と記録を見る"
-      onClick={onClick}
-      className="flex w-full items-center gap-2.5 px-3 py-[7px] text-left hover:bg-gray-50"
-    >
-      <CategoryIcon iconKey="star" size={28} />
-      <div className="min-w-0 flex-1 space-y-[3px]">
-        <div className="flex items-baseline gap-2">
-          <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">特別費</span>
-          <span className={`text-[15px] font-extrabold tabular-nums ${special.spent === 0 ? 'text-gray-400' : 'text-gray-900'}`}>
-            {isMonth ? 'この月' : '年'} {special.spent > 0 ? `−${formatYen(special.spent)}` : formatYen(special.spent)}
-          </span>
-        </div>
-        {special.yearBudget > 0 ? (
-          <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1">
-              <ProgressBar ratio={special.spentToDate / special.yearBudget} over={over} />
-            </div>
-            <span className={`shrink-0 ${type.faint}`}>
-              {`年 ${formatYen(special.spentToDate)} / ${formatYen(special.yearBudget)}・${over ? `${formatBalance(special.remaining)} 超過` : `残り ${formatYen(special.remaining)}`}`}
-            </span>
-          </div>
-        ) : (
-          <p className={type.faint}>「家計の設定」の「特別費の予定」で予定を決めると、予算の残りが出ます</p>
-        )}
-      </div>
-      <ChevronRight size={16} className="text-gray-400" />
-    </button>
   );
 }
 

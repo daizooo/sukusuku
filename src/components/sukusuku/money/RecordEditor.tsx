@@ -11,8 +11,6 @@ import type {
   MoneyStore,
   MoneyWallet,
   MoneyWalletDraft,
-  SpecialActual,
-  SpecialItem,
 } from '@/types/app';
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
 import {
@@ -80,8 +78,6 @@ export interface RecordEditorProps {
   /** 登録したお店（設定データ）。お店の選択画面で先に出す。 */
   stores: MoneyStore[];
   records: MoneyRecord[];
-  specialItems: SpecialItem[];
-  specialActuals: SpecialActual[];
   onClose: () => void;
   onSubmit: (draft: MoneyRecordDraft) => void;
   onDelete: (record: MoneyRecord) => void;
@@ -97,8 +93,6 @@ export default function RecordEditor({
   wallets,
   stores,
   records,
-  specialItems,
-  specialActuals,
   onClose,
   onSubmit,
   onDelete,
@@ -135,43 +129,32 @@ export default function RecordEditor({
   const spend = useMemo(() => livingSpendByTop(records, categories, monthKey), [records, categories, monthKey]);
   const storeOptions = useMemo(() => storeChoices(stores, records), [stores, records]);
   const total = kind === 'transfer' ? transferAmount : groups.reduce((sum, group) => sum + editorGroupTotal(group), 0);
-  const specialKind = kind === 'income' ? 'income' : 'expense';
+  const categoryKind = kind === 'income' ? 'income' : 'expense';
   // 見込みのままか。額を直すか「この額で確定する」で確定になる。
   const stillEstimate = record?.isEstimate === true && !confirmed && total === recordTotal(record);
 
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '';
-  const specialName = (id: string | null) => specialItems.find((item) => item.id === id)?.name ?? '';
 
   /** まとまりの見出し（「食費 › 食料品」「特別費 › 車検」）。 */
-  const groupTitle = (target: Pick<EditorGroup, 'categoryId' | 'specialItemId'>) =>
-    target.categoryId !== null
-      ? categoryPath(categories, target.categoryId)
-      : target.specialItemId !== null
-        ? `${kind === 'income' ? '特別収入' : '特別費'} › ${specialName(target.specialItemId)}`
-        : '';
+  const groupTitle = (target: Pick<EditorGroup, 'categoryId'>) =>
+    target.categoryId !== null ? categoryPath(categories, target.categoryId) : '';
 
-  /** まとまりのアイコン（大分類のアイコン。特別費は支払いの絵）。 */
+  /** まとまりのアイコン（大分類のアイコン）。 */
   const groupIconKey = (target: Pick<EditorGroup, 'categoryId'>) => {
     if (target.categoryId === null) return 'receipt';
     const topId = topCategoryIdOf(categories, target.categoryId);
     return iconKeyOf(categories.find((category) => category.id === topId));
   };
 
-  /** まとまりの一言（今月の残り・特別費の予算）。 */
-  const groupSubtitle = (target: Pick<EditorGroup, 'categoryId' | 'specialItemId' | 'specialPlanId'>) => {
-    if (target.categoryId !== null) {
-      const topId = topCategoryIdOf(categories, target.categoryId);
-      if (topId === null || kind !== 'expense') return '';
-      const budget = budgetFor(budgets, topId, monthKey);
-      if (budget === null) return '';
-      const remaining = budget - (spend.get(topId) ?? 0);
-      return remaining < 0 ? `今月 ${formatYen(remaining)} 超過` : `今月 残り ${formatYen(remaining)}`;
-    }
-    if (target.specialItemId !== null) {
-      const plan = specialItems.find((item) => item.id === target.specialItemId)?.plans.find((entry) => entry.id === target.specialPlanId);
-      return plan ? `予算 ${formatYen(plan.amount)}${plan.month !== null ? `（${plan.month}月）` : ''}` : '予定外';
-    }
-    return '';
+  /** まとまりの一言（今月の残り。予算を置いた大分類だけ）。 */
+  const groupSubtitle = (target: Pick<EditorGroup, 'categoryId'>) => {
+    if (target.categoryId === null) return '';
+    const topId = topCategoryIdOf(categories, target.categoryId);
+    if (topId === null || kind !== 'expense') return '';
+    const budget = budgetFor(budgets, topId, monthKey);
+    if (budget === null) return '';
+    const remaining = budget - (spend.get(topId) ?? 0);
+    return remaining < 0 ? `今月 ${formatYen(remaining)} 超過` : `今月 残り ${formatYen(remaining)}`;
   };
 
   const changeKind = (next: MoneyRecordKind) => {
@@ -195,8 +178,6 @@ export default function RecordEditor({
     setWork({
       groupKey: group.key,
       categoryId: group.categoryId,
-      specialItemId: group.specialItemId,
-      specialPlanId: group.specialPlanId,
       lines,
       selected: null,
       expr: '',
@@ -207,25 +188,20 @@ export default function RecordEditor({
 
   /** 種類を選んだ（品目の追加、または品目の画面で種類を変えた）。 */
   const pickCategory = (choice: CategoryChoice, purpose: 'add' | 'change') => {
-    const target = { categoryId: choice.categoryId, specialItemId: choice.specialItemId, specialPlanId: choice.specialPlanId };
+    const target = { categoryId: choice.categoryId };
     if (purpose === 'change' && work) {
-      // 特別費の予定に変えたら、まだ金額の無い行に予算の額を入れる。
-      const lines =
-        choice.amount !== null && work.lines.length === 1 && work.lines[0].unitPrice === 0
-          ? [{ ...work.lines[0], unitPrice: choice.amount }]
-          : work.lines;
-      setWork({ ...work, ...target, lines });
+      setWork({ ...work, ...target });
       pop();
       return;
     }
     const existing = groups.find((group) => sameGroupTarget(group, target));
-    const line = { ...blankLine(), unitPrice: choice.amount ?? 0 };
+    const line = blankLine();
     setWork({
       groupKey: existing?.key ?? null,
       ...target,
       lines: [...(existing?.lines ?? []), line],
       selected: line.key,
-      expr: choice.amount ? String(choice.amount) : '',
+      expr: '',
       focusKey: null,
     });
     replaceTop({ type: 'items' });
@@ -236,7 +212,7 @@ export default function RecordEditor({
     const lines = work.lines.filter((line) => !isBlankLine(line));
     setGroups((prev) => {
       let next = prev.filter((group) => group.key !== work.groupKey);
-      const target = { categoryId: work.categoryId, specialItemId: work.specialItemId, specialPlanId: work.specialPlanId };
+      const target = { categoryId: work.categoryId };
       const same = next.find((group) => sameGroupTarget(group, target));
       if (same) {
         // 同じ種類のまとまりがほかにあれば、そこへ足す（種類を変えた結果、同じになったとき）。
@@ -274,8 +250,6 @@ export default function RecordEditor({
             {
               amount: transferAmount,
               categoryId: null,
-              specialItemId: null,
-              specialPlanId: null,
               quantity: 1,
               unitPrice: transferAmount,
               name: '',
@@ -331,13 +305,11 @@ export default function RecordEditor({
       case 'category':
         return (
           <CategoryPicker
-            kind={specialKind}
+            kind={categoryKind}
             monthKey={monthKey}
             categories={categories}
             budgets={budgets}
             records={records}
-            specialItems={specialItems}
-            specialActuals={specialActuals}
             onPick={(choice) => pickCategory(choice, screen.purpose)}
             onClose={back}
             onEditCategories={onEditCategories}

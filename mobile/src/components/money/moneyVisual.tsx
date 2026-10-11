@@ -4,9 +4,8 @@ import Svg, { Circle } from 'react-native-svg';
 import { ArrowDownRight, ArrowLeft, ArrowUpRight, ChartCandlestick, ChevronLeft, ChevronRight, CreditCard, Landmark, PiggyBank, QrCode, RefreshCw, X } from 'lucide-react-native';
 import type { MoneyWalletType } from '@/types/app';
 import { colors } from '@/lib/theme';
-import { formatGainRate, formatMonthKey, formatSignedYen, iconTone, shiftMonth } from '@/lib/moneyUtils';
+import { formatGainRate, formatMonthKey, formatSignedYen, formatYear, iconTone, shiftMonth } from '@/lib/moneyUtils';
 import { MONEY_ICON_COMPONENTS } from '@/components/money/moneyIcons';
-import { formatYear } from '@/lib/specialUtils';
 
 // 家計タブで共通に使う部品と、見た目の決まり（docs/kakei.md §2.1）。
 // PWA版の `src/components/sukusuku/money/moneyVisual.tsx` と同じ見た目。
