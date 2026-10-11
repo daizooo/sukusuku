@@ -28,6 +28,7 @@ import type {
   MoneyWalletBalance,
   MoneyWalletType,
 } from '@/types/app';
+import { isHoliday } from './japaneseHolidays.ts';
 
 const pad2 = (value: number) => String(value).padStart(2, '0');
 
@@ -172,7 +173,7 @@ export function cardScheduleLabel(wallet: Pick<MoneyWallet, 'closeDay' | 'payDay
 
 /**
  * ルールの過去1年の記録（種類・出金元・お店が同じで、見込みでないもの。新しい順）。見込みの額のもとになる
- * （DBの money_recurring_estimate と同じ選び方。額の出し方はDBだけが持つ）。設定画面で、ルールが過去の記録と
+ * （DBの money_recurring_estimate と同じ選び方。額の出し方は estimateRecurringAmount）。設定画面で、ルールが過去の記録と
  * 結びついているかを確かめるのに使う。1件の記録に同じ種類の品目が複数あれば合計する。
  */
 export function recurringHistory(
@@ -384,32 +385,197 @@ export function categoryPath(categories: readonly MoneyCategory[], categoryId: s
   return parent ? `${parent.name} › ${category.name}` : category.name;
 }
 
+// ---- 固定費を予算に足す（docs/kakei.md §3.1・§3.3） ----
+// 足す額は、記録を作る側（DBの make_money_recurring_records・money_recurring_estimate）と同じ決め方にして、予算と記録をつなぐ。
+// 日取り・休日・見込みの出し方を DB と同じに写してある（片方を直したらもう片方も直す。日取りの休日は japaneseHolidays と DB の jp_holiday_name が一致）。
+
+const lastDayOfMonth = (year: number, month: number): number => new Date(Date.UTC(year, month, 0)).getUTCDate();
+const weekdayOfDate = (year: number, month: number, day: number): number => new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+
+/** 銀行の営業日か（土日・祝日・12月31日〜1月3日を除く。DBの money_is_business_day）。 */
+function isBusinessDay(dateKey: string): boolean {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const weekday = weekdayOfDate(year, month, day);
+  if (weekday === 0 || weekday === 6) return false;
+  if (['12-31', '01-01', '01-02', '01-03'].includes(dateKey.slice(5))) return false;
+  return !isHoliday(new Date(year, month - 1, day));
+}
+
 /**
- * その月（YYYY-MM）の大分類の月の予算。予算は年ごとに12か月ぶんを持つので、年の途中で直しても、直した月より前の月は変わらない。
+ * ルールのその月（month は 1〜12）の日付。「毎月◯日（31 は末日）」か「第n◯曜日／最終◯曜日」を決め、
+ * 休日なら翌営業日／前営業日にずらす（DBの money_rule_date と money_shift_business_day）。
+ */
+export function recurringDateOf(
+  year: number,
+  month: number,
+  rule: Pick<MoneyRecurring, 'day' | 'weekOfMonth' | 'weekday' | 'holiday'>,
+): string {
+  const last = lastDayOfMonth(year, month);
+  let day: number;
+  if (rule.weekOfMonth == null || rule.weekday == null) {
+    day = Math.min(rule.day, last);
+  } else if (rule.weekOfMonth >= 5) {
+    day = last - ((weekdayOfDate(year, month, last) - rule.weekday + 7) % 7);
+  } else {
+    day = 1 + ((rule.weekday - weekdayOfDate(year, month, 1) + 7) % 7) + (rule.weekOfMonth - 1) * 7;
+  }
+  let dateKey = `${year}-${pad2(month)}-${pad2(day)}`;
+  if (rule.holiday === 'none') return dateKey;
+  while (!isBusinessDay(dateKey)) dateKey = addDays(dateKey, rule.holiday === 'next' ? 1 : -1);
+  return dateKey;
+}
+
+/** 1年前の同じ日（2月29日は2月28日。DBの `- interval '1 year'` と同じ）。 */
+const yearBefore = (dateKey: string): string =>
+  `${Number(dateKey.slice(0, 4)) - 1}-${dateKey.slice(5) === '02-29' ? '02-28' : dateKey.slice(5)}`;
+
+/**
+ * 見込みのルールの、その月（YYYY-MM）の額。DBの money_recurring_estimate と同じ:
+ * 前年同月の記録（前年のその月の引き落とし日の前後10日。いちばん近いもの）があればその額、無ければ直近3回（過去1年）の平均、
+ * 記録が1件も無ければルールに入れた額。同じ種類・出金元・お店の、見込みでない記録だけを使う。
+ */
+export function estimateRecurringAmount(rule: MoneyRecurring, monthKey: string, records: readonly MoneyRecord[]): number {
+  if (rule.walletId === null) return rule.amount;
+  const year = yearOfMonth(monthKey);
+  const month = Number(monthKey.slice(5, 7));
+  const on = recurringDateOf(year, month, rule);
+  const lastYear = recurringDateOf(year - 1, month, rule);
+  const oneYearAgo = yearBefore(on);
+  const from = addDays(lastYear, -10) < oneYearAgo ? addDays(lastYear, -10) : oneYearAgo;
+  const store = rule.store.trim();
+  const matched: { occurredOn: string; amount: number }[] = [];
+  for (const record of records) {
+    if (record.kind !== rule.kind || record.isEstimate || record.walletId !== rule.walletId) continue;
+    if (rule.kind === 'transfer' && record.toWalletId !== rule.toWalletId) continue;
+    if (record.store.trim() !== store) continue;
+    if (record.occurredOn < from || record.occurredOn >= on) continue;
+    // その月のためにこのルールが作った記録は、作った時点では無かったので数えない。
+    if (record.recurringId === rule.id && record.month === monthKey) continue;
+    const items = rule.categoryId === null ? record.items : record.items.filter((item) => item.categoryId === rule.categoryId);
+    if (items.length === 0) continue;
+    matched.push({ occurredOn: record.occurredOn, amount: items.reduce((sum, item) => sum + item.amount, 0) });
+  }
+  const apart = (dateKey: string) => Math.abs(Math.round((parseDateKey(dateKey) - parseDateKey(lastYear)) / DAY_MS));
+  const near = matched
+    .filter((entry) => apart(entry.occurredOn) <= 10)
+    .sort((a, b) => apart(a.occurredOn) - apart(b.occurredOn) || (a.occurredOn < b.occurredOn ? 1 : -1))[0];
+  if (near) return near.amount;
+  const recent = matched
+    .filter((entry) => entry.occurredOn >= oneYearAgo)
+    .sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : a.occurredOn > b.occurredOn ? -1 : 0))
+    .slice(0, 3);
+  if (recent.length > 0) return Math.round(recent.reduce((sum, entry) => sum + entry.amount, 0) / recent.length);
+  return rule.amount;
+}
+
+/**
+ * 固定費のルールのその月（YYYY-MM）の額＝記録と同じ額。
+ * そのルールが作った記録が見込みのまま（固定額なら確定していても）あれば、その記録の額。額を見込むルールで確定したあとは、
+ * 作った時点と同じ計算（estimateRecurringAmount）で出す（確定した実際の額と比べられるように）。記録がまだ無い月も同じ計算。
+ */
+function recurringMonthAmount(
+  rule: MoneyRecurring,
+  monthKey: string,
+  records: readonly MoneyRecord[],
+  made: ReadonlyMap<string, MoneyRecord>,
+): number {
+  const record = made.get(`${rule.id}|${monthKey}`);
+  if (record && (rule.amountMode === 'fixed' || record.isEstimate)) {
+    return record.items.reduce((sum, item) => sum + item.amount, 0);
+  }
+  return rule.amountMode === 'fixed' ? rule.amount : estimateRecurringAmount(rule, monthKey, records);
+}
+
+/**
+ * 固定費（支出のルール）から、大分類ごと・年ごとの1月〜12月の予算に足す額を出す（2026-10-11）。
+ * 記録を作る条件と同じ（使っていて、出金元と種類が決まっているもの）で、生活費の大分類のものだけ。種類が小分類ならその大分類へ。
+ * ルールを作った月から、記録する月（null は毎月）に、今年の翌年まで足す（作る前の月は変えない）。
+ * 返す行は fixed: true で、手入力の予算の行といっしょに budgets に並べて使う。
+ */
+export function fixedBudgetRows(
+  recurring: readonly MoneyRecurring[],
+  categories: readonly MoneyCategory[],
+  records: readonly MoneyRecord[],
+  today: string,
+): MoneyBudget[] {
+  const byId = new Map(categories.map((category) => [category.id, category]));
+  const made = new Map<string, MoneyRecord>();
+  for (const record of records) {
+    if (record.recurringId !== null && record.month !== null && record.kind === 'expense') {
+      made.set(`${record.recurringId}|${record.month}`, record);
+    }
+  }
+  const lastYear = yearOfMonth(today) + 1;
+  const sums = new Map<string, number[]>();
+  for (const rule of recurring) {
+    if (rule.archived || rule.kind !== 'expense' || rule.walletId === null || rule.categoryId === null) continue;
+    const category = byId.get(rule.categoryId);
+    const top = category && category.parentId !== null ? byId.get(category.parentId) : category;
+    if (!top || top.kind !== 'living') continue;
+    const startMonth = rule.createdAt.slice(0, 7);
+    for (let year = yearOfMonth(startMonth); year <= lastYear; year += 1) {
+      for (let month = 1; month <= 12; month += 1) {
+        const monthKey = `${year}-${pad2(month)}`;
+        if (monthKey < startMonth || (rule.months !== null && !rule.months.includes(month))) continue;
+        const amount = recurringMonthAmount(rule, monthKey, records, made);
+        if (amount <= 0) continue;
+        const key = `${top.id}|${year}`;
+        const months = sums.get(key) ?? Array.from({ length: 12 }, () => 0);
+        months[month - 1] += amount;
+        sums.set(key, months);
+      }
+    }
+  }
+  return [...sums].map(([key, monthAmounts]) => {
+    const [categoryId, year] = key.split('|');
+    return { id: `fixed:${key}`, categoryId, year: Number(year), monthAmounts, fixed: true };
+  });
+}
+
+/**
+ * その月（YYYY-MM）の大分類の、手入力の月の予算（固定費は含まない）。予算は年ごとに12か月ぶんを持つので、
+ * 年の途中で直しても、直した月より前の月は変わらない。
  * その年の行が無ければ、前の年のいちばん近い行の12月の額（毎年入れ直さなくてよいように）。どこにも無い月は null。
  */
-export function budgetFor(budgets: readonly MoneyBudget[], categoryId: string, monthKey: string): number | null {
+export function manualBudgetFor(budgets: readonly MoneyBudget[], categoryId: string, monthKey: string): number | null {
   const year = yearOfMonth(monthKey);
   const month = Number(monthKey.slice(5, 7));
   let found: MoneyBudget | null = null;
   for (const budget of budgets) {
-    if (budget.categoryId !== categoryId || budget.year > year) continue;
+    if (budget.categoryId !== categoryId || budget.fixed || budget.year > year) continue;
     if (found === null || budget.year > found.year) found = budget;
   }
   if (found === null) return null;
   return found.monthAmounts[found.year === year ? month - 1 : 11] ?? null;
 }
 
-/** その年の1月〜12月の予算（長さ12）。年の途中で直すとき、直す前の月をそのまま残すのに使う。 */
-export const budgetMonths = (budgets: readonly MoneyBudget[], categoryId: string, year: number): (number | null)[] =>
-  Array.from({ length: 12 }, (_, index) => budgetFor(budgets, categoryId, `${year}-${pad2(index + 1)}`));
+/**
+ * その月（YYYY-MM）の大分類に、固定費から足される額（無ければ 0）。その年の行が無ければ、前の年のいちばん近い行の同じ月
+ * （先の年まで見るときの目安）。ルールを作る前の年は 0。
+ */
+export function fixedBudgetFor(budgets: readonly MoneyBudget[], categoryId: string, monthKey: string): number {
+  const year = yearOfMonth(monthKey);
+  let found: MoneyBudget | null = null;
+  for (const budget of budgets) {
+    if (budget.categoryId !== categoryId || !budget.fixed || budget.year > year) continue;
+    if (found === null || budget.year > found.year) found = budget;
+  }
+  return found?.monthAmounts[Number(monthKey.slice(5, 7)) - 1] ?? 0;
+}
 
-/** fromMonth（1〜12）から年末までを amount にした12か月ぶん。それより前の月は current のまま。 */
-export const withBudgetFrom = (
-  current: readonly (number | null)[],
-  fromMonth: number,
-  amount: number,
-): (number | null)[] => current.map((value, index) => (index + 1 >= fromMonth ? amount : value));
+/**
+ * その月（YYYY-MM）の大分類の月の予算＝手入力の額＋その月の固定費（2026-10-11）。
+ * どちらも無い月は null（予算なし）。
+ */
+export function budgetFor(budgets: readonly MoneyBudget[], categoryId: string, monthKey: string): number | null {
+  const manual = manualBudgetFor(budgets, categoryId, monthKey);
+  const fixed = fixedBudgetFor(budgets, categoryId, monthKey);
+  return manual === null && fixed === 0 ? null : (manual ?? 0) + fixed;
+}
+
+/** その年の1月〜12月の、手入力の予算（長さ12）。編集の初期値。 */
+export const budgetMonths = (budgets: readonly MoneyBudget[], categoryId: string, year: number): (number | null)[] =>
+  Array.from({ length: 12 }, (_, index) => manualBudgetFor(budgets, categoryId, `${year}-${pad2(index + 1)}`));
 
 /**
  * 「その年の予算」として一覧に出す代表の月。今年なら今月、これからの年なら1月、過ぎた年なら12月

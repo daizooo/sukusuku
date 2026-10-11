@@ -127,6 +127,8 @@ export const rowToRecurring = (row: RecurringRow): MoneyRecurring => ({
   name: row.name,
   position: row.position,
   archived: row.archived_at !== null,
+  // 日本の日付（UTC+9）で。
+  createdAt: new Date(Date.parse(row.created_at) + 9 * 60 * 60 * 1000).toISOString().slice(0, 10),
 });
 
 /** 一度に読む行数（Supabase の Data API は1回に1000行まで）。 */

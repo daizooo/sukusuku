@@ -503,6 +503,8 @@ export interface MoneyBudget {
   year: number;
   /** 1月〜12月の月額（長さ12。null の月は予算なし）。 */
   monthAmounts: (number | null)[];
+  /** 固定費から出した行（手入力ではない。保存しない）。fixedBudgetRows。 */
+  fixed?: boolean;
 }
 
 /** 出金元の種類。 */
@@ -709,6 +711,8 @@ export interface MoneyRecurring {
   name: string;
   position: number;
   archived: boolean;
+  /** ルールを作った日（YYYY-MM-DD）。固定費を予算に足すのはこの月から。 */
+  createdAt: string;
 }
 
-export type MoneyRecurringDraft = Omit<MoneyRecurring, 'id' | 'position' | 'archived'>;
+export type MoneyRecurringDraft = Omit<MoneyRecurring, 'id' | 'position' | 'archived' | 'createdAt'>;

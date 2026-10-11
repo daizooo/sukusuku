@@ -8,6 +8,7 @@ import {
   budgetFor,
   budgetMonthKey,
   budgetMonths,
+  fixedBudgetFor,
   CATEGORY_ICON_COLORS,
   dateKeyOfDate,
   childCategories,
@@ -16,7 +17,6 @@ import {
   iconKeyOf,
   MONEY_ICONS,
   topCategories,
-  withBudgetFrom,
   formatYear,
   parseAmountInput,
 } from '@/lib/moneyUtils';
@@ -158,10 +158,10 @@ export default function CategoryEditor({
           replace(category);
         }
       }
-      if (result.budget !== null) {
-        // 選んだ月から年末までだけ書き換える。それより前の月の予算は変えない（過去の振り返りが変わらないように）。
+      if (result.monthAmounts !== null) {
+        // 月ごとの手入力の額。変えた月があるときだけ保存する（固定費は計算で足されるので、ここには入れない）。
         const current = budgetMonths(budgets, category.id, year);
-        const next = withBudgetFrom(current, result.fromMonth, result.budget);
+        const next = result.monthAmounts;
         if (next.some((value, index) => value !== current[index])) {
           const saved = await saveMoneyBudget(supabase, familyId, category.id, year, next);
           onBudgets((prev) => [...prev.filter((entry) => entry.id !== saved.id), saved]);
@@ -316,13 +316,11 @@ export default function CategoryEditor({
           isTop={editing.category === null ? editing.parentId === null : editing.category.parentId === null}
           showBudget={kind === 'living'}
           year={year}
-          budget={editing.category ? budgetFor(budgets, editing.category.id, shownKey) : null}
-          // 今年ですでに予算があるカテゴリは、今月から。それ以外（新しい年・はじめて決める）は年のはじめから。
-          defaultFromMonth={
-            editing.category && year === Number(today.slice(0, 4)) && budgetFor(budgets, editing.category.id, today.slice(0, 7)) !== null
-              ? Number(today.slice(5, 7))
-              : 1
-          }
+          monthAmounts={editing.category ? budgetMonths(budgets, editing.category.id, year) : Array.from({ length: 12 }, () => null)}
+          // 固定費（毎月自動で記録するルール）から、その月の予算に足される額。
+          fixed={Array.from({ length: 12 }, (_, index) =>
+            editing.category ? fixedBudgetFor(budgets, editing.category.id, `${year}-${String(index + 1).padStart(2, '0')}`) : 0,
+          )}
           onClose={() => setEditing(null)}
           onSubmit={(result) => void save(result)}
           onDelete={editing.category ? () => void removeCategory(editing.category!) : undefined}
@@ -338,10 +336,8 @@ interface SheetResult {
   icon: string | null;
   /** アイコンの色（大分類だけ）。null は標準（アイコンごとの色）。 */
   iconColor: string | null;
-  /** 大分類の月の予算。入れなかった・小分類は null。 */
-  budget: number | null;
-  /** 予算を反映しはじめる月（1〜12）。そこから年末まで。それより前の月は変わらない。 */
-  fromMonth: number;
+  /** 大分類の、その年の1月〜12月の手入力の予算（長さ12。null の月は予算なし）。小分類は null。 */
+  monthAmounts: (number | null)[] | null;
 }
 
 const inputClass =
@@ -353,8 +349,8 @@ function CategoryModal({
   isTop,
   showBudget,
   year,
-  budget,
-  defaultFromMonth,
+  monthAmounts,
+  fixed,
   onClose,
   onSubmit,
   onDelete,
@@ -363,15 +359,15 @@ function CategoryModal({
   isTop: boolean;
   showBudget: boolean;
   year: number;
-  budget: number | null;
-  defaultFromMonth: number;
+  monthAmounts: (number | null)[];
+  fixed: number[];
   onClose: () => void;
   onSubmit: (result: SheetResult) => void;
   onDelete?: () => void;
 }) {
   const [name, setName] = useState(category?.name ?? '');
-  const [amount, setAmount] = useState(budget === null ? '' : String(budget));
-  const [fromMonth, setFromMonth] = useState(defaultFromMonth);
+  const [amounts, setAmounts] = useState<string[]>(() => monthAmounts.map((value) => (value === null ? '' : String(value))));
+  const [bulk, setBulk] = useState('');
   // 自動は無し。決めていない種類は、今の名前から近いものを選んだ状態で始める。
   const [icon, setIcon] = useState<string>(category ? (category.icon ?? guessIconKey(category.name)) : 'other');
   const [iconColor, setIconColor] = useState<string | null>(category?.iconColor ?? null);
@@ -381,15 +377,23 @@ function CategoryModal({
 
   const submit = () => {
     if (name.trim() === '') return setError('名前を入れてください');
-    const value = amount.trim() === '' ? null : parseAmountInput(amount);
-    if (withBudget && amount.trim() !== '' && value === null) return setError('予算は0以上の整数（円）で入れてください');
+    const values = amounts.map((text) => (text.trim() === '' ? null : parseAmountInput(text)));
+    if (withBudget && values.some((value, index) => value === null && amounts[index].trim() !== '')) {
+      return setError('予算は0以上の整数（円）で入れてください');
+    }
     onSubmit({
       name,
       icon: isTop ? icon : (category?.icon ?? null),
       iconColor: isTop ? iconColor : (category?.iconColor ?? null),
-      budget: withBudget ? value : null,
-      fromMonth,
+      monthAmounts: withBudget ? values : null,
     });
+  };
+
+  const fillAll = () => {
+    const value = bulk.trim() === '' ? null : parseAmountInput(bulk);
+    if (value === null) return setError('まとめて入れる額は0以上の整数（円）で入れてください');
+    setError(null);
+    setAmounts(Array.from({ length: 12 }, () => String(value)));
   };
 
   return (
@@ -480,40 +484,53 @@ function CategoryModal({
           </div>
         )}
         {withBudget && (
-          <div className="space-y-3">
-            <label className="block">
-              <span className={labelClass}>{formatYear(year)}の月の予算（円）</span>
+          <div className="space-y-2">
+            <span className={labelClass}>{formatYear(year)}の月ごとの予算（円）</span>
+            <p className="text-[11px] text-gray-400">
+              月ごとに決められます。この種類にひもづく固定費は、その月の予算に自動で足されます（固定費の設定の「種類」）。空の月は、固定費だけです
+            </p>
+            <div className="flex items-center gap-2">
               <input
                 className={`${inputClass} tabular-nums`}
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
+                value={bulk}
+                onChange={(event) => setBulk(event.target.value)}
                 inputMode="numeric"
-                placeholder="未設定"
+                placeholder="同じ額をまとめて入れる"
               />
-            </label>
-            <div>
-              <span className={labelClass}>反映する月</span>
-              <div className="flex flex-wrap gap-1.5">
-                {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
-                  <button
-                    key={month}
-                    type="button"
-                    aria-pressed={fromMonth === month}
-                    onClick={() => setFromMonth(month)}
-                    className={`rounded-full px-2.5 py-1.5 text-[13px] ${
-                      fromMonth === month ? 'bg-blue-100 font-bold text-blue-800' : 'bg-gray-100 font-semibold text-gray-700'
-                    }`}
-                  >
-                    {month}月
-                  </button>
-                ))}
-              </div>
-              <span className="mt-1 block text-[11px] text-gray-400">
-                {fromMonth === 1
-                  ? `${formatYear(year)}のはじめから、年末まで反映します。次の年も、直すまで同じ額を使います`
-                  : `${fromMonth}月から年末まで反映します。${fromMonth - 1}月までの予算は変わらず、過去の振り返りもそのままです`}
-              </span>
+              <button
+                type="button"
+                onClick={fillAll}
+                className="shrink-0 rounded-lg bg-blue-50 px-3 py-2 text-[13px] font-bold text-blue-800"
+              >
+                全ての月に入れる
+              </button>
             </div>
+            {amounts.map((text, index) => {
+              const manual = text.trim() === '' ? null : parseAmountInput(text);
+              const total = (manual ?? 0) + fixed[index];
+              return (
+                <div key={index} className="flex items-center gap-2">
+                  <span className="w-9 shrink-0 text-[13px] font-bold text-gray-700">{index + 1}月</span>
+                  <div className="w-32 shrink-0">
+                    <input
+                      className={`${inputClass} tabular-nums`}
+                      value={text}
+                      onChange={(event) =>
+                        setAmounts((prev) => prev.map((value, at) => (at === index ? event.target.value : value)))
+                      }
+                      inputMode="numeric"
+                      placeholder="未設定"
+                      aria-label={`${index + 1}月の予算`}
+                    />
+                  </div>
+                  {fixed[index] > 0 && (
+                    <span className="text-[11px] font-semibold text-gray-400 tabular-nums">
+                      ＋固定費 {formatYen(fixed[index])}＝{formatYen(total)}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
         {error && <p className="text-xs text-red-500">{error}</p>}

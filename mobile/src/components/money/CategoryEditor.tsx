@@ -10,6 +10,7 @@ import {
   budgetFor,
   budgetMonthKey,
   budgetMonths,
+  fixedBudgetFor,
   CATEGORY_ICON_COLORS,
   dateKeyOfDate,
   childCategories,
@@ -18,7 +19,6 @@ import {
   iconKeyOf,
   MONEY_ICONS,
   topCategories,
-  withBudgetFrom,
   formatYear,
   parseAmountInput,
 } from '@/lib/moneyUtils';
@@ -161,10 +161,10 @@ export default function CategoryEditor({
           replace(category);
         }
       }
-      if (result.budget !== null) {
-        // 選んだ月から年末までだけ書き換える。それより前の月の予算は変えない（過去の振り返りが変わらないように）。
+      if (result.monthAmounts !== null) {
+        // 月ごとの手入力の額。変えた月があるときだけ保存する（固定費は計算で足されるので、ここには入れない）。
         const current = budgetMonths(budgets, category.id, year);
-        const next = withBudgetFrom(current, result.fromMonth, result.budget);
+        const next = result.monthAmounts;
         if (next.some((value, index) => value !== current[index])) {
           const saved = await saveMoneyBudget(supabase, familyId, category.id, year, next);
           onBudgets((prev) => [...prev.filter((entry) => entry.id !== saved.id), saved]);
@@ -328,13 +328,11 @@ export default function CategoryEditor({
             isTop={editing.category === null ? editing.parentId === null : editing.category.parentId === null}
             showBudget={kind === 'living'}
             year={year}
-            budget={editing.category ? budgetFor(budgets, editing.category.id, shownKey) : null}
-            // 今年ですでに予算があるカテゴリは、今月から。それ以外（新しい年・はじめて決める）は年のはじめから。
-            defaultFromMonth={
-              editing.category && year === Number(today.slice(0, 4)) && budgetFor(budgets, editing.category.id, today.slice(0, 7)) !== null
-                ? Number(today.slice(5, 7))
-                : 1
-            }
+            monthAmounts={editing.category ? budgetMonths(budgets, editing.category.id, year) : Array.from({ length: 12 }, () => null)}
+            // 固定費（毎月自動で記録するルール）から、その月の予算に足される額。
+            fixed={Array.from({ length: 12 }, (_, index) =>
+              editing.category ? fixedBudgetFor(budgets, editing.category.id, `${year}-${String(index + 1).padStart(2, '0')}`) : 0,
+            )}
             onClose={() => setEditing(null)}
             onSubmit={(result) => void save(result)}
             onDelete={editing.category ? () => confirmDelete(editing.category!) : undefined}
@@ -351,10 +349,8 @@ interface SheetResult {
   icon: string | null;
   /** アイコンの色（大分類だけ）。null は標準（アイコンごとの色）。 */
   iconColor: string | null;
-  /** 大分類の月の予算。入れなかった・小分類は null。 */
-  budget: number | null;
-  /** 予算を反映しはじめる月（1〜12）。そこから年末まで。それより前の月は変わらない。 */
-  fromMonth: number;
+  /** 大分類の、その年の1月〜12月の手入力の予算（長さ12。null の月は予算なし）。小分類は null。 */
+  monthAmounts: (number | null)[] | null;
 }
 
 function CategorySheet({
@@ -362,8 +358,8 @@ function CategorySheet({
   isTop,
   showBudget,
   year,
-  budget,
-  defaultFromMonth,
+  monthAmounts,
+  fixed,
   onClose,
   onSubmit,
   onDelete,
@@ -372,15 +368,15 @@ function CategorySheet({
   isTop: boolean;
   showBudget: boolean;
   year: number;
-  budget: number | null;
-  defaultFromMonth: number;
+  monthAmounts: (number | null)[];
+  fixed: number[];
   onClose: () => void;
   onSubmit: (result: SheetResult) => void;
   onDelete?: () => void;
 }) {
   const [name, setName] = useState(category?.name ?? '');
-  const [amount, setAmount] = useState(budget === null ? '' : String(budget));
-  const [fromMonth, setFromMonth] = useState(defaultFromMonth);
+  const [amounts, setAmounts] = useState<string[]>(() => monthAmounts.map((value) => (value === null ? '' : String(value))));
+  const [bulk, setBulk] = useState('');
   // 自動は無し。決めていない種類は、今の名前から近いものを選んだ状態で始める。
   const [icon, setIcon] = useState<string>(category ? (category.icon ?? guessIconKey(category.name)) : 'other');
   const [iconColor, setIconColor] = useState<string | null>(category?.iconColor ?? null);
@@ -390,15 +386,22 @@ function CategorySheet({
 
   const submit = () => {
     if (name.trim() === '') return setError('名前を入れてください');
-    const value = amount.trim() === '' ? null : parseAmountInput(amount);
-    if (withBudget && amount.trim() !== '' && value === null) return setError('予算は0以上の整数（円）で入れてください');
+    const values = amounts.map((text) => (text.trim() === '' ? null : parseAmountInput(text)));
+    if (withBudget && values.some((value, index) => value === null && amounts[index].trim() !== '')) {
+      return setError('予算は0以上の整数（円）で入れてください');
+    }
     onSubmit({
       name,
       icon: isTop ? icon : (category?.icon ?? null),
       iconColor: isTop ? iconColor : (category?.iconColor ?? null),
-      budget: withBudget ? value : null,
-      fromMonth,
+      monthAmounts: withBudget ? values : null,
     });
+  };
+
+  const fillAll = () => {
+    if (bulk.trim() === '' || parseAmountInput(bulk) === null) return setError('まとめて入れる額は0以上の整数（円）で入れてください');
+    setError(null);
+    setAmounts(Array.from({ length: 12 }, () => String(parseAmountInput(bulk))));
   };
 
   return (
@@ -484,34 +487,45 @@ function CategorySheet({
         )}
         {withBudget && (
           <View style={styles.field}>
-            <Text style={styles.label}>{formatYear(year)}の月の予算（円）</Text>
-            <TextInput
-              style={styles.input}
-              value={amount}
-              onChangeText={setAmount}
-              keyboardType="number-pad"
-              placeholder="未設定"
-              placeholderTextColor={colors.textFaint}
-            />
-            <Text style={styles.label}>反映する月</Text>
-            <View style={styles.months}>
-              {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
-                <Pressable
-                  key={month}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: fromMonth === month }}
-                  onPress={() => setFromMonth(month)}
-                  style={[styles.monthChip, fromMonth === month && styles.monthChipSelected]}
-                >
-                  <Text style={[styles.monthChipText, fromMonth === month && styles.monthChipTextSelected]}>{month}月</Text>
-                </Pressable>
-              ))}
-            </View>
+            <Text style={styles.label}>{formatYear(year)}の月ごとの予算（円）</Text>
             <Text style={styles.hint}>
-              {fromMonth === 1
-                ? `${formatYear(year)}のはじめから、年末まで反映します。次の年も、直すまで同じ額を使います`
-                : `${fromMonth}月から年末まで反映します。${fromMonth - 1}月までの予算は変わらず、過去の振り返りもそのままです`}
+              月ごとに決められます。この種類にひもづく固定費は、その月の予算に自動で足されます（固定費の設定の「種類」）。空の月は、固定費だけです
             </Text>
+            <View style={styles.bulkRow}>
+              <TextInput
+                style={[styles.input, styles.flex]}
+                value={bulk}
+                onChangeText={setBulk}
+                keyboardType="number-pad"
+                placeholder="同じ額をまとめて入れる"
+                placeholderTextColor={colors.textFaint}
+              />
+              <Pressable accessibilityRole="button" onPress={fillAll} style={styles.bulkButton}>
+                <Text style={styles.bulkButtonText}>全ての月に入れる</Text>
+              </Pressable>
+            </View>
+            {amounts.map((text, index) => {
+              const manual = text.trim() === '' ? null : parseAmountInput(text);
+              const total = (manual ?? 0) + fixed[index];
+              return (
+                <View key={index} style={styles.monthRow}>
+                  <Text style={styles.monthLabel}>{index + 1}月</Text>
+                  <TextInput
+                    style={[styles.input, styles.monthInput]}
+                    value={text}
+                    onChangeText={(next) => setAmounts((prev) => prev.map((value, at) => (at === index ? next : value)))}
+                    keyboardType="number-pad"
+                    placeholder="未設定"
+                    placeholderTextColor={colors.textFaint}
+                  />
+                  {fixed[index] > 0 && (
+                    <Text style={styles.fixedText}>
+                      ＋固定費 {formatYen(fixed[index])}＝{formatYen(total)}
+                    </Text>
+                  )}
+                </View>
+              );
+            })}
           </View>
         )}
         {error && <Text style={styles.error}>{error}</Text>}
@@ -599,11 +613,13 @@ const styles = StyleSheet.create({
   colors: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingVertical: 4 },
   swatch: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   swatchDefault: { backgroundColor: colors.neutralSurface },
-  months: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  monthChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.neutralSurface },
-  monthChipSelected: { backgroundColor: colors.moneySoft },
-  monthChipText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
-  monthChipTextSelected: { color: colors.moneyText, fontWeight: '700' },
+  bulkRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bulkButton: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.moneySoft },
+  bulkButtonText: { fontSize: 13, fontWeight: '700', color: colors.moneyText },
+  monthRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  monthLabel: { width: 36, fontSize: 13, fontWeight: '700', color: colors.textSubtle },
+  monthInput: { width: 120 },
+  fixedText: { flex: 1, fontSize: 11, fontWeight: '600', color: colors.textFaint },
   swatchSelected: { borderWidth: 3, borderColor: colors.text },
   list: { gap: 10 },
   topLine: { flexDirection: 'row', alignItems: 'center' },
