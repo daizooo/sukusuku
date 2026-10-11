@@ -5,12 +5,12 @@ import { Pencil, Plus, Search, Store } from 'lucide-react';
 import type { MoneyStore } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { normalizeName } from '@/lib/shoppingUtils';
-import { insertMoneyStore, renameMoneyStore, setMoneyStoreArchived } from '@/lib/api/money';
+import { deleteMoneyStore, insertMoneyStore, renameMoneyStore, setMoneyStoreArchived } from '@/lib/api/money';
 import { ModalShell } from '../modals/TaskForm';
 import { PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
 
 // お店の設定（docs/kakei.md §3.5）。mobile版の `mobile/src/components/money/StoreSettings.tsx` と同じ並び・文言。
-// 登録したお店を探す・足す・名前を直す・使わなくする・また使う。ここで直すのは設定だけで、
+// 登録したお店を探す・足す・名前を直す・削除する。使わなくしてある古いお店は、また使う・削除する。ここで直すのは設定だけで、
 // 記録のお店の名前は変わらない。記録でまだ無いお店の名前を入れると、自動でここに登録される。
 
 interface StoreSettingsProps {
@@ -52,12 +52,24 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
     }
   };
 
+  // 使わなくした古いお店を「また使う」にするためだけに残している（新しく使わなくすることはできない。削除する）。
   const setArchived = async (store: MoneyStore, value: boolean) => {
     setEditing(null);
     try {
       put(await setMoneyStoreArchived(supabase, store.id, value));
     } catch {
       failed();
+    }
+  };
+
+  const remove = async (store: MoneyStore) => {
+    if (!window.confirm(`${store.name}を削除しますか？お店の一覧から消えますが、記録のお店の名前は残ります。`)) return;
+    setEditing(null);
+    try {
+      await deleteMoneyStore(supabase, store.id);
+      onStores((prev) => prev.filter((entry) => entry.id !== store.id));
+    } catch {
+      window.alert('削除できませんでした。もう一度お試しください。');
     }
   };
 
@@ -118,6 +130,9 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
                   <button type="button" onClick={() => void setArchived(store, false)} className="text-[13px] font-bold text-blue-600">
                     また使う
                   </button>
+                  <button type="button" onClick={() => void remove(store)} className="text-[13px] font-bold text-red-500">
+                    削除
+                  </button>
                 </div>
               ))}
           </>
@@ -131,7 +146,7 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
           stores={stores}
           onClose={() => setEditing(null)}
           onSubmit={(name) => void save(editing === 'new' ? null : editing, name)}
-          onArchive={editing === 'new' ? undefined : () => void setArchived(editing, true)}
+          onDelete={editing === 'new' ? undefined : () => void remove(editing)}
         />
       )}
     </StackedScreen>
@@ -143,13 +158,13 @@ function StoreModal({
   stores,
   onClose,
   onSubmit,
-  onArchive,
+  onDelete,
 }: {
   store: MoneyStore | null;
   stores: MoneyStore[];
   onClose: () => void;
   onSubmit: (name: string) => void;
-  onArchive?: () => void;
+  onDelete?: () => void;
 }) {
   const [name, setName] = useState(store?.name ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -163,10 +178,6 @@ function StoreModal({
     onSubmit(typed);
   };
 
-  const archive = () => {
-    if (window.confirm(`${store?.name ?? ''}を使わなくしますか？選べなくなりますが、記録には残ります。`)) onArchive?.();
-  };
-
   return (
     <ModalShell
       title={store ? 'お店を編集' : 'お店を足す'}
@@ -174,9 +185,9 @@ function StoreModal({
       footer={
         <div className="space-y-1">
           <PrimaryButton label="保存する" onClick={submit} />
-          {onArchive && (
-            <button type="button" onClick={archive} className="w-full py-2 text-sm text-red-500">
-              使わなくする
+          {onDelete && (
+            <button type="button" onClick={onDelete} className="w-full py-2 text-sm text-red-500">
+              削除
             </button>
           )}
         </div>

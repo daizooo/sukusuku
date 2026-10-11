@@ -5,13 +5,13 @@ import type { MoneyStore } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
 import { normalizeName } from '@/lib/shoppingUtils';
-import { insertMoneyStore, renameMoneyStore, setMoneyStoreArchived } from '@/lib/api/money';
+import { deleteMoneyStore, insertMoneyStore, renameMoneyStore, setMoneyStoreArchived } from '@/lib/api/money';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 
 // お店の設定（docs/kakei.md §3.5）。PWA版の `src/components/sukusuku/money/StoreSettings.tsx` と同じ並び・文言。
-// 登録したお店を探す・足す・名前を直す・使わなくする・また使う。ここで直すのは設定だけで、
+// 登録したお店を探す・足す・名前を直す・削除する。使わなくしてある古いお店は、また使う・削除する。ここで直すのは設定だけで、
 // 記録のお店の名前は変わらない。記録でまだ無いお店の名前を入れると、自動でここに登録される。
 
 interface StoreSettingsProps {
@@ -48,6 +48,7 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
     }
   };
 
+  // 使わなくした古いお店を「また使う」にするためだけに残している（新しく使わなくすることはできない。削除する）。
   const setArchived = async (store: MoneyStore, value: boolean) => {
     setEditing(null);
     try {
@@ -56,6 +57,22 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
       failed();
     }
   };
+
+  const remove = async (store: MoneyStore) => {
+    setEditing(null);
+    try {
+      await deleteMoneyStore(supabase, store.id);
+      onStores((prev) => prev.filter((entry) => entry.id !== store.id));
+    } catch {
+      Alert.alert('削除できませんでした', 'もう一度お試しください。');
+    }
+  };
+
+  const confirmRemove = (store: MoneyStore) =>
+    Alert.alert(`${store.name}を削除しますか？`, 'お店の一覧から消えますが、記録のお店の名前は残ります。', [
+      { text: 'やめる', style: 'cancel' },
+      { text: '削除', style: 'destructive', onPress: () => void remove(store) },
+    ]);
 
   return (
     <View style={styles.screen}>
@@ -114,6 +131,9 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
                   <Pressable accessibilityRole="button" onPress={() => void setArchived(store, false)} hitSlop={8}>
                     <Text style={styles.link}>また使う</Text>
                   </Pressable>
+                  <Pressable accessibilityRole="button" onPress={() => confirmRemove(store)} hitSlop={8}>
+                    <Text style={styles.deleteLink}>削除</Text>
+                  </Pressable>
                 </View>
               ))}
           </>
@@ -127,7 +147,7 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
           stores={stores}
           onClose={() => setEditing(null)}
           onSubmit={(name) => void save(editing === 'new' ? null : editing, name)}
-          onArchive={editing === 'new' ? undefined : () => void setArchived(editing, true)}
+          onDelete={editing === 'new' ? undefined : () => confirmRemove(editing)}
         />
       )}
     </View>
@@ -139,13 +159,13 @@ function StoreSheet({
   stores,
   onClose,
   onSubmit,
-  onArchive,
+  onDelete,
 }: {
   store: MoneyStore | null;
   stores: MoneyStore[];
   onClose: () => void;
   onSubmit: (name: string) => void;
-  onArchive?: () => void;
+  onDelete?: () => void;
 }) {
   const [name, setName] = useState(store?.name ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -159,12 +179,6 @@ function StoreSheet({
     onSubmit(typed);
   };
 
-  const archive = () =>
-    Alert.alert(`${store?.name ?? ''}を使わなくしますか？`, '選べなくなりますが、記録には残ります。', [
-      { text: 'やめる', style: 'cancel' },
-      { text: '使わなくする', style: 'destructive', onPress: () => onArchive?.() },
-    ]);
-
   return (
     <SheetModal visible onClose={onClose}>
       <LogModalShell
@@ -173,9 +187,9 @@ function StoreSheet({
         footer={
           <>
             <PrimaryButton label="保存する" onPress={submit} />
-            {onArchive && (
-              <Pressable accessibilityRole="button" onPress={archive} style={styles.secondary}>
-                <Text style={styles.deleteText}>使わなくする</Text>
+            {onDelete && (
+              <Pressable accessibilityRole="button" onPress={onDelete} style={styles.secondary}>
+                <Text style={styles.deleteText}>削除</Text>
               </Pressable>
             )}
           </>
@@ -234,6 +248,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   name: { fontSize: 15, fontWeight: '500', color: colors.text },
   link: { fontSize: 13, fontWeight: '700', color: colors.money },
+  deleteLink: { fontSize: 13, fontWeight: '700', color: colors.danger },
   field: { gap: 6 },
   label: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
   input: {

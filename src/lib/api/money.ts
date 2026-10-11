@@ -493,6 +493,12 @@ export async function renameMoneyStore(supabase: SupabaseDb, id: string, name: s
   return rowToStore(data);
 }
 
+/** お店を削除する（記録のお店の名前は残る）。 */
+export async function deleteMoneyStore(supabase: SupabaseDb, id: string): Promise<void> {
+  const { error } = await supabase.from('money_stores').delete().eq('id', id);
+  if (error) throw error;
+}
+
 /** お店を使わなくする／また使う（記録には残る）。 */
 export async function setMoneyStoreArchived(supabase: SupabaseDb, id: string, archived: boolean): Promise<MoneyStore> {
   const { data, error } = await supabase
@@ -551,6 +557,12 @@ export async function updateMoneyRecurring(
     .single();
   if (error) throw error;
   return rowToRecurring(data);
+}
+
+/** ルールを削除する。作った記録は残る（記録の recurring_id が外れるだけ）。 */
+export async function deleteMoneyRecurring(supabase: SupabaseDb, id: string): Promise<void> {
+  const { error } = await supabase.from('money_recurring').delete().eq('id', id);
+  if (error) throw error;
 }
 
 /** ルールを使わなくする／また使う。作った記録はそのまま残る。 */

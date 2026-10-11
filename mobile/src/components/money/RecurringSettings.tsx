@@ -31,14 +31,20 @@ import {
   storeChoices,
   WEEK_OF_MONTH_OPTIONS,
 } from '@/lib/moneyUtils';
-import { insertMoneyRecurring, insertMoneyStore, setMoneyRecurringArchived, updateMoneyRecurring } from '@/lib/api/money';
+import {
+  deleteMoneyRecurring,
+  insertMoneyRecurring,
+  insertMoneyStore,
+  setMoneyRecurringArchived,
+  updateMoneyRecurring,
+} from '@/lib/api/money';
 import CategoryPicker from '@/components/money/CategoryPicker';
 import StorePicker from '@/components/money/StorePicker';
 import { EstimateBadge, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 
 // 毎月の記録の設定（docs/kakei.md §3.3・§3.4・§3.5）。PWA版の `src/components/sukusuku/money/RecurringSettings.tsx` と同じ並び・文言。
 //
-// 口座から落ちる固定費・口座に入る給料などを、項目ごとのルールにする。サーバーが毎朝、その日に当たる記録を作る
+// 口座から落ちる固定支出・口座に入る給料などを、項目ごとのルールにする。サーバーが毎朝、その日に当たる記録を作る
 // （DBの make_money_recurring_records）。額を見込むものは、過去1年の記録（種類・出金元・お店が同じもの）から出す。
 // カード代金はここではなく、出金元のカードに締め日・引き落とし日・引き落とし口座を入れると作られる（一覧だけ出す）。
 // 直すのはルールだけで、もう作った記録は変わらない。
@@ -48,7 +54,7 @@ import { EstimateBadge, PrimaryButton, ScreenHeader } from '@/components/money/m
 // 履歴は、その年の収入の記録を見込み／確定つきで年ごとに出す（見込み額の変更の版は持たない）。
 
 interface RecurringSettingsProps {
-  /** 'expense'＝固定費（支出・振替）、'income'＝固定収入（給与・賞与）。 */
+  /** 'expense'＝固定支出（支出・振替）、'income'＝固定収入（給与・賞与）。 */
   mode: 'expense' | 'income';
   familyId: string;
   recurring: MoneyRecurring[];
@@ -129,6 +135,7 @@ export default function RecurringSettings({
     }
   };
 
+  // 使わなくした古い項目を「また使う」にするためだけに残している（新しく使わなくすることはできない。削除する）。
   const setArchived = async (rule: MoneyRecurring, value: boolean) => {
     setEditing(null);
     try {
@@ -137,6 +144,22 @@ export default function RecurringSettings({
       failed();
     }
   };
+
+  const remove = async (rule: MoneyRecurring) => {
+    setEditing(null);
+    try {
+      await deleteMoneyRecurring(supabase, rule.id);
+      onRecurring((prev) => prev.filter((entry) => entry.id !== rule.id));
+    } catch {
+      Alert.alert('削除できませんでした', 'もう一度お試しください。');
+    }
+  };
+
+  const confirmRemove = (rule: MoneyRecurring) =>
+    Alert.alert(`この${isIncome ? '固定収入' : '固定支出'}を削除しますか？`, 'これから先は作らなくなります。作った記録は残ります。', [
+      { text: 'やめる', style: 'cancel' },
+      { text: '削除', style: 'destructive', onPress: () => void remove(rule) },
+    ]);
 
   if (editing !== null) {
     return (
@@ -155,7 +178,7 @@ export default function RecurringSettings({
           setTemplate(null);
         }}
         onSubmit={(draft, registerStore) => void save(editing === 'new' ? null : editing, draft, registerStore)}
-        onArchive={editing === 'new' ? undefined : () => void setArchived(editing, true)}
+        onDelete={editing === 'new' ? undefined : () => confirmRemove(editing)}
         onAddSimilar={
           editing === 'new'
             ? undefined
@@ -171,12 +194,12 @@ export default function RecurringSettings({
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title={isIncome ? '固定収入' : '固定費'} icon="back" onClose={onBack} />
+      <ScreenHeader title={isIncome ? '固定収入' : '固定支出'} icon="back" onClose={onBack} />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.note}>
           {isIncome
             ? '給与・賞与を登録すると、振込日に見込みの額で自動で記録します（毎朝。休日は営業日にずらします）。給与明細などを見て額を直すと確定します。賞与は1回ごとに、月と日と額を足します。'
-            : '口座から落ちる固定費を登録すると、その日に自動で記録します（毎朝。休日は営業日にずらします）。額を見込むものは「見込み」の印つきで記録し、額を直すと確定します。'}
+            : '口座から落ちる固定支出を登録すると、その日に自動で記録します（毎朝。休日は営業日にずらします）。額を見込むものは「見込み」の印つきで記録し、額を直すと確定します。'}
         </Text>
         {usable.length === 0 && (
           <Text style={styles.empty}>
@@ -215,7 +238,7 @@ export default function RecurringSettings({
         })}
         <Pressable accessibilityRole="button" onPress={() => setEditing('new')} style={styles.add}>
           <Plus size={18} color={colors.money} />
-          <Text style={styles.addText}>{isIncome ? '固定収入を足す' : '固定費を足す'}</Text>
+          <Text style={styles.addText}>{isIncome ? '固定収入を足す' : '固定支出を足す'}</Text>
         </Pressable>
 
         {isIncome && <IncomeHistory records={records} categories={categories} />}
@@ -244,12 +267,15 @@ export default function RecurringSettings({
 
         {archived.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{isIncome ? '使わない固定収入（作った記録は残っています）' : '使わない固定費（作った記録は残っています）'}</Text>
+            <Text style={styles.sectionTitle}>{isIncome ? '使わない固定収入（作った記録は残っています）' : '使わない固定支出（作った記録は残っています）'}</Text>
             {archived.map((rule) => (
               <View key={rule.id} style={[styles.row, styles.archivedRow]}>
                 <Text style={[styles.name, styles.flex]}>{ruleTitle(rule, categories)}</Text>
                 <Pressable accessibilityRole="button" onPress={() => void setArchived(rule, false)} hitSlop={8}>
                   <Text style={styles.link}>また使う</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" onPress={() => confirmRemove(rule)} hitSlop={8}>
+                  <Text style={styles.deleteLink}>削除</Text>
                 </Pressable>
               </View>
             ))}
@@ -331,7 +357,7 @@ function RecurringEditor({
   records,
   onClose,
   onSubmit,
-  onArchive,
+  onDelete,
   onAddSimilar,
   backRef,
 }: {
@@ -346,7 +372,7 @@ function RecurringEditor({
   records: MoneyRecord[];
   onClose: () => void;
   onSubmit: (draft: MoneyRecurringDraft, registerStore: boolean) => void;
-  onArchive?: () => void;
+  onDelete?: () => void;
   /** 固定収入で、同じ名前・入金先でもう1回（月・日・額）を足す。 */
   onAddSimilar?: (source: MoneyRecurring) => void;
   backRef: MutableRefObject<(() => void) | null>;
@@ -437,12 +463,6 @@ function RecurringEditor({
     }, kind !== 'transfer' && store !== '' && registerStore);
   };
 
-  const archive = () =>
-    Alert.alert(`この${isIncome ? '固定収入' : '固定費'}を使わなくしますか？`, 'これから先は作らなくなります。作った記録は残ります。', [
-      { text: 'やめる', style: 'cancel' },
-      { text: '使わなくする', style: 'destructive', onPress: () => onArchive?.() },
-    ]);
-
   if (screen === 'category') {
     return (
       <CategoryPicker
@@ -493,7 +513,7 @@ function RecurringEditor({
   return (
     <View style={styles.screen}>
       <ScreenHeader
-        title={`${isIncome ? '固定収入' : '固定費'}を${rule ? '編集' : '足す'}`}
+        title={`${isIncome ? '固定収入' : '固定支出'}を${rule ? '編集' : '足す'}`}
         icon="back"
         onClose={onClose}
       />
@@ -647,9 +667,9 @@ function RecurringEditor({
             <Text style={styles.similarText}>同じ名前でもう1回（月・日）を足す</Text>
           </Pressable>
         )}
-        {onArchive && (
-          <Pressable accessibilityRole="button" onPress={archive} style={styles.secondary}>
-            <Text style={styles.deleteText}>使わなくする</Text>
+        {onDelete && (
+          <Pressable accessibilityRole="button" onPress={onDelete} style={styles.secondary}>
+            <Text style={styles.deleteText}>削除</Text>
           </Pressable>
         )}
       </View>
@@ -694,6 +714,7 @@ const styles = StyleSheet.create({
   add: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
   addText: { fontSize: 15, fontWeight: '700', color: colors.money },
   link: { fontSize: 13, fontWeight: '700', color: colors.money },
+  deleteLink: { fontSize: 13, fontWeight: '700', color: colors.danger },
   field: { gap: 6 },
   label: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
   input: {
