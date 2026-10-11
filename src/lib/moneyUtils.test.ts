@@ -64,6 +64,7 @@ import {
   walletGain,
   compareWithPreviousYear,
   yearToDateBalance,
+  incomeRecordsInYear,
 } from './moneyUtils.ts';
 import type { MoneyBudget, MoneyCategory, MoneyHolding, MoneyHoldingValue, MoneyItem, MoneyRecord, MoneySecurity, MoneyStore, MoneyWallet, MoneyWalletBalance } from '../types/app.ts';
 
@@ -399,6 +400,24 @@ assert.equal(
     diff: -100000,
   }, '今年の10月は前年の10月が無いので比べない。11・12月だけを比べる');
   assert.equal(compareWithPreviousYear(flow, categories, budgets, 2025, '2025-12'), null, '前の年に記録が無ければ比べない');
+}
+
+// ---- 固定収入の履歴（その年の収入の記録。docs/kakei.md §0.3） ----
+{
+  const income = (id: string, occurredOn: string, amount: number, isEstimate: boolean, kind: MoneyRecord['kind'] = 'income') =>
+    record(id, { occurredOn, kind, isEstimate, walletId: 'bank', items: [item({ amount, categoryId: 'bonus' })] });
+  const list = incomeRecordsInYear(
+    [
+      income('b1', '2026-06-10', 400000, false),
+      income('s1', '2026-10-25', 300000, true),
+      income('x1', '2026-10-26', 5000, false, 'expense'),
+      income('t1', '2026-10-27', 5000, false, 'transfer'),
+      income('p1', '2025-12-10', 250000, false),
+    ],
+    2026,
+  );
+  assert.deepEqual(list.map((entry) => entry.id), ['s1', 'b1'], 'その年の収入だけ。新しい日から（支出・振替・ほかの年は入れない）');
+  assert.equal(list[0].isEstimate, true, '見込みか確定かが分かる');
 }
 
 // ---- 入力の形との行き来 ----

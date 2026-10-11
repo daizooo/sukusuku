@@ -174,6 +174,17 @@ export function recurringHistory(
   return history.sort((x, y) => (x.occurredOn < y.occurredOn ? 1 : x.occurredOn > y.occurredOn ? -1 : 0));
 }
 
+/**
+ * その年の収入の記録（振替・支出を除く）。新しい日から。固定収入の画面の履歴に使う（見込みか確定かは isEstimate）。
+ * docs/kakei.md §0.3。
+ */
+export function incomeRecordsInYear(records: readonly MoneyRecord[], year: number): MoneyRecord[] {
+  const prefix = `${year}-`;
+  return records
+    .filter((record) => record.kind === 'income' && record.occurredOn.startsWith(prefix))
+    .sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : a.occurredOn > b.occurredOn ? -1 : 0));
+}
+
 /** その月の、見込みの額のままの記録（振替を除く。収支に入るものだけ）。 */
 export const estimatesInMonth = (records: readonly MoneyRecord[], monthKey: string): MoneyRecord[] =>
   recordsInMonth(records, monthKey).filter((record) => record.isEstimate && record.kind !== 'transfer');
@@ -194,8 +205,8 @@ export const DEFAULT_CATEGORIES: { kind: MoneyCategoryKind; name: string; childr
   { kind: 'living', name: '娯楽', children: ['レジャー', '本・趣味', '交際費'] },
   { kind: 'living', name: '子ども費', children: ['日用品', '洋服・おもちゃ', '習い事'] },
   { kind: 'living', name: 'その他', children: ['お小遣い', '仕送り', '保険', '使途不明金'] },
-  // 特別費も大分類のひとつ（2026-10-11。docs/kakei.md §0.2）。決まったもの（税金・年払いの保険など）は設定の固定費に登録する。
-  { kind: 'living', name: '特別費', children: ['税金', '保険', '車', '家具・家電', 'お祝い', '旅行'] },
+  // 特別費も大分類のひとつ（2026-10-11。docs/kakei.md §0.2）。小分類は持たず、品名で区別する。決まったもの（税金・年払いの保険など）は設定の固定費に登録する。
+  { kind: 'living', name: '特別費', children: [] },
   { kind: 'income', name: '給料', children: [] },
   { kind: 'income', name: 'その他の収入', children: [] },
 ];
