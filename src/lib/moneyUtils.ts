@@ -119,12 +119,34 @@ export const HOLIDAY_RULE_LABEL: Record<MoneyHolidayRule, string> = {
   none: 'そのまま',
 };
 
-/** 「毎月27日（休日は翌営業日）」「6・12月の10日（休日は前営業日）」。 */
-export function recurringScheduleLabel(rule: Pick<MoneyRecurring, 'day' | 'months' | 'holiday'>): string {
+/** 第何週かの選択肢（5 は最終）。毎月の記録のルールの「第◯◯曜日」に使う。 */
+export const WEEK_OF_MONTH_OPTIONS: { value: number; label: string }[] = [
+  { value: 1, label: '第1' },
+  { value: 2, label: '第2' },
+  { value: 3, label: '第3' },
+  { value: 4, label: '第4' },
+  { value: 5, label: '最終' },
+];
+
+const RULE_WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+/** 毎月の記録のルールの日取り。「27日」「末日」「第2金曜日」「最終金曜日」。 */
+export function recurringDayLabel(rule: Pick<MoneyRecurring, 'day'> & Partial<Pick<MoneyRecurring, 'weekOfMonth' | 'weekday'>>): string {
+  if (rule.weekOfMonth != null && rule.weekday != null) {
+    const week = WEEK_OF_MONTH_OPTIONS.find((option) => option.value === rule.weekOfMonth)?.label ?? `第${rule.weekOfMonth}`;
+    return `${week}${RULE_WEEKDAYS[rule.weekday] ?? ''}曜日`;
+  }
+  return formatDayOfMonth(rule.day);
+}
+
+/** 「毎月27日（休日は翌営業日）」「6・12月の10日（休日は前営業日）」「12月の第2金曜日（休日は前営業日）」。 */
+export function recurringScheduleLabel(
+  rule: Pick<MoneyRecurring, 'day' | 'months' | 'holiday'> & Partial<Pick<MoneyRecurring, 'weekOfMonth' | 'weekday'>>,
+): string {
   const when =
     rule.months === null
-      ? `毎月${formatDayOfMonth(rule.day)}`
-      : `${[...rule.months].sort((a, b) => a - b).join('・')}月の${formatDayOfMonth(rule.day)}`;
+      ? `毎月${recurringDayLabel(rule)}`
+      : `${[...rule.months].sort((a, b) => a - b).join('・')}月の${recurringDayLabel(rule)}`;
   return `${when}（${rule.holiday === 'none' ? '休日もそのまま' : `休日は${HOLIDAY_RULE_LABEL[rule.holiday]}`}）`;
 }
 

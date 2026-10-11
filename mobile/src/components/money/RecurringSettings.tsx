@@ -14,7 +14,7 @@ import type {
 } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
-import { toDateString } from '@/lib/dateUtils';
+import { toDateString, WEEKDAY_LABELS } from '@/lib/dateUtils';
 import {
   cardScheduleLabel,
   categoryPath,
@@ -29,6 +29,7 @@ import {
   recurringHistory,
   recurringScheduleLabel,
   storeChoices,
+  WEEK_OF_MONTH_OPTIONS,
 } from '@/lib/moneyUtils';
 import { insertMoneyRecurring, insertMoneyStore, setMoneyRecurringArchived, updateMoneyRecurring } from '@/lib/api/money';
 import CategoryPicker from '@/components/money/CategoryPicker';
@@ -365,6 +366,10 @@ function RecurringEditor({
   const [registerStore, setRegisterStore] = useState(false);
   const [name, setName] = useState(base?.name ?? '');
   const [day, setDay] = useState(rule ? String(rule.day) : '');
+  // 振込日を「第◯◯曜日」で決めるか（賞与など。固定収入だけ）。
+  const [byWeekday, setByWeekday] = useState(base?.weekOfMonth != null);
+  const [weekOfMonth, setWeekOfMonth] = useState<number | null>(base?.weekOfMonth ?? null);
+  const [weekday, setWeekday] = useState<number | null>(base?.weekday ?? null);
   // 給与は休日の前の営業日に振り込まれることが多い。
   const [holiday, setHoliday] = useState<MoneyHolidayRule>(base?.holiday ?? (isIncome ? 'prev' : 'next'));
   // 賞与の「もう1回」は、月を選び直す（空のまま）。
@@ -373,7 +378,12 @@ function RecurringEditor({
   const [amount, setAmount] = useState(base && base.amount > 0 ? String(base.amount) : '');
   const [error, setError] = useState<string | null>(null);
 
-  const usableWallets = wallets.filter((wallet) => !wallet.archived || wallet.id === walletId || wallet.id === toWalletId);
+  // 固定収入の入金先は銀行の口座だけ（いま選んでいるものは、銀行でなくても残す）。
+  const usableWallets = wallets.filter(
+    (wallet) =>
+      (!wallet.archived || wallet.id === walletId || wallet.id === toWalletId) &&
+      (!isIncome || wallet.type === 'bank' || wallet.id === walletId),
+  );
   const storeOptions = useMemo(() => storeChoices(stores, records), [stores, records]);
   const today = toDateString(new Date());
   const history = useMemo(
@@ -395,8 +405,14 @@ function RecurringEditor({
   };
 
   const submit = () => {
-    const dayValue = Number(day.trim());
-    if (!Number.isInteger(dayValue) || dayValue < 1 || dayValue > 31) return setError(`${isIncome ? '振込日' : '引き落とし日'}を 1〜31 で入れてください（末日は31）`);
+    // 「第◯◯曜日」のときは day を使わない（1 を入れておく）。
+    let dayValue = 1;
+    if (byWeekday) {
+      if (weekOfMonth === null || weekday === null) return setError('第何週の何曜日かを選んでください');
+    } else {
+      dayValue = Number(day.trim());
+      if (!Number.isInteger(dayValue) || dayValue < 1 || dayValue > 31) return setError(`${isIncome ? '振込日' : '引き落とし日'}を 1〜31 で入れてください（末日は31）`);
+    }
     if (walletId === null) return setError(kind === 'income' ? '入金先を選んでください' : '出金元を選んでください');
     if (kind === 'transfer' && (toWalletId === null || toWalletId === walletId)) return setError('入金先を選んでください（出金元と別の口座）');
     if (kind !== 'transfer' && categoryId === null) return setError('種類を選んでください');
@@ -407,6 +423,8 @@ function RecurringEditor({
     onSubmit({
       kind,
       day: dayValue,
+      weekOfMonth: byWeekday ? weekOfMonth : null,
+      weekday: byWeekday ? weekday : null,
       months,
       holiday,
       amountMode,
@@ -466,7 +484,9 @@ function RecurringEditor({
         .map((wallet) => (
           <Chip key={wallet.id} label={wallet.name} selected={selected === wallet.id} onPress={() => onPick(wallet.id)} />
         ))}
-      {usableWallets.length === 0 && <Text style={styles.sub}>出金元を先に足してください</Text>}
+      {usableWallets.length === 0 && (
+        <Text style={styles.sub}>{isIncome ? '銀行の口座を先に足してください' : '出金元を先に足してください'}</Text>
+      )}
     </View>
   );
 
@@ -497,6 +517,7 @@ function RecurringEditor({
         <View style={styles.field}>
           <Text style={styles.label}>{kind === 'income' ? '入金先' : '出金元'}</Text>
           {walletChips(walletId, setWalletId, null)}
+          {isIncome && <Text style={styles.sub}>入金先は銀行の口座だけ選べます</Text>}
         </View>
         {kind === 'transfer' ? (
           <View style={styles.field}>
@@ -522,17 +543,43 @@ function RecurringEditor({
           />
         </View>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>{isIncome ? '振込日' : '引き落とし日（入る日）'}</Text>
-          <TextInput
-            style={styles.input}
-            value={day}
-            onChangeText={setDay}
-            keyboardType="number-pad"
-            placeholder="例: 27（末日は31）"
-            placeholderTextColor={colors.textFaint}
-          />
-        </View>
+        {isIncome && (
+          <View style={styles.field}>
+            <Text style={styles.label}>日の決め方</Text>
+            <View style={styles.chips}>
+              <Chip label="日にち" selected={!byWeekday} onPress={() => setByWeekday(false)} />
+              <Chip label="第◯◯曜日" selected={byWeekday} onPress={() => setByWeekday(true)} />
+            </View>
+          </View>
+        )}
+        {byWeekday ? (
+          <View style={styles.field}>
+            <Text style={styles.label}>振込日</Text>
+            <View style={styles.chips}>
+              {WEEK_OF_MONTH_OPTIONS.map((option) => (
+                <Chip key={option.value} label={option.label} selected={weekOfMonth === option.value} onPress={() => setWeekOfMonth(option.value)} />
+              ))}
+            </View>
+            <View style={styles.chips}>
+              {WEEKDAY_LABELS.map((label, index) => (
+                <Chip key={label} label={`${label}曜日`} selected={weekday === index} onPress={() => setWeekday(index)} />
+              ))}
+            </View>
+            <Text style={styles.sub}>例: 第2・金曜日（その月の2回目の金曜日）、最終・金曜日（月の最後の金曜日）</Text>
+          </View>
+        ) : (
+          <View style={styles.field}>
+            <Text style={styles.label}>{isIncome ? '振込日' : '引き落とし日（入る日）'}</Text>
+            <TextInput
+              style={styles.input}
+              value={day}
+              onChangeText={setDay}
+              keyboardType="number-pad"
+              placeholder="例: 27（末日は31）"
+              placeholderTextColor={colors.textFaint}
+            />
+          </View>
+        )}
         <View style={styles.field}>
           <Text style={styles.label}>休日のとき</Text>
           <View style={styles.chips}>

@@ -1091,6 +1091,8 @@ export type Database = {
           to_wallet_id: string | null
           updated_at: string
           wallet_id: string | null
+          week_of_month: number | null
+          weekday: number | null
         }
         Insert: {
           amount?: number
@@ -1112,6 +1114,8 @@ export type Database = {
           to_wallet_id?: string | null
           updated_at?: string
           wallet_id?: string | null
+          week_of_month?: number | null
+          weekday?: number | null
         }
         Update: {
           amount?: number
@@ -1133,6 +1137,8 @@ export type Database = {
           to_wallet_id?: string | null
           updated_at?: string
           wallet_id?: string | null
+          week_of_month?: number | null
+          weekday?: number | null
         }
         Relationships: [
           {

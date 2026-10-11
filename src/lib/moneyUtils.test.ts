@@ -65,6 +65,7 @@ import {
   compareWithPreviousYear,
   yearToDateBalance,
   incomeRecordsInYear,
+  recurringDayLabel,
 } from './moneyUtils.ts';
 import type { MoneyBudget, MoneyCategory, MoneyHolding, MoneyHoldingValue, MoneyItem, MoneyRecord, MoneySecurity, MoneyStore, MoneyWallet, MoneyWalletBalance } from '../types/app.ts';
 
@@ -453,6 +454,12 @@ assert.equal(formatDayOfMonth(31), '末日');
 assert.equal(recurringScheduleLabel({ day: 27, months: null, holiday: 'next' }), '毎月27日（休日は翌営業日）');
 assert.equal(recurringScheduleLabel({ day: 10, months: [12, 6], holiday: 'prev' }), '6・12月の10日（休日は前営業日）');
 assert.equal(recurringScheduleLabel({ day: 31, months: null, holiday: 'none' }), '毎月末日（休日もそのまま）');
+// 「第◯◯曜日」の日取り（賞与など。docs/kakei.md §0.3）
+assert.equal(recurringDayLabel({ day: 1, weekOfMonth: 2, weekday: 5 }), '第2金曜日');
+assert.equal(recurringDayLabel({ day: 1, weekOfMonth: 5, weekday: 5 }), '最終金曜日');
+assert.equal(recurringDayLabel({ day: 27, weekOfMonth: null, weekday: null }), '27日');
+assert.equal(recurringScheduleLabel({ day: 1, weekOfMonth: 2, weekday: 5, months: [12, 6], holiday: 'prev' }), '6・12月の第2金曜日（休日は前営業日）');
+assert.equal(recurringScheduleLabel({ day: 1, weekOfMonth: 1, weekday: 1, months: null, holiday: 'next' }), '毎月第1月曜日（休日は翌営業日）');
 assert.equal(cardScheduleLabel({ closeDay: 15, payDay: 10, payMonthOffset: null }), '15日締め・翌10日払い');
 assert.equal(cardScheduleLabel({ closeDay: 31, payDay: 27, payMonthOffset: null }), '末日締め・翌27日払い');
 assert.equal(cardScheduleLabel({ closeDay: 5, payDay: 27, payMonthOffset: null }), '5日締め・27日払い', '締め日より後の引き落とし日は同じ月');

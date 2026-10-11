@@ -46,8 +46,11 @@
 
 ### 0.3 固定収入（家計の設定に新設。給与・賞与）
 
-- **給与**: 見込み額・振込日（毎月◯日）・休日のとき（既定は前営業日）・入金先の口座・収入の小分類。
+- **給与**: 見込み額・振込日（毎月◯日）・休日のとき（既定は前営業日）・入金先の口座（**銀行の口座だけ**）・収入の小分類。
   **賞与**: 1回ごとに1件のルール（月・日・見込み額）。「同じ名前でもう1回（月・日）を足す」で回を増やす。賞与の月と日は複数にできる
+- **振込日の決め方**（2026-10-11）: 「日にち」（毎月◯日。31は末日）か「**第◯◯曜日**」（第1〜第4・最終 ＋ 曜日。例: 12月の第2金曜日、最終金曜日）。
+  休日のときの動かし方は、そのあとに今までどおり当てる。DBは `money_recurring.week_of_month`（1〜4＝第1〜第4、5＝最終）・`weekday`（0＝日〜6＝土）と
+  関数 `money_rule_date`（0088）。自動で記録を作る関数と、見込みの額を出す関数がこれで日付を出す
 - あらかじめ登録して、**見込みの記録を自動で作る**（§3.3 の仕組み。振込日に作る。見込み → 給与明細などで額を直すと確定）
 - **履歴**: 設定の画面の下に、**その年の収入の記録**を新しい日から出す（見込みの印つき。年は送れる）。見込み額の変更の版は持たない
   （2026-10-11。複雑にしないため。記録は確定すると実績の額になる）
@@ -84,8 +87,8 @@
 | --- | --- | --- |
 | 1 | この設計（docs） | – |
 | 2 | 特別費をカテゴリへ収納: 大分類「特別費」と小分類を作る（**0086。2026-10-11に本番へ適用済み**。追加だけで、特別費の表・列は消さない）。アプリ（mobile・PWA）は特別費の別枠を外し、家計の設定の「特別費の予定」・振り返りの特別費の1行・分析・記録の入力の「予定から選ぶ」をなくした（**実装済み**）。収入の項目（賞与）は収入の大分類「給与」の小分類にした | 0086（適用済み） |
-| 2b | 後片付け: `money_items.special_item_id`・`special_plan_id`、`money_recurring.special_item_id` の列と `special_items`・`special_plans` の表を消し、`save_money_record`・`make_money_recurring_records`・`money_recurring_estimate`・`money_bootstrap` から外す（0088）。**アプリを出し、特別費の予定を固定費に登録し終えてから**。削除を含むので SQL Editor で流す | 0088（未） |
-| 3 | 収支の数え方（収入 − 生活費 − 特別費）、月・年の画面、累計・月平均・前年の同じ月ぶんとの比べ、月ごとの収支と累計のグラフ（**実装済み**）。0087 `money_settings`（集計の開始月）は一度作ったが、使わないことにした。**0088 で消す** | 0087（適用済み・使わない） |
+| 2b | 後片付け: `money_items.special_item_id`・`special_plan_id`、`money_recurring.special_item_id` の列と `special_items`・`special_plans` の表を消し、`save_money_record`・`make_money_recurring_records`・`money_recurring_estimate`・`money_bootstrap` から外す（0089）。**アプリを出し、特別費の予定を固定費に登録し終えてから**。削除を含むので SQL Editor で流す | 0089（未） |
+| 3 | 収支の数え方（収入 − 生活費 − 特別費）、月・年の画面、累計・月平均・前年の同じ月ぶんとの比べ、月ごとの収支と累計のグラフ（**実装済み**）。0087 `money_settings`（集計の開始月）は一度作ったが、使わないことにした。**0089 で消す** | 0087（適用済み・使わない） |
 | 4 | 固定収入（給与・賞与）の設定と履歴（**実装済み**。新しい表は作らず `money_recurring` を使う） | なし |
 
 ---
@@ -400,7 +403,8 @@ money_wallets に  カードの close_day（締め日）・pay_day（引き落�
 （§7 の3 以降）
 money_months      月のメモ。 family_id / month / note
 money_card_closes カードの照合。 wallet_id / month / statement_amount / closed_at
-money_settings    （使わない。集計の開始月。0087 で作ったが取りやめた。0088 で消す）
+money_recurring に  week_of_month・weekday（振込日を「第n◯曜日」で決めるルール。両方入れるか両方 null。入っているときは day を使わない。0088）
+money_settings    （使わない。集計の開始月。0087 で作ったが取りやめた。0089 で消す）
 money_wallet_balances  補正した残高（0067_money_wallet_balances.sql。§9.3）。 id / family_id / wallet_id / balance_on(日付) /
                   amount(マイナスもある) / show_in_history(履歴に行を出すか。0068) / created_by（wallet_id・balance_on で1行。同じ日に入れ直すと上書き）
 証券（§9.2.2。0070・0071）  money_wallets.type に 'securities'。money_securities・money_holdings・money_security_prices・

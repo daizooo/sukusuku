@@ -113,6 +113,8 @@ export const rowToRecurring = (row: RecurringRow): MoneyRecurring => ({
   id: row.id,
   kind: RECORD_KINDS.find((kind) => kind === row.kind) ?? 'expense',
   day: row.day,
+  weekOfMonth: row.week_of_month,
+  weekday: row.weekday,
   months: row.months,
   holiday: HOLIDAY_RULES.find((rule) => rule === row.holiday) ?? 'next',
   amountMode: row.amount_mode === 'fixed' ? 'fixed' : 'estimate',
@@ -495,6 +497,8 @@ export async function setMoneyStoreArchived(supabase: SupabaseDb, id: string, ar
 const recurringFields = (draft: MoneyRecurringDraft) => ({
   kind: draft.kind,
   day: draft.day,
+  week_of_month: draft.weekOfMonth,
+  weekday: draft.weekday,
   months: draft.months,
   holiday: draft.holiday,
   amount_mode: draft.amountMode,

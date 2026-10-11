@@ -708,8 +708,12 @@ export type MoneyHolidayRule = 'next' | 'prev' | 'none';
 export interface MoneyRecurring {
   id: string;
   kind: MoneyRecordKind;
-  /** 引き落とし日（毎月◯日。31 は末日）。 */
+  /** 引き落とし日（毎月◯日。31 は末日）。weekOfMonth があるときは使わない（1 を入れる）。 */
   day: number;
+  /** 第何週か（1〜4＝第1〜第4、5＝最終）。weekday とセット。null は day で決める。 */
+  weekOfMonth: number | null;
+  /** 曜日（0＝日〜6＝土）。weekOfMonth とセット。 */
+  weekday: number | null;
   /** 記録する月（1〜12）。null は毎月。 */
   months: number[] | null;
   holiday: MoneyHolidayRule;
