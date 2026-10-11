@@ -150,7 +150,7 @@ export default function RecurringSettings({
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="毎月の記録" icon="back" onClose={onBack} />
+      <ScreenHeader title="固定費" icon="back" onClose={onBack} />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.note}>
           口座から落ちる固定費・口座に入る給料などを登録すると、その日に自動で記録します（毎朝。休日は営業日にずらします）。
@@ -189,7 +189,7 @@ export default function RecurringSettings({
         })}
         <Pressable accessibilityRole="button" onPress={() => setEditing('new')} style={styles.add}>
           <Plus size={18} color={colors.money} />
-          <Text style={styles.addText}>毎月の記録を足す</Text>
+          <Text style={styles.addText}>固定費を足す</Text>
         </Pressable>
 
         {cards.length > 0 && (
@@ -216,7 +216,7 @@ export default function RecurringSettings({
 
         {archived.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>使わない毎月の記録（作った記録は残っています）</Text>
+            <Text style={styles.sectionTitle}>使わない固定費（作った記録は残っています）</Text>
             {archived.map((rule) => (
               <View key={rule.id} style={[styles.row, styles.archivedRow]}>
                 <Text style={[styles.name, styles.flex]}>{ruleTitle(rule, categories, specialItems)}</Text>
@@ -344,7 +344,7 @@ function RecurringEditor({
   };
 
   const archive = () =>
-    Alert.alert('この毎月の記録を使わなくしますか？', 'これから先は作らなくなります。作った記録は残ります。', [
+    Alert.alert('この固定費を使わなくしますか？', 'これから先は作らなくなります。作った記録は残ります。', [
       { text: 'やめる', style: 'cancel' },
       { text: '使わなくする', style: 'destructive', onPress: () => onArchive?.() },
     ]);
@@ -399,7 +399,7 @@ function RecurringEditor({
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title={rule ? '毎月の記録を編集' : '毎月の記録を足す'} icon="back" onClose={onClose} />
+      <ScreenHeader title={rule ? '固定費を編集' : '固定費を足す'} icon="back" onClose={onClose} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.chips}>
           {KINDS.map((entry) => (

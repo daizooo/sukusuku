@@ -143,7 +143,7 @@ export default function RecurringSettings({
         />
       ) : (
         <>
-          <ScreenHeader title="毎月の記録" icon="back" onClose={onBack} />
+          <ScreenHeader title="固定費" icon="back" onClose={onBack} />
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             <p className="text-[13px] leading-relaxed text-gray-500">
               口座から落ちる固定費・口座に入る給料などを登録すると、その日に自動で記録します（毎朝。休日は営業日にずらします）。
@@ -190,7 +190,7 @@ export default function RecurringSettings({
               className="flex items-center gap-2 py-2.5 text-[15px] font-bold text-blue-600"
             >
               <Plus size={18} />
-              毎月の記録を足す
+              固定費を足す
             </button>
 
             {cards.length > 0 && (
@@ -215,7 +215,7 @@ export default function RecurringSettings({
 
             {archived.length > 0 && (
               <section className="space-y-1.5">
-                <p className="text-xs font-bold text-gray-500">使わない毎月の記録（作った記録は残っています）</p>
+                <p className="text-xs font-bold text-gray-500">使わない固定費（作った記録は残っています）</p>
                 {archived.map((rule) => (
                   <div key={rule.id} className="flex items-center gap-2.5 rounded-lg border border-gray-200 px-3 py-3 opacity-70">
                     <span className="flex-1 text-[15px] font-semibold text-gray-900">
@@ -346,7 +346,7 @@ function RecurringEditor({
   };
 
   const archive = () => {
-    if (window.confirm('この毎月の記録を使わなくしますか？これから先は作らなくなります。作った記録は残ります。')) onArchive?.();
+    if (window.confirm('この固定費を使わなくしますか？これから先は作らなくなります。作った記録は残ります。')) onArchive?.();
   };
 
   const walletChips = (selected: string | null, onPick: (id: string) => void, exclude: string | null) => (
@@ -394,7 +394,7 @@ function RecurringEditor({
         />
       ) : (
         <>
-          <ScreenHeader title={rule ? '毎月の記録を編集' : '毎月の記録を足す'} icon="back" onClose={onClose} />
+          <ScreenHeader title={rule ? '固定費を編集' : '固定費を足す'} icon="back" onClose={onClose} />
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             <div className="flex flex-wrap gap-2">
               {KINDS.map((entry) => (

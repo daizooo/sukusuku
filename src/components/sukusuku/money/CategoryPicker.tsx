@@ -41,7 +41,7 @@ interface CategoryPickerProps {
   specialActuals: SpecialActual[];
   onPick: (choice: CategoryChoice) => void;
   onClose: () => void;
-  /** カテゴリと予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
+  /** カテゴリ・予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
   onEditCategories?: () => void;
 }
 
@@ -88,7 +88,7 @@ export default function CategoryPicker({
         onClose={onClose}
         right={
           onEditCategories && (
-            <button type="button" aria-label="カテゴリと予算を編集" onClick={onEditCategories} className="text-gray-500">
+            <button type="button" aria-label="カテゴリ・予算を編集" onClick={onEditCategories} className="text-gray-500">
               <Settings2 size={20} />
             </button>
           )

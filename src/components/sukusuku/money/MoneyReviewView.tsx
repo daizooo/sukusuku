@@ -194,12 +194,12 @@ export default function MoneyReviewView({
               hint="押すと分析と記録"
               right={
                 <button type="button" onClick={onEditCategories} className={type.link}>
-                  カテゴリと予算
+                  カテゴリ・予算
                 </button>
               }
             />
             {tiles.length === 0 && (
-              <p className="py-6 text-center text-[13px] text-gray-400">「カテゴリと予算」で種類と月の予算を決めると、ここに予算との差が出ます</p>
+              <p className="py-6 text-center text-[13px] text-gray-400">「カテゴリ・予算」で種類と月の予算を決めると、ここに予算との差が出ます</p>
             )}
             <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
               {tiles.map((tile) => (
@@ -220,7 +220,7 @@ export default function MoneyReviewView({
               hint="押すと分析と記録"
               right={
                 <button type="button" onClick={onEditCategories} className={type.link}>
-                  カテゴリと予算
+                  カテゴリ・予算
                 </button>
               }
             />

@@ -192,12 +192,12 @@ export default function MoneyReviewView({
               hint="押すと分析と記録"
               right={
                 <Pressable accessibilityRole="button" onPress={onEditCategories} hitSlop={8}>
-                  <Text style={type.link}>カテゴリと予算</Text>
+                  <Text style={type.link}>カテゴリ・予算</Text>
                 </Pressable>
               }
             />
             {tiles.length === 0 && (
-              <Text style={styles.message}>「カテゴリと予算」で種類と月の予算を決めると、ここに予算との差が出ます</Text>
+              <Text style={styles.message}>「カテゴリ・予算」で種類と月の予算を決めると、ここに予算との差が出ます</Text>
             )}
             <View style={styles.card}>
               {tiles.map((tile, index) => (
@@ -219,7 +219,7 @@ export default function MoneyReviewView({
               hint="押すと分析と記録"
               right={
                 <Pressable accessibilityRole="button" onPress={onEditCategories} hitSlop={8}>
-                  <Text style={type.link}>カテゴリと予算</Text>
+                  <Text style={type.link}>カテゴリ・予算</Text>
                 </Pressable>
               }
             />

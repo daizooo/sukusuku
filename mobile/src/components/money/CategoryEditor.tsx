@@ -32,7 +32,7 @@ import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 
-// カテゴリと予算（docs/kakei.md §3.1）。PWA版の `src/components/sukusuku/money/CategoryEditor.tsx` と同じ並び・文言。
+// カテゴリ・予算（docs/kakei.md §3.1）。PWA版の `src/components/sukusuku/money/CategoryEditor.tsx` と同じ並び・文言。
 //
 // 大分類（予算を置く単位）と小分類の追加・名前の変更・並べ替え・使わなくする。並べ替えは一覧のまま指で動かす
 // （大分類は左の持ち手をつかむ、小分類は長押し。リストと同じ操作。components/list/useDragReorder.ts）。
@@ -185,7 +185,7 @@ export default function CategoryEditor({
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
-        <ScreenHeader title="カテゴリと予算" onClose={onClose} />
+        <ScreenHeader title="カテゴリ・予算" onClose={onClose} />
         <View style={styles.bar}>
           <Pressable
             accessibilityRole="button"
