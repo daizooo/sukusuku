@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,7 +15,6 @@ import type {
   MoneyWallet,
   MoneyWalletBalance,
   MoneyWalletDraft,
-  SpecialItem,
 } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
@@ -42,7 +41,7 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadMoneyBootstrap } from '@/lib/api/moneyBootstrap';
-import { monthKeyOf, monthKeyOfDate, specialActualsFromRecords, yearOfMonth } from '@/lib/moneyUtils';
+import { monthKeyOf, monthKeyOfDate, yearOfMonth } from '@/lib/moneyUtils';
 import MoneyAccountsView from '@/components/money/MoneyAccountsView';
 import MoneyRecordsView from '@/components/money/MoneyRecordsView';
 import MoneyReviewView from '@/components/money/MoneyReviewView';
@@ -96,8 +95,6 @@ const MONEY_TABLES = [
   'money_stores',
   'money_wallet_balances',
   'money_wallets',
-  'special_items',
-  'special_plans',
 ] as const;
 
 export default function MoneyScreen() {
@@ -113,7 +110,6 @@ export default function MoneyScreen() {
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
-  const [specialItems, setSpecialItems] = useState<SpecialItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [view, setView] = useState<View3>('accounts');
   const [monthKey, setMonthKey] = useState(() => monthKeyOfDate(new Date()));
@@ -129,7 +125,7 @@ export default function MoneyScreen() {
 
   const reload = useCallback(async (id: string) => {
     // 起動で読むものは、DBの money_bootstrap で1回にまとめて読む（docs/kakei.md §9.2.6）。
-    const { money, special, securities: loadedSecurities } = await loadMoneyBootstrap(
+    const { money, securities: loadedSecurities } = await loadMoneyBootstrap(
       supabase,
       id,
       historyWanted.current,
@@ -142,7 +138,6 @@ export default function MoneyScreen() {
     setRecurring(money.recurring);
     setBalances(money.balances);
     setSecurities(loadedSecurities);
-    setSpecialItems(special);
   }, []);
 
   useEffect(() => {
@@ -189,7 +184,6 @@ export default function MoneyScreen() {
     }
   }, [familyId]);
 
-  const specialActuals = useMemo(() => specialActualsFromRecords(records), [records]);
 
   /** 振り返りの月 ↔ 年。年へ行くときは今見ている月の年を、月へ戻るときは見ている年の月を開く。 */
   const changePeriod = (next: ReviewPeriod) => {
@@ -375,7 +369,6 @@ export default function MoneyScreen() {
               records={records}
               categories={categories}
               wallets={wallets}
-              specialItems={specialItems}
               isLoading={isLoading}
               onOpen={setEditing}
             />
@@ -391,8 +384,6 @@ export default function MoneyScreen() {
               categories={categories}
               budgets={budgets}
               wallets={wallets}
-              specialItems={specialItems}
-              specialActuals={specialActuals}
               onSelectMonth={(next) => {
                 setMonthKey(next);
                 setPeriod('month');
@@ -407,7 +398,6 @@ export default function MoneyScreen() {
               balances={balances}
               securities={securities}
               categories={categories}
-              specialItems={specialItems}
               isLoading={isLoading}
               onOpenRecord={setEditing}
               onConfirm={(walletId, balanceOn, amount, showInHistory) => void confirmBalance(walletId, balanceOn, amount, showInHistory)}
@@ -441,8 +431,6 @@ export default function MoneyScreen() {
           wallets={wallets}
           stores={stores}
           records={records}
-          specialItems={specialItems}
-          specialActuals={specialActuals}
           onClose={() => setEditing(null)}
           onSubmit={(draft) => void saveRecord(draft)}
           onDelete={(record) => void removeRecord(record)}
@@ -462,16 +450,10 @@ export default function MoneyScreen() {
           wallets={wallets}
           recurring={recurring}
           records={records}
-          specialItems={specialItems}
-          specialActuals={specialActuals}
           onCategories={setCategories}
           onBudgets={setBudgets}
           onStores={setStores}
           onRecurring={setRecurring}
-          onSpecialItems={setSpecialItems}
-          onRecordsChanged={() => {
-            if (familyId) void reload(familyId).catch(() => {});
-          }}
           onClose={() => setSettingsOpen(false)}
         />
       )}

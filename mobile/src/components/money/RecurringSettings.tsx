@@ -11,8 +11,6 @@ import type {
   MoneyRecurringDraft,
   MoneyStore,
   MoneyWallet,
-  SpecialActual,
-  SpecialItem,
 } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
@@ -49,8 +47,6 @@ interface RecurringSettingsProps {
   budgets: MoneyBudget[];
   stores: MoneyStore[];
   records: MoneyRecord[];
-  specialItems: SpecialItem[];
-  specialActuals: SpecialActual[];
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
   onBack: () => void;
@@ -75,8 +71,6 @@ export default function RecurringSettings({
   budgets,
   stores,
   records,
-  specialItems,
-  specialActuals,
   onRecurring,
   onStores,
   onBack,
@@ -138,8 +132,6 @@ export default function RecurringSettings({
         budgets={budgets}
         stores={stores}
         records={records}
-        specialItems={specialItems}
-        specialActuals={specialActuals}
         onClose={() => setEditing(null)}
         onSubmit={(draft, registerStore) => void save(editing === 'new' ? null : editing, draft, registerStore)}
         onArchive={editing === 'new' ? undefined : () => void setArchived(editing, true)}
@@ -167,12 +159,12 @@ export default function RecurringSettings({
                 <Pressable
                   key={rule.id}
                   accessibilityRole="button"
-                  accessibilityLabel={`${ruleTitle(rule, categories, specialItems)}を編集`}
+                  accessibilityLabel={`${ruleTitle(rule, categories)}を編集`}
                   onPress={() => setEditing(rule)}
                   style={styles.row}
                 >
                   <View style={styles.flex}>
-                    <Text style={styles.name}>{ruleTitle(rule, categories, specialItems)}</Text>
+                    <Text style={styles.name}>{ruleTitle(rule, categories)}</Text>
                     <Text style={styles.sub}>{recurringScheduleLabel(rule)}</Text>
                     <Text style={styles.sub}>
                       {rule.kind === 'transfer'
@@ -219,7 +211,7 @@ export default function RecurringSettings({
             <Text style={styles.sectionTitle}>使わない固定費（作った記録は残っています）</Text>
             {archived.map((rule) => (
               <View key={rule.id} style={[styles.row, styles.archivedRow]}>
-                <Text style={[styles.name, styles.flex]}>{ruleTitle(rule, categories, specialItems)}</Text>
+                <Text style={[styles.name, styles.flex]}>{ruleTitle(rule, categories)}</Text>
                 <Pressable accessibilityRole="button" onPress={() => void setArchived(rule, false)} hitSlop={8}>
                   <Text style={styles.link}>また使う</Text>
                 </Pressable>
@@ -233,11 +225,10 @@ export default function RecurringSettings({
 }
 
 /** ルールの名前（品名 → お店 → 種類の順に、あるもの）。 */
-function ruleTitle(rule: MoneyRecurring, categories: MoneyCategory[], specialItems: SpecialItem[]): string {
+function ruleTitle(rule: MoneyRecurring, categories: MoneyCategory[]): string {
   if (rule.name.trim() !== '') return rule.name.trim();
   if (rule.store.trim() !== '') return rule.store.trim();
   if (rule.categoryId !== null) return categoryPath(categories, rule.categoryId);
-  if (rule.specialItemId !== null) return specialItems.find((item) => item.id === rule.specialItemId)?.name ?? '';
   return RECORD_KIND_LABEL[rule.kind];
 }
 
@@ -250,8 +241,6 @@ function RecurringEditor({
   budgets,
   stores,
   records,
-  specialItems,
-  specialActuals,
   onClose,
   onSubmit,
   onArchive,
@@ -263,8 +252,6 @@ function RecurringEditor({
   budgets: MoneyBudget[];
   stores: MoneyStore[];
   records: MoneyRecord[];
-  specialItems: SpecialItem[];
-  specialActuals: SpecialActual[];
   onClose: () => void;
   onSubmit: (draft: MoneyRecurringDraft, registerStore: boolean) => void;
   onArchive?: () => void;
@@ -276,7 +263,6 @@ function RecurringEditor({
   });
   const [kind, setKind] = useState<MoneyRecordKind>(rule?.kind ?? 'expense');
   const [categoryId, setCategoryId] = useState<string | null>(rule?.categoryId ?? null);
-  const [specialItemId, setSpecialItemId] = useState<string | null>(rule?.specialItemId ?? null);
   const [walletId, setWalletId] = useState<string | null>(rule?.walletId ?? null);
   const [toWalletId, setToWalletId] = useState<string | null>(rule?.toWalletId ?? null);
   const [store, setStore] = useState(rule?.store ?? '');
@@ -294,21 +280,15 @@ function RecurringEditor({
   const storeOptions = useMemo(() => storeChoices(stores, records), [stores, records]);
   const today = toDateString(new Date());
   const history = useMemo(
-    () => recurringHistory({ kind, walletId, toWalletId, store, categoryId, specialItemId }, records, today),
-    [kind, walletId, toWalletId, store, categoryId, specialItemId, records, today],
+    () => recurringHistory({ kind, walletId, toWalletId, store, categoryId }, records, today),
+    [kind, walletId, toWalletId, store, categoryId, records, today],
   );
-  const target =
-    categoryId !== null
-      ? categoryPath(categories, categoryId)
-      : specialItemId !== null
-        ? `${kind === 'income' ? '特別収入' : '特別費'} › ${specialItems.find((item) => item.id === specialItemId)?.name ?? ''}`
-        : '';
+  const target = categoryId !== null ? categoryPath(categories, categoryId) : '';
 
   const changeKind = (next: MoneyRecordKind) => {
     if (next === kind) return;
     setKind(next);
     setCategoryId(null);
-    setSpecialItemId(null);
   };
 
   const toggleMonth = (month: number) => {
@@ -322,7 +302,7 @@ function RecurringEditor({
     if (!Number.isInteger(dayValue) || dayValue < 1 || dayValue > 31) return setError('引き落とし日を 1〜31 で入れてください（末日は31）');
     if (walletId === null) return setError(kind === 'income' ? '入金先を選んでください' : '出金元を選んでください');
     if (kind === 'transfer' && (toWalletId === null || toWalletId === walletId)) return setError('入金先を選んでください（出金元と別の口座）');
-    if (kind !== 'transfer' && categoryId === null && specialItemId === null) return setError('種類を選んでください');
+    if (kind !== 'transfer' && categoryId === null) return setError('種類を選んでください');
     if (months !== null && months.length === 0) return setError('記録する月を選んでください');
     const amountValue = amount.trim() === '' ? 0 : Number(amount.trim());
     if (!Number.isInteger(amountValue) || amountValue < 0) return setError('額は0以上の整数で入れてください');
@@ -338,7 +318,6 @@ function RecurringEditor({
       toWalletId: kind === 'transfer' ? toWalletId : null,
       store: kind === 'transfer' ? '' : store,
       categoryId: kind === 'transfer' ? null : categoryId,
-      specialItemId: kind === 'transfer' ? null : specialItemId,
       name,
     }, kind !== 'transfer' && store !== '' && registerStore);
   };
@@ -357,11 +336,8 @@ function RecurringEditor({
         categories={categories}
         budgets={budgets}
         records={records}
-        specialItems={specialItems}
-        specialActuals={specialActuals}
         onPick={(choice) => {
           setCategoryId(choice.categoryId);
-          setSpecialItemId(choice.specialItemId);
           setScreen('form');
         }}
         onClose={() => setScreen('form')}

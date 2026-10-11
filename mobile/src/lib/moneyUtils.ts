@@ -4,8 +4,8 @@
 // 年はすべて暦年（1月〜12月。2026-10-09に、4月始まりの年度から変えた）。予算は大分類・年ごとの月額で、
 // その年の予算が無ければ前の年の額を使う（毎年入れ直さなくてよいように）。
 //
-// 生活費の収支＝収入 − 生活費（特別費以外の支出）。特別費（特別費の項目を持つ品目）は収支に入れず、別枠で数える
-// （docs/kakei.md §4.1）。振替は集計に入れない。貯金は記録なので、収支の式にも表示にも入れない。
+// 収支＝収入 − 支出（生活費と特別費。特別費は大分類「特別費」のカテゴリなので、生活費と同じに数える。
+// 2026-10-11。docs/kakei.md §0）。振替は集計に入れない。貯金は記録なので、収支の式にも表示にも入れない。
 
 import type {
   MoneyBudget,
@@ -27,9 +27,7 @@ import type {
   MoneyWallet,
   MoneyWalletBalance,
   MoneyWalletType,
-  SpecialActual,
 } from '@/types/app';
-import type { SpecialRow } from '@/lib/specialUtils';
 
 const pad2 = (value: number) => String(value).padStart(2, '0');
 
@@ -156,18 +154,13 @@ export function cardScheduleLabel(wallet: Pick<MoneyWallet, 'closeDay' | 'payDay
  * 結びついているかを確かめるのに使う。1件の記録に同じ種類の品目が複数あれば合計する。
  */
 export function recurringHistory(
-  rule: Pick<MoneyRecurring, 'kind' | 'walletId' | 'toWalletId' | 'store' | 'categoryId' | 'specialItemId'>,
+  rule: Pick<MoneyRecurring, 'kind' | 'walletId' | 'toWalletId' | 'store' | 'categoryId'>,
   records: readonly MoneyRecord[],
   today: string,
 ): { occurredOn: string; amount: number }[] {
   if (rule.walletId === null) return [];
   const since = `${Number(today.slice(0, 4)) - 1}${today.slice(4)}`;
-  const matches = (item: MoneyItem) =>
-    rule.categoryId !== null
-      ? item.categoryId === rule.categoryId
-      : rule.specialItemId !== null
-        ? item.specialItemId === rule.specialItemId
-        : true;
+  const matches = (item: MoneyItem) => rule.categoryId === null || item.categoryId === rule.categoryId;
   const history: { occurredOn: string; amount: number }[] = [];
   for (const record of records) {
     if (record.kind !== rule.kind || record.isEstimate || record.walletId !== rule.walletId) continue;
@@ -201,6 +194,8 @@ export const DEFAULT_CATEGORIES: { kind: MoneyCategoryKind; name: string; childr
   { kind: 'living', name: '娯楽', children: ['レジャー', '本・趣味', '交際費'] },
   { kind: 'living', name: '子ども費', children: ['日用品', '洋服・おもちゃ', '習い事'] },
   { kind: 'living', name: 'その他', children: ['お小遣い', '仕送り', '保険', '使途不明金'] },
+  // 特別費も大分類のひとつ（2026-10-11。docs/kakei.md §0.2）。決まったもの（税金・年払いの保険など）は設定の固定費に登録する。
+  { kind: 'living', name: '特別費', children: ['税金', '保険', '車', '家具・家電', 'お祝い', '旅行'] },
   { kind: 'income', name: '給料', children: [] },
   { kind: 'income', name: 'その他の収入', children: [] },
 ];
@@ -249,6 +244,7 @@ export const MONEY_ICONS: { key: string; label: string; color: string; surface: 
 ];
 
 const ICON_RULES: [RegExp, string][] = [
+  [/特別/, 'star'],
   [/住|家賃|ローン|管理費|修繕/, 'home'],
   [/家具|家電/, 'sofa'],
   [/食料|スーパー/, 'grocery'],
@@ -428,18 +424,12 @@ export function groupRecordsByDay(records: readonly MoneyRecord[]): { date: stri
 export interface ItemGroup<T extends Omit<MoneyItem, 'id'>> {
   key: string;
   categoryId: string | null;
-  specialItemId: string | null;
-  specialPlanId: string | null;
   items: T[];
   total: number;
 }
 
-export const itemGroupKey = (item: Pick<MoneyItem, 'categoryId' | 'specialItemId' | 'specialPlanId'>) =>
-  item.categoryId !== null
-    ? `category:${item.categoryId}`
-    : item.specialItemId !== null
-      ? `special:${item.specialItemId}:${item.specialPlanId ?? ''}`
-      : 'none';
+export const itemGroupKey = (item: Pick<MoneyItem, 'categoryId'>) =>
+  item.categoryId !== null ? `category:${item.categoryId}` : 'none';
 
 /** 品目を種類ごとにまとめる。最初に出てきた順。 */
 export function groupItems<T extends Omit<MoneyItem, 'id'>>(items: readonly T[]): ItemGroup<T>[] {
@@ -454,8 +444,6 @@ export function groupItems<T extends Omit<MoneyItem, 'id'>>(items: readonly T[])
       groups.push({
         key,
         categoryId: item.categoryId,
-        specialItemId: item.specialItemId,
-        specialPlanId: item.specialPlanId,
         items: [item],
         total: item.amount,
       });
@@ -483,26 +471,6 @@ export function itemSummary(items: readonly Pick<MoneyItem, 'name'>[]): string {
 /** 品目の金額（単価があれば 個数 × 単価）。 */
 export const lineAmount = (line: { quantity: number; unitPrice: number | null; amount: number }) =>
   line.unitPrice === null ? line.amount : line.unitPrice * line.quantity;
-
-/** 家計の品目を、特別費の画面の実績の形にする（特別費の項目を持つ品目だけ）。 */
-export function specialActualsFromRecords(records: readonly MoneyRecord[]): SpecialActual[] {
-  const actuals: SpecialActual[] = [];
-  for (const record of records) {
-    for (const item of record.items) {
-      if (item.specialItemId === null) continue;
-      actuals.push({
-        id: item.id,
-        recordId: record.id,
-        itemId: item.specialItemId,
-        planId: item.specialPlanId,
-        occurredOn: record.occurredOn,
-        amount: item.amount,
-        note: item.memo,
-      });
-    }
-  }
-  return actuals.sort((a, b) => a.occurredOn.localeCompare(b.occurredOn));
-}
 
 // ---- 入力の手助け ----
 
@@ -683,17 +651,15 @@ export function buildBudgetTiles(
 }
 
 export interface MonthSummary {
-  /** 収入（特別収入を除く）。 */
+  /** 収入。 */
   income: number;
-  /** 生活費の実績（特別費以外の支出）。 */
+  /** 支出の実績（生活費と特別費。振替は入れない）。 */
   living: number;
-  /** 生活費の予算の合計。 */
+  /** 予算の合計（予算を置いた大分類だけ。特別費は予算を置かない）。 */
   livingBudget: number;
-  /** 特別費（支出）の実績。生活費の収支には入れず、別に出す。 */
-  special: number;
-  /** 生活費の収支＝収入 − 生活費（特別費以外の支出）。貯金は記録なので式に入れない。 */
+  /** 収支＝収入 − 支出。貯金は記録なので式に入れない。 */
   balance: number;
-  /** 生活費が予算どおりなら残る予定だった額＝収入 − 生活費の予算。 */
+  /** 予算どおりなら残る予定だった額＝収入 − 予算の合計。 */
   plannedBalance: number;
 }
 
@@ -705,18 +671,12 @@ export function buildMonthSummary(
 ): MonthSummary {
   let income = 0;
   let living = 0;
-  let special = 0;
   for (const record of recordsInMonth(records, monthKey)) {
     // 振替（貯金への振替を含む）は集計に入れない。
     if (record.kind === 'transfer') continue;
     for (const item of record.items) {
-      if (record.kind === 'income') {
-        if (item.specialItemId === null) income += item.amount;
-      } else if (item.specialItemId !== null) {
-        special += item.amount;
-      } else if (item.categoryId !== null) {
-        living += item.amount;
-      }
+      if (record.kind === 'income') income += item.amount;
+      else if (item.categoryId !== null) living += item.amount;
     }
   }
   const livingBudget = topCategories(categories, 'living').reduce(
@@ -727,7 +687,6 @@ export function buildMonthSummary(
     income,
     living,
     livingBudget,
-    special,
     balance: income - living,
     plannedBalance: income - livingBudget,
   };
@@ -741,17 +700,28 @@ export function yearMonthKeys(year: number): string[] {
 /** 月（YYYY-MM）が属する年（暦年）。 */
 export const yearOfMonth = (monthKey: string): number => Number(monthKey.slice(0, 4));
 
+/** 年の表示（振り返りの年）。 */
+export const formatYear = (year: number) => `${year}年`;
+
+/** 金額の入力を読む。「30,500」「¥30500」「３０５００円」を受け付ける。空・負・小数・読めないものは null。 */
+export function parseAmountInput(text: string): number | null {
+  const normalized = text
+    .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0))
+    .replace(/[¥￥,，円\s]/g, '');
+  if (!/^\d+$/.test(normalized)) return null;
+  const value = Number(normalized);
+  return Number.isSafeInteger(value) ? value : null;
+}
+
 export interface YearMonthRow {
   monthKey: string;
-  /** その月に記録（特別費を除く）があるか。無い月は数えない（使い始める前の月・まだ来ていない月）。 */
+  /** その月に記録があるか。無い月は数えない（使い始める前の月・まだ来ていない月）。 */
   recorded: boolean;
   income: number;
   living: number;
-  /** 特別費（支出）。生活費の収支には入れない。 */
-  special: number;
-  /** 生活費の収支（収入 − 生活費）。 */
+  /** 収支（収入 − 支出）。 */
   balance: number;
-  /** 生活費の予算 − 実績。 */
+  /** 予算 − 実績。 */
   livingDiff: number;
 }
 
@@ -764,8 +734,8 @@ export interface YearSummary {
 }
 
 /**
- * 年の生活費の収支（docs/kakei.md §4.2）。月ごとの 収入・生活費・収支 と年間の合計。特別費は収支に入れず、別に数える。
- * 記録（特別費を除く）の無い月は数えない（使い始める前の月まで予算が残ったように見えないように）。
+ * 年の収支（docs/kakei.md §4.2・§0.4）。月ごとの 収入・支出・収支 と年間の合計。
+ * 記録の無い月は数えない（使い始める前の月まで予算が残ったように見えないように）。
  * upTo（YYYY-MM）より後の月は、まだ来ていないので数えない。
  */
 export function buildYearSummary(
@@ -775,24 +745,17 @@ export function buildYearSummary(
   year: number,
   upTo: string,
 ): YearSummary {
-  const total = { income: 0, living: 0, special: 0, balance: 0, livingDiff: 0 };
+  const total = { income: 0, living: 0, balance: 0, livingDiff: 0 };
   let recordedMonths = 0;
   const months = yearMonthKeys(year).map((monthKey) => {
-    const recorded =
-      monthKey <= upTo &&
-      recordsInMonth(records, monthKey).some((record) => record.items.some((item) => item.specialItemId === null));
-    // 特別費だけの月（生活費の記録が無い月）も、特別費は年に数える。
-    const hasAny = monthKey <= upTo && recordsInMonth(records, monthKey).length > 0;
-    if (!recorded && !hasAny) return { monthKey, recorded, income: 0, living: 0, special: 0, balance: 0, livingDiff: 0 };
+    const recorded = monthKey <= upTo && recordsInMonth(records, monthKey).length > 0;
+    if (!recorded) return { monthKey, recorded, income: 0, living: 0, balance: 0, livingDiff: 0 };
     const summary = buildMonthSummary(records, categories, budgets, monthKey);
-    total.special += summary.special;
-    if (!recorded) return { monthKey, recorded, income: 0, living: 0, special: summary.special, balance: 0, livingDiff: 0 };
     const row = {
       monthKey,
       recorded,
       income: summary.income,
       living: summary.living,
-      special: summary.special,
       balance: summary.balance,
       livingDiff: summary.livingBudget - summary.living,
     };
@@ -804,71 +767,6 @@ export function buildYearSummary(
     return row;
   });
   return { months, total, recordedMonths };
-}
-
-export interface SpecialProgress {
-  /** 年の特別費の予算（予定の合計）。 */
-  yearBudget: number;
-  /** その月に払った特別費。 */
-  spentThisMonth: number;
-  /** 年のはじめからその月までに払った特別費。 */
-  spentToDate: number;
-  /** 年の予算の残り（予算 − ここまで払った額）。 */
-  remaining: number;
-  /** その月の予定で、まだ払っていないもの。 */
-  pendingThisMonth: number;
-}
-
-/**
- * その月に、特別費の年の予算がどれだけ減ったか（docs/kakei.md §4.1）。月の収支には入れない。
- * rows は specialUtils の buildYearRows(…, 年, 'expense')。
- */
-export function buildSpecialProgress(rows: readonly SpecialRow[], monthKey: string): SpecialProgress {
-  const month = Number(monthKey.slice(5, 7));
-  let yearBudget = 0;
-  let spentThisMonth = 0;
-  let spentToDate = 0;
-  let pendingThisMonth = 0;
-  for (const row of rows) {
-    yearBudget += row.budget;
-    for (const actual of row.actuals) {
-      const key = monthKeyOf(actual.occurredOn);
-      if (key === monthKey) spentThisMonth += actual.amount;
-      if (key <= monthKey) spentToDate += actual.amount;
-    }
-    if (row.planId !== null && row.actual === null && row.month === month) pendingThisMonth += 1;
-  }
-  return { yearBudget, spentThisMonth, spentToDate, remaining: yearBudget - spentToDate, pendingThisMonth };
-}
-
-export interface SpecialReview {
-  /** 年の特別費の予算（予定の合計）。 */
-  yearBudget: number;
-  /** 見ている期間（月、または年ぜんたい）に払った特別費。 */
-  spent: number;
-  /** 年のはじめから、見ている期間の終わりまでに払った額。 */
-  spentToDate: number;
-  /** 年の予算の残り＝予算 − ここまで払った額（マイナスは超えた額）。 */
-  remaining: number;
-}
-
-/**
- * 振り返りの特別費（docs/kakei.md §4.1・§4.2）。monthKey があればその月に払った額と、その月までの累計での予算の残り。
- * null なら年ぜんたい。rows は specialUtils の buildYearRows(…, 年, 'expense')。
- */
-export function buildSpecialReview(rows: readonly SpecialRow[], monthKey: string | null): SpecialReview {
-  if (monthKey !== null) {
-    const progress = buildSpecialProgress(rows, monthKey);
-    return {
-      yearBudget: progress.yearBudget,
-      spent: progress.spentThisMonth,
-      spentToDate: progress.spentToDate,
-      remaining: progress.remaining,
-    };
-  }
-  const yearBudget = rows.reduce((sum, row) => sum + row.budget, 0);
-  const spent = rows.reduce((sum, row) => sum + row.actuals.reduce((inner, actual) => inner + actual.amount, 0), 0);
-  return { yearBudget, spent, spentToDate: spent, remaining: yearBudget - spent };
 }
 
 // ---- 内訳の分析（振り返りの内訳をタップしたとき。docs/kakei.md §4.4） ----
@@ -921,7 +819,7 @@ export function buildCategoryAnalysis(
   previousKeys: readonly string[] | null,
 ): CategoryAnalysis {
   const inTop = (item: MoneyItem) =>
-    item.specialItemId === null && item.categoryId !== null && topCategoryIdOf(categories, item.categoryId) === topId;
+    item.categoryId !== null && topCategoryIdOf(categories, item.categoryId) === topId;
   const narrowed = narrowRecords(records, monthKeys, (item) => inTop(item));
   const sum = (list: readonly MoneyRecord[]) =>
     list.reduce((total, record) => total + record.items.reduce((inner, item) => inner + item.amount, 0), 0);
@@ -965,46 +863,6 @@ export function buildCategoryAnalysis(
   };
 }
 
-export interface SpecialAnalysis extends SpecialReview {
-  /** 項目ごとの 年の予算と、見ている期間に払った額・年のはじめからの累計。期間に払った額が多い順。 */
-  items: { id: string; name: string; category: string; budget: number; spent: number; spentToDate: number }[];
-  /** 特別費の記録（品目を特別費のものだけに絞った）。 */
-  records: MoneyRecord[];
-}
-
-/**
- * 内訳の特別費を分析する。rows は specialUtils の buildYearRows(…, 年, 'expense')、monthKey があればその月、
- * null なら年ぜんたい。year は rows の年。
- */
-export function buildSpecialAnalysis(
-  records: readonly MoneyRecord[],
-  rows: readonly SpecialRow[],
-  year: number,
-  monthKey: string | null,
-): SpecialAnalysis {
-  const review = buildSpecialReview(rows, monthKey);
-  const expenseItemIds = new Set(rows.map((row) => row.item.id));
-  const periodKeys = monthKey !== null ? [monthKey] : yearMonthKeys(year);
-  const untilKeys = monthKey !== null ? yearMonthKeys(year).filter((key) => key <= monthKey) : yearMonthKeys(year);
-  const spentOf = (itemId: string, keys: readonly string[]) =>
-    narrowRecords(records, keys, (item) => item.specialItemId === itemId).reduce(
-      (total, record) => total + record.items.reduce((inner, item) => inner + item.amount, 0),
-      0,
-    );
-  const byItem = new Map<string, { id: string; name: string; category: string; budget: number }>();
-  for (const row of rows) {
-    const entry = byItem.get(row.item.id) ?? { id: row.item.id, name: row.item.name, category: row.item.category, budget: 0 };
-    entry.budget += row.budget;
-    byItem.set(row.item.id, entry);
-  }
-  const items = [...byItem.values()]
-    .map((entry) => ({ ...entry, spent: spentOf(entry.id, periodKeys), spentToDate: spentOf(entry.id, untilKeys) }))
-    .filter((entry) => entry.budget > 0 || entry.spent > 0)
-    .sort((a, b) => b.spent - a.spent || b.budget - a.budget || a.name.localeCompare(b.name, 'ja'));
-  const narrowed = narrowRecords(records, periodKeys, (item) => item.specialItemId !== null && expenseItemIds.has(item.specialItemId));
-  return { ...review, items, records: narrowed };
-}
-
 // ---- 記録の入力（記録の詳細・品目の画面）の形 ----
 
 /** 品目の画面の1行。金額は 個数 × 単価。 */
@@ -1020,8 +878,6 @@ export interface EditorLine {
 export interface EditorGroup {
   key: string;
   categoryId: string | null;
-  specialItemId: string | null;
-  specialPlanId: string | null;
   lines: EditorLine[];
 }
 
@@ -1038,8 +894,6 @@ export function groupsFromItems(items: readonly MoneyItem[], nextKey: () => stri
   return groupItems(items).map((group) => ({
     key: nextKey(),
     categoryId: group.categoryId,
-    specialItemId: group.specialItemId,
-    specialPlanId: group.specialPlanId,
     lines: group.items.map((item) => {
       // 金額だけの品目（単価なし）は、1個あたりに直す。割り切れなければ1個として扱う。
       const divisible = item.amount % item.quantity === 0;
@@ -1062,8 +916,6 @@ export function itemsFromGroups(groups: readonly EditorGroup[]): MoneyItemDraft[
       .map((line) => ({
         amount: editorLineAmount(line),
         categoryId: group.categoryId,
-        specialItemId: group.specialItemId,
-        specialPlanId: group.specialPlanId,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         name: line.name.trim(),
@@ -1072,11 +924,9 @@ export function itemsFromGroups(groups: readonly EditorGroup[]): MoneyItemDraft[
   );
 }
 
-/** 同じ種類（同じ特別費の予定）のまとまりか。 */
-export const sameGroupTarget = (
-  a: Pick<EditorGroup, 'categoryId' | 'specialItemId' | 'specialPlanId'>,
-  b: Pick<EditorGroup, 'categoryId' | 'specialItemId' | 'specialPlanId'>,
-) => a.categoryId === b.categoryId && a.specialItemId === b.specialItemId && a.specialPlanId === b.specialPlanId;
+/** 同じ種類のまとまりか。 */
+export const sameGroupTarget = (a: Pick<EditorGroup, 'categoryId'>, b: Pick<EditorGroup, 'categoryId'>) =>
+  a.categoryId === b.categoryId;
 
 // ---- 電卓（品目の金額。＋−×÷） ----
 

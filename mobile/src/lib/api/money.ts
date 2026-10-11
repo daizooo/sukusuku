@@ -86,8 +86,6 @@ const rowToItem = (row: ItemRow): MoneyItem => ({
   id: row.id,
   amount: row.amount,
   categoryId: row.category_id,
-  specialItemId: row.special_item_id,
-  specialPlanId: row.special_plan_id,
   quantity: row.quantity,
   unitPrice: row.unit_price,
   name: row.name,
@@ -123,7 +121,6 @@ export const rowToRecurring = (row: RecurringRow): MoneyRecurring => ({
   toWalletId: row.to_wallet_id,
   store: row.store,
   categoryId: row.category_id,
-  specialItemId: row.special_item_id,
   name: row.name,
   position: row.position,
   archived: row.archived_at !== null,
@@ -223,8 +220,6 @@ export async function saveMoneyRecord(supabase: SupabaseDb, draft: MoneyRecordDr
   const items: Json = draft.items.map((item) => ({
     amount: item.amount,
     category_id: item.categoryId,
-    special_item_id: item.specialItemId,
-    special_plan_id: item.specialPlanId,
     quantity: item.quantity,
     unit_price: item.unitPrice,
     name: item.name.trim(),
@@ -508,7 +503,6 @@ const recurringFields = (draft: MoneyRecurringDraft) => ({
   to_wallet_id: draft.kind === 'transfer' ? draft.toWalletId : null,
   store: draft.kind === 'transfer' ? '' : draft.store.trim(),
   category_id: draft.kind === 'transfer' ? null : draft.categoryId,
-  special_item_id: draft.kind === 'transfer' ? null : draft.specialItemId,
   name: draft.name.trim(),
 });
 

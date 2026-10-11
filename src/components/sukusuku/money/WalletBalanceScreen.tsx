@@ -8,7 +8,6 @@ import type {
   MoneyWallet,
   MoneyWalletBalance,
   MoneyWalletDraft,
-  SpecialItem,
 } from '@/types/app';
 import {
   balanceChecks,
@@ -45,7 +44,6 @@ interface WalletBalanceScreenProps {
   records: MoneyRecord[];
   balances: MoneyWalletBalance[];
   categories: MoneyCategory[];
-  specialItems: SpecialItem[];
   onClose: () => void;
   onOpenRecord: (record: MoneyRecord) => void;
   onConfirm: (walletId: string, balanceOn: string, amount: number, showInHistory: boolean) => void;
@@ -85,7 +83,6 @@ export default function WalletBalanceScreen({
   records,
   balances,
   categories,
-  specialItems,
   onClose,
   onOpenRecord,
   onConfirm,
@@ -196,7 +193,6 @@ export default function WalletBalanceScreen({
                 records={mine}
                 categories={categories}
                 wallets={wallets}
-                specialItems={specialItems}
                 onOpen={onOpenRecord}
                 corrections={shownChecks}
                 onOpenCorrection={(check) => remove(check.balance)}

@@ -1,7 +1,7 @@
 'use client';
 
 import { Scale } from 'lucide-react';
-import type { MoneyCategory, MoneyRecord, MoneyWallet, SpecialItem } from '@/types/app';
+import type { MoneyCategory, MoneyRecord, MoneyWallet } from '@/types/app';
 import { WEEKDAY_LABELS } from '@/lib/dateUtils';
 import {
   formatBalance,
@@ -29,7 +29,6 @@ interface RecordDayListProps {
   records: MoneyRecord[];
   categories: MoneyCategory[];
   wallets: MoneyWallet[];
-  specialItems: SpecialItem[];
   onOpen: (record: MoneyRecord) => void;
   /** 口座の履歴に混ぜる、残高の補正。 */
   corrections?: BalanceCheck[];
@@ -49,7 +48,6 @@ export default function RecordDayList({
   records,
   categories,
   wallets,
-  specialItems,
   onOpen,
   corrections = [],
   onOpenCorrection,
@@ -78,15 +76,12 @@ export default function RecordDayList({
     const groups = groupItems(record.items);
     const first = groups[0];
     const top = first?.categoryId ? topCategoryIdOf(categories, first.categoryId) : null;
-    // 小分類だけ（大分類はアイコンで分かる）。特別費は項目の名前。
+    // 小分類だけ（大分類はアイコンで分かる）。
     const firstTitle = first?.categoryId
       ? (categories.find((category) => category.id === first.categoryId)?.name ?? '')
-      : first?.specialItemId
-        ? (specialItems.find((item) => item.id === first.specialItemId)?.name ?? '')
-        : '';
+      : '';
     const title = groups.length > 1 ? `${firstTitle} ほか${groups.length - 1}` : firstTitle;
     return {
-      // 特別費は Zaim と同じく黄色の星。
       icon: top ? iconKeyOf(categories.find((category) => category.id === top)) : 'star',
       title: record.store.trim() !== '' ? `${title} @ ${record.store.trim()}` : title,
       sub: itemSummary(record.items),
@@ -105,7 +100,6 @@ export default function RecordDayList({
         const spent = day.records
           .filter((record) => record.kind === 'expense')
           .flatMap((record) => record.items)
-          .filter((item) => item.specialItemId === null)
           .reduce((sum, item) => sum + item.amount, 0);
         return (
           <section key={day.date} className="mt-2.5">

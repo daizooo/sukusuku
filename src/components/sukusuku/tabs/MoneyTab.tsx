@@ -14,7 +14,6 @@ import type {
   MoneyWallet,
   MoneyWalletBalance,
   MoneyWalletDraft,
-  SpecialItem,
 } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { useSwipeTabs } from '../ui/useSwipeTabs';
@@ -38,7 +37,7 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadMoneyBootstrap, type MoneyBootstrap } from '@/lib/api/moneyBootstrap';
-import { monthKeyOf, monthKeyOfDate, specialActualsFromRecords, yearOfMonth } from '@/lib/moneyUtils';
+import { monthKeyOf, monthKeyOfDate, yearOfMonth } from '@/lib/moneyUtils';
 import MoneyAccountsView from '../money/MoneyAccountsView';
 import MoneyRecordsView from '../money/MoneyRecordsView';
 import MoneyReviewView from '../money/MoneyReviewView';
@@ -94,8 +93,6 @@ const MONEY_TABLES = [
   'money_stores',
   'money_wallet_balances',
   'money_wallets',
-  'special_items',
-  'special_plans',
 ] as const;
 
 export default function MoneyTab({ familyId, userId }: { familyId: string; userId: string }) {
@@ -108,7 +105,6 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
-  const [specialItems, setSpecialItems] = useState<SpecialItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [view, setView] = useState<MoneyView>('accounts');
   const [monthKey, setMonthKey] = useState(() => monthKeyOfDate(new Date()));
@@ -126,7 +122,7 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
 
   /** 読んだものを画面に入れる。 */
   const apply = useCallback(
-    ({ money, special, securities: loadedSecurities }: MoneyBootstrap) => {
+    ({ money, securities: loadedSecurities }: MoneyBootstrap) => {
       setCategories(money.categories);
       setBudgets(money.budgets);
       setWallets(money.wallets);
@@ -135,7 +131,6 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
       setRecurring(money.recurring);
       setBalances(money.balances);
       setSecurities(loadedSecurities);
-      setSpecialItems(special);
     },
     [],
   );
@@ -185,7 +180,6 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
     }
   }, [supabase, familyId]);
 
-  const specialActuals = useMemo(() => specialActualsFromRecords(records), [records]);
 
   /** 振り返りの月 ↔ 年。年へ行くときは今見ている月の年を、月へ戻るときは見ている年の月を開く。 */
   const changePeriod = (next: ReviewPeriod) => {
@@ -366,7 +360,6 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
               records={records}
               categories={categories}
               wallets={wallets}
-              specialItems={specialItems}
               isLoading={isLoading}
               onOpen={setEditing}
             />
@@ -382,8 +375,6 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
               categories={categories}
               budgets={budgets}
               wallets={wallets}
-              specialItems={specialItems}
-              specialActuals={specialActuals}
               onSelectMonth={(next) => {
                 setMonthKey(next);
                 setPeriod('month');
@@ -398,7 +389,6 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
               balances={balances}
               securities={securities}
               categories={categories}
-              specialItems={specialItems}
               isLoading={isLoading}
               onOpenRecord={setEditing}
               onConfirm={(walletId, balanceOn, amount, showInHistory) => void confirmBalance(walletId, balanceOn, amount, showInHistory)}
@@ -430,8 +420,6 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
           wallets={wallets}
           stores={stores}
           records={records}
-          specialItems={specialItems}
-          specialActuals={specialActuals}
           onClose={() => setEditing(null)}
           onSubmit={(draft) => void saveRecord(draft)}
           onDelete={(record) => void removeRecord(record)}
@@ -451,14 +439,10 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
           wallets={wallets}
           recurring={recurring}
           records={records}
-          specialItems={specialItems}
-          specialActuals={specialActuals}
           onCategories={setCategories}
           onBudgets={setBudgets}
           onStores={setStores}
           onRecurring={setRecurring}
-          onSpecialItems={setSpecialItems}
-          onRecordsChanged={() => void reload().catch(() => {})}
           onClose={() => setSettingsOpen(false)}
         />
       )}

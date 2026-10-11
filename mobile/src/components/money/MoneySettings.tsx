@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CalendarClock, ChevronRight, Star, Store, Tag } from 'lucide-react-native';
+import { CalendarClock, ChevronRight, Store, Tag } from 'lucide-react-native';
 import type {
   MoneyBudget,
   MoneyCategory,
@@ -9,28 +9,24 @@ import type {
   MoneyRecurring,
   MoneyStore,
   MoneyWallet,
-  SpecialActual,
-  SpecialItem,
 } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
-import { budgetFor, budgetMonthKey, dateKeyOfDate, formatYen, topCategories } from '@/lib/moneyUtils';
-import { formatYear } from '@/lib/specialUtils';
+import { budgetFor, budgetMonthKey, dateKeyOfDate, formatYear, formatYen, topCategories } from '@/lib/moneyUtils';
 import CategoryEditor from '@/components/money/CategoryEditor';
 import RecurringSettings from '@/components/money/RecurringSettings';
-import SpecialSettings from '@/components/money/SpecialSettings';
 import StoreSettings from '@/components/money/StoreSettings';
 import { ScreenHeader } from '@/components/money/moneyVisual';
 
 // 家計の設定（docs/kakei.md §3.5）。PWA版の `src/components/sukusuku/money/MoneySettings.tsx` と同じ並び・文言。
 //
-// カテゴリ・予算・特別費の予定・固定費・よく行くお店を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
+// カテゴリ・予算・固定費・よく行くお店を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
 // （お店の名前を直しても、過去の記録のお店の名前はそのまま）。
 // 戻る操作（スマホの戻るボタン）は、開いている設定の面から入口へ、入口から家計タブへ。
 
 interface MoneySettingsProps {
   familyId: string;
-  /** 予算・特別費の予定を最初に見る年（暦年）。 */
+  /** 予算を最初に見る年（暦年）。 */
   year: number;
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
@@ -39,19 +35,14 @@ interface MoneySettingsProps {
   wallets: MoneyWallet[];
   recurring: MoneyRecurring[];
   records: MoneyRecord[];
-  specialItems: SpecialItem[];
-  specialActuals: SpecialActual[];
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
   onBudgets: (update: (prev: MoneyBudget[]) => MoneyBudget[]) => void;
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
-  onSpecialItems: (update: (prev: SpecialItem[]) => SpecialItem[]) => void;
-  /** 特別費の項目を消すと記録も消える。家計タブの記録を読み直す。 */
-  onRecordsChanged: () => void;
   onClose: () => void;
 }
 
-type Page = 'menu' | 'categories' | 'special' | 'stores' | 'recurring';
+type Page = 'menu' | 'categories' | 'stores' | 'recurring';
 
 export default function MoneySettings({
   familyId,
@@ -62,14 +53,10 @@ export default function MoneySettings({
   wallets,
   recurring,
   records,
-  specialItems,
-  specialActuals,
   onCategories,
   onBudgets,
   onStores,
   onRecurring,
-  onSpecialItems,
-  onRecordsChanged,
   onClose,
 }: MoneySettingsProps) {
   const insets = useSafeAreaInsets();
@@ -81,21 +68,13 @@ export default function MoneySettings({
   const totalBudget = tops.reduce((sum, top) => sum + (budgetFor(budgets, top.id, budgetMonthKey(year, dateKeyOfDate(new Date()))) ?? 0), 0);
   const storeCount = stores.filter((store) => !store.archived).length;
   const recurringCount = recurring.filter((rule) => !rule.archived).length;
-  const specialExpenseCount = specialItems.filter((item) => item.kind === 'expense').length;
-  const specialIncomeCount = specialItems.filter((item) => item.kind === 'income').length;
 
   const rows: { id: Exclude<Page, 'menu'>; label: string; summary: string; icon: typeof Tag }[] = [
     {
       id: 'categories',
       label: 'カテゴリ・予算',
-      summary: `生活費の大分類 ${tops.length}個・月の予算 ${formatYen(totalBudget)}（${formatYear(year)}）`,
+      summary: `支出の大分類 ${tops.length}個・月の予算 ${formatYen(totalBudget)}（${formatYear(year)}）`,
       icon: Tag,
-    },
-    {
-      id: 'special',
-      label: '特別費の予定',
-      summary: `支出予定 ${specialExpenseCount}件・収入予定 ${specialIncomeCount}件（${formatYear(year)}から送れます）`,
-      icon: Star,
     },
     { id: 'recurring', label: '固定費', summary: `給料なども含む ${recurringCount}件（自動で記録）`, icon: CalendarClock },
     { id: 'stores', label: 'よく行くお店', summary: `登録したお店 ${storeCount}件`, icon: Store },
@@ -116,7 +95,7 @@ export default function MoneySettings({
             <ScreenHeader title="家計の設定" onClose={onClose} />
             <View style={styles.content}>
               <Text style={styles.note}>
-                カテゴリ・予算・特別費の予定・固定費・よく行くお店を、いつでも編集・追加できます。直すのは設定だけで、記録は変わりません。
+                カテゴリ・予算・固定費・よく行くお店を、いつでも編集・追加できます。直すのは設定だけで、記録は変わりません。
               </Text>
               {rows.map((row) => {
                 const Icon = row.icon;
@@ -141,16 +120,6 @@ export default function MoneySettings({
             </View>
           </>
         )}
-        {page === 'special' && (
-          <SpecialSettings
-            familyId={familyId}
-            year={year}
-            items={specialItems}
-            onItems={onSpecialItems}
-            onRecordsChanged={onRecordsChanged}
-            onBack={back}
-          />
-        )}
         {page === 'stores' && <StoreSettings familyId={familyId} stores={stores} onStores={onStores} onBack={back} />}
         {page === 'recurring' && (
           <RecurringSettings
@@ -161,8 +130,6 @@ export default function MoneySettings({
             budgets={budgets}
             stores={stores}
             records={records}
-            specialItems={specialItems}
-            specialActuals={specialActuals}
             onRecurring={onRecurring}
             onStores={onStores}
             onBack={back}

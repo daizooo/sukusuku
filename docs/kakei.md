@@ -75,7 +75,8 @@
 | 順 | 中身 | DB |
 | --- | --- | --- |
 | 1 | この設計（docs） | – |
-| 2 | 特別費をカテゴリへ収納: 大分類「特別費」と小分類を作り、`money_items`・`money_recurring` の `special_item_id` を `category_id` に移す。家計の設定の「特別費の予定」と、振り返りの特別費の1行・分析を外す | 移行 migration、`special_*` の削除（削除を含む文は SQL Editor で渡す） |
+| 2 | 特別費をカテゴリへ収納: 大分類「特別費」と小分類を作る（**0086。2026-10-11に本番へ適用済み**。追加だけで、特別費の表・列は消さない）。アプリ（mobile・PWA）は特別費の別枠を外し、家計の設定の「特別費の予定」・振り返りの特別費の1行・分析・記録の入力の「予定から選ぶ」をなくした（**実装済み**）。収入の項目（賞与）は収入の大分類「給与」の小分類にした | 0086（適用済み） |
+| 2b | 後片付け: `money_items.special_item_id`・`special_plan_id`、`money_recurring.special_item_id` の列と `special_items`・`special_plans` の表を消し、`save_money_record`・`make_money_recurring_records`・`money_recurring_estimate`・`money_bootstrap` から外す（0087）。**アプリを出し、特別費の予定を固定費に登録し終えてから**。削除を含むので SQL Editor で流す | 0087（未） |
 | 3 | 収支の数え方（収入 − 生活費 − 特別費）、月・年の画面、累計・月平均、集計の開始月 | 開始月の設定 |
 | 4 | 固定収入（給与・賞与）の設定と履歴 | §0.3 |
 

@@ -25,8 +25,6 @@ export interface ItemsWork {
   /** 直している種類のまとまり。新しい種類なら null。 */
   groupKey: string | null;
   categoryId: string | null;
-  specialItemId: string | null;
-  specialPlanId: string | null;
   lines: EditorLine[];
   selected: string | null;
   /** 選んだ行の電卓の式。 */

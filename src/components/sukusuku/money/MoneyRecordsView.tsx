@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { MoneyCategory, MoneyRecord, MoneyWallet, SpecialItem } from '@/types/app';
+import type { MoneyCategory, MoneyRecord, MoneyWallet } from '@/types/app';
 import { recordsInMonth } from '@/lib/moneyUtils';
 import { MonthBar } from './moneyVisual';
 import RecordDayList from './RecordDayList';
@@ -17,7 +17,6 @@ interface MoneyRecordsViewProps {
   records: MoneyRecord[];
   categories: MoneyCategory[];
   wallets: MoneyWallet[];
-  specialItems: SpecialItem[];
   isLoading: boolean;
   onOpen: (record: MoneyRecord) => void;
 }
@@ -28,7 +27,6 @@ export default function MoneyRecordsView({
   records,
   categories,
   wallets,
-  specialItems,
   isLoading,
   onOpen,
 }: MoneyRecordsViewProps) {
@@ -44,7 +42,7 @@ export default function MoneyRecordsView({
         ) : inMonth.length === 0 ? (
           <p className="py-8 text-center text-sm text-gray-400">この月の記録はまだありません。右下の「＋」で記録します</p>
         ) : (
-          <RecordDayList records={inMonth} categories={categories} wallets={wallets} specialItems={specialItems} onOpen={onOpen} />
+          <RecordDayList records={inMonth} categories={categories} wallets={wallets} onOpen={onOpen} />
         )}
       </div>
     </div>
