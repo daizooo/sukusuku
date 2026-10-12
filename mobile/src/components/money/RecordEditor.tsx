@@ -500,7 +500,7 @@ export default function RecordEditor({
               <Text style={styles.fieldText}>金額を入れる</Text>
               <ChevronRight size={18} color={colors.textFaint} />
             </Pressable>
-            <Text style={styles.note}>貯金用の口座への振替は「貯金」として数えます。ほかの振替は集計に入れません</Text>
+            <Text style={styles.note}>振替は集計に入れません</Text>
           </>
         ) : (
           <>
