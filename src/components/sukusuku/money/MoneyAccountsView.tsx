@@ -127,6 +127,8 @@ export default function MoneyAccountsView({
         {WALLET_TYPES.map((walletType) => {
           const inType = usable.filter((row) => row.wallet.type === walletType.id);
           if (inType.length === 0) return null;
+          // 1件だけの種類は1列（横いっぱい・名前と金額を1行）にして高さを縮める。2件以上になれば2列に戻る。
+          const single = inType.length === 1;
           return (
             <section key={walletType.id} className="mt-2 space-y-[3px]">
               <h4 className="flex items-baseline justify-between px-1 text-xs font-bold text-gray-700">
@@ -134,13 +136,13 @@ export default function MoneyAccountsView({
                 <span className="tabular-nums text-gray-500">{formatBalance(inType.reduce((sum, row) => sum + row.amount, 0))}</span>
               </h4>
               {/* Zaim の「残高」と同じく2列に並べる（2026-10-08）。金額は大きく太く、プラスは緑・マイナスは「−」と黒（2026-10-10）。 */}
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className={`grid gap-1.5 ${single ? 'grid-cols-1' : 'grid-cols-2'}`}>
                 {inType.map((row) => (
                   <button
                     key={row.wallet.id}
                     type="button"
                     onClick={() => setOpenId(row.wallet.id)}
-                    className="flex min-w-0 flex-col justify-between gap-0.5 rounded-xl border border-gray-200 bg-white px-2.5 pb-1.5 pt-[7px] text-left hover:bg-gray-50"
+                    className={`flex min-w-0 justify-between gap-0.5 rounded-xl border border-gray-200 bg-white px-2.5 text-left hover:bg-gray-50 ${single ? 'items-center py-2' : 'flex-col pb-1.5 pt-[7px]'}`}
                   >
                     <span className="flex min-w-0 items-start gap-1.5">
                       <span className="shrink-0">
@@ -149,7 +151,7 @@ export default function MoneyAccountsView({
                       <span className="line-clamp-2 min-w-0 flex-1 text-[13px] font-bold leading-4 text-gray-500">{row.wallet.name}</span>
                     </span>
                     <span
-                      className={`self-end text-[21px] font-extrabold tabular-nums ${row.amount > 0 ? incomeAmountClass : 'text-gray-900'}`}
+                      className={`${single ? '' : 'self-end'} text-[21px] font-extrabold tabular-nums ${row.amount > 0 ? incomeAmountClass : 'text-gray-900'}`}
                     >
                       {formatBalance(row.amount)}
                     </span>

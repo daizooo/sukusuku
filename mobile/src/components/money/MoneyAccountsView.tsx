@@ -127,6 +127,8 @@ export default function MoneyAccountsView({
         {WALLET_TYPES.map((walletType) => {
           const inType = usable.filter((row) => row.wallet.type === walletType.id);
           if (inType.length === 0) return null;
+          // 1件だけの種類は1列（横いっぱい・名前と金額を1行）にして高さを縮める。2件以上になれば2列に戻る。
+          const single = inType.length === 1;
           return (
             <View key={walletType.id} style={styles.section}>
               <View style={styles.sectionHead}>
@@ -140,15 +142,15 @@ export default function MoneyAccountsView({
                     key={row.wallet.id}
                     accessibilityRole="button"
                     onPress={() => setOpenId(row.wallet.id)}
-                    style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.tile, single && styles.tileSingle, pressed && styles.pressed]}
                   >
-                    <View style={styles.tileTop}>
+                    <View style={[styles.tileTop, single && styles.flex]}>
                       <WalletTypeIcon type={row.wallet.type} size={20} color={row.wallet.iconColor} />
                       <Text style={styles.tileName} numberOfLines={2}>
                         {row.wallet.name}
                       </Text>
                     </View>
-                    <Text style={[styles.tileAmount, row.amount > 0 && styles.tilePlus]}>{formatBalance(row.amount)}</Text>
+                    <Text style={[styles.tileAmount, single && styles.tileAmountSingle, row.amount > 0 && styles.tilePlus]}>{formatBalance(row.amount)}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -267,10 +269,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
+  // 1件だけの種類: 横いっぱいで、名前（左）と金額（右）を1行に並べる。
+  tileSingle: { width: '100%', flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
   tileTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   tileName: { flex: 1, fontSize: 13, fontWeight: '700', lineHeight: 16, color: colors.textMuted },
   // 金額は名前より大きく太く。プラスは明るい緑、マイナスは「−」をつけて黒（Zaim と同じ）。
   tileAmount: { alignSelf: 'flex-end', fontSize: 21, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
+  tileAmountSingle: { alignSelf: 'auto' },
   tilePlus: { color: colors.moneyIncome },
   archivedName: { opacity: 0.7 },
   add: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 16 },
