@@ -1,5 +1,5 @@
-import type { MoneyFeedItem, MoneyFeedRule, MoneyRecord } from '@/types/app';
-import { formatYen, recordTotal } from '@/lib/moneyUtils';
+import type { MoneyFeedItem, MoneyFeedRule, MoneyRecord, MoneyRecordDraft } from '@/types/app';
+import { formatYen, recordTotal } from './moneyUtils.ts';
 
 // Zaim 取り込みの画面で使う、数え方・言葉（docs/kakei.md §9.5）。mobile版の `mobile/src/lib/moneyFeedUtils.ts` と同じ中身。
 
@@ -69,6 +69,29 @@ export const feedLinkCandidates = (
     )
     .sort((a, b) => Math.abs(recordTotal(a) - amount) - Math.abs(recordTotal(b) - amount))
     .slice(0, 20);
+};
+
+/**
+ * 記録の入力の重複の確認（§9.5.5 の最後）。新しく入れる記録と、同じ口座・同じ額・前後 days 日の「明細から来た記録」。
+ * 口座は、入れる記録の出金元・入金先のどちらかが、明細から来た記録の出金元・入金先のどちらかと同じなら同じとみなす。
+ */
+export const feedDuplicates = (
+  draft: Pick<MoneyRecordDraft, 'id' | 'occurredOn' | 'walletId' | 'toWalletId' | 'items'>,
+  records: MoneyRecord[],
+  linkedRecordIds: ReadonlySet<string>,
+  days: number,
+): MoneyRecord[] => {
+  if (draft.id !== null) return [];
+  const amount = draft.items.reduce((sum, item) => sum + item.amount, 0);
+  const wallets = new Set([draft.walletId, draft.toWalletId].filter((id): id is string => id !== null));
+  if (amount <= 0 || wallets.size === 0) return [];
+  return records.filter(
+    (record) =>
+      linkedRecordIds.has(record.id) &&
+      recordTotal(record) === amount &&
+      dayDiff(record.occurredOn, draft.occurredOn) <= days &&
+      ((record.walletId !== null && wallets.has(record.walletId)) || (record.toWalletId !== null && wallets.has(record.toWalletId))),
+  );
 };
 
 export const FEED_ACTION_LABELS: Record<MoneyFeedRule['action'], string> = {

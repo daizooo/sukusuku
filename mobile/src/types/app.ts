@@ -823,6 +823,8 @@ export interface MoneyFeedData {
   settings: MoneyFeedSettings;
   walletFeeds: MoneyWalletFeed[];
   accounts: MoneyFeedAccount[];
+  /** 明細から来た（結んだ・作った）記録。新しい500件の明細の分。記録の入力の重複の確認に使う。 */
+  linkedRecordIds: string[];
   /** 最後に明細が届いた日時。 */
   lastReceivedAt: string | null;
   /** この30日に届いた明細の数。 */

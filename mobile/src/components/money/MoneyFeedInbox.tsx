@@ -2,8 +2,10 @@ import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronRight } from 'lucide-react-native';
+import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import type { MoneyBudget, MoneyCategory, MoneyFeedItem, MoneyRecord, MoneyWallet } from '@/types/app';
-import type { MoneyFeedResolve } from '@/lib/api/moneyFeed';
+import type { MoneyFeedFill, MoneyFeedResolve } from '@/lib/api/moneyFeed';
+import { formatDateWithWeekday, toDateString } from '@/lib/dateUtils';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import { formatYen, monthKeyOfDate, recordTotal } from '@/lib/moneyUtils';
@@ -28,15 +30,19 @@ import { Chip, ChipRow, Field, ToggleRow, WalletChoices } from '@/components/mon
 
 interface MoneyFeedInboxProps {
   items: MoneyFeedItem[];
+  /** 明細から来た記録（結ぶ候補から除く）。 */
+  linkedRecordIds: string[];
   wallets: MoneyWallet[];
   records: MoneyRecord[];
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   onResolve: (item: MoneyFeedItem, resolve: MoneyFeedResolve) => Promise<boolean>;
+  /** 読めないメールに、口座・向き・日付・額を手で入れる。入れたあとは未確認として続けて片づける。 */
+  onFill: (item: MoneyFeedItem, fill: MoneyFeedFill) => Promise<boolean>;
   onClose: () => void;
 }
 
-export default function MoneyFeedInbox({ items, wallets, records, categories, budgets, onResolve, onClose }: MoneyFeedInboxProps) {
+export default function MoneyFeedInbox({ items, linkedRecordIds, wallets, records, categories, budgets, onResolve, onFill, onClose }: MoneyFeedInboxProps) {
   const insets = useSafeAreaInsets();
   const [openId, setOpenId] = useState<string | null>(null);
   const sorted = useMemo(() => sortFeedInbox(items), [items]);
@@ -80,6 +86,7 @@ export default function MoneyFeedInbox({ items, wallets, records, categories, bu
         <FeedItemSheet
           key={opened.id}
           item={opened}
+          linkedRecordIds={linkedRecordIds}
           wallets={wallets}
           records={records}
           categories={categories}
@@ -87,6 +94,10 @@ export default function MoneyFeedInbox({ items, wallets, records, categories, bu
           onClose={() => setOpenId(null)}
           onResolve={async (resolve) => {
             if (await onResolve(opened, resolve)) setOpenId(null);
+          }}
+          onFill={async (fill) => {
+            // 入れたあとも片づいていなければ、同じ明細の枠を開いたまま次の片づけ方を選ぶ
+            await onFill(opened, fill);
           }}
         />
       )}
@@ -105,22 +116,30 @@ const MODES: { id: Mode; label: string }[] = [
 
 function FeedItemSheet({
   item,
+  linkedRecordIds,
   wallets,
   records,
   categories,
   budgets,
   onClose,
   onResolve,
+  onFill,
 }: {
   item: MoneyFeedItem;
+  linkedRecordIds: string[];
   wallets: MoneyWallet[];
   records: MoneyRecord[];
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   onClose: () => void;
   onResolve: (resolve: MoneyFeedResolve) => Promise<void>;
+  onFill: (fill: MoneyFeedFill) => Promise<void>;
 }) {
   const [mode, setMode] = useState<Mode>('record');
+  // 読めないメールの手入力（口座・向き・日付・額）
+  const [fillDirection, setFillDirection] = useState<'in' | 'out'>('out');
+  const [fillOn, setFillOn] = useState(() => toDateString(new Date(item.receivedAt)));
+  const [fillAmount, setFillAmount] = useState('');
   const [walletId, setWalletId] = useState<string | null>(null);
   const [remember, setRemember] = useState(true);
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -135,7 +154,7 @@ function FeedItemSheet({
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '—';
   const categoryName = categories.find((category) => category.id === categoryId)?.name ?? null;
   const candidates = useMemo(() => records.filter((record) => item.candidateRecordIds.includes(record.id)), [records, item]);
-  const linkChoices = useMemo(() => feedLinkCandidates(item, records, new Set()), [item, records]);
+  const linkChoices = useMemo(() => feedLinkCandidates(item, records, new Set(linkedRecordIds)), [item, records, linkedRecordIds]);
 
   const run = async (resolve: MoneyFeedResolve) => {
     if (busy) return;
@@ -157,19 +176,75 @@ function FeedItemSheet({
     </View>
   );
 
-  // 読めないメール: 件名だけ見せて、記録しない
+  // 読めないメール: 件名を見ながら、口座・向き・日付・額を手で入れる（入れると未確認として突き合わせる）。記録しないこともできる
   if (item.status === 'unreadable' || item.direction === null) {
+    const amount = Number(fillAmount.replace(/[^0-9]/g, ''));
+    const canFill = !busy && walletId !== null && amount > 0;
+    const fill = async () => {
+      if (!canFill || walletId === null) return;
+      setBusy(true);
+      try {
+        await onFill({ walletId, direction: fillDirection, occurredOn: fillOn, amount });
+      } finally {
+        setBusy(false);
+      }
+    };
+    const openDate = () =>
+      DateTimePickerAndroid.open({
+        value: new Date(`${fillOn}T00:00:00`),
+        mode: 'date',
+        onChange: (_event, picked) => {
+          if (picked) setFillOn(toDateString(picked));
+        },
+      });
     return (
       <SheetModal visible onClose={onClose}>
         <LogModalShell
           title="読めないメール"
           onClose={onClose}
-          footer={<PrimaryButton label="記録しない" disabled={busy} onPress={() => void run({ action: 'ignore', learn: false })} />}
+          footer={
+            <>
+              <PrimaryButton label="この内容で取り込む" disabled={!canFill} onPress={() => void fill()} />
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => void run({ action: 'ignore', learn: false })}
+                style={styles.secondary}
+              >
+                <Text style={styles.secondaryText}>記録しない</Text>
+              </Pressable>
+            </>
+          }
         >
           <Text style={styles.summaryDescription}>{item.subject}</Text>
           <Text style={styles.hint}>
-            メールの形が違い、日付・額・口座を読めませんでした。必要なら記録は手で入れてください。
+            メールの形が違い、日付・額・口座を読めませんでした。件名を見て入れると、ほかの明細と同じく振替・自動の記録・手入力と突き合わせます。
           </Text>
+          <Field label="向き">
+            <ChipRow>
+              <Chip label="出金" selected={fillDirection === 'out'} onPress={() => setFillDirection('out')} />
+              <Chip label="入金" selected={fillDirection === 'in'} onPress={() => setFillDirection('in')} />
+            </ChipRow>
+          </Field>
+          <Field label="日付">
+            <Pressable accessibilityRole="button" onPress={openDate} style={styles.select}>
+              <Text style={styles.selectText}>{formatDateWithWeekday(new Date(`${fillOn}T00:00:00`))}</Text>
+              <ChevronRight size={18} color={colors.textFaint} />
+            </Pressable>
+          </Field>
+          <Field label="金額（円）">
+            <TextInput
+              style={styles.input}
+              value={fillAmount}
+              onChangeText={setFillAmount}
+              placeholder="例: 20000"
+              placeholderTextColor={colors.textFaint}
+              keyboardType="number-pad"
+            />
+          </Field>
+          <Field label="口座">
+            <WalletChoices wallets={wallets} selectedId={walletId} onPick={setWalletId} />
+          </Field>
         </LogModalShell>
       </SheetModal>
     );

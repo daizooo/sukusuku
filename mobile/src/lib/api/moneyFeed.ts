@@ -89,10 +89,10 @@ export async function loadMoneyFeed(supabase: SupabaseDb, familyId: string): Pro
       .order('received_at', { ascending: false })
       .order('id', { ascending: true })
       .limit(200),
-    // 届いた口座名と、最後に届いた日時・この30日の件数（新しい500件から）
+    // 届いた口座名と、最後に届いた日時・この30日の件数・明細から来た記録（新しい500件から）
     supabase
       .from('money_feed')
-      .select('account_name, to_email, received_at')
+      .select('account_name, to_email, received_at, record_id')
       .eq('family_id', familyId)
       .order('received_at', { ascending: false })
       .limit(500),
@@ -145,6 +145,7 @@ export async function loadMoneyFeed(supabase: SupabaseDb, familyId: string): Pro
       }),
     ),
     accounts: [...accounts.values()],
+    linkedRecordIds: [...new Set(recentRows.flatMap((row) => (row.record_id ? [row.record_id] : [])))],
     lastReceivedAt: recentRows[0]?.received_at ?? null,
     recentCount: recentRows.filter((row) => row.received_at >= since).length,
   };
@@ -175,6 +176,26 @@ export async function resolveMoneyFeed(supabase: SupabaseDb, feedId: string, res
     p_feed: feedId,
     p_action: resolve.action,
     p_args: args as Database['public']['Functions']['money_feed_resolve']['Args']['p_args'],
+  });
+  if (error) throw error;
+  return data;
+}
+
+/** 読めないメールに、口座・向き・日付・額を手で入れて未確認に戻し、突き合わせる。返り値は突き合わせたあとの状態。 */
+export interface MoneyFeedFill {
+  walletId: string;
+  direction: 'in' | 'out';
+  occurredOn: string;
+  amount: number;
+}
+
+export async function fillMoneyFeed(supabase: SupabaseDb, feedId: string, fill: MoneyFeedFill): Promise<string> {
+  const { data, error } = await supabase.rpc('money_feed_fill', {
+    p_feed: feedId,
+    p_wallet: fill.walletId,
+    p_direction: fill.direction,
+    p_occurred_on: fill.occurredOn,
+    p_amount: fill.amount,
   });
   if (error) throw error;
   return data;

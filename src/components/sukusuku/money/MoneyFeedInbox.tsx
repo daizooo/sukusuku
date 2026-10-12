@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { MoneyBudget, MoneyCategory, MoneyFeedItem, MoneyRecord, MoneyWallet } from '@/types/app';
-import type { MoneyFeedResolve } from '@/lib/api/moneyFeed';
+import type { MoneyFeedFill, MoneyFeedResolve } from '@/lib/api/moneyFeed';
+import { toDateStringInTimeZone } from '@/lib/dateUtils';
 import { formatYen, monthKeyOfDate, recordTotal } from '@/lib/moneyUtils';
 import { feedAmountLabel, feedDayLabel, feedLinkCandidates, feedStatusLabel, sortFeedInbox } from '@/lib/moneyFeedUtils';
 import { ModalShell } from '../modals/TaskForm';
@@ -19,15 +20,29 @@ import { Chip, ChipRow, Field, ToggleRow, WalletChoices, feedInputClass } from '
 
 interface MoneyFeedInboxProps {
   items: MoneyFeedItem[];
+  /** 明細から来た記録（結ぶ候補から除く）。 */
+  linkedRecordIds: string[];
   wallets: MoneyWallet[];
   records: MoneyRecord[];
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   onResolve: (item: MoneyFeedItem, resolve: MoneyFeedResolve) => Promise<boolean>;
+  /** 読めないメールに、口座・向き・日付・額を手で入れる。入れたあとは未確認として続けて片づける。 */
+  onFill: (item: MoneyFeedItem, fill: MoneyFeedFill) => Promise<boolean>;
   onClose: () => void;
 }
 
-export default function MoneyFeedInbox({ items, wallets, records, categories, budgets, onResolve, onClose }: MoneyFeedInboxProps) {
+export default function MoneyFeedInbox({
+  items,
+  linkedRecordIds,
+  wallets,
+  records,
+  categories,
+  budgets,
+  onResolve,
+  onFill,
+  onClose,
+}: MoneyFeedInboxProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const sorted = useMemo(() => sortFeedInbox(items), [items]);
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? null;
@@ -68,6 +83,7 @@ export default function MoneyFeedInbox({ items, wallets, records, categories, bu
         <FeedItemModal
           key={opened.id}
           item={opened}
+          linkedRecordIds={linkedRecordIds}
           wallets={wallets}
           records={records}
           categories={categories}
@@ -75,6 +91,10 @@ export default function MoneyFeedInbox({ items, wallets, records, categories, bu
           onClose={() => setOpenId(null)}
           onResolve={async (resolve) => {
             if (await onResolve(opened, resolve)) setOpenId(null);
+          }}
+          onFill={async (fill) => {
+            // 入れたあとも片づいていなければ、同じ明細の枠を開いたまま次の片づけ方を選ぶ
+            await onFill(opened, fill);
           }}
         />
       )}
@@ -95,22 +115,30 @@ const candidateButtonClass = 'rounded-lg bg-blue-100 px-3 py-2 text-[13px] font-
 
 function FeedItemModal({
   item,
+  linkedRecordIds,
   wallets,
   records,
   categories,
   budgets,
   onClose,
   onResolve,
+  onFill,
 }: {
   item: MoneyFeedItem;
+  linkedRecordIds: string[];
   wallets: MoneyWallet[];
   records: MoneyRecord[];
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   onClose: () => void;
   onResolve: (resolve: MoneyFeedResolve) => Promise<void>;
+  onFill: (fill: MoneyFeedFill) => Promise<void>;
 }) {
   const [mode, setMode] = useState<Mode>('record');
+  // 読めないメールの手入力（口座・向き・日付・額）
+  const [fillDirection, setFillDirection] = useState<'in' | 'out'>('out');
+  const [fillOn, setFillOn] = useState(() => toDateStringInTimeZone(new Date(item.receivedAt)));
+  const [fillAmount, setFillAmount] = useState('');
   const [walletId, setWalletId] = useState<string | null>(null);
   const [remember, setRemember] = useState(true);
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -124,7 +152,7 @@ function FeedItemModal({
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '—';
   const categoryName = categories.find((category) => category.id === categoryId)?.name ?? null;
   const candidates = useMemo(() => records.filter((record) => item.candidateRecordIds.includes(record.id)), [records, item]);
-  const linkChoices = useMemo(() => feedLinkCandidates(item, records, new Set()), [item, records]);
+  const linkChoices = useMemo(() => feedLinkCandidates(item, records, new Set(linkedRecordIds)), [item, records, linkedRecordIds]);
 
   const run = async (resolve: MoneyFeedResolve) => {
     if (busy) return;
@@ -146,19 +174,63 @@ function FeedItemModal({
     </div>
   );
 
-  // 読めないメール: 件名だけ見せて、記録しない
+  // 読めないメール: 件名を見ながら、口座・向き・日付・額を手で入れる（入れると未確認として突き合わせる）。記録しないこともできる
   if (item.status === 'unreadable' || item.direction === null) {
+    const amount = Number(fillAmount.replace(/[^0-9]/g, ''));
+    const canFill = !busy && walletId !== null && amount > 0 && fillOn !== '';
+    const fill = async () => {
+      if (!canFill || walletId === null) return;
+      setBusy(true);
+      try {
+        await onFill({ walletId, direction: fillDirection, occurredOn: fillOn, amount });
+      } finally {
+        setBusy(false);
+      }
+    };
     return (
       <ModalShell
         title="読めないメール"
         onClose={onClose}
-        footer={<PrimaryButton label="記録しない" disabled={busy} onClick={() => void run({ action: 'ignore', learn: false })} />}
+        footer={
+          <div className="space-y-1">
+            <PrimaryButton label="この内容で取り込む" disabled={!canFill} onClick={() => void fill()} />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void run({ action: 'ignore', learn: false })}
+              className="w-full py-2.5 text-sm font-bold text-gray-700"
+            >
+              記録しない
+            </button>
+          </div>
+        }
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
           <p className="text-[13px] leading-relaxed text-gray-500">{item.subject}</p>
           <p className="text-xs leading-relaxed text-gray-500">
-            メールの形が違い、日付・額・口座を読めませんでした。必要なら記録は手で入れてください。
+            メールの形が違い、日付・額・口座を読めませんでした。件名を見て入れると、ほかの明細と同じく振替・自動の記録・手入力と突き合わせます。
           </p>
+          <Field label="向き">
+            <ChipRow>
+              <Chip label="出金" selected={fillDirection === 'out'} onClick={() => setFillDirection('out')} />
+              <Chip label="入金" selected={fillDirection === 'in'} onClick={() => setFillDirection('in')} />
+            </ChipRow>
+          </Field>
+          <Field label="日付">
+            <input type="date" className={feedInputClass} value={fillOn} onChange={(event) => setFillOn(event.target.value)} />
+          </Field>
+          <Field label="金額（円）">
+            <input
+              className={feedInputClass}
+              inputMode="numeric"
+              value={fillAmount}
+              onChange={(event) => setFillAmount(event.target.value)}
+              placeholder="例: 20000"
+            />
+          </Field>
+          <Field label="口座">
+            <WalletChoices wallets={wallets} selectedId={walletId} onPick={setWalletId} />
+          </Field>
         </div>
       </ModalShell>
     );

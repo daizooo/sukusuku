@@ -2481,6 +2481,16 @@ export type Database = {
         Args: { p_day: number; p_month: string }
         Returns: string
       }
+      money_feed_fill: {
+        Args: {
+          p_amount: number
+          p_direction: string
+          p_feed: string
+          p_occurred_on: string
+          p_wallet: string
+        }
+        Returns: string
+      }
       money_feed_issue_token: { Args: never; Returns: string }
       money_feed_key: { Args: { p_description: string }; Returns: string }
       money_feed_learn: {

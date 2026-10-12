@@ -43,8 +43,15 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadMoneyBootstrap } from '@/lib/api/moneyBootstrap';
-import { loadMoneyFeed, resolveMoneyFeed, type MoneyFeedResolve } from '@/lib/api/moneyFeed';
-import { dateKeyOfDate, fixedBudgetRows, monthKeyOf, monthKeyOfDate, yearOfMonth } from '@/lib/moneyUtils';
+import {
+  fillMoneyFeed,
+  loadMoneyFeed,
+  resolveMoneyFeed,
+  type MoneyFeedFill,
+  type MoneyFeedResolve,
+} from '@/lib/api/moneyFeed';
+import { feedDayLabel, feedDuplicates } from '@/lib/moneyFeedUtils';
+import { dateKeyOfDate, fixedBudgetRows, formatYen, monthKeyOf, monthKeyOfDate, recordTotal, yearOfMonth } from '@/lib/moneyUtils';
 import MoneyAccountsView from '@/components/money/MoneyAccountsView';
 import MoneyRecordsView from '@/components/money/MoneyRecordsView';
 import MoneyReviewView from '@/components/money/MoneyReviewView';
@@ -213,7 +220,38 @@ export default function MoneyScreen() {
   };
   const failed = (what: string) => Alert.alert(`${what}できませんでした`, 'もう一度お試しください。');
 
+  /**
+   * 新しく入れる記録が、Zaim から取り込んだ明細の記録と重なっていないか（docs/kakei.md §9.5.5 の最後）。
+   * 同じ口座・同じ額・前後の日（手入力との確認の幅）の記録があれば、入れるか聞く。入れないなら false。
+   */
+  const confirmNotDuplicate = (draft: MoneyRecordDraft): Promise<boolean> => {
+    if (!feed) return Promise.resolve(true);
+    const duplicates = feedDuplicates(draft, records, new Set(feed.linkedRecordIds), feed.settings.manualDays);
+    if (duplicates.length === 0) return Promise.resolve(true);
+    const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '';
+    const lines = duplicates
+      .map((record) => {
+        const where =
+          record.kind === 'transfer' ? `${walletName(record.walletId)} → ${walletName(record.toWalletId)}` : walletName(record.walletId);
+        const kind = record.kind === 'transfer' ? '振替' : record.kind === 'income' ? '収入' : '支出';
+        return `${feedDayLabel(record.occurredOn)} ${kind} ${formatYen(recordTotal(record))}（${where}）`;
+      })
+      .join('\n');
+    return new Promise((resolve) =>
+      Alert.alert(
+        '同じ取引が取り込まれています',
+        `Zaim から取り込んだ記録に、同じ口座・同じ額のものがあります。\n${lines}\n\nそれでも入れますか？`,
+        [
+          { text: '入れない', style: 'cancel', onPress: () => resolve(false) },
+          { text: '入れる', onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) },
+      ),
+    );
+  };
+
   const saveRecord = async (draft: MoneyRecordDraft) => {
+    if (!(await confirmNotDuplicate(draft))) return;
     setEditing(null);
     try {
       const saved = await saveMoneyRecord(supabase, draft);
@@ -236,6 +274,19 @@ export default function MoneyScreen() {
       await reload(familyId);
       // 口座を選んだだけで、まだ未確認に残るときは枠を開いたままにする
       return !(resolve.action === 'wallet' && status === 'pending');
+    } catch {
+      failed('保存');
+      return false;
+    }
+  };
+
+  /** 読めないメールに中身を入れる（docs/kakei.md §9.5.6.1）。入れたあとは未確認として続けて片づける。 */
+  const fillFeed = async (item: MoneyFeedItem, fill: MoneyFeedFill): Promise<boolean> => {
+    if (!familyId) return false;
+    try {
+      await fillMoneyFeed(supabase, item.id, fill);
+      await reload(familyId);
+      return true;
     } catch {
       failed('保存');
       return false;
@@ -504,11 +555,13 @@ export default function MoneyScreen() {
       {feedOpen && feed && (
         <MoneyFeedInbox
           items={feed.open}
+          linkedRecordIds={feed.linkedRecordIds}
           wallets={wallets}
           records={records}
           categories={categories}
           budgets={allBudgets}
           onResolve={resolveFeed}
+          onFill={fillFeed}
           onClose={() => setFeedOpen(false)}
         />
       )}
