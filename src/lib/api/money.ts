@@ -89,6 +89,7 @@ const rowToItem = (row: ItemRow): MoneyItem => ({
   unitPrice: row.unit_price,
   name: row.name,
   memo: row.memo,
+  receiptName: row.receipt_name ?? null,
 });
 
 export const rowToRecord = (row: RecordRow & { money_items: ItemRow[] }): MoneyRecord => ({
@@ -219,6 +220,8 @@ export async function saveMoneyRecord(supabase: SupabaseDb, draft: MoneyRecordDr
     store: draft.kind === 'transfer' ? '' : draft.store.trim(),
     register_store: draft.registerStore === true,
     is_estimate: draft.isEstimate,
+    // レシートの店名（読み取りで入れた記録だけ。直すときは送らなければ今のまま。docs/kakei.md §10.3）
+    receipt_store: draft.receiptStore ?? null,
   };
   const items: Json = draft.items.map((item) => ({
     amount: item.amount,
@@ -228,6 +231,7 @@ export async function saveMoneyRecord(supabase: SupabaseDb, draft: MoneyRecordDr
     unit_price: item.unitPrice,
     name: item.name.trim(),
     memo: item.memo.trim(),
+    receipt_name: item.receiptName ?? null,
   }));
   const { data, error } = await supabase.rpc('save_money_record', { p_record: record, p_items: items });
   if (error) throw error;

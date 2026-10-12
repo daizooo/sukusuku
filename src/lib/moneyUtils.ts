@@ -15,6 +15,7 @@ import type {
   MoneyHoldingAccount,
   MoneyHoldingValue,
   MoneyItem,
+  ReceiptScanItem,
   MoneyItemDraft,
   MoneyHolidayRule,
   MoneyRecord,
@@ -1155,6 +1156,8 @@ export interface EditorLine {
   quantity: number;
   unitPrice: number;
   memo: string;
+  /** レシートに印字された品名そのまま（読み取りで入れた行だけ。docs/kakei.md §10.3）。 */
+  receiptName?: string | null;
 }
 
 /** 品目の種類のまとまり（記録の詳細の1行、品目の画面1枚）。 */
@@ -1189,6 +1192,7 @@ export function groupsFromItems(items: readonly MoneyItem[], nextKey: () => stri
         quantity: item.unitPrice === null && !divisible ? 1 : item.quantity,
         unitPrice: item.unitPrice ?? (divisible ? item.amount / item.quantity : item.amount),
         memo: item.memo,
+        receiptName: item.receiptName ?? null,
       };
     }),
   }));
@@ -1207,8 +1211,33 @@ export function itemsFromGroups(groups: readonly EditorGroup[]): MoneyItemDraft[
         unitPrice: line.unitPrice,
         name: line.name.trim(),
         memo: line.memo.trim(),
+        receiptName: line.receiptName ?? null,
       })),
   );
+}
+
+/**
+ * レシートの読み取りの品目を、入力の形にする（種類ごとにまとめる。読んだ順）。
+ * 種類が決まらなかった品目は、種類なしの1つのまとまりにする（「種類を選んでください」。docs/kakei.md §10.4）。
+ */
+export function groupsFromScan(items: readonly ReceiptScanItem[], nextKey: () => string): EditorGroup[] {
+  const groups: EditorGroup[] = [];
+  for (const item of items) {
+    let group = groups.find((entry) => entry.categoryId === item.categoryId);
+    if (!group) {
+      group = { key: nextKey(), categoryId: item.categoryId, categoryName: '', lines: [] };
+      groups.push(group);
+    }
+    group.lines.push({
+      key: nextKey(),
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      memo: '',
+      receiptName: item.receiptName,
+    });
+  }
+  return groups;
 }
 
 /** 同じ種類のまとまりか。 */

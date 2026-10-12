@@ -11,6 +11,7 @@ import type {
   MoneyStore,
   MoneyWallet,
   MoneyWalletDraft,
+  ReceiptScan,
 } from '@/types/app';
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
 import {
@@ -23,6 +24,7 @@ import {
   formatMonthKey,
   formatYen,
   groupsFromItems,
+  groupsFromScan,
   iconKeyOf,
   isBlankLine,
   itemNamesLabel,
@@ -85,6 +87,8 @@ export interface RecordEditorProps {
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onArchiveWallet: (wallet: MoneyWallet) => void;
   onEditCategories: () => void;
+  /** レシートの読み取りの結果。あれば、その内容を入れた新しい記録として開く（docs/kakei.md §10.4）。 */
+  receipt?: ReceiptScan | null;
 }
 
 /**
@@ -109,18 +113,27 @@ export default function RecordEditor({
   onSaveWallet,
   onArchiveWallet,
   onEditCategories,
+  receipt = null,
 }: RecordEditorProps) {
   const [kind, setKind] = useState<MoneyRecordKind>(record?.kind ?? 'expense');
-  const [occurredOn, setOccurredOn] = useState(record?.occurredOn ?? toDateStringInTimeZone(new Date()));
-  const [walletId, setWalletId] = useState<string | null>(
-    record ? record.walletId : lastWalletId(records, wallets, 'expense'),
+  const [occurredOn, setOccurredOn] = useState(
+    record?.occurredOn ?? receipt?.occurredOn ?? toDateStringInTimeZone(new Date()),
   );
+  // レシートから出金元が当たらなかったときは、前回の出金元を入れて「確かめてください」を出す（§10.4）。
+  const [initialWalletId] = useState<string | null>(() =>
+    record ? record.walletId : (receipt?.walletId ?? lastWalletId(records, wallets, 'expense')),
+  );
+  const [walletId, setWalletId] = useState<string | null>(initialWalletId);
   const [toWalletId, setToWalletId] = useState<string | null>(record?.toWalletId ?? null);
-  const [store, setStore] = useState(record?.store ?? '');
+  const [store, setStore] = useState(record?.store ?? receipt?.store ?? '');
   // お店の選択で「お店に登録して使う」を選んだか（保存のときにお店の設定に登録する。docs/kakei.md §3.5）。
   const [registerStore, setRegisterStore] = useState(false);
   const [groups, setGroups] = useState<EditorGroup[]>(() =>
-    record && record.kind !== 'transfer' ? groupsFromItems(record.items, newGroupKey) : [],
+    record && record.kind !== 'transfer'
+      ? groupsFromItems(record.items, newGroupKey)
+      : receipt
+        ? groupsFromScan(receipt.items, newGroupKey)
+        : [],
   );
   const [transferAmount, setTransferAmount] = useState(() =>
     record?.kind === 'transfer' ? record.items.reduce((sum, item) => sum + item.amount, 0) : 0,
@@ -147,7 +160,19 @@ export default function RecordEditor({
 
   /** まとまりの見出し（「食費 › 食料品」「特別費 › 車検」）。 */
   const groupTitle = (target: Pick<EditorGroup, 'categoryId' | 'categoryName'>) =>
-    target.categoryId !== null ? categoryPath(categories, target.categoryId) : target.categoryName;
+    target.categoryId !== null
+      ? categoryPath(categories, target.categoryId)
+      : target.categoryName || (receipt ? '種類を選んでください' : '');
+
+  // レシートの読み取りで、保存の前に確かめてほしいこと（§10.4・§10.5）。
+  const receiptNotices = receipt
+    ? [
+        total !== receipt.receiptTotal &&
+          `レシートの合計 ${formatYen(receipt.receiptTotal)} と ${formatYen(total - receipt.receiptTotal)} 違います`,
+        receipt.walletId === null && walletId === initialWalletId && '出金元を確かめてください（レシートから分かりませんでした）',
+        groups.some((group) => group.categoryId === null && group.categoryName === '') && '種類の決まっていない品目があります',
+      ].filter((notice): notice is string => typeof notice === 'string')
+    : [];
 
   /** まとまりのアイコン（大分類のアイコン）。 */
   const groupIconKey = (target: Pick<EditorGroup, 'categoryId'>) => {
@@ -282,6 +307,7 @@ export default function RecordEditor({
       registerStore: kind !== 'transfer' && store !== '' && registerStore,
       isEstimate: stillEstimate,
       items,
+      ...(receipt && kind !== 'transfer' && { receiptStore: receipt.receiptStore }),
     });
   };
 
@@ -424,6 +450,15 @@ export default function RecordEditor({
           <span className="pb-1.5 text-xs text-gray-400">{kind === 'transfer' ? '金額' : '合計（品目の合計）'}</span>
           <span className="text-[34px] font-bold text-gray-900 tabular-nums">{formatBalance(total)}</span>
         </div>
+        {receiptNotices.length > 0 && (
+          <div className="mt-3 space-y-1 rounded-xl bg-red-50 p-3">
+            {receiptNotices.map((notice) => (
+              <p key={notice} className="text-[13px] font-semibold text-red-500">
+                {notice}
+              </p>
+            ))}
+          </div>
+        )}
         {record?.isEstimate && (
           <div className="mt-3 space-y-2 rounded-xl bg-amber-100 p-3">
             <div className="flex items-center gap-2">

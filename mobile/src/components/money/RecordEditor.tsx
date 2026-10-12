@@ -12,6 +12,7 @@ import type {
   MoneyStore,
   MoneyWallet,
   MoneyWalletDraft,
+  ReceiptScan,
 } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
@@ -26,6 +27,7 @@ import {
   formatMonthKey,
   formatYen,
   groupsFromItems,
+  groupsFromScan,
   iconKeyOf,
   isBlankLine,
   itemNamesLabel,
@@ -88,6 +90,8 @@ export interface RecordEditorProps {
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onArchiveWallet: (wallet: MoneyWallet) => void;
   onEditCategories: () => void;
+  /** レシートの読み取りの結果。あれば、その内容を入れた新しい記録として開く（docs/kakei.md §10.4）。 */
+  receipt?: ReceiptScan | null;
 }
 
 /**
@@ -112,19 +116,26 @@ export default function RecordEditor({
   onSaveWallet,
   onArchiveWallet,
   onEditCategories,
+  receipt = null,
 }: RecordEditorProps) {
   const insets = useSafeAreaInsets();
   const [kind, setKind] = useState<MoneyRecordKind>(record?.kind ?? 'expense');
-  const [occurredOn, setOccurredOn] = useState(record?.occurredOn ?? toDateString(new Date()));
-  const [walletId, setWalletId] = useState<string | null>(
-    record ? record.walletId : lastWalletId(records, wallets, 'expense'),
+  const [occurredOn, setOccurredOn] = useState(record?.occurredOn ?? receipt?.occurredOn ?? toDateString(new Date()));
+  // レシートから出金元が当たらなかったときは、前回の出金元を入れて「確かめてください」を出す（§10.4）。
+  const [initialWalletId] = useState<string | null>(() =>
+    record ? record.walletId : (receipt?.walletId ?? lastWalletId(records, wallets, 'expense')),
   );
+  const [walletId, setWalletId] = useState<string | null>(initialWalletId);
   const [toWalletId, setToWalletId] = useState<string | null>(record?.toWalletId ?? null);
-  const [store, setStore] = useState(record?.store ?? '');
+  const [store, setStore] = useState(record?.store ?? receipt?.store ?? '');
   // お店の選択で「お店に登録して使う」を選んだか（保存のときにお店の設定に登録する。docs/kakei.md §3.5）。
   const [registerStore, setRegisterStore] = useState(false);
   const [groups, setGroups] = useState<EditorGroup[]>(() =>
-    record && record.kind !== 'transfer' ? groupsFromItems(record.items, newGroupKey) : [],
+    record && record.kind !== 'transfer'
+      ? groupsFromItems(record.items, newGroupKey)
+      : receipt
+        ? groupsFromScan(receipt.items, newGroupKey)
+        : [],
   );
   const [transferAmount, setTransferAmount] = useState(() =>
     record?.kind === 'transfer' ? record.items.reduce((sum, item) => sum + item.amount, 0) : 0,
@@ -151,7 +162,19 @@ export default function RecordEditor({
 
   /** まとまりの見出し（「食費 › 食料品」「特別費 › 車検」）。 */
   const groupTitle = (target: Pick<EditorGroup, 'categoryId' | 'categoryName'>) =>
-    target.categoryId !== null ? categoryPath(categories, target.categoryId) : target.categoryName;
+    target.categoryId !== null
+      ? categoryPath(categories, target.categoryId)
+      : target.categoryName || (receipt ? '種類を選んでください' : '');
+
+  // レシートの読み取りで、保存の前に確かめてほしいこと（§10.4・§10.5）。
+  const receiptNotices = receipt
+    ? [
+        total !== receipt.receiptTotal &&
+          `レシートの合計 ${formatYen(receipt.receiptTotal)} と ${formatYen(total - receipt.receiptTotal)} 違います`,
+        receipt.walletId === null && walletId === initialWalletId && '出金元を確かめてください（レシートから分かりませんでした）',
+        groups.some((group) => group.categoryId === null && group.categoryName === '') && '種類の決まっていない品目があります',
+      ].filter((notice): notice is string => typeof notice === 'string')
+    : [];
 
   /** まとまりのアイコン（大分類のアイコン）。 */
   const groupIconKey = (target: Pick<EditorGroup, 'categoryId'>) => {
@@ -306,6 +329,7 @@ export default function RecordEditor({
       registerStore: kind !== 'transfer' && store !== '' && registerStore,
       isEstimate: stillEstimate,
       items,
+      ...(receipt && kind !== 'transfer' && { receiptStore: receipt.receiptStore }),
     });
   };
 
@@ -445,6 +469,15 @@ export default function RecordEditor({
           <Text style={styles.totalLabel}>{kind === 'transfer' ? '金額' : '合計（品目の合計）'}</Text>
           <Text style={styles.total}>{formatBalance(total)}</Text>
         </View>
+        {receiptNotices.length > 0 && (
+          <View style={styles.receiptNotice}>
+            {receiptNotices.map((notice) => (
+              <Text key={notice} style={styles.receiptNoticeText}>
+                {notice}
+              </Text>
+            ))}
+          </View>
+        )}
         {record?.isEstimate && (
           <View style={styles.estimate}>
             <View style={styles.estimateHead}>
@@ -587,6 +620,8 @@ const styles = StyleSheet.create({
   fieldText: { flex: 1, fontSize: 16, fontWeight: '500', color: colors.text },
   placeholder: { color: colors.textFaint },
   note: { fontSize: 12, fontWeight: '500', color: colors.textFaint, marginTop: 10 },
+  receiptNotice: { marginTop: 12, padding: 12, gap: 4, borderRadius: 12, backgroundColor: colors.dangerSurface },
+  receiptNoticeText: { fontSize: 13, fontWeight: '600', color: colors.danger },
   estimate: { marginTop: 12, padding: 12, gap: 8, borderRadius: 12, backgroundColor: colors.moneyEstimateSurface },
   estimateHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   estimateText: { fontSize: 13, fontWeight: '500', color: colors.moneyEstimate },

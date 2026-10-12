@@ -17,6 +17,7 @@ import type {
   MoneyWallet,
   MoneyWalletBalance,
   MoneyWalletDraft,
+  ReceiptScan,
 } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
@@ -43,6 +44,8 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadMoneyBootstrap } from '@/lib/api/moneyBootstrap';
+import { scanReceipt } from '@/lib/api/moneyReceipt';
+import { captureReceipt } from '@/lib/receiptCapture';
 import {
   fillMoneyFeed,
   loadMoneyFeed,
@@ -135,6 +138,9 @@ export default function MoneyScreen() {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [period, setPeriod] = useState<ReviewPeriod>('month');
   const [editing, setEditing] = useState<Editing>(null);
+  // レシートの読み取りの結果（記録の入力に入れて開く）と、読み取り中か（docs/kakei.md §10）。
+  const [receipt, setReceipt] = useState<ReceiptScan | null>(null);
+  const [scanning, setScanning] = useState(false);
   const [editingCategories, setEditingCategories] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Zaim から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
@@ -253,6 +259,7 @@ export default function MoneyScreen() {
   const saveRecord = async (draft: MoneyRecordDraft) => {
     if (!(await confirmNotDuplicate(draft))) return;
     setEditing(null);
+    setReceipt(null);
     try {
       const saved = await saveMoneyRecord(supabase, draft);
       setRecords((prev) => [...prev.filter((record) => record.id !== saved.id), saved]);
@@ -299,6 +306,27 @@ export default function MoneyScreen() {
       await reload(familyId);
     } catch {
       // 圏外なら前に読んだ分を出したままにする。
+    }
+  };
+
+  /** レシートを撮って読み取り、その内容を入れた記録の入力を開く（docs/kakei.md §10）。 */
+  const startReceiptScan = async () => {
+    let images: Awaited<ReturnType<typeof captureReceipt>>;
+    try {
+      images = await captureReceipt();
+    } catch {
+      Alert.alert('カメラを開けませんでした');
+      return;
+    }
+    if (!images) return;
+    setScanning(true);
+    try {
+      setReceipt(await scanReceipt(supabase, images));
+      setEditing('new');
+    } catch (error) {
+      Alert.alert('レシートを読み取れませんでした', error instanceof Error ? error.message : undefined);
+    } finally {
+      setScanning(false);
     }
   };
 
@@ -510,20 +538,32 @@ export default function MoneyScreen() {
         addDisabled={!familyId}
         settingsDisabled={!familyId}
         onAdd={() => setEditing('new')}
+        onScan={() => void startReceiptScan()}
         onSettings={() => setSettingsOpen(true)}
         onLottery={() => router.push('/lottery')}
       />
 
+      {scanning && (
+        <View style={styles.scanning}>
+          <ActivityIndicator color={colors.primaryText} />
+          <Text style={styles.scanningText}>レシートを読み取っています…</Text>
+        </View>
+      )}
+
       {editing !== null && (
         <RecordEditor
-          key={editing === 'new' ? 'new' : editing.id}
+          key={editing === 'new' ? (receipt ? 'receipt' : 'new') : editing.id}
           record={editing === 'new' ? null : editing}
+          receipt={editing === 'new' ? receipt : null}
           categories={categories}
           budgets={allBudgets}
           wallets={wallets}
           stores={stores}
           records={records}
-          onClose={() => setEditing(null)}
+          onClose={() => {
+            setEditing(null);
+            setReceipt(null);
+          }}
           onSubmit={(draft) => void saveRecord(draft)}
           onDelete={(record) => void removeRecord(record)}
           onSaveWallet={saveWallet}
@@ -582,6 +622,15 @@ export default function MoneyScreen() {
 }
 
 const styles = StyleSheet.create({
+  // レシートの読み取り中（数秒）。画面を暗くして、ほかの操作をさせない。
+  scanning: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  scanningText: { fontSize: 15, fontWeight: '600', color: colors.primaryText },
   screen: { flex: 1, backgroundColor: colors.background },
   body: { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center' },

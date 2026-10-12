@@ -661,6 +661,8 @@ export interface MoneyItem {
   unitPrice: number | null;
   name: string;
   memo: string;
+  /** レシートに印字された品名そのまま（読み取りで入れた品目だけ。docs/kakei.md §10.3）。 */
+  receiptName?: string | null;
 }
 
 /** 記録（記録の詳細＋品目）。money_records に対応。 */
@@ -699,6 +701,8 @@ export interface MoneyRecordDraft {
   /** 見込みのまま残すか。 */
   isEstimate: boolean;
   items: MoneyItemDraft[];
+  /** レシートに印字された店名そのまま（読み取りで入れた記録だけ。docs/kakei.md §10.3）。 */
+  receiptStore?: string;
 }
 
 /** 休日のとき。翌営業日・前営業日・そのまま。 */
@@ -829,4 +833,30 @@ export interface MoneyFeedData {
   lastReceivedAt: string | null;
   /** この30日に届いた明細の数。 */
   recentCount: number;
+}
+
+/** レシートの読み取りの結果（Edge Function money-receipt-scan。docs/kakei.md §10.4）。記録の入力に入れて開く。 */
+export interface ReceiptScan {
+  /** 入れるお店（過去の記録・登録したお店に当てたもの。当たらなければ読んだ店名）。 */
+  store: string;
+  storeRegistered: boolean;
+  /** レシートに印字された店名そのまま。 */
+  receiptStore: string;
+  occurredOn: string;
+  /** 支払いの欄から当てた出金元。当たらなければ null（前回の出金元を使う）。 */
+  walletId: string | null;
+  items: ReceiptScanItem[];
+  /** レシートの合計。品目の和と比べる（§10.5）。 */
+  receiptTotal: number;
+}
+
+export interface ReceiptScanItem {
+  receiptName: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+  categoryId: string | null;
+  /** 種類をどこから決めたか。none は「種類を選んでください」。 */
+  categorySource: 'history' | 'ai' | 'none';
 }
