@@ -222,6 +222,7 @@ export default function RecurringSettings({
                 >
                   <View style={styles.flex}>
                     <Text style={styles.name}>{ruleTitle(rule, categories)}</Text>
+                    {ruleDetail(rule) !== '' && <Text style={styles.sub}>{ruleDetail(rule)}</Text>}
                     <Text style={styles.sub}>{recurringScheduleLabel(rule)}</Text>
                     <Text style={styles.sub}>
                       {rule.kind === 'transfer'
@@ -270,7 +271,10 @@ export default function RecurringSettings({
             <Text style={styles.sectionTitle}>{isIncome ? '使わない固定収入（作った記録は残っています）' : '使わない固定支出（作った記録は残っています）'}</Text>
             {archived.map((rule) => (
               <View key={rule.id} style={[styles.row, styles.archivedRow]}>
-                <Text style={[styles.name, styles.flex]}>{ruleTitle(rule, categories)}</Text>
+                <Text style={[styles.name, styles.flex]}>
+                  {ruleTitle(rule, categories)}
+                  {ruleDetail(rule) !== '' ? `（${ruleDetail(rule)}）` : ''}
+                </Text>
                 <Pressable accessibilityRole="button" onPress={() => void setArchived(rule, false)} hitSlop={8}>
                   <Text style={styles.link}>また使う</Text>
                 </Pressable>
@@ -336,12 +340,18 @@ function IncomeHistory({ records, categories }: { records: MoneyRecord[]; catego
   );
 }
 
-/** ルールの名前（品名 → お店 → 種類の順に、あるもの）。 */
+/** ルールの見出し。種類（カテゴリ）に統一する。振替など種類のないものは取引の種別。 */
 function ruleTitle(rule: MoneyRecurring, categories: MoneyCategory[]): string {
-  if (rule.name.trim() !== '') return rule.name.trim();
-  if (rule.store.trim() !== '') return rule.store.trim();
-  if (rule.categoryId !== null) return categoryPath(categories, rule.categoryId);
-  return RECORD_KIND_LABEL[rule.kind];
+  const path = rule.categoryId !== null ? categoryPath(categories, rule.categoryId) : '';
+  return path !== '' ? path : RECORD_KIND_LABEL[rule.kind];
+}
+
+/** お店（相手先）と品名。見出しの下に添える（どちらも無ければ空）。 */
+function ruleDetail(rule: MoneyRecurring): string {
+  return [rule.store, rule.name]
+    .map((text) => text.trim())
+    .filter((text) => text !== '')
+    .join('・');
 }
 
 type EditorScreen = 'form' | 'category' | 'store';

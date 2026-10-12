@@ -218,6 +218,7 @@ export default function RecurringSettings({
                         <span className="block text-[15px] font-semibold text-gray-900">
                           {ruleTitle(rule, categories)}
                         </span>
+                        {ruleDetail(rule) !== '' && <span className={subClass}>{ruleDetail(rule)}</span>}
                         <span className={subClass}>{recurringScheduleLabel(rule)}</span>
                         <span className={`${subClass} tabular-nums`}>
                           {rule.kind === 'transfer'
@@ -272,6 +273,7 @@ export default function RecurringSettings({
                   <div key={rule.id} className="flex items-center gap-2.5 rounded-lg border border-gray-200 px-3 py-3 opacity-70">
                     <span className="flex-1 text-[15px] font-semibold text-gray-900">
                       {ruleTitle(rule, categories)}
+                      {ruleDetail(rule) !== '' ? `（${ruleDetail(rule)}）` : ''}
                     </span>
                     <button
                       type="button"
@@ -342,12 +344,18 @@ function IncomeHistory({ records, categories }: { records: MoneyRecord[]; catego
   );
 }
 
-/** ルールの名前（品名 → お店 → 種類の順に、あるもの）。 */
+/** ルールの見出し。種類（カテゴリ）に統一する。振替など種類のないものは取引の種別。 */
 function ruleTitle(rule: MoneyRecurring, categories: MoneyCategory[]): string {
-  if (rule.name.trim() !== '') return rule.name.trim();
-  if (rule.store.trim() !== '') return rule.store.trim();
-  if (rule.categoryId !== null) return categoryPath(categories, rule.categoryId);
-  return RECORD_KIND_LABEL[rule.kind];
+  const path = rule.categoryId !== null ? categoryPath(categories, rule.categoryId) : '';
+  return path !== '' ? path : RECORD_KIND_LABEL[rule.kind];
+}
+
+/** お店（相手先）と品名。見出しの下に添える（どちらも無ければ空）。 */
+function ruleDetail(rule: MoneyRecurring): string {
+  return [rule.store, rule.name]
+    .map((text) => text.trim())
+    .filter((text) => text !== '')
+    .join('・');
 }
 
 type EditorScreen = 'form' | 'category' | 'store';
