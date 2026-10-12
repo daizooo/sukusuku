@@ -4,8 +4,8 @@ import { colors } from '@/lib/theme';
 import {
   editorLineAmount,
   evaluateCalc,
+  formatBalance,
   formatCalc,
-  formatYen,
   isBlankLine,
   pressCalcKey,
   type EditorLine,
@@ -18,6 +18,7 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 // 1つの種類の品目を何行でもまとめて記録する。行＝品名・個数（−＋）・単価・金額。
 // 一覧のいちばん下に空の行を置き、押すとそこに新しく入力する（入れると次の空の行が出る）。
 // 選んだ行（青）の単価を下の電卓で直す（＋−×÷）。電卓はこの画面で初めて出る。
+// 値引き・割引・返金は「マイナスにする」で、選んだ行の金額をマイナスにする（docs/kakei.md §10.5）。
 // 種類は見出しの下に1行で小さく出す（押すと変えられる）。
 
 /** 品目の画面で書きかけのもの（記録の入力が持ち、ほかの画面へ行って戻っても消えない）。 */
@@ -78,7 +79,7 @@ export default function ItemsScreen({
     onChange({ ...work, lines: work.lines.map((line) => (line.key === key ? { ...line, ...patch } : line)) });
 
   const select = (line: EditorLine) =>
-    onChange({ ...work, selected: line.key, expr: line.unitPrice > 0 ? String(line.unitPrice) : '', focusKey: null });
+    onChange({ ...work, selected: line.key, expr: line.unitPrice !== 0 ? String(Math.abs(line.unitPrice)) : '', focusKey: null });
 
   const addLine = () => {
     // 書きかけの空の行は残さない（空の行は保存もしない）。
@@ -99,13 +100,23 @@ export default function ItemsScreen({
       current = { ...current, lines: [...current.lines, line], selected: line.key, expr: '' };
     }
     const expr = pressCalcKey(current.expr, key);
-    const unitPrice = evaluateCalc(expr) ?? 0;
+    const value = evaluateCalc(expr) ?? 0;
     onChange({
       ...current,
       expr,
       focusKey: null,
-      lines: current.lines.map((line) => (line.key === current.selected ? { ...line, unitPrice } : line)),
+      // 電卓は金額の大きさだけを扱い、マイナスの行はマイナスのまま。
+      lines: current.lines.map((line) =>
+        line.key === current.selected ? { ...line, unitPrice: line.unitPrice < 0 ? -value : value } : line,
+      ),
     });
+  };
+
+  const selectedLine = work.lines.find((line) => line.key === work.selected) ?? null;
+
+  const toggleSign = () => {
+    if (!selectedLine) return;
+    updateLine(selectedLine.key, { unitPrice: -selectedLine.unitPrice });
   };
 
   const removeSelected = () =>
@@ -180,8 +191,13 @@ export default function ItemsScreen({
                   <Plus size={13} color={colors.textMuted} />
                 </Pressable>
               </View>
-              <Text style={styles.unit}>@{line.unitPrice.toLocaleString('ja-JP')}</Text>
-              <Text style={styles.amount}>{formatYen(editorLineAmount(line))}</Text>
+              <Text style={styles.unit}>
+                @{line.unitPrice < 0 ? '−' : ''}
+                {Math.abs(line.unitPrice).toLocaleString('ja-JP')}
+              </Text>
+              <Text style={[styles.amount, line.unitPrice < 0 && styles.minus]}>
+                {formatBalance(editorLineAmount(line))}
+              </Text>
             </Pressable>
           );
         })}
@@ -190,22 +206,30 @@ export default function ItemsScreen({
           <Text style={styles.blankAmount}>¥0</Text>
         </Pressable>
         <View style={styles.subtotalRow}>
-          {work.selected !== null && (
-            <Pressable accessibilityRole="button" onPress={removeSelected} hitSlop={6}>
-              <Text style={styles.removeText}>選んだ行を消す</Text>
-            </Pressable>
+          {selectedLine !== null && (
+            <>
+              <Pressable accessibilityRole="button" onPress={removeSelected} hitSlop={6}>
+                <Text style={styles.removeText}>選んだ行を消す</Text>
+              </Pressable>
+              {/* 金額を入れてから切り替える（0円の行には出さない）。 */}
+              {selectedLine.unitPrice !== 0 && (
+                <Pressable accessibilityRole="button" onPress={toggleSign} hitSlop={6}>
+                  <Text style={styles.signText}>{selectedLine.unitPrice < 0 ? 'プラスに戻す' : 'マイナスにする'}</Text>
+                </Pressable>
+              )}
+            </>
           )}
           <View style={styles.flex} />
           {showExpr && <Text style={styles.expr}>{formatCalc(work.expr)} =</Text>}
           <Text style={styles.subtotalLabel}>小計</Text>
-          <Text style={styles.subtotal}>{formatYen(subtotal)}</Text>
+          <Text style={styles.subtotal}>{formatBalance(subtotal)}</Text>
         </View>
       </ScrollView>
 
       <Calculator onKey={pressKey} />
       <View style={styles.footer}>
         <PrimaryButton
-          label={filled.length === 0 ? '金額を入れてください' : `この種類を保存（${filled.length}行 ${formatYen(subtotal)}）`}
+          label={filled.length === 0 ? '金額を入れてください' : `この種類を保存（${filled.length}行 ${formatBalance(subtotal)}）`}
           disabled={filled.length === 0}
           onPress={onSave}
         />
@@ -255,6 +279,7 @@ const styles = StyleSheet.create({
   quantity: { minWidth: 16, textAlign: 'center', fontSize: 14, fontWeight: '700', color: colors.text },
   unit: { width: 56, textAlign: 'right', fontSize: 12, fontWeight: '500', color: colors.textFaint },
   amount: { width: 72, textAlign: 'right', fontSize: 15, fontWeight: '700', color: colors.text },
+  minus: { color: colors.danger },
   blank: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -268,6 +293,7 @@ const styles = StyleSheet.create({
   blankAmount: { fontSize: 15, fontWeight: '600', color: colors.borderStrong },
   subtotalRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, paddingHorizontal: 16, paddingTop: 10 },
   removeText: { fontSize: 12, fontWeight: '600', color: colors.danger },
+  signText: { fontSize: 12, fontWeight: '600', color: colors.money },
   expr: { fontSize: 13, fontWeight: '500', color: colors.textMuted },
   subtotalLabel: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
   subtotal: { fontSize: 22, fontWeight: '700', color: colors.text },

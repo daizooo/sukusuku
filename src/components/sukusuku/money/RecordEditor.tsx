@@ -18,6 +18,7 @@ import {
   categoryPath,
   editorGroupTotal,
   evaluateCalc,
+  formatBalance,
   formatCalc,
   formatMonthKey,
   formatYen,
@@ -269,6 +270,8 @@ export default function RecordEditor({
           ]
         : itemsFromGroups(groups);
     if (items.length === 0) return window.alert('品目を入れてください。「品目を追加する」から種類を選びます。');
+    // 品目はマイナスも入れられるが、記録の合計はマイナスにしない（docs/kakei.md §10.5。DB でも確かめる）。
+    if (total < 0) return window.alert('合計がマイナスです。値引きの行の金額を確かめてください。');
     onSubmit({
       id: record?.id ?? null,
       kind,
@@ -419,7 +422,7 @@ export default function RecordEditor({
 
         <div className="flex items-end justify-between border-b border-gray-200 py-3.5">
           <span className="pb-1.5 text-xs text-gray-400">{kind === 'transfer' ? '金額' : '合計（品目の合計）'}</span>
-          <span className="text-[34px] font-bold text-gray-900 tabular-nums">{formatYen(total)}</span>
+          <span className="text-[34px] font-bold text-gray-900 tabular-nums">{formatBalance(total)}</span>
         </div>
         {record?.isEstimate && (
           <div className="mt-3 space-y-2 rounded-xl bg-amber-100 p-3">
@@ -506,7 +509,7 @@ export default function RecordEditor({
                     <span className="block text-[13px] font-semibold text-gray-700">{groupTitle(group)}</span>
                     {names !== '' && <span className="block text-[11px] text-gray-400">{names}</span>}
                   </span>
-                  <span className="text-sm font-bold text-gray-900 tabular-nums">{formatYen(editorGroupTotal(group))}</span>
+                  <span className="text-sm font-bold text-gray-900 tabular-nums">{formatBalance(editorGroupTotal(group))}</span>
                 </button>
               );
             })}

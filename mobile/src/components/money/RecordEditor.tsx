@@ -21,6 +21,7 @@ import {
   categoryPath,
   editorGroupTotal,
   evaluateCalc,
+  formatBalance,
   formatCalc,
   formatMonthKey,
   formatYen,
@@ -293,6 +294,8 @@ export default function RecordEditor({
           ]
         : itemsFromGroups(groups);
     if (items.length === 0) return Alert.alert('品目を入れてください', '「品目を追加する」から種類を選びます。');
+    // 品目はマイナスも入れられるが、記録の合計はマイナスにしない（docs/kakei.md §10.5。DB でも確かめる）。
+    if (total < 0) return Alert.alert('合計がマイナスです', '値引きの行の金額を確かめてください。');
     onSubmit({
       id: record?.id ?? null,
       kind,
@@ -440,7 +443,7 @@ export default function RecordEditor({
 
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>{kind === 'transfer' ? '金額' : '合計（品目の合計）'}</Text>
-          <Text style={styles.total}>{formatYen(total)}</Text>
+          <Text style={styles.total}>{formatBalance(total)}</Text>
         </View>
         {record?.isEstimate && (
           <View style={styles.estimate}>
@@ -523,7 +526,7 @@ export default function RecordEditor({
                     <Text style={styles.groupTitle}>{groupTitle(group)}</Text>
                     {names !== '' && <Text style={styles.groupNames}>{names}</Text>}
                   </View>
-                  <Text style={styles.groupTotal}>{formatYen(editorGroupTotal(group))}</Text>
+                  <Text style={styles.groupTotal}>{formatBalance(editorGroupTotal(group))}</Text>
                 </Pressable>
               );
             })}
