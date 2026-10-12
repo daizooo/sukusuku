@@ -16,6 +16,7 @@ import type {
   MoneyWallet,
   MoneyWalletBalance,
   MoneyWalletDraft,
+  ReceiptScan,
 } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { useSwipeTabs } from '../ui/useSwipeTabs';
@@ -39,6 +40,8 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadMoneyBootstrap, type MoneyBootstrap } from '@/lib/api/moneyBootstrap';
+import { scanReceipt } from '@/lib/api/moneyReceipt';
+import { receiptImagesFromFiles } from '@/lib/receiptCapture';
 import {
   fillMoneyFeed,
   loadMoneyFeed,
@@ -130,6 +133,10 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [period, setPeriod] = useState<ReviewPeriod>('month');
   const [editing, setEditing] = useState<Editing>(null);
+  // レシートの読み取りの結果（記録の入力に入れて開く）と、読み取り中か（docs/kakei.md §10）。
+  const [receipt, setReceipt] = useState<ReceiptScan | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const receiptInput = useRef<HTMLInputElement>(null);
   const [editingCategories, setEditingCategories] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Zaim から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
@@ -254,6 +261,7 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
   const saveRecord = async (draft: MoneyRecordDraft) => {
     if (!confirmNotDuplicate(draft)) return;
     setEditing(null);
+    setReceipt(null);
     try {
       const saved = await saveMoneyRecord(supabase, draft);
       setRecords((prev) => [...prev.filter((record) => record.id !== saved.id), saved]);
@@ -297,6 +305,23 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
       await reload();
     } catch {
       // 圏外なら前に読んだ分を出したままにする。
+    }
+  };
+
+  /** 撮った・選んだレシートの写真を読み取り、その内容を入れた記録の入力を開く（docs/kakei.md §10）。 */
+  const readReceipt = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setScanning(true);
+    try {
+      const images = await receiptImagesFromFiles(files);
+      if (images.length === 0) return;
+      setReceipt(await scanReceipt(supabase, images));
+      setEditing('new');
+    } catch (error) {
+      window.alert(`レシートを読み取れませんでした。${error instanceof Error ? error.message : ''}`);
+    } finally {
+      setScanning(false);
+      if (receiptInput.current) receiptInput.current.value = '';
     }
   };
 
@@ -501,20 +526,42 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
       {/* 右下の1つの大きなボタン。押すと「記録を追加」「家計の設定」「福引チャンス」が開く（2026-10-10）。 */}
       <MoneyFab
         onAdd={() => setEditing('new')}
+        onScan={() => receiptInput.current?.click()}
         onSettings={() => setSettingsOpen(true)}
         onLottery={() => setLotteryOpen(true)}
       />
 
+      {/* レシートの写真（スマホではカメラが開く。長いレシートは分けて撮って複数選ぶ）。 */}
+      <input
+        ref={receiptInput}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple
+        className="hidden"
+        onChange={(event) => void readReceipt(event.target.files)}
+      />
+      {scanning && (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-black/50">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-white/40 border-t-white" />
+          <p className="text-[15px] font-semibold text-white">レシートを読み取っています…</p>
+        </div>
+      )}
+
       {editing !== null && (
         <RecordEditor
-          key={editing === 'new' ? 'new' : editing.id}
+          key={editing === 'new' ? (receipt ? 'receipt' : 'new') : editing.id}
           record={editing === 'new' ? null : editing}
+          receipt={editing === 'new' ? receipt : null}
           categories={categories}
           budgets={allBudgets}
           wallets={wallets}
           stores={stores}
           records={records}
-          onClose={() => setEditing(null)}
+          onClose={() => {
+            setEditing(null);
+            setReceipt(null);
+          }}
           onSubmit={(draft) => void saveRecord(draft)}
           onDelete={(record) => void removeRecord(record)}
           onSaveWallet={saveWallet}

@@ -42,6 +42,7 @@ import {
   recurringScheduleLabel,
   formatSignedYen,
   groupsFromItems,
+  groupsFromScan,
   itemsFromGroups,
   frequentCategoryIds,
   guessIconKey,
@@ -558,6 +559,7 @@ assert.deepEqual(saved[0], {
   unitPrice: 198,
   name: '牛乳',
   memo: '',
+  receiptName: null,
 });
 // マイナスの品目（値引き。docs/kakei.md §10.5）は、マイナスのまま行き来する
 const discountGroups = groupsFromItems(
@@ -573,6 +575,31 @@ assert.deepEqual(
   [
     [638, 319],
     [-50, -50],
+  ],
+);
+
+// レシートの読み取り（docs/kakei.md §10.4）: 種類ごとにまとめ、種類の無い品目は1つにまとめる。表記は保存まで持ち回る
+const scanGroups = groupsFromScan(
+  [
+    { receiptName: 'ﾀﾏｺﾞ', name: 'たまご', quantity: 2, unitPrice: 319, amount: 638, categoryId: 'grocery', categorySource: 'ai' },
+    { receiptName: 'ﾚｼﾞ袋', name: 'レジ袋', quantity: 1, unitPrice: 6, amount: 6, categoryId: null, categorySource: 'none' },
+    { receiptName: '値引', name: '値引', quantity: 1, unitPrice: -50, amount: -50, categoryId: 'grocery', categorySource: 'ai' },
+  ],
+  () => `s${(key += 1)}`,
+);
+assert.deepEqual(
+  scanGroups.map((group) => [group.categoryId, group.lines.map((line) => line.name)]),
+  [
+    ['grocery', ['たまご', '値引']],
+    [null, ['レジ袋']],
+  ],
+);
+assert.deepEqual(
+  itemsFromGroups(scanGroups).map((entry) => [entry.receiptName, entry.amount]),
+  [
+    ['ﾀﾏｺﾞ', 638],
+    ['値引', -50],
+    ['ﾚｼﾞ袋', 6],
   ],
 );
 

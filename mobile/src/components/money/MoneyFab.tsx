@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
 import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Plus, Settings, Ticket } from 'lucide-react-native';
+import { Camera, Plus, Settings, Ticket } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 
 /**
  * 家計タブ右下の、1つの大きな丸いボタン（docs/kakei.md §2）。
- * 押すと「記録を追加」「家計の設定」「福引チャンス」の3つが上に開く。
+ * 押すと「記録を追加」「レシートを読む」「家計の設定」「福引チャンス」が上に開く（レシートは docs/kakei.md §10）。
  * 以前は＋と、その左の小さなピル（福引｜設定）に分かれていて押しづらかったので、1つにまとめて大きくした（2026-10-10）。
  * 開いている間は戻る操作で閉じる。暗い部分を押しても閉じる。
  */
@@ -14,12 +14,14 @@ export default function MoneyFab({
   addDisabled,
   settingsDisabled,
   onAdd,
+  onScan,
   onSettings,
   onLottery,
 }: {
   addDisabled?: boolean;
   settingsDisabled?: boolean;
   onAdd: () => void;
+  onScan: () => void;
   onSettings: () => void;
   onLottery: () => void;
 }) {
@@ -77,6 +79,16 @@ export default function MoneyFab({
           >
             <Settings size={24} color={colors.textMuted} />
             <Text style={[styles.itemText, { color: colors.text }]}>家計の設定</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="レシートを読む"
+            onPress={choose(onScan)}
+            disabled={addDisabled}
+            style={[styles.item, addDisabled && styles.itemDisabled]}
+          >
+            <Camera size={24} color={colors.money} />
+            <Text style={[styles.itemText, { color: colors.text }]}>レシートを読む</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
