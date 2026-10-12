@@ -25,3 +25,8 @@ verify_jwt = false
 # pg_cron（REMINDER_CRON_SECRET のヘッダー）とアプリ（ログインの JWT）の両方から呼ぶ。
 # どちらも関数側で確かめるので、Supabase の JWT 検証は使わない。
 verify_jwt = false
+
+[functions.money-feed-ingest]
+# Gmail の Apps Script から呼ぶ。取り込みの鍵（money_feed_tokens）を関数側で確かめるので、
+# Supabase の JWT 検証は使わない。
+verify_jwt = false

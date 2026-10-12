@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Banknote, CalendarClock, ChevronRight, Store, Tag, type LucideIcon } from 'lucide-react';
+import { Banknote, CalendarClock, ChevronRight, Mail, Store, Tag, type LucideIcon } from 'lucide-react';
 import type {
   MoneyBudget,
   MoneyCategory,
+  MoneyFeedData,
   MoneyRecord,
   MoneyRecurring,
   MoneyStore,
@@ -14,6 +15,7 @@ import { budgetFor, budgetMonthKey, dateKeyOfDate, formatYear, formatYen, topCat
 import CategoryEditor from './CategoryEditor';
 import RecurringSettings from './RecurringSettings';
 import StoreSettings from './StoreSettings';
+import MoneyFeedSettings from './MoneyFeedSettings';
 import { FullScreen, ScreenHeader } from './moneyVisual';
 
 // 家計の設定（docs/kakei.md §3.5）。mobile版の `mobile/src/components/money/MoneySettings.tsx` と同じ並び・文言。
@@ -37,10 +39,14 @@ interface MoneySettingsProps {
   onBudgets: (update: (prev: MoneyBudget[]) => MoneyBudget[]) => void;
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
+  /** Zaim 取り込み（docs/kakei.md §9.5.6）。null は読み込み中。 */
+  feed: MoneyFeedData | null;
+  /** 取り込みの設定を直したあとに読み直す。 */
+  onFeedChanged: () => Promise<void>;
   onClose: () => void;
 }
 
-type Page = 'menu' | 'categories' | 'stores' | 'recurring' | 'income';
+type Page = 'menu' | 'categories' | 'stores' | 'recurring' | 'income' | 'feed';
 
 export default function MoneySettings({
   familyId,
@@ -55,6 +61,8 @@ export default function MoneySettings({
   onBudgets,
   onStores,
   onRecurring,
+  feed,
+  onFeedChanged,
   onClose,
 }: MoneySettingsProps) {
   const [page, setPage] = useState<Page>('menu');
@@ -75,6 +83,12 @@ export default function MoneySettings({
     { id: 'recurring', label: '固定支出', summary: `${recurringCount}件（自動で記録）`, icon: CalendarClock },
     { id: 'income', label: '固定収入', summary: `給与・賞与 ${incomeCount}件（自動で記録）`, icon: Banknote },
     { id: 'stores', label: 'よく行くお店', summary: `登録したお店 ${storeCount}件`, icon: Store },
+    {
+      id: 'feed',
+      label: 'Zaim 取り込み',
+      summary: feed ? `口座の対応・取り込みのルール ${feed.rules.length}件` : '口座の対応・取り込みのルール',
+      icon: Mail,
+    },
   ];
 
   const back = () => setPage('menu');
@@ -86,7 +100,7 @@ export default function MoneySettings({
           <ScreenHeader title="家計の設定" onClose={onClose} />
           <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 p-4">
             <p className="pb-1 text-[13px] leading-relaxed text-gray-500">
-              カテゴリ・予算・固定支出・固定収入・よく行くお店を、いつでも編集・追加できます。直すのは設定だけで、記録は変わりません。
+              カテゴリ・予算・固定支出・固定収入・よく行くお店・Zaim 取り込みを、いつでも編集・追加できます。直すのは設定だけで、記録は変わりません。
             </p>
             {rows.map((row) => {
               const Icon = row.icon;
@@ -112,6 +126,19 @@ export default function MoneySettings({
         </>
       )}
       {page === 'stores' && <StoreSettings familyId={familyId} stores={stores} onStores={onStores} onBack={back} />}
+      {page === 'feed' && (
+        <MoneyFeedSettings
+          familyId={familyId}
+          feed={feed}
+          wallets={wallets}
+          categories={categories}
+          budgets={budgets}
+          records={records}
+          recurring={recurring}
+          onChanged={onFeedChanged}
+          onBack={back}
+        />
+      )}
       {(page === 'recurring' || page === 'income') && (
         <RecurringSettings
           mode={page === 'income' ? 'income' : 'expense'}
