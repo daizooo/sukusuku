@@ -776,6 +776,286 @@ export type Database = {
           },
         ]
       }
+      money_feed: {
+        Row: {
+          account_name: string | null
+          amount: number | null
+          candidate_record_ids: string[]
+          created_at: string
+          description: string
+          direction: string | null
+          family_id: string
+          id: string
+          occurred_on: string | null
+          pair_id: string | null
+          raw_line: string
+          received_at: string
+          record_id: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          rule_id: string | null
+          source: string
+          source_id: string
+          status: string
+          subject: string
+          to_email: string | null
+          updated_at: string
+          wallet_id: string | null
+        }
+        Insert: {
+          account_name?: string | null
+          amount?: number | null
+          candidate_record_ids?: string[]
+          created_at?: string
+          description?: string
+          direction?: string | null
+          family_id: string
+          id?: string
+          occurred_on?: string | null
+          pair_id?: string | null
+          raw_line?: string
+          received_at: string
+          record_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          rule_id?: string | null
+          source?: string
+          source_id: string
+          status?: string
+          subject?: string
+          to_email?: string | null
+          updated_at?: string
+          wallet_id?: string | null
+        }
+        Update: {
+          account_name?: string | null
+          amount?: number | null
+          candidate_record_ids?: string[]
+          created_at?: string
+          description?: string
+          direction?: string | null
+          family_id?: string
+          id?: string
+          occurred_on?: string | null
+          pair_id?: string | null
+          raw_line?: string
+          received_at?: string
+          record_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          rule_id?: string | null
+          source?: string
+          source_id?: string
+          status?: string
+          subject?: string
+          to_email?: string | null
+          updated_at?: string
+          wallet_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_feed_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_feed_pair_id_fkey"
+            columns: ["pair_id"]
+            isOneToOne: false
+            referencedRelation: "money_feed"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_feed_record_fkey"
+            columns: ["record_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_records"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
+            foreignKeyName: "money_feed_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_feed_wallet_fkey"
+            columns: ["wallet_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_wallets"
+            referencedColumns: ["id", "family_id"]
+          },
+        ]
+      }
+      money_feed_rules: {
+        Row: {
+          action: string
+          amount_max: number | null
+          amount_min: number | null
+          category_id: string | null
+          created_at: string
+          direction: string | null
+          family_id: string
+          id: string
+          learned: boolean
+          match: string
+          name: string
+          pattern: string
+          position: number
+          record_kind: string | null
+          recurring_id: string | null
+          store: string
+          to_wallet_id: string | null
+          updated_at: string
+          wallet_id: string | null
+        }
+        Insert: {
+          action: string
+          amount_max?: number | null
+          amount_min?: number | null
+          category_id?: string | null
+          created_at?: string
+          direction?: string | null
+          family_id: string
+          id?: string
+          learned?: boolean
+          match?: string
+          name?: string
+          pattern?: string
+          position?: number
+          record_kind?: string | null
+          recurring_id?: string | null
+          store?: string
+          to_wallet_id?: string | null
+          updated_at?: string
+          wallet_id?: string | null
+        }
+        Update: {
+          action?: string
+          amount_max?: number | null
+          amount_min?: number | null
+          category_id?: string | null
+          created_at?: string
+          direction?: string | null
+          family_id?: string
+          id?: string
+          learned?: boolean
+          match?: string
+          name?: string
+          pattern?: string
+          position?: number
+          record_kind?: string | null
+          recurring_id?: string | null
+          store?: string
+          to_wallet_id?: string | null
+          updated_at?: string
+          wallet_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_feed_rules_category_fkey"
+            columns: ["category_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_categories"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
+            foreignKeyName: "money_feed_rules_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_feed_rules_recurring_id_fkey"
+            columns: ["recurring_id"]
+            isOneToOne: false
+            referencedRelation: "money_recurring"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_feed_rules_to_wallet_fkey"
+            columns: ["to_wallet_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_wallets"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
+            foreignKeyName: "money_feed_rules_wallet_fkey"
+            columns: ["wallet_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_wallets"
+            referencedColumns: ["id", "family_id"]
+          },
+        ]
+      }
+      money_feed_settings: {
+        Row: {
+          estimate_days: number
+          family_id: string
+          manual_days: number
+          pair_days: number
+          start_at: string
+          updated_at: string
+        }
+        Insert: {
+          estimate_days?: number
+          family_id: string
+          manual_days?: number
+          pair_days?: number
+          start_at?: string
+          updated_at?: string
+        }
+        Update: {
+          estimate_days?: number
+          family_id?: string
+          manual_days?: number
+          pair_days?: number
+          start_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_feed_settings_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: true
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_feed_tokens: {
+        Row: {
+          created_at: string
+          family_id: string
+          last_used_at: string | null
+          token_hash: string
+        }
+        Insert: {
+          created_at?: string
+          family_id: string
+          last_used_at?: string | null
+          token_hash: string
+        }
+        Update: {
+          created_at?: string
+          family_id?: string
+          last_used_at?: string | null
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_feed_tokens_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: true
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_fx_rates: {
         Row: {
           created_at: string
@@ -974,6 +1254,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           family_id: string
+          feed_id: string | null
           id: string
           is_estimate: boolean
           kind: string
@@ -989,6 +1270,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           family_id: string
+          feed_id?: string | null
           id?: string
           is_estimate?: boolean
           kind?: string
@@ -1004,6 +1286,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           family_id?: string
+          feed_id?: string | null
           id?: string
           is_estimate?: boolean
           kind?: string
@@ -1029,6 +1312,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "families"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_records_feed_fkey"
+            columns: ["feed_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_feed"
+            referencedColumns: ["id", "family_id"]
           },
           {
             foreignKeyName: "money_records_recurring_fkey"
@@ -1340,6 +1630,10 @@ export type Database = {
           close_day: number | null
           created_at: string
           family_id: string
+          feed_name: string | null
+          holder_kana: string | null
+          holder_name: string | null
+          holder_zaim_email: string | null
           icon_color: string | null
           id: string
           is_saving: boolean
@@ -1358,6 +1652,10 @@ export type Database = {
           close_day?: number | null
           created_at?: string
           family_id: string
+          feed_name?: string | null
+          holder_kana?: string | null
+          holder_name?: string | null
+          holder_zaim_email?: string | null
           icon_color?: string | null
           id?: string
           is_saving?: boolean
@@ -1376,6 +1674,10 @@ export type Database = {
           close_day?: number | null
           created_at?: string
           family_id?: string
+          feed_name?: string | null
+          holder_kana?: string | null
+          holder_name?: string | null
+          holder_zaim_email?: string | null
           icon_color?: string | null
           id?: string
           is_saving?: boolean
@@ -2176,6 +2478,18 @@ export type Database = {
         Args: { p_day: number; p_month: string }
         Returns: string
       }
+      money_feed_issue_token: { Args: never; Returns: string }
+      money_feed_key: { Args: { p_description: string }; Returns: string }
+      money_feed_link: {
+        Args: { p_feed: string; p_record: string }
+        Returns: undefined
+      }
+      money_feed_process: { Args: { p_feed: string }; Returns: string }
+      money_feed_receive: {
+        Args: { p_family: string; p_feed: Json }
+        Returns: Json
+      }
+      money_feed_requester: { Args: { p_description: string }; Returns: string }
       money_is_business_day: { Args: { p_date: string }; Returns: boolean }
       money_latest_holding_values: {
         Args: { p_family_id: string }
@@ -2197,6 +2511,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      money_record_amount: { Args: { p_record: string }; Returns: number }
       money_recurring_estimate: {
         Args: {
           p_month: string
