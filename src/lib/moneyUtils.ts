@@ -489,7 +489,7 @@ function recurringMonthAmount(
 /**
  * 固定費（支出のルール）から、大分類ごと・年ごとの1月〜12月の予算に足す額を出す（2026-10-11）。
  * 記録を作る条件と同じ（使っていて、出金元と種類が決まっているもの）で、生活費の大分類のものだけ。種類が小分類ならその大分類へ。
- * ルールを作った月から、記録する月（null は毎月）に、今年の翌年まで足す（作る前の月は変えない）。
+ * 記録する月（null は毎月）に、ルールを作った年から今年の翌年まで足す。作った年の中では、作った月より前の月にも足す（2026-10-12）。
  * 返す行は fixed: true で、手入力の予算の行といっしょに budgets に並べて使う。
  */
 export function fixedBudgetRows(
@@ -512,11 +512,10 @@ export function fixedBudgetRows(
     const category = byId.get(rule.categoryId);
     const top = category && category.parentId !== null ? byId.get(category.parentId) : category;
     if (!top || top.kind !== 'living') continue;
-    const startMonth = rule.createdAt.slice(0, 7);
-    for (let year = yearOfMonth(startMonth); year <= lastYear; year += 1) {
+    for (let year = yearOfMonth(rule.createdAt.slice(0, 7)); year <= lastYear; year += 1) {
       for (let month = 1; month <= 12; month += 1) {
         const monthKey = `${year}-${pad2(month)}`;
-        if (monthKey < startMonth || (rule.months !== null && !rule.months.includes(month))) continue;
+        if (rule.months !== null && !rule.months.includes(month)) continue;
         const amount = recurringMonthAmount(rule, monthKey, records, made);
         if (amount <= 0) continue;
         const key = `${top.id}|${year}`;
