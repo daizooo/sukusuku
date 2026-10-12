@@ -4,8 +4,8 @@ import { ChevronRight, Minus, Plus, Trash2 } from 'lucide-react';
 import {
   editorLineAmount,
   evaluateCalc,
+  formatBalance,
   formatCalc,
-  formatYen,
   isBlankLine,
   pressCalcKey,
   type EditorLine,
@@ -18,6 +18,7 @@ import { CategoryIcon, PrimaryButton, ScreenHeader, StackedScreen } from './mone
 // 1つの種類の品目を何行でもまとめて記録する。行＝品名・個数（−＋）・単価・金額。
 // 一覧のいちばん下に空の行を置き、押すとそこに新しく入力する（入れると次の空の行が出る）。
 // 選んだ行（青）の単価を下の電卓で直す（＋−×÷）。電卓はこの画面で初めて出る。
+// 値引き・割引・返金は「マイナスにする」で、選んだ行の金額をマイナスにする（docs/kakei.md §10.5）。
 // 種類は見出しの下に1行で小さく出す（押すと変えられる）。
 
 /** 品目の画面で書きかけのもの（記録の入力が持ち、ほかの画面へ行って戻っても消えない）。 */
@@ -77,7 +78,7 @@ export default function ItemsScreen({
     onChange({ ...work, lines: work.lines.map((line) => (line.key === key ? { ...line, ...patch } : line)) });
 
   const select = (line: EditorLine) =>
-    onChange({ ...work, selected: line.key, expr: line.unitPrice > 0 ? String(line.unitPrice) : '', focusKey: null });
+    onChange({ ...work, selected: line.key, expr: line.unitPrice !== 0 ? String(Math.abs(line.unitPrice)) : '', focusKey: null });
 
   const addLine = () => {
     // 書きかけの空の行は残さない（空の行は保存もしない）。
@@ -98,13 +99,23 @@ export default function ItemsScreen({
       current = { ...current, lines: [...current.lines, line], selected: line.key, expr: '' };
     }
     const expr = pressCalcKey(current.expr, key);
-    const unitPrice = evaluateCalc(expr) ?? 0;
+    const value = evaluateCalc(expr) ?? 0;
     onChange({
       ...current,
       expr,
       focusKey: null,
-      lines: current.lines.map((line) => (line.key === current.selected ? { ...line, unitPrice } : line)),
+      // 電卓は金額の大きさだけを扱い、マイナスの行はマイナスのまま。
+      lines: current.lines.map((line) =>
+        line.key === current.selected ? { ...line, unitPrice: line.unitPrice < 0 ? -value : value } : line,
+      ),
     });
+  };
+
+  const selectedLine = work.lines.find((line) => line.key === work.selected) ?? null;
+
+  const toggleSign = () => {
+    if (!selectedLine) return;
+    updateLine(selectedLine.key, { unitPrice: -selectedLine.unitPrice });
   };
 
   const removeSelected = () =>
@@ -182,9 +193,14 @@ export default function ItemsScreen({
                   <Plus size={13} />
                 </button>
               </span>
-              <span className="w-14 text-right text-xs text-gray-400 tabular-nums">@{line.unitPrice.toLocaleString('ja-JP')}</span>
-              <span className="w-[72px] text-right text-[15px] font-bold text-gray-900 tabular-nums">
-                {formatYen(editorLineAmount(line))}
+              <span className="w-14 text-right text-xs text-gray-400 tabular-nums">
+                @{line.unitPrice < 0 ? '−' : ''}
+                {Math.abs(line.unitPrice).toLocaleString('ja-JP')}
+              </span>
+              <span
+                className={`w-[72px] text-right text-[15px] font-bold tabular-nums ${line.unitPrice < 0 ? 'text-red-500' : 'text-gray-900'}`}
+              >
+                {formatBalance(editorLineAmount(line))}
               </span>
             </div>
           );
@@ -198,22 +214,30 @@ export default function ItemsScreen({
           <span className="text-[15px] font-semibold text-gray-300">¥0</span>
         </button>
         <div className="flex items-baseline gap-1.5 px-4 pt-2.5">
-          {work.selected !== null && (
-            <button type="button" onClick={removeSelected} className="text-xs font-semibold text-red-500">
-              選んだ行を消す
-            </button>
+          {selectedLine !== null && (
+            <>
+              <button type="button" onClick={removeSelected} className="text-xs font-semibold text-red-500">
+                選んだ行を消す
+              </button>
+              {/* 金額を入れてから切り替える（0円の行には出さない）。 */}
+              {selectedLine.unitPrice !== 0 && (
+                <button type="button" onClick={toggleSign} className="text-xs font-semibold text-blue-600">
+                  {selectedLine.unitPrice < 0 ? 'プラスに戻す' : 'マイナスにする'}
+                </button>
+              )}
+            </>
           )}
           <span className="flex-1" />
           {showExpr && <span className="text-[13px] text-gray-500 tabular-nums">{formatCalc(work.expr)} =</span>}
           <span className="text-[13px] font-semibold text-gray-700">小計</span>
-          <span className="text-[22px] font-bold text-gray-900 tabular-nums">{formatYen(subtotal)}</span>
+          <span className="text-[22px] font-bold text-gray-900 tabular-nums">{formatBalance(subtotal)}</span>
         </div>
       </div>
 
       <Calculator onKey={pressKey} />
       <div className="shrink-0 px-4 pt-1 pb-4">
         <PrimaryButton
-          label={filled.length === 0 ? '金額を入れてください' : `この種類を保存（${filled.length}行 ${formatYen(subtotal)}）`}
+          label={filled.length === 0 ? '金額を入れてください' : `この種類を保存（${filled.length}行 ${formatBalance(subtotal)}）`}
           disabled={filled.length === 0}
           onClick={onSave}
         />

@@ -559,6 +559,22 @@ assert.deepEqual(saved[0], {
   name: '牛乳',
   memo: '',
 });
+// マイナスの品目（値引き。docs/kakei.md §10.5）は、マイナスのまま行き来する
+const discountGroups = groupsFromItems(
+  [item({ amount: 638, categoryId: 'grocery', quantity: 2, unitPrice: 319 }), item({ amount: -50, categoryId: 'grocery', name: '値引' })],
+  () => `d${(key += 1)}`,
+);
+assert.deepEqual(discountGroups[0].lines.map((line) => [line.quantity, line.unitPrice]), [
+  [2, 319],
+  [1, -50],
+]);
+assert.deepEqual(
+  itemsFromGroups(discountGroups).map((entry) => [entry.amount, entry.unitPrice]),
+  [
+    [638, 319],
+    [-50, -50],
+  ],
+);
 
 // ---- 毎月の記録（docs/kakei.md §3.3・§3.4） ----
 assert.equal(formatDayOfMonth(27), '27日');
