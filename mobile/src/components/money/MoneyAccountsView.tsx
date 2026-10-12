@@ -16,7 +16,9 @@ import {
   buildWalletBalances,
   dateKeyOfDate,
   formatBalance,
+  groupWalletSections,
   WALLET_TYPES,
+  type WalletBalanceRow,
 } from '@/lib/moneyUtils';
 import { WalletSheet } from '@/components/money/WalletPicker';
 import TotalTrendScreen from '@/components/money/TotalTrendScreen';
@@ -32,6 +34,11 @@ import { Hero, WalletTypeIcon, type } from '@/components/money/moneyVisual';
 // 出金元を押すと詳細（履歴 / 推移 / 残高計算）。出金元の追加・編集・使わなくする・また使うもこの面から。
 // 総残高に入れるのは使っている出金元だけ。カードは未払いがマイナスで入る（請求済み・未請求の内訳は、押した先の詳細だけに出す）。
 // 証券口座の残高は、記録からではなく保有銘柄の評価額（docs/kakei.md §9.2）。押すと証券口座の詳細（推移と保有銘柄）。
+
+interface WalletSection {
+  type: (typeof WALLET_TYPES)[number];
+  rows: WalletBalanceRow[];
+}
 
 interface MoneyAccountsViewProps {
   wallets: MoneyWallet[];
@@ -84,6 +91,12 @@ export default function MoneyAccountsView({
   );
   const usable = summary.rows.filter((row) => !row.wallet.archived);
   const archived = summary.rows.filter((row) => row.wallet.archived);
+  const sectionBlocks = groupWalletSections(
+    WALLET_TYPES.map((walletType) => ({
+      type: walletType,
+      rows: usable.filter((row) => row.wallet.type === walletType.id),
+    })).filter((section) => section.rows.length > 0),
+  );
   const opened = wallets.find((wallet) => wallet.id === openId) ?? null;
   const needsHistory =
     (opened !== null && opened.type === 'securities') ||
@@ -91,6 +104,35 @@ export default function MoneyAccountsView({
   useEffect(() => {
     if (needsHistory && !securities.historyLoaded) onNeedSecurityHistory();
   }, [needsHistory, securities.historyLoaded, onNeedSecurityHistory]);
+
+  // 出金元の種類ごとの見出し＋タイル。Zaim の「残高」と同じく2列に並べる（2026-10-08）。金額は大きく太く、プラスは緑・マイナスは「−」と黒（2026-10-10）。
+  // paired は「1件だけの種類を2つ横に並べた」ときで、区画は半分の幅になり、タイルはその幅いっぱいに広げる。
+  const renderSection = ({ type: walletType, rows: inType }: WalletSection, paired: boolean) => (
+    <View key={walletType.id} style={[styles.section, paired && styles.sectionPaired]}>
+      <View style={styles.sectionHead}>
+        <Text style={styles.sectionTitle}>{walletType.label}</Text>
+        <Text style={styles.sectionSum}>{formatBalance(inType.reduce((sum, row) => sum + row.amount, 0))}</Text>
+      </View>
+      <View style={styles.grid}>
+        {inType.map((row) => (
+          <Pressable
+            key={row.wallet.id}
+            accessibilityRole="button"
+            onPress={() => setOpenId(row.wallet.id)}
+            style={({ pressed }) => [styles.tile, paired && styles.tilePaired, pressed && styles.pressed]}
+          >
+            <View style={styles.tileTop}>
+              <WalletTypeIcon type={row.wallet.type} size={20} color={row.wallet.iconColor} />
+              <Text style={styles.tileName} numberOfLines={2}>
+                {row.wallet.name}
+              </Text>
+            </View>
+            <Text style={[styles.tileAmount, row.amount > 0 && styles.tilePlus]}>{formatBalance(row.amount)}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
 
   return (
     <View style={styles.flex}>
@@ -124,39 +166,16 @@ export default function MoneyAccountsView({
           </Pressable>
         )}
         {isLoading && <Text style={styles.message}>読み込み中...</Text>}
-        {WALLET_TYPES.map((walletType) => {
-          const inType = usable.filter((row) => row.wallet.type === walletType.id);
-          if (inType.length === 0) return null;
-          // 1件だけの種類は1列（横いっぱい・名前と金額を1行）にして高さを縮める。2件以上になれば2列に戻る。
-          const single = inType.length === 1;
-          return (
-            <View key={walletType.id} style={styles.section}>
-              <View style={styles.sectionHead}>
-                <Text style={styles.sectionTitle}>{walletType.label}</Text>
-                <Text style={styles.sectionSum}>{formatBalance(inType.reduce((sum, row) => sum + row.amount, 0))}</Text>
-              </View>
-              {/* Zaim の「残高」と同じく2列に並べる（2026-10-08）。金額は大きく太く、プラスは緑・マイナスは「−」と黒（2026-10-10）。 */}
-              <View style={styles.grid}>
-                {inType.map((row) => (
-                  <Pressable
-                    key={row.wallet.id}
-                    accessibilityRole="button"
-                    onPress={() => setOpenId(row.wallet.id)}
-                    style={({ pressed }) => [styles.tile, single && styles.tileSingle, pressed && styles.pressed]}
-                  >
-                    <View style={[styles.tileTop, single && styles.flex]}>
-                      <WalletTypeIcon type={row.wallet.type} size={20} color={row.wallet.iconColor} />
-                      <Text style={styles.tileName} numberOfLines={2}>
-                        {row.wallet.name}
-                      </Text>
-                    </View>
-                    <Text style={[styles.tileAmount, single && styles.tileAmountSingle, row.amount > 0 && styles.tilePlus]}>{formatBalance(row.amount)}</Text>
-                  </Pressable>
-                ))}
-              </View>
+        {/* 項目が1つだけの種類（プリペイド・証券など）は、隣り合うもの同士を横に並べて1行にまとめ、高さを縮める。2つ以上になった種類は単独で2列に戻る。 */}
+        {sectionBlocks.map((block) =>
+          block.length === 1 ? (
+            renderSection(block[0], false)
+          ) : (
+            <View key={block.map((section) => section.type.id).join('+')} style={styles.pairRow}>
+              {block.map((section) => renderSection(section, true))}
             </View>
-          );
-        })}
+          ),
+        )}
 
         <Pressable accessibilityRole="button" onPress={() => setAdding(true)} style={styles.add}>
           <Plus size={18} color={colors.money} />
@@ -256,6 +275,10 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
   pressed: { backgroundColor: colors.background },
+  // 1件だけの種類を2つ横に並べる行。区画の上の余白は行の側でとる。
+  pairRow: { flexDirection: 'row', gap: 6 },
+  sectionPaired: { flex: 1, minWidth: 0 },
+  tilePaired: { width: '100%' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tile: {
     width: '48.5%',
@@ -269,13 +292,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  // 1件だけの種類: 横いっぱいで、名前（左）と金額（右）を1行に並べる。
-  tileSingle: { width: '100%', flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
   tileTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   tileName: { flex: 1, fontSize: 13, fontWeight: '700', lineHeight: 16, color: colors.textMuted },
   // 金額は名前より大きく太く。プラスは明るい緑、マイナスは「−」をつけて黒（Zaim と同じ）。
   tileAmount: { alignSelf: 'flex-end', fontSize: 21, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
-  tileAmountSingle: { alignSelf: 'auto' },
   tilePlus: { color: colors.moneyIncome },
   archivedName: { opacity: 0.7 },
   add: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 16 },

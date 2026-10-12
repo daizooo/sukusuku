@@ -89,6 +89,20 @@ export const WALLET_TYPES: { id: MoneyWalletType; label: string }[] = [
 ];
 
 /**
+ * 家計「口座」の種類ごとの区画を、表示のまとまりに分ける。項目が1つだけの区画が隣り合うときは2つを1まとまり（横に並べて1行）にして、高さを縮める。
+ * 2つ以上ある区画は単独のまま（そちらは2列のタイル）。並び順は変えない。
+ */
+export function groupWalletSections<T extends { rows: readonly unknown[] }>(sections: readonly T[]): T[][] {
+  const blocks: T[][] = [];
+  for (const section of sections) {
+    const last = blocks[blocks.length - 1];
+    if (section.rows.length === 1 && last && last.length === 1 && last[0].rows.length === 1) last.push(section);
+    else blocks.push([section]);
+  }
+  return blocks;
+}
+
+/**
  * 出金元のアイコンの色の候補（docs/kakei.md §3.2）。「標準」（null）は種類ごとの色。
  * 保存するのは #rrggbb（money_wallets.icon_color）。
  */
