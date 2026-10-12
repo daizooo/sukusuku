@@ -30,3 +30,7 @@ verify_jwt = false
 # Gmail の Apps Script から呼ぶ。取り込みの鍵（money_feed_tokens）を関数側で確かめるので、
 # Supabase の JWT 検証は使わない。
 verify_jwt = false
+
+[functions.money-receipt-scan]
+# アプリ（ログインの JWT）から呼ぶ。関数側で確かめるので、Supabase の JWT 検証は使わない。
+verify_jwt = false

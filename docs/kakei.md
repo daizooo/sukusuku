@@ -947,6 +947,12 @@ money_records に   feed_id（どの明細から来たか。振替は出金側�
    - 品目の画面: 選んだ行に「マイナスにする／プラスに戻す」（0円の行には出さない）。電卓は金額の大きさだけを扱い、符号はそのまま。
      マイナスの行の金額は赤。記録の入力は、合計がマイナスなら保存しない
 2. DB: `receipt_name`・`receipt_store` の列。Edge Function `money-receipt-scan`（Haiku 5.5・月の上限・形を決めたJSON）。Anthropic の鍵を Edge Function のシークレットに入れる
+   - DB は 0095: 列2つと索引、読み取りの回数の表 `money_receipt_scans`（RLS あり・ポリシーなし＝Edge Function だけが書く）、
+     `save_money_record` が `receipt_store`・品目の `receipt_name` を保存する（記録を直すとき、表記が送られてこなければ今のまま）
+   - Edge Function `money-receipt-scan`: ログインの JWT で呼ぶ。`POST { images: [{ media_type, data }] }`（4枚まで）。
+     AIの答えを直す処理は `_shared/receiptScan.ts`（`npm run test:receipt-scan`）。外税の配り方・お店と出金元の当て方・過去の手本の引き方もここ
+   - 鍵は Edge Function のシークレット `ANTHROPIC_API_KEY`。無ければ 503 を返す（AIは呼ばない）
+   - **アプリは手順3で、品目の `receipt_name` を読み・保存で送り返す**（送らないと、読み取りで入れた記録を直したときに品目の表記が消える）
 3. 画面: 「＋」の隣に「レシート」→ スキャナー（mobile）／写真（PWA）→ 読み取り → 記録の入力を入れた状態で開く（§10.4・§10.5）
 4. 実物のレシートで試し、精度・費用を §10.7 に残す
 

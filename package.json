@@ -29,6 +29,7 @@
     "test:family-sync-mobile": "node --experimental-strip-types mobile/src/lib/familySyncStamps.test.ts",
     "test:zaim-mail": "node --experimental-strip-types supabase/functions/_shared/zaimMail.test.ts",
     "test:money-feed": "node --experimental-strip-types src/lib/moneyFeedUtils.test.ts",
+    "test:receipt-scan": "node --experimental-strip-types supabase/functions/_shared/receiptScan.test.ts",
     "check:family-sync": "node scripts/check-family-sync.mjs"
   },
   "dependencies": {
