@@ -478,7 +478,7 @@ export default function RecordEditor({
               <span className="flex-1 text-base text-gray-900">金額を入れる</span>
               <ChevronRight size={18} className="text-gray-400" />
             </button>
-            <p className="mt-2.5 text-xs text-gray-400">貯金用の口座への振替は「貯金」として数えます。ほかの振替は集計に入れません</p>
+            <p className="mt-2.5 text-xs text-gray-400">振替は集計に入れません</p>
           </>
         ) : (
           <>

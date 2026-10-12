@@ -538,10 +538,6 @@ export interface MoneyWallet {
   id: string;
   name: string;
   type: MoneyWalletType;
-  /** 貯金用の口座。ここへの振替を貯金として数える。 */
-  isSaving: boolean;
-  /** 貯金の月の目標（円）。 */
-  savingTarget: number | null;
   /** カードの締め日（31 は末日）。カードだけ。docs/kakei.md §3.4。 */
   closeDay: number | null;
   /** カードの引き落とし日（31 は末日）。締め日のあとの最初のこの日（payMonthOffset があるときは、その月のこの日）。 */

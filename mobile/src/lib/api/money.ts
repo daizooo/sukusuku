@@ -57,8 +57,6 @@ export const rowToWallet = (row: WalletRow): MoneyWallet => ({
   id: row.id,
   name: row.name,
   type: WALLET_TYPES.find((type) => type === row.type) ?? 'cash',
-  isSaving: row.is_saving,
-  savingTarget: row.saving_target,
   closeDay: row.close_day,
   payDay: row.pay_day,
   payMonthOffset: row.pay_month_offset,
@@ -375,8 +373,6 @@ export async function saveMoneyBudget(
 const walletFields = (draft: MoneyWalletDraft) => ({
   name: draft.name.trim(),
   type: draft.type,
-  is_saving: draft.isSaving,
-  saving_target: draft.isSaving ? draft.savingTarget : null,
   // 締め日・引き落とし日・引き落とし口座はカードだけ（docs/kakei.md §3.4）。
   close_day: draft.type === 'card' ? draft.closeDay : null,
   pay_day: draft.type === 'card' ? draft.payDay : null,

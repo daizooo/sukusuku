@@ -28,7 +28,7 @@
 
 - **収入** ＝ 給与 ＋ 賞与 ＋ 臨時収入。**支出** ＝ 生活費 ＋ 特別費。**収支** ＝ 収入 − 支出（実額）
 - **家族のお金は、登録した口座すべてをひとまとまり**として数える。**登録口座の間の移動はすべて振替**（集計に入れない。妻から夫への生活費の入金も、
-  貯金用の口座への移動も同じ）。登録していない口座への送金は支出、外からの入金は収入
+  貯金の口座への移動も同じ）。登録していない口座への送金は支出、外からの入金は収入
 - 貯金へ移した額も集計に入れない。毎月のプラスは、収支の累計にそのまま残る
 - 口座は**総残高の計算用**（§9.3）。収支の数え方には使わない
 
@@ -250,7 +250,8 @@
 - **お店**: 選ぶ画面で、検索と「最近使ったお店」（前に入れたお店から）。位置からの候補は出さない
 - **振替**: 出金元 → 入金先（例: 生活費用の口座 → 貯金用の口座）。**振替は集計に入れない**（貯金への振替も同じ。
   貯金は自動で算出せず、記録があればしたということ、無ければしなかったということ。2026-10-08に変更）。
-  出金元の「貯金用」は目印だけ
+  ~~出金元の「貯金用」は目印だけ~~ **「貯金用」の設定は削除**（2026-10-12）。貯金用の口座も、名前で分かるだけの**ただの口座**として扱う。
+  `money_wallets.is_saving`・`saving_target` は使わない（古いアプリが書き込むため列は残す）
 - **Zaim から変えるところ**
   - 種類の選択の上に**よく使う小分類**、各大分類に**今月の残り**。品目で種類を選ぶと、その大分類の今月の残りが出る
   - ~~特別費は、その年の予定から選ぶ（選ぶと予算の額が入る。これが特別費の「済」になる）~~ **やめた**（2026-10-11）。
@@ -401,7 +402,7 @@
 ```
 money_categories  種類。 id / family_id / kind('living'|'income') / parent_id(null=大分類) / name / icon / icon_color(0079) / position / archived_at（0090 から使わない。それ以前に使わなくしたものは灰色で残り、削除できる）
 money_budgets     予算。 id / family_id / category_id(大分類) / fiscal_year(暦年) / monthly_amount(12月の額) / month_amounts(1〜12月の月額。0083)（category_id・fiscal_year で1行）
-money_wallets     出金元。 id / family_id / name / type('card'|'cash'|'bank'|'prepaid'|'qr') / is_saving / saving_target /
+money_wallets     出金元。 id / family_id / name / type('card'|'cash'|'bank'|'prepaid'|'qr') / is_saving・saving_target（2026-10-12 から使わない） /
                   position / archived_at
 money_stores      お店（設定データ）。 id / family_id / name / archived_at（family_id・name で1行。0065_money_stores.sql）
 money_records     記録の詳細。 id / family_id / kind('expense'|'income'|'transfer') / occurred_on / wallet_id /

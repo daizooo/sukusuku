@@ -268,10 +268,10 @@ const record = (id: string, fields: Partial<MoneyRecord>): MoneyRecord => ({
   ...fields,
 });
 const wallets: MoneyWallet[] = [
-  { id: 'card', name: 'カード', type: 'card', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 0, archived: false },
-  { id: 'bank', name: '生活費口座', type: 'bank', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 1, archived: false },
-  { id: 'save', name: '貯金口座', type: 'bank', isSaving: true, savingTarget: 30000, closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 2, archived: false },
-  { id: 'gone', name: '昔のカード', type: 'card', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 3, archived: true },
+  { id: 'card', name: 'カード', type: 'card', closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 0, archived: false },
+  { id: 'bank', name: '生活費口座', type: 'bank', closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 1, archived: false },
+  { id: 'save', name: '貯金口座', type: 'bank', closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 2, archived: false },
+  { id: 'gone', name: '昔のカード', type: 'card', closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 3, archived: true },
 ];
 const records: MoneyRecord[] = [
   record('r1', {
@@ -312,7 +312,7 @@ const records: MoneyRecord[] = [
 const summary = buildMonthSummary(records, categories, budgets, '2026-09');
 assert.equal(summary.income, 300000 + 400000, '賞与も月の収入に入れる');
 assert.equal(summary.living, 396 + 168 + 500 + 70000 + 85000 + 58000, '特別費も生活費と同じ支出に入れる');
-assert.equal('saving' in summary, false, '貯金は記録なので、集計にも表示にも入れない（貯金用の口座への振替も数えない）');
+assert.equal('saving' in summary, false, '貯金は記録なので、集計にも表示にも入れない（貯金の口座への振替も数えない）');
 assert.equal('special' in summary, false, '特別費は別枠にしない（大分類「特別費」のカテゴリ）');
 assert.equal(summary.livingBudget, 60000 + 5000 + 85000, '使わなくした大分類・収入・予算のない特別費は予算に入れない');
 assert.equal(summary.balance, summary.income - summary.living, '収支＝収入 − 支出（特別費を含む。振替は入れない）');
@@ -802,7 +802,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
   assert.equal(walletGain([]), null);
 
   // 総残高: 証券口座は評価額で数える（記録・補正は見ない）。
-  const secWallet: MoneyWallet = { id: 'sec', name: '証券', type: 'securities', isSaving: false, savingTarget: null, closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 9, archived: false };
+  const secWallet: MoneyWallet = { id: 'sec', name: '証券', type: 'securities', closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 9, archived: false };
   const bankWallet: MoneyWallet = { ...secWallet, id: 'bank2', name: '口座', type: 'bank' };
   const transfer = record('tr', { kind: 'transfer', walletId: 'bank2', toWalletId: 'sec', occurredOn: '2026-10-07', items: [item({ amount: 50000 })] });
   const summary = buildWalletBalances([bankWallet, secWallet], [transfer], [{ id: 'b', walletId: 'bank2', balanceOn: '2026-10-06', amount: 100000, showInHistory: true }], '2026-10-08', data);

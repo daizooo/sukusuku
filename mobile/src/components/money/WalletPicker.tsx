@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Check, Pencil, Plus } from 'lucide-react-native';
 import type { MoneyWallet, MoneyWalletDraft, MoneyWalletType } from '@/types/app';
 import { colors } from '@/lib/theme';
@@ -52,7 +52,6 @@ export default function WalletPicker({ title, wallets, selectedId, onPick, onClo
                   >
                     <View style={styles.flex}>
                       <Text style={styles.name}>{wallet.name}</Text>
-                      {wallet.isSaving && <Text style={styles.sub}>貯金用</Text>}
                       {cardScheduleLabel(wallet) !== '' && <Text style={styles.sub}>{cardScheduleLabel(wallet)}</Text>}
                     </View>
                     {selected && <Check size={18} color={colors.money} />}
@@ -128,7 +127,6 @@ export function WalletSheet({
   const [name, setName] = useState(wallet?.name ?? '');
   const [type, setType] = useState<MoneyWalletType>(wallet?.type ?? 'card');
   const [iconColor, setIconColor] = useState<string | null>(wallet?.iconColor ?? null);
-  const [isSaving, setIsSaving] = useState(wallet?.isSaving ?? false);
   const [closeDay, setCloseDay] = useState(wallet?.closeDay ? String(wallet.closeDay) : '');
   const [payDay, setPayDay] = useState(wallet?.payDay ? String(wallet.payDay) : '');
   const [payMonthOffset, setPayMonthOffset] = useState<number | null>(wallet?.payMonthOffset ?? null);
@@ -145,12 +143,9 @@ export function WalletSheet({
     if (type === 'card' && ((closeDay.trim() !== '' && close === null) || (payDay.trim() !== '' && pay === null))) {
       return setError('締め日・引き落とし日は 1〜31 で入れてください（末日は31）');
     }
-    // 貯金は記録なので、貯金用は目印だけ（収支には入れない。月の目標も持たない。docs/kakei.md §4）。
     onSubmit({
       name,
       type,
-      isSaving: type !== 'securities' && isSaving,
-      savingTarget: type !== 'securities' && isSaving ? (wallet?.savingTarget ?? null) : null,
       closeDay: type === 'card' ? close : null,
       payDay: type === 'card' ? pay : null,
       payMonthOffset: type === 'card' ? payMonthOffset : null,
@@ -234,15 +229,6 @@ export function WalletSheet({
           </View>
           <Text style={styles.sub}>左端は種類ごとの標準の色です</Text>
         </View>
-        {type !== 'securities' && (
-          <View style={styles.switchRow}>
-            <View style={styles.flex}>
-              <Text style={styles.label}>貯金用</Text>
-              <Text style={styles.sub}>貯金用の口座の目印です（収支には入れません）</Text>
-            </View>
-            <Switch value={isSaving} onValueChange={setIsSaving} />
-          </View>
-        )}
         {type === 'card' && (
           <>
             <View style={styles.days}>
@@ -362,7 +348,6 @@ const styles = StyleSheet.create({
   swatch: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   swatchDefault: { backgroundColor: colors.neutralSurface },
   swatchSelected: { borderWidth: 3, borderColor: colors.text },
-  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   days: { flexDirection: 'row', gap: 12 },
   error: { fontSize: 12, fontWeight: '500', color: colors.danger },
   secondary: { paddingVertical: 10, alignItems: 'center' },

@@ -60,7 +60,6 @@ export default function WalletPicker({ title, wallets, selectedId, onPick, onClo
                     >
                       <span className="flex-1">
                         <span className="block text-[15px] font-semibold text-gray-900">{wallet.name}</span>
-                        {wallet.isSaving && <span className="block text-xs text-gray-400">貯金用</span>}
                         {cardScheduleLabel(wallet) !== '' && (
                           <span className="block text-xs text-gray-400">{cardScheduleLabel(wallet)}</span>
                         )}
@@ -142,7 +141,6 @@ export function WalletModal({
   const [name, setName] = useState(wallet?.name ?? '');
   const [type, setType] = useState<MoneyWalletType>(wallet?.type ?? 'card');
   const [iconColor, setIconColor] = useState<string | null>(wallet?.iconColor ?? null);
-  const [isSaving, setIsSaving] = useState(wallet?.isSaving ?? false);
   const [closeDay, setCloseDay] = useState(wallet?.closeDay ? String(wallet.closeDay) : '');
   const [payDay, setPayDay] = useState(wallet?.payDay ? String(wallet.payDay) : '');
   const [payMonthOffset, setPayMonthOffset] = useState<number | null>(wallet?.payMonthOffset ?? null);
@@ -159,12 +157,9 @@ export function WalletModal({
     if (type === 'card' && ((closeDay.trim() !== '' && close === null) || (payDay.trim() !== '' && pay === null))) {
       return setError('締め日・引き落とし日は 1〜31 で入れてください（末日は31）');
     }
-    // 貯金は記録なので、貯金用は目印だけ（収支には入れない。月の目標も持たない。docs/kakei.md §4）。
     onSubmit({
       name,
       type,
-      isSaving: type !== 'securities' && isSaving,
-      savingTarget: type !== 'securities' && isSaving ? (wallet?.savingTarget ?? null) : null,
       closeDay: type === 'card' ? close : null,
       payDay: type === 'card' ? pay : null,
       payMonthOffset: type === 'card' ? payMonthOffset : null,
@@ -247,15 +242,6 @@ export function WalletModal({
           </div>
           <p className="mt-1.5 text-xs text-gray-400">左端は種類ごとの標準の色です</p>
         </div>
-        {type !== 'securities' && (
-          <label className="flex items-center gap-3">
-            <span className="flex-1">
-              <span className="block text-xs font-bold text-gray-700">貯金用</span>
-              <span className="block text-xs text-gray-400">貯金用の口座の目印です（収支には入れません）</span>
-            </span>
-            <input type="checkbox" checked={isSaving} onChange={(event) => setIsSaving(event.target.checked)} className="h-5 w-5" />
-          </label>
-        )}
         {type === 'card' && (
           <>
             <div className="flex gap-3">
