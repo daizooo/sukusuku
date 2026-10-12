@@ -1204,6 +1204,7 @@ export type Database = {
           name: string
           position: number
           quantity: number
+          receipt_name: string | null
           record_id: string
           unit_price: number | null
         }
@@ -1218,6 +1219,7 @@ export type Database = {
           name?: string
           position?: number
           quantity?: number
+          receipt_name?: string | null
           record_id: string
           unit_price?: number | null
         }
@@ -1232,6 +1234,7 @@ export type Database = {
           name?: string
           position?: number
           quantity?: number
+          receipt_name?: string | null
           record_id?: string
           unit_price?: number | null
         }
@@ -1252,6 +1255,38 @@ export type Database = {
           },
         ]
       }
+      money_receipt_scans: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          family_id: string
+          id: string
+          images: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          family_id: string
+          id?: string
+          images?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          family_id?: string
+          id?: string
+          images?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_receipt_scans_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_records: {
         Row: {
           created_at: string
@@ -1263,6 +1298,7 @@ export type Database = {
           kind: string
           month: string | null
           occurred_on: string
+          receipt_store: string | null
           recurring_id: string | null
           store: string
           to_wallet_id: string | null
@@ -1279,6 +1315,7 @@ export type Database = {
           kind?: string
           month?: string | null
           occurred_on: string
+          receipt_store?: string | null
           recurring_id?: string | null
           store?: string
           to_wallet_id?: string | null
@@ -1295,6 +1332,7 @@ export type Database = {
           kind?: string
           month?: string | null
           occurred_on?: string
+          receipt_store?: string | null
           recurring_id?: string | null
           store?: string
           to_wallet_id?: string | null

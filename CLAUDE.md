@@ -46,6 +46,8 @@
   （`create or replace function` の中身）も同じ。MCP は削除を含む SQL で確認待ちになり、60秒で止まる
   - `drop ... if exists` で何度流しても同じ結果になるようにしているだけの行は、本番に対象が無いことを
     確かめてから、その行を外して MCP で適用してよい（リポジトリの migration ファイルはそのまま）
+  - **渡すときは、流す SQL の全文をチャットにコードブロックで出す**（そのままコピーして SQL Editor に貼れる形。
+    ファイルの場所や「◯◯より下」だけを伝えない。2026-10-12に決定）。PR の本文にも同じ全文を載せる
 - 1回の `apply_migration` は小さく分ける（関数・表・cron ごとなど）
 - 適用したら確かめる: 物ができたか（表・列・関数・cron）、`generate_typescript_types` の結果と
   `src/types/supabase.ts`・`mobile/src/types/supabase.ts` の該当部分が同じか、計算の結果
