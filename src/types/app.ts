@@ -707,7 +707,7 @@ export interface MoneyRecurring {
   name: string;
   position: number;
   archived: boolean;
-  /** ルールを作った日（YYYY-MM-DD）。固定費を予算に足すのはこの月から。 */
+  /** ルールを作った日（YYYY-MM-DD）。固定費を予算に足すのはこの年から（年の中は全部の月）。 */
   createdAt: string;
 }
 
