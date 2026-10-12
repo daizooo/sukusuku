@@ -705,7 +705,7 @@ money_holding_values   保有ごとの日々の評価額。 holding_id / value_o
 
 #### 9.5.3 口座を決める
 - 出金元（口座）に **「Zaim での口座名」**（`money_wallets.feed_name`）と **所持者**（2026-10-12に決定）を持たせる。
-  「口座」の面の出金元の編集で入れる（銀行・証券だけに出す）
+  家計の設定の「Zaim 取り込み」の**口座の対応**で入れる（2026-10-12に、出金元の編集ではなくここ1か所にした。届いた口座名が並び、押して出金元と所持者を選ぶ）
   - **所持者** ＝ 誰の口座か（表示名。例: 本人・妻・子）と、その人の **Zaim のアカウント**（Zaim に登録したメールアドレス＝通知の宛先）、
     **名義（カナ）**（`money_wallets.holder_name`・`holder_zaim_email`・`holder_kana`）
 - 決め方（上から順に、1つに決まったところで止める）:
@@ -821,12 +821,15 @@ money_feed_settings 取り込みの設定（家族で1行）。 family_id / star
 money_wallets に   feed_name（Zaim での口座名）・holder_name（所持者の表示名）・holder_zaim_email（所持者の Zaim のアカウント＝通知の宛先）・
                    holder_kana（名義カナ）。holder_zaim_email・feed_name の組は family_id の中で一意（どちらかが null の口座は除く）
 money_feed に      to_email（通知の宛先）も持つ
-money_feed に      rule_id（どのルールで決まったか）も持つ
+money_feed に      rule_id（どのルールで決まったか）・skip_manual（「別の取引」を選んだ。突き合わせ直しても手入力との確認に戻さない。0092）も持つ
 money_records に   feed_id（どの明細から来たか。振替は出金側の明細。入金側は money_feed.record_id で同じ記録を指す）
 ```
 - 新しい表は家族で共有するので、migration で `select public.attach_family_sync('public.money_feed');`・`money_feed_rules`・`money_feed_settings` も同じ。
   家計タブの読み込み（`money_bootstrap`）には**未確認の件数と一覧だけ**を足す（明細の全件は読まない）
 - Edge Function は鍵を確かめてから service role で書く（RLS は家族単位のまま。アプリからは読む・状態を変える関数だけ）
+- アプリから呼ぶ関数（0092）: `money_feed_resolve(明細, 動き, 引数)`（口座を選ぶ・結ぶ・振替に置き換える・別の取引・記録にする・振替にする・記録しない。
+  「次から同じ内容は自動で」は覚えたルールを足す）、`money_feed_reprocess()`（口座の対応・ルール・日数を直したあと、未確認を突き合わせ直す）、
+  `money_feed_issue_token()`（鍵を作り直す。鍵は返り値で1回だけ見せる）。振替に置き換えるは記録を消さずに直す（品目が1つの記録だけ）
 - 内容（`description`）には振込の相手の名前が入る。家族のデータとして RLS の内側に置き、ログには出さない
 
 #### 9.5.8 Zaim を続ける条件と、まだ届いていない文面
@@ -843,9 +846,12 @@ money_records に   feed_id（どの明細から来たか。振替は出金側�
 
 #### 9.5.10 進め方（PRを分ける。mobile を先に、`src/` は同じPRで追従する）
 1. **（2026-10-12に済）** DB（`money_feed_tokens`・`money_feed`・`money_feed_rules`・列の追加・`money_feed_process`）と Edge Function `money-feed-ingest`、
-   Apps Script（`tools/gas/zaim-feed.gs`）。試しの2通（§9.5.2。本番には取り込まない）と同じ形のメールを検証用に流し、振替が1件できることを確かめる
-2. 画面: 家計の設定の「Zaim 取り込み」（状態・鍵・口座の対応・取り込みのルール・突き合わせの幅。§9.5.6）、出金元の編集の「Zaim での口座名」・所持者
-3. 画面: 「未確認」の一覧と確認（§9.5.5・§9.5.6.1）、記録の入力の重複の確認
+   Apps Script（`tools/gas/zaim-feed.gs`）。試しの2通で振替が1件できることを確かめた（§9.5.11）
+2. **（2026-10-12に済）** 画面: 家計の設定の「Zaim 取り込み」（状態・鍵・口座の対応・取り込みのルール・ひな形・突き合わせの幅。§9.5.6）。
+   mobile `MoneyFeedSettings`、PWA `MoneyFeedSettings`。DB は 0092（`money_feed_resolve`・`money_feed_reprocess`・`skip_manual`）
+3. **（2026-10-12に済）** 画面: 「口座」の面の上の「未確認 n件」と、その一覧・片づけ（§9.5.5・§9.5.6.1）。mobile・PWA の `MoneyFeedInbox`
+4. まだ: 記録の入力の重複の確認（明細から来た記録と同じ額・前後3日の記録を人が入れようとしたとき。§9.5.5 の最後）、
+   読めないメールを手で口座・日付・額を入れて片づけること（いまは「記録しない」だけ）
 
 #### 9.5.11 試した結果（2026-10-12。本番DB・Edge Function で）
 - 作ったもの: migration `0091_money_feed.sql`（本番に適用済み）、Edge Function `money-feed-ingest`（デプロイ済み）、

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   MoneyBudget,
   MoneyCategory,
+  MoneyFeedData,
+  MoneyFeedItem,
   MoneyRecord,
   MoneyRecordDraft,
   MoneyRecurring,
@@ -37,6 +39,7 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadMoneyBootstrap, type MoneyBootstrap } from '@/lib/api/moneyBootstrap';
+import { loadMoneyFeed, resolveMoneyFeed, type MoneyFeedResolve } from '@/lib/api/moneyFeed';
 import { dateKeyOfDate, fixedBudgetRows, monthKeyOf, monthKeyOfDate, yearOfMonth } from '@/lib/moneyUtils';
 import MoneyAccountsView from '../money/MoneyAccountsView';
 import MoneyRecordsView from '../money/MoneyRecordsView';
@@ -45,6 +48,7 @@ import RecordEditor from '../money/RecordEditor';
 import CategoryEditor from '../money/CategoryEditor';
 import MoneySettings from '../money/MoneySettings';
 import MoneyFab from '../money/MoneyFab';
+import MoneyFeedInbox from '../money/MoneyFeedInbox';
 import { type ReviewPeriod } from '../money/moneyVisual';
 import LotteryScreen from './LotteryScreen';
 
@@ -80,10 +84,13 @@ type Editing = MoneyRecord | 'new' | null;
 
 const NO_SECURITIES: MoneySecuritiesData = { securities: [], holdings: [], values: [], historyLoaded: true };
 
-/** 家計の読み込み（money_bootstrap と証券の評価額）が読む表。mobile版（mobile/app/(tabs)/money.tsx）と同じ。 */
+/** 家計の読み込み（money_bootstrap と証券の評価額、Zaim 取り込み）が読む表。mobile版（mobile/app/(tabs)/money.tsx）と同じ。 */
 const MONEY_TABLES = [
   'money_budgets',
   'money_categories',
+  'money_feed',
+  'money_feed_rules',
+  'money_feed_settings',
   'money_holding_values',
   'money_holdings',
   'money_items',
@@ -118,6 +125,9 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
   const [editing, setEditing] = useState<Editing>(null);
   const [editingCategories, setEditingCategories] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Zaim から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
+  const [feed, setFeed] = useState<MoneyFeedData | null>(null);
+  const [feedOpen, setFeedOpen] = useState(false);
   // 福引チャンスの画面を開いているか。開いているあいだは家計の代わりにその画面を出す（戻る操作で家計へ戻る）。
   const [lotteryOpen, setLotteryOpen] = useState(false);
 
@@ -144,7 +154,21 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
     () => loadMoneyBootstrap(supabase, familyId, historyWanted.current),
     [supabase, familyId],
   );
-  const reload = () => fetchAll().then(apply);
+  // Zaim 取り込み（未確認の明細・ルール・設定）は家計と並べて読む。読めなくても家計は出す。
+  const loadFeed = useCallback(
+    () =>
+      loadMoneyFeed(supabase, familyId)
+        .then(setFeed)
+        .catch(() => {
+          // 読めなかったら前に読んだ分のまま。
+        }),
+    [supabase, familyId],
+  );
+  const reload = () => Promise.all([fetchAll().then(apply), loadFeed()]);
+
+  useEffect(() => {
+    void loadFeed();
+  }, [loadFeed]);
 
   useEffect(() => {
     let isMounted = true;
@@ -210,6 +234,27 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
       }
     } catch {
       failed('保存');
+    }
+  };
+
+  /** 取り込んだ明細を1件片づける（docs/kakei.md §9.5.6.1）。記録が増えたり確定したりするので、家計ごと読み直す。 */
+  const resolveFeed = async (item: MoneyFeedItem, resolve: MoneyFeedResolve): Promise<boolean> => {
+    try {
+      const status = await resolveMoneyFeed(supabase, item.id, resolve);
+      await reload();
+      // 口座を選んだだけで、まだ未確認に残るときは枠を開いたままにする
+      return !(resolve.action === 'wallet' && status === 'pending');
+    } catch {
+      failed('保存');
+      return false;
+    }
+  };
+
+  const reloadFeed = async () => {
+    try {
+      await reload();
+    } catch {
+      // 圏外なら前に読んだ分を出したままにする。
     }
   };
 
@@ -404,6 +449,8 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
               onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
               onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
               onNeedSecurityHistory={needSecurityHistory}
+              feedOpenCount={feed?.open.length ?? 0}
+              onOpenFeed={() => setFeedOpen(true)}
             />
           )}
         </div>
@@ -448,7 +495,21 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
           onBudgets={setBudgets}
           onStores={setStores}
           onRecurring={setRecurring}
+          feed={feed}
+          onFeedChanged={reloadFeed}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+
+      {feedOpen && feed && (
+        <MoneyFeedInbox
+          items={feed.open}
+          wallets={wallets}
+          records={records}
+          categories={categories}
+          budgets={allBudgets}
+          onResolve={resolveFeed}
+          onClose={() => setFeedOpen(false)}
         />
       )}
 

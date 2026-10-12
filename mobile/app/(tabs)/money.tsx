@@ -5,6 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type {
   MoneyBudget,
   MoneyCategory,
+  MoneyFeedData,
+  MoneyFeedItem,
   MoneyRecord,
   MoneyRecordDraft,
   MoneyRecurring,
@@ -41,6 +43,7 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadMoneyBootstrap } from '@/lib/api/moneyBootstrap';
+import { loadMoneyFeed, resolveMoneyFeed, type MoneyFeedResolve } from '@/lib/api/moneyFeed';
 import { dateKeyOfDate, fixedBudgetRows, monthKeyOf, monthKeyOfDate, yearOfMonth } from '@/lib/moneyUtils';
 import MoneyAccountsView from '@/components/money/MoneyAccountsView';
 import MoneyRecordsView from '@/components/money/MoneyRecordsView';
@@ -49,6 +52,7 @@ import RecordEditor from '@/components/money/RecordEditor';
 import CategoryEditor from '@/components/money/CategoryEditor';
 import MoneySettings from '@/components/money/MoneySettings';
 import MoneyFab from '@/components/money/MoneyFab';
+import MoneyFeedInbox from '@/components/money/MoneyFeedInbox';
 import { type ReviewPeriod } from '@/components/money/moneyVisual';
 
 /**
@@ -82,10 +86,13 @@ type Editing = MoneyRecord | 'new' | null;
 
 const NO_SECURITIES: MoneySecuritiesData = { securities: [], holdings: [], values: [], historyLoaded: true };
 
-/** 家計の読み込み（money_bootstrap と証券の評価額）が読む表。 */
+/** 家計の読み込み（money_bootstrap と証券の評価額、Zaim 取り込み）が読む表。 */
 const MONEY_TABLES = [
   'money_budgets',
   'money_categories',
+  'money_feed',
+  'money_feed_rules',
+  'money_feed_settings',
   'money_holding_values',
   'money_holdings',
   'money_items',
@@ -123,6 +130,9 @@ export default function MoneyScreen() {
   const [editing, setEditing] = useState<Editing>(null);
   const [editingCategories, setEditingCategories] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Zaim から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
+  const [feed, setFeed] = useState<MoneyFeedData | null>(null);
+  const [feedOpen, setFeedOpen] = useState(false);
 
   // 評価額の履歴（推移用）は、推移・証券口座の詳細を開くまで読まない。一度読んだら、読み直しでも履歴まで読む。
   const historyWanted = useRef(false);
@@ -130,11 +140,12 @@ export default function MoneyScreen() {
 
   const reload = useCallback(async (id: string) => {
     // 起動で読むものは、DBの money_bootstrap で1回にまとめて読む（docs/kakei.md §9.2.6）。
-    const { money, securities: loadedSecurities } = await loadMoneyBootstrap(
-      supabase,
-      id,
-      historyWanted.current,
-    );
+    // Zaim 取り込み（未確認の明細・ルール・設定）は並べて読む。読めなくても家計は出す。
+    const [{ money, securities: loadedSecurities }, loadedFeed] = await Promise.all([
+      loadMoneyBootstrap(supabase, id, historyWanted.current),
+      loadMoneyFeed(supabase, id).catch(() => null),
+    ]);
+    if (loadedFeed) setFeed(loadedFeed);
     setCategories(money.categories);
     setBudgets(money.budgets);
     setWallets(money.wallets);
@@ -214,6 +225,29 @@ export default function MoneyScreen() {
       }
     } catch {
       failed('保存');
+    }
+  };
+
+  /** 取り込んだ明細を1件片づける（docs/kakei.md §9.5.6.1）。記録が増えたり確定したりするので、家計ごと読み直す。 */
+  const resolveFeed = async (item: MoneyFeedItem, resolve: MoneyFeedResolve): Promise<boolean> => {
+    if (!familyId) return false;
+    try {
+      const status = await resolveMoneyFeed(supabase, item.id, resolve);
+      await reload(familyId);
+      // 口座を選んだだけで、まだ未確認に残るときは枠を開いたままにする
+      return !(resolve.action === 'wallet' && status === 'pending');
+    } catch {
+      failed('保存');
+      return false;
+    }
+  };
+
+  const reloadFeed = async () => {
+    if (!familyId) return;
+    try {
+      await reload(familyId);
+    } catch {
+      // 圏外なら前に読んだ分を出したままにする。
     }
   };
 
@@ -413,6 +447,8 @@ export default function MoneyScreen() {
               onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
               onNeedSecurityHistory={needSecurityHistory}
               onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
+              feedOpenCount={feed?.open.length ?? 0}
+              onOpenFeed={() => setFeedOpen(true)}
             />
           )}
         </Animated.View>
@@ -459,7 +495,21 @@ export default function MoneyScreen() {
           onBudgets={setBudgets}
           onStores={setStores}
           onRecurring={setRecurring}
+          feed={feed}
+          onFeedChanged={reloadFeed}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+
+      {feedOpen && feed && (
+        <MoneyFeedInbox
+          items={feed.open}
+          wallets={wallets}
+          records={records}
+          categories={categories}
+          budgets={allBudgets}
+          onResolve={resolveFeed}
+          onClose={() => setFeedOpen(false)}
         />
       )}
 

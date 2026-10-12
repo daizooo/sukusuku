@@ -735,3 +735,96 @@ export interface MoneyRecurring {
 }
 
 export type MoneyRecurringDraft = Omit<MoneyRecurring, 'id' | 'position' | 'archived' | 'createdAt'>;
+
+// ---- Zaim 取り込み（docs/kakei.md §9.5） ----
+
+/** 取り込んだ明細の状態。pending 未確認 / confirm 手入力との確認 / unreadable 読めない（ほかは片づいたもの）。 */
+export type MoneyFeedStatus = 'pending' | 'confirm' | 'linked' | 'created' | 'ignored' | 'unreadable';
+
+/** Zaim の入出金通知メールから取り込んだ明細。money_feed に対応。 */
+export interface MoneyFeedItem {
+  id: string;
+  receivedAt: string;
+  toEmail: string | null;
+  subject: string;
+  /** 'in' 入金 / 'out' 出金。読めないメールは null。 */
+  direction: 'in' | 'out' | null;
+  /** YYYY-MM-DD。読めないメールは null。 */
+  occurredOn: string | null;
+  amount: number | null;
+  /** Zaim での口座名。 */
+  accountName: string | null;
+  description: string;
+  walletId: string | null;
+  status: MoneyFeedStatus;
+  /** 振替の相手の明細。 */
+  pairId: string | null;
+  recordId: string | null;
+  /** 確認・候補に出す記録。 */
+  candidateRecordIds: string[];
+}
+
+/** 取り込みのルールの動き（§9.5.6）。 */
+export type MoneyFeedAction = 'record' | 'transfer' | 'link_recurring' | 'adjust_only' | 'ignore';
+
+/** 取り込みのルール。money_feed_rules に対応。上（position の小さい順）から見て、最初に当たったものを使う。 */
+export interface MoneyFeedRule {
+  id: string;
+  position: number;
+  name: string;
+  /** 条件。null は「どの口座でも」「どちらでも」。 */
+  walletId: string | null;
+  direction: 'in' | 'out' | null;
+  /** contains は内容に含む文字、key は覚えたルール（内容の決まった部分が同じ）。 */
+  match: 'contains' | 'key';
+  pattern: string;
+  amountMin: number | null;
+  amountMax: number | null;
+  action: MoneyFeedAction;
+  recordKind: 'expense' | 'income' | null;
+  categoryId: string | null;
+  store: string;
+  toWalletId: string | null;
+  recurringId: string | null;
+  /** 「次から同じ内容は自動で」で作ったルール。 */
+  learned: boolean;
+}
+
+export type MoneyFeedRuleDraft = Omit<MoneyFeedRule, 'id' | 'position' | 'learned'>;
+
+/** 取り込みの設定（家族で1行）。日数は突き合わせの幅。 */
+export interface MoneyFeedSettings {
+  startAt: string | null;
+  pairDays: number;
+  estimateDays: number;
+  manualDays: number;
+}
+
+/** 出金元の、Zaim での口座名と所持者（§9.5.3）。 */
+export interface MoneyWalletFeed {
+  walletId: string;
+  feedName: string | null;
+  holderName: string | null;
+  holderZaimEmail: string | null;
+  holderKana: string | null;
+}
+
+/** 届いたことのある Zaim の口座名（宛先ごと）。 */
+export interface MoneyFeedAccount {
+  accountName: string;
+  toEmail: string | null;
+  lastReceivedAt: string;
+}
+
+export interface MoneyFeedData {
+  /** 片づいていない明細（未確認・確認・読めない）。新しい順。 */
+  open: MoneyFeedItem[];
+  rules: MoneyFeedRule[];
+  settings: MoneyFeedSettings;
+  walletFeeds: MoneyWalletFeed[];
+  accounts: MoneyFeedAccount[];
+  /** 最後に明細が届いた日時。 */
+  lastReceivedAt: string | null;
+  /** この30日に届いた明細の数。 */
+  recentCount: number;
+}

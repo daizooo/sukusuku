@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { ChevronRight, Inbox, Plus } from 'lucide-react';
 import type {
   MoneyCategory,
   MoneyRecord,
@@ -50,6 +50,9 @@ interface MoneyAccountsViewProps {
   onArchiveSecurity: (walletId: string, security: MoneySecurity) => void;
   /** 推移・証券口座の詳細を開いたときに、評価額の履歴を読ませる（一覧は最新の1行だけで出す）。 */
   onNeedSecurityHistory: () => void | Promise<void>;
+  /** Zaim から取り込んだ明細のうち、片づいていないものの数（docs/kakei.md §9.5.6.1）。0 なら出さない。 */
+  feedOpenCount: number;
+  onOpenFeed: () => void;
 }
 
 export default function MoneyAccountsView({
@@ -68,6 +71,8 @@ export default function MoneyAccountsView({
   onSaveSecurity,
   onArchiveSecurity,
   onNeedSecurityHistory,
+  feedOpenCount,
+  onOpenFeed,
 }: MoneyAccountsViewProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -106,6 +111,18 @@ export default function MoneyAccountsView({
             note={usable.length === 0 ? '出金元を足すと、残高が出ます' : undefined}
           />
         </button>
+        {feedOpenCount > 0 && (
+          <button
+            type="button"
+            onClick={onOpenFeed}
+            className="mx-4 mt-2 flex w-[calc(100%-2rem)] items-center gap-2 rounded-2xl bg-blue-100 px-3.5 py-2.5 text-left text-blue-800 hover:bg-blue-200"
+          >
+            <Inbox size={18} />
+            <span className="text-[15px] font-extrabold">未確認 {feedOpenCount}件</span>
+            <span className="flex-1 text-xs">Zaim から取り込んだ明細</span>
+            <ChevronRight size={16} />
+          </button>
+        )}
         {isLoading && <p className="py-4 text-center text-sm text-gray-400">読み込み中...</p>}
         {WALLET_TYPES.map((walletType) => {
           const inType = usable.filter((row) => row.wallet.type === walletType.id);

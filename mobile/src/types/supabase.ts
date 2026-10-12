@@ -794,6 +794,7 @@ export type Database = {
           resolved_at: string | null
           resolved_by: string | null
           rule_id: string | null
+          skip_manual: boolean
           source: string
           source_id: string
           status: string
@@ -819,6 +820,7 @@ export type Database = {
           resolved_at?: string | null
           resolved_by?: string | null
           rule_id?: string | null
+          skip_manual?: boolean
           source?: string
           source_id: string
           status?: string
@@ -844,6 +846,7 @@ export type Database = {
           resolved_at?: string | null
           resolved_by?: string | null
           rule_id?: string | null
+          skip_manual?: boolean
           source?: string
           source_id?: string
           status?: string
@@ -2480,6 +2483,18 @@ export type Database = {
       }
       money_feed_issue_token: { Args: never; Returns: string }
       money_feed_key: { Args: { p_description: string }; Returns: string }
+      money_feed_learn: {
+        Args: {
+          p_action: string
+          p_category?: string
+          p_feed: Database["public"]["Tables"]["money_feed"]["Row"]
+          p_record_kind?: string
+          p_recurring?: string
+          p_store?: string
+          p_to_wallet?: string
+        }
+        Returns: undefined
+      }
       money_feed_link: {
         Args: { p_feed: string; p_record: string }
         Returns: undefined
@@ -2489,7 +2504,12 @@ export type Database = {
         Args: { p_family: string; p_feed: Json }
         Returns: Json
       }
+      money_feed_reprocess: { Args: never; Returns: number }
       money_feed_requester: { Args: { p_description: string }; Returns: string }
+      money_feed_resolve: {
+        Args: { p_action: string; p_args?: Json; p_feed: string }
+        Returns: string
+      }
       money_is_business_day: { Args: { p_date: string }; Returns: boolean }
       money_latest_holding_values: {
         Args: { p_family_id: string }

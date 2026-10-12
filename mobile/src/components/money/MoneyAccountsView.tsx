@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Plus } from 'lucide-react-native';
+import { ChevronRight, Inbox, Plus } from 'lucide-react-native';
 import type {
   MoneyCategory,
   MoneyRecord,
@@ -50,6 +50,9 @@ interface MoneyAccountsViewProps {
   onArchiveSecurity: (walletId: string, security: MoneySecurity) => void;
   /** 推移・証券口座の詳細を開いたときに、評価額の履歴を読ませる（一覧は最新の1行だけで出す）。 */
   onNeedSecurityHistory: () => void | Promise<void>;
+  /** Zaim から取り込んだ明細のうち、片づいていないものの数（docs/kakei.md §9.5.6.1）。0 なら出さない。 */
+  feedOpenCount: number;
+  onOpenFeed: () => void;
 }
 
 export default function MoneyAccountsView({
@@ -68,6 +71,8 @@ export default function MoneyAccountsView({
   onSaveSecurity,
   onArchiveSecurity,
   onNeedSecurityHistory,
+  feedOpenCount,
+  onOpenFeed,
 }: MoneyAccountsViewProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -106,6 +111,18 @@ export default function MoneyAccountsView({
             note={usable.length === 0 ? '出金元を足すと、残高が出ます' : undefined}
           />
         </Pressable>
+        {feedOpenCount > 0 && (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onOpenFeed}
+            style={({ pressed }) => [styles.feed, pressed && styles.pressed]}
+          >
+            <Inbox size={18} color={colors.moneyText} />
+            <Text style={styles.feedText}>未確認 {feedOpenCount}件</Text>
+            <Text style={styles.feedSub}>Zaim から取り込んだ明細</Text>
+            <ChevronRight size={16} color={colors.moneyText} />
+          </Pressable>
+        )}
         {isLoading && <Text style={styles.message}>読み込み中...</Text>}
         {WALLET_TYPES.map((walletType) => {
           const inType = usable.filter((row) => row.wallet.type === walletType.id);
@@ -258,4 +275,16 @@ const styles = StyleSheet.create({
   archivedName: { opacity: 0.7 },
   add: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 16 },
   addText: { fontSize: 15, fontWeight: '700', color: colors.money },
+  feed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 14,
+    backgroundColor: colors.moneySoft,
+  },
+  feedText: { fontSize: 15, fontWeight: '800', color: colors.moneyText },
+  feedSub: { flex: 1, fontSize: 12, fontWeight: '500', color: colors.moneyText },
 });
