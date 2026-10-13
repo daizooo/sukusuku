@@ -1,4 +1,4 @@
-import type { Contract, ContractAmountCycle, ContractDraft, ContractKind } from '@/types/app';
+import type { Contract, ContractAmountCycle, ContractDraft, ContractKind, MemberRelation } from '@/types/app';
 
 // 契約（docs/contracts.md）の、画面に依らない計算と文言。
 // mobile版の `mobile/src/lib/contractUtils.ts` と同じ中身にしてある（片方を直したらもう片方も直す）。
@@ -21,33 +21,9 @@ export const CYCLE_LABEL: Record<ContractAmountCycle, string> = {
 
 export const CYCLES: ContractAmountCycle[] = ['monthly', 'yearly', 'once'];
 
-/** 更新日の何日前にお知らせするかの選択肢（既定は 60・30・7）。 */
-export const NOTIFY_DAY_OPTIONS = [60, 30, 14, 7, 3];
-export const DEFAULT_NOTIFY_DAYS = [60, 30, 7];
-
-/** 種類ごとの、契約期間（月数）の初期値。 */
-export const DEFAULT_TERM_MONTHS: Record<ContractKind, number | null> = {
-  rent: 24,
-  insurance: 12,
-  subscription: 1,
-  other: null,
-};
-
-/** 小分類の候補（保険だけ）。 */
-export const CATEGORY_SUGGESTIONS: Record<ContractKind, string[]> = {
-  rent: [],
-  insurance: ['自動車', '医療', '就労不能', '火災', '生命'],
-  subscription: [],
-  other: [],
-};
-
-/** 自由項目のラベルの候補。押すとその行が足される。強制ではなく、書き換えてよい。 */
-export const FIELD_SUGGESTIONS: Record<ContractKind, string[]> = {
-  rent: ['住所', '管理会社の電話', '家賃', '共益費', '敷金', '更新料', '保証会社'],
-  insurance: ['車', '等級', '補償の内容', '受付の電話', '保障の内容', '入院日額', '免責期間'],
-  subscription: ['プラン', '次回の請求日', '解約のしかた', 'ログインに使うメール'],
-  other: ['連絡先', '担当者', 'URL'],
-};
+/** 更新日の何日前にお知らせするかの選択肢（既定は 30・7・1。DB の notify_days の既定と同じ）。 */
+export const NOTIFY_DAY_OPTIONS = [60, 30, 14, 7, 3, 1];
+export const DEFAULT_NOTIFY_DAYS = [30, 7, 1];
 
 /** 自由項目の入力欄の下に常に出す注意書き。持たない方針を、案内で守る。 */
 export const FIELD_WARNING = '証券番号・口座・カード番号・パスワードは入れないでください';
@@ -141,19 +117,16 @@ export const sortContracts = <T extends Pick<Contract, 'renewsOn' | 'title'>>(co
     return a.renewsOn < b.renewsOn ? -1 : 1;
   });
 
-/**
- * 見せる相手が限られているときの添え書き。全員に見せていれば null（印を出さない）。
- * 自分だけなら「自分だけ」、それ以外は見せる相手の名前を「・」でつなぐ。
- */
-export const visibilityLabel = (
-  visibleMemberIds: string[],
-  members: { id: string; displayName: string }[],
-  myMemberId: string | null,
-): string | null => {
-  if (members.length > 0 && members.every((member) => visibleMemberIds.includes(member.id))) return null;
-  if (myMemberId !== null && visibleMemberIds.length === 1 && visibleMemberIds[0] === myMemberId) return '自分だけ';
-  const names = members.filter((member) => visibleMemberIds.includes(member.id)).map((member) => member.displayName);
-  return names.length > 0 ? names.join('・') : null;
+type ContractMember = { id: string; displayName: string; relation: MemberRelation };
+
+/** 見せる相手になる家族。夫婦だけ（子は含めない）。画面では選ばせず、初期値として裏で効かせる。 */
+const visibleCandidates = <T extends { relation: MemberRelation }>(members: T[]): T[] =>
+  members.filter((member) => member.relation !== 'child');
+
+/** 新しい契約の見せる相手の初期値。夫婦と、作った本人。 */
+export const defaultVisibleMemberIds = (members: ContractMember[], myMemberId: string | null): string[] => {
+  const ids = visibleCandidates(members).map((member) => member.id);
+  return myMemberId && !ids.includes(myMemberId) ? [...ids, myMemberId] : ids;
 };
 
 /** 金額の表示。「¥98,000」。 */
@@ -165,21 +138,20 @@ export const amountText = (contract: Pick<Contract, 'amount' | 'amountCycle'>): 
     ? null
     : `${CYCLE_LABEL[contract.amountCycle]} ${formatYen(contract.amount)}`;
 
-/** 空の入力。見せる相手は作った本人のメンバーだけ（ToDoの「自分だけ」と同じ）。 */
-export const emptyContractDraft = (myMemberId: string | null): ContractDraft => ({
+/** 空の入力。契約者は作った本人、見せる相手は夫婦（defaultVisibleMemberIds）。 */
+export const emptyContractDraft = (myMemberId: string | null, visibleMemberIds: string[]): ContractDraft => ({
   kind: 'rent',
-  category: '',
   title: '',
   company: '',
-  contractorId: null,
+  contractorId: myMemberId,
   startedOn: null,
   renewsOn: null,
-  termMonths: DEFAULT_TERM_MONTHS.rent,
+  termMonths: null,
   amount: null,
   amountCycle: null,
   notifyDays: DEFAULT_NOTIFY_DAYS,
   memo: '',
-  visibleMemberIds: myMemberId ? [myMemberId] : [],
+  visibleMemberIds,
   fields: [],
 });
 

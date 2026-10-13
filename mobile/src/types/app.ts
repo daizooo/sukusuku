@@ -865,7 +865,7 @@ export interface ReceiptScanItem {
 
 // --- 契約（賃貸・保険・サブスクなどの控え。docs/contracts.md）---
 
-/** 契約の種類。一覧の絞り込みと、自由項目の候補の出し分けに使う。 */
+/** 契約の種類。一覧の絞り込みに使う。 */
 export type ContractKind = 'rent' | 'insurance' | 'subscription' | 'other';
 
 /** 金額の周期。年間の目安は 月払い×12 + 年払い（1回は数えない）。 */
@@ -883,17 +883,15 @@ export interface ContractField {
 export interface Contract {
   id: string;
   kind: ContractKind;
-  /** 小分類。保険なら「自動車」「医療」「就労不能」など。 */
-  category: string;
   title: string;
   company: string;
   /** 契約者（family_members.id）。 */
   contractorId: string | null;
   /** 'YYYY-MM-DD'。無ければ null。 */
   startedOn: string | null;
-  /** 満了日・更新日・次の請求日。無ければ null（お知らせもバッジも出ない）。 */
+  /** 満了日・更新日・次の請求日。県民共済のように無い契約は null（お知らせもバッジも出ない）。 */
   renewsOn: string | null;
-  /** 「更新した」で更新日を進める月数。 */
+  /** 「更新した」で更新日を進める月数。県民共済のように期間の無い契約は null。 */
   termMonths: number | null;
   amount: number | null;
   amountCycle: ContractAmountCycle | null;

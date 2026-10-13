@@ -6,12 +6,12 @@ import {
   annualTotal,
   daysBetween,
   draftError,
+  defaultVisibleMemberIds,
   emptyContractDraft,
   nearestRenewal,
   parseCount,
   renewalBadge,
   sortContracts,
-  visibilityLabel,
 } from './contractUtils.ts';
 
 // 契約の計算（docs/contracts.md）。実行: npm run test:contracts
@@ -70,10 +70,16 @@ const titles = sortContracts([
 assert.deepEqual(titles, ['A', 'B', 'C', 'D']);
 
 // 入力: 名称・見せる相手・金額と周期のセット・契約期間
-const draft = emptyContractDraft('member-1');
-assert.deepEqual(draft.visibleMemberIds, ['member-1']);
+const draft = emptyContractDraft('member-1', ['member-1', 'member-2']);
+assert.deepEqual(draft.visibleMemberIds, ['member-1', 'member-2'], '見せる相手の初期値');
+assert.equal(draft.contractorId, 'member-1', '契約者の初期値は作った本人');
+// 県民共済のように更新日も契約期間も無い契約でも保存できる。お知らせは既定が 30・7・1 日前
+assert.equal(draft.renewsOn, null);
+assert.equal(draft.termMonths, null);
+assert.deepEqual(draft.notifyDays, [30, 7, 1]);
 assert.equal(draftError(draft), '名称を入力してください');
 assert.equal(draftError({ ...draft, title: '賃貸' }), null);
+assert.equal(draftError({ ...draft, title: '県民共済', kind: 'insurance' }), null, '更新日・期間なし');
 assert.equal(draftError({ ...draft, title: '賃貸', visibleMemberIds: [] }), '見せる相手を1人以上選んでください');
 assert.equal(draftError({ ...draft, title: '賃貸', amount: 100 }), '金額と周期はセットで入力してください');
 assert.equal(draftError({ ...draft, title: '賃貸', termMonths: 0 }), '契約期間は1か月以上にしてください');
@@ -81,17 +87,16 @@ assert.equal(parseCount('98,000'), 98000);
 assert.equal(parseCount(''), null);
 assert.equal(parseCount('abc'), null);
 
-// 見せる相手の添え書き: 全員=出さない、自分だけ、限られた人は名前
 const people = [
-  { id: 'h', displayName: '夫' },
-  { id: 'w', displayName: '妻' },
-  { id: 'c', displayName: '子' },
+  { id: 'h', displayName: '夫', relation: 'husband' as const },
+  { id: 'w', displayName: '妻', relation: 'wife' as const },
+  { id: 'c', displayName: '子', relation: 'child' as const },
 ];
-assert.equal(visibilityLabel(['h', 'w', 'c'], people, 'h'), null);
-assert.equal(visibilityLabel(['h'], people, 'h'), '自分だけ');
-assert.equal(visibilityLabel(['w'], people, 'h'), '妻');
-assert.equal(visibilityLabel(['h', 'w'], people, 'h'), '夫・妻');
-assert.equal(visibilityLabel(['h'], [], 'h'), '自分だけ');
+
+// 見せる相手の初期値: 夫婦と、作った本人（子のアカウントで作ったときは子も入る）
+assert.deepEqual(defaultVisibleMemberIds(people, 'h'), ['h', 'w']);
+assert.deepEqual(defaultVisibleMemberIds(people, 'c'), ['h', 'w', 'c']);
+assert.deepEqual(defaultVisibleMemberIds([], null), []);
 
 // その他タブの行に添える更新日: 過ぎた契約が先、90日より先は出さない、更新日なしは数えない
 assert.equal(nearestRenewal([], '2026-10-13'), null);

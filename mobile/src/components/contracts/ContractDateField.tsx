@@ -36,7 +36,7 @@ export default function ContractDateField({
       <View style={styles.row}>
         <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={open} style={styles.input}>
           <Text style={[styles.text, !current && styles.placeholder]}>
-            {current ? formatDateWithWeekday(current) : '未設定'}
+            {current ? formatDateWithWeekday(current) : ''}
           </Text>
         </Pressable>
         {current && (

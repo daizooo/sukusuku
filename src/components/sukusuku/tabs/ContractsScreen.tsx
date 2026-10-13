@@ -15,7 +15,6 @@ import {
   annualTotal,
   formatYen,
   sortContracts,
-  visibilityLabel,
 } from '@/lib/contractUtils';
 import ContractModal from '../modals/ContractModal';
 import ContractCard from './ContractCard';
@@ -215,7 +214,6 @@ export default function ContractsScreen({
                 key={contract.id}
                 contract={contract}
                 contractorName={memberName(contract.contractorId)}
-                lockLabel={visibilityLabel(contract.visibleMemberIds, members, myMemberId)}
                 today={today}
                 onOpen={() => setEditing(contract)}
               />

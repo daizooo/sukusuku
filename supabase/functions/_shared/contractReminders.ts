@@ -24,6 +24,11 @@ export interface ContractRow {
   renews_on: string | null;
   /** 更新日の何日前に知らせるか。空ならお知らせなし。 */
   notify_days: number[];
+  /**
+   * 更新日を足した・直した日（YYYY-MM-DD）。この日より後に来る節目だけ知らせる
+   * （更新したあとに、新しい更新日のすでに過ぎた節目を知らせないため）。null は制限なし。
+   */
+  notify_after: string | null;
   /** 見せる相手（family_members.id）。作った本人は含まれていなくても見える。 */
   visible_member_ids: string[];
 }
@@ -75,6 +80,8 @@ export function daysBetween(from: string, to: string): number {
  * 「更新日の N 日前の日」が (since, today] に入った契約が対象。since は前回までに知らせ終えた日
  * （含まない）で、実行が飛んだ日があっても次の実行でまとめて拾える。
  *
+ * - 更新日を足した・直した日（notify_after）以前の節目は知らせない。更新した直後に、
+ *   新しい更新日のすでに過ぎた節目（例: 1か月進めたサブスクの30日前）が届かないようにする
  * - 更新日の無いもの・更新日を過ぎたもの（一覧のバッジが知らせる）・お知らせの日数が空のもの・
  *   その人に見えないものは対象にしない
  * - 複数の節目が窓に入っても（実行が長く飛んだとき）、1契約につき1件にする
@@ -93,9 +100,12 @@ export function collectNotices(
     if (!contract.renews_on || contract.renews_on < today) continue;
     if (!canSee(contract, viewer)) continue;
     const renewsOn = contract.renews_on;
-    const hit = contract.notify_days.some(
-      (days) => Number.isInteger(days) && days >= 0 && inWindow(addDays(renewsOn, -days)),
-    );
+    const after = contract.notify_after;
+    const hit = contract.notify_days.some((days) => {
+      if (!Number.isInteger(days) || days < 0) return false;
+      const day = addDays(renewsOn, -days);
+      return inWindow(day) && (after === null || day > after);
+    });
     if (hit) notices.push({ contract, daysLeft: daysBetween(today, renewsOn) });
   }
 
