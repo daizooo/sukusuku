@@ -10,9 +10,9 @@ import { getMyMembership } from '@/lib/api/me';
 import LotteryPanel from '@/components/living/LotteryPanel';
 
 /**
- * 福引チャンスの画面（docs/home.md §9）。家計タブの帯の右端のチケットから開く
- * （以前は暮らしタブのメニュー。2026-10-10に暮らしタブを廃止）。戻る操作（端末の戻るボタン・左上の矢印）で
- * 前の画面（家計タブ）へ戻る。Web版の `src/components/sukusuku/tabs/LotteryScreen.tsx` と同じ項目・並び・文言。
+ * 福引チャンスの画面（docs/home.md §9）。その他タブの「福引チャンス」の行から開く
+ * （以前は家計タブの＋ボタンの中。さらに前は暮らしタブのメニュー。2026-10-13にその他タブへ移した）。
+ * 戻る操作（端末の戻るボタン・左上の矢印）で前の画面（その他タブ）へ戻る。Web版の `src/components/sukusuku/tabs/LotteryScreen.tsx` と同じ項目・並び・文言。
  */
 
 export default function LotteryScreen() {
@@ -50,7 +50,7 @@ export default function LotteryScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="戻る"
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/money'))}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/info'))}
           hitSlop={8}
           style={styles.back}
         >

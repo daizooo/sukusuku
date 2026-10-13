@@ -296,7 +296,7 @@ export interface ListItem {
   position: number;
 }
 
-// 予定・リスト・育児・家計・設定の5つ（docs/family-app.md §4.1）。
+// 予定・ToDo・育児・家計・その他の5つ（docs/family-app.md §4.1）。
 export type TabId = 'schedule' | 'list' | 'care' | 'money' | 'info';
 
 // スケジュールタブの表示切り替え。既定は月（カレンダー）。
@@ -837,3 +837,51 @@ export interface ReceiptScanItem {
   /** 種類をどこから決めたか。none は「種類を選んでください」。 */
   categorySource: 'history' | 'ai' | 'none';
 }
+
+// --- 契約（賃貸・保険・サブスクなどの控え。docs/contracts.md）---
+
+/** 契約の種類。一覧の絞り込みと、自由項目の候補の出し分けに使う。 */
+export type ContractKind = 'rent' | 'insurance' | 'subscription' | 'other';
+
+/** 金額の周期。年間の目安は 月払い×12 + 年払い（1回は数えない）。 */
+export type ContractAmountCycle = 'monthly' | 'yearly' | 'once';
+
+/** 契約の自由項目（「ラベル: 値」の1行）。 */
+export interface ContractField {
+  id: string;
+  label: string;
+  value: string;
+  position: number;
+}
+
+/** 契約。contracts に対応。自由項目は開いたときに読むので、一覧では持たない。 */
+export interface Contract {
+  id: string;
+  kind: ContractKind;
+  /** 小分類。保険なら「自動車」「医療」「就労不能」など。 */
+  category: string;
+  title: string;
+  company: string;
+  /** 契約者（family_members.id）。 */
+  contractorId: string | null;
+  /** 'YYYY-MM-DD'。無ければ null。 */
+  startedOn: string | null;
+  /** 満了日・更新日・次の請求日。無ければ null（お知らせもバッジも出ない）。 */
+  renewsOn: string | null;
+  /** 「更新した」で更新日を進める月数。 */
+  termMonths: number | null;
+  amount: number | null;
+  amountCycle: ContractAmountCycle | null;
+  /** 更新日の何日前にお知らせするか。空ならお知らせなし。 */
+  notifyDays: number[];
+  memo: string;
+  /** 見せる相手（family_members.id）。作った本人は含まれていなくても見える。 */
+  visibleMemberIds: string[];
+  /** 作った本人（users.id）。 */
+  createdBy: string | null;
+}
+
+/** 追加・編集の入力。自由項目も一緒に保存する。 */
+export type ContractDraft = Omit<Contract, 'id' | 'createdBy'> & {
+  fields: Pick<ContractField, 'label' | 'value'>[];
+};

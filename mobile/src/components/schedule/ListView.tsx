@@ -121,7 +121,7 @@ export default function ListView({
         {
           kind: 'note',
           key: 'undated-note',
-          text: 'お子様の誕生日を設定タブで登録すると、カレンダーに表示されます。',
+          text: 'お子様の誕生日をその他タブの設定で登録すると、カレンダーに表示されます。',
         },
         ...undated.map<Row>((task) => ({ kind: 'task', key: task.occurrenceKey, task })),
       ],

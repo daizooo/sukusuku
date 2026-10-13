@@ -108,6 +108,126 @@ export type Database = {
           },
         ]
       }
+      contract_fields: {
+        Row: {
+          contract_id: string
+          created_at: string
+          id: string
+          label: string
+          position: number
+          value: string
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          id?: string
+          label: string
+          position?: number
+          value?: string
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          id?: string
+          label?: string
+          position?: number
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_fields_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contracts: {
+        Row: {
+          amount: number | null
+          amount_cycle: string | null
+          category: string
+          company: string
+          contractor_id: string | null
+          created_at: string
+          created_by: string | null
+          family_id: string
+          id: string
+          kind: string
+          memo: string
+          notify_days: number[]
+          renews_on: string | null
+          started_on: string | null
+          term_months: number | null
+          title: string
+          updated_at: string
+          visible_member_ids: string[]
+        }
+        Insert: {
+          amount?: number | null
+          amount_cycle?: string | null
+          category?: string
+          company?: string
+          contractor_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          family_id: string
+          id?: string
+          kind: string
+          memo?: string
+          notify_days?: number[]
+          renews_on?: string | null
+          started_on?: string | null
+          term_months?: number | null
+          title: string
+          updated_at?: string
+          visible_member_ids: string[]
+        }
+        Update: {
+          amount?: number | null
+          amount_cycle?: string | null
+          category?: string
+          company?: string
+          contractor_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          family_id?: string
+          id?: string
+          kind?: string
+          memo?: string
+          notify_days?: number[]
+          renews_on?: string | null
+          started_on?: string | null
+          term_months?: number | null
+          title?: string
+          updated_at?: string
+          visible_member_ids?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contracts_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "family_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           family_id: string
@@ -2592,6 +2712,7 @@ export type Database = {
         Args: { p_date: string; p_holiday: string }
         Returns: string
       }
+      my_member_id: { Args: never; Returns: string }
       redeem_member_invite: { Args: { p_code: string }; Returns: string }
       refresh_money_holding_values: {
         Args: { p_from: string; p_holding_id?: string; p_to: string }

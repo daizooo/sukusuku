@@ -37,9 +37,9 @@ import { useShoppingSender } from '../living/useShoppingSender';
 import { shortageTitle } from '@/lib/shoppingUtils';
 
 /**
- * 防災備蓄の画面（docs/home.md §10.2）。リストタブの下の「防災備蓄」の行から開く
- * （以前は暮らしタブのメニュー。2026-10-10に暮らしタブを廃止）。戻る操作（ブラウザの戻る・左上の矢印）で
- * リストタブの一覧へ戻る。mobile版の `mobile/app/stock.tsx` と同じ項目・並び・文言にしてある。
+ * 防災備蓄の画面（docs/home.md §10.2）。その他タブの「防災備蓄」の行から開く
+ * （以前はリストタブの下。さらに前は暮らしタブのメニュー。2026-10-13にその他タブへ移した）。戻る操作（ブラウザの戻る・左上の矢印）で
+ * その他タブの一覧へ戻る。mobile版の `mobile/app/stock.tsx` と同じ項目・並び・文言にしてある。
  *
  * 画面の組み立ては「点検盤」（docs/home.md §10.2。living/StockBoard）。
  * 上に備えの状況、その下に要対応（不足・期限が近い・点検の時期）、目標ごとの塊（期限順と必要数を1つに）、
@@ -63,7 +63,7 @@ export default function StockScreen({ familyId, onClose }: { familyId: string; o
   const [plan, setPlan] = useState<StockPlan>(DEFAULT_STOCK_PLAN);
   const [isLoading, setIsLoading] = useState(true);
   const [restocking, setRestocking] = useState<StockItem | null>(null);
-  // 戻る操作（ブラウザの戻る）は、リストタブの一覧へ戻す。
+  // 戻る操作（ブラウザの戻る）は、その他タブの一覧へ戻す。
   useBackLayer(onClose);
   const [editing, setEditing] = useState<Editing>(null);
   const [editingTarget, setEditingTarget] = useState<EditingTarget>(null);

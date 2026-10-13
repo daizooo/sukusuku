@@ -41,8 +41,8 @@ import { useShoppingSender } from '@/components/living/useShoppingSender';
 import { shortageTitle } from '@/lib/shoppingUtils';
 
 /**
- * 防災備蓄の画面（docs/home.md §10.2）。リストタブの下の「防災備蓄」の行から開く
- * （以前は暮らしタブのメニュー。2026-10-10に暮らしタブを廃止）。戻る操作（端末の戻るボタン・左上の矢印）で
+ * 防災備蓄の画面（docs/home.md §10.2）。その他タブの「防災備蓄」の行から開く
+ * （以前はリストタブの下。さらに前は暮らしタブのメニュー。2026-10-13にその他タブへ移した）。戻る操作（端末の戻るボタン・左上の矢印）で
  * 前の画面へ戻る。Web版の `src/components/sukusuku/tabs/StockScreen.tsx` と同じ項目・並び・文言にしてある。
  *
  * 画面の組み立ては「点検盤」（StockBoard）。上に備えの状況、その下に要対応（不足・期限が近い・点検の時期）、
@@ -277,8 +277,8 @@ export default function StockScreen() {
   }
   if (!session) return <Redirect href="/login" />;
 
-  /** 前の画面へ戻る。通知から開いたときなど戻り先が無ければ、リストタブへ。 */
-  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/list'));
+  /** 前の画面へ戻る。通知から開いたときなど戻り先が無ければ、その他タブへ。 */
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/info'));
 
   return (
     <SafeAreaView style={styles.screen}>

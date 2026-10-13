@@ -60,7 +60,6 @@ import MoneySettings from '../money/MoneySettings';
 import MoneyFab from '../money/MoneyFab';
 import MoneyFeedInbox from '../money/MoneyFeedInbox';
 import { type ReviewPeriod } from '../money/moneyVisual';
-import LotteryScreen from './LotteryScreen';
 
 /**
  * 家計タブ（docs/kakei.md）。日々の収支の記録と、月・年の振り返り。
@@ -112,7 +111,7 @@ const MONEY_TABLES = [
   'money_wallets',
 ] as const;
 
-export default function MoneyTab({ familyId, userId }: { familyId: string; userId: string }) {
+export default function MoneyTab({ familyId }: { familyId: string }) {
   const supabase = useMemo(() => createClient(), []);
   const [categories, setCategories] = useState<MoneyCategory[]>([]);
   const [budgets, setBudgets] = useState<MoneyBudget[]>([]);
@@ -142,8 +141,6 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
   // Zaim から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
   const [feed, setFeed] = useState<MoneyFeedData | null>(null);
   const [feedOpen, setFeedOpen] = useState(false);
-  // 福引チャンスの画面を開いているか。開いているあいだは家計の代わりにその画面を出す（戻る操作で家計へ戻る）。
-  const [lotteryOpen, setLotteryOpen] = useState(false);
 
   // 評価額の履歴（推移用）は、推移・証券口座の詳細を開くまで読まない。一度読んだら、読み直しでも履歴まで読む。
   const historyWanted = useRef(false);
@@ -440,10 +437,6 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
     setView,
   );
 
-  if (lotteryOpen) {
-    return <LotteryScreen familyId={familyId} userId={userId} onClose={() => setLotteryOpen(false)} />;
-  }
-
   return (
     <div className="relative p-4 pb-0 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <div className="flex min-h-0 flex-1 flex-col" {...swipeHandlers}>
@@ -523,12 +516,11 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
         </div>
       </div>
 
-      {/* 右下の1つの大きなボタン。押すと「記録を追加」「家計の設定」「福引チャンス」が開く（2026-10-10）。 */}
+      {/* 右下の1つの大きなボタン。押すと「記録を追加」「レシートを読む」「家計の設定」が開く（2026-10-10）。 */}
       <MoneyFab
         onAdd={() => setEditing('new')}
         onScan={() => receiptInput.current?.click()}
         onSettings={() => setSettingsOpen(true)}
-        onLottery={() => setLotteryOpen(true)}
       />
 
       {/* レシートの写真（スマホではカメラが開く。長いレシートは分けて撮って複数選ぶ）。 */}

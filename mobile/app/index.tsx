@@ -8,7 +8,7 @@ import { colors } from '@/lib/theme';
 import { notificationTarget, OPEN_LOG_PARAM } from '@/lib/appLinks';
 import { getMyStartTab, START_TAB_ROUTE } from '@/lib/api/me';
 
-// アプリを開いたときの入口。最初に開くタブは設定タブで1人ずつ選ぶ（users.start_tab。
+// アプリを開いたときの入口。最初に開くタブは設定で1人ずつ選ぶ（users.start_tab。
 // docs/family-app.md §3.4）。お知らせをタップして起動したときは、その用件の画面を開く
 // （app/_layout.tsx の useNotificationTapHandler と同じ飛び先）。
 export default function Index() {

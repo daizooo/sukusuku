@@ -6,8 +6,8 @@ import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import NurseryPanel from '@/components/care/NurseryPanel';
 
-// 保活（見学チェック）の画面。設定タブの「保活」から開く（以前は育児タブの切り替え）。
-// 戻る操作（端末の戻るボタン・左上の矢印）で設定タブへ戻る。
+// 保活（見学チェック）の画面。その他タブの「保活」の行から開く（以前は設定タブの中。さらに前は育児タブの切り替え）。
+// 戻る操作（端末の戻るボタン・左上の矢印）でその他タブへ戻る。
 
 export default function NurseryScreen() {
   const { session, isLoading } = useSession();

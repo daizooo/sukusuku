@@ -77,13 +77,13 @@ export const START_TABS: StartTab[] = ['schedule', 'list', 'care', 'money', 'set
 
 export const START_TAB_LABEL: Record<StartTab, string> = {
   schedule: '予定',
-  list: 'リスト',
+  list: 'ToDo',
   care: '育児',
   money: '家計',
-  settings: '設定',
+  settings: 'その他',
 };
 
-/** start_tab の値と、タブのパス（設定タブのファイルは info.tsx）。 */
+/** start_tab の値と、タブのパス（その他タブのファイルは info.tsx）。 */
 export const START_TAB_ROUTE: Record<StartTab, string> = {
   schedule: '/schedule',
   list: '/list',
