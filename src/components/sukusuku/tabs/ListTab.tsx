@@ -424,7 +424,7 @@ function ListOverviewCard({
     >
       <button type="button" onClick={onOpen} className="w-full text-left block hover:border-gray-300 transition">
       {/* 見出し（リスト名）は帯にして、中身と一目で分かれるようにする。 */}
-      <h3 className="flex items-center gap-1 px-2.5 py-2 pr-9 bg-gray-50 border-b border-gray-200 text-base font-bold text-gray-900">
+      <h3 className="flex items-center gap-1 px-2.5 py-2 pr-9 bg-gray-50 border-b border-gray-200 text-lg font-bold text-gray-900">
         <span className="min-w-0 break-words">{list.name}</span>
         {/* 自分だけのリストは錠前を添える。 */}
         {list.isPrivate && <Lock size={11} className="flex-none text-gray-400" aria-label="自分だけ" />}
@@ -437,13 +437,13 @@ function ListOverviewCard({
               key={row.key}
               className={`border-b border-gray-200 pb-1 mb-1.5 ${index === 0 ? '' : 'mt-2.5'}`}
             >
-              <span className="block truncate text-sm font-bold text-gray-900">{row.name}</span>
+              <span className="block truncate text-base font-bold text-gray-900">{row.name}</span>
             </div>
           ) : (
             /* 項目どうしは線で区切らない（線が多いと詰まって見える）。 */
             <div key={row.key} className="flex items-start gap-1.5 py-[3px]">
               <span className="flex-none mt-[3px] w-3.5 h-3.5 rounded border border-gray-300" />
-              <span className="flex-1 min-w-0 text-[15px] leading-[21px] text-gray-900 break-words line-clamp-2">{row.item.title}</span>
+              <span className="flex-1 min-w-0 text-sm font-normal leading-5 text-gray-900 break-words line-clamp-2">{row.item.title}</span>
             </div>
           ),
         )}
