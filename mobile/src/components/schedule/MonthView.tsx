@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { CheckCircle2 } from 'lucide-react-native';
 import type { DynamicTask } from '@/types/app';
 import {
   WEEKDAY_LABELS,
@@ -12,22 +13,26 @@ import {
 import { getHolidayName } from '@/lib/japaneseHolidays';
 import { getMilestoneLabel } from '@/lib/milestones';
 import { tasksOnDate } from '@/lib/scheduleUtils';
-import { getOwnerTone } from '@/lib/uiUtils';
+import { getTaskTone } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 
 // 月グリッド。Web版の `src/components/sukusuku/schedule/MonthView.tsx` を置き換えたもの。
-// 予定はタイトル入りのチップで積み、育児記録はここには出さない
-// （月表示は予定を見渡すための面。記録は日をタップした先で見る）。
+// Googleカレンダーの月表示にならい、予定は1行ずつ「印＋タイトル」で積む:
+// - 予定: 主体の色の点
+// - タスク: 灰のチェックの丸（文字も灰。docs/calendar.md §1）
+// - 完了: 薄い灰の取り消し線
+// 曜日は1週目のマスの頭に出し、月の初日は「10月1日」のように月も付ける。
+// 育児記録はここには出さない（月表示は予定を見渡すための面。記録は日をタップした先で見る）。
 //
 // 押したところで動きが分かれる（Googleカレンダーと同じ）:
 // - 日付の数字 → その日の日表示
-// - 予定のチップ → 予定の詳細
+// - 予定の行 → 予定の詳細
 // - それ以外のマスの中（予定の無いところ） → その日の予定・タスクの追加
-// 手触りは予定と空きで逆にする（Googleカレンダーと同じ）。予定のチップ・日付の数字は
+// 手触りは予定と空きで逆にする（Googleカレンダーと同じ）。予定の行・日付の数字は
 // 触れている間に色が変わり、予定の無いマスの中は変わらない。
 //
 // 高さは親から与えられたぶんを週の数で等分する。画面全体をスクロールさせないため、
-// マスに入りきらない予定は「+n件」に寄せる。
+// マスに入りきらない予定は「他n件」に寄せる。
 
 interface MonthViewProps {
   /** 表示する月（日は問わない）。 */
@@ -44,25 +49,24 @@ interface MonthViewProps {
   onOpenTask: (task: DynamicTask) => void;
 }
 
-// 1マスに出す予定の数の上限。Web版は画面の広さで2件と3件を切り替えるが、
-// こちらは携帯だけなので、Web版の狭いほうと同じ2件にする。
-const CHIPS = 2;
+// 1マスに出す予定の数の上限。これを超えたぶんは「他n件」にまとめる（Web版と同じ）。
+const CHIPS = 4;
 
-// マスの高さは画面と週の数で変わる（下に「直近のスケジュール」が並ぶぶん低い）ので、
-// 上の CHIPS 件が入らないときは件数を減らして「+n件」に寄せる。
-// 下の値は styles の実寸の見積もり（余白・枠を含む）。styles を変えたら合わせる。
+// マスの高さは画面と週の数で変わるので、上の CHIPS 件が入らないときは件数を減らして
+// 「他n件」に寄せる。下の値は styles の実寸の見積もり（余白・枠を含む）。styles を変えたら合わせる。
 const CELL_CHROME = 6; // マスの上下の余白と枠
+const WEEKDAY_HEIGHT = 12; // 1週目のマスの頭の曜日
 const DATE_HEIGHT = 18; // 日付の丸
 const LABEL_HEIGHT = 11; // 祝日・節目の行
-const CHIP_HEIGHT = 16;
+const CHIP_HEIGHT = 14; // 予定1行
 const MORE_HEIGHT = 12;
 const CHIP_GAP = 1;
 
-/** 予定が total 件あるマスで、予定へ回せる高さ room に何件のチップを出せるか。 */
+/** 予定が total 件あるマスで、予定へ回せる高さ room に何件出せるか。 */
 const chipsThatFit = (total: number, room: number): number => {
   const stack = (n: number) => n * CHIP_HEIGHT + Math.max(n - 1, 0) * CHIP_GAP;
   const limit = Math.min(total, CHIPS);
-  // 全部出せるなら「+n件」は要らない（CHIPS を超える分だけは「+n件」が必要）。
+  // 全部出せるなら「他n件」は要らない（CHIPS を超える分だけは「他n件」が必要）。
   if (total <= CHIPS && stack(total) <= room) return total;
   for (let n = limit; n > 0; n -= 1) {
     if (stack(n) + CHIP_GAP + MORE_HEIGHT <= room) return n;
@@ -98,21 +102,6 @@ export default function MonthView({
 
   return (
     <View style={styles.card}>
-      <View style={styles.weekdayRow}>
-        {WEEKDAY_LABELS.map((d, i) => (
-          <Text
-            key={d}
-            style={[
-              styles.weekday,
-              i === 0 && styles.sunday,
-              i === 6 && styles.saturday,
-            ]}
-          >
-            {d}
-          </Text>
-        ))}
-      </View>
-
       <View style={styles.grid} onLayout={(e) => setGridHeight(e.nativeEvent.layout.height)}>
         {weeks.map((week, w) => (
           <View key={w} style={styles.week}>
@@ -129,7 +118,12 @@ export default function MonthView({
                   ? CHIPS
                   : chipsThatFit(
                       dayTasks.length,
-                      rowHeight - CELL_CHROME - DATE_HEIGHT - (hasLabel ? LABEL_HEIGHT : 0) - CHIP_GAP,
+                      rowHeight -
+                        CELL_CHROME -
+                        (w === 0 ? WEEKDAY_HEIGHT : 0) -
+                        DATE_HEIGHT -
+                        (hasLabel ? LABEL_HEIGHT : 0) -
+                        CHIP_GAP,
                     );
 
               return (
@@ -142,10 +136,10 @@ export default function MonthView({
                     styles.cell,
                     // 最終列の右の線はカードの縁と重なるので引かない。
                     columnIndex === 6 && styles.cellLastColumn,
-                    isOtherMonth && styles.cellOtherMonth,
                     isSelected && styles.cellSelected,
                   ]}
                 >
+                  {w === 0 && <Text style={styles.weekday}>{WEEKDAY_LABELS[columnIndex]}</Text>}
                   <View style={styles.dateRow}>
                     <Pressable
                       accessibilityRole="button"
@@ -161,18 +155,10 @@ export default function MonthView({
                       <Text
                         style={[
                           styles.dateText,
-                          isToday
-                            ? styles.dateTextToday
-                            : isOtherMonth
-                              ? styles.dateTextOtherMonth
-                              : date.getDay() === 0 || holiday
-                                ? styles.sunday
-                                : date.getDay() === 6
-                                  ? styles.saturday
-                                  : null,
+                          isToday ? styles.dateTextToday : isOtherMonth ? styles.dateTextOtherMonth : null,
                         ]}
                       >
-                        {date.getDate()}
+                        {date.getDate() === 1 ? `${date.getMonth() + 1}月1日` : date.getDate()}
                       </Text>
                     </Pressable>
                   </View>
@@ -188,39 +174,43 @@ export default function MonthView({
                   )}
 
                   <View style={styles.chips}>
-                    {dayTasks.slice(0, shownChips).map((task) => {
-                      const label = getOwnerTone(task.owner, task.participants);
-                      return (
-                        <Pressable
-                          key={task.occurrenceKey}
-                          accessibilityRole="button"
-                          onPress={() => onOpenTask(task)}
-                          // 触れている間は地の色を枠の色（濃いほう）に変えて、触った感を出す。
-                          style={({ pressed }) => [
-                            styles.chip,
-                            task.done
-                              ? [styles.chipDone, pressed && styles.chipDonePressed]
-                              : {
-                                  backgroundColor: pressed ? label.border : label.background,
-                                  borderColor: label.border,
-                                },
-                            isOtherMonth && styles.chipOtherMonth,
+                    {dayTasks.slice(0, shownChips).map((task) => (
+                      <Pressable
+                        key={task.occurrenceKey}
+                        accessibilityRole="button"
+                        onPress={() => onOpenTask(task)}
+                        // 触れている間は地の色を付けて、触った感を出す。
+                        style={({ pressed }) => [
+                          styles.chip,
+                          pressed && styles.chipPressed,
+                          isOtherMonth && styles.chipOtherMonth,
+                        ]}
+                      >
+                        {task.kind === 'task' ? (
+                          <CheckCircle2 size={9} color={colors.textFaint} />
+                        ) : (
+                          <View
+                            style={[
+                              styles.dot,
+                              { backgroundColor: task.done ? colors.borderStrong : getTaskTone(task).text },
+                            ]}
+                          />
+                        )}
+                        <Text
+                          numberOfLines={1}
+                          ellipsizeMode="clip"
+                          style={[
+                            styles.chipText,
+                            task.kind === 'task' && styles.chipTextTask,
+                            task.done && styles.chipTextDone,
                           ]}
                         >
-                          <Text
-                            numberOfLines={1}
-                            style={[
-                              styles.chipText,
-                              task.done ? styles.chipTextDone : { color: label.text },
-                            ]}
-                          >
-                            {task.title}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
+                          {task.title}
+                        </Text>
+                      </Pressable>
+                    ))}
                     {dayTasks.length > shownChips && (
-                      <Text style={styles.more}>+{dayTasks.length - shownChips}件</Text>
+                      <Text style={styles.more}>他{dayTasks.length - shownChips}件</Text>
                     )}
                   </View>
                 </Pressable>
@@ -242,17 +232,14 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
   },
-  weekdayRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border },
   weekday: {
-    flex: 1,
+    height: WEEKDAY_HEIGHT,
     textAlign: 'center',
-    fontSize: 10,
-    fontWeight: '500',
+    fontSize: 9,
+    lineHeight: WEEKDAY_HEIGHT,
+    fontWeight: '700',
     color: colors.textMuted,
-    paddingVertical: 6,
   },
-  sunday: { color: colors.sunday },
-  saturday: { color: colors.navActive },
 
   grid: { flex: 1 },
   week: { flex: 1, flexDirection: 'row' },
@@ -269,11 +256,11 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   cellLastColumn: { borderRightColor: 'transparent' },
-  cellOtherMonth: { backgroundColor: colors.background },
   cellSelected: { backgroundColor: colors.selectedSurface, borderColor: colors.selectedRing },
   dateRow: { alignItems: 'center' },
   dateBubble: {
-    width: DATE_HEIGHT,
+    minWidth: DATE_HEIGHT,
+    paddingHorizontal: 3,
     height: DATE_HEIGHT,
     borderRadius: 999,
     alignItems: 'center',
@@ -282,17 +269,25 @@ const styles = StyleSheet.create({
   dateBubbleToday: { backgroundColor: colors.navActive },
   dateBubblePressed: { backgroundColor: colors.border },
   dateBubbleTodayPressed: { backgroundColor: colors.navActiveText },
-  dateText: { fontSize: 11, color: colors.textSubtle, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  dateText: { fontSize: 11, color: colors.text, fontWeight: '700', fontVariant: ['tabular-nums'] },
   dateTextToday: { color: colors.primaryText, fontWeight: '700' },
-  dateTextOtherMonth: { color: colors.borderStrong },
+  dateTextOtherMonth: { color: colors.textFaint },
   milestone: { fontSize: 8, textAlign: 'center', color: colors.milestone, fontWeight: '500' },
   holidayLabel: { color: colors.sunday },
   chips: { marginTop: CHIP_GAP, gap: CHIP_GAP },
-  chip: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1 },
-  chipDone: { backgroundColor: colors.neutralSurface, borderColor: colors.border },
-  chipDonePressed: { backgroundColor: colors.border },
+  chip: {
+    height: CHIP_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    borderRadius: 3,
+    paddingHorizontal: 1,
+  },
+  chipPressed: { backgroundColor: colors.neutralSurface },
   chipOtherMonth: { opacity: 0.5 },
-  chipText: { fontSize: 9, fontWeight: '500', textAlign: 'center' },
+  dot: { width: 5, height: 5, borderRadius: 999 },
+  chipText: { flex: 1, fontSize: 9, fontWeight: '500', color: colors.text },
+  chipTextTask: { color: colors.textMuted },
   chipTextDone: { color: colors.textFaint, textDecorationLine: 'line-through' },
-  more: { fontSize: 9, color: colors.textFaint, paddingHorizontal: 3, fontWeight: '500' },
+  more: { fontSize: 9, color: colors.textMuted, paddingHorizontal: 2, fontWeight: '700' },
 });

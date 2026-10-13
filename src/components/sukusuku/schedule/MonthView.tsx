@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { CheckCircle2 } from 'lucide-react';
 import type { DynamicTask } from '@/types/app';
-import { getOwnerTone } from '@/lib/uiUtils';
+import { getTaskDotColor } from '@/lib/uiUtils';
 import {
   WEEKDAY_LABELS,
   addDays,
@@ -30,32 +31,40 @@ interface MonthViewProps {
   onOpenTask: (task: DynamicTask) => void;
 }
 
-// 1マスに出す予定の数。狭い画面では2件まで、広い画面では3件まで。
-// これを超えたぶんは「+n件」にまとめる。
-const CHIPS_NARROW = 2;
-const CHIPS_WIDE = 3;
+// 1マスに出す予定の数の上限（mobile版と同じ）。これを超えたぶんは「他n件」にまとめる。
+const CHIPS = 4;
+// これより広いグリッドでは、予定の時刻と週番号も出す（Googleカレンダーの広い画面と同じ）。
 const WIDE_GRID_PX = 640;
 
-// マスの高さは画面と週の数で変わる（下に「直近のスケジュール」が並ぶぶん低い）ので、
-// 上の件数が入らないときは件数を減らして「+n件」に寄せる（mobile版の chipsThatFit と同じ考え方）。
+// マスの高さは画面と週の数で変わるので、上の件数が入らないときは件数を減らして
+// 「他n件」に寄せる（mobile版の chipsThatFit と同じ考え方）。
 // 下の値は className の実寸の見積もり（余白・枠を含む）。className を変えたら合わせる。
 const CELL_CHROME = 9; // マスの上下の余白と枠
+const WEEKDAY_HEIGHT = 12; // 1週目のマスの頭の曜日
 const DATE_HEIGHT = 22; // 日付の丸（下の余白を含む）
 const LABEL_HEIGHT = 10; // 祝日・節目の行
-const CHIP_HEIGHT = 17;
-const MORE_HEIGHT = 11;
-const CHIP_GAP = 2;
+const CHIP_HEIGHT_NARROW = 14; // 予定1行
+const CHIP_HEIGHT_WIDE = 18;
+const MORE_HEIGHT = 12;
+const CHIP_GAP = 1;
 
 /** 予定が total 件あるマスで、予定へ回せる高さ room に何件のチップを出せるか。 */
-const chipsThatFit = (total: number, room: number, limitChips: number): number => {
-  const stack = (n: number) => n * CHIP_HEIGHT + Math.max(n - 1, 0) * CHIP_GAP;
-  const limit = Math.min(total, limitChips);
-  // 全部出せるなら「+n件」は要らない（上限を超える分だけは「+n件」が必要）。
-  if (total <= limitChips && stack(total) <= room) return total;
+const chipsThatFit = (total: number, room: number, chipHeight: number): number => {
+  const stack = (n: number) => n * chipHeight + Math.max(n - 1, 0) * CHIP_GAP;
+  const limit = Math.min(total, CHIPS);
+  // 全部出せるなら「他n件」は要らない（上限を超える分だけは「他n件」が必要）。
+  if (total <= CHIPS && stack(total) <= room) return total;
   for (let n = limit; n > 0; n -= 1) {
     if (stack(n) + CHIP_GAP + MORE_HEIGHT <= room) return n;
   }
   return 0;
+};
+
+/** ISO 8601 の週番号（月曜始まり。その週の木曜が、その年の何週目に入るかで数える）。 */
+const isoWeekNumber = (date: Date): number => {
+  const thursday = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 3 - ((date.getDay() + 6) % 7));
+  const dayOfYear = Math.round((thursday.getTime() - new Date(thursday.getFullYear(), 0, 1).getTime()) / 86400000);
+  return Math.floor(dayOfYear / 7) + 1;
 };
 
 /** 要素の大きさを追う。最初の計測が済むまでは null。 */
@@ -76,20 +85,25 @@ const useElementSize = () => {
 };
 
 /**
- * 月グリッド。予定はタイトル入りのチップで積み、育児記録はここには出さない
- * （月表示は予定を見渡すための面。記録は日をタップした先で見る）。
+ * 月グリッド。Googleカレンダーの月表示にならい、予定は1行ずつ「印＋タイトル」で積む
+ * （mobile版の MonthView と同じ）:
+ * - 予定: 主体の色の点（広い画面では時刻も）
+ * - タスク: 灰のチェックの丸（文字も灰。docs/calendar.md §1）
+ * - 完了: 薄い灰の取り消し線
+ * 曜日は1週目のマスの頭に出し、月の初日は「10月1日」のように月も付ける。広い画面では左に週番号を出す。
+ * 育児記録はここには出さない（月表示は予定を見渡すための面。記録は日をタップした先で見る）。
  *
  * 高さは親から与えられたぶんを週の数で等分する。画面全体をスクロールさせないため、
- * マスに入りきらない予定は「+n件」に寄せる。
+ * マスに入りきらない予定は「他n件」に寄せる。
  *
  * 押したところで動きが分かれる（Googleカレンダーと同じ）:
  * - 日付の数字 → その日の日表示
- * - 予定のチップ → 予定の詳細
+ * - 予定の行 → 予定の詳細
  * - それ以外のマスの中（予定の無いところ） → その日の予定・タスクの追加
  * 手触りはGoogleカレンダーと同じく、予定と空きで逆にする:
- * - 予定のチップ・日付の数字 → カーソルが指の形になり、合わせる・押している間は色が濃くなる
+ * - 予定の行・日付の数字 → カーソルが指の形になり、合わせる・押している間は地の色が付く
  * - 予定の無いマスの中 → カーソルは矢印のまま、色も変えない（押すと追加が開く）
- * （mobile版は触れている間の色だけ。チップと日付の数字だけが変わり、空きは変わらない）
+ * （mobile版は触れている間の色だけ。予定の行と日付の数字だけが変わり、空きは変わらない）
  */
 export default function MonthView({
   month,
@@ -107,126 +121,152 @@ export default function MonthView({
   // 前後の月の日も含めて週単位で埋める（週の途中で切らない）。
   const gridStart = startOfWeek(new Date(year, monthIndex, 1));
   const weekCount = Math.ceil((getFirstDayOfMonth(year, monthIndex) + getDaysInMonth(year, monthIndex)) / 7);
-  const days = Array.from({ length: weekCount * 7 }, (_, i) => addDays(gridStart, i));
+  const weeks = Array.from({ length: weekCount }, (_, w) =>
+    Array.from({ length: 7 }, (_, d) => addDays(gridStart, w * 7 + d)),
+  );
 
   const { ref: gridRef, size: gridSize } = useElementSize();
   const rowHeight = gridSize ? gridSize.height / weekCount : null;
-  const limitChips = gridSize && gridSize.width >= WIDE_GRID_PX ? CHIPS_WIDE : CHIPS_NARROW;
+  const isWide = gridSize !== null && gridSize.width >= WIDE_GRID_PX;
+  const chipHeight = isWide ? CHIP_HEIGHT_WIDE : CHIP_HEIGHT_NARROW;
 
   return (
     <div className="h-full flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="grid grid-cols-7 border-b border-gray-100 flex-none">
-        {WEEKDAY_LABELS.map((d, i) => (
-          <div
-            key={d}
-            className={`text-center text-[10px] font-medium py-1.5 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-500'}`}
-          >
-            {d}
-          </div>
-        ))}
-      </div>
-
       <div
         ref={gridRef}
-        className="flex-1 min-h-0 grid grid-cols-7"
+        className="flex-1 min-h-0 grid"
         style={{ gridTemplateRows: `repeat(${weekCount}, minmax(0, 1fr))` }}
       >
-        {days.map((date) => {
-          const dayTasks = tasksOnDate(tasks, date);
-          const isToday = isSameDay(date, today);
-          const isSelected = isSameDay(date, selectedDate);
-          const isOtherMonth = date.getMonth() !== monthIndex;
-          const holiday = getHolidayName(date);
-          const milestone = getMilestoneLabel(birthDate, date);
-          const hasLabel = !isOtherMonth && (holiday !== null || milestone !== null);
-          const shownChips =
-            rowHeight === null
-              ? limitChips
-              : chipsThatFit(
-                  dayTasks.length,
-                  rowHeight - CELL_CHROME - DATE_HEIGHT - (hasLabel ? LABEL_HEIGHT : 0) - CHIP_GAP,
-                  limitChips,
-                );
+        {weeks.map((week, w) => (
+          <div key={w} className="min-h-0 flex border-b border-gray-100 last:border-b-0">
+            {isWide && (
+              // 週番号は月曜の日で数える（週は日曜始まりなので2日目）。
+              <div className="flex-none w-7 bg-gray-50 border-r border-gray-100 pt-5 text-center text-[10px] font-bold text-gray-400">
+                {isoWeekNumber(week[1])}
+              </div>
+            )}
+            {week.map((date, columnIndex) => {
+              const dayTasks = tasksOnDate(tasks, date);
+              const isToday = isSameDay(date, today);
+              const isSelected = isSameDay(date, selectedDate);
+              const isOtherMonth = date.getMonth() !== monthIndex;
+              const holiday = getHolidayName(date);
+              const milestone = getMilestoneLabel(birthDate, date);
+              const hasLabel = !isOtherMonth && (holiday !== null || milestone !== null);
+              const shownChips =
+                rowHeight === null
+                  ? CHIPS
+                  : chipsThatFit(
+                      dayTasks.length,
+                      rowHeight -
+                        CELL_CHROME -
+                        (w === 0 ? WEEKDAY_HEIGHT : 0) -
+                        DATE_HEIGHT -
+                        (hasLabel ? LABEL_HEIGHT : 0) -
+                        CHIP_GAP,
+                      chipHeight,
+                    );
 
-          return (
-            <div
-              key={date.toISOString()}
-              role="button"
-              tabIndex={0}
-              aria-label={`${date.getMonth() + 1}月${date.getDate()}日${holiday ? ` ${holiday}` : ''} 予定${dayTasks.length}件 押すと予定を追加`}
-              onClick={() => onAddTask(date)}
-              onKeyDown={(e) => {
-                if (e.target !== e.currentTarget) return;
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onAddTask(date);
-                }
-              }}
-              className={`min-w-0 overflow-hidden border-r border-b border-gray-100 [&:nth-child(7n)]:border-r-0 px-1 pt-1 pb-1 text-left cursor-default ${
-                isSelected ? 'bg-blue-50/70 ring-1 ring-inset ring-blue-400' : ''
-              } ${isOtherMonth ? 'bg-gray-50/60' : ''}`}
-            >
-              <div className="flex items-center justify-center">
-                <button
-                  type="button"
-                  aria-label={`${date.getMonth() + 1}月${date.getDate()}日の予定を見る`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectDate(date);
+              return (
+                <div
+                  key={date.toISOString()}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${date.getMonth() + 1}月${date.getDate()}日${holiday ? ` ${holiday}` : ''} 予定${dayTasks.length}件 押すと予定を追加`}
+                  onClick={() => onAddTask(date)}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onAddTask(date);
+                    }
                   }}
-                  className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] leading-none cursor-pointer transition ${
-                    isToday
-                      ? 'bg-blue-500 text-white font-bold hover:bg-blue-600 active:bg-blue-700'
-                      : isOtherMonth
-                        ? 'text-gray-300'
-                        : date.getDay() === 0 || holiday
-                          ? 'text-red-500'
-                          : date.getDay() === 6
-                            ? 'text-blue-500'
-                            : 'text-gray-700'
-                  } ${isToday ? '' : 'hover:bg-gray-200 active:bg-gray-300'}`}
+                  className={`flex-1 min-w-0 overflow-hidden px-0.5 pt-1 pb-1 text-left cursor-default ${
+                    columnIndex === 6 ? '' : 'border-r border-gray-100'
+                  } ${isSelected ? 'bg-blue-50/70 ring-1 ring-inset ring-blue-400' : ''}`}
                 >
-                  {date.getDate()}
-                </button>
-              </div>
+                  {w === 0 && (
+                    <p className="h-3 text-[9px] leading-3 text-center font-bold text-gray-500">
+                      {WEEKDAY_LABELS[columnIndex]}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-center">
+                    <button
+                      type="button"
+                      aria-label={`${date.getMonth() + 1}月${date.getDate()}日の予定を見る`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectDate(date);
+                      }}
+                      className={`inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full text-[11px] leading-none font-bold cursor-pointer transition ${
+                        isToday
+                          ? 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700'
+                          : `${isOtherMonth ? 'text-gray-400' : 'text-gray-900'} hover:bg-gray-200 active:bg-gray-300`
+                      }`}
+                    >
+                      {date.getDate() === 1 ? `${date.getMonth() + 1}月1日` : date.getDate()}
+                    </button>
+                  </div>
 
-              {/* 祝日と節目が重なる日は祝日を出す。1マスの高さに収めるため1行だけにする。 */}
-              {!isOtherMonth && (holiday || milestone) && (
-                <p
-                  className={`text-[8px] leading-tight text-center truncate ${
-                    holiday ? 'text-red-500' : 'text-amber-600'
-                  }`}
-                >
-                  {holiday ?? milestone}
-                </p>
-              )}
+                  {/* 祝日と節目が重なる日は祝日を出す。1マスの高さに収めるため1行だけにする。 */}
+                  {hasLabel && (
+                    <p
+                      className={`text-[8px] leading-tight text-center truncate ${
+                        holiday ? 'text-red-500' : 'text-amber-600'
+                      }`}
+                    >
+                      {holiday ?? milestone}
+                    </p>
+                  )}
 
-              <div className="mt-0.5 space-y-0.5">
-                {dayTasks.slice(0, shownChips).map((task) => (
-                  <button
-                    key={task.occurrenceKey}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenTask(task);
-                    }}
-                    // カーソルを指の形にし、合わせる・押している間は色を濃くして、触った感を出す。
-    // （空きのマスは逆に、カーソルも色も変えない）
-                    className={`w-full text-center text-[9px] leading-tight px-1 py-0.5 rounded border truncate cursor-pointer transition hover:brightness-90 active:brightness-75 ${
-                      task.done
-                        ? 'bg-gray-100 text-gray-400 border-gray-200 line-through'
-                        : getOwnerTone(task.owner, task.participants)
-                    } ${isOtherMonth ? 'opacity-50' : ''}`}
-                  >
-                    {task.title}
-                  </button>
-                ))}
-                {dayTasks.length > shownChips && (
-                  <p className="text-[9px] leading-tight text-gray-400 px-1">+{dayTasks.length - shownChips}件</p>
-                )}
-              </div>
-            </div>
-          );
-        })}
+                  <div className="mt-px space-y-px">
+                    {dayTasks.slice(0, shownChips).map((task) => (
+                      <button
+                        key={task.occurrenceKey}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenTask(task);
+                        }}
+                        // カーソルを指の形にし、合わせる・押している間は地の色を付けて、触った感を出す。
+                        // （空きのマスは逆に、カーソルも色も変えない）
+                        className={`w-full flex items-center gap-0.5 md:gap-1 rounded px-px md:px-1 text-left whitespace-nowrap overflow-hidden cursor-pointer transition hover:bg-gray-100 active:bg-gray-200 ${
+                          isWide ? 'h-[18px] text-xs' : 'h-3.5 text-[9px]'
+                        } ${isOtherMonth ? 'opacity-50' : ''}`}
+                      >
+                        {task.kind === 'task' ? (
+                          <CheckCircle2 size={isWide ? 13 : 9} className="flex-none text-gray-400" />
+                        ) : (
+                          <span
+                            className={`flex-none rounded-full ${isWide ? 'w-2 h-2' : 'w-[5px] h-[5px]'} ${
+                              task.done ? 'bg-gray-300' : getTaskDotColor(task)
+                            }`}
+                          />
+                        )}
+                        {isWide && task.startTime && (
+                          <span className={`flex-none font-medium ${task.done ? 'text-gray-400 line-through' : 'text-gray-500'}`}>
+                            {task.startTime}
+                          </span>
+                        )}
+                        <span
+                          className={`min-w-0 overflow-hidden font-medium ${isWide ? 'text-ellipsis' : 'text-clip'} ${
+                            task.done ? 'text-gray-400 line-through' : task.kind === 'task' ? 'text-gray-500' : 'text-gray-900'
+                          }`}
+                        >
+                          {task.title}
+                        </span>
+                      </button>
+                    ))}
+                    {dayTasks.length > shownChips && (
+                      <p className={`leading-tight font-bold text-gray-500 px-0.5 ${isWide ? 'text-[11px]' : 'text-[9px]'}`}>
+                        他{dayTasks.length - shownChips}件
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );

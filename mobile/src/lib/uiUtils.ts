@@ -1,4 +1,4 @@
-import type { MemberColor } from '@/types/app';
+import type { MemberColor, TaskKind } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { participantColorName } from '@/lib/familyRoster';
 
@@ -40,6 +40,17 @@ export const getOwnerTone = (
   participants: string[],
 ): { background: string; text: string; border: string } =>
   owner !== null ? getParticipantColor(owner) : getParticipantsTone(participants);
+
+/**
+ * 予定タブでの1件の色分け。種別がタスクのものは主体・参加者によらず一律で灰にし、
+ * 予定は getOwnerTone で主体の色にする（docs/calendar.md §1）。
+ */
+export const getTaskTone = (task: {
+  kind: TaskKind;
+  owner: string | null;
+  participants: string[];
+}): { background: string; text: string; border: string } =>
+  task.kind === 'task' ? TONE_BY_COLOR.gray : getOwnerTone(task.owner, task.participants);
 
 // 全角数字を半角に変換
 const toHalfWidthDigits = (value: string): string =>

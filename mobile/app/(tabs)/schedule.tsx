@@ -3,14 +3,7 @@ import { ActivityIndicator, Alert, Animated, BackHandler, Pressable, ScrollView,
 import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  CornerDownRight,
-  Plus,
-  Undo2,
-} from 'lucide-react-native';
+import { CornerDownRight } from 'lucide-react-native';
 import type { CareLog, DynamicTask, Participant, ScheduleView, Task } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
@@ -35,7 +28,6 @@ import {
   calculateTargetDate,
   formatDateHeading,
   formatDateString,
-  isSameDay,
   isSameMonth,
   parseDateString,
   startOfDay,
@@ -49,7 +41,7 @@ import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import MonthView from '@/components/schedule/MonthView';
 import DayView from '@/components/schedule/DayView';
 import ListView from '@/components/schedule/ListView';
-import UpcomingTasks from '@/components/schedule/UpcomingTasks';
+import ScheduleHeader from '@/components/schedule/ScheduleHeader';
 import AddTaskModal, { type TaskDraft } from '@/components/schedule/AddTaskModal';
 import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 
@@ -62,8 +54,8 @@ import TaskDetailModal from '@/components/schedule/TaskDetailModal';
 // 画面の作り方はルートの CLAUDE.md に従い、日付送りは固定して、
 // スクロールは予定の一覧だけに閉じる。
 //
-// 面は月（初期表示）・日（日をタップ）・リスト（「直近のスケジュール」の見出しをタップ）の3つ。
-// 切り替えの帯は置かず、日・リストからは戻るボタン（Androidの戻る操作も）で月へ戻る。
+// 面は月（初期表示）・日（日をタップ）・リストの3つ。見出しの「月▾」で切り替え、
+// 日・リストからはAndroidの戻る操作でも月へ戻る。見出しの検索はリストを絞り込んで出す。
 // 月から先の面で戻る操作を握るのはこの画面だけ。月に戻ったあとの戻る操作は、
 // タブの履歴（(tabs)/_layout.tsx の backBehavior）に任せて1つ前のタブへ戻る。
 
@@ -86,7 +78,7 @@ const emptyTaskDraft = (date: Date, owner: Participant | null): TaskDraft => ({
   timing: '',
 });
 
-// 「直近のスケジュール」とリストに、繰り返す予定を何日先まで並べるか。
+// リスト（と検索）に、繰り返す予定を何日先まで並べるか。
 const FORWARD_DAYS = 366;
 
 export default function ScheduleScreen() {
@@ -107,6 +99,8 @@ export default function ScheduleScreen() {
   const [isLoadingTodos, setIsLoadingTodos] = useState(true);
 
   const [view, setView] = useState<ScheduleView>('month');
+  // 検索中の文字。null なら検索していない。検索はリストの面で、これからの予定を絞り込む。
+  const [searchQuery, setSearchQuery] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(today));
   const [currentCalendarDate, setCurrentCalendarDate] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1),
@@ -196,7 +190,7 @@ export default function ScheduleScreen() {
   // 繰り返す予定を回へ展開する範囲。見ている面ごとに必要な分だけ展開する。
   // - 月: マスに出る範囲（前後の月の日も含めて週単位。最大6週）
   // - 日: 選んでいる日
-  // - 直近のスケジュール・リスト: 今日から先 FORWARD_DAYS 日。過去の回は期限切れにも
+  // - リスト・検索: 今日から先 FORWARD_DAYS 日。過去の回は期限切れにも
   //   完了済みにも並べない（毎日の予定が過去ぶん全部「期限切れ」になるのを避ける。
   //   過ぎた回は月・日の表示で見返せる）
   const monthTime = monthStart.getTime();
@@ -294,18 +288,19 @@ export default function ScheduleScreen() {
 
   // 矢印ボタンと同じ操作を、画面上どこでの横スワイプでもできるようにする。
   // 一覧表示（list）には日付送りが無いため、それ以外の表示中だけ有効にする。
-  // 指に合わせて横に動くのは、月表示はカレンダーだけ（直近のスケジュールは固定）、日表示はその日の中身。
+  // 指に合わせて横に動くのは、月表示はカレンダー、日表示はその日の中身（見出しは固定）。
   const swipe = useSwipeNavigation({
     onSwipeLeft: () => step(1),
     onSwipeRight: () => step(-1),
     enabled: view !== 'list',
   });
 
-  // 日・リストからは、Androidの戻る操作でも月へ戻る（切り替えの帯を置かないぶん、戻り道を用意する）。
+  // 日・リスト（検索中も）からは、Androidの戻る操作で月へ戻る。
   useFocusEffect(
     useCallback(() => {
       if (view === 'month') return undefined;
       const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        setSearchQuery(null);
         setView('month');
         return true;
       });
@@ -328,11 +323,25 @@ export default function ScheduleScreen() {
 
   const title =
     view === 'month'
-      ? `${monthStart.getFullYear()}年 ${monthStart.getMonth() + 1}月`
-      : formatDateHeading(selectedDate, today);
+      ? `${monthStart.getFullYear()}年${monthStart.getMonth() + 1}月`
+      : view === 'day'
+        ? formatDateHeading(selectedDate, today)
+        : 'リスト';
 
-  const isShowingToday =
-    view === 'month' ? isSameMonth(monthStart, today) : isSameDay(selectedDate, today);
+  // 見出しの「月▾」での切り替え。リストを離れたら検索もやめる。
+  const changeView = (next: ScheduleView) => {
+    if (next !== 'list') setSearchQuery(null);
+    setView(next);
+  };
+
+  // 検索は、タイトル・場所・詳細のどれかに文字を含む予定に絞る（大文字・小文字は区別しない）。
+  const normalizedQuery = searchQuery?.trim().toLowerCase() ?? '';
+  const listTodos =
+    normalizedQuery === ''
+      ? forwardTodos
+      : forwardTodos.filter((t) =>
+          [t.title, t.place, t.note].some((text) => text.toLowerCase().includes(normalizedQuery)),
+        );
 
   const tasksInMonth = monthTodos.filter(
     (t) => t.targetDateObj && isSameMonth(t.targetDateObj, monthStart),
@@ -486,52 +495,24 @@ export default function ScheduleScreen() {
   return (
     <SafeAreaView style={styles.screen} {...swipe.handlers}>
       <View style={styles.page}>
-        {/* 月以外（日・リスト）では、戻るボタンだけを左上に出す（文言は付けない）。 */}
-        {view !== 'month' && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="戻る"
-            onPress={() => setView('month')}
-            hitSlop={8}
-            style={styles.backButton}
-          >
-            <ChevronLeft size={24} color={colors.navActive} />
-          </Pressable>
-        )}
+        <ScheduleHeader
+          view={view}
+          title={title}
+          onChangeView={changeView}
+          onToday={goToday}
+          onStep={step}
+          onPickDate={openJumpPicker}
+          onAdd={() => openAddTaskModal(selectedDate)}
+          searchQuery={searchQuery}
+          onChangeSearchQuery={setSearchQuery}
+          onStartSearch={() => {
+            setSearchQuery('');
+            setView('list');
+          }}
+          onEndSearch={() => changeView('month')}
+        />
 
-        {view !== 'list' && (
-          <View style={styles.nav}>
-            <Pressable accessibilityRole="button" accessibilityLabel="前へ" onPress={() => step(-1)} style={styles.navArrow}>
-              <ChevronLeft size={20} color={colors.textSubtle} />
-            </Pressable>
-
-            <View style={styles.navTitleRow}>
-              <Text style={styles.navTitle}>{title}</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={view === 'month' ? '月を選ぶ' : '日付を選ぶ'}
-                onPress={openJumpPicker}
-                hitSlop={8}
-              >
-                <CalendarDays size={16} color={colors.textFaint} />
-              </Pressable>
-              {!isShowingToday && (
-                // 育児タブの日付送りと同じ「今日へ戻る」。「今日」だけだと表示中の見出しのラベルに見える。
-                <Pressable accessibilityRole="button" onPress={goToday} style={styles.todayButton}>
-                  <Undo2 size={12} color={colors.navActiveText} />
-                  <Text style={styles.todayText}>今日へ戻る</Text>
-                </Pressable>
-              )}
-            </View>
-
-            <Pressable accessibilityRole="button" accessibilityLabel="次へ" onPress={() => step(1)} style={styles.navArrow}>
-              <ChevronRight size={20} color={colors.textSubtle} />
-            </Pressable>
-          </View>
-        )}
-
-        {/* 月表示は、カレンダーの下に「直近のスケジュール」を並べる。高さは 5:3 で分け、
-            どちらも画面全体はスクロールさせない。 */}
+        {/* 月表示は、カレンダーを見出しの下の高さいっぱいに出す（画面全体はスクロールさせない）。 */}
         {view === 'month' && (
           <View style={styles.body}>
             <Animated.View style={[styles.calendar, swipe.style]}>
@@ -563,17 +544,6 @@ export default function ScheduleScreen() {
                 </Text>
               </Pressable>
             )}
-            <View style={styles.upcoming}>
-              <UpcomingTasks
-                tasks={forwardTodos}
-                isLoading={isLoadingTodos}
-                today={today}
-                onToggleTodo={toggleTodo}
-                onOpenTask={openTaskDetail}
-                onAddTask={() => openAddTaskModal(selectedDate)}
-                onShowAll={() => setView('list')}
-              />
-            </View>
           </View>
         )}
 
@@ -597,29 +567,17 @@ export default function ScheduleScreen() {
         {view === 'list' && (
           <View style={styles.body}>
             <ListView
-              tasks={forwardTodos}
+              tasks={listTodos}
               isLoading={isLoadingTodos}
               today={today}
               birthDate={birthDate}
               onToggleTodo={toggleTodo}
               onOpenTask={openTaskDetail}
+              emptyMessage={normalizedQuery === '' ? undefined : '見つかりませんでした'}
             />
           </View>
         )}
       </View>
-
-      {/* 月表示では、右下のボタンが「直近のスケジュール」の一覧に重なって隠してしまうため、
-          追加ボタンをその見出しの中に置く（UpcomingTasks）。それ以外の表示ではここに置く。 */}
-      {view !== 'month' && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="予定を追加"
-          onPress={() => openAddTaskModal(selectedDate)}
-          style={styles.fab}
-        >
-          <Plus size={28} color={colors.primaryText} />
-        </Pressable>
-      )}
 
       <AddTaskModal
         show={showAddModal}
@@ -649,38 +607,10 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   centered: { alignItems: 'center', justifyContent: 'center' },
   page: { flex: 1, padding: 16, gap: 12 },
-  backButton: { alignSelf: 'flex-start', paddingVertical: 2 },
-
-  nav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 4,
-  },
-  navArrow: { padding: 8 },
-  navTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  navTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
-  todayButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: colors.diaperSurface,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  todayText: { fontSize: 12, fontWeight: '700', color: colors.navActiveText },
 
   body: { flex: 1, minHeight: 0 },
-  // 月表示の縦の配分。カレンダー 5 : 直近のスケジュール 3。
-  // 上にあった切り替えの帯をなくして空いた高さは、この比でどちらにも回る。
-  calendar: { flex: 5, minHeight: 0 },
-  upcoming: { flex: 3, minHeight: 0, marginTop: 12 },
-  scrollContent: { paddingBottom: 96 },
+  calendar: { flex: 1, minHeight: 0 },
+  scrollContent: { paddingBottom: 16 },
   jump: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -694,17 +624,4 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   jumpText: { fontSize: 13, fontWeight: '500', color: colors.navActive },
-
-  fab: {
-    position: 'absolute',
-    right: 16,
-    bottom: 16,
-    width: 56,
-    height: 56,
-    borderRadius: 999,
-    backgroundColor: colors.navActive,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-  },
 });

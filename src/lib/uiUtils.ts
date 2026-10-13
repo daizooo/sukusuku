@@ -1,4 +1,4 @@
-import type { MemberColor } from '@/types/app';
+import type { MemberColor, TaskKind } from '@/types/app';
 import { participantColorName } from '@/lib/familyRoster';
 
 // 参加者1人のバッジ配色（家族メンバーの色ごと）。
@@ -35,6 +35,25 @@ export const getParticipantsTone = (participants: string[]): string =>
 // 主体が未設定の古いデータは今までどおり参加者の人数で決める。
 export const getOwnerTone = (owner: string | null, participants: string[]): string =>
   owner !== null ? getParticipantColor(owner) : getParticipantsTone(participants);
+
+// 予定タブでの1件の色分け。種別がタスクのものは主体・参加者によらず一律で灰にし、
+// 予定は getOwnerTone で主体の色にする（docs/calendar.md §1）。
+export const getTaskTone = (task: {
+  kind: TaskKind;
+  owner: string | null;
+  participants: string[];
+}): string => (task.kind === 'task' ? TONE_BY_COLOR.gray : getOwnerTone(task.owner, task.participants));
+
+// 月グリッドの予定の点の色（getTaskTone と同じ決め方で、塗り色だけ）。
+export const getTaskDotColor = (task: {
+  kind: TaskKind;
+  owner: string | null;
+  participants: string[];
+}): string => {
+  if (task.kind === 'task') return DOT_BY_COLOR.gray;
+  if (task.owner !== null) return getParticipantDotColor(task.owner);
+  return getParticipantDotColor(task.participants.length === 1 ? task.participants[0] : '');
+};
 
 // 全角数字を半角に変換
 const toHalfWidthDigits = (value: string): string =>

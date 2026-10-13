@@ -14,7 +14,7 @@ import {
   Users,
 } from 'lucide-react';
 import type { DynamicTask } from '@/types/app';
-import { getOwnerTone } from '@/lib/uiUtils';
+import { getTaskTone } from '@/lib/uiUtils';
 import { formatTimeRange } from '@/lib/dateUtils';
 import { summarizeRecurrence } from '@/lib/recurrence';
 import TaskForm, { ModalShell } from './TaskForm';
@@ -112,7 +112,7 @@ export default function TaskDetailModal({
         <div className="flex items-center space-x-2 flex-none">
           {selectedTask.participants.length > 0 && (
             <span
-              className={`text-[10px] font-bold px-2 py-1 rounded border whitespace-nowrap ${getOwnerTone(selectedTask.owner, selectedTask.participants)}`}
+              className={`text-[10px] font-bold px-2 py-1 rounded border whitespace-nowrap ${getTaskTone(selectedTask)}`}
             >
               {selectedTask.participants.join('・')}
             </span>
