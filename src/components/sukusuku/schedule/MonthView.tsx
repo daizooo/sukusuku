@@ -135,10 +135,14 @@ export default function MonthView({
       <div
         ref={gridRef}
         className="flex-1 min-h-0 grid"
-        style={{ gridTemplateRows: `repeat(${weekCount}, minmax(0, 1fr))` }}
+        // 列も minmax(0, 1fr) にする。auto のままだと帯の文字（折り返さない）の幅で週が広がり、右の列がはみ出す。
+        style={{
+          gridTemplateRows: `repeat(${weekCount}, minmax(0, 1fr))`,
+          gridTemplateColumns: 'minmax(0, 1fr)',
+        }}
       >
         {weeks.map((week, w) => (
-          <div key={w} className="min-h-0 flex border-b border-gray-100 last:border-b-0">
+          <div key={w} className="min-h-0 min-w-0 flex border-b border-gray-100 last:border-b-0">
             {isWide && (
               // 週番号は月曜の日で数える（週は日曜始まりなので2日目）。
               <div className="flex-none w-7 bg-gray-50 border-r border-gray-100 pt-5 text-center text-[10px] font-bold text-gray-400">
