@@ -77,6 +77,7 @@ export const rowToBalance = (row: BalanceRow): MoneyWalletBalance => ({
 export const rowToStore = (row: StoreRow): MoneyStore => ({
   id: row.id,
   name: row.name,
+  position: row.position,
   archived: row.archived_at !== null,
 });
 
@@ -179,7 +180,7 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
       supabase.from('money_categories').select('*').eq('family_id', familyId),
       supabase.from('money_budgets').select('*').eq('family_id', familyId),
       supabase.from('money_wallets').select('*').eq('family_id', familyId).order('position', { ascending: true }),
-      supabase.from('money_stores').select('*').eq('family_id', familyId),
+      supabase.from('money_stores').select('*').eq('family_id', familyId).order('position', { ascending: true }).order('name', { ascending: true }),
       supabase.from('money_recurring').select('*').eq('family_id', familyId).order('position', { ascending: true }),
       supabase.from('money_wallet_balances').select('*').eq('family_id', familyId),
       loadRecords(supabase, familyId),
@@ -470,7 +471,7 @@ export async function deleteMoneyWalletBalance(supabase: SupabaseDb, id: string)
 
 /** お店の設定を読み直す（記録の保存で「お店に登録して使う」を選んだお店が登録されたあとなど）。 */
 export async function loadMoneyStores(supabase: SupabaseDb, familyId: string): Promise<MoneyStore[]> {
-  const { data, error } = await supabase.from('money_stores').select('*').eq('family_id', familyId);
+  const { data, error } = await supabase.from('money_stores').select('*').eq('family_id', familyId).order('position', { ascending: true }).order('name', { ascending: true });
   if (error) throw error;
   return (data ?? []).map(rowToStore);
 }
@@ -491,6 +492,12 @@ export async function renameMoneyStore(supabase: SupabaseDb, id: string, name: s
   const { data, error } = await supabase.from('money_stores').update({ name: name.trim() }).eq('id', id).select('*').single();
   if (error) throw error;
   return rowToStore(data);
+}
+
+/** お店の並び順を直す（設定の並べ替え）。 */
+export async function updateMoneyStorePosition(supabase: SupabaseDb, id: string, position: number): Promise<void> {
+  const { error } = await supabase.from('money_stores').update({ position }).eq('id', id);
+  if (error) throw error;
 }
 
 /** お店を削除する（記録のお店の名前は残る）。 */
@@ -557,6 +564,12 @@ export async function updateMoneyRecurring(
     .single();
   if (error) throw error;
   return rowToRecurring(data);
+}
+
+/** ルールの並び順を直す（設定の並べ替え）。 */
+export async function updateMoneyRecurringPosition(supabase: SupabaseDb, id: string, position: number): Promise<void> {
+  const { error } = await supabase.from('money_recurring').update({ position }).eq('id', id);
+  if (error) throw error;
 }
 
 /** ルールを削除する。作った記録は残る（記録の recurring_id が外れるだけ）。 */

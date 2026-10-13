@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Pencil, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, GripVertical, Pencil, Plus } from 'lucide-react';
 import type {
   MoneyBudget,
   MoneyCategory,
@@ -28,6 +28,7 @@ import {
   recordTotal,
   recurringHistory,
   recurringScheduleLabel,
+  reorderedPositions,
   storeChoices,
   WEEK_OF_MONTH_OPTIONS,
 } from '@/lib/moneyUtils';
@@ -37,7 +38,9 @@ import {
   insertMoneyStore,
   setMoneyRecurringArchived,
   updateMoneyRecurring,
+  updateMoneyRecurringPosition,
 } from '@/lib/api/money';
+import { useDragReorder } from '../ui/useDragReorder';
 import CategoryPicker from './CategoryPicker';
 import StorePicker from './StorePicker';
 import { EstimateBadge, PrimaryButton, ScreenHeader, StackedScreen, incomeAmountClass } from './moneyVisual';
@@ -52,6 +55,9 @@ import { EstimateBadge, PrimaryButton, ScreenHeader, StackedScreen, incomeAmount
 // 固定収入（給与・賞与。2026-10-11。docs/kakei.md §0.3）も同じルールで、mode が 'income' の画面。収入のルールだけを出し、
 // 入金先・振込日・見込み額の言葉にする。賞与は1回ごとに1件のルール（月・日・額）で、「同じ名前でもう1回足す」で回を増やす。
 // 履歴は、その年の収入の記録を見込み／確定つきで年ごとに出す（見込み額の変更の版は持たない）。
+//
+// 並べ替え（左の持ち手をつかんで動かす。リストと同じ操作）は、種類（支出・振替）ごとの中で動かせる。
+// 複製は、編集の画面の「複製して足す」から。日・月・額など全部を写した新規の編集を開き、直して保存すると足される。
 
 interface RecurringSettingsProps {
   /** 'expense'＝固定支出（支出・振替）、'income'＝固定収入（給与・賞与）。 */
@@ -95,11 +101,14 @@ export default function RecurringSettings({
   const supabase = useMemo(() => createClient(), []);
   const isIncome = mode === 'income';
   const [editing, setEditing] = useState<MoneyRecurring | 'new' | null>(null);
-  // 賞与の「もう1回」を足すときの元（月・日だけ入れ直す）。
+  // 「もう1回」「複製」を足すときの元。「もう1回」は月・日だけ入れ直し、複製は全部を写す。
   const [template, setTemplate] = useState<MoneyRecurring | null>(null);
+  const [duplicate, setDuplicate] = useState(false);
   const inMode = recurring.filter((rule) => (rule.kind === 'income') === isIncome);
   const usable = inMode.filter((rule) => !rule.archived);
   const archived = inMode.filter((rule) => rule.archived);
+  // 同じ種類に2件以上あるときだけ動かせる。
+  const canReorder = (isIncome ? ['income'] : KINDS).some((kind) => usable.filter((rule) => rule.kind === kind).length > 1);
   const cards = isIncome ? [] : wallets.filter((wallet) => wallet.type === 'card' && !wallet.archived);
 
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '';
@@ -107,9 +116,27 @@ export default function RecurringSettings({
   const put = (saved: MoneyRecurring) =>
     onRecurring((prev) => [...prev.filter((rule) => rule.id !== saved.id), saved].sort(byPosition));
 
+  // 動かしたあとの並び。同じ種類の中で数え直し、変わったものだけ保存する。
+  const drag = useDragReorder((_sectionKey, orderedIds) => {
+    const changes = reorderedPositions(recurring, orderedIds);
+    if (changes.length === 0) return;
+    onRecurring((prev) =>
+      prev
+        .map((rule) => {
+          const hit = changes.find((change) => change.id === rule.id);
+          return hit ? { ...rule, position: hit.position } : rule;
+        })
+        .sort(byPosition),
+    );
+    void Promise.all(changes.map((change) => updateMoneyRecurringPosition(supabase, change.id, change.position))).catch(() =>
+      window.alert('並べ替えを保存できませんでした。もう一度お試しください。'),
+    );
+  });
+
   const save = async (target: MoneyRecurring | null, draft: MoneyRecurringDraft, registerStore: boolean) => {
     setEditing(null);
     setTemplate(null);
+    setDuplicate(false);
     try {
       put(
         target === null
@@ -166,6 +193,7 @@ export default function RecurringSettings({
           mode={mode}
           rule={editing === 'new' ? null : editing}
           template={editing === 'new' ? template : null}
+          duplicate={duplicate}
           wallets={wallets}
           categories={categories}
           budgets={budgets}
@@ -174,6 +202,7 @@ export default function RecurringSettings({
           onClose={() => {
             setEditing(null);
             setTemplate(null);
+            setDuplicate(false);
           }}
           onSubmit={(draft, registerStore) => void save(editing === 'new' ? null : editing, draft, registerStore)}
           onDelete={editing === 'new' ? undefined : () => void remove(editing)}
@@ -182,6 +211,16 @@ export default function RecurringSettings({
               ? undefined
               : (source) => {
                   setTemplate(source);
+                  setDuplicate(false);
+                  setEditing('new');
+                }
+          }
+          onDuplicate={
+            editing === 'new'
+              ? undefined
+              : (source) => {
+                  setTemplate(source);
+                  setDuplicate(true);
                   setEditing('new');
                 }
           }
@@ -195,6 +234,7 @@ export default function RecurringSettings({
                 ? '給与・賞与を登録すると、振込日に見込みの額で自動で記録します（毎朝。休日は営業日にずらします）。給与明細などを見て額を直すと確定します。賞与は1回ごとに、月と日と額を足します。'
                 : '口座から落ちる固定支出を登録すると、その日に自動で記録します（毎朝。休日は営業日にずらします）。額を見込むものは「見込み」の印つきで記録し、額を直すと確定します。'}
             </p>
+            {canReorder && <p className="text-[11px] text-gray-400">並べ替え: 左の持ち手をつかんでそのまま動かす</p>}
             {usable.length === 0 && (
               <p className="py-4 text-center text-sm text-gray-400">
                 {isIncome ? 'まだありません。給与・賞与を足してください' : 'まだありません。家賃・光熱費などを足してください'}
@@ -206,29 +246,46 @@ export default function RecurringSettings({
               return (
                 <section key={kind} className="space-y-1.5">
                   {!isIncome && <p className="text-xs font-bold text-gray-500">{RECORD_KIND_LABEL[kind]}</p>}
-                  {inKind.map((rule) => (
-                    <button
+                  {drag.arrange(`rules-${kind}`, inKind).map((rule) => (
+                    <div
                       key={rule.id}
-                      type="button"
-                      aria-label={`${ruleTitle(rule, categories)}を編集`}
-                      onClick={() => setEditing(rule)}
-                      className="flex w-full items-center gap-2.5 rounded-lg border border-gray-200 px-3 py-3 text-left hover:bg-gray-50"
+                      ref={drag.dragRef(rule.id)}
+                      className={`flex w-full items-center gap-2.5 rounded-lg border bg-white px-3 py-3 ${
+                        drag.isDragging(rule.id) ? 'relative z-20 border-blue-300 shadow-lg' : 'border-gray-200'
+                      }`}
                     >
-                      <span className="flex-1">
-                        <span className="block text-[15px] font-semibold text-gray-900">
-                          {ruleTitle(rule, categories)}
+                      {inKind.length > 1 && (
+                        <span
+                          role="button"
+                          aria-label={`${ruleTitle(rule, categories)}を並べ替え`}
+                          {...drag.gripProps(`rules-${kind}`, inKind, rule.id)}
+                          className="-my-3 -ml-2 flex w-7 flex-none cursor-grab touch-none select-none items-center justify-center self-stretch text-gray-300"
+                        >
+                          <GripVertical size={18} />
                         </span>
-                        {ruleDetail(rule) !== '' && <span className={subClass}>{ruleDetail(rule)}</span>}
-                        <span className={subClass}>{recurringScheduleLabel(rule)}</span>
-                        <span className={`${subClass} tabular-nums`}>
-                          {rule.kind === 'transfer'
-                            ? `${walletName(rule.walletId) || '?'} → ${walletName(rule.toWalletId) || '?'}`
-                            : walletName(rule.walletId) || (isIncome ? '入金先なし' : '出金元なし')}
-                          ・{amountLabel(rule, isIncome)}
+                      )}
+                      <button
+                        type="button"
+                        aria-label={`${ruleTitle(rule, categories)}を編集`}
+                        onClick={() => setEditing(rule)}
+                        className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                      >
+                        <span className="flex-1">
+                          <span className="block text-[15px] font-semibold text-gray-900">
+                            {ruleTitle(rule, categories)}
+                          </span>
+                          {ruleDetail(rule) !== '' && <span className={subClass}>{ruleDetail(rule)}</span>}
+                          <span className={subClass}>{recurringScheduleLabel(rule)}</span>
+                          <span className={`${subClass} tabular-nums`}>
+                            {rule.kind === 'transfer'
+                              ? `${walletName(rule.walletId) || '?'} → ${walletName(rule.toWalletId) || '?'}`
+                              : walletName(rule.walletId) || (isIncome ? '入金先なし' : '出金元なし')}
+                            ・{amountLabel(rule, isIncome)}
+                          </span>
                         </span>
-                      </span>
-                      <Pencil size={16} className="text-gray-400" />
-                    </button>
+                        <Pencil size={16} className="text-gray-400" />
+                      </button>
+                    </div>
                   ))}
                 </section>
               );
@@ -364,6 +421,7 @@ function RecurringEditor({
   mode,
   rule,
   template,
+  duplicate,
   wallets,
   categories,
   budgets,
@@ -373,11 +431,14 @@ function RecurringEditor({
   onSubmit,
   onDelete,
   onAddSimilar,
+  onDuplicate,
 }: {
   mode: 'expense' | 'income';
   rule: MoneyRecurring | null;
   /** 賞与の「もう1回」を足すときの元。月・日は入れ直す。 */
   template: MoneyRecurring | null;
+  /** template を全部写す複製か（false は「もう1回」で、月・日を入れ直す）。 */
+  duplicate: boolean;
   wallets: MoneyWallet[];
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
@@ -388,11 +449,13 @@ function RecurringEditor({
   onDelete?: () => void;
   /** 固定収入で、同じ名前・入金先でもう1回（月・日・額）を足す。 */
   onAddSimilar?: (source: MoneyRecurring) => void;
+  /** 全部を写した新しい項目を足す（日・月・額もそのまま）。 */
+  onDuplicate?: (source: MoneyRecurring) => void;
 }) {
   const isIncome = mode === 'income';
   const base = rule ?? template;
   const [screen, setScreen] = useState<EditorScreen>('form');
-  const [kind, setKind] = useState<MoneyRecordKind>(rule?.kind ?? (isIncome ? 'income' : 'expense'));
+  const [kind, setKind] = useState<MoneyRecordKind>(base?.kind ?? (isIncome ? 'income' : 'expense'));
   const [categoryId, setCategoryId] = useState<string | null>(base?.categoryId ?? null);
   const [walletId, setWalletId] = useState<string | null>(base?.walletId ?? null);
   const [toWalletId, setToWalletId] = useState<string | null>(base?.toWalletId ?? null);
@@ -400,7 +463,7 @@ function RecurringEditor({
   // お店の選択で「お店に登録して使う」を選んだか（保存のときにお店の設定に登録する）。
   const [registerStore, setRegisterStore] = useState(false);
   const [name, setName] = useState(base?.name ?? '');
-  const [day, setDay] = useState(rule ? String(rule.day) : '');
+  const [day, setDay] = useState(rule ? String(rule.day) : duplicate && template ? String(template.day) : '');
   // 振込日を「第◯◯曜日」で決めるか（賞与など。固定収入だけ）。
   const [byWeekday, setByWeekday] = useState(base?.weekOfMonth != null);
   const [weekOfMonth, setWeekOfMonth] = useState<number | null>(base?.weekOfMonth ?? null);
@@ -408,7 +471,7 @@ function RecurringEditor({
   // 給与は休日の前の営業日に振り込まれることが多い。
   const [holiday, setHoliday] = useState<MoneyHolidayRule>(base?.holiday ?? (isIncome ? 'prev' : 'next'));
   // 賞与の「もう1回」は、月を選び直す（空のまま）。
-  const [months, setMonths] = useState<number[] | null>(rule ? rule.months : template ? [] : null);
+  const [months, setMonths] = useState<number[] | null>(rule ? rule.months : template ? (duplicate ? template.months : []) : null);
   const [amountMode, setAmountMode] = useState<MoneyRecurring['amountMode']>(base?.amountMode ?? 'estimate');
   const [amount, setAmount] = useState(base && base.amount > 0 ? String(base.amount) : '');
   const [error, setError] = useState<string | null>(null);
@@ -516,7 +579,7 @@ function RecurringEditor({
         />
       ) : (
         <>
-          <ScreenHeader title={`${isIncome ? '固定収入' : '固定支出'}を${rule ? '編集' : '足す'}`} icon="back" onClose={onClose} />
+          <ScreenHeader title={`${isIncome ? '固定収入' : '固定支出'}を${rule ? '編集' : duplicate ? '複製して足す' : '足す'}`} icon="back" onClose={onClose} />
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {!isIncome && (
               <div className="flex flex-wrap gap-2">
@@ -666,6 +729,11 @@ function RecurringEditor({
           </div>
           <div className="shrink-0 space-y-1 border-t border-gray-200 px-4 pt-2.5 pb-4">
             <PrimaryButton label="保存する" onClick={submit} />
+            {rule && onDuplicate && (
+              <button type="button" onClick={() => onDuplicate(rule)} className="w-full py-2 text-sm font-bold text-blue-600">
+                複製して足す
+              </button>
+            )}
             {isIncome && rule && onAddSimilar && (
               <button type="button" onClick={() => onAddSimilar(rule)} className="w-full py-2 text-sm font-bold text-blue-600">
                 同じ名前でもう1回（月・日）を足す
