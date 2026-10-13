@@ -22,7 +22,6 @@ import { colors } from '@/lib/theme';
 // - タスク: 灰の帯に灰のチェックの丸（docs/calendar.md §1）
 // - 完了: 薄い灰の帯に取り消し線
 // 曜日は1週目のマスの頭に出し、月の初日は「10月1日」のように月も付ける。
-// 祝日・節目は日付と同じ行の右端にバッジで出す。
 // 育児記録はここには出さない（月表示は予定を見渡すための面。記録は日をタップした先で見る）。
 //
 // 押したところで動きが分かれる（Googleカレンダーと同じ）:
@@ -58,6 +57,7 @@ const CHIPS = 4;
 const CELL_CHROME = 6; // マスの上下の余白と枠
 const WEEKDAY_HEIGHT = 12; // 1週目のマスの頭の曜日
 const DATE_HEIGHT = 18; // 日付の丸
+const LABEL_HEIGHT = 11; // 祝日・節目の行
 const CHIP_HEIGHT = 15; // 予定1行（帯）
 const MORE_HEIGHT = 12;
 const CHIP_GAP = 2;
@@ -112,8 +112,7 @@ export default function MonthView({
               const isOtherMonth = date.getMonth() !== monthIndex;
               const holiday = getHolidayName(date);
               const milestone = getMilestoneLabel(birthDate, date);
-              // 祝日と節目が重なる日は祝日を出す。日付と同じ1行に収めるため1つだけにする。
-              const badge = isOtherMonth ? null : (holiday ?? milestone);
+              const hasLabel = !isOtherMonth && (holiday !== null || milestone !== null);
               const shownChips =
                 rowHeight === null
                   ? CHIPS
@@ -123,6 +122,7 @@ export default function MonthView({
                         CELL_CHROME -
                         (w === 0 ? WEEKDAY_HEIGHT : 0) -
                         DATE_HEIGHT -
+                        (hasLabel ? LABEL_HEIGHT : 0) -
                         CHIP_GAP,
                     );
 
@@ -161,16 +161,17 @@ export default function MonthView({
                         {date.getDate() === 1 ? `${date.getMonth() + 1}月1日` : date.getDate()}
                       </Text>
                     </Pressable>
-                    {badge !== null && (
-                      <Text
-                        numberOfLines={1}
-                        ellipsizeMode="clip"
-                        style={[styles.badge, holiday !== null ? styles.badgeHoliday : styles.badgeMilestone]}
-                      >
-                        {badge}
-                      </Text>
-                    )}
                   </View>
+
+                  {/* 祝日と節目が重なる日は祝日を出す。1マスの高さに収めるため1行だけにする。 */}
+                  {hasLabel && (
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.milestone, holiday !== null && styles.holidayLabel]}
+                    >
+                      {holiday ?? milestone}
+                    </Text>
+                  )}
 
                   <View style={styles.chips}>
                     {dayTasks.slice(0, shownChips).map((task) => (
@@ -250,7 +251,7 @@ const styles = StyleSheet.create({
   },
   cellLastColumn: { borderRightColor: 'transparent' },
   cellSelected: { backgroundColor: colors.selectedSurface, borderColor: colors.selectedRing },
-  dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 2 },
+  dateRow: { alignItems: 'center' },
   dateBubble: {
     minWidth: DATE_HEIGHT,
     paddingHorizontal: 3,
@@ -265,18 +266,8 @@ const styles = StyleSheet.create({
   dateText: { fontSize: 11, color: colors.text, fontWeight: '700', fontVariant: ['tabular-nums'] },
   dateTextToday: { color: colors.primaryText, fontWeight: '700' },
   dateTextOtherMonth: { color: colors.textFaint },
-  // 祝日・節目のバッジ。日付の右に寄せ、足りないぶんは切る（日付を優先する）。
-  badge: {
-    flexShrink: 1,
-    borderRadius: 3,
-    paddingHorizontal: 2,
-    fontSize: 8,
-    lineHeight: 11,
-    fontWeight: '700',
-    overflow: 'hidden',
-  },
-  badgeHoliday: { color: colors.holidayText, backgroundColor: colors.holidaySurface },
-  badgeMilestone: { color: colors.milestoneText, backgroundColor: colors.milestoneSurface },
+  milestone: { fontSize: 8, textAlign: 'center', color: colors.milestone, fontWeight: '500' },
+  holidayLabel: { color: colors.sunday },
   chips: { marginTop: CHIP_GAP, gap: CHIP_GAP },
   chip: {
     height: CHIP_HEIGHT,

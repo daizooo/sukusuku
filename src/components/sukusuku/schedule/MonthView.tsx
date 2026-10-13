@@ -42,6 +42,7 @@ const WIDE_GRID_PX = 640;
 const CELL_CHROME = 9; // マスの上下の余白と枠
 const WEEKDAY_HEIGHT = 12; // 1週目のマスの頭の曜日
 const DATE_HEIGHT = 22; // 日付の丸（下の余白を含む）
+const LABEL_HEIGHT = 10; // 祝日・節目の行
 const CHIP_HEIGHT_NARROW = 15; // 予定1行（帯）
 const CHIP_HEIGHT_WIDE = 18;
 const MORE_HEIGHT = 12;
@@ -90,7 +91,6 @@ const useElementSize = () => {
  * - タスク: 灰の帯に灰のチェックの丸（docs/calendar.md §1）
  * - 完了: 薄い灰の帯に取り消し線
  * 曜日は1週目のマスの頭に出し、月の初日は「10月1日」のように月も付ける。広い画面では左に週番号を出す。
- * 祝日・節目は日付と同じ行の右端にバッジで出す。
  * 育児記録はここには出さない（月表示は予定を見渡すための面。記録は日をタップした先で見る）。
  *
  * 高さは親から与えられたぶんを週の数で等分する。画面全体をスクロールさせないため、
@@ -152,8 +152,7 @@ export default function MonthView({
               const isOtherMonth = date.getMonth() !== monthIndex;
               const holiday = getHolidayName(date);
               const milestone = getMilestoneLabel(birthDate, date);
-              // 祝日と節目が重なる日は祝日を出す。日付と同じ1行に収めるため1つだけにする。
-              const badge = isOtherMonth ? null : (holiday ?? milestone);
+              const hasLabel = !isOtherMonth && (holiday !== null || milestone !== null);
               const shownChips =
                 rowHeight === null
                   ? CHIPS
@@ -163,6 +162,7 @@ export default function MonthView({
                         CELL_CHROME -
                         (w === 0 ? WEEKDAY_HEIGHT : 0) -
                         DATE_HEIGHT -
+                        (hasLabel ? LABEL_HEIGHT : 0) -
                         CHIP_GAP,
                       chipHeight,
                     );
@@ -190,7 +190,7 @@ export default function MonthView({
                       {WEEKDAY_LABELS[columnIndex]}
                     </p>
                   )}
-                  <div className="flex items-center justify-between gap-0.5">
+                  <div className="flex items-center justify-center">
                     <button
                       type="button"
                       aria-label={`${date.getMonth() + 1}月${date.getDate()}日の予定を見る`}
@@ -206,17 +206,18 @@ export default function MonthView({
                     >
                       {date.getDate() === 1 ? `${date.getMonth() + 1}月1日` : date.getDate()}
                     </button>
-                    {badge !== null && (
-                      // 日付の右に寄せ、足りないぶんは切る（日付を優先する）。
-                      <span
-                        className={`min-w-0 flex-initial overflow-hidden whitespace-nowrap rounded px-0.5 text-[8px] leading-[11px] font-bold ${
-                          holiday ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'
-                        }`}
-                      >
-                        {badge}
-                      </span>
-                    )}
                   </div>
+
+                  {/* 祝日と節目が重なる日は祝日を出す。1マスの高さに収めるため1行だけにする。 */}
+                  {hasLabel && (
+                    <p
+                      className={`text-[8px] leading-tight text-center truncate ${
+                        holiday ? 'text-red-500' : 'text-amber-600'
+                      }`}
+                    >
+                      {holiday ?? milestone}
+                    </p>
+                  )}
 
                   <div className="mt-0.5 space-y-0.5">
                     {dayTasks.slice(0, shownChips).map((task) => (

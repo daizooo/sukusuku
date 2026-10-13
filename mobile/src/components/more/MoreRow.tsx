@@ -5,7 +5,7 @@ import { colors } from '@/lib/theme';
 
 /**
  * その他タブの1行（docs/family-app.md §4.5）。色つきの丸いアイコン・名前・ひとこと・
- * 必要なら件数や期限のバッジ・右の矢印。押すとその画面へ。
+ * 必要なら件数や期限のバッジ（名前と同じ見出しの行の右端）・右の矢印。押すとその画面へ。
  * Web版は `src/components/sukusuku/tabs/MoreRow.tsx`。
  */
 
@@ -51,14 +51,20 @@ export default function MoreRow({
     >
       <View style={[styles.chip, { backgroundColor: tintSurface }]}>{icon}</View>
       <View style={styles.body}>
-        <Text style={styles.title}>{title}</Text>
+        <View style={styles.heading}>
+          <Text numberOfLines={1} style={styles.title}>
+            {title}
+          </Text>
+          {badge ? (
+            <View style={[styles.badge, { backgroundColor: tone.surface }]}>
+              <View style={[styles.badgeDot, { backgroundColor: tone.text }]} />
+              <Text numberOfLines={1} style={[styles.badgeText, { color: tone.text }]}>
+                {badge}
+              </Text>
+            </View>
+          ) : null}
+        </View>
         <Text style={styles.description}>{description}</Text>
-        {badge ? (
-          <View style={[styles.badge, { backgroundColor: tone.surface }]}>
-            <View style={[styles.badgeDot, { backgroundColor: tone.text }]} />
-            <Text style={[styles.badgeText, { color: tone.text }]}>{badge}</Text>
-          </View>
-        ) : null}
       </View>
       <ChevronRight size={18} color={colors.textFaint} />
     </Pressable>
@@ -76,18 +82,19 @@ const styles = StyleSheet.create({
   rowPressed: { backgroundColor: colors.background },
   chip: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, minWidth: 0, gap: 2 },
-  title: { fontSize: 15, fontWeight: '700', color: colors.text },
+  heading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { flexShrink: 0, fontSize: 15, fontWeight: '700', color: colors.text },
   description: { fontSize: 12, fontWeight: '400', color: colors.textMuted },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
+    flexShrink: 1,
+    marginLeft: 'auto',
     gap: 4,
-    marginTop: 2,
     paddingHorizontal: 8,
     paddingVertical: 1,
     borderRadius: 999,
   },
   badgeDot: { width: 6, height: 6, borderRadius: 3 },
-  badgeText: { fontSize: 11, fontWeight: '700' },
+  badgeText: { flexShrink: 1, fontSize: 11, fontWeight: '700' },
 });
