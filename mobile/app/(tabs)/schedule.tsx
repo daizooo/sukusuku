@@ -485,7 +485,7 @@ export default function ScheduleScreen() {
 
   if (isSessionLoading) {
     return (
-      <SafeAreaView style={[styles.screen, styles.centered]}>
+      <SafeAreaView edges={['top']} style={[styles.screen, styles.centered]}>
         <ActivityIndicator color={colors.navActive} />
       </SafeAreaView>
     );
@@ -493,7 +493,7 @@ export default function ScheduleScreen() {
   if (!session) return <Redirect href="/login" />;
 
   return (
-    <SafeAreaView style={styles.screen} {...swipe.handlers}>
+    <SafeAreaView edges={['top']} style={styles.screen} {...swipe.handlers}>
       <View style={styles.page}>
         <ScheduleHeader
           view={view}
@@ -628,7 +628,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   fabPressed: { opacity: 0.85 },
-  page: { flex: 1, padding: 16, gap: 12 },
+  page: { flex: 1, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, gap: 8 },
 
   body: { flex: 1, minHeight: 0 },
   calendar: { flex: 1, minHeight: 0 },

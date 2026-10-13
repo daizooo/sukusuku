@@ -750,7 +750,7 @@ export default function CareScreen() {
 
   if (isSessionLoading) {
     return (
-      <SafeAreaView style={[styles.screen, styles.centered]}>
+      <SafeAreaView edges={['top']} style={[styles.screen, styles.centered]}>
         <ActivityIndicator color={colors.primary} />
       </SafeAreaView>
     );
@@ -758,7 +758,7 @@ export default function CareScreen() {
   if (!session) return <Redirect href="/login" />;
 
   return (
-    <SafeAreaView style={styles.screen} {...swipe.handlers}>
+    <SafeAreaView edges={['top']} style={styles.screen} {...swipe.handlers}>
       {!bodyOpen && (
         <>
       {/* グループ1: 生後日数と次の授乳の目安を琥珀色の1枚に。固定し、スクロールは下のパネルの中だけにする。 */}

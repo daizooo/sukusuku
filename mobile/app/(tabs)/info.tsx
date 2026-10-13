@@ -47,7 +47,7 @@ export default function InfoScreen() {
 
   if (isSessionLoading) {
     return (
-      <SafeAreaView style={[styles.screen, styles.centered]}>
+      <SafeAreaView edges={['top']} style={[styles.screen, styles.centered]}>
         <ActivityIndicator color={colors.navActive} />
       </SafeAreaView>
     );
@@ -55,7 +55,7 @@ export default function InfoScreen() {
   if (!session) return <Redirect href="/login" />;
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView edges={['top']} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>その他</Text>
 
