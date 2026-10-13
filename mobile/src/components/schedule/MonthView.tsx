@@ -58,7 +58,7 @@ const CHIPS = 4;
 const CELL_CHROME = 6; // マスの上下の余白と枠
 const WEEKDAY_HEIGHT = 12; // 1週目のマスの頭の曜日
 const DATE_HEIGHT = 18; // 日付の丸
-const LABEL_HEIGHT = 11; // 祝日・節目の行
+const LABEL_HEIGHT = 13; // 祝日・節目の行
 const CHIP_HEIGHT = 15; // 予定1行（帯）
 const MORE_HEIGHT = 12;
 const CHIP_GAP = 2;
@@ -186,6 +186,9 @@ export default function MonthView({
                   {hasLabel && (
                     <Text
                       numberOfLines={1}
+                      // マスの幅（約47dp）に「スポーツの日」などは10で収まらないため、長いものだけ縮める。
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
                       style={[styles.milestone, holiday !== null && styles.holidayLabel]}
                     >
                       {holiday ?? milestone}
@@ -287,7 +290,7 @@ const styles = StyleSheet.create({
   dateTextOtherMonth: { color: colors.textFaint },
   dateTextSunday: { color: colors.sunday },
   dateTextSaturday: { color: colors.navActive },
-  milestone: { fontSize: 8, textAlign: 'center', color: colors.milestone, fontWeight: '500' },
+  milestone: { fontSize: 10, lineHeight: 13, textAlign: 'center', color: colors.milestone, fontWeight: '500' },
   holidayLabel: { color: colors.sunday },
   chips: { marginTop: CHIP_GAP, gap: CHIP_GAP },
   chip: {

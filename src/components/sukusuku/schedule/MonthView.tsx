@@ -42,7 +42,7 @@ const WIDE_GRID_PX = 640;
 const CELL_CHROME = 9; // マスの上下の余白と枠
 const WEEKDAY_HEIGHT = 12; // 1週目のマスの頭の曜日
 const DATE_HEIGHT = 22; // 日付の丸（下の余白を含む）
-const LABEL_HEIGHT = 10; // 祝日・節目の行
+const LABEL_HEIGHT = 13; // 祝日・節目の行
 const CHIP_HEIGHT_NARROW = 15; // 予定1行（帯）
 const CHIP_HEIGHT_WIDE = 18;
 const MORE_HEIGHT = 12;
@@ -215,7 +215,7 @@ export default function MonthView({
                   {/* 祝日と節目が重なる日は祝日を出す。1マスの高さに収めるため1行だけにする。 */}
                   {hasLabel && (
                     <p
-                      className={`text-[8px] leading-tight text-center truncate ${
+                      className={`text-[10px] leading-[13px] text-center truncate ${
                         holiday ? 'text-red-500' : 'text-amber-600'
                       }`}
                     >
