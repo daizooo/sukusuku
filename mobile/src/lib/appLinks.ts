@@ -28,7 +28,8 @@ export interface NotificationTarget {
 }
 
 /**
- * お知らせの種類ごとの飛び先。PWA版（public/sw.js の URL_BY_KIND）と同じ対応にする。
+ * お知らせの種類ごとの飛び先。送る側（supabase/functions/_shared/deliver.ts）の種類と対にする。
+ * PWA版は通知を受け取らない（public/sw.js は登録を外すだけ）ので、対応表は mobile だけが持つ。
  *
  * 予定のリマインダーは種類を持たないので、予定タブを開く。
  */

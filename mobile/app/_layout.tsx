@@ -94,8 +94,7 @@ function AppEffects() {
 
 /**
  * お知らせをタップしたときに、その用件の画面へ移る。
- * 飛び先の決まりごとは PWA版（public/sw.js の URL_BY_KIND）と同じ
- * （src/lib/appLinks.ts）。
+ * 飛び先の決まりごとは mobile/src/lib/appLinks.ts の notificationTarget。
  */
 function useNotificationTapHandler(): void {
   useEffect(() => {

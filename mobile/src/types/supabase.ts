@@ -480,6 +480,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "feeding_reminder_deliveries_care_log_id_fkey"
+            columns: ["care_log_id"]
+            isOneToOne: false
+            referencedRelation: "next_feeding_schedule"
+            referencedColumns: ["care_log_id"]
+          },
+          {
             foreignKeyName: "feeding_reminder_deliveries_subscription_id_fkey"
             columns: ["subscription_id"]
             isOneToOne: false
@@ -850,8 +857,8 @@ export type Database = {
           family_id: string
           fiscal_year: number
           id: string
-          monthly_amount: number
           month_amounts: number[] | null
+          monthly_amount: number
           updated_at: string
         }
         Insert: {
@@ -860,8 +867,8 @@ export type Database = {
           family_id: string
           fiscal_year: number
           id?: string
-          monthly_amount?: number
           month_amounts?: number[] | null
+          monthly_amount?: number
           updated_at?: string
         }
         Update: {
@@ -870,8 +877,8 @@ export type Database = {
           family_id?: string
           fiscal_year?: number
           id?: string
-          monthly_amount?: number
           month_amounts?: number[] | null
+          monthly_amount?: number
           updated_at?: string
         }
         Relationships: [
@@ -2374,15 +2381,14 @@ export type Database = {
       tasks: {
         Row: {
           anchor_type: string
-          done_dates: string[]
           belongings: string | null
           category: string
           created_at: string
           created_by: string | null
           days_after_birth: number
+          done_dates: string[]
           end_time: string | null
           family_id: string
-          has_notification: boolean
           id: string
           is_done: boolean
           is_private: boolean
@@ -2401,15 +2407,14 @@ export type Database = {
         }
         Insert: {
           anchor_type?: string
-          done_dates?: string[]
           belongings?: string | null
           category?: string
           created_at?: string
           created_by?: string | null
           days_after_birth?: number
+          done_dates?: string[]
           end_time?: string | null
           family_id: string
-          has_notification?: boolean
           id?: string
           is_done?: boolean
           is_private?: boolean
@@ -2428,15 +2433,14 @@ export type Database = {
         }
         Update: {
           anchor_type?: string
-          done_dates?: string[]
           belongings?: string | null
           category?: string
           created_at?: string
           created_by?: string | null
           days_after_birth?: number
+          done_dates?: string[]
           end_time?: string | null
           family_id?: string
-          has_notification?: boolean
           id?: string
           is_done?: boolean
           is_private?: boolean
@@ -2608,7 +2612,9 @@ export type Database = {
       task_reminder_schedule: {
         Row: {
           category: string | null
+          created_by: string | null
           family_id: string | null
+          is_private: boolean | null
           place: string | null
           remind_at: string | null
           remind_minutes_before: number | null
@@ -2619,6 +2625,13 @@ export type Database = {
           title: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tasks_family_id_fkey"
             columns: ["family_id"]
@@ -2634,15 +2647,7 @@ export type Database = {
           scheduled_for: string | null
           slot: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "temperature_reminder_settings_family_id_fkey"
-            columns: ["family_id"]
-            isOneToOne: true
-            referencedRelation: "families"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Functions: {
@@ -2663,17 +2668,78 @@ export type Database = {
       jp_base_holiday_name: { Args: { p_date: string }; Returns: string }
       jp_holiday_name: { Args: { p_date: string }; Returns: string }
       lottery_delete_my_test_data: { Args: never; Returns: number }
+      lottery_monthly_allowance: {
+        Args: { p_at: string; p_user: string }
+        Returns: number
+      }
       lottery_open_box: {
         Args: { p_draw_id: string }
-        Returns: Database["public"]["Tables"]["lottery_coupons"]["Row"][]
+        Returns: {
+          cycle: number | null
+          expires_at: string | null
+          family_id: string
+          id: string
+          is_test: boolean
+          kind: string
+          obtained_at: string
+          owner_id: string
+          slot: number | null
+          source_draw_id: string | null
+          used_at: string | null
+          used_draw_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "lottery_coupons"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       lottery_use_coupon: {
         Args: { p_coupon_id: string }
-        Returns: Database["public"]["Tables"]["lottery_coupons"]["Row"]
+        Returns: {
+          cycle: number | null
+          expires_at: string | null
+          family_id: string
+          id: string
+          is_test: boolean
+          kind: string
+          obtained_at: string
+          owner_id: string
+          slot: number | null
+          source_draw_id: string | null
+          used_at: string | null
+          used_draw_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "lottery_coupons"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       lottery_use_rate_up: {
-        Args: { p_draw_id: string; p_coupon_id: string }
-        Returns: Database["public"]["Tables"]["subsidy_draws"]["Row"]
+        Args: { p_coupon_id: string; p_draw_id: string }
+        Returns: {
+          ball: string
+          drawn_at: string
+          drawn_by: string | null
+          family_id: string
+          id: string
+          is_test: boolean
+          item_name: string
+          price: number
+          push_coupon_id: string | null
+          rate: number
+          rate_up_used: boolean
+          subsidy: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "subsidy_draws"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       make_money_recurring_records: {
         Args: { p_today?: string }
@@ -2753,11 +2819,24 @@ export type Database = {
         }
         Returns: number
       }
+      money_rule_date: {
+        Args: {
+          p_day: number
+          p_month: string
+          p_week: number
+          p_weekday: number
+        }
+        Returns: string
+      }
       money_shift_business_day: {
         Args: { p_date: string; p_holiday: string }
         Returns: string
       }
       my_member_id: { Args: never; Returns: string }
+      push_subscription_family_id: {
+        Args: { subscription: string }
+        Returns: string
+      }
       redeem_member_invite: { Args: { p_code: string }; Returns: string }
       refresh_money_holding_values: {
         Args: { p_from: string; p_holding_id?: string; p_to: string }
@@ -2785,12 +2864,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2814,11 +2893,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2839,11 +2918,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2864,11 +2943,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2881,11 +2960,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
