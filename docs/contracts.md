@@ -1,11 +1,13 @@
 # 契約（賃貸・保険・サブスクなどの控え）
 
 その他タブ（[family-app.md §4.5](./family-app.md)）の「契約」の中身の設計。2026-10-13。
-**状態: §9 の PR1（DB + 画面）を実装した（2026-10-13）。PR2（更新日のお知らせ）はこれから。**
+**状態: §9 の PR1（DB + 画面）と PR2（更新日のお知らせ）を実装した（2026-10-13）。**
 migration は `0096_contracts.sql`（本番DBへ適用済み）。画面は mobile `app/contracts.tsx`（部品は `components/contracts/`）、
 PWA `tabs/ContractsScreen.tsx`（部品は `tabs/ContractCard.tsx`・`modals/ContractModal.tsx`）。計算は `contractUtils.ts`
 （`npm run test:contracts`）、読み書きは `lib/api/contracts.ts`。その他タブの「契約」の行は、いちばん急ぐ更新日をバッジで添える
-（`ContractMoreRow`）。お知らせ（§6）は未実装なので、いまは一覧のバッジとその他タブの行だけで知らせる。
+（`ContractMoreRow`）。お知らせ（§6）は migration `0097_contract_reminders.sql`・Edge Function `send-contract-reminders`
+（`supabase/functions/_shared/contractReminders.ts` が日付の計算。`npm run test:contract-reminders`）で、本番へデプロイ・適用済み。
+仕組みの全体は [notifications.md §14](./notifications.md)。
 
 ## 1. 何のためにあるか
 
@@ -140,7 +142,9 @@ family_id = (自分の家族) and (
   （「賃貸の更新まで30日 ほか1件」）
 - 更新日を過ぎた契約は知らせない（一覧のバッジが「更新日を過ぎています」を出す）
 - お知らせの種類は `kind = 'contract'`。タップするとその他タブの契約の画面へ
-  （`appLinks` の `notificationTarget`、`public/sw.js` の対応表にも足す。PWAは通知を受け取らないので mobile のみ実害がある）
+  （mobile の `appLinks.ts` の `notificationTarget`。PWA版は通知を受け取らず、`public/sw.js` は登録を外すだけの版なので、対応表は無い）
+- 通知チャンネルは `contract-renewal`（`_shared/deliver.ts` と `mobile/src/lib/push.ts` で同じid）
+- 送信済み記録の掃除の定期実行は作らない（記録はお知らせが出た朝にしか増えない。notifications.md §14）
 - 静かな時間（夜間）の扱いは既存と同じ（`quietHours.ts`）。朝9時なので当たらない
 
 ## 7. 画面
@@ -195,7 +199,7 @@ mobile が正、PWA は同じ項目・文言（CLAUDE.md の第一優先）。
 
 1. **DB + 画面（実装済み）**: migration（`contracts`・`contract_fields`・RLS・`attach_family_sync`・`my_member_id`）と、一覧・追加・編集・
    更新した・絞り込み・年間の目安（mobile → 同じPRで PWA）。migration は削除を含まないので、CLAUDE.md のとおり Claude が MCP で適用する
-2. **お知らせ（これから）**: `contract_deliveries`・`send-contract-reminders`・`_shared/contractReminders.ts`（テスト付き）・pg_cron・
+2. **お知らせ（実装済み）**: `contract_deliveries`・`send-contract-reminders`・`_shared/contractReminders.ts`（テスト付き）・pg_cron・
    `appLinks`/`sw.js` の対応。cron の登録 migration は、先頭の `cron.unschedule` が削除にあたる。本番に同名のジョブが無いことを確かめ、
    その行を外して MCP で適用する（リポジトリのファイルはそのまま。CLAUDE.md の「`drop ... if exists` …」と同じ扱い）
 3. 使ってみて足りない項目・候補を直す

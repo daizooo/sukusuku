@@ -108,6 +108,51 @@ export type Database = {
           },
         ]
       }
+      contract_deliveries: {
+        Row: {
+          error: string | null
+          family_id: string
+          id: string
+          notify_on: string
+          sent_at: string
+          status: string
+          subscription_id: string
+        }
+        Insert: {
+          error?: string | null
+          family_id: string
+          id?: string
+          notify_on: string
+          sent_at?: string
+          status?: string
+          subscription_id: string
+        }
+        Update: {
+          error?: string | null
+          family_id?: string
+          id?: string
+          notify_on?: string
+          sent_at?: string
+          status?: string
+          subscription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_deliveries_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_deliveries_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "push_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contract_fields: {
         Row: {
           contract_id: string

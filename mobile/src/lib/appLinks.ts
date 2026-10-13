@@ -19,8 +19,11 @@ export const parseLogType = (value: string | string[] | undefined): LogType | nu
 
 /** お知らせの飛び先。開くタブと、育児タブなら開く入力画面。 */
 export interface NotificationTarget {
-  /** 開くタブ。備蓄の期限のお知らせだけは、タブではなく備蓄の画面（app/stock.tsx）。 */
-  tab: TabId | 'stock';
+  /**
+   * 開くタブ。備蓄の期限のお知らせは備蓄の画面（app/stock.tsx）、契約の更新日のお知らせは
+   * 契約の画面（app/contracts.tsx）。どちらもタブではなく、その他タブから開く画面。
+   */
+  tab: TabId | 'stock' | 'contracts';
   openLog?: LogType;
 }
 
@@ -41,6 +44,9 @@ export const notificationTarget = (kind: unknown): NotificationTarget => {
     // 備蓄の期限のお知らせは備蓄の画面（備蓄の期限順の一覧）へ
     case 'stock':
       return { tab: 'stock' };
+    // 契約の更新日のお知らせは契約の画面（更新日の近い順の一覧）へ
+    case 'contract':
+      return { tab: 'contracts' };
     default:
       return { tab: 'schedule' };
   }

@@ -23,6 +23,7 @@
     "test:shopping": "node --experimental-strip-types src/lib/shoppingUtils.test.ts",
     "test:lottery": "node --experimental-strip-types src/lib/subsidyLotteryUtils.test.ts",
     "test:stock-expiry": "node --experimental-strip-types supabase/functions/_shared/stockExpiry.test.ts",
+    "test:contract-reminders": "node --experimental-strip-types supabase/functions/_shared/contractReminders.test.ts",
     "test:money": "node --experimental-strip-types src/lib/moneyUtils.test.ts",
     "test:security-prices": "node --experimental-strip-types supabase/functions/_shared/securityPrices.test.ts",
     "test:family-sync": "node --experimental-strip-types src/lib/familySyncStamps.test.ts",
