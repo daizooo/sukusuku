@@ -21,6 +21,8 @@ interface ListViewProps {
   birthDate: string;
   onToggleTodo: (task: DynamicTask) => void;
   onOpenTask: (task: DynamicTask) => void;
+  /** 並べる予定が無いときの文言。検索で見つからないときに替える。 */
+  emptyMessage?: string;
 }
 
 const SECTION_TONE: Record<ScheduleListSection['tone'], string> = {
@@ -62,6 +64,7 @@ export default function ListView({
   birthDate,
   onToggleTodo,
   onOpenTask,
+  emptyMessage = '予定はまだありません',
 }: ListViewProps) {
   const [showDone, setShowDone] = useState(false);
 
@@ -71,7 +74,7 @@ export default function ListView({
   const done = tasks.filter((t) => t.done).sort(byDateDesc);
 
   if (isLoading) return <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>;
-  if (tasks.length === 0) return <p className="text-sm text-gray-400 text-center py-8">予定はまだありません</p>;
+  if (tasks.length === 0) return <p className="text-sm text-gray-400 text-center py-8">{emptyMessage}</p>;
 
   return (
     <div className="space-y-5">

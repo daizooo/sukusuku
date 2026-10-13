@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType } from 'react';
 import dynamic from 'next/dynamic';
-import { Baby, CalendarDays, Ellipsis, ListTodo, Plus } from 'lucide-react';
+import { Baby, CalendarDays, Ellipsis, ListTodo } from 'lucide-react';
 import YenCoinIcon from './ui/YenCoinIcon';
 
 import type {
@@ -1550,18 +1550,6 @@ function SukusukuAppContent({
             />
           )}
         </main>
-
-        {/* 月表示では、右下のボタンが「直近のスケジュール」の一覧に重なって隠してしまうため、
-            追加ボタンをその見出しの中に置く（UpcomingTasks）。それ以外の表示ではここに置く。 */}
-        {activeTab === 'schedule' && scheduleView !== 'month' && (
-          <button
-            aria-label="予定を追加"
-            onClick={() => openAddTaskModal(selectedScheduleDate)}
-            className="absolute bottom-[calc(4rem+env(safe-area-inset-bottom)+1rem)] right-4 desktop:bottom-8 desktop:right-8 w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-all active:scale-95 z-20"
-          >
-            <Plus size={28} />
-          </button>
-        )}
 
         <nav className="flex-none bg-white border-t border-gray-200 w-full z-30 pb-[env(safe-area-inset-bottom)] desktop:hidden">
           <div className="flex justify-around items-center h-16 px-1">

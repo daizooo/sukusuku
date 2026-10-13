@@ -27,6 +27,8 @@ interface ListViewProps {
   birthDate: string;
   onToggleTodo: (task: DynamicTask) => void;
   onOpenTask: (task: DynamicTask) => void;
+  /** 並べる予定が無いときの文言。検索で見つからないときに替える。 */
+  emptyMessage?: string;
 }
 
 const TONE_COLOR: Record<ScheduleListSection['tone'], string> = {
@@ -85,11 +87,12 @@ export default function ListView({
   birthDate,
   onToggleTodo,
   onOpenTask,
+  emptyMessage = '予定はまだありません',
 }: ListViewProps) {
   const [showDone, setShowDone] = useState(false);
 
   if (isLoading) return <Text style={styles.message}>読み込み中...</Text>;
-  if (tasks.length === 0) return <Text style={styles.message}>予定はまだありません</Text>;
+  if (tasks.length === 0) return <Text style={styles.message}>{emptyMessage}</Text>;
 
   // 誕生日が未登録で日付が確定しない予定は、日付順の並びに混ぜず末尾にまとめる。
   const undated = tasks.filter((t) => !t.targetDateObj && !t.done);
