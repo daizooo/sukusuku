@@ -1,89 +1,63 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text } from 'react-native';
-import { Redirect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Redirect, router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ClipboardCheck, FileText, Settings } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
-import { useFamilyRefresh } from '@/lib/familySync';
-import {
-  DEFAULT_FEEDING_SETTINGS,
-  getFeedingSettings,
-  type FeedingSettings,
-} from '@/lib/api/feedingSettings';
-import {
-  DEFAULT_TEMPERATURE_REMINDER_SETTINGS,
-  getTemperatureReminderSettings,
-  type TemperatureReminderSettings,
-} from '@/lib/api/temperatureReminderSettings';
-import AccountSection from '@/components/info/AccountSection';
-import FamilySection from '@/components/info/FamilySection';
-import NotificationSetting from '@/components/info/NotificationSetting';
-import FeedingIntervalSetting from '@/components/info/FeedingIntervalSetting';
-import WakeAlarmSetting from '@/components/info/WakeAlarmSetting';
-import HokatsuSetting from '@/components/info/HokatsuSetting';
-import TemperatureReminderSetting from '@/components/info/TemperatureReminderSetting';
+import { readHokatsuVisible } from '@/lib/hokatsuVisibility';
+import MoreRow from '@/components/more/MoreRow';
+import LotteryMoreRow from '@/components/more/LotteryMoreRow';
+import StockMoreRow from '@/components/more/StockMoreRow';
 import VersionInfo from '@/components/info/VersionInfo';
 
-// 設定タブ。家族・通知・アカウント・アプリ情報に絞る（docs/family-app.md §4.3）。
-// 以前の自由入力（お子様の情報・パパママ情報・緊急連絡先・カスタム項目）は
-// 「家族」（family_members・families）に置き換えた。
+// その他タブ（docs/family-app.md §4.5）。以前の設定タブ。毎日は開かないものの入口を、上から
+// 福引チャンス・契約・防災備蓄・保活・設定の順に並べる。中身は、それぞれ別の画面で開く。
+//   - 福引チャンス: 以前は家計タブの＋ボタンの中（app/lottery.tsx）
+//   - 契約: 賃貸・保険などの控え（app/contracts.tsx。いまは入口だけ）
+//   - 防災備蓄: 以前はリストタブの下（app/stock.tsx）
+//   - 保活: 以前は設定タブの中（app/nursery.tsx）。見学が済んだら、設定で行ごと隠せる
+//   - 設定: 以前の設定タブの中身（app/settings.tsx）
 // Web版は `src/components/sukusuku/tabs/InfoTab.tsx`。
 //
-// 設定タブは画面全体がスクロールしてよい（ルートの CLAUDE.md の「画面の作り方」の例外）。
+// 設定タブだった流れで、画面全体がスクロールしてよい（ルートの CLAUDE.md の「画面の作り方」の例外）。
 
 export default function InfoScreen() {
   const { session, isLoading: isSessionLoading } = useSession();
   const userId = session?.user.id ?? null;
 
   const [familyId, setFamilyId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [feedingSettings, setFeedingSettings] = useState<FeedingSettings>(DEFAULT_FEEDING_SETTINGS);
-  const [temperatureReminderSettings, setTemperatureReminderSettings] =
-    useState<TemperatureReminderSettings>(DEFAULT_TEMPERATURE_REMINDER_SETTINGS);
+  const [hokatsuVisible, setHokatsuVisible] = useState(true);
 
   useEffect(() => {
     if (!userId) return;
     let isMounted = true;
-    void (async () => {
-      try {
-        const membership = await getMyMembership(supabase, userId);
-        if (!isMounted || !membership.familyId) return;
-        setFamilyId(membership.familyId);
-        const [feeding, temperature] = await Promise.all([
-          getFeedingSettings(supabase, membership.familyId),
-          getTemperatureReminderSettings(supabase, membership.familyId),
-        ]);
-        if (!isMounted) return;
-        setFeedingSettings(feeding);
-        setTemperatureReminderSettings(temperature);
-      } catch {
-        // 圏外でも画面は出す。出せるところまで出して、残りは空のままにする。
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    })();
+    getMyMembership(supabase, userId)
+      .then((membership) => {
+        if (isMounted) setFamilyId(membership.familyId);
+      })
+      .catch(() => {
+        // 圏外でも画面は出す。家族が分からないうちは、件数のバッジが出ないだけ。
+      });
     return () => {
       isMounted = false;
     };
   }, [userId]);
 
-  // 相手の端末で変わった授乳の間隔・検温のお知らせの設定に追いつかせる。読み込み中の表示には戻さず、届いたら差し替える。
-  useFamilyRefresh(['feeding_settings', 'temperature_reminder_settings'], () => {
-    if (!familyId) return;
-    void Promise.all([
-      getFeedingSettings(supabase, familyId),
-      getTemperatureReminderSettings(supabase, familyId),
-    ])
-      .then(([feeding, temperature]) => {
-        setFeedingSettings(feeding);
-        setTemperatureReminderSettings(temperature);
-      })
-      .catch(() => {
-        // 圏外なら前に読んだ分を出したままにする。
+  // 開くたびに読み直す（設定で保活の表示を切り替えて戻ってきたときも）。
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      void readHokatsuVisible().then((value) => {
+        if (isActive) setHokatsuVisible(value);
       });
-  });
+      return () => {
+        isActive = false;
+      };
+    }, []),
+  );
 
   if (isSessionLoading) {
     return (
@@ -96,35 +70,43 @@ export default function InfoScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {isLoading && <Text style={styles.message}>読み込み中...</Text>}
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.title}>その他</Text>
 
-        {familyId && (
-          <>
-            <FamilySection familyId={familyId} userId={session.user.id} />
-
-            {/* 通知。授乳の目安・検温のお知らせも同じ枠にまとめる（docs/family-app.md §7-5） */}
-            <NotificationSetting familyId={familyId} userId={session.user.id}>
-              <FeedingIntervalSetting
-                familyId={familyId}
-                settings={feedingSettings}
-                onChange={setFeedingSettings}
+        <View style={styles.group}>
+          <LotteryMoreRow familyId={familyId} userId={session.user.id} />
+          <View style={styles.divider} />
+          <MoreRow
+            icon={<FileText size={20} color={colors.contract} />}
+            tintSurface={colors.contractSurface}
+            title="契約"
+            description="賃貸・保険など"
+            badge="準備中"
+            onPress={() => router.push('/contracts')}
+          />
+          <View style={styles.divider} />
+          <StockMoreRow familyId={familyId} />
+          {hokatsuVisible && (
+            <>
+              <View style={styles.divider} />
+              <MoreRow
+                icon={<ClipboardCheck size={20} color={colors.primary} />}
+                tintSurface={colors.accentSurface}
+                title="保活"
+                description="見学チェックリスト"
+                onPress={() => router.push('/nursery')}
               />
-              <TemperatureReminderSetting
-                familyId={familyId}
-                settings={temperatureReminderSettings}
-                onChange={setTemperatureReminderSettings}
-              />
-              {/* 夜の授乳の起床アラーム。この端末だけの設定で、Androidのネイティブ版だけに出る。 */}
-              <WakeAlarmSetting />
-            </NotificationSetting>
-
-            {/* 保活（見学チェック）。見学のときしか開かないので、育児タブから移した。 */}
-            <HokatsuSetting />
-
-            <AccountSection familyId={familyId} userId={session.user.id} />
-          </>
-        )}
+            </>
+          )}
+          <View style={styles.divider} />
+          <MoreRow
+            icon={<Settings size={20} color={colors.textSubtle} />}
+            tintSurface={colors.neutralSurface}
+            title="設定"
+            description="家族・通知・授乳の目安・アカウント"
+            onPress={() => router.push('/settings')}
+          />
+        </View>
 
         <VersionInfo />
       </ScrollView>
@@ -136,5 +118,13 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   centered: { alignItems: 'center', justifyContent: 'center' },
   content: { paddingHorizontal: 16, paddingTop: 12, gap: 12, paddingBottom: 24 },
-  message: { fontSize: 14, fontWeight: '400', color: colors.textFaint, textAlign: 'center' },
+  title: { fontSize: 21, fontWeight: '800', color: colors.text, paddingHorizontal: 2 },
+  group: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  divider: { height: 1, backgroundColor: colors.border },
 });

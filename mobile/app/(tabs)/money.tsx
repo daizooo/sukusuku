@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Redirect, router } from 'expo-router';
+import { Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type {
   MoneyBudget,
@@ -69,15 +69,15 @@ import { type ReviewPeriod } from '@/components/money/moneyVisual';
  * 家計タブ（docs/kakei.md）。日々の収支の記録と、月・年の振り返り。
  * Web版の `src/components/sukusuku/tabs/MoneyTab.tsx` と同じ項目・並び・文言にしてある。
  *
- * 中は「口座 / 記録 / 振り返り」の3つ。右下の1つの大きな丸いボタン「＋」を押すと、記録の追加・家計の設定・福引チャンスが開く（§2）。
+ * 中は「口座 / 記録 / 振り返り」の3つ。右下の1つの大きな丸いボタン「＋」を押すと、記録の追加・レシートを読む・家計の設定が開く（§2）。
  * どの面も「送り → 結論（数字を1つ大きく）→ 内訳 → 明細」の順（見た目の決まりは §2.1・moneyVisual）。
  * - 記録: その月に使った額（特別費を除く）と、記録を日ごとに。押すと記録の詳細（RecordEditor。Zaim と同じ流れ）
  * - 振り返り: 月と年（暦年）は同じ面で、送りの右「月 / 年」で期間を切り替える（§4）。結論は生活費の収支
  *   （収入 − 特別費以外の支出。貯金は入れない）。内訳の行（大分類・特別費）を押すと、簡単な分析と絞った記録の一覧（§4.4）
  * - 口座: 総残高と出金元ごとの残高（確定した残高 + その後の記録）。残高の確定、出金元の追加・編集もここ（§9.3）
  * - 見出しは出さない（2026-10-10。切り替えの帯が見出しを兼ねる）。右下の大きなボタンを押すと、「記録を追加」「家計の設定」
- *   （カテゴリと予算・特別費の予定・お店・毎月の記録。docs/kakei.md §3.5）「福引チャンス」（紫のチケット。暮らしタブの廃止で
- *   移した。docs/home.md §9）の3つが上に開く。ボタンはどの面にも出ているので、どの面からも入れる
+ *   （カテゴリと予算・特別費の予定・お店・毎月の記録。docs/kakei.md §3.5）「レシートを読む」（§10）の3つが上に開く。
+ *   ボタンはどの面にも出ているので、どの面からも入れる。福引チャンスは家計と連動しないので、2026-10-13にその他タブへ移した
  *
  * 見出し・切り替え・月の送りは固定し、スクロールするのは一覧だけ（CLAUDE.md）。
  */
@@ -533,14 +533,13 @@ export default function MoneyScreen() {
         </Animated.View>
       </View>
 
-      {/* 右下の1つの大きなボタン。押すと「記録を追加」「家計の設定」「福引チャンス」が開く（2026-10-10）。 */}
+      {/* 右下の1つの大きなボタン。押すと「記録を追加」「レシートを読む」「家計の設定」が開く（2026-10-10）。 */}
       <MoneyFab
         addDisabled={!familyId}
         settingsDisabled={!familyId}
         onAdd={() => setEditing('new')}
         onScan={() => void startReceiptScan()}
         onSettings={() => setSettingsOpen(true)}
-        onLottery={() => router.push('/lottery')}
       />
 
       {scanning && (

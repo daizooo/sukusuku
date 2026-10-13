@@ -5,9 +5,9 @@ import { useBackLayer } from '@/lib/browserHistory';
 import LotteryPanel from '../living/LotteryPanel';
 
 /**
- * 福引チャンスの画面（docs/home.md §9）。家計タブの帯の右端のチケットから開く
- * （以前は暮らしタブのメニュー。2026-10-10に暮らしタブを廃止）。戻る操作（ブラウザの戻る・左上の矢印）で
- * 家計タブへ戻る。mobile版の `mobile/app/lottery.tsx` と同じ項目・並び・文言。
+ * 福引チャンスの画面（docs/home.md §9）。その他タブの「福引チャンス」の行から開く
+ * （以前は家計タブの＋ボタンの中。さらに前は暮らしタブのメニュー。2026-10-13にその他タブへ移した）。
+ * 戻る操作（ブラウザの戻る・左上の矢印）でその他タブへ戻る。mobile版の `mobile/app/lottery.tsx` と同じ項目・並び・文言。
  */
 export default function LotteryScreen({
   familyId,
@@ -18,7 +18,7 @@ export default function LotteryScreen({
   userId: string;
   onClose: () => void;
 }) {
-  // 戻る操作（ブラウザの戻る）は、家計タブへ戻す。
+  // 戻る操作（ブラウザの戻る）は、その他タブへ戻す。
   useBackLayer(onClose);
 
   return (

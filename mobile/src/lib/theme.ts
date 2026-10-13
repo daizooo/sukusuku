@@ -122,4 +122,8 @@ export const colors = {
   moneyIncome: '#43b02a', // 収入の額（明るい緑。green-500 と lime-600 の間）
   moneyEstimate: '#92400e', // amber-800（見込みの額の印。docs/kakei.md §3.3）
   moneyEstimateSurface: '#fef3c7', // amber-100
+
+  // その他タブ（契約）の差し色。青緑。
+  contract: '#0d9488', // teal-600
+  contractSurface: '#f0fdfa', // teal-50
 } as const;

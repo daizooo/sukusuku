@@ -1,13 +1,14 @@
 import { useCallback, useState } from 'react';
 import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Camera, Plus, Settings, Ticket } from 'lucide-react-native';
+import { Camera, Plus, Settings } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 
 /**
  * 家計タブ右下の、1つの大きな丸いボタン（docs/kakei.md §2）。
- * 押すと「記録を追加」「レシートを読む」「家計の設定」「福引チャンス」が上に開く（レシートは docs/kakei.md §10）。
+ * 押すと「記録を追加」「レシートを読む」「家計の設定」が上に開く（レシートは docs/kakei.md §10）。
  * 以前は＋と、その左の小さなピル（福引｜設定）に分かれていて押しづらかったので、1つにまとめて大きくした（2026-10-10）。
+ * 福引チャンスは家計と連動していないので、2026-10-13にその他タブへ移した。
  * 開いている間は戻る操作で閉じる。暗い部分を押しても閉じる。
  */
 export default function MoneyFab({
@@ -16,14 +17,12 @@ export default function MoneyFab({
   onAdd,
   onScan,
   onSettings,
-  onLottery,
 }: {
   addDisabled?: boolean;
   settingsDisabled?: boolean;
   onAdd: () => void;
   onScan: () => void;
   onSettings: () => void;
-  onLottery: () => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -61,15 +60,6 @@ export default function MoneyFab({
 
       {open && (
         <View style={styles.menu} pointerEvents="box-none">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="福引チャンス"
-            onPress={choose(onLottery)}
-            style={[styles.item, styles.itemLottery]}
-          >
-            <Ticket size={24} color={colors.livingLottery} />
-            <Text style={[styles.itemText, { color: colors.livingLottery }]}>福引チャンス</Text>
-          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="家計の設定"
@@ -155,7 +145,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     elevation: 6,
   },
-  itemLottery: { backgroundColor: colors.livingLotterySurface },
   itemAdd: { backgroundColor: colors.money, borderColor: colors.money },
   itemDisabled: { opacity: 0.4 },
   itemText: { fontSize: 17, fontWeight: '700' },

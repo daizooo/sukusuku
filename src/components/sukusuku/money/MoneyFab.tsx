@@ -1,24 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { Camera, Plus, Settings, Ticket } from 'lucide-react';
+import { Camera, Plus, Settings } from 'lucide-react';
 import { useBackLayer } from '@/lib/browserHistory';
 import { useBackdropClose } from '../ui/useBackdropClose';
 
 // 家計タブ右下の、1つの大きな丸いボタン（docs/kakei.md §2）。mobile版の `mobile/src/components/money/MoneyFab.tsx` と同じ。
-// 押すと「記録を追加」「レシートを読む」「家計の設定」「福引チャンス」が上に開く（レシートは docs/kakei.md §10）。以前は＋と、その左の小さなピル（福引｜設定）に
+// 押すと「記録を追加」「レシートを読む」「家計の設定」が上に開く（レシートは docs/kakei.md §10）。福引チャンスは家計と連動しないので、2026-10-13にその他タブへ移した。以前は＋と、その左の小さなピル（福引｜設定）に
 // 分かれていて押しづらかったので、1つにまとめて大きくした（2026-10-10）。
 // 開いている間は戻る操作で閉じる。暗い部分を押しても閉じる。
 export default function MoneyFab({
   onAdd,
   onScan,
   onSettings,
-  onLottery,
 }: {
   onAdd: () => void;
   onScan: () => void;
   onSettings: () => void;
-  onLottery: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
@@ -37,15 +35,6 @@ export default function MoneyFab({
 
       {open && (
         <div className="pointer-events-none absolute bottom-[92px] right-4 flex flex-col items-end gap-3">
-          <button
-            type="button"
-            aria-label="福引チャンス"
-            onClick={choose(onLottery)}
-            className="pointer-events-auto flex h-14 items-center gap-3 rounded-full border border-gray-200 bg-purple-50 px-[22px] text-[17px] font-bold text-purple-600 shadow-lg active:scale-95"
-          >
-            <Ticket size={24} />
-            福引チャンス
-          </button>
           <button
             type="button"
             aria-label="家計の設定"

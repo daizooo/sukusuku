@@ -13,13 +13,13 @@ export const START_TABS: StartTab[] = ['schedule', 'list', 'care', 'money', 'set
 
 export const START_TAB_LABEL: Record<StartTab, string> = {
   schedule: '予定',
-  list: 'リスト',
+  list: 'ToDo',
   care: '育児',
   money: '家計',
-  settings: '設定',
+  settings: 'その他',
 };
 
-/** start_tab の値と、画面のタブ（設定タブのidは info）。 */
+/** start_tab の値と、画面のタブ（その他タブのidは info）。 */
 export const START_TAB_TO_TAB_ID: Record<StartTab, TabId> = {
   schedule: 'schedule',
   list: 'list',

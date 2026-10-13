@@ -103,7 +103,7 @@ export default function ListView({
             <span className="text-[11px] text-gray-400">{undated.length}件</span>
           </div>
           <p className="text-[11px] text-gray-400 mb-2 px-1 leading-relaxed">
-            お子様の誕生日を設定タブで登録すると、カレンダーに表示されます。
+            お子様の誕生日をその他タブの設定で登録すると、カレンダーに表示されます。
           </p>
           <div className="space-y-2">
             {undated.map((task) => (

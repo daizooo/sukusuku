@@ -1,18 +1,31 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import NotificationSetting from '@/components/sukusuku/NotificationSetting';
-import FeedingIntervalSetting from '@/components/sukusuku/FeedingIntervalSetting';
-import TemperatureReminderSetting from '@/components/sukusuku/TemperatureReminderSetting';
-import AccountSection from '@/components/sukusuku/AccountSection';
-import FamilySection from '@/components/sukusuku/FamilySection';
-import HokatsuSetting from '@/components/sukusuku/HokatsuSetting';
+import { useState, type ReactNode } from 'react';
+import { ClipboardCheck, FileText, Settings } from 'lucide-react';
+import LotteryMoreRow from '@/components/sukusuku/living/LotteryMoreRow';
+import StockEntryRow from '@/components/sukusuku/living/StockEntryRow';
+import HokatsuScreen from '@/components/sukusuku/HokatsuScreen';
+import { useHokatsuVisible } from '@/lib/hokatsuVisibility';
 import type { FeedingSettings } from '@/lib/api/feedingSettings';
 import type { TemperatureReminderSettings } from '@/lib/api/temperatureReminderSettings';
+import ContractsScreen from './ContractsScreen';
+import LotteryScreen from './LotteryScreen';
+import MoreRow from './MoreRow';
+import SettingsScreen from './SettingsScreen';
+import StockScreen from './StockScreen';
 
-// 設定タブ。家族・通知・アカウントに絞る（docs/family-app.md §4.3）。
-// 以前の自由入力（お子様の情報・パパママ情報・緊急連絡先・カスタム項目）は
-// 「家族」（family_members・families）に置き換えた。mobile版は `mobile/app/(tabs)/info.tsx`。
+// その他タブ（docs/family-app.md §4.5）。以前の設定タブ。毎日は開かないものの入口を、上から
+// 福引チャンス・契約・防災備蓄・保活・設定の順に並べる。中身は、それぞれ別の画面で開く。
+//   - 福引チャンス: 以前は家計タブの＋ボタンの中（tabs/LotteryScreen）
+//   - 契約: 賃貸・保険などの控え（tabs/ContractsScreen。いまは入口だけ）
+//   - 防災備蓄: 以前はリストタブの下（tabs/StockScreen）
+//   - 保活: 以前は設定タブの中（HokatsuScreen）。見学が済んだら、設定で行ごと隠せる
+//   - 設定: 以前の設定タブの中身（tabs/SettingsScreen）
+// mobile版は `mobile/app/(tabs)/info.tsx`。
+//
+// 設定タブだった流れで、画面全体がスクロールしてよい（ルートの CLAUDE.md の「画面の作り方」の例外）。
+
+type Screen = 'lottery' | 'contracts' | 'stock' | 'nursery' | 'settings';
 
 interface InfoTabProps {
   familyId: string;
@@ -23,7 +36,7 @@ interface InfoTabProps {
   /** 検温のお知らせの設定。こちらも家族で共通。 */
   temperatureReminderSettings: TemperatureReminderSettings;
   onChangeTemperatureReminderSettings: (settings: TemperatureReminderSettings) => void;
-  /** 保活（見学チェック）の中身（HokatsuTab）。見学のときしか開かないので、育児タブから移した。 */
+  /** 保活（見学チェック）の中身（HokatsuTab）。保活の画面を開いたときだけ描画する。 */
   hokatsuPanel: ReactNode;
 }
 
@@ -36,29 +49,63 @@ export default function InfoTab({
   onChangeTemperatureReminderSettings,
   hokatsuPanel,
 }: InfoTabProps) {
+  // 開いている画面。null のあいだはその他タブの一覧を出す（戻る操作で一覧へ戻る）。
+  const [screen, setScreen] = useState<Screen | null>(null);
+  const [hokatsuVisible] = useHokatsuVisible();
+  const close = () => setScreen(null);
+
+  if (screen === 'lottery') return <LotteryScreen familyId={familyId} userId={userId} onClose={close} />;
+  if (screen === 'contracts') return <ContractsScreen onClose={close} />;
+  if (screen === 'stock') return <StockScreen familyId={familyId} onClose={close} />;
+  if (screen === 'nursery') return <HokatsuScreen onClose={close}>{hokatsuPanel}</HokatsuScreen>;
+  if (screen === 'settings') {
+    return (
+      <SettingsScreen
+        familyId={familyId}
+        userId={userId}
+        feedingSettings={feedingSettings}
+        onChangeFeedingSettings={onChangeFeedingSettings}
+        temperatureReminderSettings={temperatureReminderSettings}
+        onChangeTemperatureReminderSettings={onChangeTemperatureReminderSettings}
+        onClose={close}
+      />
+    );
+  }
+
   return (
     <div className="px-4 pt-3 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <div className="flex-1 overflow-y-auto">
         <div className="space-y-3 pb-6">
-          <FamilySection familyId={familyId} userId={userId} />
+          <h2 className="px-0.5 text-[21px] font-extrabold text-gray-900">その他</h2>
 
-          {/* 通知。授乳の目安・検温のお知らせも同じ枠にまとめる（docs/family-app.md §7-5） */}
-          <NotificationSetting>
-            <FeedingIntervalSetting
-              familyId={familyId}
-              settings={feedingSettings}
-              onChange={onChangeFeedingSettings}
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white divide-y divide-gray-200">
+            <LotteryMoreRow familyId={familyId} userId={userId} onOpen={() => setScreen('lottery')} />
+            <MoreRow
+              icon={<FileText size={20} className="text-teal-600" />}
+              tintClass="bg-teal-50"
+              title="契約"
+              description="賃貸・保険など"
+              badge="準備中"
+              onClick={() => setScreen('contracts')}
             />
-            <TemperatureReminderSetting
-              familyId={familyId}
-              settings={temperatureReminderSettings}
-              onChange={onChangeTemperatureReminderSettings}
+            <StockEntryRow familyId={familyId} onOpen={() => setScreen('stock')} />
+            {hokatsuVisible && (
+              <MoreRow
+                icon={<ClipboardCheck size={20} className="text-pink-500" />}
+                tintClass="bg-pink-50"
+                title="保活"
+                description="見学チェックリスト"
+                onClick={() => setScreen('nursery')}
+              />
+            )}
+            <MoreRow
+              icon={<Settings size={20} className="text-gray-700" />}
+              tintClass="bg-gray-100"
+              title="設定"
+              description="家族・通知・授乳の目安・アカウント"
+              onClick={() => setScreen('settings')}
             />
-          </NotificationSetting>
-
-          <HokatsuSetting>{hokatsuPanel}</HokatsuSetting>
-
-          <AccountSection familyId={familyId} userId={userId} />
+          </div>
         </div>
       </div>
     </div>
