@@ -1,17 +1,25 @@
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Pencil, Plus, Search, Store } from 'lucide-react-native';
+import { GripVertical, Pencil, Plus, Search, Store } from 'lucide-react-native';
 import type { MoneyStore } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
 import { normalizeName } from '@/lib/shoppingUtils';
-import { deleteMoneyStore, insertMoneyStore, renameMoneyStore, setMoneyStoreArchived } from '@/lib/api/money';
+import { reorderedPositions } from '@/lib/moneyUtils';
+import {
+  deleteMoneyStore,
+  insertMoneyStore,
+  renameMoneyStore,
+  setMoneyStoreArchived,
+  updateMoneyStorePosition,
+} from '@/lib/api/money';
+import { useDragReorder } from '@/components/list/useDragReorder';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 
 // お店の設定（docs/kakei.md §3.5）。PWA版の `src/components/sukusuku/money/StoreSettings.tsx` と同じ並び・文言。
-// 登録したお店を探す・足す・名前を直す・削除する。使わなくしてある古いお店は、また使う・削除する。ここで直すのは設定だけで、
+// 登録したお店を探す・足す・名前を直す・並べ替える（左の持ち手をつかんで動かす。リストと同じ操作）・削除する。使わなくしてある古いお店は、また使う・削除する。ここで直すのは設定だけで、
 // 記録のお店の名前は変わらない。記録でまだ無いお店の名前を入れると、自動でここに登録される。
 
 interface StoreSettingsProps {
@@ -21,7 +29,7 @@ interface StoreSettingsProps {
   onBack: () => void;
 }
 
-const byName = (a: MoneyStore, b: MoneyStore) => a.name.localeCompare(b.name, 'ja');
+const byPosition = (a: MoneyStore, b: MoneyStore) => a.position - b.position || a.name.localeCompare(b.name, 'ja');
 
 export default function StoreSettings({ familyId, stores, onStores, onBack }: StoreSettingsProps) {
   const [query, setQuery] = useState('');
@@ -30,14 +38,32 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
 
   const key = normalizeName(query.trim());
   const matches = useMemo(
-    () => stores.filter((store) => key === '' || normalizeName(store.name).includes(key)).sort(byName),
+    () => stores.filter((store) => key === '' || normalizeName(store.name).includes(key)).sort(byPosition),
     [stores, key],
   );
   const usable = matches.filter((store) => !store.archived);
   const archived = matches.filter((store) => store.archived);
 
   const failed = () => Alert.alert('保存できませんでした', 'もう一度お試しください。');
-  const put = (saved: MoneyStore) => onStores((prev) => [...prev.filter((store) => store.id !== saved.id), saved]);
+  const put = (saved: MoneyStore) => onStores((prev) => [...prev.filter((store) => store.id !== saved.id), saved].sort(byPosition));
+
+  // 指で動かしたあとの並び。使っているお店の並びを数え直し、変わったものだけ保存する。探しているあいだは動かせない。
+  const drag = useDragReorder((_sectionKey, orderedIds) => {
+    const changes = reorderedPositions(stores, orderedIds);
+    if (changes.length === 0) return;
+    onStores((prev) =>
+      prev
+        .map((store) => {
+          const hit = changes.find((change) => change.id === store.id);
+          return hit ? { ...store, position: hit.position } : store;
+        })
+        .sort(byPosition),
+    );
+    void Promise.all(changes.map((change) => updateMoneyStorePosition(supabase, change.id, change.position))).catch(() =>
+      Alert.alert('並べ替えを保存できませんでした', 'もう一度お試しください。'),
+    );
+  });
+  const canReorder = key === '' && usable.length > 1;
 
   const save = async (target: MoneyStore | null, name: string) => {
     setEditing(null);
@@ -88,7 +114,7 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
           returnKeyType="search"
         />
       </View>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEnabled={!drag.isActive}>
         <Pressable accessibilityRole="button" onPress={() => setEditing('new')} style={styles.add}>
           <Plus size={18} color={colors.money} />
           <Text style={styles.addText}>お店を足す</Text>
@@ -102,19 +128,28 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
         {stores.length > 0 && usable.length === 0 && archived.length === 0 && (
           <Text style={styles.empty}>見つかりませんでした</Text>
         )}
-        {usable.map((store) => (
-          <Pressable
-            key={store.id}
-            accessibilityRole="button"
-            accessibilityLabel={`${store.name}を編集`}
-            onPress={() => setEditing(store)}
-            style={styles.row}
-          >
-            <Store size={18} color={colors.textFaint} />
-            <Text style={[styles.name, styles.flex]}>{store.name}</Text>
-            <Pencil size={16} color={colors.textFaint} />
-          </Pressable>
-        ))}
+        {canReorder && <Text style={styles.reorderHint}>並べ替え: 左の持ち手をつかんでそのまま動かす</Text>}
+        <View {...drag.panHandlers}>
+          {usable.map((store) => (
+            <Pressable
+              key={store.id}
+              accessibilityRole="button"
+              accessibilityLabel={`${store.name}を編集`}
+              onPress={() => setEditing(store)}
+              {...drag.measureProps(store.id)}
+              style={[styles.row, drag.styleFor(store.id), drag.isDragging(store.id) && styles.lifted]}
+            >
+              {canReorder && (
+                <View accessibilityLabel={`${store.name}を並べ替え`} {...drag.gripProps('stores', usable, store.id)} style={styles.grip}>
+                  <GripVertical size={18} color={colors.borderStrong} />
+                </View>
+              )}
+              <Store size={18} color={colors.textFaint} />
+              <Text style={[styles.name, styles.flex]}>{store.name}</Text>
+              <Pencil size={16} color={colors.textFaint} />
+            </Pressable>
+          ))}
+        </View>
 
         {archived.length > 0 && (
           <>
@@ -244,6 +279,9 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   archivedRow: { opacity: 0.7 },
+  grip: { width: 28, alignSelf: 'stretch', marginLeft: -8, marginVertical: -4, alignItems: 'center', justifyContent: 'center' },
+  lifted: { opacity: 0.9, elevation: 8, backgroundColor: colors.surface },
+  reorderHint: { fontSize: 11, fontWeight: '500', color: colors.textFaint, paddingBottom: 4 },
   archivedHeader: { marginTop: 16, marginBottom: 4 },
   sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   name: { fontSize: 15, fontWeight: '500', color: colors.text },

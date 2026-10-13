@@ -783,6 +783,27 @@ export function storeChoices(
   return { registered, recent, others };
 }
 
+/**
+ * 並べ替えのあとの position（設定の固定支出・固定収入・お店。docs/kakei.md §3.3・§3.5）。
+ * orderedIds が新しい並び。その行がもともと持っていた position を小さい順に取り、新しい並びの順に割り当て直す
+ * （並べ替えに出ていない行の position は動かさない）。変わった行だけ返す。
+ */
+export function reorderedPositions(
+  rows: readonly { id: string; position: number }[],
+  orderedIds: readonly string[],
+): { id: string; position: number }[] {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const ids = orderedIds.filter((id) => byId.has(id));
+  const slots = ids.map((id) => byId.get(id)!.position).sort((a, b) => a - b);
+  // 同じ position が重なっていても、並びが決まるように 1 ずつずらす。
+  for (let index = 1; index < slots.length; index++) {
+    if (slots[index] <= slots[index - 1]) slots[index] = slots[index - 1] + 1;
+  }
+  return ids
+    .map((id, index) => ({ id, position: slots[index] }))
+    .filter((change) => change.position !== byId.get(change.id)!.position);
+}
+
 /** 前回の出金元（その種類の記録でいちばん新しいもの）。使わなくした出金元は使わない。 */
 export function lastWalletId(
   records: readonly MoneyRecord[],

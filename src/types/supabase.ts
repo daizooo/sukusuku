@@ -1763,6 +1763,7 @@ export type Database = {
           family_id: string
           id: string
           name: string
+          position: number
           updated_at: string
         }
         Insert: {
@@ -1771,6 +1772,7 @@ export type Database = {
           family_id: string
           id?: string
           name: string
+          position?: number
           updated_at?: string
         }
         Update: {
@@ -1779,6 +1781,7 @@ export type Database = {
           family_id?: string
           id?: string
           name?: string
+          position?: number
           updated_at?: string
         }
         Relationships: [

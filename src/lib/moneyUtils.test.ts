@@ -55,6 +55,7 @@ import {
   pressCalcKey,
   recentStores,
   shiftMonth,
+  reorderedPositions,
   storeChoices,
   storeKey,
   matchesStore,
@@ -386,14 +387,14 @@ assert.deepEqual(recentStores(records), ['レストラン', 'スーパー']);
 
 // お店の選択肢: 最近使ったお店を先に、続けて登録したお店の残りを使った回数の多い順に。使わなくしたお店は出さない。
 const storeList: MoneyStore[] = [
-  { id: 's1', name: 'ドラッグ', archived: false },
-  { id: 's2', name: 'スーパー', archived: false },
-  { id: 's3', name: '閉店した店', archived: true },
+  { id: 's1', name: 'ドラッグ', position: 0, archived: false },
+  { id: 's2', name: 'スーパー', position: 1, archived: false },
+  { id: 's3', name: '閉店した店', position: 2, archived: true },
 ];
 assert.deepEqual(storeChoices(storeList, records), { recent: ['レストラン', 'スーパー'], registered: ['ドラッグ'], others: [] }, '最近使ったお店と重なる登録は、登録のほうに出さない');
 assert.deepEqual(storeChoices(storeList, records, 1), { recent: ['レストラン'], registered: ['スーパー', 'ドラッグ'], others: [] }, '最近の件数を絞ると、残りは登録のほうへ（使った回数の多い順）');
 assert.deepEqual(
-  storeChoices([{ id: 's4', name: 'レストラン', archived: true }], records),
+  storeChoices([{ id: 's4', name: 'レストラン', position: 0, archived: true }], records),
   { recent: ['スーパー'], registered: [], others: [] },
   '使わなくしたお店は、記録で使っていても候補に出さない',
 );
@@ -983,3 +984,20 @@ assert.equal(yearOfMonth('2027-02'), 2027, '2027年2月は2027年');
 }
 
 console.log('moneyUtils: ok');
+
+// 並べ替えのあとの position: 持っていた position を新しい並びに割り当て直す。出ていない行は動かさない。変わった行だけ返す。
+assert.deepEqual(
+  reorderedPositions([{ id: 'a', position: 0 }, { id: 'b', position: 1 }, { id: 'c', position: 2 }], ['c', 'a', 'b']),
+  [{ id: 'c', position: 0 }, { id: 'a', position: 1 }, { id: 'b', position: 2 }],
+);
+assert.deepEqual(
+  reorderedPositions([{ id: 'a', position: 0 }, { id: 'x', position: 1 }, { id: 'b', position: 2 }], ['b', 'a']),
+  [{ id: 'b', position: 0 }, { id: 'a', position: 2 }],
+  '種類ごとの一部だけ動かしても、ほかの行の position は動かさない',
+);
+assert.deepEqual(reorderedPositions([{ id: 'a', position: 0 }, { id: 'b', position: 1 }], ['a', 'b']), [], '変わらなければ何も返さない');
+assert.deepEqual(
+  reorderedPositions([{ id: 'a', position: 0 }, { id: 'b', position: 0 }], ['b', 'a']),
+  [{ id: 'a', position: 1 }],
+  'position が重なっていても並びが決まる',
+);

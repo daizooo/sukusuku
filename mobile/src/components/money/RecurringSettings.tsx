@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type MutableRefObject } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ChevronLeft, ChevronRight, Pencil, Plus } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, GripVertical, Pencil, Plus } from 'lucide-react-native';
 import type {
   MoneyBudget,
   MoneyCategory,
@@ -28,6 +28,7 @@ import {
   recordTotal,
   recurringHistory,
   recurringScheduleLabel,
+  reorderedPositions,
   storeChoices,
   WEEK_OF_MONTH_OPTIONS,
 } from '@/lib/moneyUtils';
@@ -37,7 +38,9 @@ import {
   insertMoneyStore,
   setMoneyRecurringArchived,
   updateMoneyRecurring,
+  updateMoneyRecurringPosition,
 } from '@/lib/api/money';
+import { useDragReorder } from '@/components/list/useDragReorder';
 import CategoryPicker from '@/components/money/CategoryPicker';
 import StorePicker from '@/components/money/StorePicker';
 import { EstimateBadge, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
@@ -50,8 +53,11 @@ import { EstimateBadge, PrimaryButton, ScreenHeader } from '@/components/money/m
 // 直すのはルールだけで、もう作った記録は変わらない。
 //
 // 固定収入（給与・賞与。2026-10-11。docs/kakei.md §0.3）も同じルールで、mode が 'income' の画面。収入のルールだけを出し、
-// 入金先・振込日・見込み額の言葉にする。賞与は1回ごとに1件のルール（月・日・額）で、「同じ名前でもう1回足す」で回を増やす。
+// 入金先・振込日・見込み額の言葉にする。賞与は1回ごとに1件のルール（月・日・額）で、「複製して足す」で回を増やす。
 // 履歴は、その年の収入の記録を見込み／確定つきで年ごとに出す（見込み額の変更の版は持たない）。
+//
+// 並べ替え（左の持ち手をつかんで動かす。リストと同じ操作）は、種類（支出・振替）ごとの中で動かせる。
+// 複製は、編集の画面の「複製して足す」から。日・月・額など全部を写し、品名に「のコピー」を付けた新規の編集を開き、直して保存すると足される。
 
 interface RecurringSettingsProps {
   /** 'expense'＝固定支出（支出・振替）、'income'＝固定収入（給与・賞与）。 */
@@ -95,7 +101,7 @@ export default function RecurringSettings({
 }: RecurringSettingsProps) {
   const isIncome = mode === 'income';
   const [editing, setEditing] = useState<MoneyRecurring | 'new' | null>(null);
-  // 賞与の「もう1回」を足すときの元（月・日だけ入れ直す）。
+  // 「複製して足す」の元。日・月・額など全部を写し、品名に「のコピー」を付けて新規の編集を開く。
   const [template, setTemplate] = useState<MoneyRecurring | null>(null);
   // 編集を閉じたら、戻る操作を家計の設定へ返す（開いているあいだは RecurringEditor が入れる）。
   useEffect(() => {
@@ -104,12 +110,31 @@ export default function RecurringSettings({
   const inMode = recurring.filter((rule) => (rule.kind === 'income') === isIncome);
   const usable = inMode.filter((rule) => !rule.archived);
   const archived = inMode.filter((rule) => rule.archived);
+  // 同じ種類に2件以上あるときだけ動かせる。
+  const canReorder = (isIncome ? ['income'] : KINDS).some((kind) => usable.filter((rule) => rule.kind === kind).length > 1);
   const cards = isIncome ? [] : wallets.filter((wallet) => wallet.type === 'card' && !wallet.archived);
 
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '';
   const failed = () => Alert.alert('保存できませんでした', 'もう一度お試しください。');
   const put = (saved: MoneyRecurring) =>
     onRecurring((prev) => [...prev.filter((rule) => rule.id !== saved.id), saved].sort(byPosition));
+
+  // 指で動かしたあとの並び。同じ種類の中で数え直し、変わったものだけ保存する。
+  const drag = useDragReorder((_sectionKey, orderedIds) => {
+    const changes = reorderedPositions(recurring, orderedIds);
+    if (changes.length === 0) return;
+    onRecurring((prev) =>
+      prev
+        .map((rule) => {
+          const hit = changes.find((change) => change.id === rule.id);
+          return hit ? { ...rule, position: hit.position } : rule;
+        })
+        .sort(byPosition),
+    );
+    void Promise.all(changes.map((change) => updateMoneyRecurringPosition(supabase, change.id, change.position))).catch(() =>
+      Alert.alert('並べ替えを保存できませんでした', 'もう一度お試しください。'),
+    );
+  });
 
   const save = async (target: MoneyRecurring | null, draft: MoneyRecurringDraft, registerStore: boolean) => {
     setEditing(null);
@@ -179,7 +204,7 @@ export default function RecurringSettings({
         }}
         onSubmit={(draft, registerStore) => void save(editing === 'new' ? null : editing, draft, registerStore)}
         onDelete={editing === 'new' ? undefined : () => confirmRemove(editing)}
-        onAddSimilar={
+        onDuplicate={
           editing === 'new'
             ? undefined
             : (source) => {
@@ -195,12 +220,15 @@ export default function RecurringSettings({
   return (
     <View style={styles.screen}>
       <ScreenHeader title={isIncome ? '固定収入' : '固定支出'} icon="back" onClose={onBack} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} scrollEnabled={!drag.isActive}>
         <Text style={styles.note}>
           {isIncome
             ? '給与・賞与を登録すると、振込日に見込みの額で自動で記録します（毎朝。休日は営業日にずらします）。給与明細などを見て額を直すと確定します。賞与は1回ごとに、月と日と額を足します。'
             : '口座から落ちる固定支出を登録すると、その日に自動で記録します（毎朝。休日は営業日にずらします）。額を見込むものは「見込み」の印つきで記録し、額を直すと確定します。'}
         </Text>
+        {canReorder && (
+          <Text style={styles.reorderHint}>並べ替え: 左の持ち手をつかんでそのまま動かす</Text>
+        )}
         {usable.length === 0 && (
           <Text style={styles.empty}>
             {isIncome ? 'まだありません。給与・賞与を足してください' : 'まだありません。家賃・光熱費などを足してください'}
@@ -210,7 +238,7 @@ export default function RecurringSettings({
           const inKind = usable.filter((rule) => rule.kind === kind);
           if (inKind.length === 0) return null;
           return (
-            <View key={kind} style={styles.section}>
+            <View key={kind} {...drag.panHandlers} style={styles.section}>
               {!isIncome && <Text style={styles.sectionTitle}>{RECORD_KIND_LABEL[kind]}</Text>}
               {inKind.map((rule) => (
                 <Pressable
@@ -218,8 +246,18 @@ export default function RecurringSettings({
                   accessibilityRole="button"
                   accessibilityLabel={`${ruleTitle(rule, categories)}を編集`}
                   onPress={() => setEditing(rule)}
-                  style={styles.row}
+                  {...drag.measureProps(rule.id)}
+                  style={[styles.row, drag.styleFor(rule.id), drag.isDragging(rule.id) && styles.lifted]}
                 >
+                  {inKind.length > 1 && (
+                    <View
+                      accessibilityLabel={`${ruleTitle(rule, categories)}を並べ替え`}
+                      {...drag.gripProps(`rules-${kind}`, inKind, rule.id)}
+                      style={styles.grip}
+                    >
+                      <GripVertical size={18} color={colors.borderStrong} />
+                    </View>
+                  )}
                   <View style={styles.flex}>
                     <Text style={styles.name}>{ruleTitle(rule, categories)}</Text>
                     {ruleDetail(rule) !== '' && <Text style={styles.sub}>{ruleDetail(rule)}</Text>}
@@ -354,6 +392,12 @@ function ruleDetail(rule: MoneyRecurring): string {
     .join('・');
 }
 
+/** 複製の品名。品名があれば「◯◯のコピー」、無ければ種類（見出し）に「のコピー」を付ける。 */
+function copyName(source: MoneyRecurring, categories: MoneyCategory[]): string {
+  const name = source.name.trim();
+  return `${name !== '' ? name : ruleTitle(source, categories)}のコピー`;
+}
+
 type EditorScreen = 'form' | 'category' | 'store';
 
 function RecurringEditor({
@@ -368,12 +412,12 @@ function RecurringEditor({
   onClose,
   onSubmit,
   onDelete,
-  onAddSimilar,
+  onDuplicate,
   backRef,
 }: {
   mode: 'expense' | 'income';
   rule: MoneyRecurring | null;
-  /** 賞与の「もう1回」を足すときの元。月・日は入れ直す。 */
+  /** 「複製して足す」の元（全部を写す）。 */
   template: MoneyRecurring | null;
   wallets: MoneyWallet[];
   categories: MoneyCategory[];
@@ -383,8 +427,8 @@ function RecurringEditor({
   onClose: () => void;
   onSubmit: (draft: MoneyRecurringDraft, registerStore: boolean) => void;
   onDelete?: () => void;
-  /** 固定収入で、同じ名前・入金先でもう1回（月・日・額）を足す。 */
-  onAddSimilar?: (source: MoneyRecurring) => void;
+  /** 全部を写した新しい項目を足す（日・月・額もそのまま）。 */
+  onDuplicate?: (source: MoneyRecurring) => void;
   backRef: MutableRefObject<(() => void) | null>;
 }) {
   const isIncome = mode === 'income';
@@ -393,23 +437,22 @@ function RecurringEditor({
   useEffect(() => {
     backRef.current = () => (screen === 'form' ? onClose() : setScreen('form'));
   });
-  const [kind, setKind] = useState<MoneyRecordKind>(rule?.kind ?? (isIncome ? 'income' : 'expense'));
+  const [kind, setKind] = useState<MoneyRecordKind>(base?.kind ?? (isIncome ? 'income' : 'expense'));
   const [categoryId, setCategoryId] = useState<string | null>(base?.categoryId ?? null);
   const [walletId, setWalletId] = useState<string | null>(base?.walletId ?? null);
   const [toWalletId, setToWalletId] = useState<string | null>(base?.toWalletId ?? null);
   const [store, setStore] = useState(base?.store ?? '');
   // お店の選択で「お店に登録して使う」を選んだか（保存のときにお店の設定に登録する）。
   const [registerStore, setRegisterStore] = useState(false);
-  const [name, setName] = useState(base?.name ?? '');
-  const [day, setDay] = useState(rule ? String(rule.day) : '');
+  const [name, setName] = useState(rule ? rule.name : template ? copyName(template, categories) : '');
+  const [day, setDay] = useState(rule ? String(rule.day) : template ? String(template.day) : '');
   // 振込日を「第◯◯曜日」で決めるか（賞与など。固定収入だけ）。
   const [byWeekday, setByWeekday] = useState(base?.weekOfMonth != null);
   const [weekOfMonth, setWeekOfMonth] = useState<number | null>(base?.weekOfMonth ?? null);
   const [weekday, setWeekday] = useState<number | null>(base?.weekday ?? null);
   // 給与は休日の前の営業日に振り込まれることが多い。
   const [holiday, setHoliday] = useState<MoneyHolidayRule>(base?.holiday ?? (isIncome ? 'prev' : 'next'));
-  // 賞与の「もう1回」は、月を選び直す（空のまま）。
-  const [months, setMonths] = useState<number[] | null>(rule ? rule.months : template ? [] : null);
+  const [months, setMonths] = useState<number[] | null>((rule ?? template)?.months ?? null);
   const [amountMode, setAmountMode] = useState<MoneyRecurring['amountMode']>(base?.amountMode ?? 'estimate');
   const [amount, setAmount] = useState(base && base.amount > 0 ? String(base.amount) : '');
   const [error, setError] = useState<string | null>(null);
@@ -523,7 +566,7 @@ function RecurringEditor({
   return (
     <View style={styles.screen}>
       <ScreenHeader
-        title={`${isIncome ? '固定収入' : '固定支出'}を${rule ? '編集' : '足す'}`}
+        title={`${isIncome ? '固定収入' : '固定支出'}を${rule ? '編集' : template ? '複製して足す' : '足す'}`}
         icon="back"
         onClose={onClose}
       />
@@ -672,9 +715,9 @@ function RecurringEditor({
       </ScrollView>
       <View style={styles.footer}>
         <PrimaryButton label="保存する" onPress={submit} />
-        {isIncome && rule && onAddSimilar && (
-          <Pressable accessibilityRole="button" onPress={() => onAddSimilar(rule)} style={styles.secondary}>
-            <Text style={styles.similarText}>同じ名前でもう1回（月・日）を足す</Text>
+        {rule && onDuplicate && (
+          <Pressable accessibilityRole="button" onPress={() => onDuplicate(rule)} style={styles.secondary}>
+            <Text style={styles.similarText}>複製して足す</Text>
           </Pressable>
         )}
         {onDelete && (
@@ -719,6 +762,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   archivedRow: { opacity: 0.7 },
+  grip: { width: 28, alignSelf: 'stretch', marginLeft: -8, marginVertical: -4, alignItems: 'center', justifyContent: 'center' },
+  lifted: { opacity: 0.9, elevation: 8, backgroundColor: colors.surface },
+  reorderHint: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
   name: { fontSize: 15, fontWeight: '600', color: colors.text },
   sub: { fontSize: 12, fontWeight: '500', color: colors.textFaint, marginTop: 2 },
   add: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },

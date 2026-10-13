@@ -642,6 +642,8 @@ export interface MoneySecurityDraft {
 export interface MoneyStore {
   id: string;
   name: string;
+  /** 並び順（小さいほど上。設定「よく行くお店」で並べ替える）。 */
+  position: number;
   /** 使わなくした（選択画面に出さないが、記録には残る）。 */
   archived: boolean;
 }
