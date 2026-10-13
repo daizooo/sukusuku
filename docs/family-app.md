@@ -219,7 +219,7 @@
 | 順 | 行 | ひとこと / バッジ | 開く画面 | 以前の場所 |
 |---|---|---|---|---|
 | 1 | 福引チャンス（紫） | 「欲しいものが買ってもらえるかも…」/ 福引券 あとn回 | mobile `app/lottery.tsx`、PWA `tabs/LotteryScreen.tsx` | 家計タブの＋ボタンの中 |
-| 2 | 契約（青緑） | 「賃貸・保険など」/ 準備中 | mobile `app/contracts.tsx`、PWA `tabs/ContractsScreen.tsx` | 新規（いまは入口だけ） |
+| 2 | 契約（青緑） | 「賃貸・保険・サブスクなど」/ 更新まで n日（名称） | mobile `app/contracts.tsx`、PWA `tabs/ContractsScreen.tsx` | 新規（2026-10-13。docs/contracts.md） |
 | 3 | 防災備蓄（橙） | 「期限・不足・持ち出しバッグ」/ 要確認 n | mobile `app/stock.tsx`、PWA `tabs/StockScreen.tsx` | リストタブの下 |
 | 4 | 保活（桃） | 「見学チェックリスト」 | mobile `app/nursery.tsx`、PWA `HokatsuScreen.tsx` | 設定タブの中 |
 | 5 | 設定（灰） | 「家族・通知・授乳の目安・アカウント」 | mobile `app/settings.tsx`、PWA `tabs/SettingsScreen.tsx`（§4.3） | 設定タブそのもの |
@@ -230,7 +230,7 @@
 - 防災備蓄・福引チャンスのバッジは、画面を開くたびと、他の端末での変更（`useFamilyRefresh`）で読み直す
 - 戻る操作は、各画面からその他タブへ戻る。通知（備蓄の期限）から開いたときに戻り先が無ければ、その他タブへ
 - 画面全体のスクロールは、設定タブだった流れで許す（ルートの CLAUDE.md の例外）
-- 契約の中身（項目・DB・見せる相手・更新日の知らせ）は [contracts.md](./contracts.md) に設計した。画面は入口の行と「準備中」だけ先に置いてある
+- 契約の中身（項目・DB・見せる相手・更新日の知らせ）は [contracts.md](./contracts.md)。一覧・追加・編集は実装済みで、更新日のお知らせ（端末への通知）はこれから
 
 ## 5. 進め方（PR分割案）
 

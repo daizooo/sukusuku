@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect, router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ClipboardCheck, FileText, Settings } from 'lucide-react-native';
+import { ClipboardCheck, Settings } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
 import { readHokatsuVisible } from '@/lib/hokatsuVisibility';
 import MoreRow from '@/components/more/MoreRow';
+import ContractMoreRow from '@/components/more/ContractMoreRow';
 import LotteryMoreRow from '@/components/more/LotteryMoreRow';
 import StockMoreRow from '@/components/more/StockMoreRow';
 import VersionInfo from '@/components/info/VersionInfo';
@@ -16,7 +17,7 @@ import VersionInfo from '@/components/info/VersionInfo';
 // その他タブ（docs/family-app.md §4.5）。以前の設定タブ。毎日は開かないものの入口を、上から
 // 福引チャンス・契約・防災備蓄・保活・設定の順に並べる。中身は、それぞれ別の画面で開く。
 //   - 福引チャンス: 以前は家計タブの＋ボタンの中（app/lottery.tsx）
-//   - 契約: 賃貸・保険などの控え（app/contracts.tsx。いまは入口だけ）
+//   - 契約: 賃貸・保険・サブスクなどの控え（app/contracts.tsx。docs/contracts.md）
 //   - 防災備蓄: 以前はリストタブの下（app/stock.tsx）
 //   - 保活: 以前は設定タブの中（app/nursery.tsx）。見学が済んだら、設定で行ごと隠せる
 //   - 設定: 以前の設定タブの中身（app/settings.tsx）
@@ -76,14 +77,7 @@ export default function InfoScreen() {
         <View style={styles.group}>
           <LotteryMoreRow familyId={familyId} userId={session.user.id} />
           <View style={styles.divider} />
-          <MoreRow
-            icon={<FileText size={20} color={colors.contract} />}
-            tintSurface={colors.contractSurface}
-            title="契約"
-            description="賃貸・保険など"
-            badge="準備中"
-            onPress={() => router.push('/contracts')}
-          />
+          <ContractMoreRow familyId={familyId} />
           <View style={styles.divider} />
           <StockMoreRow familyId={familyId} />
           {hokatsuVisible && (

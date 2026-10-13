@@ -1,8 +1,11 @@
 # 契約（賃貸・保険・サブスクなどの控え）
 
 その他タブ（[family-app.md §4.5](./family-app.md)）の「契約」の中身の設計。2026-10-13。
-**状態: 設計のみ。実装はこの文書の合意後（§9 の順に PR を分ける）。** 入口と「準備中」の画面だけは入っている
-（mobile `app/contracts.tsx`、PWA `tabs/ContractsScreen.tsx`）。
+**状態: §9 の PR1（DB + 画面）を実装した（2026-10-13）。PR2（更新日のお知らせ）はこれから。**
+migration は `0096_contracts.sql`（本番DBへ適用済み）。画面は mobile `app/contracts.tsx`（部品は `components/contracts/`）、
+PWA `tabs/ContractsScreen.tsx`（部品は `tabs/ContractCard.tsx`・`modals/ContractModal.tsx`）。計算は `contractUtils.ts`
+（`npm run test:contracts`）、読み書きは `lib/api/contracts.ts`。その他タブの「契約」の行は、いちばん急ぐ更新日をバッジで添える
+（`ContractMoreRow`）。お知らせ（§6）は未実装なので、いまは一覧のバッジとその他タブの行だけで知らせる。
 
 ## 1. 何のためにあるか
 
@@ -190,9 +193,9 @@ mobile が正、PWA は同じ項目・文言（CLAUDE.md の第一優先）。
 
 ## 9. 進め方（PRの分け方）
 
-1. **DB + 画面**: migration（`contracts`・`contract_fields`・RLS・`attach_family_sync`・`my_member_id`）と、一覧・追加・編集・
+1. **DB + 画面（実装済み）**: migration（`contracts`・`contract_fields`・RLS・`attach_family_sync`・`my_member_id`）と、一覧・追加・編集・
    更新した・絞り込み・年間の目安（mobile → 同じPRで PWA）。migration は削除を含まないので、CLAUDE.md のとおり Claude が MCP で適用する
-2. **お知らせ**: `contract_deliveries`・`send-contract-reminders`・`_shared/contractReminders.ts`（テスト付き）・pg_cron・
+2. **お知らせ（これから）**: `contract_deliveries`・`send-contract-reminders`・`_shared/contractReminders.ts`（テスト付き）・pg_cron・
    `appLinks`/`sw.js` の対応。cron の登録 migration は、先頭の `cron.unschedule` が削除にあたる。本番に同名のジョブが無いことを確かめ、
    その行を外して MCP で適用する（リポジトリのファイルはそのまま。CLAUDE.md の「`drop ... if exists` …」と同じ扱い）
 3. 使ってみて足りない項目・候補を直す

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { ClipboardCheck, FileText, Settings } from 'lucide-react';
+import { ClipboardCheck, Settings } from 'lucide-react';
+import ContractMoreRow from '@/components/sukusuku/living/ContractMoreRow';
 import LotteryMoreRow from '@/components/sukusuku/living/LotteryMoreRow';
 import StockEntryRow from '@/components/sukusuku/living/StockEntryRow';
 import HokatsuScreen from '@/components/sukusuku/HokatsuScreen';
@@ -17,7 +18,7 @@ import StockScreen from './StockScreen';
 // その他タブ（docs/family-app.md §4.5）。以前の設定タブ。毎日は開かないものの入口を、上から
 // 福引チャンス・契約・防災備蓄・保活・設定の順に並べる。中身は、それぞれ別の画面で開く。
 //   - 福引チャンス: 以前は家計タブの＋ボタンの中（tabs/LotteryScreen）
-//   - 契約: 賃貸・保険などの控え（tabs/ContractsScreen。いまは入口だけ）
+//   - 契約: 賃貸・保険・サブスクなどの控え（tabs/ContractsScreen。docs/contracts.md）
 //   - 防災備蓄: 以前はリストタブの下（tabs/StockScreen）
 //   - 保活: 以前は設定タブの中（HokatsuScreen）。見学が済んだら、設定で行ごと隠せる
 //   - 設定: 以前の設定タブの中身（tabs/SettingsScreen）
@@ -55,7 +56,7 @@ export default function InfoTab({
   const close = () => setScreen(null);
 
   if (screen === 'lottery') return <LotteryScreen familyId={familyId} userId={userId} onClose={close} />;
-  if (screen === 'contracts') return <ContractsScreen onClose={close} />;
+  if (screen === 'contracts') return <ContractsScreen familyId={familyId} userId={userId} onClose={close} />;
   if (screen === 'stock') return <StockScreen familyId={familyId} onClose={close} />;
   if (screen === 'nursery') return <HokatsuScreen onClose={close}>{hokatsuPanel}</HokatsuScreen>;
   if (screen === 'settings') {
@@ -80,14 +81,7 @@ export default function InfoTab({
 
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white divide-y divide-gray-200">
             <LotteryMoreRow familyId={familyId} userId={userId} onOpen={() => setScreen('lottery')} />
-            <MoreRow
-              icon={<FileText size={20} className="text-teal-600" />}
-              tintClass="bg-teal-50"
-              title="契約"
-              description="賃貸・保険など"
-              badge="準備中"
-              onClick={() => setScreen('contracts')}
-            />
+            <ContractMoreRow familyId={familyId} onOpen={() => setScreen('contracts')} />
             <StockEntryRow familyId={familyId} onOpen={() => setScreen('stock')} />
             {hokatsuVisible && (
               <MoreRow
