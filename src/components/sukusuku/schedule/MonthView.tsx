@@ -241,7 +241,7 @@ export default function MonthView({
                           <CheckCircle2 size={isWide ? 13 : 9} className="flex-none text-gray-500" />
                         )}
                         <span
-                          className={`min-w-0 flex-1 overflow-hidden text-center font-semibold ${isWide ? 'text-ellipsis' : 'text-clip'} ${
+                          className={`min-w-0 overflow-hidden font-semibold ${task.kind === 'task' ? '' : 'flex-1 text-center'} ${isWide ? 'text-ellipsis' : 'text-clip'} ${
                             task.done ? 'line-through' : ''
                           }`}
                         >
