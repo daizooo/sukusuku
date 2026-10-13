@@ -44,7 +44,7 @@ export default function ContractCard({ contract, contractorName, lockLabel, toda
     >
       <span className="flex items-center gap-2">
         <span className={`rounded-md px-2 py-px text-[11px] font-extrabold ${KIND_CLASS[contract.kind]}`}>
-          {contract.category ? `${KIND_LABEL[contract.kind]}・${contract.category}` : KIND_LABEL[contract.kind]}
+          {KIND_LABEL[contract.kind]}
         </span>
         <span className="flex-1 min-w-0 text-[15px] font-bold text-gray-900 break-words">{contract.title}</span>
         {lockLabel && (

@@ -6,12 +6,9 @@ import type { Contract, ContractDraft, ContractKind, Member } from '@/types/app'
 import { createClient } from '@/lib/supabase/client';
 import { loadContractFields } from '@/lib/api/contracts';
 import {
-  CATEGORY_SUGGESTIONS,
   CONTRACT_KINDS,
   CYCLES,
   CYCLE_LABEL,
-  DEFAULT_TERM_MONTHS,
-  FIELD_SUGGESTIONS,
   FIELD_WARNING,
   KIND_LABEL,
   NOTIFY_DAY_OPTIONS,
@@ -23,8 +20,9 @@ import {
 import { ModalShell } from './TaskForm';
 import { Segmented } from './logModalParts';
 
-// 契約の追加・編集（docs/contracts.md §7.2）。上から 種類 → 名称 → 会社 → 小分類 → 契約者 → 開始日・更新日 →
+// 契約の追加・編集（docs/contracts.md §7.2）。上から 種類 → 名称 → 会社 → 契約者 → 開始日・更新日 →
 // 契約期間 → 金額と周期 → そのほかの項目（自由項目）→ お知らせ → メモ → 見せる相手。
+// 更新日・契約期間は空でよい（県民共済のように無い契約。お知らせは更新日があるものだけ）。
 // 編集では「更新した」（更新日を契約期間ぶん進める）と削除がある。
 // mobile版は `mobile/src/components/contracts/ContractSheet.tsx` と同じ項目・同じ文言。
 
@@ -37,7 +35,6 @@ const MEMBER_DOT: Record<Member['color'], string> = {
 
 const toDraft = (contract: Contract): ContractDraft => ({
   kind: contract.kind,
-  category: contract.category,
   title: contract.title,
   company: contract.company,
   contractorId: contract.contractorId,
@@ -124,17 +121,6 @@ export default function ContractModal({
 
   const update = (patch: Partial<ContractDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
 
-  const changeKind = (kind: ContractKind) => {
-    // 新規のあいだだけ、種類に合わせて契約期間の初期値を入れる。
-    if (!contract) {
-      const term = DEFAULT_TERM_MONTHS[kind];
-      setTermText(term === null ? '' : String(term));
-      update({ kind, category: '', termMonths: term });
-    } else {
-      update({ kind, category: '' });
-    }
-  };
-
   const toggleNotifyDay = (day: number) =>
     update({
       notifyDays: draft.notifyDays.includes(day)
@@ -176,7 +162,6 @@ export default function ContractModal({
 
   const termMonths = parseCount(termText);
   const canRenew = !!contract && !!onRenew && draft.renewsOn !== null && termMonths !== null;
-  const unused = FIELD_SUGGESTIONS[draft.kind].filter((label) => !draft.fields.some((f) => f.label === label));
 
   return (
     <ModalShell
@@ -206,7 +191,7 @@ export default function ContractModal({
           <Segmented
             options={CONTRACT_KINDS.map((kind) => ({ value: kind, label: KIND_LABEL[kind] }))}
             value={draft.kind}
-            onChange={changeKind}
+            onChange={(kind: ContractKind) => update({ kind })}
           />
         </div>
 
@@ -229,30 +214,6 @@ export default function ContractModal({
             placeholder="例: 管理会社・保険会社・サービス名"
           />
         </label>
-
-        {CATEGORY_SUGGESTIONS[draft.kind].length > 0 && (
-          <div>
-            <label className="block">
-              <span className={labelClass}>小分類</span>
-              <input
-                className={inputClass}
-                value={draft.category}
-                onChange={(event) => update({ category: event.target.value })}
-                placeholder="例: 自動車"
-              />
-            </label>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {CATEGORY_SUGGESTIONS[draft.kind].map((category) => (
-                <Chip
-                  key={category}
-                  label={category}
-                  selected={draft.category === category}
-                  onClick={() => update({ category: draft.category === category ? '' : category })}
-                />
-              ))}
-            </div>
-          </div>
-        )}
 
         <div>
           <span className={labelClass}>契約者</span>
@@ -290,7 +251,7 @@ export default function ContractModal({
           </label>
         </div>
         <p className="-mt-2 text-[11px] text-gray-400">
-          更新日は、満了日・次の請求日でも構いません。空にするとお知らせは出ません。
+          更新日は、満了日・次の請求日でも構いません。更新日や期間のない契約は空のままにしてください（お知らせは出ません）。
         </p>
 
         <div className="flex items-end gap-3">
@@ -367,16 +328,6 @@ export default function ContractModal({
             </div>
           ))}
           <div className="flex flex-wrap gap-1.5">
-            {unused.map((label) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => addField(label)}
-                className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-[11px] font-bold text-teal-700 hover:bg-teal-100 transition"
-              >
-                ＋ {label}
-              </button>
-            ))}
             <button
               type="button"
               onClick={() => addField()}
@@ -391,17 +342,25 @@ export default function ContractModal({
 
         <div>
           <span className={labelClass}>お知らせ（更新日の何日前）</span>
-          <div className="flex flex-wrap gap-1.5">
-            {NOTIFY_DAY_OPTIONS.map((day) => (
-              <Chip
-                key={day}
-                label={`${day}日前`}
-                selected={draft.notifyDays.includes(day)}
-                onClick={() => toggleNotifyDay(day)}
-              />
-            ))}
-          </div>
-          {draft.notifyDays.length === 0 && <p className="mt-1 text-[11px] text-gray-400">お知らせは出しません。</p>}
+          {draft.renewsOn === null ? (
+            <p className="text-[11px] text-gray-400">更新日を入れると、お知らせの日数を選べます。</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-1.5">
+                {NOTIFY_DAY_OPTIONS.map((day) => (
+                  <Chip
+                    key={day}
+                    label={`${day}日前`}
+                    selected={draft.notifyDays.includes(day)}
+                    onClick={() => toggleNotifyDay(day)}
+                  />
+                ))}
+              </div>
+              {draft.notifyDays.length === 0 && (
+                <p className="mt-1 text-[11px] text-gray-400">お知らせは出しません。</p>
+              )}
+            </>
+          )}
         </div>
 
         <label className="block">

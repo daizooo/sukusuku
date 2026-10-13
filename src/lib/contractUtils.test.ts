@@ -72,8 +72,13 @@ assert.deepEqual(titles, ['A', 'B', 'C', 'D']);
 // 入力: 名称・見せる相手・金額と周期のセット・契約期間
 const draft = emptyContractDraft('member-1');
 assert.deepEqual(draft.visibleMemberIds, ['member-1']);
+// 県民共済のように更新日も契約期間も無い契約でも保存できる。お知らせは既定が 30・7・1 日前
+assert.equal(draft.renewsOn, null);
+assert.equal(draft.termMonths, null);
+assert.deepEqual(draft.notifyDays, [30, 7, 1]);
 assert.equal(draftError(draft), '名称を入力してください');
 assert.equal(draftError({ ...draft, title: '賃貸' }), null);
+assert.equal(draftError({ ...draft, title: '県民共済', kind: 'insurance' }), null, '更新日・期間なし');
 assert.equal(draftError({ ...draft, title: '賃貸', visibleMemberIds: [] }), '見せる相手を1人以上選んでください');
 assert.equal(draftError({ ...draft, title: '賃貸', amount: 100 }), '金額と周期はセットで入力してください');
 assert.equal(draftError({ ...draft, title: '賃貸', termMonths: 0 }), '契約期間は1か月以上にしてください');

@@ -50,9 +50,7 @@ export default function ContractCard({
     >
       <View style={styles.top}>
         <View style={[styles.kind, { backgroundColor: kind.surface }]}>
-          <Text style={[styles.kindText, { color: kind.text }]}>
-            {contract.category ? `${KIND_LABEL[contract.kind]}・${contract.category}` : KIND_LABEL[contract.kind]}
-          </Text>
+          <Text style={[styles.kindText, { color: kind.text }]}>{KIND_LABEL[contract.kind]}</Text>
         </View>
         <Text style={styles.title}>{contract.title}</Text>
         {lockLabel && (

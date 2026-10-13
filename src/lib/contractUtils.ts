@@ -21,33 +21,9 @@ export const CYCLE_LABEL: Record<ContractAmountCycle, string> = {
 
 export const CYCLES: ContractAmountCycle[] = ['monthly', 'yearly', 'once'];
 
-/** 更新日の何日前にお知らせするかの選択肢（既定は 60・30・7）。 */
-export const NOTIFY_DAY_OPTIONS = [60, 30, 14, 7, 3];
-export const DEFAULT_NOTIFY_DAYS = [60, 30, 7];
-
-/** 種類ごとの、契約期間（月数）の初期値。 */
-export const DEFAULT_TERM_MONTHS: Record<ContractKind, number | null> = {
-  rent: 24,
-  insurance: 12,
-  subscription: 1,
-  other: null,
-};
-
-/** 小分類の候補（保険だけ）。 */
-export const CATEGORY_SUGGESTIONS: Record<ContractKind, string[]> = {
-  rent: [],
-  insurance: ['自動車', '医療', '就労不能', '火災', '生命'],
-  subscription: [],
-  other: [],
-};
-
-/** 自由項目のラベルの候補。押すとその行が足される。強制ではなく、書き換えてよい。 */
-export const FIELD_SUGGESTIONS: Record<ContractKind, string[]> = {
-  rent: ['住所', '管理会社の電話', '家賃', '共益費', '敷金', '更新料', '保証会社'],
-  insurance: ['車', '等級', '補償の内容', '受付の電話', '保障の内容', '入院日額', '免責期間'],
-  subscription: ['プラン', '次回の請求日', '解約のしかた', 'ログインに使うメール'],
-  other: ['連絡先', '担当者', 'URL'],
-};
+/** 更新日の何日前にお知らせするかの選択肢（既定は 30・7・1。DB の notify_days の既定と同じ）。 */
+export const NOTIFY_DAY_OPTIONS = [60, 30, 14, 7, 3, 1];
+export const DEFAULT_NOTIFY_DAYS = [30, 7, 1];
 
 /** 自由項目の入力欄の下に常に出す注意書き。持たない方針を、案内で守る。 */
 export const FIELD_WARNING = '証券番号・口座・カード番号・パスワードは入れないでください';
@@ -168,13 +144,12 @@ export const amountText = (contract: Pick<Contract, 'amount' | 'amountCycle'>): 
 /** 空の入力。見せる相手は作った本人のメンバーだけ（ToDoの「自分だけ」と同じ）。 */
 export const emptyContractDraft = (myMemberId: string | null): ContractDraft => ({
   kind: 'rent',
-  category: '',
   title: '',
   company: '',
   contractorId: null,
   startedOn: null,
   renewsOn: null,
-  termMonths: DEFAULT_TERM_MONTHS.rent,
+  termMonths: null,
   amount: null,
   amountCycle: null,
   notifyDays: DEFAULT_NOTIFY_DAYS,

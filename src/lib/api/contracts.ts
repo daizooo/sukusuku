@@ -23,7 +23,6 @@ const toCycle = (value: string | null): ContractAmountCycle | null =>
 const rowToContract = (row: ContractRow): Contract => ({
   id: row.id,
   kind: toKind(row.kind),
-  category: row.category,
   title: row.title,
   company: row.company,
   contractorId: row.contractor_id,
@@ -40,7 +39,6 @@ const rowToContract = (row: ContractRow): Contract => ({
 
 const draftToRow = (draft: ContractDraft) => ({
   kind: draft.kind,
-  category: draft.category.trim(),
   title: draft.title.trim(),
   company: draft.company.trim(),
   contractor_id: draft.contractorId,
