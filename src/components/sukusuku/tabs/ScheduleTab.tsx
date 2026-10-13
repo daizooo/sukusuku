@@ -233,9 +233,9 @@ export default function ScheduleTab({
         type="button"
         aria-label="予定を追加"
         onClick={() => onAddTask(selectedDate)}
-        className="absolute bottom-4 right-4 z-10 flex h-16 w-16 items-center justify-center rounded-full bg-pink-500 text-white shadow-lg transition-all hover:bg-pink-600 active:scale-95"
+        className="absolute bottom-4 right-4 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-pink-500 text-white shadow-lg transition-all hover:bg-pink-600 active:scale-95"
       >
-        <Plus size={32} />
+        <Plus size={28} />
       </button>
     </div>
   );

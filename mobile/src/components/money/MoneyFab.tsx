@@ -7,7 +7,7 @@ import { colors } from '@/lib/theme';
 /**
  * 家計タブ右下の、1つの大きな丸いボタン（docs/kakei.md §2）。
  * 押すと「記録を追加」「レシートを読む」「家計の設定」が上に開く（レシートは docs/kakei.md §10）。
- * 以前は＋と、その左の小さなピル（福引｜設定）に分かれていて押しづらかったので、1つにまとめて大きくした（2026-10-10）。
+ * 以前は＋と、その左の小さなピル（福引｜設定）に分かれていて押しづらかったので、1つにまとめて大きくした（2026-10-10）。大きすぎたので64→56に小さくした（2026-10-13）。
  * 福引チャンスは家計と連動していないので、2026-10-13にその他タブへ移した。
  * 開いている間は戻る操作で閉じる。暗い部分を押しても閉じる。
  */
@@ -67,7 +67,7 @@ export default function MoneyFab({
             disabled={settingsDisabled}
             style={[styles.item, settingsDisabled && styles.itemDisabled]}
           >
-            <Settings size={24} color={colors.textMuted} />
+            <Settings size={22} color={colors.textMuted} />
             <Text style={[styles.itemText, { color: colors.text }]}>家計の設定</Text>
           </Pressable>
           <Pressable
@@ -77,7 +77,7 @@ export default function MoneyFab({
             disabled={addDisabled}
             style={[styles.item, addDisabled && styles.itemDisabled]}
           >
-            <Camera size={24} color={colors.money} />
+            <Camera size={22} color={colors.money} />
             <Text style={[styles.itemText, { color: colors.text }]}>レシートを読む</Text>
           </Pressable>
           <Pressable
@@ -87,7 +87,7 @@ export default function MoneyFab({
             disabled={addDisabled}
             style={[styles.item, styles.itemAdd, addDisabled && styles.itemDisabled]}
           >
-            <Plus size={24} color={colors.primaryText} />
+            <Plus size={22} color={colors.primaryText} />
             <Text style={[styles.itemText, { color: colors.primaryText }]}>記録を追加</Text>
           </Pressable>
         </View>
@@ -100,13 +100,13 @@ export default function MoneyFab({
         style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
       >
         {/* 開いている間は45度回して「×」にする。 */}
-        <Plus size={32} color={colors.primaryText} style={open ? styles.rotated : undefined} />
+        <Plus size={28} color={colors.primaryText} style={open ? styles.rotated : undefined} />
       </Pressable>
     </View>
   );
 }
 
-const FAB = 64;
+const FAB = 56;
 
 const styles = StyleSheet.create({
   layer: { ...StyleSheet.absoluteFillObject },
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
   },
   fabPressed: { opacity: 0.85 },
   rotated: { transform: [{ rotate: '45deg' }] },
-  // ボタンの上（下の余白16 + ボタン64 + すき間12）から、右にそろえて積む。
+  // ボタンの上（下の余白16 + ボタン56 + すき間12）から、右にそろえて積む。
   menu: {
     position: 'absolute',
     right: 16,
@@ -134,12 +134,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   item: {
-    height: 56,
+    height: 48,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 22,
-    borderRadius: 28,
+    gap: 10,
+    paddingHorizontal: 18,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -147,5 +147,5 @@ const styles = StyleSheet.create({
   },
   itemAdd: { backgroundColor: colors.money, borderColor: colors.money },
   itemDisabled: { opacity: 0.4 },
-  itemText: { fontSize: 17, fontWeight: '700' },
+  itemText: { fontSize: 15, fontWeight: '700' },
 });

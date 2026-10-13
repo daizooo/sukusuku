@@ -585,7 +585,7 @@ export default function ScheduleScreen() {
         onPress={() => openAddTaskModal(selectedDate)}
         style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
       >
-        <Plus size={32} color={colors.primaryText} />
+        <Plus size={28} color={colors.primaryText} />
       </Pressable>
 
       <AddTaskModal
@@ -619,9 +619,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     bottom: 16,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary,
