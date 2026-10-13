@@ -33,7 +33,7 @@ interface MonthViewProps {
 
 // 1マスに出す予定の数の上限（mobile版と同じ）。これを超えたぶんは「他n件」にまとめる。
 const CHIPS = 4;
-// これより広いグリッドでは、予定の時刻と週番号も出す（Googleカレンダーの広い画面と同じ）。
+// これより広いグリッドでは、予定の帯を少し大きくする（時刻・週番号は出さない。mobile版と同じ）。
 const WIDE_GRID_PX = 640;
 
 // マスの高さは画面と週の数で変わるので、上の件数が入らないときは件数を減らして
@@ -60,13 +60,6 @@ const chipsThatFit = (total: number, room: number, chipHeight: number): number =
   return 0;
 };
 
-/** ISO 8601 の週番号（月曜始まり。その週の木曜が、その年の何週目に入るかで数える）。 */
-const isoWeekNumber = (date: Date): number => {
-  const thursday = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 3 - ((date.getDay() + 6) % 7));
-  const dayOfYear = Math.round((thursday.getTime() - new Date(thursday.getFullYear(), 0, 1).getTime()) / 86400000);
-  return Math.floor(dayOfYear / 7) + 1;
-};
-
 /** 要素の大きさを追う。最初の計測が済むまでは null。 */
 const useElementSize = () => {
   const ref = useRef<HTMLDivElement>(null);
@@ -87,10 +80,10 @@ const useElementSize = () => {
 /**
  * 月グリッド。Googleカレンダーの月表示にならい、予定は1行ずつ色付きの帯にして積む
  * （mobile版の MonthView と同じ）:
- * - 予定: 主体の色の帯（淡い地に濃い文字。広い画面では時刻も）
+ * - 予定: 主体の色の帯（淡い地に濃い文字）
  * - タスク: 灰の帯に灰のチェックの丸（docs/calendar.md §1）
  * - 完了: 薄い灰の帯に取り消し線
- * 曜日は1週目のマスの頭に出し、月の初日も他の日と同じく日付の数字だけ（月は見出しに出ている）。広い画面では左に週番号を出す。
+ * 曜日は1週目のマスの頭に出し、月の初日も他の日と同じく日付の数字だけ（月は見出しに出ている）。
  * 日曜・祝日は赤、土曜は青（曜日の文字も同じ）。今日だけ青い丸に白、前後の月の日は薄い灰。
  * 育児記録はここには出さない（月表示は予定を見渡すための面。記録は日をタップした先で見る）。
  *
@@ -144,12 +137,6 @@ export default function MonthView({
       >
         {weeks.map((week, w) => (
           <div key={w} className="min-h-0 min-w-0 flex border-b border-gray-100 last:border-b-0">
-            {isWide && (
-              // 週番号は月曜の日で数える（週は日曜始まりなので2日目）。
-              <div className="flex-none w-7 bg-gray-50 border-r border-gray-100 pt-5 text-center text-[10px] font-bold text-gray-400">
-                {isoWeekNumber(week[1])}
-              </div>
-            )}
             {week.map((date, columnIndex) => {
               const dayTasks = tasksOnDate(tasks, date);
               const isToday = isSameDay(date, today);
@@ -252,11 +239,6 @@ export default function MonthView({
                       >
                         {task.kind === 'task' && (
                           <CheckCircle2 size={isWide ? 13 : 9} className="flex-none text-gray-500" />
-                        )}
-                        {isWide && task.startTime && (
-                          <span className={`flex-none font-medium ${task.done ? 'line-through' : ''}`}>
-                            {task.startTime}
-                          </span>
                         )}
                         <span
                           className={`min-w-0 overflow-hidden font-semibold ${isWide ? 'text-ellipsis' : 'text-clip'} ${
