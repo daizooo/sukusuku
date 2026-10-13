@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import type { DynamicTask } from '@/types/app';
-import { getTaskDotColor } from '@/lib/uiUtils';
+import { getTaskTone } from '@/lib/uiUtils';
 import {
   WEEKDAY_LABELS,
   addDays,
@@ -42,11 +42,10 @@ const WIDE_GRID_PX = 640;
 const CELL_CHROME = 9; // マスの上下の余白と枠
 const WEEKDAY_HEIGHT = 12; // 1週目のマスの頭の曜日
 const DATE_HEIGHT = 22; // 日付の丸（下の余白を含む）
-const LABEL_HEIGHT = 10; // 祝日・節目の行
-const CHIP_HEIGHT_NARROW = 14; // 予定1行
+const CHIP_HEIGHT_NARROW = 15; // 予定1行（帯）
 const CHIP_HEIGHT_WIDE = 18;
 const MORE_HEIGHT = 12;
-const CHIP_GAP = 1;
+const CHIP_GAP = 2;
 
 /** 予定が total 件あるマスで、予定へ回せる高さ room に何件のチップを出せるか。 */
 const chipsThatFit = (total: number, room: number, chipHeight: number): number => {
@@ -85,12 +84,13 @@ const useElementSize = () => {
 };
 
 /**
- * 月グリッド。Googleカレンダーの月表示にならい、予定は1行ずつ「印＋タイトル」で積む
+ * 月グリッド。Googleカレンダーの月表示にならい、予定は1行ずつ色付きの帯にして積む
  * （mobile版の MonthView と同じ）:
- * - 予定: 主体の色の点（広い画面では時刻も）
- * - タスク: 灰のチェックの丸（文字も灰。docs/calendar.md §1）
- * - 完了: 薄い灰の取り消し線
+ * - 予定: 主体の色の帯（淡い地に濃い文字。広い画面では時刻も）
+ * - タスク: 灰の帯に灰のチェックの丸（docs/calendar.md §1）
+ * - 完了: 薄い灰の帯に取り消し線
  * 曜日は1週目のマスの頭に出し、月の初日は「10月1日」のように月も付ける。広い画面では左に週番号を出す。
+ * 祝日・節目は日付と同じ行の右端にバッジで出す。
  * 育児記録はここには出さない（月表示は予定を見渡すための面。記録は日をタップした先で見る）。
  *
  * 高さは親から与えられたぶんを週の数で等分する。画面全体をスクロールさせないため、
@@ -152,7 +152,8 @@ export default function MonthView({
               const isOtherMonth = date.getMonth() !== monthIndex;
               const holiday = getHolidayName(date);
               const milestone = getMilestoneLabel(birthDate, date);
-              const hasLabel = !isOtherMonth && (holiday !== null || milestone !== null);
+              // 祝日と節目が重なる日は祝日を出す。日付と同じ1行に収めるため1つだけにする。
+              const badge = isOtherMonth ? null : (holiday ?? milestone);
               const shownChips =
                 rowHeight === null
                   ? CHIPS
@@ -162,7 +163,6 @@ export default function MonthView({
                         CELL_CHROME -
                         (w === 0 ? WEEKDAY_HEIGHT : 0) -
                         DATE_HEIGHT -
-                        (hasLabel ? LABEL_HEIGHT : 0) -
                         CHIP_GAP,
                       chipHeight,
                     );
@@ -190,7 +190,7 @@ export default function MonthView({
                       {WEEKDAY_LABELS[columnIndex]}
                     </p>
                   )}
-                  <div className="flex items-center justify-center">
+                  <div className="flex items-center justify-between gap-0.5">
                     <button
                       type="button"
                       aria-label={`${date.getMonth() + 1}月${date.getDate()}日の予定を見る`}
@@ -206,20 +206,19 @@ export default function MonthView({
                     >
                       {date.getDate() === 1 ? `${date.getMonth() + 1}月1日` : date.getDate()}
                     </button>
+                    {badge !== null && (
+                      // 日付の右に寄せ、足りないぶんは切る（日付を優先する）。
+                      <span
+                        className={`min-w-0 flex-initial overflow-hidden whitespace-nowrap rounded px-0.5 text-[8px] leading-[11px] font-bold ${
+                          holiday ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'
+                        }`}
+                      >
+                        {badge}
+                      </span>
+                    )}
                   </div>
 
-                  {/* 祝日と節目が重なる日は祝日を出す。1マスの高さに収めるため1行だけにする。 */}
-                  {hasLabel && (
-                    <p
-                      className={`text-[8px] leading-tight text-center truncate ${
-                        holiday ? 'text-red-500' : 'text-amber-600'
-                      }`}
-                    >
-                      {holiday ?? milestone}
-                    </p>
-                  )}
-
-                  <div className="mt-px space-y-px">
+                  <div className="mt-0.5 space-y-0.5">
                     {dayTasks.slice(0, shownChips).map((task) => (
                       <button
                         key={task.occurrenceKey}
@@ -227,29 +226,23 @@ export default function MonthView({
                           e.stopPropagation();
                           onOpenTask(task);
                         }}
-                        // カーソルを指の形にし、合わせる・押している間は地の色を付けて、触った感を出す。
+                        // カーソルを指の形にし、合わせる・押している間は帯を薄くして、触った感を出す。
                         // （空きのマスは逆に、カーソルも色も変えない）
-                        className={`w-full flex items-center gap-0.5 md:gap-1 rounded px-px md:px-1 text-left whitespace-nowrap overflow-hidden cursor-pointer transition hover:bg-gray-100 active:bg-gray-200 ${
-                          isWide ? 'h-[18px] text-xs' : 'h-3.5 text-[9px]'
-                        } ${isOtherMonth ? 'opacity-50' : ''}`}
+                        className={`w-full flex items-center gap-0.5 md:gap-1 rounded px-[3px] md:px-1 text-left whitespace-nowrap overflow-hidden cursor-pointer transition hover:opacity-80 active:opacity-60 ${
+                          task.done ? 'bg-gray-100 text-gray-400' : getTaskTone(task)
+                        } ${isWide ? 'h-[18px] text-xs' : 'h-[15px] text-[9px]'} ${isOtherMonth ? 'opacity-50' : ''}`}
                       >
-                        {task.kind === 'task' ? (
-                          <CheckCircle2 size={isWide ? 13 : 9} className="flex-none text-gray-400" />
-                        ) : (
-                          <span
-                            className={`flex-none rounded-full ${isWide ? 'w-2 h-2' : 'w-[5px] h-[5px]'} ${
-                              task.done ? 'bg-gray-300' : getTaskDotColor(task)
-                            }`}
-                          />
+                        {task.kind === 'task' && (
+                          <CheckCircle2 size={isWide ? 13 : 9} className="flex-none text-gray-500" />
                         )}
                         {isWide && task.startTime && (
-                          <span className={`flex-none font-medium ${task.done ? 'text-gray-400 line-through' : 'text-gray-500'}`}>
+                          <span className={`flex-none font-medium ${task.done ? 'line-through' : ''}`}>
                             {task.startTime}
                           </span>
                         )}
                         <span
-                          className={`min-w-0 overflow-hidden font-medium ${isWide ? 'text-ellipsis' : 'text-clip'} ${
-                            task.done ? 'text-gray-400 line-through' : task.kind === 'task' ? 'text-gray-500' : 'text-gray-900'
+                          className={`min-w-0 overflow-hidden font-semibold ${isWide ? 'text-ellipsis' : 'text-clip'} ${
+                            task.done ? 'line-through' : ''
                           }`}
                         >
                           {task.title}

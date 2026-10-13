@@ -17,11 +17,12 @@ import { getTaskTone } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 
 // 月グリッド。Web版の `src/components/sukusuku/schedule/MonthView.tsx` を置き換えたもの。
-// Googleカレンダーの月表示にならい、予定は1行ずつ「印＋タイトル」で積む:
-// - 予定: 主体の色の点
-// - タスク: 灰のチェックの丸（文字も灰。docs/calendar.md §1）
-// - 完了: 薄い灰の取り消し線
+// Googleカレンダーの月表示にならい、予定は1行ずつ色付きの帯にして積む:
+// - 予定: 主体の色の帯（淡い地に濃い文字）
+// - タスク: 灰の帯に灰のチェックの丸（docs/calendar.md §1）
+// - 完了: 薄い灰の帯に取り消し線
 // 曜日は1週目のマスの頭に出し、月の初日は「10月1日」のように月も付ける。
+// 祝日・節目は日付と同じ行の右端にバッジで出す。
 // 育児記録はここには出さない（月表示は予定を見渡すための面。記録は日をタップした先で見る）。
 //
 // 押したところで動きが分かれる（Googleカレンダーと同じ）:
@@ -57,10 +58,9 @@ const CHIPS = 4;
 const CELL_CHROME = 6; // マスの上下の余白と枠
 const WEEKDAY_HEIGHT = 12; // 1週目のマスの頭の曜日
 const DATE_HEIGHT = 18; // 日付の丸
-const LABEL_HEIGHT = 11; // 祝日・節目の行
-const CHIP_HEIGHT = 14; // 予定1行
+const CHIP_HEIGHT = 15; // 予定1行（帯）
 const MORE_HEIGHT = 12;
-const CHIP_GAP = 1;
+const CHIP_GAP = 2;
 
 /** 予定が total 件あるマスで、予定へ回せる高さ room に何件出せるか。 */
 const chipsThatFit = (total: number, room: number): number => {
@@ -112,7 +112,8 @@ export default function MonthView({
               const isOtherMonth = date.getMonth() !== monthIndex;
               const holiday = getHolidayName(date);
               const milestone = getMilestoneLabel(birthDate, date);
-              const hasLabel = !isOtherMonth && (holiday !== null || milestone !== null);
+              // 祝日と節目が重なる日は祝日を出す。日付と同じ1行に収めるため1つだけにする。
+              const badge = isOtherMonth ? null : (holiday ?? milestone);
               const shownChips =
                 rowHeight === null
                   ? CHIPS
@@ -122,7 +123,6 @@ export default function MonthView({
                         CELL_CHROME -
                         (w === 0 ? WEEKDAY_HEIGHT : 0) -
                         DATE_HEIGHT -
-                        (hasLabel ? LABEL_HEIGHT : 0) -
                         CHIP_GAP,
                     );
 
@@ -161,17 +161,16 @@ export default function MonthView({
                         {date.getDate() === 1 ? `${date.getMonth() + 1}月1日` : date.getDate()}
                       </Text>
                     </Pressable>
+                    {badge !== null && (
+                      <Text
+                        numberOfLines={1}
+                        ellipsizeMode="clip"
+                        style={[styles.badge, holiday !== null ? styles.badgeHoliday : styles.badgeMilestone]}
+                      >
+                        {badge}
+                      </Text>
+                    )}
                   </View>
-
-                  {/* 祝日と節目が重なる日は祝日を出す。1マスの高さに収めるため1行だけにする。 */}
-                  {hasLabel && (
-                    <Text
-                      numberOfLines={1}
-                      style={[styles.milestone, holiday !== null && styles.holidayLabel]}
-                    >
-                      {holiday ?? milestone}
-                    </Text>
-                  )}
 
                   <View style={styles.chips}>
                     {dayTasks.slice(0, shownChips).map((task) => (
@@ -179,29 +178,23 @@ export default function MonthView({
                         key={task.occurrenceKey}
                         accessibilityRole="button"
                         onPress={() => onOpenTask(task)}
-                        // 触れている間は地の色を付けて、触った感を出す。
+                        // 触れている間は帯を少し薄くして、触った感を出す。
                         style={({ pressed }) => [
                           styles.chip,
+                          {
+                            backgroundColor: task.done ? colors.neutralSurface : getTaskTone(task).background,
+                          },
                           pressed && styles.chipPressed,
                           isOtherMonth && styles.chipOtherMonth,
                         ]}
                       >
-                        {task.kind === 'task' ? (
-                          <CheckCircle2 size={9} color={colors.textFaint} />
-                        ) : (
-                          <View
-                            style={[
-                              styles.dot,
-                              { backgroundColor: task.done ? colors.borderStrong : getTaskTone(task).text },
-                            ]}
-                          />
-                        )}
+                        {task.kind === 'task' && <CheckCircle2 size={9} color={colors.textMuted} />}
                         <Text
                           numberOfLines={1}
                           ellipsizeMode="clip"
                           style={[
                             styles.chipText,
-                            task.kind === 'task' && styles.chipTextTask,
+                            { color: getTaskTone(task).text },
                             task.done && styles.chipTextDone,
                           ]}
                         >
@@ -257,7 +250,7 @@ const styles = StyleSheet.create({
   },
   cellLastColumn: { borderRightColor: 'transparent' },
   cellSelected: { backgroundColor: colors.selectedSurface, borderColor: colors.selectedRing },
-  dateRow: { alignItems: 'center' },
+  dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 2 },
   dateBubble: {
     minWidth: DATE_HEIGHT,
     paddingHorizontal: 3,
@@ -272,8 +265,18 @@ const styles = StyleSheet.create({
   dateText: { fontSize: 11, color: colors.text, fontWeight: '700', fontVariant: ['tabular-nums'] },
   dateTextToday: { color: colors.primaryText, fontWeight: '700' },
   dateTextOtherMonth: { color: colors.textFaint },
-  milestone: { fontSize: 8, textAlign: 'center', color: colors.milestone, fontWeight: '500' },
-  holidayLabel: { color: colors.sunday },
+  // 祝日・節目のバッジ。日付の右に寄せ、足りないぶんは切る（日付を優先する）。
+  badge: {
+    flexShrink: 1,
+    borderRadius: 3,
+    paddingHorizontal: 2,
+    fontSize: 8,
+    lineHeight: 11,
+    fontWeight: '700',
+    overflow: 'hidden',
+  },
+  badgeHoliday: { color: colors.holidayText, backgroundColor: colors.holidaySurface },
+  badgeMilestone: { color: colors.milestoneText, backgroundColor: colors.milestoneSurface },
   chips: { marginTop: CHIP_GAP, gap: CHIP_GAP },
   chip: {
     height: CHIP_HEIGHT,
@@ -281,13 +284,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     borderRadius: 3,
-    paddingHorizontal: 1,
+    paddingHorizontal: 3,
   },
-  chipPressed: { backgroundColor: colors.neutralSurface },
+  chipPressed: { opacity: 0.7 },
   chipOtherMonth: { opacity: 0.5 },
-  dot: { width: 5, height: 5, borderRadius: 999 },
-  chipText: { flex: 1, fontSize: 9, fontWeight: '500', color: colors.text },
-  chipTextTask: { color: colors.textMuted },
+  chipText: { flex: 1, fontSize: 9, fontWeight: '600' },
   chipTextDone: { color: colors.textFaint, textDecorationLine: 'line-through' },
   more: { fontSize: 9, color: colors.textMuted, paddingHorizontal: 2, fontWeight: '700' },
 });
