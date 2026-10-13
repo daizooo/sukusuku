@@ -449,7 +449,7 @@ assert.equal(year.months[0].recorded, false);
 assert.equal(year.total.livingDiff, september.livingDiff + august.livingDiff, '記録の無い月の予算は差に入れない');
 assert.equal(year.total.balance, year.months.reduce((sum, row) => sum + row.balance, 0));
 assert.equal(year.total.balance, year.total.income - year.total.living, '年の収支も 収入 − 支出');
-// 特別費だけの月も、普通の記録のある月として数える（特別費は別枠にしない）
+// カテゴリだけの月も、普通の記録のある月として数える
 const specialOnly = buildYearSummary(
   [record('s1', { occurredOn: '2026-07-10', items: [item({ amount: 30000, categoryId: 'tax' })] })],
   categories,
@@ -462,6 +462,25 @@ assert.equal(specialOnly.recordedMonths, 1);
 assert.equal(specialOnly.months.find((row) => row.monthKey === '2026-07')!.balance, -30000);
 
 assert.equal(year.months.find((row) => row.monthKey === '2026-10')!.recorded, false, 'まだ来ていない月は数えない');
+
+// 月が進むごとに年初からの累計が伸びる（育休中のように、給付金が2か月ごとに入る年）
+const leave = [
+  record('l1', { occurredOn: '2027-01-10', items: [item({ amount: 200000, categoryId: 'house' })] }),
+  record('l2', { occurredOn: '2027-01-25', kind: 'income', items: [item({ amount: 300000, categoryId: 'bonus' })] }),
+  record('l3', { occurredOn: '2027-02-10', items: [item({ amount: 250000, categoryId: 'house' })] }),
+  record('l4', { occurredOn: '2027-03-10', items: [item({ amount: 220000, categoryId: 'house' })] }),
+  record('l5', { occurredOn: '2027-03-25', kind: 'income', items: [item({ amount: 500000, categoryId: 'bonus' })] }),
+];
+const cumulativeAt = (upTo: string) =>
+  buildYearSummary(leave, categories, budgets, 2027, upTo).months.map((row) => (row.recorded ? row.cumulative : null));
+assert.deepEqual(cumulativeAt('2027-01').slice(0, 3), [100000, null, null], '1月だけ: 1月の収支');
+assert.deepEqual(cumulativeAt('2027-02').slice(0, 3), [100000, -150000, null], '2月: 1月 + 2月（給付金なしの赤字月）');
+assert.deepEqual(cumulativeAt('2027-03').slice(0, 3), [100000, -150000, 130000], '3月: 給付金が入った月で累計が戻る');
+assert.equal(yearToDateBalance(leave, categories, budgets, '2027-02'), -150000, '月の画面の累計も同じ');
+assert.equal(yearToDateBalance(leave, categories, budgets, '2027-04'), null, '記録の無い月は累計を出さない');
+const marchYear = buildYearSummary(leave, categories, budgets, 2027, '2027-03');
+assert.equal(marchYear.total.balance, 130000, '年の収支は累計の終点と同じ');
+assert.equal(marchYear.average!.balance, 43333, '月平均は記録のある月で割る');
 assert.equal(
   buildYearSummary(records, categories, budgets, 2026, '2026-08').total.living,
   1000,

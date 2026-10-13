@@ -26,7 +26,7 @@ import { FullScreen, ScreenHeader } from './moneyVisual';
 
 interface MoneySettingsProps {
   familyId: string;
-  /** 予算・特別費の予定を最初に見る年（暦年）。 */
+  /** 予算を最初に見る年（暦年）。 */
   year: number;
   categories: MoneyCategory[];
   budgets: MoneyBudget[];

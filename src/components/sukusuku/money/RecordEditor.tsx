@@ -158,7 +158,7 @@ export default function RecordEditor({
 
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '';
 
-  /** まとまりの見出し（「食費 › 食料品」「特別費 › 車検」）。 */
+  /** まとまりの見出し（「食費 › 食料品」「医療費 › 病院」）。 */
   const groupTitle = (target: Pick<EditorGroup, 'categoryId' | 'categoryName'>) =>
     target.categoryId !== null
       ? categoryPath(categories, target.categoryId)

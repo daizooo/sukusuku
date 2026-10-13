@@ -498,7 +498,7 @@ export interface LotteryCoupon {
   isTest: boolean;
 }
 
-/** 家計の種類のまとまり。生活費と収入（docs/kakei.md §3.1）。特別費は生活費の大分類「特別費」（§0.2）。 */
+/** 家計の種類のまとまり。生活費と収入（docs/kakei.md §3.1）。 */
 export type MoneyCategoryKind = 'living' | 'income';
 
 /** 家計の種類。money_categories に対応。parentId が null なら大分類（予算を置く単位）。 */
@@ -649,7 +649,7 @@ export interface MoneyStore {
 /** 記録の種類。支出・収入・振替。 */
 export type MoneyRecordKind = 'expense' | 'income' | 'transfer';
 
-/** 品目。money_items に対応。種類（categoryId）を持つ。振替は無い。特別費も大分類「特別費」の種類。 */
+/** 品目。money_items に対応。種類（categoryId）を持つ。振替は無い。 */
 export interface MoneyItem {
   id: string;
   amount: number;

@@ -4,8 +4,8 @@
 // 年はすべて暦年（1月〜12月。2026-10-09に、4月始まりの年度から変えた）。予算は大分類・年ごとの月額で、
 // その年の予算が無ければ前の年の額を使う（毎年入れ直さなくてよいように）。
 //
-// 収支＝収入 − 支出（生活費と特別費。特別費は大分類「特別費」のカテゴリなので、生活費と同じに数える。
-// 2026-10-11。docs/kakei.md §0）。振替は集計に入れない。貯金は記録なので、収支の式にも表示にも入れない。
+// 収支＝収入 − 支出（生活費）。
+// 振替は集計に入れない。貯金は記録なので、収支の式にも表示にも入れない。
 
 import type {
   MoneyBudget,
@@ -243,8 +243,6 @@ export const DEFAULT_CATEGORIES: { kind: MoneyCategoryKind; name: string; childr
   { kind: 'living', name: '娯楽', children: ['レジャー', '本・趣味', '交際費'] },
   { kind: 'living', name: '子ども費', children: ['日用品', '洋服・おもちゃ', '習い事'] },
   { kind: 'living', name: 'その他', children: ['お小遣い', '仕送り', '保険', '使途不明金'] },
-  // 特別費も大分類のひとつ（2026-10-11。docs/kakei.md §0.2）。小分類は持たず、品名で区別する。決まったもの（税金・年払いの保険など）は設定の固定費に登録する。
-  { kind: 'living', name: '特別費', children: [] },
   { kind: 'income', name: '給料', children: [] },
   { kind: 'income', name: 'その他の収入', children: [] },
 ];
@@ -811,7 +809,7 @@ export interface BudgetTile {
   percent: number | null;
 }
 
-/** その月の生活費を、大分類ごとに足す（特別費・振替は入れない）。 */
+/** その月の生活費を、大分類ごとに足す（振替は入れない）。 */
 export function livingSpendByTop(
   records: readonly MoneyRecord[],
   categories: readonly MoneyCategory[],
@@ -869,9 +867,9 @@ export function buildBudgetTiles(
 export interface MonthSummary {
   /** 収入。 */
   income: number;
-  /** 支出の実績（生活費と特別費。振替は入れない）。 */
+  /** 支出の実績（生活費。振替は入れない）。 */
   living: number;
-  /** 予算の合計（予算を置いた大分類だけ。特別費は予算を置かない）。 */
+  /** 予算の合計（予算を置いた大分類だけ）。 */
   livingBudget: number;
   /** 収支＝収入 − 支出。貯金は記録なので式に入れない。 */
   balance: number;
