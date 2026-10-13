@@ -6,7 +6,6 @@ import FeedingIntervalSetting from '@/components/sukusuku/FeedingIntervalSetting
 import TemperatureReminderSetting from '@/components/sukusuku/TemperatureReminderSetting';
 import AccountSection from '@/components/sukusuku/AccountSection';
 import FamilySection from '@/components/sukusuku/FamilySection';
-import HokatsuSetting from '@/components/sukusuku/HokatsuSetting';
 import { useBackLayer } from '@/lib/browserHistory';
 import type { FeedingSettings } from '@/lib/api/feedingSettings';
 import type { TemperatureReminderSettings } from '@/lib/api/temperatureReminderSettings';
@@ -70,9 +69,6 @@ export default function SettingsScreen({
               onChange={onChangeTemperatureReminderSettings}
             />
           </NotificationSetting>
-
-          {/* 保活の入口をその他タブに出すかどうか。 */}
-          <HokatsuSetting />
 
           <AccountSection familyId={familyId} userId={userId} />
         </div>

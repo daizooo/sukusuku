@@ -716,7 +716,7 @@ const styles = StyleSheet.create({
   centered: { alignItems: 'center', justifyContent: 'center' },
   padded: { padding: 16, gap: 12 },
   flex: { flex: 1 },
-  page: { flex: 1, padding: 16 },
+  page: { flex: 1, paddingHorizontal: 4, paddingVertical: 12 },
   message: { fontSize: 14, color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
 
   seedButton: {
@@ -735,7 +735,7 @@ const styles = StyleSheet.create({
 
   overviewContent: { paddingBottom: 24 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start' },
-  gridCell: { width: '50%', padding: 6 },
+  gridCell: { width: '50%', padding: 5 },
   addList: {
     flexDirection: 'row',
     alignItems: 'center',

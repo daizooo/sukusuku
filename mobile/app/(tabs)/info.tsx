@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Redirect, router, useFocusEffect } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ClipboardCheck, Settings } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
-import { readHokatsuVisible } from '@/lib/hokatsuVisibility';
 import MoreRow from '@/components/more/MoreRow';
 import ContractMoreRow from '@/components/more/ContractMoreRow';
 import LotteryMoreRow from '@/components/more/LotteryMoreRow';
@@ -19,7 +18,7 @@ import VersionInfo from '@/components/info/VersionInfo';
 //   - 福引チャンス: 以前は家計タブの＋ボタンの中（app/lottery.tsx）
 //   - 契約: 賃貸・保険・サブスクなどの控え（app/contracts.tsx。docs/contracts.md）
 //   - 防災備蓄: 以前はリストタブの下（app/stock.tsx）
-//   - 保活: 以前は設定タブの中（app/nursery.tsx）。見学が済んだら、設定で行ごと隠せる
+//   - 保活: 以前は設定タブの中（app/nursery.tsx）
 //   - 設定: 以前の設定タブの中身（app/settings.tsx）
 // Web版は `src/components/sukusuku/tabs/InfoTab.tsx`。
 //
@@ -30,7 +29,6 @@ export default function InfoScreen() {
   const userId = session?.user.id ?? null;
 
   const [familyId, setFamilyId] = useState<string | null>(null);
-  const [hokatsuVisible, setHokatsuVisible] = useState(true);
 
   useEffect(() => {
     if (!userId) return;
@@ -46,19 +44,6 @@ export default function InfoScreen() {
       isMounted = false;
     };
   }, [userId]);
-
-  // 開くたびに読み直す（設定で保活の表示を切り替えて戻ってきたときも）。
-  useFocusEffect(
-    useCallback(() => {
-      let isActive = true;
-      void readHokatsuVisible().then((value) => {
-        if (isActive) setHokatsuVisible(value);
-      });
-      return () => {
-        isActive = false;
-      };
-    }, []),
-  );
 
   if (isSessionLoading) {
     return (
@@ -80,18 +65,14 @@ export default function InfoScreen() {
           <ContractMoreRow familyId={familyId} />
           <View style={styles.divider} />
           <StockMoreRow familyId={familyId} />
-          {hokatsuVisible && (
-            <>
-              <View style={styles.divider} />
-              <MoreRow
-                icon={<ClipboardCheck size={20} color={colors.primary} />}
-                tintSurface={colors.accentSurface}
-                title="保活"
-                description="見学チェックリスト"
-                onPress={() => router.push('/nursery')}
-              />
-            </>
-          )}
+          <View style={styles.divider} />
+          <MoreRow
+            icon={<ClipboardCheck size={20} color={colors.primary} />}
+            tintSurface={colors.accentSurface}
+            title="保活"
+            description="見学チェックリスト"
+            onPress={() => router.push('/nursery')}
+          />
           <View style={styles.divider} />
           <MoreRow
             icon={<Settings size={20} color={colors.textSubtle} />}

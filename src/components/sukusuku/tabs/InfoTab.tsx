@@ -6,7 +6,6 @@ import ContractMoreRow from '@/components/sukusuku/living/ContractMoreRow';
 import LotteryMoreRow from '@/components/sukusuku/living/LotteryMoreRow';
 import StockEntryRow from '@/components/sukusuku/living/StockEntryRow';
 import HokatsuScreen from '@/components/sukusuku/HokatsuScreen';
-import { useHokatsuVisible } from '@/lib/hokatsuVisibility';
 import type { FeedingSettings } from '@/lib/api/feedingSettings';
 import type { TemperatureReminderSettings } from '@/lib/api/temperatureReminderSettings';
 import ContractsScreen from './ContractsScreen';
@@ -20,7 +19,7 @@ import StockScreen from './StockScreen';
 //   - 福引チャンス: 以前は家計タブの＋ボタンの中（tabs/LotteryScreen）
 //   - 契約: 賃貸・保険・サブスクなどの控え（tabs/ContractsScreen。docs/contracts.md）
 //   - 防災備蓄: 以前はリストタブの下（tabs/StockScreen）
-//   - 保活: 以前は設定タブの中（HokatsuScreen）。見学が済んだら、設定で行ごと隠せる
+//   - 保活: 以前は設定タブの中（HokatsuScreen）
 //   - 設定: 以前の設定タブの中身（tabs/SettingsScreen）
 // mobile版は `mobile/app/(tabs)/info.tsx`。
 //
@@ -52,7 +51,6 @@ export default function InfoTab({
 }: InfoTabProps) {
   // 開いている画面。null のあいだはその他タブの一覧を出す（戻る操作で一覧へ戻る）。
   const [screen, setScreen] = useState<Screen | null>(null);
-  const [hokatsuVisible] = useHokatsuVisible();
   const close = () => setScreen(null);
 
   if (screen === 'lottery') return <LotteryScreen familyId={familyId} userId={userId} onClose={close} />;
@@ -83,15 +81,13 @@ export default function InfoTab({
             <LotteryMoreRow familyId={familyId} userId={userId} onOpen={() => setScreen('lottery')} />
             <ContractMoreRow familyId={familyId} onOpen={() => setScreen('contracts')} />
             <StockEntryRow familyId={familyId} onOpen={() => setScreen('stock')} />
-            {hokatsuVisible && (
-              <MoreRow
-                icon={<ClipboardCheck size={20} className="text-pink-500" />}
-                tintClass="bg-pink-50"
-                title="保活"
-                description="見学チェックリスト"
-                onClick={() => setScreen('nursery')}
-              />
-            )}
+            <MoreRow
+              icon={<ClipboardCheck size={20} className="text-pink-500" />}
+              tintClass="bg-pink-50"
+              title="保活"
+              description="見学チェックリスト"
+              onClick={() => setScreen('nursery')}
+            />
             <MoreRow
               icon={<Settings size={20} className="text-gray-700" />}
               tintClass="bg-gray-100"
