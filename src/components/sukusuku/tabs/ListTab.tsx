@@ -119,7 +119,7 @@ function ItemRow({
       <ItemCheck done={item.done} onToggle={onToggle} label={`${item.title}を${item.done ? '戻す' : '完了にする'}`} />
       {draft === null ? (
         <button type="button" onClick={() => setDraft(item.title)} className="flex-1 min-w-0 text-left">
-          <span className={`block min-h-5 text-sm break-words ${item.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+          <span className={`block min-h-5 text-base break-words ${item.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
             {item.title}
           </span>
         </button>
@@ -309,7 +309,7 @@ function AddRow({
       <button
         type="button"
         onClick={() => setDraft('')}
-        className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-400 hover:bg-gray-50 transition ${
+        className={`w-full flex items-center gap-2 px-3 py-2.5 text-base text-gray-400 hover:bg-gray-50 transition ${
           tone === 'outlined' ? 'border border-dashed border-gray-300 rounded-xl justify-center' : divider
         }`}
       >
@@ -424,12 +424,12 @@ function ListOverviewCard({
     >
       <button type="button" onClick={onOpen} className="w-full text-left block hover:border-gray-300 transition">
       {/* 見出し（リスト名）は帯にして、中身と一目で分かれるようにする。 */}
-      <h3 className="flex items-center gap-1 px-3 py-2 pr-9 bg-gray-50 border-b border-gray-200 text-[13px] font-bold text-gray-900">
+      <h3 className="flex items-center gap-1 px-2.5 py-2 pr-9 bg-gray-50 border-b border-gray-200 text-base font-bold text-gray-900">
         <span className="min-w-0 break-words">{list.name}</span>
         {/* 自分だけのリストは錠前を添える。 */}
         {list.isPrivate && <Lock size={11} className="flex-none text-gray-400" aria-label="自分だけ" />}
       </h3>
-      <div className="px-3 py-2">
+      <div className="px-2.5 py-2.5">
         {rows.map((row, index) =>
           row.type === 'group' ? (
             /* グループ名は下線で区切る。どこからどこまでが同じ枠かが線で分かる。 */
@@ -437,17 +437,17 @@ function ListOverviewCard({
               key={row.key}
               className={`border-b border-gray-200 pb-1 mb-1.5 ${index === 0 ? '' : 'mt-2.5'}`}
             >
-              <span className="block truncate text-[11px] font-bold text-gray-600">{row.name}</span>
+              <span className="block truncate text-sm font-bold text-gray-600">{row.name}</span>
             </div>
           ) : (
             /* 項目どうしは線で区切らない（線が多いと詰まって見える）。 */
             <div key={row.key} className="flex items-start gap-1.5 py-[3px]">
               <span className="flex-none mt-[3px] w-3.5 h-3.5 rounded border border-gray-300" />
-              <span className="flex-1 min-w-0 text-xs text-gray-700 break-words line-clamp-2">{row.item.title}</span>
+              <span className="flex-1 min-w-0 text-[15px] leading-[21px] text-gray-700 break-words line-clamp-2">{row.item.title}</span>
             </div>
           ),
         )}
-        {rows.length === 0 && <p className="text-xs text-gray-300 py-1">項目なし</p>}
+        {rows.length === 0 && <p className="text-sm text-gray-300 py-1">項目なし</p>}
       </div>
       </button>
       {/* よく開くリストを上に固定する（Keepのピン止め）。 */}
@@ -644,17 +644,17 @@ export default function ListTab({
   }
 
   return (
-    <div className="p-4 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
+    <div className="px-1.5 py-3 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       {/* 一覧: Keepと同じく全部のリストをカードで並べる。2列にして1画面に4〜5つ入れる。
           固定したものは上にまとめる（見出しは付けず、カードのピンの色で分かる）。
           並べ替えは長押ししてそのまま動かす。 */}
         <div className="flex-1 overflow-y-auto">
           {pinnedLists.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-3 items-start gap-3 content-start mb-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 items-start gap-1.5 content-start mb-1.5">
               {overviewCards(LISTS_PINNED, pinnedLists)}
             </div>
           )}
-          <div className="grid grid-cols-2 md:grid-cols-3 items-start gap-3 content-start">
+          <div className="grid grid-cols-2 md:grid-cols-3 items-start gap-1.5 content-start">
             {overviewCards(LISTS_OTHER, otherLists)}
             <button
               type="button"

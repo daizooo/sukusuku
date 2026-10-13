@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
   },
   itemRowWithGrip: { paddingLeft: 0 },
   grip: { width: 32, alignSelf: 'stretch', marginVertical: -10, alignItems: 'center', justifyContent: 'center' },
-  itemTitle: { fontSize: 14, color: colors.textSubtle, minHeight: 20 },
+  itemTitle: { fontSize: 16, color: colors.textSubtle, minHeight: 22 },
   itemTitleDone: { color: colors.textFaint, textDecorationLine: 'line-through' },
   iconButton: { padding: 6 },
 
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   groupHeaderWithGrip: { paddingLeft: 0 },
-  groupName: { fontSize: 13, fontWeight: '700', color: colors.text },
+  groupName: { fontSize: 15, fontWeight: '700', color: colors.text },
   groupCount: { fontWeight: '400', color: colors.textFaint },
   ungroupedName: { color: colors.textMuted },
   groupInput: { paddingVertical: 4 },
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   },
 
   addButton: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
-  addLabel: { fontSize: 14, color: colors.textFaint },
+  addLabel: { fontSize: 16, color: colors.textFaint },
   addRow: {
     flexDirection: 'row',
     alignItems: 'center',
