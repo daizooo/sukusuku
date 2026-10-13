@@ -443,7 +443,7 @@ function ListOverviewCard({
             /* 項目どうしは線で区切らない（線が多いと詰まって見える）。 */
             <div key={row.key} className="flex items-start gap-1.5 py-[3px]">
               <span className="flex-none mt-[3px] w-3.5 h-3.5 rounded border border-gray-300" />
-              <span className="flex-1 min-w-0 text-sm font-normal leading-5 text-gray-900 break-words line-clamp-2">{row.item.title}</span>
+              <span className="flex-1 min-w-0 text-[15px] font-normal leading-[21px] text-gray-900 break-words line-clamp-2">{row.item.title}</span>
             </div>
           ),
         )}

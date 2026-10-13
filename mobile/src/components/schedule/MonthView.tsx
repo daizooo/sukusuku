@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   },
   chipPressed: { opacity: 0.7 },
   chipOtherMonth: { opacity: 0.5 },
-  chipText: { flex: 1, fontSize: 9, fontWeight: '600' },
+  chipText: { flex: 1, fontSize: 9, fontWeight: '600', textAlign: 'center' },
   chipTextDone: { color: colors.textFaint, textDecorationLine: 'line-through' },
   more: { fontSize: 9, color: colors.textMuted, paddingHorizontal: 2, fontWeight: '700' },
 });

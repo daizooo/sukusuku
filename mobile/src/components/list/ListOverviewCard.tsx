@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderStrong,
   },
-  itemTitle: { flex: 1, fontSize: 14, fontWeight: '400', color: colors.text, lineHeight: 20 },
+  itemTitle: { flex: 1, fontSize: 15, fontWeight: '400', color: colors.text, lineHeight: 21 },
   empty: { fontSize: 14, color: colors.borderStrong, paddingVertical: 4 },
   pin: { position: 'absolute', top: 4, right: 4, padding: 6, borderRadius: 999 },
 });
