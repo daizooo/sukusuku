@@ -11,11 +11,14 @@ import { colors } from '@/lib/theme';
 
 export type MoreBadgeTone = 'alert' | 'warn' | 'ok' | 'plain';
 
+// バッジの色はどの種類もグレーにそろえる（2026-10-13。行ごとの色が多く見づらかったため。意味は文言で伝える）。
+// tone は呼び出し側の分類として残してある。色を戻すときはここを変える。
+const NEUTRAL_BADGE = { surface: colors.neutralSurface, text: colors.neutralBadgeText };
 const BADGE: Record<MoreBadgeTone, { surface: string; text: string }> = {
-  alert: { surface: colors.alertSurface, text: colors.alertText },
-  warn: { surface: colors.milestoneSurface, text: colors.milestoneText },
-  ok: { surface: colors.doneSurface, text: colors.doneText },
-  plain: { surface: colors.neutralSurface, text: colors.neutralBadgeText },
+  alert: NEUTRAL_BADGE,
+  warn: NEUTRAL_BADGE,
+  ok: NEUTRAL_BADGE,
+  plain: NEUTRAL_BADGE,
 };
 
 export default function MoreRow({

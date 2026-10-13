@@ -9,11 +9,14 @@ import { ChevronRight } from 'lucide-react';
 
 export type MoreBadgeTone = 'alert' | 'warn' | 'ok' | 'plain';
 
+// バッジの色はどの種類もグレーにそろえる（2026-10-13。行ごとの色が多く見づらかったため。意味は文言で伝える）。
+// tone は呼び出し側の分類として残してある。色を戻すときはここを変える。
+const NEUTRAL_BADGE = 'bg-gray-100 text-gray-600';
 const BADGE: Record<MoreBadgeTone, string> = {
-  alert: 'bg-red-100 text-red-700',
-  warn: 'bg-amber-50 text-amber-700',
-  ok: 'bg-green-100 text-green-700',
-  plain: 'bg-gray-100 text-gray-600',
+  alert: NEUTRAL_BADGE,
+  warn: NEUTRAL_BADGE,
+  ok: NEUTRAL_BADGE,
+  plain: NEUTRAL_BADGE,
 };
 
 interface MoreRowProps {

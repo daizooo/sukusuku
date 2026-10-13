@@ -18,7 +18,6 @@ import { CategoryIcon, ScreenHeader, StackedScreen } from './moneyVisual';
 //
 // 上によく使う小分類。その下に大分類ごとの枠（見出しに今月の残り、中に小分類のチップ）。押すと大分類も決まる。
 // 大分類ごとに枠で囲み、見出しに色を付けて、どこからどこまでが同じ大分類かを分かるようにする。
-// 特別費も大分類のひとつ（大分類「特別費」。小分類が項目。2026-10-11。docs/kakei.md §0.2）。
 
 export interface CategoryChoice {
   categoryId: string;
