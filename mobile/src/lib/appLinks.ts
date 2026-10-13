@@ -19,13 +19,17 @@ export const parseLogType = (value: string | string[] | undefined): LogType | nu
 
 /** お知らせの飛び先。開くタブと、育児タブなら開く入力画面。 */
 export interface NotificationTarget {
-  /** 開くタブ。備蓄の期限のお知らせだけは、タブではなく備蓄の画面（app/stock.tsx）。 */
-  tab: TabId | 'stock';
+  /**
+   * 開くタブ。備蓄の期限のお知らせは備蓄の画面（app/stock.tsx）、契約の更新日のお知らせは
+   * 契約の画面（app/contracts.tsx）。どちらもタブではなく、その他タブから開く画面。
+   */
+  tab: TabId | 'stock' | 'contracts';
   openLog?: LogType;
 }
 
 /**
- * お知らせの種類ごとの飛び先。PWA版（public/sw.js の URL_BY_KIND）と同じ対応にする。
+ * お知らせの種類ごとの飛び先。送る側（supabase/functions/_shared/deliver.ts）の種類と対にする。
+ * PWA版は通知を受け取らない（public/sw.js は登録を外すだけ）ので、対応表は mobile だけが持つ。
  *
  * 予定のリマインダーは種類を持たないので、予定タブを開く。
  */
@@ -41,6 +45,9 @@ export const notificationTarget = (kind: unknown): NotificationTarget => {
     // 備蓄の期限のお知らせは備蓄の画面（備蓄の期限順の一覧）へ
     case 'stock':
       return { tab: 'stock' };
+    // 契約の更新日のお知らせは契約の画面（更新日の近い順の一覧）へ
+    case 'contract':
+      return { tab: 'contracts' };
     default:
       return { tab: 'schedule' };
   }

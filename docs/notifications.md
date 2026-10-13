@@ -236,6 +236,9 @@ select status, return_message, start_time
 | `supabase/functions/send-stock-expiry-reminders/index.ts` | 備蓄の期限のお知らせの配信（§13） |
 | `supabase/functions/_shared/stockExpiry.ts` | 何を知らせるか・文面の決めごと（`npm run test:stock-expiry`） |
 | `supabase/migrations/0058_stock_expiry_notifications.sql` | 送信済み記録・定期実行の登録 |
+| `supabase/functions/send-contract-reminders/index.ts` | 契約の更新日のお知らせの配信（§14） |
+| `supabase/functions/_shared/contractReminders.ts` | 何を・誰に知らせるか・文面の決めごと（`npm run test:contract-reminders`） |
+| `supabase/migrations/0097_contract_reminders.sql` | 送信済み記録・定期実行の登録 |
 | `src/lib/appLinks.ts` | 開く画面をURLで表す決まりごと（§9） |
 | `src/lib/notificationCleanup.ts` | 用が済んだ通知を消す判断と実行（§10） |
 | `supabase/functions/_shared/deliver.ts` | 宛先の種類で送り方を振り分ける（§11） |
@@ -686,6 +689,7 @@ select status, return_message, start_time
 | 次の授乳の目安（§7） | 記録タブ・授乳の入力画面 |
 | 検温（§8） | 記録タブ・体温の入力画面 |
 | 予定のリマインダー（§2） | ホーム |
+| 契約の更新日（§14） | ネイティブ版のみ。その他タブの契約の画面（`app/contracts.tsx`） |
 
 飛び先はURLで表す。`/?tab=log&open=temperature` のように、`tab` が開くタブ、
 `open` が記録タブで開く入力画面を指す（値の一覧は `src/lib/appLinks.ts`）。
@@ -955,6 +959,7 @@ Androidは鳴り方・振動を**チャンネルに固定する**（作ったあ
 | `feeding-reminder` | 次の授乳の目安（§7） |
 | `temperature-reminder` | 検温（§8） |
 | `stock-expiry` | 備蓄の期限（§13） |
+| `contract-renewal` | 契約の更新日（§14） |
 
 ---
 
@@ -1047,3 +1052,66 @@ select status, return_message, start_time from cron.job_run_details
 
 届かない朝の多くは「その日に当たる節目が無かった」だけ。節目の日付は
 期限の3か月前・1か月前の日（`2027-06-30` なら `2027-03-30`・`2027-05-30`）で確かめられる。
+
+---
+
+## 14. 契約の更新日のお知らせ（2026-10-13に追加）
+
+その他タブの契約（[contracts.md](./contracts.md)）。更新日の N 日前（契約ごとの `notify_days`。既定は60・30・7日前）に、
+毎朝9時（日本時間）に**1台につき1通へまとめて**送る。受け取れるのはネイティブ版だけ。
+備蓄の期限（§13）と同じ作りで、違うのは**宛先を契約ごとに絞る**ところ。
+
+```
+pg_cron（毎日 0:00 UTC = 9:00 JST）
+  └ Edge Function: send-contract-reminders
+       ├ contracts から、更新日がこれから来るものを取る
+       ├ 端末の持ち主ごとに、family_members.id を調べる
+       ├ 端末ごとに、前回送った日（contract_deliveries の sent の最後の notify_on）を調べる
+       ├ _shared/contractReminders.ts の collectNotices で
+       │  「更新日の N 日前の日が、前回の翌日〜今日に来た、その人に見える契約」を拾う
+       ├ 拾えた端末へ、contract_deliveries に記録を作って送信権を取り、1通送る
+       └ 送れたら sent、失敗なら failed（失効した宛先は消す。ほかのお知らせと同じ）
+```
+
+- **宛先は、その契約が見える人の端末だけ。** Edge Function は service_role で動いて RLS が効かないので、
+  `canSee`（contracts の RLS `contracts_visible` と同じ条件: 作った本人、または `visible_member_ids` に自分の
+  `family_members.id` が入っている）で絞る。契約の判定を変えたら、RLS と `canSee` の両方を直す
+- **契約ごとの「知らせた」印は持たない。** 日付で決めるので、契約を直しても繰り返さない。
+  複数の節目が窓に入ったもの（実行が長く飛んだとき）も1契約につき1件
+- **更新日を過ぎた契約・更新日の無い契約・`notify_days` が空の契約は知らせない**
+  （過ぎたものは一覧のバッジが「更新日を過ぎています」を出す）
+- 取りこぼしの拾い直しは3日前まで（`CATCH_UP_DAYS`）。二重送信は `(subscription_id, notify_on)` の一意制約で防ぐ
+- 文面は、いちばん急ぐ契約を見出しにして残りを「ほかn件」にまとめる
+  （例: 「◯◯マンションの更新まで30日 ほか1件」）。本文は契約ごとに1行（3件まで）
+- 飛び先はその他タブの契約の画面（`kind = 'contract'`。`mobile/src/lib/appLinks.ts` の `notificationTarget` が
+  `app/contracts.tsx` へ送る）。PWA版は通知を受け取らないので、`public/sw.js` の側に対応は無い。
+  用が済んだ通知を消す仕組み（§10）の対象にはしない
+- 送信済み記録 `contract_deliveries` は家族で共有しない表（`scripts/check-family-sync.mjs` の `NOT_SHARED` と
+  `family_sync_missing()` に載せてある）。**掃除の定期実行は作っていない**（記録はお知らせが出た朝にしか増えず、
+  1台につき年に数行。溜まって困るようになったら 0058 の `purge-stock-expiry-deliveries` と同じものを足す）
+
+### セットアップ
+
+```bash
+supabase functions deploy send-contract-reminders
+```
+
+そのうえで `0097_contract_reminders.sql` を適用する（Vaultの `reminder_cron_secret` と
+`FCM_SERVICE_ACCOUNT` は他のお知らせと共通）。**Functionを先にデプロイしてから適用する**
+（定期実行が先に動くと存在しないFunctionを叩く）。`supabase/config.toml` に `verify_jwt = false` を入れてある。
+
+### 動かないときの確認
+
+```sql
+-- 直近の送信記録
+select * from contract_deliveries order by sent_at desc limit 10;
+-- 定期実行の結果
+select status, return_message, start_time from cron.job_run_details
+ where jobid = (select jobid from cron.job where jobname = 'send-contract-reminders')
+ order by start_time desc limit 5;
+```
+
+届かない朝の多くは「その日に当たる節目が無かった」だけ。節目の日付は更新日の N 日前
+（`2026-11-12` の30日前は `2026-10-13`）で確かめられる。ほかに、その契約が**その端末の持ち主に見えるか**
+（作った本人か、見せる相手に入っているか。アカウントの無い子の端末は無い）も確かめる。
+

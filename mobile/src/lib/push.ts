@@ -61,6 +61,11 @@ const CHANNELS: {
     name: '備蓄の期限',
     description: '備蓄の期限の3か月前・1か月前に、朝まとめて届きます。',
   },
+  {
+    id: 'contract-renewal',
+    name: '契約の更新日',
+    description: '契約の更新日が近づくと、朝まとめて届きます。',
+  },
 ];
 
 /**

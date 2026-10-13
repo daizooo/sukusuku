@@ -30,6 +30,7 @@ const NOT_SHARED = new Set([
   'stock_expiry_deliveries',
   'temperature_reminder_deliveries',
   'money_feed_tokens',
+  'contract_deliveries',
 ]);
 
 // 画面の読み込みで使う DB関数（rpc）が読む表。関数の中身は画面のコードからは見えないので、ここに書く。
