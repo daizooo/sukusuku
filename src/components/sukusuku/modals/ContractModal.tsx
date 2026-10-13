@@ -14,8 +14,10 @@ import {
   NOTIFY_DAY_OPTIONS,
   advanceRenewal,
   draftError,
+  defaultVisibleMemberIds,
   emptyContractDraft,
   parseCount,
+  visibleCandidates,
 } from '@/lib/contractUtils';
 import { ModalShell } from './TaskForm';
 import { Segmented } from './logModalParts';
@@ -94,7 +96,7 @@ export default function ContractModal({
   onRenew,
 }: ContractModalProps) {
   const supabase = useMemo(() => createClient(), []);
-  const [draft, setDraft] = useState<ContractDraft>(() => (contract ? toDraft(contract) : emptyContractDraft(myMemberId)));
+  const [draft, setDraft] = useState<ContractDraft>(() => (contract ? toDraft(contract) : emptyContractDraft(myMemberId, defaultVisibleMemberIds(members, myMemberId))));
   const [amountText, setAmountText] = useState(contract?.amount != null ? String(contract.amount) : '');
   const [termText, setTermText] = useState(contract?.termMonths != null ? String(contract.termMonths) : '');
   const [error, setError] = useState<string | null>(null);
@@ -201,7 +203,6 @@ export default function ContractModal({
             className={inputClass}
             value={draft.title}
             onChange={(event) => update({ title: event.target.value })}
-            placeholder="例: ◯◯マンション 502"
           />
         </label>
 
@@ -211,14 +212,12 @@ export default function ContractModal({
             className={inputClass}
             value={draft.company}
             onChange={(event) => update({ company: event.target.value })}
-            placeholder="例: 管理会社・保険会社・サービス名"
           />
         </label>
 
         <div>
           <span className={labelClass}>契約者</span>
           <div className="flex flex-wrap gap-1.5">
-            <Chip label="指定なし" selected={draft.contractorId === null} onClick={() => update({ contractorId: null })} />
             {members.map((member) => (
               <Chip
                 key={member.id}
@@ -250,9 +249,6 @@ export default function ContractModal({
             />
           </label>
         </div>
-        <p className="-mt-2 text-[11px] text-gray-400">
-          更新日は、満了日・次の請求日でも構いません。更新日や期間のない契約は空のままにしてください（お知らせは出ません）。
-        </p>
 
         <div className="flex items-end gap-3">
           <label className="block flex-1">
@@ -262,7 +258,6 @@ export default function ContractModal({
               value={termText}
               onChange={(event) => setTermText(event.target.value)}
               inputMode="numeric"
-              placeholder="例: 24"
             />
           </label>
           {canRenew && (
@@ -288,7 +283,6 @@ export default function ContractModal({
               value={amountText}
               onChange={(event) => setAmountText(event.target.value)}
               inputMode="numeric"
-              placeholder="例: 98000"
             />
           </label>
           <div className="w-36">
@@ -337,31 +331,26 @@ export default function ContractModal({
               自由に追加
             </button>
           </div>
-          <p className="rounded-lg bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700">{FIELD_WARNING}</p>
-        </div>
-
-        <div>
-          <span className={labelClass}>お知らせ（更新日の何日前）</span>
-          {draft.renewsOn === null ? (
-            <p className="text-[11px] text-gray-400">更新日を入れると、お知らせの日数を選べます。</p>
-          ) : (
-            <>
-              <div className="flex flex-wrap gap-1.5">
-                {NOTIFY_DAY_OPTIONS.map((day) => (
-                  <Chip
-                    key={day}
-                    label={`${day}日前`}
-                    selected={draft.notifyDays.includes(day)}
-                    onClick={() => toggleNotifyDay(day)}
-                  />
-                ))}
-              </div>
-              {draft.notifyDays.length === 0 && (
-                <p className="mt-1 text-[11px] text-gray-400">お知らせは出しません。</p>
-              )}
-            </>
+          {draft.fields.length > 0 && (
+            <p className="rounded-lg bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700">{FIELD_WARNING}</p>
           )}
         </div>
+
+        {draft.renewsOn !== null && (
+          <div>
+            <span className={labelClass}>お知らせ（更新日の何日前）</span>
+            <div className="flex flex-wrap gap-1.5">
+              {NOTIFY_DAY_OPTIONS.map((day) => (
+                <Chip
+                  key={day}
+                  label={`${day}日前`}
+                  selected={draft.notifyDays.includes(day)}
+                  onClick={() => toggleNotifyDay(day)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         <label className="block">
           <span className={labelClass}>メモ</span>
@@ -375,7 +364,7 @@ export default function ContractModal({
         <div>
           <span className={labelClass}>見せる相手（複数選べます）</span>
           <div className="flex flex-wrap gap-1.5">
-            {members.map((member) => (
+            {visibleCandidates(members).map((member) => (
               <Chip
                 key={member.id}
                 label={member.displayName}
@@ -385,9 +374,6 @@ export default function ContractModal({
               />
             ))}
           </div>
-          <p className="mt-1 text-[11px] text-gray-400">
-            作った人は、選ばなくても見られます。子はアカウントを作るまで見られません。
-          </p>
         </div>
 
         {error && <p className="text-xs text-red-500">{error}</p>}

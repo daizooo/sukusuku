@@ -13,8 +13,10 @@ import {
   NOTIFY_DAY_OPTIONS,
   advanceRenewal,
   draftError,
+  defaultVisibleMemberIds,
   emptyContractDraft,
   parseCount,
+  visibleCandidates,
 } from '@/lib/contractUtils';
 import { colors } from '@/lib/theme';
 import LogModalShell from '@/components/log/LogModalShell';
@@ -79,7 +81,7 @@ export default function ContractSheet({
   onRenew,
 }: ContractSheetProps) {
   const [draft, setDraft] = useState<ContractDraft>(() =>
-    contract ? toDraft(contract) : emptyContractDraft(myMemberId),
+    contract ? toDraft(contract) : emptyContractDraft(myMemberId, defaultVisibleMemberIds(members, myMemberId)),
   );
   const [amountText, setAmountText] = useState(contract?.amount != null ? String(contract.amount) : '');
   const [termText, setTermText] = useState(contract?.termMonths != null ? String(contract.termMonths) : '');
@@ -189,8 +191,6 @@ export default function ContractSheet({
             style={styles.input}
             value={draft.title}
             onChangeText={(title) => update({ title })}
-            placeholder="例: ◯◯マンション 502"
-            placeholderTextColor={colors.textFaint}
           />
         </View>
 
@@ -200,15 +200,12 @@ export default function ContractSheet({
             style={styles.input}
             value={draft.company}
             onChangeText={(company) => update({ company })}
-            placeholder="例: 管理会社・保険会社・サービス名"
-            placeholderTextColor={colors.textFaint}
           />
         </View>
 
         <View style={styles.field}>
           <FieldLabel>契約者</FieldLabel>
           <View style={styles.chips}>
-            <Chip label="指定なし" selected={draft.contractorId === null} onPress={() => update({ contractorId: null })} />
             {members.map((member) => (
               <Chip
                 key={member.id}
@@ -224,7 +221,6 @@ export default function ContractSheet({
           <ContractDateField label="開始日" value={draft.startedOn} onChange={(startedOn) => update({ startedOn })} />
           <ContractDateField label="更新日" value={draft.renewsOn} onChange={(renewsOn) => update({ renewsOn })} />
         </View>
-        <Text style={styles.hint}>更新日は、満了日・次の請求日でも構いません。更新日や期間のない契約は空のままにしてください（お知らせは出ません）。</Text>
 
         <View style={styles.row}>
           <View style={styles.flex}>
@@ -235,8 +231,6 @@ export default function ContractSheet({
               onChangeText={setTermText}
               keyboardType="number-pad"
               inputMode="numeric"
-              placeholder="例: 24"
-              placeholderTextColor={colors.textFaint}
             />
           </View>
           {canRenew && (
@@ -263,8 +257,6 @@ export default function ContractSheet({
               onChangeText={setAmountText}
               keyboardType="number-pad"
               inputMode="numeric"
-              placeholder="例: 98000"
-              placeholderTextColor={colors.textFaint}
             />
           </View>
           <View style={styles.cycleBox}>
@@ -311,29 +303,24 @@ export default function ContractSheet({
               <Text style={styles.suggestText}>自由に追加</Text>
             </Pressable>
           </View>
-          <Text style={styles.warning}>{FIELD_WARNING}</Text>
+          {draft.fields.length > 0 && <Text style={styles.warning}>{FIELD_WARNING}</Text>}
         </View>
 
-        <View style={styles.field}>
-          <FieldLabel>お知らせ（更新日の何日前）</FieldLabel>
-          {draft.renewsOn === null ? (
-            <Text style={styles.hint}>更新日を入れると、お知らせの日数を選べます。</Text>
-          ) : (
-            <>
-              <View style={styles.chips}>
-                {NOTIFY_DAY_OPTIONS.map((day) => (
-                  <Chip
-                    key={day}
-                    label={`${day}日前`}
-                    selected={draft.notifyDays.includes(day)}
-                    onPress={() => toggleNotifyDay(day)}
-                  />
-                ))}
-              </View>
-              {draft.notifyDays.length === 0 && <Text style={styles.hint}>お知らせは出しません。</Text>}
-            </>
-          )}
-        </View>
+        {draft.renewsOn !== null && (
+          <View style={styles.field}>
+            <FieldLabel>お知らせ（更新日の何日前）</FieldLabel>
+            <View style={styles.chips}>
+              {NOTIFY_DAY_OPTIONS.map((day) => (
+                <Chip
+                  key={day}
+                  label={`${day}日前`}
+                  selected={draft.notifyDays.includes(day)}
+                  onPress={() => toggleNotifyDay(day)}
+                />
+              ))}
+            </View>
+          </View>
+        )}
 
         <View style={styles.field}>
           <FieldLabel>メモ</FieldLabel>
@@ -342,14 +329,13 @@ export default function ContractSheet({
             value={draft.memo}
             onChangeText={(memo) => update({ memo })}
             multiline
-            placeholderTextColor={colors.textFaint}
           />
         </View>
 
         <View style={styles.field}>
           <FieldLabel>見せる相手（複数選べます）</FieldLabel>
           <View style={styles.chips}>
-            {members.map((member) => {
+            {visibleCandidates(members).map((member) => {
               const selected = draft.visibleMemberIds.includes(member.id);
               return (
                 <Pressable
@@ -365,9 +351,6 @@ export default function ContractSheet({
               );
             })}
           </View>
-          <Text style={styles.hint}>
-            作った人は、選ばなくても見られます。子はアカウントを作るまで見られません。
-          </Text>
         </View>
 
         {error && <Text style={styles.error}>{error}</Text>}
@@ -447,7 +430,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 5,
   },
-  hint: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
   renew: {
     borderRadius: 10,
     paddingHorizontal: 14,

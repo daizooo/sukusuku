@@ -1,4 +1,4 @@
-import type { Contract, ContractAmountCycle, ContractDraft, ContractKind } from '@/types/app';
+import type { Contract, ContractAmountCycle, ContractDraft, ContractKind, MemberRelation } from '@/types/app';
 
 // 契約（docs/contracts.md）の、画面に依らない計算と文言。
 // mobile版の `mobile/src/lib/contractUtils.ts` と同じ中身にしてある（片方を直したらもう片方も直す）。
@@ -117,16 +117,29 @@ export const sortContracts = <T extends Pick<Contract, 'renewsOn' | 'title'>>(co
     return a.renewsOn < b.renewsOn ? -1 : 1;
   });
 
+type ContractMember = { id: string; displayName: string; relation: MemberRelation };
+
+/** 見せる相手として選べる家族。夫婦だけ（子は選ばせない）。 */
+export const visibleCandidates = <T extends { relation: MemberRelation }>(members: T[]): T[] =>
+  members.filter((member) => member.relation !== 'child');
+
+/** 新しい契約の見せる相手の初期値。夫婦と、作った本人。 */
+export const defaultVisibleMemberIds = (members: ContractMember[], myMemberId: string | null): string[] => {
+  const ids = visibleCandidates(members).map((member) => member.id);
+  return myMemberId && !ids.includes(myMemberId) ? [...ids, myMemberId] : ids;
+};
+
 /**
- * 見せる相手が限られているときの添え書き。全員に見せていれば null（印を出さない）。
+ * 見せる相手が限られているときの添え書き。夫婦の全員に見せていれば null（印を出さない）。
  * 自分だけなら「自分だけ」、それ以外は見せる相手の名前を「・」でつなぐ。
  */
 export const visibilityLabel = (
   visibleMemberIds: string[],
-  members: { id: string; displayName: string }[],
+  members: ContractMember[],
   myMemberId: string | null,
 ): string | null => {
-  if (members.length > 0 && members.every((member) => visibleMemberIds.includes(member.id))) return null;
+  const couple = visibleCandidates(members);
+  if (couple.length > 0 && couple.every((member) => visibleMemberIds.includes(member.id))) return null;
   if (myMemberId !== null && visibleMemberIds.length === 1 && visibleMemberIds[0] === myMemberId) return '自分だけ';
   const names = members.filter((member) => visibleMemberIds.includes(member.id)).map((member) => member.displayName);
   return names.length > 0 ? names.join('・') : null;
@@ -141,12 +154,12 @@ export const amountText = (contract: Pick<Contract, 'amount' | 'amountCycle'>): 
     ? null
     : `${CYCLE_LABEL[contract.amountCycle]} ${formatYen(contract.amount)}`;
 
-/** 空の入力。見せる相手は作った本人のメンバーだけ（ToDoの「自分だけ」と同じ）。 */
-export const emptyContractDraft = (myMemberId: string | null): ContractDraft => ({
+/** 空の入力。契約者は作った本人、見せる相手は夫婦（defaultVisibleMemberIds）。 */
+export const emptyContractDraft = (myMemberId: string | null, visibleMemberIds: string[]): ContractDraft => ({
   kind: 'rent',
   title: '',
   company: '',
-  contractorId: null,
+  contractorId: myMemberId,
   startedOn: null,
   renewsOn: null,
   termMonths: null,
@@ -154,7 +167,7 @@ export const emptyContractDraft = (myMemberId: string | null): ContractDraft => 
   amountCycle: null,
   notifyDays: DEFAULT_NOTIFY_DAYS,
   memo: '',
-  visibleMemberIds: myMemberId ? [myMemberId] : [],
+  visibleMemberIds,
   fields: [],
 });
 
