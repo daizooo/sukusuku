@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 10, paddingVertical: 10 },
   groupRow: { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 4, marginBottom: 6 },
   groupRowSpaced: { marginTop: 10 },
-  groupName: { fontSize: 14, fontWeight: '700', color: colors.textMuted },
+  groupName: { fontSize: 14, fontWeight: '700', color: colors.text },
   itemRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, paddingVertical: 4 },
   itemBox: {
     width: 14,
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderStrong,
   },
-  itemTitle: { flex: 1, fontSize: 15, color: colors.textSubtle, lineHeight: 21 },
+  itemTitle: { flex: 1, fontSize: 15, color: colors.text, lineHeight: 21 },
   empty: { fontSize: 14, color: colors.borderStrong, paddingVertical: 4 },
   pin: { position: 'absolute', top: 4, right: 4, padding: 6, borderRadius: 999 },
 });

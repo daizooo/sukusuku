@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
   },
   itemRowWithGrip: { paddingLeft: 0 },
   grip: { width: 32, alignSelf: 'stretch', marginVertical: -10, alignItems: 'center', justifyContent: 'center' },
-  itemTitle: { fontSize: 16, color: colors.textSubtle, minHeight: 22 },
+  itemTitle: { fontSize: 16, color: colors.text, minHeight: 22 },
   itemTitleDone: { color: colors.textFaint, textDecorationLine: 'line-through' },
   iconButton: { padding: 6 },
 
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
   groupHeaderWithGrip: { paddingLeft: 0 },
   groupName: { fontSize: 15, fontWeight: '700', color: colors.text },
   groupCount: { fontWeight: '400', color: colors.textFaint },
-  ungroupedName: { color: colors.textMuted },
+  ungroupedName: { color: colors.text },
   groupInput: { paddingVertical: 4 },
 
   input: {

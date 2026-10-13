@@ -119,7 +119,7 @@ function ItemRow({
       <ItemCheck done={item.done} onToggle={onToggle} label={`${item.title}を${item.done ? '戻す' : '完了にする'}`} />
       {draft === null ? (
         <button type="button" onClick={() => setDraft(item.title)} className="flex-1 min-w-0 text-left">
-          <span className={`block min-h-5 text-base break-words ${item.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+          <span className={`block min-h-5 text-base break-words ${item.done ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
             {item.title}
           </span>
         </button>
@@ -254,7 +254,7 @@ function UngroupedHeader({ onName }: { onName: (name: string) => void }) {
           type="button"
           onClick={() => setDraft('')}
           aria-label="未分類に名前を付ける"
-          className="flex-1 min-w-0 text-left text-[13px] font-bold text-gray-500 py-0.5"
+          className="flex-1 min-w-0 text-left text-[13px] font-bold text-gray-900 py-0.5"
         >
           未分類
         </button>
@@ -437,13 +437,13 @@ function ListOverviewCard({
               key={row.key}
               className={`border-b border-gray-200 pb-1 mb-1.5 ${index === 0 ? '' : 'mt-2.5'}`}
             >
-              <span className="block truncate text-sm font-bold text-gray-600">{row.name}</span>
+              <span className="block truncate text-sm font-bold text-gray-900">{row.name}</span>
             </div>
           ) : (
             /* 項目どうしは線で区切らない（線が多いと詰まって見える）。 */
             <div key={row.key} className="flex items-start gap-1.5 py-[3px]">
               <span className="flex-none mt-[3px] w-3.5 h-3.5 rounded border border-gray-300" />
-              <span className="flex-1 min-w-0 text-[15px] leading-[21px] text-gray-700 break-words line-clamp-2">{row.item.title}</span>
+              <span className="flex-1 min-w-0 text-[15px] leading-[21px] text-gray-900 break-words line-clamp-2">{row.item.title}</span>
             </div>
           ),
         )}
@@ -650,11 +650,11 @@ export default function ListTab({
           並べ替えは長押ししてそのまま動かす。 */}
         <div className="flex-1 overflow-y-auto">
           {pinnedLists.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-3 items-start gap-1.5 content-start mb-1.5">
+            <div className="grid grid-cols-2 md:grid-cols-3 items-start gap-2.5 content-start mb-2.5">
               {overviewCards(LISTS_PINNED, pinnedLists)}
             </div>
           )}
-          <div className="grid grid-cols-2 md:grid-cols-3 items-start gap-1.5 content-start">
+          <div className="grid grid-cols-2 md:grid-cols-3 items-start gap-2.5 content-start">
             {overviewCards(LISTS_OTHER, otherLists)}
             <button
               type="button"
