@@ -451,7 +451,7 @@ export default function MoneyScreen() {
 
   if (isSessionLoading) {
     return (
-      <SafeAreaView style={[styles.screen, styles.centered]}>
+      <SafeAreaView edges={['top']} style={[styles.screen, styles.centered]}>
         <ActivityIndicator color={colors.navActive} />
       </SafeAreaView>
     );
@@ -459,7 +459,7 @@ export default function MoneyScreen() {
   if (!session) return <Redirect href="/login" />;
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView edges={['top']} style={styles.screen}>
       <View style={styles.body} {...viewSwipe.handlers}>
         <View accessibilityRole="tablist" style={styles.views}>
           {VIEWS.map((entry) => {

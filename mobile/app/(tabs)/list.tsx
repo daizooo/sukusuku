@@ -468,7 +468,7 @@ export default function ListScreen() {
 
   if (isSessionLoading) {
     return (
-      <SafeAreaView style={[styles.screen, styles.centered]}>
+      <SafeAreaView edges={['top']} style={[styles.screen, styles.centered]}>
         <ActivityIndicator color={colors.navActive} />
       </SafeAreaView>
     );
@@ -477,7 +477,7 @@ export default function ListScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.screen}>
+      <SafeAreaView edges={['top']} style={styles.screen}>
         <Text style={styles.message}>読み込み中...</Text>
       </SafeAreaView>
     );
@@ -485,7 +485,7 @@ export default function ListScreen() {
 
   if (lists.length === 0) {
     return (
-      <SafeAreaView style={[styles.screen, styles.centered, styles.padded]}>
+      <SafeAreaView edges={['top']} style={[styles.screen, styles.centered, styles.padded]}>
         <Text style={styles.message}>リストはまだありません</Text>
         <Pressable accessibilityRole="button" onPress={() => void addDefaultLists()} style={styles.seedButton}>
           <Text style={styles.seedTitle}>よく使う3つのリストを作る</Text>
@@ -694,7 +694,7 @@ export default function ListScreen() {
      固定したものは上にまとめる（見出しは付けず、カードのピンの色で分かる）。
      並べ替えは長押ししてそのまま動かす。 */
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView edges={['top']} style={styles.screen}>
       <ScrollView
         style={styles.page}
         contentContainerStyle={styles.overviewContent}
