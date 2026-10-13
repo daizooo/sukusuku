@@ -53,11 +53,11 @@ import { EstimateBadge, PrimaryButton, ScreenHeader } from '@/components/money/m
 // 直すのはルールだけで、もう作った記録は変わらない。
 //
 // 固定収入（給与・賞与。2026-10-11。docs/kakei.md §0.3）も同じルールで、mode が 'income' の画面。収入のルールだけを出し、
-// 入金先・振込日・見込み額の言葉にする。賞与は1回ごとに1件のルール（月・日・額）で、「同じ名前でもう1回足す」で回を増やす。
+// 入金先・振込日・見込み額の言葉にする。賞与は1回ごとに1件のルール（月・日・額）で、「複製して足す」で回を増やす。
 // 履歴は、その年の収入の記録を見込み／確定つきで年ごとに出す（見込み額の変更の版は持たない）。
 //
 // 並べ替え（左の持ち手をつかんで動かす。リストと同じ操作）は、種類（支出・振替）ごとの中で動かせる。
-// 複製は、編集の画面の「複製して足す」から。日・月・額など全部を写した新規の編集を開き、直して保存すると足される。
+// 複製は、編集の画面の「複製して足す」から。日・月・額など全部を写し、品名に「のコピー」を付けた新規の編集を開き、直して保存すると足される。
 
 interface RecurringSettingsProps {
   /** 'expense'＝固定支出（支出・振替）、'income'＝固定収入（給与・賞与）。 */
@@ -101,9 +101,8 @@ export default function RecurringSettings({
 }: RecurringSettingsProps) {
   const isIncome = mode === 'income';
   const [editing, setEditing] = useState<MoneyRecurring | 'new' | null>(null);
-  // 「もう1回」「複製」を足すときの元。「もう1回」は月・日だけ入れ直し、複製は全部を写す。
+  // 「複製して足す」の元。日・月・額など全部を写し、品名に「のコピー」を付けて新規の編集を開く。
   const [template, setTemplate] = useState<MoneyRecurring | null>(null);
-  const [duplicate, setDuplicate] = useState(false);
   // 編集を閉じたら、戻る操作を家計の設定へ返す（開いているあいだは RecurringEditor が入れる）。
   useEffect(() => {
     if (editing === null) backRef.current = null;
@@ -140,7 +139,6 @@ export default function RecurringSettings({
   const save = async (target: MoneyRecurring | null, draft: MoneyRecurringDraft, registerStore: boolean) => {
     setEditing(null);
     setTemplate(null);
-    setDuplicate(false);
     try {
       put(
         target === null
@@ -195,7 +193,6 @@ export default function RecurringSettings({
         mode={mode}
         rule={editing === 'new' ? null : editing}
         template={editing === 'new' ? template : null}
-        duplicate={duplicate}
         wallets={wallets}
         categories={categories}
         budgets={budgets}
@@ -204,25 +201,14 @@ export default function RecurringSettings({
         onClose={() => {
           setEditing(null);
           setTemplate(null);
-          setDuplicate(false);
         }}
         onSubmit={(draft, registerStore) => void save(editing === 'new' ? null : editing, draft, registerStore)}
         onDelete={editing === 'new' ? undefined : () => confirmRemove(editing)}
-        onAddSimilar={
-          editing === 'new'
-            ? undefined
-            : (source) => {
-                setTemplate(source);
-                setDuplicate(false);
-                setEditing('new');
-              }
-        }
         onDuplicate={
           editing === 'new'
             ? undefined
             : (source) => {
                 setTemplate(source);
-                setDuplicate(true);
                 setEditing('new');
               }
         }
@@ -406,13 +392,18 @@ function ruleDetail(rule: MoneyRecurring): string {
     .join('・');
 }
 
+/** 複製の品名。品名があれば「◯◯のコピー」、無ければ種類（見出し）に「のコピー」を付ける。 */
+function copyName(source: MoneyRecurring, categories: MoneyCategory[]): string {
+  const name = source.name.trim();
+  return `${name !== '' ? name : ruleTitle(source, categories)}のコピー`;
+}
+
 type EditorScreen = 'form' | 'category' | 'store';
 
 function RecurringEditor({
   mode,
   rule,
   template,
-  duplicate,
   wallets,
   categories,
   budgets,
@@ -421,16 +412,13 @@ function RecurringEditor({
   onClose,
   onSubmit,
   onDelete,
-  onAddSimilar,
   onDuplicate,
   backRef,
 }: {
   mode: 'expense' | 'income';
   rule: MoneyRecurring | null;
-  /** 賞与の「もう1回」を足すときの元。月・日は入れ直す。 */
+  /** 「複製して足す」の元（全部を写す）。 */
   template: MoneyRecurring | null;
-  /** template を全部写す複製か（false は「もう1回」で、月・日を入れ直す）。 */
-  duplicate: boolean;
   wallets: MoneyWallet[];
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
@@ -439,8 +427,6 @@ function RecurringEditor({
   onClose: () => void;
   onSubmit: (draft: MoneyRecurringDraft, registerStore: boolean) => void;
   onDelete?: () => void;
-  /** 固定収入で、同じ名前・入金先でもう1回（月・日・額）を足す。 */
-  onAddSimilar?: (source: MoneyRecurring) => void;
   /** 全部を写した新しい項目を足す（日・月・額もそのまま）。 */
   onDuplicate?: (source: MoneyRecurring) => void;
   backRef: MutableRefObject<(() => void) | null>;
@@ -458,16 +444,15 @@ function RecurringEditor({
   const [store, setStore] = useState(base?.store ?? '');
   // お店の選択で「お店に登録して使う」を選んだか（保存のときにお店の設定に登録する）。
   const [registerStore, setRegisterStore] = useState(false);
-  const [name, setName] = useState(base?.name ?? '');
-  const [day, setDay] = useState(rule ? String(rule.day) : duplicate && template ? String(template.day) : '');
+  const [name, setName] = useState(rule ? rule.name : template ? copyName(template, categories) : '');
+  const [day, setDay] = useState(rule ? String(rule.day) : template ? String(template.day) : '');
   // 振込日を「第◯◯曜日」で決めるか（賞与など。固定収入だけ）。
   const [byWeekday, setByWeekday] = useState(base?.weekOfMonth != null);
   const [weekOfMonth, setWeekOfMonth] = useState<number | null>(base?.weekOfMonth ?? null);
   const [weekday, setWeekday] = useState<number | null>(base?.weekday ?? null);
   // 給与は休日の前の営業日に振り込まれることが多い。
   const [holiday, setHoliday] = useState<MoneyHolidayRule>(base?.holiday ?? (isIncome ? 'prev' : 'next'));
-  // 賞与の「もう1回」は、月を選び直す（空のまま）。
-  const [months, setMonths] = useState<number[] | null>(rule ? rule.months : template ? (duplicate ? template.months : []) : null);
+  const [months, setMonths] = useState<number[] | null>((rule ?? template)?.months ?? null);
   const [amountMode, setAmountMode] = useState<MoneyRecurring['amountMode']>(base?.amountMode ?? 'estimate');
   const [amount, setAmount] = useState(base && base.amount > 0 ? String(base.amount) : '');
   const [error, setError] = useState<string | null>(null);
@@ -581,7 +566,7 @@ function RecurringEditor({
   return (
     <View style={styles.screen}>
       <ScreenHeader
-        title={`${isIncome ? '固定収入' : '固定支出'}を${rule ? '編集' : duplicate ? '複製して足す' : '足す'}`}
+        title={`${isIncome ? '固定収入' : '固定支出'}を${rule ? '編集' : template ? '複製して足す' : '足す'}`}
         icon="back"
         onClose={onClose}
       />
@@ -733,11 +718,6 @@ function RecurringEditor({
         {rule && onDuplicate && (
           <Pressable accessibilityRole="button" onPress={() => onDuplicate(rule)} style={styles.secondary}>
             <Text style={styles.similarText}>複製して足す</Text>
-          </Pressable>
-        )}
-        {isIncome && rule && onAddSimilar && (
-          <Pressable accessibilityRole="button" onPress={() => onAddSimilar(rule)} style={styles.secondary}>
-            <Text style={styles.similarText}>同じ名前でもう1回（月・日）を足す</Text>
           </Pressable>
         )}
         {onDelete && (
