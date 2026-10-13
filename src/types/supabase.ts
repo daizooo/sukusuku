@@ -201,6 +201,7 @@ export type Database = {
           id: string
           kind: string
           memo: string
+          notify_after: string | null
           notify_days: number[]
           renews_on: string | null
           started_on: string | null
@@ -221,6 +222,7 @@ export type Database = {
           id?: string
           kind: string
           memo?: string
+          notify_after?: string | null
           notify_days?: number[]
           renews_on?: string | null
           started_on?: string | null
@@ -241,6 +243,7 @@ export type Database = {
           id?: string
           kind?: string
           memo?: string
+          notify_after?: string | null
           notify_days?: number[]
           renews_on?: string | null
           started_on?: string | null

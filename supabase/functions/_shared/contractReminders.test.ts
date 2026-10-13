@@ -22,6 +22,7 @@ const contract = (title: string, renews_on: string | null, extra: Partial<Contra
   title,
   renews_on,
   notify_days: [60, 30, 7],
+  notify_after: null,
   visible_member_ids: ['m-me'],
   ...extra,
 });
@@ -126,6 +127,25 @@ assert.equal(collectNotices([contract('済み', '2026-11-12')], me, today, '2026
 assert.equal(
   collectNotices([contract('不正', '2026-11-12', { notify_days: [-30, 30.5] })], me, since, today).length,
   0,
+);
+
+// 更新した（更新日を足した・直した）日以前の節目は知らせない
+{
+  // 1か月進めたサブスク: 更新日 11/12、今日 10/13 に更新。30日前 = 今日 は更新と同じ日なので出さない。7日前 = 11/5 は出す
+  const renewed = contract('更新直後', '2026-11-12', { notify_after: today });
+  assert.equal(collectNotices([renewed], me, since, today).length, 0, '更新した日の節目は出さない');
+  assert.equal(collectNotices([renewed], me, today, '2026-11-05').length, 1, '更新した日より後の節目は出す');
+  // 窓が更新日より前に及んでも（実行が飛んだ後でも）、更新前の節目は拾わない
+  assert.equal(collectNotices([renewed], me, '2026-10-01', today).length, 0);
+  // 更新したのが昨日なら、今日の節目は出す
+  assert.equal(collectNotices([contract('昨日更新', '2026-11-12', { notify_after: since })], me, since, today).length, 1);
+}
+
+// 既定の {30,7,1}: 前日にも知らせる
+assert.equal(
+  collectNotices([contract('前日', '2026-10-14', { notify_days: [30, 7, 1] })], me, since, today).length,
+  1,
+  '更新日の前日',
 );
 
 // ---- 文面 ----

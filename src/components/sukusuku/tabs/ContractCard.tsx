@@ -1,6 +1,5 @@
 'use client';
 
-import { Lock } from 'lucide-react';
 import type { Contract, ContractKind } from '@/types/app';
 import { KIND_LABEL, amountText, renewalBadge, type RenewalTone } from '@/lib/contractUtils';
 
@@ -23,13 +22,11 @@ const BADGE_CLASS: Record<RenewalTone, string> = {
 interface ContractCardProps {
   contract: Contract;
   contractorName: string | null;
-  /** 見せる相手が限られているときの添え書き（「自分だけ」「夫・妻」）。全員に見せているときは null。 */
-  lockLabel: string | null;
   today: string;
   onOpen: () => void;
 }
 
-export default function ContractCard({ contract, contractorName, lockLabel, today, onOpen }: ContractCardProps) {
+export default function ContractCard({ contract, contractorName, today, onOpen }: ContractCardProps) {
   const badge = renewalBadge(contract.renewsOn, today);
   const meta = [contract.company, contractorName, amountText(contract)].filter((part): part is string => !!part);
 
@@ -44,15 +41,9 @@ export default function ContractCard({ contract, contractorName, lockLabel, toda
     >
       <span className="flex items-center gap-2">
         <span className={`rounded-md px-2 py-px text-[11px] font-extrabold ${KIND_CLASS[contract.kind]}`}>
-          {contract.category ? `${KIND_LABEL[contract.kind]}・${contract.category}` : KIND_LABEL[contract.kind]}
+          {KIND_LABEL[contract.kind]}
         </span>
         <span className="flex-1 min-w-0 text-[15px] font-bold text-gray-900 break-words">{contract.title}</span>
-        {lockLabel && (
-          <span className="flex items-center gap-1 text-[11px] font-semibold text-gray-400">
-            <Lock size={12} />
-            {lockLabel}
-          </span>
-        )}
       </span>
       {meta.length > 0 && <span className="text-xs text-gray-500 tabular-nums">{meta.join(' ・ ')}</span>}
       {badge && (

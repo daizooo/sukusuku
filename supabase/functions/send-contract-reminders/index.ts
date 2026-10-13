@@ -67,7 +67,7 @@ Deno.serve(async (request) => {
   // 更新日がこれから来る契約だけ（過ぎたものは一覧のバッジが知らせる）
   const { data: contracts, error: contractsError } = await supabase
     .from('contracts')
-    .select('id, family_id, created_by, kind, title, renews_on, notify_days, visible_member_ids')
+    .select('id, family_id, created_by, kind, title, renews_on, notify_days, notify_after, visible_member_ids')
     .not('renews_on', 'is', null)
     .gte('renews_on', today)
     .returns<ContractRow[]>();
