@@ -34,32 +34,32 @@ export default function MoneyFab({
       {open && <div className="pointer-events-auto absolute inset-0 bg-black/40" aria-hidden="true" {...backdropClose} />}
 
       {open && (
-        <div className="pointer-events-none absolute bottom-[92px] right-4 flex flex-col items-end gap-3">
+        <div className="pointer-events-none absolute bottom-[84px] right-4 flex flex-col items-end gap-3">
           <button
             type="button"
             aria-label="家計の設定"
             onClick={choose(onSettings)}
-            className="pointer-events-auto flex h-14 items-center gap-3 rounded-full border border-gray-200 bg-white px-[22px] text-[17px] font-bold text-gray-900 shadow-lg active:scale-95"
+            className="pointer-events-auto flex h-12 items-center gap-2.5 rounded-full border border-gray-200 bg-white px-[18px] text-[15px] font-bold text-gray-900 shadow-lg active:scale-95"
           >
-            <Settings size={24} className="text-gray-500" />
+            <Settings size={22} className="text-gray-500" />
             家計の設定
           </button>
           <button
             type="button"
             aria-label="レシートを読む"
             onClick={choose(onScan)}
-            className="pointer-events-auto flex h-14 items-center gap-3 rounded-full border border-gray-200 bg-white px-[22px] text-[17px] font-bold text-gray-900 shadow-lg active:scale-95"
+            className="pointer-events-auto flex h-12 items-center gap-2.5 rounded-full border border-gray-200 bg-white px-[18px] text-[15px] font-bold text-gray-900 shadow-lg active:scale-95"
           >
-            <Camera size={24} className="text-blue-600" />
+            <Camera size={22} className="text-blue-600" />
             レシートを読む
           </button>
           <button
             type="button"
             aria-label="記録を追加"
             onClick={choose(onAdd)}
-            className="pointer-events-auto flex h-14 items-center gap-3 rounded-full border border-blue-600 bg-blue-600 px-[22px] text-[17px] font-bold text-white shadow-lg active:scale-95"
+            className="pointer-events-auto flex h-12 items-center gap-2.5 rounded-full border border-blue-600 bg-blue-600 px-[18px] text-[15px] font-bold text-white shadow-lg active:scale-95"
           >
-            <Plus size={24} />
+            <Plus size={22} />
             記録を追加
           </button>
         </div>
@@ -69,10 +69,10 @@ export default function MoneyFab({
         type="button"
         aria-label={open ? 'メニューを閉じる' : 'メニューを開く'}
         onClick={() => setOpen((value) => !value)}
-        className="pointer-events-auto absolute bottom-4 right-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition-all hover:bg-blue-700 active:scale-95"
+        className="pointer-events-auto absolute bottom-4 right-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition-all hover:bg-blue-700 active:scale-95"
       >
         {/* 開いている間は45度回して「×」にする。 */}
-        <Plus size={32} className={`transition-transform ${open ? 'rotate-45' : ''}`} />
+        <Plus size={28} className={`transition-transform ${open ? 'rotate-45' : ''}`} />
       </button>
     </div>
   );

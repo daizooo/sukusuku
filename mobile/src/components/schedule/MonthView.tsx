@@ -17,11 +17,12 @@ import { getTaskTone } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 
 // 月グリッド。Web版の `src/components/sukusuku/schedule/MonthView.tsx` を置き換えたもの。
-// Googleカレンダーの月表示にならい、予定は1行ずつ「印＋タイトル」で積む:
-// - 予定: 主体の色の点
-// - タスク: 灰のチェックの丸（文字も灰。docs/calendar.md §1）
-// - 完了: 薄い灰の取り消し線
+// Googleカレンダーの月表示にならい、予定は1行ずつ色付きの帯にして積む:
+// - 予定: 主体の色の帯（淡い地に濃い文字）
+// - タスク: 灰の帯に灰のチェックの丸（docs/calendar.md §1）
+// - 完了: 薄い灰の帯に取り消し線
 // 曜日は1週目のマスの頭に出し、月の初日は「10月1日」のように月も付ける。
+// 日曜・祝日は赤、土曜は青（曜日の文字も同じ）。今日だけ青い丸に白、前後の月の日は薄い灰。
 // 育児記録はここには出さない（月表示は予定を見渡すための面。記録は日をタップした先で見る）。
 //
 // 押したところで動きが分かれる（Googleカレンダーと同じ）:
@@ -58,9 +59,9 @@ const CELL_CHROME = 6; // マスの上下の余白と枠
 const WEEKDAY_HEIGHT = 12; // 1週目のマスの頭の曜日
 const DATE_HEIGHT = 18; // 日付の丸
 const LABEL_HEIGHT = 11; // 祝日・節目の行
-const CHIP_HEIGHT = 14; // 予定1行
+const CHIP_HEIGHT = 15; // 予定1行（帯）
 const MORE_HEIGHT = 12;
-const CHIP_GAP = 1;
+const CHIP_GAP = 2;
 
 /** 予定が total 件あるマスで、予定へ回せる高さ room に何件出せるか。 */
 const chipsThatFit = (total: number, room: number): number => {
@@ -139,7 +140,17 @@ export default function MonthView({
                     isSelected && styles.cellSelected,
                   ]}
                 >
-                  {w === 0 && <Text style={styles.weekday}>{WEEKDAY_LABELS[columnIndex]}</Text>}
+                  {w === 0 && (
+                    <Text
+                      style={[
+                        styles.weekday,
+                        columnIndex === 0 && styles.dateTextSunday,
+                        columnIndex === 6 && styles.dateTextSaturday,
+                      ]}
+                    >
+                      {WEEKDAY_LABELS[columnIndex]}
+                    </Text>
+                  )}
                   <View style={styles.dateRow}>
                     <Pressable
                       accessibilityRole="button"
@@ -155,7 +166,15 @@ export default function MonthView({
                       <Text
                         style={[
                           styles.dateText,
-                          isToday ? styles.dateTextToday : isOtherMonth ? styles.dateTextOtherMonth : null,
+                          isToday
+                            ? styles.dateTextToday
+                            : isOtherMonth
+                              ? styles.dateTextOtherMonth
+                              : date.getDay() === 0 || holiday !== null
+                                ? styles.dateTextSunday
+                                : date.getDay() === 6
+                                  ? styles.dateTextSaturday
+                                  : null,
                         ]}
                       >
                         {date.getDate() === 1 ? `${date.getMonth() + 1}月1日` : date.getDate()}
@@ -179,29 +198,23 @@ export default function MonthView({
                         key={task.occurrenceKey}
                         accessibilityRole="button"
                         onPress={() => onOpenTask(task)}
-                        // 触れている間は地の色を付けて、触った感を出す。
+                        // 触れている間は帯を少し薄くして、触った感を出す。
                         style={({ pressed }) => [
                           styles.chip,
+                          {
+                            backgroundColor: task.done ? colors.neutralSurface : getTaskTone(task).background,
+                          },
                           pressed && styles.chipPressed,
                           isOtherMonth && styles.chipOtherMonth,
                         ]}
                       >
-                        {task.kind === 'task' ? (
-                          <CheckCircle2 size={9} color={colors.textFaint} />
-                        ) : (
-                          <View
-                            style={[
-                              styles.dot,
-                              { backgroundColor: task.done ? colors.borderStrong : getTaskTone(task).text },
-                            ]}
-                          />
-                        )}
+                        {task.kind === 'task' && <CheckCircle2 size={9} color={colors.textMuted} />}
                         <Text
                           numberOfLines={1}
                           ellipsizeMode="clip"
                           style={[
                             styles.chipText,
-                            task.kind === 'task' && styles.chipTextTask,
+                            { color: getTaskTone(task).text },
                             task.done && styles.chipTextDone,
                           ]}
                         >
@@ -272,6 +285,8 @@ const styles = StyleSheet.create({
   dateText: { fontSize: 11, color: colors.text, fontWeight: '700', fontVariant: ['tabular-nums'] },
   dateTextToday: { color: colors.primaryText, fontWeight: '700' },
   dateTextOtherMonth: { color: colors.textFaint },
+  dateTextSunday: { color: colors.sunday },
+  dateTextSaturday: { color: colors.navActive },
   milestone: { fontSize: 8, textAlign: 'center', color: colors.milestone, fontWeight: '500' },
   holidayLabel: { color: colors.sunday },
   chips: { marginTop: CHIP_GAP, gap: CHIP_GAP },
@@ -281,13 +296,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     borderRadius: 3,
-    paddingHorizontal: 1,
+    paddingHorizontal: 3,
   },
-  chipPressed: { backgroundColor: colors.neutralSurface },
+  chipPressed: { opacity: 0.7 },
   chipOtherMonth: { opacity: 0.5 },
-  dot: { width: 5, height: 5, borderRadius: 999 },
-  chipText: { flex: 1, fontSize: 9, fontWeight: '500', color: colors.text },
-  chipTextTask: { color: colors.textMuted },
+  chipText: { flex: 1, fontSize: 9, fontWeight: '600' },
   chipTextDone: { color: colors.textFaint, textDecorationLine: 'line-through' },
   more: { fontSize: 9, color: colors.textMuted, paddingHorizontal: 2, fontWeight: '700' },
 });

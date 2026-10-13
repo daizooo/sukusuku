@@ -82,6 +82,7 @@ export default function TaskDetailModal({
       <TaskModalShell
         show
         title={tempEditingTask.kind === 'task' ? 'タスクを編集' : '予定を編集'}
+        fixedHeight
         onClose={onClose}
         footer={
           <Pressable

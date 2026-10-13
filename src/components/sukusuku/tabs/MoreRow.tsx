@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 
 // その他タブの1行（docs/family-app.md §4.5）。色つきの丸いアイコン・名前・ひとこと・
-// 必要なら件数や期限のバッジ・右の矢印。押すとその画面へ。
+// 必要なら件数や期限のバッジ（名前と同じ見出しの行の右端）・右の矢印。押すとその画面へ。
 // mobile版は `mobile/src/components/more/MoreRow.tsx`。
 
 export type MoreBadgeTone = 'alert' | 'warn' | 'ok' | 'plain';
@@ -52,16 +52,18 @@ export default function MoreRow({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[15px] font-bold text-gray-900">{title}</span>
+        <span className="flex items-center gap-2">
+          <span className="flex-none text-[15px] font-bold text-gray-900">{title}</span>
+          {badge && (
+            <span
+              className={`ml-auto inline-flex min-w-0 items-center gap-1 rounded-full px-2 py-px text-[11px] font-bold ${BADGE[badgeTone]}`}
+            >
+              <span className="h-1.5 w-1.5 flex-none rounded-full bg-current" />
+              <span className="truncate">{badge}</span>
+            </span>
+          )}
+        </span>
         <span className="block text-xs text-gray-500">{description}</span>
-        {badge && (
-          <span
-            className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-2 py-px text-[11px] font-bold ${BADGE[badgeTone]}`}
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-current" />
-            {badge}
-          </span>
-        )}
       </span>
       <ChevronRight size={18} className="flex-none text-gray-400" />
     </button>

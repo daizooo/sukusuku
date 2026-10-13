@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CornerDownRight } from 'lucide-react';
+import { CornerDownRight, Plus } from 'lucide-react';
 import type { CareLog, DynamicTask, ScheduleView } from '@/types/app';
 import {
   addDays,
@@ -146,7 +146,7 @@ export default function ScheduleTab({
 
   return (
     <div
-      className="p-4 h-full flex flex-col md:max-w-3xl lg:max-w-4xl md:mx-auto md:w-full"
+      className="relative p-4 h-full flex flex-col md:max-w-3xl lg:max-w-4xl md:mx-auto md:w-full"
       {...swipeHandlers}
     >
       {/* 面は月（初期表示）・日（日をタップ）・リストの3つ。見出しの「月▾」で切り替え、
@@ -161,7 +161,6 @@ export default function ScheduleTab({
         selectedDate={selectedDate}
         onPickMonth={onChangeCalendarDate}
         onPickDate={(date) => selectDate(date, false)}
-        onAdd={() => onAddTask(selectedDate)}
         searchQuery={searchQuery}
         onChangeSearchQuery={setSearchInput}
         onStartSearch={() => {
@@ -228,6 +227,16 @@ export default function ScheduleTab({
           />
         </div>
       )}
+
+      {/* 右下の丸い追加ボタン。家計タブのボタンと同じ大きさ・位置（2026-10-13）。 */}
+      <button
+        type="button"
+        aria-label="予定を追加"
+        onClick={() => onAddTask(selectedDate)}
+        className="absolute bottom-4 right-4 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-pink-500 text-white shadow-lg transition-all hover:bg-pink-600 active:scale-95"
+      >
+        <Plus size={28} />
+      </button>
     </div>
   );
 }

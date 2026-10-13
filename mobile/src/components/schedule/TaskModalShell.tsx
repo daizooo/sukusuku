@@ -9,6 +9,12 @@ import SheetModal from '@/components/ui/SheetModal';
 // 画面いっぱいにはせず、Web版と同じく画面の下に浮かぶ枠にする（SheetModal）。
 // 高さは中身なりで、入りきらないときだけ枠が縮んで中身がスクロールする
 // （Web版の `max-h-[90vh]`）。見出しと下のボタンは固定し、保存・完了のボタンは隠れない。
+//
+// 追加・編集の入力は高さを決め打ちにする（fixedHeight）。予定とタスクで項目の数が違うので、
+// 中身なりにすると、切り替えるたびに枠の大きさが変わってしまう（2026-10-13）。詳細の表示は中身なり。
+
+/** 追加・編集の枠の高さ。記録の入力（LOG_SHEET_HEIGHT）と同じ。入りきらない画面では縮む。 */
+const FORM_SHEET_HEIGHT = 640;
 
 interface TaskModalShellProps {
   show: boolean;
@@ -16,6 +22,8 @@ interface TaskModalShellProps {
   onClose: () => void;
   children: ReactNode;
   footer: ReactNode;
+  /** 追加・編集の入力で true。種別の切り替えで枠の大きさが変わらないよう、高さを決め打ちにする。 */
+  fixedHeight?: boolean;
 }
 
 export default function TaskModalShell({
@@ -24,9 +32,10 @@ export default function TaskModalShell({
   onClose,
   children,
   footer,
+  fixedHeight = false,
 }: TaskModalShellProps) {
   return (
-    <SheetModal visible={show} onClose={onClose}>
+    <SheetModal visible={show} onClose={onClose} height={fixedHeight ? FORM_SHEET_HEIGHT : undefined}>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="閉じる" onPress={onClose} hitSlop={12}>
@@ -35,7 +44,7 @@ export default function TaskModalShell({
       </View>
 
       <ScrollView
-        style={styles.scroll}
+        style={[styles.scroll, fixedHeight && styles.scrollFill]}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
@@ -60,6 +69,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '700', color: colors.textSubtle },
   // 中身が多いときだけ縮めてスクロールさせる（flex: 1 にすると中身が少なくても枠が伸びる）。
   scroll: { flexShrink: 1 },
+  // 高さを決め打ちにするときは、中身が少なくても余りを埋めて、下のボタンを枠の底に置く。
+  scrollFill: { flexGrow: 1 },
   content: { paddingHorizontal: 20, paddingVertical: 16 },
   footer: {
     paddingHorizontal: 20,

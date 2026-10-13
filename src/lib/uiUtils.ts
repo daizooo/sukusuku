@@ -44,17 +44,6 @@ export const getTaskTone = (task: {
   participants: string[];
 }): string => (task.kind === 'task' ? TONE_BY_COLOR.gray : getOwnerTone(task.owner, task.participants));
 
-// 月グリッドの予定の点の色（getTaskTone と同じ決め方で、塗り色だけ）。
-export const getTaskDotColor = (task: {
-  kind: TaskKind;
-  owner: string | null;
-  participants: string[];
-}): string => {
-  if (task.kind === 'task') return DOT_BY_COLOR.gray;
-  if (task.owner !== null) return getParticipantDotColor(task.owner);
-  return getParticipantDotColor(task.participants.length === 1 ? task.participants[0] : '');
-};
-
 // 全角数字を半角に変換
 const toHalfWidthDigits = (value: string): string =>
   value.replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0));
