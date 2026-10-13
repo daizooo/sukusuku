@@ -12,7 +12,6 @@ import {
   parseCount,
   renewalBadge,
   sortContracts,
-  visibilityLabel,
 } from './contractUtils.ts';
 
 // 契約の計算（docs/contracts.md）。実行: npm run test:contracts
@@ -88,23 +87,16 @@ assert.equal(parseCount('98,000'), 98000);
 assert.equal(parseCount(''), null);
 assert.equal(parseCount('abc'), null);
 
-// 見せる相手の添え書き: 全員=出さない、自分だけ、限られた人は名前
 const people = [
   { id: 'h', displayName: '夫', relation: 'husband' as const },
   { id: 'w', displayName: '妻', relation: 'wife' as const },
   { id: 'c', displayName: '子', relation: 'child' as const },
 ];
-assert.equal(visibilityLabel(['h', 'w', 'c'], people, 'h'), null);
-assert.equal(visibilityLabel(['h', 'w'], people, 'h'), null, '夫婦に見せていれば印は出さない');
 
 // 見せる相手の初期値: 夫婦と、作った本人（子のアカウントで作ったときは子も入る）
 assert.deepEqual(defaultVisibleMemberIds(people, 'h'), ['h', 'w']);
 assert.deepEqual(defaultVisibleMemberIds(people, 'c'), ['h', 'w', 'c']);
 assert.deepEqual(defaultVisibleMemberIds([], null), []);
-assert.equal(visibilityLabel(['h'], people, 'h'), '自分だけ');
-assert.equal(visibilityLabel(['w'], people, 'h'), '妻');
-assert.equal(visibilityLabel(['h', 'c'], people, 'h'), '夫・子');
-assert.equal(visibilityLabel(['h'], [], 'h'), '自分だけ');
 
 // その他タブの行に添える更新日: 過ぎた契約が先、90日より先は出さない、更新日なしは数えない
 assert.equal(nearestRenewal([], '2026-10-13'), null);

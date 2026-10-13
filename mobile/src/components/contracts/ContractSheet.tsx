@@ -16,7 +16,6 @@ import {
   defaultVisibleMemberIds,
   emptyContractDraft,
   parseCount,
-  visibleCandidates,
 } from '@/lib/contractUtils';
 import { colors } from '@/lib/theme';
 import LogModalShell from '@/components/log/LogModalShell';
@@ -26,19 +25,12 @@ import ContractDateField from './ContractDateField';
 
 /**
  * 契約の追加・編集（docs/contracts.md §7.2）。上から 種類 → 名称 → 会社 → 契約者 → 開始日・更新日 →
- * 契約期間 → 金額と周期 → そのほかの項目（自由項目）→ お知らせ → メモ → 見せる相手。
+ * 契約期間 → 金額と周期 → そのほかの項目（自由項目）→ お知らせ → メモ。
+ * 見せる相手は画面で選ばせず、夫婦を裏で効かせる（defaultVisibleMemberIds）。
  * 更新日・契約期間は空でよい（県民共済のように無い契約。お知らせは更新日があるものだけ）。
  * 編集では「更新した」（更新日を契約期間ぶん進める）と削除がある。
  * Web版は `src/components/sukusuku/modals/ContractModal.tsx`。
  */
-
-/** 見せる相手のチップに使う、メンバーの色。 */
-const MEMBER_DOT: Record<Member['color'], string> = {
-  blue: colors.diaper,
-  pink: colors.danger,
-  emerald: colors.gradeGood,
-  gray: colors.textFaint,
-};
 
 const toDraft = (contract: Contract): ContractDraft => ({
   kind: contract.kind,
@@ -60,7 +52,7 @@ interface ContractSheetProps {
   /** null なら追加。呼び出し側で対象が変わるたびに作り直す。 */
   contract: Contract | null;
   members: Member[];
-  /** 自分の family_members.id。新しい契約の見せる相手の初期値（自分だけ）。 */
+  /** 自分の family_members.id。新しい契約の契約者の初期値と、見せる相手（夫婦と本人）の初期値に使う。 */
   myMemberId: string | null;
   today: string;
   onClose: () => void;
@@ -114,13 +106,6 @@ export default function ContractSheet({
       notifyDays: draft.notifyDays.includes(day)
         ? draft.notifyDays.filter((value) => value !== day)
         : [...draft.notifyDays, day].sort((a, b) => b - a),
-    });
-
-  const toggleMember = (id: string) =>
-    update({
-      visibleMemberIds: draft.visibleMemberIds.includes(id)
-        ? draft.visibleMemberIds.filter((value) => value !== id)
-        : [...draft.visibleMemberIds, id],
     });
 
   const setField = (index: number, patch: Partial<ContractDraft['fields'][number]>) =>
@@ -332,27 +317,6 @@ export default function ContractSheet({
           />
         </View>
 
-        <View style={styles.field}>
-          <FieldLabel>見せる相手（複数選べます）</FieldLabel>
-          <View style={styles.chips}>
-            {visibleCandidates(members).map((member) => {
-              const selected = draft.visibleMemberIds.includes(member.id);
-              return (
-                <Pressable
-                  key={member.id}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  onPress={() => toggleMember(member.id)}
-                  style={[styles.chip, selected && styles.chipSelected]}
-                >
-                  <View style={[styles.memberDot, { backgroundColor: MEMBER_DOT[member.color] }]} />
-                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{member.displayName}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
         {error && <Text style={styles.error}>{error}</Text>}
       </LogModalShell>
     </SheetModal>
@@ -405,8 +369,7 @@ const styles = StyleSheet.create({
   chipSelected: { backgroundColor: colors.contract, borderColor: colors.contract },
   chipText: { fontSize: 13, fontWeight: '700', color: colors.neutralBadgeText },
   chipTextSelected: { color: colors.primaryText },
-  memberDot: { width: 10, height: 10, borderRadius: 5 },
-  customBox: { gap: 8, padding: 10, borderRadius: 12, backgroundColor: colors.neutralSurface },
+  customBox: { gap: 8 },
   customRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   customLabel: { width: 104 },
   suggest: {

@@ -24,7 +24,6 @@ import {
   annualTotal,
   formatYen,
   sortContracts,
-  visibilityLabel,
 } from '@/lib/contractUtils';
 import ContractCard from '@/components/contracts/ContractCard';
 import ContractSheet from '@/components/contracts/ContractSheet';
@@ -227,7 +226,6 @@ export default function ContractsScreen() {
               key={contract.id}
               contract={contract}
               contractorName={memberName(contract.contractorId)}
-              lockLabel={visibilityLabel(contract.visibleMemberIds, members, myMemberId)}
               today={today}
               onPress={() => setEditing(contract)}
             />

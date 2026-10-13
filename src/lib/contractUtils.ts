@@ -119,30 +119,14 @@ export const sortContracts = <T extends Pick<Contract, 'renewsOn' | 'title'>>(co
 
 type ContractMember = { id: string; displayName: string; relation: MemberRelation };
 
-/** 見せる相手として選べる家族。夫婦だけ（子は選ばせない）。 */
-export const visibleCandidates = <T extends { relation: MemberRelation }>(members: T[]): T[] =>
+/** 見せる相手になる家族。夫婦だけ（子は含めない）。画面では選ばせず、初期値として裏で効かせる。 */
+const visibleCandidates = <T extends { relation: MemberRelation }>(members: T[]): T[] =>
   members.filter((member) => member.relation !== 'child');
 
 /** 新しい契約の見せる相手の初期値。夫婦と、作った本人。 */
 export const defaultVisibleMemberIds = (members: ContractMember[], myMemberId: string | null): string[] => {
   const ids = visibleCandidates(members).map((member) => member.id);
   return myMemberId && !ids.includes(myMemberId) ? [...ids, myMemberId] : ids;
-};
-
-/**
- * 見せる相手が限られているときの添え書き。夫婦の全員に見せていれば null（印を出さない）。
- * 自分だけなら「自分だけ」、それ以外は見せる相手の名前を「・」でつなぐ。
- */
-export const visibilityLabel = (
-  visibleMemberIds: string[],
-  members: ContractMember[],
-  myMemberId: string | null,
-): string | null => {
-  const couple = visibleCandidates(members);
-  if (couple.length > 0 && couple.every((member) => visibleMemberIds.includes(member.id))) return null;
-  if (myMemberId !== null && visibleMemberIds.length === 1 && visibleMemberIds[0] === myMemberId) return '自分だけ';
-  const names = members.filter((member) => visibleMemberIds.includes(member.id)).map((member) => member.displayName);
-  return names.length > 0 ? names.join('・') : null;
 };
 
 /** 金額の表示。「¥98,000」。 */

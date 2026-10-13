@@ -1,5 +1,4 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Lock } from 'lucide-react-native';
 import type { Contract, ContractKind } from '@/types/app';
 import { KIND_LABEL, amountText, renewalBadge, type RenewalTone } from '@/lib/contractUtils';
 import { colors } from '@/lib/theme';
@@ -25,14 +24,11 @@ const BADGE_TONE: Record<RenewalTone, { surface: string; text: string }> = {
 export default function ContractCard({
   contract,
   contractorName,
-  lockLabel,
   today,
   onPress,
 }: {
   contract: Contract;
   contractorName: string | null;
-  /** 見せる相手が限られているときの添え書き（「自分だけ」「夫・妻」）。全員に見せているときは null。 */
-  lockLabel: string | null;
   today: string;
   onPress: () => void;
 }) {
@@ -53,12 +49,6 @@ export default function ContractCard({
           <Text style={[styles.kindText, { color: kind.text }]}>{KIND_LABEL[contract.kind]}</Text>
         </View>
         <Text style={styles.title}>{contract.title}</Text>
-        {lockLabel && (
-          <View style={styles.lock}>
-            <Lock size={12} color={colors.textFaint} />
-            <Text style={styles.lockText}>{lockLabel}</Text>
-          </View>
-        )}
       </View>
       {meta !== '' && <Text style={styles.meta}>{meta}</Text>}
       {badge && (
@@ -86,8 +76,6 @@ const styles = StyleSheet.create({
   kind: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 1 },
   kindText: { fontSize: 11, fontWeight: '800' },
   title: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.text },
-  lock: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  lockText: { fontSize: 11, fontWeight: '600', color: colors.textFaint },
   meta: { fontSize: 12, fontWeight: '400', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   badge: {
     flexDirection: 'row',

@@ -17,23 +17,16 @@ import {
   defaultVisibleMemberIds,
   emptyContractDraft,
   parseCount,
-  visibleCandidates,
 } from '@/lib/contractUtils';
 import { ModalShell } from './TaskForm';
 import { Segmented } from './logModalParts';
 
 // 契約の追加・編集（docs/contracts.md §7.2）。上から 種類 → 名称 → 会社 → 契約者 → 開始日・更新日 →
-// 契約期間 → 金額と周期 → そのほかの項目（自由項目）→ お知らせ → メモ → 見せる相手。
+// 契約期間 → 金額と周期 → そのほかの項目（自由項目）→ お知らせ → メモ。
+// 見せる相手は画面で選ばせず、夫婦を裏で効かせる（defaultVisibleMemberIds）。
 // 更新日・契約期間は空でよい（県民共済のように無い契約。お知らせは更新日があるものだけ）。
 // 編集では「更新した」（更新日を契約期間ぶん進める）と削除がある。
 // mobile版は `mobile/src/components/contracts/ContractSheet.tsx` と同じ項目・同じ文言。
-
-const MEMBER_DOT: Record<Member['color'], string> = {
-  blue: 'bg-blue-500',
-  pink: 'bg-red-500',
-  emerald: 'bg-emerald-500',
-  gray: 'bg-gray-400',
-};
 
 const toDraft = (contract: Contract): ContractDraft => ({
   kind: contract.kind,
@@ -55,7 +48,7 @@ interface ContractModalProps {
   /** null なら追加。呼び出し側で対象が変わるたびに作り直す。 */
   contract: Contract | null;
   members: Member[];
-  /** 自分の family_members.id。新しい契約の見せる相手の初期値（自分だけ）。 */
+  /** 自分の family_members.id。新しい契約の契約者の初期値と、見せる相手（夫婦と本人）の初期値に使う。 */
   myMemberId: string | null;
   today: string;
   onClose: () => void;
@@ -69,7 +62,7 @@ const inputClass =
   'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-400';
 const labelClass = 'block text-xs font-bold text-gray-700 mb-1.5';
 
-function Chip({ label, selected, onClick, dot }: { label: string; selected: boolean; onClick: () => void; dot?: string }) {
+function Chip({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -79,7 +72,6 @@ function Chip({ label, selected, onClick, dot }: { label: string; selected: bool
         selected ? 'border-teal-600 bg-teal-600 text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
       }`}
     >
-      {dot && <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />}
       {label}
     </button>
   );
@@ -128,13 +120,6 @@ export default function ContractModal({
       notifyDays: draft.notifyDays.includes(day)
         ? draft.notifyDays.filter((value) => value !== day)
         : [...draft.notifyDays, day].sort((a, b) => b - a),
-    });
-
-  const toggleMember = (id: string) =>
-    update({
-      visibleMemberIds: draft.visibleMemberIds.includes(id)
-        ? draft.visibleMemberIds.filter((value) => value !== id)
-        : [...draft.visibleMemberIds, id],
     });
 
   const setField = (index: number, patch: Partial<ContractDraft['fields'][number]>) =>
@@ -295,7 +280,7 @@ export default function ContractModal({
           </div>
         </div>
 
-        <div className="space-y-2 rounded-xl bg-gray-100 p-2.5">
+        <div className="space-y-2">
           <span className={labelClass}>そのほかの項目</span>
           {draft.fields.map((field, index) => (
             <div key={index} className="flex items-center gap-1.5">
@@ -360,21 +345,6 @@ export default function ContractModal({
             onChange={(event) => update({ memo: event.target.value })}
           />
         </label>
-
-        <div>
-          <span className={labelClass}>見せる相手（複数選べます）</span>
-          <div className="flex flex-wrap gap-1.5">
-            {visibleCandidates(members).map((member) => (
-              <Chip
-                key={member.id}
-                label={member.displayName}
-                dot={MEMBER_DOT[member.color]}
-                selected={draft.visibleMemberIds.includes(member.id)}
-                onClick={() => toggleMember(member.id)}
-              />
-            ))}
-          </div>
-        </div>
 
         {error && <p className="text-xs text-red-500">{error}</p>}
       </div>
