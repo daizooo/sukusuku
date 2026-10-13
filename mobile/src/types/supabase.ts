@@ -1463,6 +1463,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          draw_id: string | null
           family_id: string
           feed_id: string | null
           id: string
@@ -1480,6 +1481,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          draw_id?: string | null
           family_id: string
           feed_id?: string | null
           id?: string
@@ -1497,6 +1499,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          draw_id?: string | null
           family_id?: string
           feed_id?: string | null
           id?: string
@@ -1517,6 +1520,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_records_draw_id_fkey"
+            columns: ["draw_id"]
+            isOneToOne: false
+            referencedRelation: "subsidy_draws"
             referencedColumns: ["id"]
           },
           {
