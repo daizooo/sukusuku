@@ -28,6 +28,7 @@ export default function AddTaskModal({
   return (
     <ModalShell
       title={newTask.kind === 'task' ? 'タスクを追加' : '予定を追加'}
+      fixedHeight
       onClose={onClose}
       footer={
         <button
