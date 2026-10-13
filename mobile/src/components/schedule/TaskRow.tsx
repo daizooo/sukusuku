@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CalendarDays, CheckCircle2, Circle, Clock, Lock, MapPin } from 'lucide-react-native';
 import type { DynamicTask } from '@/types/app';
 import { formatTimeRange } from '@/lib/dateUtils';
-import { getOwnerTone } from '@/lib/uiUtils';
+import { getTaskTone } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 
 // 予定1件の行。Web版の `src/components/sukusuku/schedule/TaskRow.tsx` を置き換えたもの。
@@ -17,7 +17,7 @@ interface TaskRowProps {
 }
 
 export default function TaskRow({ task, onToggle, onOpen, showDate }: TaskRowProps) {
-  const tone = getOwnerTone(task.owner, task.participants);
+  const tone = getTaskTone(task);
 
   return (
     <Pressable

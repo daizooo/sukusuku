@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { DynamicTask } from '@/types/app';
-import { getOwnerTone } from '@/lib/uiUtils';
+import { getTaskTone } from '@/lib/uiUtils';
 import {
   WEEKDAY_LABELS,
   addDays,
@@ -214,7 +214,7 @@ export default function MonthView({
                     className={`w-full text-center text-[9px] leading-tight px-1 py-0.5 rounded border truncate cursor-pointer transition hover:brightness-90 active:brightness-75 ${
                       task.done
                         ? 'bg-gray-100 text-gray-400 border-gray-200 line-through'
-                        : getOwnerTone(task.owner, task.participants)
+                        : getTaskTone(task)
                     } ${isOtherMonth ? 'opacity-50' : ''}`}
                   >
                     {task.title}

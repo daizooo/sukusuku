@@ -2,7 +2,7 @@
 
 import { CalendarDays, CheckCircle2, Circle, Clock, Lock, MapPin } from 'lucide-react';
 import type { DynamicTask } from '@/types/app';
-import { getOwnerTone } from '@/lib/uiUtils';
+import { getTaskTone } from '@/lib/uiUtils';
 import { formatTimeRange } from '@/lib/dateUtils';
 
 interface TaskRowProps {
@@ -38,7 +38,7 @@ export default function TaskRow({ task, onToggle, onOpen, showDate }: TaskRowPro
           </p>
           {task.participants.length > 0 && (
             <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ml-2 ${getOwnerTone(task.owner, task.participants)}`}
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ml-2 ${getTaskTone(task)}`}
             >
               {task.participants.join('・')}
             </span>

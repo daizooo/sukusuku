@@ -15,7 +15,7 @@ import {
 import type { DynamicTask } from '@/types/app';
 import { formatTimeRange } from '@/lib/dateUtils';
 import { summarizeRecurrence } from '@/lib/recurrence';
-import { getOwnerTone } from '@/lib/uiUtils';
+import { getTaskTone } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
 import TaskForm from './TaskForm';
 import TaskModalShell from './TaskModalShell';
@@ -147,7 +147,7 @@ export default function TaskDetailModal({
         <View style={styles.titleActions}>
           {selectedTask.participants.length > 0 &&
             (() => {
-              const tone = getOwnerTone(selectedTask.owner, selectedTask.participants);
+              const tone = getTaskTone(selectedTask);
               return (
                 <View style={[styles.label, { backgroundColor: tone.background, borderColor: tone.border }]}>
                   <Text style={[styles.labelText, { color: tone.text }]}>
