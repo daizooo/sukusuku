@@ -91,6 +91,7 @@ const useElementSize = () => {
  * - タスク: 灰の帯に灰のチェックの丸（docs/calendar.md §1）
  * - 完了: 薄い灰の帯に取り消し線
  * 曜日は1週目のマスの頭に出し、月の初日は「10月1日」のように月も付ける。広い画面では左に週番号を出す。
+ * 日曜・祝日は赤、土曜は青（曜日の文字も同じ）。今日だけ青い丸に白、前後の月の日は薄い灰。
  * 育児記録はここには出さない（月表示は予定を見渡すための面。記録は日をタップした先で見る）。
  *
  * 高さは親から与えられたぶんを週の数で等分する。画面全体をスクロールさせないため、
@@ -190,7 +191,11 @@ export default function MonthView({
                   } ${isSelected ? 'bg-blue-50/70 ring-1 ring-inset ring-blue-400' : ''}`}
                 >
                   {w === 0 && (
-                    <p className="h-3 text-[9px] leading-3 text-center font-bold text-gray-500">
+                    <p
+                      className={`h-3 text-[9px] leading-3 text-center font-bold ${
+                        columnIndex === 0 ? 'text-red-500' : columnIndex === 6 ? 'text-blue-500' : 'text-gray-500'
+                      }`}
+                    >
                       {WEEKDAY_LABELS[columnIndex]}
                     </p>
                   )}
@@ -205,7 +210,15 @@ export default function MonthView({
                       className={`inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full text-[11px] leading-none font-bold cursor-pointer transition ${
                         isToday
                           ? 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700'
-                          : `${isOtherMonth ? 'text-gray-400' : 'text-gray-900'} hover:bg-gray-200 active:bg-gray-300`
+                          : `${
+                              isOtherMonth
+                                ? 'text-gray-400'
+                                : date.getDay() === 0 || holiday
+                                  ? 'text-red-500'
+                                  : date.getDay() === 6
+                                    ? 'text-blue-500'
+                                    : 'text-gray-900'
+                            } hover:bg-gray-200 active:bg-gray-300`
                       }`}
                     >
                       {date.getDate() === 1 ? `${date.getMonth() + 1}月1日` : date.getDate()}

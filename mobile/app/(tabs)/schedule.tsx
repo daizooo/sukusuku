@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Animated, BackHandler, Pressable, ScrollView,
 import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { CornerDownRight } from 'lucide-react-native';
+import { CornerDownRight, Plus } from 'lucide-react-native';
 import type { CareLog, DynamicTask, Participant, ScheduleView, Task } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
@@ -502,7 +502,6 @@ export default function ScheduleScreen() {
           onToday={goToday}
           onStep={step}
           onPickDate={openJumpPicker}
-          onAdd={() => openAddTaskModal(selectedDate)}
           searchQuery={searchQuery}
           onChangeSearchQuery={setSearchQuery}
           onStartSearch={() => {
@@ -579,6 +578,16 @@ export default function ScheduleScreen() {
         )}
       </View>
 
+      {/* 右下の丸い追加ボタン。家計タブのボタンと同じ大きさ・位置（2026-10-13）。 */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="予定を追加"
+        onPress={() => openAddTaskModal(selectedDate)}
+        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+      >
+        <Plus size={32} color={colors.primaryText} />
+      </Pressable>
+
       <AddTaskModal
         show={showAddModal}
         newTask={newTask}
@@ -606,6 +615,19 @@ export default function ScheduleScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   centered: { alignItems: 'center', justifyContent: 'center' },
+  fab: {
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    elevation: 8,
+  },
+  fabPressed: { opacity: 0.85 },
   page: { flex: 1, padding: 16, gap: 12 },
 
   body: { flex: 1, minHeight: 0 },

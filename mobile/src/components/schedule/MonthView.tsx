@@ -22,6 +22,7 @@ import { colors } from '@/lib/theme';
 // - タスク: 灰の帯に灰のチェックの丸（docs/calendar.md §1）
 // - 完了: 薄い灰の帯に取り消し線
 // 曜日は1週目のマスの頭に出し、月の初日は「10月1日」のように月も付ける。
+// 日曜・祝日は赤、土曜は青（曜日の文字も同じ）。今日だけ青い丸に白、前後の月の日は薄い灰。
 // 育児記録はここには出さない（月表示は予定を見渡すための面。記録は日をタップした先で見る）。
 //
 // 押したところで動きが分かれる（Googleカレンダーと同じ）:
@@ -139,7 +140,17 @@ export default function MonthView({
                     isSelected && styles.cellSelected,
                   ]}
                 >
-                  {w === 0 && <Text style={styles.weekday}>{WEEKDAY_LABELS[columnIndex]}</Text>}
+                  {w === 0 && (
+                    <Text
+                      style={[
+                        styles.weekday,
+                        columnIndex === 0 && styles.dateTextSunday,
+                        columnIndex === 6 && styles.dateTextSaturday,
+                      ]}
+                    >
+                      {WEEKDAY_LABELS[columnIndex]}
+                    </Text>
+                  )}
                   <View style={styles.dateRow}>
                     <Pressable
                       accessibilityRole="button"
@@ -155,7 +166,15 @@ export default function MonthView({
                       <Text
                         style={[
                           styles.dateText,
-                          isToday ? styles.dateTextToday : isOtherMonth ? styles.dateTextOtherMonth : null,
+                          isToday
+                            ? styles.dateTextToday
+                            : isOtherMonth
+                              ? styles.dateTextOtherMonth
+                              : date.getDay() === 0 || holiday !== null
+                                ? styles.dateTextSunday
+                                : date.getDay() === 6
+                                  ? styles.dateTextSaturday
+                                  : null,
                         ]}
                       >
                         {date.getDate() === 1 ? `${date.getMonth() + 1}月1日` : date.getDate()}
@@ -266,6 +285,8 @@ const styles = StyleSheet.create({
   dateText: { fontSize: 11, color: colors.text, fontWeight: '700', fontVariant: ['tabular-nums'] },
   dateTextToday: { color: colors.primaryText, fontWeight: '700' },
   dateTextOtherMonth: { color: colors.textFaint },
+  dateTextSunday: { color: colors.sunday },
+  dateTextSaturday: { color: colors.navActive },
   milestone: { fontSize: 8, textAlign: 'center', color: colors.milestone, fontWeight: '500' },
   holidayLabel: { color: colors.sunday },
   chips: { marginTop: CHIP_GAP, gap: CHIP_GAP },

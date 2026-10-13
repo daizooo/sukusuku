@@ -1,11 +1,11 @@
 'use client';
 
-import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import type { ScheduleView } from '@/types/app';
 import { parseDateString, toDateString } from '@/lib/dateUtils';
 
 // 予定タブの見出し（1行）。Googleカレンダーの見出しにならう（ヘルプ・設定・予定とタスクの切り替えは置かない）:
-//   今日 / ‹ › / 年月（押すと月・日を選べる） / 検索 / 表示の切り替え（月・日・リスト） / ＋（予定の追加）
+//   今日 / ‹ › / 年月（押すと月・日を選べる） / 検索 / 表示の切り替え（月・日・リスト）。予定の追加は右下の丸いボタン
 // 検索中は1行まるごと検索欄に替わる。
 // mobile版の `mobile/src/components/schedule/ScheduleHeader.tsx` と同じ並び。
 
@@ -27,7 +27,6 @@ interface ScheduleHeaderProps {
   selectedDate: Date;
   onPickMonth: (month: Date) => void;
   onPickDate: (date: Date) => void;
-  onAdd: () => void;
   /** 検索中の文字。null なら検索していない。 */
   searchQuery: string | null;
   onChangeSearchQuery: (query: string) => void;
@@ -45,7 +44,6 @@ export default function ScheduleHeader({
   selectedDate,
   onPickMonth,
   onPickDate,
-  onAdd,
   searchQuery,
   onChangeSearchQuery,
   onStartSearch,
@@ -139,13 +137,6 @@ export default function ScheduleHeader({
           ))}
         </select>
       </label>
-      <button
-        onClick={onAdd}
-        aria-label="予定を追加"
-        className="flex-none w-8 h-8 md:w-9 md:h-9 rounded-full bg-pink-500 text-white flex items-center justify-center shadow-sm hover:bg-pink-600 active:scale-95 transition"
-      >
-        <Plus size={18} />
-      </button>
     </div>
   );
 }
