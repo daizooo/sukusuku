@@ -21,7 +21,7 @@ import { colors } from '@/lib/theme';
 // - 予定: 主体の色の帯（淡い地に濃い文字）
 // - タスク: 灰の帯に灰のチェックの丸（docs/calendar.md §1）
 // - 完了: 薄い灰の帯に取り消し線
-// 曜日は1週目のマスの頭に出し、月の初日は「10月1日」のように月も付ける。
+// 曜日は1週目のマスの頭に出し、月の初日も他の日と同じく日付の数字だけ（月は見出しに出ている）。
 // 日曜・祝日は赤、土曜は青（曜日の文字も同じ）。今日だけ青い丸に白、前後の月の日は薄い灰。
 // 育児記録はここには出さない（月表示は予定を見渡すための面。記録は日をタップした先で見る）。
 //
@@ -58,7 +58,7 @@ const CHIPS = 4;
 const CELL_CHROME = 6; // マスの上下の余白と枠
 const WEEKDAY_HEIGHT = 12; // 1週目のマスの頭の曜日
 const DATE_HEIGHT = 18; // 日付の丸
-const LABEL_HEIGHT = 11; // 祝日・節目の行
+const LABEL_HEIGHT = 13; // 祝日・節目の行
 const CHIP_HEIGHT = 15; // 予定1行（帯）
 const MORE_HEIGHT = 12;
 const CHIP_GAP = 2;
@@ -177,7 +177,7 @@ export default function MonthView({
                                   : null,
                         ]}
                       >
-                        {date.getDate() === 1 ? `${date.getMonth() + 1}月1日` : date.getDate()}
+                        {date.getDate()}
                       </Text>
                     </Pressable>
                   </View>
@@ -186,6 +186,9 @@ export default function MonthView({
                   {hasLabel && (
                     <Text
                       numberOfLines={1}
+                      // マスの幅（約47dp）に「スポーツの日」などは10で収まらないため、長いものだけ縮める。
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
                       style={[styles.milestone, holiday !== null && styles.holidayLabel]}
                     >
                       {holiday ?? milestone}
@@ -214,6 +217,8 @@ export default function MonthView({
                           ellipsizeMode="clip"
                           style={[
                             styles.chipText,
+                            // 予定だけ中央揃え。タスク（チェックの丸が付く）は左のまま。
+                            task.kind !== 'task' && styles.chipTextCenter,
                             { color: getTaskTone(task).text },
                             task.done && styles.chipTextDone,
                           ]}
@@ -287,7 +292,7 @@ const styles = StyleSheet.create({
   dateTextOtherMonth: { color: colors.textFaint },
   dateTextSunday: { color: colors.sunday },
   dateTextSaturday: { color: colors.navActive },
-  milestone: { fontSize: 8, textAlign: 'center', color: colors.milestone, fontWeight: '500' },
+  milestone: { fontSize: 10, lineHeight: 13, textAlign: 'center', color: colors.milestone, fontWeight: '500' },
   holidayLabel: { color: colors.sunday },
   chips: { marginTop: CHIP_GAP, gap: CHIP_GAP },
   chip: {
@@ -301,6 +306,7 @@ const styles = StyleSheet.create({
   chipPressed: { opacity: 0.7 },
   chipOtherMonth: { opacity: 0.5 },
   chipText: { flex: 1, fontSize: 9, fontWeight: '600' },
+  chipTextCenter: { textAlign: 'center' },
   chipTextDone: { color: colors.textFaint, textDecorationLine: 'line-through' },
   more: { fontSize: 9, color: colors.textMuted, paddingHorizontal: 2, fontWeight: '700' },
 });
