@@ -1,5 +1,6 @@
 import type { WidgetInfo } from 'react-native-android-widget';
 import { CareWidget } from './CareWidget';
+import { TabsCareMoneyWidget, TabsCareWidget, TabsMoneyWidget } from './CombinedWidgets';
 import { LauncherWidget } from './LauncherWidget';
 import { MoneyWidget } from './MoneyWidget';
 import { WIDGET_NAMES } from './widgetNames';
@@ -17,6 +18,12 @@ export async function renderWidget({ widgetName, width, height }: Pick<WidgetInf
       return <CareWidget data={await loadCareWidgetData()} />;
     case WIDGET_NAMES.money:
       return <MoneyWidget />;
+    case WIDGET_NAMES.tabsCareMoney:
+      return <TabsCareMoneyWidget care={await loadCareWidgetData()} />;
+    case WIDGET_NAMES.tabsCare:
+      return <TabsCareWidget care={await loadCareWidgetData()} />;
+    case WIDGET_NAMES.tabsMoney:
+      return <TabsMoneyWidget />;
     default:
       return null;
   }

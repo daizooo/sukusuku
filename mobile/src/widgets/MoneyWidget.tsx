@@ -14,21 +14,28 @@ const BUTTONS: { open: MoneyOpen; icon: WidgetIconName; label: string }[] = [
   { open: 'receipt', icon: 'receipt', label: 'レシート' },
 ];
 
+/** 4つのボタンを並べた1段。タブと1つにまとめたもの（CombinedWidgets.tsx）でも使う。 */
+export function MoneyRow() {
+  return (
+    <ButtonRow>
+      {BUTTONS.map(({ open, icon, label }) => (
+        <ActionButton
+          key={open}
+          icon={icon}
+          label={label}
+          uri={appLink('money', { [OPEN_MONEY_PARAM]: open })}
+          color={colors.money}
+          surface={colors.moneySurface}
+        />
+      ))}
+    </ButtonRow>
+  );
+}
+
 export function MoneyWidget() {
   return (
     <WidgetFrame padding={8}>
-      <ButtonRow>
-        {BUTTONS.map(({ open, icon, label }) => (
-          <ActionButton
-            key={open}
-            icon={icon}
-            label={label}
-            uri={appLink('money', { [OPEN_MONEY_PARAM]: open })}
-            color={colors.money}
-            surface={colors.moneySurface}
-          />
-        ))}
-      </ButtonRow>
+      <MoneyRow />
     </WidgetFrame>
   );
 }

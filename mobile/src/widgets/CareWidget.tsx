@@ -33,39 +33,46 @@ const dueLines = (data: WidgetData<CareWidgetData>): { label: string; value: str
   return { label: '次の目安', value: data.value.dueAt ? formatTimeString(data.value.dueAt) : '—' };
 };
 
-export function CareWidget({ data }: { data: WidgetData<CareWidgetData> }) {
+/** 次の目安と3つのボタンを並べた1段。タブと1つにまとめたもの（CombinedWidgets.tsx）でも使う。 */
+export function CareRow({ data }: { data: WidgetData<CareWidgetData> }) {
   const { label, value } = dueLines(data);
   return (
+    <ButtonRow>
+      <FlexWidget
+        clickAction="OPEN_URI"
+        clickActionData={{ uri: careUri }}
+        accessibilityLabel={`${label} ${value}`}
+        style={{
+          flex: 1,
+          height: 'match_parent',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: hex(colors.milkSurface),
+          borderRadius: 14,
+        }}
+      >
+        <TextWidget text={label} maxLines={1} style={{ fontSize: 11, fontWeight: '500', color: hex(colors.textMuted) }} />
+        <TextWidget text={value} maxLines={1} style={{ fontSize: 18, fontWeight: '700', color: hex(colors.milkText) }} />
+      </FlexWidget>
+      {BUTTONS.map(({ type, icon, label: buttonLabel, color, surface }) => (
+        <ActionButton
+          key={type}
+          icon={icon}
+          label={buttonLabel}
+          uri={appLink('care', { [OPEN_LOG_PARAM]: type })}
+          color={color}
+          surface={surface}
+        />
+      ))}
+    </ButtonRow>
+  );
+}
+
+export function CareWidget({ data }: { data: WidgetData<CareWidgetData> }) {
+  return (
     <WidgetFrame padding={8}>
-      <ButtonRow>
-        <FlexWidget
-          clickAction="OPEN_URI"
-          clickActionData={{ uri: careUri }}
-          accessibilityLabel={`${label} ${value}`}
-          style={{
-            flex: 1,
-            height: 'match_parent',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: hex(colors.milkSurface),
-            borderRadius: 14,
-          }}
-        >
-          <TextWidget text={label} maxLines={1} style={{ fontSize: 11, fontWeight: '500', color: hex(colors.textMuted) }} />
-          <TextWidget text={value} maxLines={1} style={{ fontSize: 18, fontWeight: '700', color: hex(colors.milkText) }} />
-        </FlexWidget>
-        {BUTTONS.map(({ type, icon, label: buttonLabel, color, surface }) => (
-          <ActionButton
-            key={type}
-            icon={icon}
-            label={buttonLabel}
-            uri={appLink('care', { [OPEN_LOG_PARAM]: type })}
-            color={color}
-            surface={surface}
-          />
-        ))}
-      </ButtonRow>
+      <CareRow data={data} />
     </WidgetFrame>
   );
 }

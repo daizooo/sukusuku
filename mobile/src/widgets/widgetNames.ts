@@ -4,6 +4,10 @@ export const WIDGET_NAMES = {
   launcher: 'TabLauncher',
   care: 'CareQuick',
   money: 'MoneyQuick',
+  // タブに育児・家計の段を重ねたもの（CombinedWidgets.tsx）
+  tabsCareMoney: 'TabsCareMoney',
+  tabsCare: 'TabsCare',
+  tabsMoney: 'TabsMoney',
 } as const;
 
 export type WidgetName = (typeof WIDGET_NAMES)[keyof typeof WIDGET_NAMES];
