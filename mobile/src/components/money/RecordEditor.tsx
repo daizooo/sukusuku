@@ -88,7 +88,7 @@ export interface RecordEditorProps {
   onSubmit: (draft: MoneyRecordDraft) => void;
   onDelete: (record: MoneyRecord) => void;
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
-  onArchiveWallet: (wallet: MoneyWallet) => void;
+  onDeleteWallet: (wallet: MoneyWallet) => void;
   onEditCategories: () => void;
   /** レシートの読み取りの結果。あれば、その内容を入れた新しい記録として開く（docs/kakei.md §10.4）。 */
   receipt?: ReceiptScan | null;
@@ -116,7 +116,7 @@ export default function RecordEditor({
   onSubmit,
   onDelete,
   onSaveWallet,
-  onArchiveWallet,
+  onDeleteWallet,
   onEditCategories,
   receipt = null,
   initialKind = 'expense',
@@ -396,7 +396,7 @@ export default function RecordEditor({
             }}
             onClose={back}
             onSave={onSaveWallet}
-            onArchive={onArchiveWallet}
+            onDelete={onDeleteWallet}
           />
         );
       case 'store':

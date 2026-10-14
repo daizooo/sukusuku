@@ -17,6 +17,7 @@ import {
   dateKeyOfDate,
   formatBalance,
   groupWalletSections,
+  WALLET_DELETE_NOTE,
   WALLET_TYPES,
   type WalletBalanceRow,
 } from '@/lib/moneyUtils';
@@ -51,7 +52,7 @@ interface MoneyAccountsViewProps {
   onConfirm: (walletId: string, balanceOn: string, amount: number, showInHistory: boolean) => void;
   onDeleteBalance: (balance: MoneyWalletBalance) => void;
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
-  onArchiveWallet: (wallet: MoneyWallet) => void;
+  onDeleteWallet: (wallet: MoneyWallet) => void;
   onRestoreWallet: (wallet: MoneyWallet) => void;
   onSaveSecurity: (walletId: string, target: MoneySecurity | null, draft: MoneySecurityDraft) => void;
   onArchiveSecurity: (walletId: string, security: MoneySecurity) => void;
@@ -73,7 +74,7 @@ export default function MoneyAccountsView({
   onConfirm,
   onDeleteBalance,
   onSaveWallet,
-  onArchiveWallet,
+  onDeleteWallet,
   onRestoreWallet,
   onSaveSecurity,
   onArchiveSecurity,
@@ -209,6 +210,15 @@ export default function MoneyAccountsView({
                   <button type="button" onClick={() => onRestoreWallet(row.wallet)} className={type.link}>
                     また使う
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`${row.wallet.name}を削除しますか？${WALLET_DELETE_NOTE}`)) onDeleteWallet(row.wallet);
+                    }}
+                    className="text-[13px] font-bold text-red-500"
+                  >
+                    削除
+                  </button>
                 </div>
               ))}
             </div>
@@ -224,7 +234,7 @@ export default function MoneyAccountsView({
           securities={securities}
           onClose={() => setOpenId(null)}
           onSaveWallet={onSaveWallet}
-          onArchiveWallet={onArchiveWallet}
+          onDeleteWallet={onDeleteWallet}
           onSaveSecurity={onSaveSecurity}
           onArchiveSecurity={onArchiveSecurity}
         />
@@ -242,7 +252,7 @@ export default function MoneyAccountsView({
           onConfirm={onConfirm}
           onDeleteBalance={onDeleteBalance}
           onSaveWallet={onSaveWallet}
-          onArchiveWallet={onArchiveWallet}
+          onDeleteWallet={onDeleteWallet}
         />
       )}
       {showTrend && (

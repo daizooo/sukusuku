@@ -411,16 +411,13 @@ export async function updateMoneyWallet(
   return rowToWallet(data);
 }
 
-/** 出金元を使わなくする（記録には残る）。 */
-export async function archiveMoneyWallet(supabase: SupabaseDb, id: string): Promise<MoneyWallet> {
-  const { data, error } = await supabase
-    .from('money_wallets')
-    .update({ archived_at: new Date().toISOString() })
-    .eq('id', id)
-    .select('*')
-    .single();
+/**
+ * 出金元を削除する。記録は残り、出金元は「なし」になる（DBの外部キーが on delete set null）。
+ * その出金元で確定した残高・証券の保有・取り込みのルールは一緒に消える（on delete cascade）。
+ */
+export async function deleteMoneyWallet(supabase: SupabaseDb, id: string): Promise<void> {
+  const { error } = await supabase.from('money_wallets').delete().eq('id', id);
   if (error) throw error;
-  return rowToWallet(data);
 }
 
 /** 使わなくした出金元をまた使う。 */

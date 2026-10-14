@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { Clock, Lock, MapPin, Repeat, Star, Users, Text as TextIcon } from 'lucide-react-native';
 import type { Participant, Task, TaskKind } from '@/types/app';
@@ -12,6 +12,7 @@ import {
 } from '@/lib/dateUtils';
 import { getParticipantColor } from '@/lib/uiUtils';
 import { colors } from '@/lib/theme';
+import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import SelectField from '@/components/ui/SelectField';
 import {
   defaultRecurrence,
@@ -79,6 +80,13 @@ export default function TaskForm({ value, onChange }: TaskFormProps) {
       set(value.anchorType === 'birth_relative' ? { kind, anchorType: 'absolute' } : { kind });
     }
   };
+
+  // 予定/タスクは、切り替えの帯と入力欄の上の左右スワイプでも切り替える。
+  const swipe = useSwipeTabs(
+    KIND_TABS.map((tab) => tab.value),
+    value.kind,
+    setKind,
+  );
 
   const toggleAllDay = () => {
     // 終日 <-> 時刻あり。時刻ありに切り替えたときは 09:00 を初期値にする。
@@ -167,7 +175,8 @@ export default function TaskForm({ value, onChange }: TaskFormProps) {
   };
 
   return (
-    <View style={styles.form}>
+    <View {...swipe.handlers}>
+    <Animated.View style={[styles.form, swipe.style]}>
       {/* 種別（予定/タスク） */}
       <View style={styles.switcher}>
         {KIND_TABS.map((tab) => {
@@ -379,6 +388,7 @@ export default function TaskForm({ value, onChange }: TaskFormProps) {
           })}
         </View>
       </View>
+    </Animated.View>
     </View>
   );
 }

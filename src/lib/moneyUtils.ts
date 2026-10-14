@@ -80,6 +80,9 @@ export const RECORD_KIND_LABEL: Record<MoneyRecordKind, string> = {
 };
 
 /** 出金元の種類（Zaim の「出金元の選択」と同じ並び）。 */
+/** 出金元を削除するときの確認文（記録は残り、出金元は「なし」になる）。 */
+export const WALLET_DELETE_NOTE = '記録は残りますが、出金元はなしになります。確定した残高や取り込みのルールは消えます。';
+
 export const WALLET_TYPES: { id: MoneyWalletType; label: string }[] = [
   { id: 'cash', label: '財布' },
   { id: 'card', label: 'カード' },

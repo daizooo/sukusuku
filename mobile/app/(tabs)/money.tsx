@@ -28,7 +28,7 @@ import { getMyMembership } from '@/lib/api/me';
 import { useFamilyRefresh } from '@/lib/familySync';
 import { OPEN_MONEY_PARAM, parseMoneyOpen } from '@/lib/appLinks';
 import {
-  archiveMoneyWallet,
+  deleteMoneyWallet,
   deleteMoneyRecord,
   deleteMoneyWalletBalance,
   insertMoneyWallet,
@@ -385,12 +385,14 @@ export default function MoneyScreen() {
     }
   };
 
-  const archiveWallet = async (wallet: MoneyWallet) => {
+  // 出金元を削除する。記録は残り、出金元は「なし」になる。DBで書き換わるものが多い（記録・ルール・補正・保有）ので読み直す。
+  const deleteWallet = async (wallet: MoneyWallet) => {
+    if (!familyId) return;
     try {
-      const saved = await archiveMoneyWallet(supabase, wallet.id);
-      setWallets((prev) => prev.map((entry) => (entry.id === saved.id ? saved : entry)));
+      await deleteMoneyWallet(supabase, wallet.id);
+      await reload(familyId);
     } catch {
-      failed('保存');
+      failed('削除');
     }
   };
 
@@ -544,7 +546,7 @@ export default function MoneyScreen() {
               onConfirm={(walletId, balanceOn, amount, showInHistory) => void confirmBalance(walletId, balanceOn, amount, showInHistory)}
               onDeleteBalance={(balance) => void removeBalance(balance)}
               onSaveWallet={saveWallet}
-              onArchiveWallet={(wallet) => void archiveWallet(wallet)}
+              onDeleteWallet={(wallet) => void deleteWallet(wallet)}
               onRestoreWallet={(wallet) => void restoreWallet(wallet)}
               onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
               onNeedSecurityHistory={needSecurityHistory}
@@ -593,7 +595,7 @@ export default function MoneyScreen() {
           onSubmit={(draft) => void saveRecord(draft)}
           onDelete={(record) => void removeRecord(record)}
           onSaveWallet={saveWallet}
-          onArchiveWallet={(wallet) => void archiveWallet(wallet)}
+          onDeleteWallet={(wallet) => void deleteWallet(wallet)}
           onEditCategories={() => setEditingCategories(true)}
         />
       )}

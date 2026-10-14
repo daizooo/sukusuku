@@ -3,13 +3,13 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { Check, Pencil, Plus } from 'lucide-react-native';
 import type { MoneyWallet, MoneyWalletDraft, MoneyWalletType } from '@/types/app';
 import { colors } from '@/lib/theme';
-import { cardScheduleLabel, PAY_MONTH_OPTIONS, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
+import { cardScheduleLabel, PAY_MONTH_OPTIONS, WALLET_DELETE_NOTE, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import { PrimaryButton, ScreenHeader, WalletTypeIcon } from '@/components/money/moneyVisual';
 
 // 出金元の選択（docs/kakei.md §3.2）。PWA版の `src/components/sukusuku/money/WalletPicker.tsx` と同じ並び・文言。
-// 種類（財布・カード・口座…）ごとに並べる。ここで出金元を足す・直す・使わなくする。
+// 種類（財布・カード・口座…）ごとに並べる。ここで出金元を足す・直す・削除する。
 // カードは締め日・引き落とし日・引き落とし口座を持てる。そろうと、引き落とし日にカード代金の振替（見込み）が
 // 自動で作られる（docs/kakei.md §3.4）。
 
@@ -20,10 +20,10 @@ interface WalletPickerProps {
   onPick: (walletId: string) => void;
   onClose: () => void;
   onSave: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
-  onArchive: (wallet: MoneyWallet) => void;
+  onDelete: (wallet: MoneyWallet) => void;
 }
 
-export default function WalletPicker({ title, wallets, selectedId, onPick, onClose, onSave, onArchive }: WalletPickerProps) {
+export default function WalletPicker({ title, wallets, selectedId, onPick, onClose, onSave, onDelete }: WalletPickerProps) {
   const [editing, setEditing] = useState<MoneyWallet | 'new' | null>(null);
   const usable = wallets.filter((wallet) => !wallet.archived);
 
@@ -89,13 +89,13 @@ export default function WalletPicker({ title, wallets, selectedId, onPick, onClo
             // 足したばかりの出金元は、そのまま選ぶ。
             if (saved && target === null) onPick(saved.id);
           }}
-          onArchive={
+          onDelete={
             editing === 'new'
               ? undefined
               : () => {
                   const target = editing;
                   setEditing(null);
-                  onArchive(target);
+                  onDelete(target);
                 }
           }
         />
@@ -115,14 +115,14 @@ export function WalletSheet({
   wallets,
   onClose,
   onSubmit,
-  onArchive,
+  onDelete,
 }: {
   wallet: MoneyWallet | null;
   /** 引き落とし口座の候補に使う。 */
   wallets: MoneyWallet[];
   onClose: () => void;
   onSubmit: (draft: MoneyWalletDraft) => void;
-  onArchive?: () => void;
+  onDelete?: () => void;
 }) {
   const [name, setName] = useState(wallet?.name ?? '');
   const [type, setType] = useState<MoneyWalletType>(wallet?.type ?? 'card');
@@ -154,10 +154,10 @@ export function WalletSheet({
     });
   };
 
-  const archive = () =>
-    Alert.alert(`${wallet?.name ?? ''}を使わなくしますか？`, '選べなくなりますが、記録には残ります。', [
+  const remove = () =>
+    Alert.alert(`${wallet?.name ?? ''}を削除しますか？`, WALLET_DELETE_NOTE, [
       { text: 'やめる', style: 'cancel' },
-      { text: '使わなくする', style: 'destructive', onPress: () => onArchive?.() },
+      { text: '削除する', style: 'destructive', onPress: () => onDelete?.() },
     ]);
 
   return (
@@ -168,9 +168,9 @@ export function WalletSheet({
         footer={
           <>
             <PrimaryButton label="保存する" onPress={submit} />
-            {onArchive && (
-              <Pressable accessibilityRole="button" onPress={archive} style={styles.secondary}>
-                <Text style={styles.deleteText}>使わなくする</Text>
+            {onDelete && (
+              <Pressable accessibilityRole="button" onPress={remove} style={styles.secondary}>
+                <Text style={styles.deleteText}>削除する</Text>
               </Pressable>
             )}
           </>
