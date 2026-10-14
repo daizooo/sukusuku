@@ -39,6 +39,14 @@ export interface NotificationContent {
   url: string;
   /** 予定のリマインダーだけが持つ。お知らせを予定ごとに分けるのに使う。 */
   taskId?: string;
+  /**
+   * 通知の上のボタン（タスクの「完了」）。持たせると、OSに出させず
+   * アプリ（expo-notifications）に出させる（下の deliver）。値はアプリが登録するものと合わせる
+   * （mobile/src/lib/notificationActions.ts の NOTIFICATION_CATEGORY）。
+   */
+  categoryId?: 'task-complete';
+  /** 予定のリマインダーの回の日付（YYYY-MM-DD）。「完了」で、繰り返すタスクのどの回かを決める。 */
+  date?: string;
 }
 
 export interface DeliveryResult {
@@ -71,6 +79,28 @@ const channelOf = (content: NotificationContent): string => {
   // 万一届いたときに無いチャンネルへ送って落とさないよう、予定と同じ扱いにしておく。
   return 'task-reminder';
 };
+
+/**
+ * ボタン付きのお知らせの中身。データだけのメッセージに載せる。
+ *
+ * **ボタンはOSが出すお知らせ（notification を載せたメッセージ）には付けられない。**
+ * そこでデータだけで送り、アプリ側の expo-notifications に出させる。アプリが閉じていても、
+ * title か message があれば expo-notifications が出し、categoryId のボタンを付ける
+ * （ExpoHandlingDelegate。キーの名前は expo-notifications の NotificationData が読むもの）。
+ * tag はそのままお知らせのidになるので、同じ用件は積み上げずに差し替わる。
+ * アプリを開いている間は出さない決まりなので、アプリが自分で出す（notificationActions.ts）。
+ */
+const actionableData = (content: NotificationContent): Record<string, string> => ({
+  title: content.title,
+  message: content.body,
+  channelId: channelOf(content),
+  tag: tagOf(content),
+  categoryId: content.categoryId!,
+  ...(content.kind ? { kind: content.kind } : {}),
+  ...(content.taskId ? { taskId: content.taskId } : {}),
+  ...(content.date ? { date: content.date } : {}),
+  url: content.url,
+});
 
 /**
  * 配信に使う鍵。1回の実行で何通も送るので、鍵の用意は1度だけにする。
@@ -125,6 +155,9 @@ export class DeliveryContext {
   ): Promise<DeliveryResult> {
     try {
       const fcm = await this.getFcm();
+      if (content.categoryId) {
+        return await sendFcmData(fcm, fcmTokenOf(target.endpoint), actionableData(content), ttlSeconds);
+      }
       return await sendFcmNotification(fcm, fcmTokenOf(target.endpoint), {
         title: content.title,
         body: content.body,

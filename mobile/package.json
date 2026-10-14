@@ -2,7 +2,7 @@
   "name": "sukusuku-mobile",
   "version": "0.1.0",
   "private": true,
-  "main": "expo-router/entry",
+  "main": "index.ts",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android --app-id com.sukusuku.app.dev",
@@ -24,6 +24,7 @@
     "expo-router": "~6.0.24",
     "expo-sqlite": "~16.0.10",
     "expo-status-bar": "~3.0.9",
+    "expo-task-manager": "~14.0.9",
     "lucide-react-native": "^1.47.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",

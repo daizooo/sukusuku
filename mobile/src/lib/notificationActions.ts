@@ -1,0 +1,158 @@
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import { supabase } from '@/lib/supabase';
+import { updateTaskDone, updateTaskDoneDates } from '@/lib/api/tasks';
+
+// お知らせの上のボタン。タスクのリマインダーに「完了」を付け、アプリを開かずに完了にできるようにする（docs/notifications.md §15）。
+//
+// ボタンはOSが出すお知らせには付けられないので、タスクのリマインダーだけはサーバーがデータだけで送り、
+// expo-notifications に出させる（supabase/functions/_shared/deliver.ts の actionableData）。
+// 押したときの処理は3つの入口から来るが、中身はすべて handleNotificationAction に通す。
+//
+//   - アプリが裏にいる・閉じている: expo-task-manager の背景の処理（notificationActionTask.ts）
+//   - アプリを開いている: お知らせの応答の受け手（app/_layout.tsx）
+//   - 閉じている間に押されて背景の処理が動かなかった分: 次に開いたとき、同じ受け手に届く
+//
+// 同じ押下が2つの入口から届くことがあるので、一度済ませた押下は覚えておいて二度は行わない
+// （完了は何度しても同じだが、余計な書き込みを避ける）。
+
+/** ボタンの組の名前。送る側（_shared/deliver.ts の categoryId）と合わせる。 */
+export const NOTIFICATION_CATEGORY = {
+  taskComplete: 'task-complete',
+} as const;
+
+const ACTION_COMPLETE = 'complete';
+
+/** 済ませた押下の控え。新しいものから残す数。 */
+const HANDLED_KEY = 'sukusuku.notificationActions.handled';
+const HANDLED_LIMIT = 50;
+
+/**
+ * ボタンの組を端末に登録する。起動のたびに呼んでよい（同じ名前なら上書きされるだけ）。
+ * 登録は端末に残るので、アプリが閉じている間に届いたお知らせにもボタンが付く。
+ */
+export async function configureNotificationCategories(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORY.taskComplete, [
+    {
+      identifier: ACTION_COMPLETE,
+      buttonTitle: '完了',
+      options: { opensAppToForeground: false },
+    },
+  ]);
+}
+
+type NotificationData = Record<string, unknown>;
+
+const stringOf = (value: unknown): string | null =>
+  typeof value === 'string' && value ? value : null;
+
+/** お知らせを、中身はそのままで本文だけ差し替えて出し直す（できなかったことを伝える）。 */
+async function presentAgain(request: Notifications.NotificationRequest, body: string): Promise<void> {
+  const data = (request.content.data ?? {}) as NotificationData;
+  const categoryId = stringOf(data.categoryId);
+  await Notifications.scheduleNotificationAsync({
+    identifier: request.identifier,
+    content: {
+      title: request.content.title ?? stringOf(data.title) ?? '',
+      body,
+      data,
+      ...(categoryId ? { categoryIdentifier: categoryId } : {}),
+    },
+    trigger: { channelId: stringOf(data.channelId) ?? 'task-reminder' },
+  });
+}
+
+/**
+ * アプリを開いている間に届いた、ボタン付きのお知らせを出す。
+ *
+ * データだけのメッセージは、アプリを開いている間は expo-notifications が出さない
+ * （閉じている間は出す）。そこで届いたものをそのまま、ボタンを付けて自分で出す。
+ * 自分で出したお知らせもここへ来るので、サーバーから届いたもの（push）だけを扱う。
+ */
+export async function presentActionableNotification(
+  notification: Notifications.Notification,
+): Promise<void> {
+  const { request } = notification;
+  if ((request.trigger as { type?: unknown } | null)?.type !== 'push') return;
+  const data = (request.content.data ?? {}) as NotificationData;
+  const categoryId = stringOf(data.categoryId);
+  if (!categoryId) return;
+
+  await Notifications.scheduleNotificationAsync({
+    // 閉じている間に届いたときと同じidにする（同じ用件は差し替わる。消すときも同じ規則）
+    identifier: stringOf(data.tag) ?? request.identifier,
+    content: {
+      title: request.content.title ?? stringOf(data.title) ?? '',
+      body: request.content.body ?? stringOf(data.message) ?? '',
+      data,
+      categoryIdentifier: categoryId,
+    },
+    trigger: { channelId: stringOf(data.channelId) ?? 'task-reminder' },
+  });
+}
+
+const handledInMemory = new Set<string>();
+
+/** この押下をまだ済ませていなければ、済ませたことにして true を返す。 */
+async function claim(key: string): Promise<boolean> {
+  if (handledInMemory.has(key)) return false;
+  handledInMemory.add(key);
+  try {
+    const raw = await AsyncStorage.getItem(HANDLED_KEY);
+    const handled: string[] = raw ? (JSON.parse(raw) as string[]) : [];
+    if (handled.includes(key)) return false;
+    await AsyncStorage.setItem(HANDLED_KEY, JSON.stringify([key, ...handled].slice(0, HANDLED_LIMIT)));
+  } catch {
+    // 控えが読めなくても、押されたことは済ませる（二重になるよりは、やらないほうが困る）
+  }
+  return true;
+}
+
+/**
+ * タスクを完了にする。繰り返すタスクは、お知らせの回（date）だけを完了にする
+ * （予定タブの完了の切り替えと同じ。app/(tabs)/schedule.tsx の toggleTodo）。
+ */
+async function completeTask(taskId: string, date: string | null): Promise<void> {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('recurrence, done_dates')
+    .eq('id', taskId)
+    .single();
+  if (error) throw error;
+  if (data.recurrence && date) {
+    const dates = data.done_dates ?? [];
+    if (!dates.includes(date)) await updateTaskDoneDates(supabase, taskId, [...dates, date]);
+    return;
+  }
+  await updateTaskDone(supabase, taskId, true);
+}
+
+/**
+ * お知らせのボタンが押されたときの処理。ボタンの押下でなければ何もせず false。
+ * 済ませたらお知らせを消す。できなければ、そのことを本文にして出し直す（もう一度押せる）。
+ */
+export async function handleNotificationAction(
+  response: Notifications.NotificationResponse,
+): Promise<boolean> {
+  const { actionIdentifier, notification } = response;
+  if (actionIdentifier !== ACTION_COMPLETE) return false;
+
+  const { request } = notification;
+  const key = [request.identifier, notification.date, actionIdentifier].join('|');
+  if (!(await claim(key))) return true;
+
+  const data = (request.content.data ?? {}) as NotificationData;
+
+  const taskId = stringOf(data.taskId);
+  if (!taskId) return true;
+  try {
+    await completeTask(taskId, stringOf(data.date));
+  } catch {
+    await presentAgain(request, '完了にできませんでした。アプリを開いて完了にしてください。');
+    return true;
+  }
+  await Notifications.dismissNotificationAsync(request.identifier);
+  return true;
+}

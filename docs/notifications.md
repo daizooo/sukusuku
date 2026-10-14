@@ -1117,3 +1117,46 @@ select status, return_message, start_time from cron.job_run_details
 （`2026-11-12` の30日前は `2026-10-13`）で確かめられる。ほかに、その契約が**その端末の持ち主に見えるか**
 （作った本人か、見せる相手に入っているか。アカウントの無い子の端末は無い）も確かめる。
 
+
+---
+
+## 15. お知らせの上の「完了」ボタン（2026-10-14に追加）
+
+予定のリマインダーのうち**タスク**（`tasks.kind = 'task'`）には「完了」ボタンを付け、アプリを開かずに完了にできる。
+繰り返すタスクはお知らせの回だけを完了にする（`done_dates` に日付を足す。予定タブの完了と同じ）。
+予定（`kind = 'event'`）には完了が無いので付けない。
+
+検温のお知らせにも記録のボタンを付ける案があったが、通知の上では体温の値を見ながら選べない
+（入力欄は自由入力しか置けず、ボタンは3つまで）ため、付けないことにした。タップで体温の入力画面が開く（§9）。
+
+### 送り方: タスクのリマインダーだけデータだけで送る
+
+ボタンは、OSが出すお知らせ（`notification` を載せたFCMのメッセージ）には付けられない。そこでタスクの
+リマインダーは**データだけのメッセージ**で送り、アプリ側の expo-notifications に出させる（`_shared/deliver.ts` の
+`actionableData`。中身に `categoryId` を持たせたものがこの扱いになる）。
+
+- アプリが閉じている・裏にいる: expo-notifications が `title`・`message` から出し、`categoryId` のボタンを付ける。
+  お知らせのidは `tag`（`task-<id>`）になるので、§10 の掃除もそのまま効く
+- アプリを開いている: expo-notifications はデータだけのメッセージを出さないので、アプリが届いたものを
+  そのまま自分で出す（`mobile/src/lib/notificationActions.ts` の `presentActionableNotification`）
+- 古いアプリ（ボタンの組を登録する前の版）にも、ボタン無しで同じように出る
+
+### 押したときの処理
+
+`mobile/src/lib/notificationActions.ts` の `handleNotificationAction` が受け持つ。入口は2つ。
+
+- アプリが裏にいる・閉じている: expo-task-manager の背景の処理（`notificationActionTask.ts`。
+  アプリの入口 `mobile/index.ts` から読んで、画面より先に定める）
+- アプリを開いている／閉じている間の押下が次の起動で届いた: お知らせの応答の受け手（`app/_layout.tsx`）
+
+同じ押下が両方から届くことがあるので、済ませた押下は端末に控え、二度は行わない。
+済ませたらお知らせを消す。通信の失敗などでできなかったときは、そのことを本文にして同じお知らせを出し直す（もう一度押せる）。
+
+### セットアップ
+
+```bash
+supabase functions deploy send-reminders
+```
+
+DBの変更は無い。Functionを先に出しても、古いアプリにはボタン無しで届くだけで困らない。
+ボタンが付くのは expo-task-manager を入れた版のアプリ（`.apk`）から。PWA版は通知を受け取らないので対象外。

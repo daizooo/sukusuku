@@ -27,7 +27,7 @@ import SheetModal from '@/components/ui/SheetModal';
 // 体温の記録。Web版には無い、ネイティブから足した記録（docs/what-to-record.md §4-1）。
 //
 // 入れるのは体温計に出た数字ひとつだけなので、入力もその1つに絞る。
-// 熱があるときは何度も測ることになるため、前回の値から始められるようにしてある。
+// 新しく記録するときは、前回の値ではなく一律で 37.0℃ から始める（前回は見比べる相手として出す）。
 
 export interface TemperatureLogInput {
   celsius: number;
@@ -40,7 +40,7 @@ interface TemperatureLogModalProps {
   log: TemperatureLog | null;
   /** 新規追加時に記録する日。過去の日を表示中でもその日に登録する。 */
   baseDate: Date;
-  /** 表示中の日でいちばん新しい体温。新規追加のときの初期値と、比べる相手に使う。 */
+  /** 表示中の日でいちばん新しい体温。新規追加のときに見比べる相手として出す。 */
   previous: TemperatureLog | null;
   /** この子の平熱。記録がまだ少なければ null。 */
   baseline: TemperatureBaseline | null;
@@ -76,7 +76,7 @@ function TemperatureLogModalBody({
   // 値は入力欄の文字列だけで持つ（ボタンでの上げ下げもこの文字列を書き換える）。
   // 数値と文字列を別々に持つと、打ちかけの「37.」のような状態でずれるため。
   const [input, setInput] = useState(() =>
-    (log?.celsius ?? previous?.celsius ?? DEFAULT_CELSIUS).toFixed(1),
+    (log?.celsius ?? DEFAULT_CELSIUS).toFixed(1),
   );
   // 新規は表示中の日 + 今の時刻。編集は保存されている日時をそのまま出す。
   const [time, setTime] = useState(() => {
@@ -101,7 +101,7 @@ function TemperatureLogModalBody({
 
   // 上げ下げは、読めない値を入れている途中なら初期値から始める。
   const step = (diff: number) => {
-    const from = celsius ?? previous?.celsius ?? DEFAULT_CELSIUS;
+    const from = celsius ?? DEFAULT_CELSIUS;
     const next = Math.min(MAX_CELSIUS, Math.max(MIN_CELSIUS, roundCelsius(from + diff)));
     setInput(next.toFixed(1));
   };
@@ -130,7 +130,6 @@ function TemperatureLogModalBody({
       {!log && previous && (
         <HintBanner accent="temperature">
           前回は {formatCelsius(previous.celsius)}（{formatTimeString(previous.time)}）。
-          その値から始めています。
         </HintBanner>
       )}
 

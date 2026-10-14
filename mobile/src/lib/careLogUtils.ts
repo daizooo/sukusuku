@@ -87,7 +87,7 @@ export const LOW_CELSIUS = 35.0;
 /** 入力できる体温の範囲(℃)。体温計が出さない値は打ち間違いとして弾く。 */
 export const MIN_CELSIUS = 30.0;
 export const MAX_CELSIUS = 43.0;
-/** 記録が1件も無いときの初期値(℃)。 */
+/** 新しく記録するときの初期値(℃)。前回の値によらず一律でここから始める。 */
 export const DEFAULT_CELSIUS = 37.0;
 /** ボタンで上げ下げする幅(℃)。 */
 export const CELSIUS_STEP = 0.1;
