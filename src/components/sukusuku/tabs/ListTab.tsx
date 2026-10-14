@@ -972,7 +972,6 @@ export default function ListTab({
         {/* 枠そのものを足す。お店が増えたらここから作る。 */}
         {selected && (
           <AddRow
-            tone="outlined"
             label="グループを追加"
             placeholder="グループの名前（例: イオン）"
             onSubmit={(name) => {
