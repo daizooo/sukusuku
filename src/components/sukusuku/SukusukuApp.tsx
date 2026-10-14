@@ -1345,14 +1345,40 @@ function SukusukuAppContent({
     }
   };
 
-  const addItemHandler = async (listId: string, groupId: string | null, title: string) => {
-    const position = listItems.filter((i) => i.listId === listId).length;
+  /**
+   * 項目を足して、足した項目を返す（失敗したら null）。`at` を渡すと、リスト全体の並び
+   * （`order`）の中で `afterId` の項目の下へ入れる。途中に入れるときは並びを振り直す。
+   */
+  const addItemHandler = async (
+    listId: string,
+    groupId: string | null,
+    title: string,
+    at?: { order: string[]; afterId: string | null },
+  ): Promise<ListItem | null> => {
+    const order = at?.order ?? listItems.filter((i) => i.listId === listId).map((i) => i.id);
+    const after = at?.afterId ? order.indexOf(at.afterId) : -1;
+    const insertAt = after < 0 ? order.length : after + 1;
     try {
-      const created = await insertItem(supabase, { listId, groupId, title, position });
-      setListItems((prev) => [...prev, created]);
+      const created = await insertItem(supabase, { listId, groupId, title, position: order.length });
+      if (insertAt >= order.length) {
+        setListItems((prev) => [...prev, created]);
+        return created;
+      }
+      const ordered = [...order];
+      ordered.splice(insertAt, 0, created.id);
+      setListItems((prev) => applyPositions([...prev, created], ordered));
+      try {
+        await updateItemPositions(supabase, ordered);
+      } catch (err) {
+        console.error('Failed to reorder list items:', err);
+        setListItems((prev) => applyPositions(prev, [...order, created.id]));
+        alert('並び順の保存に失敗しました。もう一度お試しください。');
+      }
+      return created;
     } catch (err) {
       console.error('Failed to add list item:', err);
       alert('項目の追加に失敗しました。もう一度お試しください。');
+      return null;
     }
   };
 

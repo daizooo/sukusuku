@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -40,7 +40,16 @@ import {
 } from '@/lib/api/lists';
 import ListEditorModal from '@/components/list/ListEditorModal';
 import ListOverviewCard from '@/components/list/ListOverviewCard';
-import { AddRow, GroupHeader, ItemRow, UngroupedHeader } from '@/components/list/ListRows';
+import {
+  AddItemButton,
+  AddRow,
+  DraftRegistry,
+  DraftRegistryContext,
+  GroupHeader,
+  ItemRow,
+  NewItemRow,
+  UngroupedHeader,
+} from '@/components/list/ListRows';
 import { useDragReorder } from '@/components/list/useDragReorder';
 
 /**
@@ -74,6 +83,21 @@ const LISTS_OTHER = 'lists:other';
 const GROUPS = 'groups';
 const itemsSection = (groupId: string | null) => `items:${groupId ?? 'none'}`;
 
+/**
+ * 項目の入力欄を開いているあいだの持ち物。入力欄は afterId の項目の下に出し、確定するたびに
+ * 新しい項目の下へ移る。保存は順番待ちで進める（続けて打っても並びが入れ替わらないように）ので、
+ * 画面の状態とは別に、いまの並び（order）と位置（afterId）をここで持つ。
+ */
+interface ComposerSession {
+  listId: string;
+  /** 入れる枠。null は未分類（グループを作っていないリストもここ）。 */
+  groupId: string | null;
+  /** リスト全体の項目の並び（完了済みも含む）。 */
+  order: string[];
+  /** この項目の下に入れる。null は枠の先頭（枠が空のとき）。 */
+  afterId: string | null;
+}
+
 export default function ListScreen() {
   const { session, isLoading: isSessionLoading } = useSession();
   const userId = session?.user.id ?? null;
@@ -89,6 +113,16 @@ export default function ListScreen() {
   // 今の編集が「新しく作ったリスト」か。見出しへ入力を移し、何も書かずに閉じたら消す。
   const [isNewList, setIsNewList] = useState(false);
   const [showDone, setShowDone] = useState(false);
+  // 打ちかけの入力欄を、閉じる操作でも保存するための登録簿（ListRows.tsx の DraftRegistry）。
+  const [drafts] = useState(() => new DraftRegistry());
+  // 項目の入力欄。開いているあいだだけ持つ。
+  const [composer, setComposer] = useState<{ session: ComposerSession; afterId: string | null } | null>(
+    null,
+  );
+  const composeQueue = useRef<Promise<void>>(Promise.resolve());
+  // 項目やグループを足したリスト。足した直後は画面の状態がまだ古いので、閉じるときの
+  // 「空のリストか」の判定に使う。
+  const touchedLists = useRef(new Set<string>());
 
   useEffect(() => {
     if (!userId) return;
@@ -266,8 +300,12 @@ export default function ListScreen() {
    * 新しく作ったまま何も入れなかったリストは、空のカードが残らないよう消す。
    */
   const closeEditor = (list: ListBoard, draftName: string) => {
+    // 打ちかけの項目・グループ名があれば、閉じる前に保存する。閉じるボタンを押しても
+    // キーボードの入力欄からはonBlurが来ず、書きかけが捨てられていたため。
+    drafts.flush();
     const name = draftName.trim();
     const isEmpty =
+      !touchedLists.current.has(list.id) &&
       !groups.some((group) => group.listId === list.id) &&
       !items.some((item) => item.listId === list.id);
     setOpenListId(null);
@@ -308,6 +346,7 @@ export default function ListScreen() {
   };
 
   const addGroup = async (listId: string, name: string) => {
+    touchedLists.current.add(listId);
     try {
       const created = await insertGroup(supabase, {
         listId,
@@ -383,18 +422,54 @@ export default function ListScreen() {
     ]);
   };
 
-  const addItem = async (listId: string, groupId: string | null, title: string) => {
-    try {
-      const created = await insertItem(supabase, {
-        listId,
-        groupId,
-        title,
-        position: items.filter((item) => item.listId === listId).length,
-      });
-      setItems((prev) => [...prev, created]);
-    } catch {
-      failed('項目の追加');
-    }
+  /**
+   * 項目の入力欄を開く。groupId の枠で、afterId の項目の下（null なら枠の先頭）に出す。
+   * 枠の末尾の「追加」と、項目の書き換え中の改行のどちらもここへ来る。
+   */
+  const openComposer = (listId: string, groupId: string | null, afterId: string | null) => {
+    const order = items
+      .filter((item) => item.listId === listId)
+      .sort((a, b) => a.position - b.position)
+      .map((item) => item.id);
+    setComposer({ session: { listId, groupId, order, afterId }, afterId });
+  };
+
+  /**
+   * 入力欄で確定した項目を、いまの位置（afterId の下）に足す。足したら入力欄をその下へ移す。
+   * 末尾に足すときは position を件数にするだけ。途中に入れるときは、全体の並びを振り直す。
+   */
+  const composeItem = (session: ComposerSession, title: string) => {
+    touchedLists.current.add(session.listId);
+    composeQueue.current = composeQueue.current.then(async () => {
+      const after = session.afterId === null ? -1 : session.order.indexOf(session.afterId);
+      const previousOrder = session.order;
+      const insertAt = after < 0 ? previousOrder.length : after + 1;
+      const isInsertion = insertAt < previousOrder.length;
+      try {
+        const created = await insertItem(supabase, {
+          listId: session.listId,
+          groupId: session.groupId,
+          title,
+          position: previousOrder.length,
+        });
+        const ordered = [...previousOrder];
+        ordered.splice(insertAt, 0, created.id);
+        session.order = ordered;
+        session.afterId = created.id;
+        setItems((prev) => (isInsertion ? applyOrder([...prev, created], ordered) : [...prev, created]));
+        setComposer((prev) => (prev?.session === session ? { ...prev, afterId: created.id } : prev));
+        if (isInsertion) {
+          try {
+            await updateItemPositions(supabase, ordered);
+          } catch {
+            setItems((prev) => applyOrder(prev, [...previousOrder, created.id]));
+            failed('並び順の保存');
+          }
+        }
+      } catch {
+        failed('項目の追加');
+      }
+    });
   };
 
   const toggleItem = async (id: string) => {
@@ -536,10 +611,31 @@ export default function ListScreen() {
     </View>
   );
 
-  /** 項目の行。左端の持ち手で動かす。 */
-  const itemRows = (sectionKey: string, rows: ListItem[]) => (
-    <View {...drag.panHandlers}>
-      {rows.map((item, index) => (
+  /**
+   * 項目の行。左端の持ち手で動かす。この枠（groupId）に入力欄が開いているときは、
+   * その位置の行の下に入力欄を挟む。入力欄は並びが変わっても作り直さない（key固定）。
+   */
+  const itemRows = (sectionKey: string, rows: ListItem[], groupId: string | null) => {
+    const open = composer && composer.session.groupId === groupId ? composer : null;
+    // 入力欄を出す位置（この番号の行の下。-1は先頭）。基準の行が消えていたら枠の末尾。
+    let slot: number | null = null;
+    if (open) {
+      const anchor = open.afterId === null ? -1 : rows.findIndex((item) => item.id === open.afterId);
+      slot = open.afterId === null ? -1 : anchor >= 0 ? anchor : rows.length - 1;
+    }
+    const composerRow = open ? (
+      <NewItemRow
+        key="composer"
+        divided={slot !== null && slot >= 0}
+        onSubmit={(title) => composeItem(open.session, title)}
+        onDone={() => setComposer((prev) => (prev?.session === open.session ? null : prev))}
+      />
+    ) : null;
+
+    const children: ReactNode[] = [];
+    if (slot === -1) children.push(composerRow);
+    rows.forEach((item, index) => {
+      children.push(
         <Animated.View
           key={item.id}
           {...drag.measureProps(item.id)}
@@ -551,12 +647,24 @@ export default function ListScreen() {
             gripProps={drag.gripProps(sectionKey, rows, item.id)}
             onToggle={() => void toggleItem(item.id)}
             onRename={(title) => void renameItem(item, title)}
+            onInsertBelow={() => openComposer(item.listId, item.groupId, item.id)}
             onDelete={() => void removeItem(item.id)}
           />
-        </Animated.View>
-      ))}
-    </View>
-  );
+        </Animated.View>,
+      );
+      if (slot === index) children.push(composerRow);
+    });
+    return <View {...drag.panHandlers}>{children}</View>;
+  };
+
+  /** 枠の末尾の「追加」。その枠に入力欄が開いているあいだは出さない。 */
+  const addItemButton = (listId: string, groupId: string | null, rows: ListItem[]) =>
+    composer?.session.groupId === groupId ? null : (
+      <AddItemButton
+        divided={rows.length > 0}
+        onPress={() => openComposer(listId, groupId, rows.length > 0 ? rows[rows.length - 1].id : null)}
+      />
+    );
 
   /* 編集モード: 開いたカードを画面の中央に拡大して出す（Keepと同じ）。
      見出し・項目・グループ・固定・共有・削除をここで済ませる。 */
@@ -578,16 +686,12 @@ export default function ListScreen() {
       }
       onClose={(draftName) => closeEditor(selected, draftName)}
     >
+      <DraftRegistryContext.Provider value={drafts}>
         {/* グループを作っていないリストは、枠1つのただのチェックリストになる。 */}
         {listGroups.length === 0 ? (
           <View style={[styles.card, styles.cardSpaced]}>
-            {itemRows(itemsSection(null), undoneItems)}
-            <AddRow
-              divided={undoneItems.length > 0}
-              label="追加"
-              allowEmpty
-              onSubmit={(title) => void addItem(selected.id, null, title)}
-            />
+            {itemRows(itemsSection(null), undoneItems, null)}
+            {addItemButton(selected.id, null, undoneItems)}
           </View>
         ) : (
           <View {...drag.panHandlers}>
@@ -612,13 +716,8 @@ export default function ListScreen() {
                     onRename={(name) => void renameGroup(group.id, name)}
                     onDelete={() => deleteGroupWithConfirm(group)}
                   />
-                  {itemRows(itemsSection(group.id), groupItems)}
-                  <AddRow
-                    divided={groupItems.length > 0}
-                    label="追加"
-                    allowEmpty
-                    onSubmit={(title) => void addItem(selected.id, group.id, title)}
-                  />
+                  {itemRows(itemsSection(group.id), groupItems, group.id)}
+                  {addItemButton(selected.id, group.id, groupItems)}
                 </Animated.View>
               );
             })}
@@ -628,13 +727,8 @@ export default function ListScreen() {
               <View style={[styles.card, styles.cardSpaced]}>
                 {/* 見出しを押すと名前を付けられる（その名前のグループになる）。 */}
                 <UngroupedHeader onName={(name) => void nameUngrouped(selected.id, name)} />
-                {itemRows(itemsSection(null), ungroupedItems)}
-                <AddRow
-                  divided
-                  label="追加"
-                  allowEmpty
-                  onSubmit={(title) => void addItem(selected.id, null, title)}
-                />
+                {itemRows(itemsSection(null), ungroupedItems, null)}
+                {addItemButton(selected.id, null, ungroupedItems)}
               </View>
             )}
           </View>
@@ -687,6 +781,7 @@ export default function ListScreen() {
               ))}
           </View>
         )}
+      </DraftRegistryContext.Provider>
     </ListEditorModal>
   );
 
