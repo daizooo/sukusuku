@@ -40,11 +40,11 @@ export interface NotificationContent {
   /** 予定のリマインダーだけが持つ。お知らせを予定ごとに分けるのに使う。 */
   taskId?: string;
   /**
-   * 通知の上のボタン（タスクの「完了」・検温の「記録」）。持たせると、OSに出させず
+   * 通知の上のボタン（タスクの「完了」）。持たせると、OSに出させず
    * アプリ（expo-notifications）に出させる（下の deliver）。値はアプリが登録するものと合わせる
    * （mobile/src/lib/notificationActions.ts の NOTIFICATION_CATEGORY）。
    */
-  categoryId?: 'task-complete' | 'temperature-record';
+  categoryId?: 'task-complete';
   /** 予定のリマインダーの回の日付（YYYY-MM-DD）。「完了」で、繰り返すタスクのどの回かを決める。 */
   date?: string;
 }

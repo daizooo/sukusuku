@@ -107,7 +107,7 @@ function useNotificationTapHandler(): void {
     // （既にあれば作り直されない）。通知をオンにする前に届くことはないが、
     // オンにした端末では入れ替え後の起動でも必ずそろっている状態にする。
     void configureNotificationChannels();
-    // お知らせの上のボタン（タスクの完了・検温の記録）も、閉じている間に届く分に付くよう先に登録する。
+    // お知らせの上のボタン（タスクの完了）も、閉じている間に届く分に付くよう先に登録する。
     void configureNotificationCategories().catch((err: unknown) =>
       console.error('Failed to configure notification categories:', err),
     );

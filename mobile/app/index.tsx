@@ -17,7 +17,7 @@ export default function Index() {
   const [startRoute, setStartRoute] = useState<string | null>(null);
 
   // 起動のもとになったお知らせ。読むのは最初の1回だけでよい。
-  // ボタン（完了・記録）の押下は画面を開く用件ではないので、タップだけを数える。
+  // ボタン（完了）の押下は画面を開く用件ではないので、タップだけを数える。
   const [launchedFrom] = useState(() => {
     const last = Notifications.getLastNotificationResponse();
     return last?.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER ? last : null;

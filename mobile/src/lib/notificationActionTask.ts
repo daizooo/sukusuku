@@ -3,7 +3,7 @@ import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 import { handleNotificationAction } from '@/lib/notificationActions';
 
-// アプリが裏にいる・閉じている間に、お知らせのボタン（完了・記録）が押されたときの処理。
+// アプリが裏にいる・閉じている間に、お知らせのボタン（タスクの完了）が押されたときの処理。
 //
 // expo-task-manager がアプリのJSを裏で読み込んで、ここで定めた処理を動かす。
 // 読み込まれるのはアプリの入口（mobile/index.ts）なので、定めるのも入口から読む
