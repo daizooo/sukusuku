@@ -13,7 +13,7 @@ export const START_TABS: StartTab[] = ['schedule', 'list', 'care', 'money', 'set
 
 export const START_TAB_LABEL: Record<StartTab, string> = {
   schedule: '予定',
-  list: 'ToDo',
+  list: 'リスト',
   care: '育児',
   money: '家計',
   settings: 'その他',

@@ -22,7 +22,7 @@ export default function ListPickerModal({ lists, selectedId, onClose, onPick }: 
       footer={<p className="text-[11px] text-gray-400 text-center">この端末で覚えます。あとで「送り先」から変えられます</p>}
     >
       {lists.length === 0 ? (
-        <p className="text-sm text-gray-500 text-center py-4">リストがまだありません。ToDoタブで作ってください</p>
+        <p className="text-sm text-gray-500 text-center py-4">リストがまだありません。リストタブで作ってください</p>
       ) : (
         <ul className="rounded-xl border border-gray-200 divide-y divide-gray-200 overflow-hidden">
           {lists.map((list) => {

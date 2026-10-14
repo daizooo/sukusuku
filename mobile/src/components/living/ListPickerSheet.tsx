@@ -20,7 +20,7 @@ export default function ListPickerSheet({ lists, selectedId, onClose, onPick }: 
     <SheetModal visible onClose={onClose}>
       <LogModalShell title="送り先のリスト" onClose={onClose}>
         {lists.length === 0 ? (
-          <Text style={styles.empty}>リストがまだありません。ToDoタブで作ってください</Text>
+          <Text style={styles.empty}>リストがまだありません。リストタブで作ってください</Text>
         ) : (
           <View style={styles.card}>
             {lists.map((list, index) => {

@@ -146,13 +146,13 @@ const HokatsuTab = dynamic(() => import('./tabs/HokatsuTab'), { loading: TabFall
 const InfoTab = dynamic(() => import('./tabs/InfoTab'), { loading: TabFallback });
 const MoneyTab = dynamic(() => import('./tabs/MoneyTab'), { loading: TabFallback });
 
-// 予定・ToDo・育児・家計・その他の5つ（docs/family-app.md §4.1・docs/kakei.md §2）。mobile版の app/(tabs)/_layout.tsx と同じ。
+// 予定・リスト・育児・家計・その他の5つ（docs/family-app.md §4.1・docs/kakei.md §2）。mobile版の app/(tabs)/_layout.tsx と同じ。
 // 暮らしタブは2026-10-10に廃止した。2026-10-13にタブを改め、リストタブを「ToDo」、設定タブを「その他」にした
 // （防災備蓄・福引チャンス・保活・契約・設定はその他タブから開く。docs/family-app.md §4.5）。
 // タブのid（'list'・'info'）と DB の users.start_tab の値（'list'・'settings'）は変えていない。
 const NAV_ITEMS: { id: TabId; icon: ComponentType<{ size?: number; className?: string }>; label: string }[] = [
   { id: 'schedule', icon: CalendarDays, label: '予定' },
-  { id: 'list', icon: ListTodo, label: 'ToDo' },
+  { id: 'list', icon: ListTodo, label: 'リスト' },
   { id: 'care', icon: Baby, label: '育児' },
   { id: 'money', icon: YenCoinIcon, label: '家計' },
   { id: 'info', icon: Ellipsis, label: 'その他' },

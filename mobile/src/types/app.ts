@@ -267,7 +267,7 @@ export interface FamilyMember {
 /** 授乳の入力画面で「搾乳」を選んだときの、飲ませた分か搾った分かの切り替え。 */
 export type FeedingEntryMode = 'feed' | 'pump';
 
-// 予定・ToDo・育児・家計・その他の5つ（docs/family-app.md §4.1）。
+// 予定・リスト・育児・家計・その他の5つ（docs/family-app.md §4.1）。
 export type TabId = 'schedule' | 'list' | 'care' | 'money' | 'info';
 
 // スケジュールタブの表示切り替え。既定は月（カレンダー）。
