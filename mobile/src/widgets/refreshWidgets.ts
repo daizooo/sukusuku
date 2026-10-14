@@ -11,7 +11,13 @@ export async function refreshWidgets(): Promise<void> {
   const { renderWidget } = require('./renderWidget') as typeof import('./renderWidget');
   const { WIDGET_NAMES } = require('./widgetNames') as typeof import('./widgetNames');
   await Promise.all(
-    [WIDGET_NAMES.care, WIDGET_NAMES.tabsCareMoney, WIDGET_NAMES.tabsCare].map((widgetName) =>
+    [
+      WIDGET_NAMES.care,
+      WIDGET_NAMES.tabsCareMoney,
+      WIDGET_NAMES.tabsCare,
+      WIDGET_NAMES.tabsCareMoneyTight,
+      WIDGET_NAMES.tabsCareMoneyInline,
+    ].map((widgetName) =>
       requestWidgetUpdate({
         widgetName,
         renderWidget: async (info) => {
