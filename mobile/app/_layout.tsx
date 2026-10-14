@@ -12,6 +12,11 @@ import { useSettledNotificationCleanup } from '@/lib/notificationCleanup';
 import { useWakeAlarmSync } from '@/lib/wakeAlarm';
 import { configureNotificationChannels } from '@/lib/push';
 import { notificationTarget, OPEN_LOG_PARAM } from '@/lib/appLinks';
+import {
+  configureNotificationCategories,
+  handleNotificationAction,
+  presentActionableNotification,
+} from '@/lib/notificationActions';
 import { colors } from '@/lib/theme';
 
 // アプリを開いている間に届いたお知らせも、そのまま画面の上に出す。
@@ -102,6 +107,21 @@ function useNotificationTapHandler(): void {
     // （既にあれば作り直されない）。通知をオンにする前に届くことはないが、
     // オンにした端末では入れ替え後の起動でも必ずそろっている状態にする。
     void configureNotificationChannels();
+    // お知らせの上のボタン（タスクの完了・検温の記録）も、閉じている間に届く分に付くよう先に登録する。
+    void configureNotificationCategories().catch((err: unknown) =>
+      console.error('Failed to configure notification categories:', err),
+    );
+
+    // ボタン付きのお知らせは、開いている間はアプリが自分で出す（src/lib/notificationActions.ts）。
+    const received = Notifications.addNotificationReceivedListener((notification) => {
+      void presentActionableNotification(notification).catch((err: unknown) =>
+        console.error('Failed to present actionable notification:', err),
+      );
+    });
+
+    // ボタンの押下は画面を移さずにその場で済ませる。タップ（既定の操作）だけ画面を開く。
+    const isTap = (response: Notifications.NotificationResponse) =>
+      response.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER;
 
     const open = (data: Record<string, unknown> | undefined) => {
       const target = notificationTarget(data?.kind);
@@ -116,7 +136,7 @@ function useNotificationTapHandler(): void {
     // 飛び先へ移すが、入口が移し終えるのを待ってからもう一度動かす。同じ回で移そうとすると
     // そちらに上書きされて、タップした用件の画面が開かない。
     const last = Notifications.getLastNotificationResponse();
-    const timer = last
+    const timer = last && isTap(last)
       ? setTimeout(() => {
           open(last.notification.request.content.data);
           // 次の起動で同じお知らせをもう一度開かないようにする。
@@ -125,10 +145,18 @@ function useNotificationTapHandler(): void {
       : null;
 
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      open(response.notification.request.content.data);
+      if (isTap(response)) {
+        open(response.notification.request.content.data);
+        return;
+      }
+      // 裏の処理（notificationActionTask.ts）が済ませた押下も届くが、二重には行わない。
+      void handleNotificationAction(response).catch((err: unknown) =>
+        console.error('Failed to handle notification action:', err),
+      );
     });
     return () => {
       if (timer !== null) clearTimeout(timer);
+      received.remove();
       subscription.remove();
     };
   }, []);

@@ -134,6 +134,8 @@ Deno.serve(async (request) => {
         subscription,
         {
           kind: 'temperature',
+          // 通知の上で体温を入れて記録できるようにする（mobile/src/lib/notificationActions.ts）
+          categoryId: 'temperature-record',
           title: row.slot === 'morning' ? '朝の検温' : '夕方の検温',
           body: `${JST_TIME.format(new Date(row.scheduled_for))} です。体温を測って記録しましょう`,
           url: '/',

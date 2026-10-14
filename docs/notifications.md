@@ -1117,3 +1117,53 @@ select status, return_message, start_time from cron.job_run_details
 （`2026-11-12` の30日前は `2026-10-13`）で確かめられる。ほかに、その契約が**その端末の持ち主に見えるか**
 （作った本人か、見せる相手に入っているか。アカウントの無い子の端末は無い）も確かめる。
 
+
+---
+
+## 15. お知らせの上のボタン（2026-10-14に追加）
+
+タスクのリマインダーと検温のお知らせは、アプリを開かずにお知らせの上で済ませられる。
+
+| お知らせ | ボタン | 押すと |
+| --- | --- | --- |
+| 予定のリマインダーのうち**タスク**（`tasks.kind = 'task'`） | 完了 | そのタスクを完了にする。繰り返すタスクはお知らせの回だけ（`done_dates` に日付を足す。予定タブの完了と同じ） |
+| 検温のお知らせ（§8） | 体温を記録 | 打ち込んだ体温を、いまの時刻で記録する（育児タブと同じ控え→送信の経路なので、圏外でも入る） |
+
+予定（`kind = 'event'`）には完了が無いので、ボタンは付けない。
+
+### 送り方: この2つだけデータだけで送る
+
+ボタンは、OSが出すお知らせ（`notification` を載せたFCMのメッセージ）には付けられない。そこでこの2つは
+**データだけのメッセージ**で送り、アプリ側の expo-notifications に出させる（`_shared/deliver.ts` の
+`actionableData`。中身に `categoryId` を持たせたものがこの扱いになる）。
+
+- アプリが閉じている・裏にいる: expo-notifications が `title`・`message` から出し、`categoryId` のボタンを付ける。
+  お知らせのidは `tag`（`task-<id>` / `temperature-reminder`）になるので、§10 の掃除もそのまま効く
+- アプリを開いている: expo-notifications はデータだけのメッセージを出さないので、アプリが届いたものを
+  そのまま自分で出す（`mobile/src/lib/notificationActions.ts` の `presentActionableNotification`）
+- 古いアプリ（ボタンの組を登録する前の版）にも、ボタン無しで同じように出る
+
+### 押したときの処理
+
+`mobile/src/lib/notificationActions.ts` の `handleNotificationAction` が受け持つ。入口は2つ。
+
+- アプリが裏にいる・閉じている: expo-task-manager の背景の処理（`notificationActionTask.ts`。
+  アプリの入口 `mobile/index.ts` から読んで、画面より先に定める）
+- アプリを開いている／閉じている間の押下が次の起動で届いた: お知らせの応答の受け手（`app/_layout.tsx`）
+
+同じ押下が両方から届くことがあるので、済ませた押下は端末に控え、二度は行わない。
+済ませたらお知らせを消す。できなかったとき（読めない数字・範囲外・通信の失敗）は、理由を本文にして
+同じお知らせを出し直す（もう一度押せる）。
+
+体温は通知の入力欄に打つ（数字のキーボードにはできない）。全角・「℃」付き・小数点の打ち忘れ（`368` → 36.8）も読む
+（`mobile/src/lib/celsiusText.ts`。`npm run test:celsius-text`）。範囲は育児タブと同じ 30.0〜43.0℃。
+
+### セットアップ
+
+```bash
+supabase functions deploy send-reminders
+supabase functions deploy send-temperature-reminders
+```
+
+DBの変更は無い。Functionを先に出しても、古いアプリにはボタン無しで届くだけで困らない。
+ボタンが付くのは expo-task-manager を入れた版のアプリ（`.apk`）から。PWA版は通知を受け取らないので対象外。

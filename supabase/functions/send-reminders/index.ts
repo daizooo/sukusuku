@@ -101,6 +101,16 @@ Deno.serve(async (request) => {
   ];
   if (due.length === 0) return json({ due: 0, sent: 0, failed: 0, skipped: 0 });
 
+  // タスク（予定ではないもの）には「完了」のボタンを付ける。種類はビューに無いので、
+  // 通知する分だけ引く。読めなければボタンを付けずに送る（通知そのものは落とさない）。
+  const { data: kindRows, error: kindError } = await supabase
+    .from('tasks')
+    .select('id, kind')
+    .in('id', [...new Set(due.map((row) => row.task_id))])
+    .returns<{ id: string; kind: string | null }[]>();
+  if (kindError) console.error('予定の種類を読めませんでした（ボタン無しで送ります）', kindError.message);
+  const taskIds = new Set((kindRows ?? []).filter((row) => row.kind === 'task').map((row) => row.id));
+
   const familyIds = [...new Set(due.map((row) => row.family_id))];
   // 送り先はネイティブ版だけ。ブラウザ向けの Web Push は撤去した（フェーズ4の条件D）。
   // PWA版の通知も撤去したので kind = 'webpush' の行は増えない。残っている古い行も、
@@ -162,6 +172,9 @@ Deno.serve(async (request) => {
         title: row.title,
         body: formatWhen(row),
         url: '/',
+        ...(taskIds.has(row.task_id)
+          ? { categoryId: 'task-complete' as const, date: row.target_date }
+          : {}),
       });
 
       if (result.ok) {
