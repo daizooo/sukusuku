@@ -2,7 +2,6 @@ import { FlexWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
 import type { ColorProp } from 'react-native-android-widget';
 import { colors } from '@/lib/theme';
 import { widgetIcon, type WidgetIconName } from './icons';
-import type { WidgetDataError } from './widgetData';
 
 // ウィジェットの共通の部品（docs/widgets.md §2）。
 //
@@ -12,8 +11,8 @@ import type { WidgetDataError } from './widgetData';
 
 const hex = (value: string) => value as ColorProp;
 
-/** ウィジェットの外枠。白の地に薄い枠線（アプリのカードと同じ）。 */
-export function WidgetFrame({ children, gap = 8 }: { children: React.ReactNode; gap?: number }) {
+/** ウィジェットの外枠。白の地に薄い枠線（アプリのカードと同じ）。中はボタンを横に並べた1段（4×1）。 */
+export function WidgetFrame({ children, gap = 8, padding = 12 }: { children: React.ReactNode; gap?: number; padding?: number }) {
   return (
     <FlexWidget
       style={{
@@ -24,38 +23,11 @@ export function WidgetFrame({ children, gap = 8 }: { children: React.ReactNode; 
         borderRadius: 20,
         borderWidth: 1,
         borderColor: hex(colors.border),
-        padding: 12,
+        padding,
         flexGap: gap,
       }}
     >
       {children}
-    </FlexWidget>
-  );
-}
-
-/** 見出しの行。左に名前（押すとそのタブ）、右に添え書き。 */
-export function WidgetHeader({ title, note, uri, noteUri }: { title: string; note?: string; uri: string; noteUri?: string }) {
-  return (
-    <FlexWidget
-      style={{ width: 'match_parent', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-    >
-      <TextWidget
-        text={title}
-        clickAction="OPEN_URI"
-        clickActionData={{ uri }}
-        maxLines={1}
-        truncate="END"
-        style={{ fontSize: 14, fontWeight: '700', color: hex(colors.text) }}
-      />
-      {note ? (
-        <TextWidget
-          text={note}
-          clickAction="OPEN_URI"
-          clickActionData={{ uri: noteUri ?? uri }}
-          maxLines={1}
-          style={{ fontSize: 12, fontWeight: '700', color: hex(colors.textMuted) }}
-        />
-      ) : null}
     </FlexWidget>
   );
 }
@@ -101,31 +73,6 @@ export function ActionButton({
 export function ButtonRow({ children }: { children: React.ReactNode }) {
   return (
     <FlexWidget style={{ flex: 1, width: 'match_parent', flexDirection: 'row', flexGap: 6 }}>{children}</FlexWidget>
-  );
-}
-
-/** 読めなかったときの一言。ボタンはそのまま使えるので、短く添えるだけにする。 */
-export const errorText = (error: WidgetDataError): string => {
-  switch (error) {
-    case 'signed-out':
-      return 'アプリでログインすると表示されます';
-    case 'no-family':
-      return 'アプリで家族を設定すると表示されます';
-    case 'offline':
-      return '読み込めませんでした';
-  }
-};
-
-export function NoteText({ text, uri }: { text: string; uri: string }) {
-  return (
-    <TextWidget
-      text={text}
-      clickAction="OPEN_URI"
-      clickActionData={{ uri }}
-      maxLines={1}
-      truncate="END"
-      style={{ fontSize: 12, fontWeight: '500', color: hex(colors.textMuted) }}
-    />
   );
 }
 

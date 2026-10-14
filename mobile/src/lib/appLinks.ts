@@ -70,9 +70,6 @@ export const parseMoneyOpen = (value: string | string[] | undefined): MoneyOpen 
   return MONEY_OPENS.find((open) => open === first) ?? null;
 };
 
-/** ToDoタブで開くリスト（リストのID）。開いたら消す（OPEN_LOG_PARAM と同じ）。 */
-export const OPEN_LIST_PARAM = 'list';
-
 /**
  * アプリの外からタブを開くリンク（`sukusuku://care?open=milk`）。
  * scheme は app.config.js の scheme。タブのパスはグループ名を含まない（app/index.tsx と同じ形）。

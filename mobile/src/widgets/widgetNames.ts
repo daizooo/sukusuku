@@ -4,7 +4,6 @@ export const WIDGET_NAMES = {
   launcher: 'TabLauncher',
   care: 'CareQuick',
   money: 'MoneyQuick',
-  list: 'ListItems',
 } as const;
 
 export type WidgetName = (typeof WIDGET_NAMES)[keyof typeof WIDGET_NAMES];

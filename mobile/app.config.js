@@ -40,7 +40,8 @@ module.exports = {
       ],
       './plugins/withDevVariant',
       // ホーム画面のウィジェット（docs/widgets.md）。name は src/widgets/widgetNames.ts と同じにする。
-      // 中身を出すものは30分ごと（Androidの最短）に描き直す。アプリを閉じたときにも描き直す。
+      // どれも4×1の1段。previewImage はウィジェットの追加画面に出す見本（無いと全部アプリのアイコンになる）。
+      // 中身を出す育児（次の目安）だけ30分ごと（Androidの最短）に描き直す。アプリを閉じたときにも描き直す。
       [
         'react-native-android-widget',
         {
@@ -54,39 +55,30 @@ module.exports = {
               targetCellWidth: 4,
               targetCellHeight: 1,
               resizeMode: 'horizontal|vertical',
+              previewImage: './assets/widget-preview/tablauncher.png',
             },
             {
               name: 'CareQuick',
               label: '育児',
-              description: '前回の授乳・次の目安と、授乳・おむつ・搾乳・体温の入力',
+              description: '次の授乳の目安と、授乳・おむつ・体温の入力',
               minWidth: '250dp',
-              minHeight: '110dp',
+              minHeight: '40dp',
               targetCellWidth: 4,
-              targetCellHeight: 2,
+              targetCellHeight: 1,
               resizeMode: 'horizontal|vertical',
               updatePeriodMillis: 1800000,
+              previewImage: './assets/widget-preview/carequick.png',
             },
             {
               name: 'MoneyQuick',
               label: '家計',
-              description: '今月・今日の支出と、支出・収入・振替・レシートの入力',
+              description: '支出・収入・振替・レシートの入力',
               minWidth: '250dp',
-              minHeight: '110dp',
+              minHeight: '40dp',
               targetCellWidth: 4,
-              targetCellHeight: 2,
+              targetCellHeight: 1,
               resizeMode: 'horizontal|vertical',
-              updatePeriodMillis: 1800000,
-            },
-            {
-              name: 'ListItems',
-              label: 'ToDo・買い物',
-              description: 'リストのまだ済んでいない項目',
-              minWidth: '110dp',
-              minHeight: '110dp',
-              targetCellWidth: 2,
-              targetCellHeight: 2,
-              resizeMode: 'horizontal|vertical',
-              updatePeriodMillis: 1800000,
+              previewImage: './assets/widget-preview/moneyquick.png',
             },
           ],
         },
