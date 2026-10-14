@@ -71,12 +71,16 @@ export const parseMoneyOpen = (value: string | string[] | undefined): MoneyOpen 
 };
 
 /**
- * アプリの外からタブを開くリンク（`sukusuku://care?open=milk`）。
+ * アプリの外からタブを開くリンク（`sukusuku:///care?open=milk`）。
  * scheme は app.config.js の scheme。タブのパスはグループ名を含まない（app/index.tsx と同じ形）。
+ *
+ * **スラッシュは3本。** `sukusuku://care` と書くと `care` がパスではなくホスト名として読まれ、
+ * Expo Router がタブも `open` も拾えない（2026-10-14、ウィジェットの授乳・おむつ・体温が入力画面を開かなかった）。
+ * 確認メールのリンク（`sukusuku:///auth/confirm`。lib/authLinks.ts の `Linking.createURL`）と同じ形にする。
  */
 export const appLink = (tab: TabId, params: Record<string, string> = {}): string => {
   const query = Object.entries(params)
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
     .join('&');
-  return `sukusuku://${tab}${query ? `?${query}` : ''}`;
+  return `sukusuku:///${tab}${query ? `?${query}` : ''}`;
 };
