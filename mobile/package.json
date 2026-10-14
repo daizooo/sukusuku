@@ -8,6 +8,7 @@
     "android": "expo run:android --app-id com.sukusuku.app.dev",
     "prebuild": "expo prebuild --platform android",
     "typecheck": "tsc --noEmit",
+    "postinstall": "patch-package",
     "ios": "expo run:ios"
   },
   "dependencies": {
@@ -42,6 +43,7 @@
   "devDependencies": {
     "@types/node": "^24.13.3",
     "@types/react": "~19.1.10",
+    "patch-package": "^8.0.0",
     "typescript": "~6.0.3"
   },
   "expo": {

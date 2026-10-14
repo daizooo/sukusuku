@@ -1,0 +1,53 @@
+diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
+index 5650d1e..46b513d 100644
+--- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
++++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
+@@ -199,7 +199,36 @@ public class RNWidget {
+         widgetView.addView(R.id.rn_widget_clickable_container, clickableRemoteView);
+     }
+ 
++    // かぞく手帳の差分（patches/react-native-android-widget+0.22.1.patch。docs/widgets.md §4）:
++    // 元は requestCode に System.currentTimeMillis() を使い FLAG_CANCEL_CURRENT で作っていた。
++    // 1回の描画で作るボタンはほぼ同じミリ秒になり、Intent も extras 以外が同じなので、
++    // 後から作ったものが先のものを取り消し、押しても何も起きないボタンができていた（2026-10-14、3段のウィジェット）。
++    // - requestCode はボタンごとに振る通し番号にする
++    // - OPEN_URI は放送を経ずに、そのリンクを直接開く Activity の PendingIntent にする
++    //   （放送の受け手から画面を開く「トランポリン」を避ける。開くアプリも自分に固定する）
++    private static int nextRequestCode = 1;
++
++    private static synchronized int newRequestCode() {
++        nextRequestCode = nextRequestCode >= Integer.MAX_VALUE - 1 ? 1 : nextRequestCode + 1;
++        return nextRequestCode;
++    }
++
+     private void registerClickTask(int id, ClickableView clickableView, RemoteViews widgetView, Integer button) {
++        if ("OPEN_URI".equals(clickableView.getClickAction()) && clickableView.getClickActionData() != null
++            && clickableView.getClickActionData().hasKey("uri")) {
++            Intent viewIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(clickableView.getClickActionData().getString("uri")));
++            viewIntent.setPackage(appContext.getPackageName());
++            viewIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++            PendingIntent pendingIntent = PendingIntent.getActivity(
++                appContext,
++                newRequestCode(),
++                viewIntent,
++                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
++            );
++            widgetView.setOnClickPendingIntent(button, pendingIntent);
++            return;
++        }
++
+         Intent intent = new Intent(appContext.getPackageName() + ".WIDGET_CLICK");
+         intent.setComponent(new ComponentName(appContext, RNWidgetUtil.getWidgetProviderClassName(appContext, widgetName)));
+         intent.putExtra("widgetId", id);
+@@ -207,9 +236,9 @@ public class RNWidget {
+         intent.putExtra("clickActionData", Arguments.toBundle(clickableView.getClickActionData()));
+         PendingIntent pendingIntent = PendingIntent.getBroadcast(
+             appContext,
+-            (int) System.currentTimeMillis(),
++            newRequestCode(),
+             intent,
+-            PendingIntent.FLAG_CANCEL_CURRENT
++            PendingIntent.FLAG_UPDATE_CURRENT
+                 | PendingIntent.FLAG_MUTABLE
+         );
+         widgetView.setOnClickPendingIntent(button, pendingIntent);
