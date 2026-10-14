@@ -70,17 +70,31 @@ export const parseMoneyOpen = (value: string | string[] | undefined): MoneyOpen 
   return MONEY_OPENS.find((open) => open === first) ?? null;
 };
 
+/** ウィジェットのリンクで開くタブを指すパラメータ名。入口（app/index.tsx）が読む。 */
+export const WIDGET_TAB_PARAM = 'to';
+
+/** ウィジェットから開けるタブ。 */
+const WIDGET_TABS: TabId[] = ['schedule', 'list', 'care', 'money'];
+
+/** パラメータの to を解釈する。知らない値なら null（ウィジェットのリンクではない）。 */
+export const parseWidgetTab = (value: string | string[] | undefined): TabId | null => {
+  const first = Array.isArray(value) ? value[0] : value;
+  return WIDGET_TABS.find((tab) => tab === first) ?? null;
+};
+
 /**
- * アプリの外からタブを開くリンク（`sukusuku:///care?open=milk`）。
- * scheme は app.config.js の scheme。タブのパスはグループ名を含まない（app/index.tsx と同じ形）。
+ * ホーム画面のウィジェットから、タブ（と入力画面）を開くリンク（`sukusuku:///?to=care&open=milk`）。
+ * scheme は app.config.js の scheme。
  *
- * **スラッシュは3本。** `sukusuku://care` と書くと `care` がパスではなくホスト名として読まれ、
- * Expo Router がタブも `open` も拾えない（2026-10-14、ウィジェットの授乳・おむつ・体温が入力画面を開かなかった）。
- * 確認メールのリンク（`sukusuku:///auth/confirm`。lib/authLinks.ts の `Linking.createURL`）と同じ形にする。
+ * **タブのパスへ直接は飛ばさず、入口（app/index.tsx）を通す。** 入口が `to` と `open` を読み、
+ * お知らせのタップと同じ形（パスとパラメータ）でタブへ移す。タブのパスを直接開くリンク
+ * （`sukusuku:///care?open=milk`）は、押すとアプリが一瞬開いてホーム画面へ戻る不具合になった
+ * （2026-10-14。`sukusuku://care` と2本スラッシュのときは、タブも `open` も拾えなかった）。
+ * 毎回の起動で通る入口と、お知らせのタップで実績のある移し方に合わせる。
  */
 export const appLink = (tab: TabId, params: Record<string, string> = {}): string => {
-  const query = Object.entries(params)
+  const query = Object.entries({ [WIDGET_TAB_PARAM]: tab, ...params })
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
     .join('&');
-  return `sukusuku:///${tab}${query ? `?${query}` : ''}`;
+  return `sukusuku:///?${query}`;
 };
