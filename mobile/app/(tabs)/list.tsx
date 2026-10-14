@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react-native';
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
@@ -18,7 +18,6 @@ import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
 import { useFamilyRefresh } from '@/lib/familySync';
-import { OPEN_LIST_PARAM } from '@/lib/appLinks';
 import {
   deleteDoneItems,
   deleteGroup,
@@ -128,21 +127,6 @@ export default function ListScreen() {
         // 圏外なら前に読んだ分を出したままにする。
       });
   });
-
-  // ホーム画面のウィジェットから来たときは、そのリストを開く（docs/widgets.md §2.4）。
-  // 読み終えてから開き、開いたらパラメータを消す（この画面へ戻るたびに開き直さないため）。
-  // 消えた・見えなくなったリストなら一覧のまま。
-  const { list: requestedListId } = useLocalSearchParams<{ list?: string }>();
-  useEffect(() => {
-    if (!requestedListId || isLoading) return;
-    router.setParams({ [OPEN_LIST_PARAM]: '' });
-    if (lists.some((list) => list.id === requestedListId)) {
-      setIsNewList(false);
-      setOpenListId(requestedListId);
-    }
-    // 開くのはパラメータが来たときの1回だけでよい（リストが読み直されるたびに開き直さない）。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestedListId, isLoading]);
 
   // 固定したリストが先。中は並び順（position）で、同じなら読み込んだ順のまま。
   const sortedLists = useMemo(

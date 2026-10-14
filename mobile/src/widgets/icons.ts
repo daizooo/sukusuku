@@ -11,7 +11,6 @@ export type WidgetIconName =
   | 'money'
   | 'milk'
   | 'diaper'
-  | 'pumping'
   | 'temperature'
   | 'expense'
   | 'income'
@@ -38,10 +37,6 @@ const SHAPES: Record<WidgetIconName, string> = {
   // lucide: Droplet（おむつ。育児タブの一覧と同じ）
   diaper:
     '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
-  // lucide: Milk（搾乳）
-  pumping:
-    '<path d="M8 2h8"/><path d="M9 2v2.789a4 4 0 0 1-.672 2.219l-.656.984A4 4 0 0 0 7 10.212V20a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-9.789a4 4 0 0 0-.672-2.219l-.656-.984A4 4 0 0 1 15 4.788V2"/>' +
-    '<path d="M7 15a6.472 6.472 0 0 1 5 0 6.47 6.47 0 0 0 5 0"/>',
   // lucide: Thermometer（体温）
   temperature: '<path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>',
   // lucide: CircleMinus / CirclePlus / ArrowLeftRight / Camera（家計の入力）

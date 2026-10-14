@@ -24,7 +24,6 @@ import NotificationSetting from '@/components/info/NotificationSetting';
 import FeedingIntervalSetting from '@/components/info/FeedingIntervalSetting';
 import WakeAlarmSetting from '@/components/info/WakeAlarmSetting';
 import TemperatureReminderSetting from '@/components/info/TemperatureReminderSetting';
-import WidgetSetting from '@/components/info/WidgetSetting';
 
 // 設定の画面。その他タブの「設定」の行から開く（以前は設定タブそのもの。2026-10-13にその他タブへ改めた。
 // docs/family-app.md §4.3・§4.5）。家族・通知・アカウント・アプリ情報に絞る。
@@ -131,9 +130,6 @@ export default function SettingsScreen() {
               {/* 夜の授乳の起床アラーム。この端末だけの設定で、Androidのネイティブ版だけに出る。 */}
               <WakeAlarmSetting />
             </NotificationSetting>
-
-            {/* ホーム画面のウィジェット。この端末だけの設定で、Androidのネイティブ版だけに出る。 */}
-            <WidgetSetting />
 
             <AccountSection familyId={familyId} userId={session.user.id} />
           </>
