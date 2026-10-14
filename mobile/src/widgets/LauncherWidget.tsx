@@ -12,7 +12,7 @@ import type { WidgetIconName } from './icons';
 
 const TABS: { tab: TabId; icon: WidgetIconName; label: string }[] = [
   { tab: 'schedule', icon: 'schedule', label: '予定' },
-  { tab: 'list', icon: 'list', label: 'ToDo' },
+  { tab: 'list', icon: 'list', label: 'リスト' },
   { tab: 'care', icon: 'care', label: '育児' },
   { tab: 'money', icon: 'money', label: '家計' },
 ];

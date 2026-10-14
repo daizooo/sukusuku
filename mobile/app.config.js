@@ -49,7 +49,7 @@ module.exports = {
             {
               name: 'TabLauncher',
               label: 'タブ',
-              description: '予定・ToDo・育児・家計をワンタップで開く',
+              description: '予定・リスト・育児・家計をワンタップで開く',
               minWidth: '250dp',
               minHeight: '40dp',
               targetCellWidth: 4,

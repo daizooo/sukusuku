@@ -296,7 +296,7 @@ export interface ListItem {
   position: number;
 }
 
-// 予定・ToDo・育児・家計・その他の5つ（docs/family-app.md §4.1）。
+// 予定・リスト・育児・家計・その他の5つ（docs/family-app.md §4.1）。
 export type TabId = 'schedule' | 'list' | 'care' | 'money' | 'info';
 
 // スケジュールタブの表示切り替え。既定は月（カレンダー）。
