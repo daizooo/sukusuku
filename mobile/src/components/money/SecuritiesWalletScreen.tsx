@@ -24,7 +24,7 @@ interface SecuritiesWalletScreenProps {
   securities: MoneySecuritiesData;
   onClose: () => void;
   onSaveWallet: (target: MoneyWallet, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
-  onArchiveWallet: (wallet: MoneyWallet) => void;
+  onDeleteWallet: (wallet: MoneyWallet) => void;
   onSaveSecurity: (walletId: string, target: MoneySecurity | null, draft: MoneySecurityDraft) => void;
   onArchiveSecurity: (walletId: string, security: MoneySecurity) => void;
 }
@@ -35,7 +35,7 @@ export default function SecuritiesWalletScreen({
   securities,
   onClose,
   onSaveWallet,
-  onArchiveWallet,
+  onDeleteWallet,
   onSaveSecurity,
   onArchiveSecurity,
 }: SecuritiesWalletScreenProps) {
@@ -157,9 +157,9 @@ export default function SecuritiesWalletScreen({
             setEditing(false);
             void onSaveWallet(wallet, draft);
           }}
-          onArchive={() => {
+          onDelete={() => {
             setEditing(false);
-            onArchiveWallet(wallet);
+            onDeleteWallet(wallet);
             onClose();
           }}
         />

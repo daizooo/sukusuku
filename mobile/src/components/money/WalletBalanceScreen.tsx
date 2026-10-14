@@ -51,7 +51,7 @@ interface WalletBalanceScreenProps {
   onConfirm: (walletId: string, balanceOn: string, amount: number, showInHistory: boolean) => void;
   onDeleteBalance: (balance: MoneyWalletBalance) => void;
   onSaveWallet: (target: MoneyWallet, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
-  onArchiveWallet: (wallet: MoneyWallet) => void;
+  onDeleteWallet: (wallet: MoneyWallet) => void;
 }
 
 type Tab = 'history' | 'trend';
@@ -90,7 +90,7 @@ export default function WalletBalanceScreen({
   onConfirm,
   onDeleteBalance,
   onSaveWallet,
-  onArchiveWallet,
+  onDeleteWallet,
 }: WalletBalanceScreenProps) {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('history');
@@ -255,9 +255,9 @@ export default function WalletBalanceScreen({
             setEditing(false);
             void onSaveWallet(wallet, draft);
           }}
-          onArchive={() => {
+          onDelete={() => {
             setEditing(false);
-            onArchiveWallet(wallet);
+            onDeleteWallet(wallet);
             onClose();
           }}
         />

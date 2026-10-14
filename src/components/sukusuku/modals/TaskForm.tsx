@@ -7,6 +7,7 @@ import { participantNames, useFamilyRoster } from '@/lib/familyRoster';
 import { useBackLayer } from '@/lib/browserHistory';
 import { useBackdropClose } from '../ui/useBackdropClose';
 import { swipeBoundary } from '../ui/useSwipeNavigation';
+import { useSwipeTabs } from '../ui/useSwipeTabs';
 import { parseDateString } from '@/lib/dateUtils';
 import { getParticipantColor } from '@/lib/uiUtils';
 import {
@@ -80,6 +81,13 @@ export default function TaskForm({ value, onChange }: TaskFormProps) {
     }
   };
 
+  // 予定/タスクは、切り替えの帯と入力欄の上の左右スワイプでも切り替える。
+  const { handlers: swipeHandlers, attachContent } = useSwipeTabs(
+    KIND_TABS.map((tab) => tab.value),
+    value.kind,
+    setKind,
+  );
+
   const toggleAllDay = () => {
     // 終日 <-> 時刻あり。時刻ありに切り替えたときは 09:00 を初期値にする。
     set(isAllDay ? { startTime: '09:00', endTime: null } : { startTime: null, endTime: null });
@@ -136,7 +144,8 @@ export default function TaskForm({ value, onChange }: TaskFormProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div {...swipeHandlers}>
+    <div ref={attachContent} className="space-y-4">
       {/* 種別（予定/タスク） */}
       <div className={SWITCHER}>
         {KIND_TABS.map((tab) => (
@@ -328,6 +337,7 @@ export default function TaskForm({ value, onChange }: TaskFormProps) {
           ))}
         </div>
       </div>
+    </div>
     </div>
   );
 }

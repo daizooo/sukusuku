@@ -3,12 +3,12 @@
 import { useState } from 'react';
 import { Check, Pencil, Plus } from 'lucide-react';
 import type { MoneyWallet, MoneyWalletDraft, MoneyWalletType } from '@/types/app';
-import { cardScheduleLabel, PAY_MONTH_OPTIONS, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
+import { cardScheduleLabel, PAY_MONTH_OPTIONS, WALLET_DELETE_NOTE, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
 import { ModalShell } from '../modals/TaskForm';
 import { PrimaryButton, ScreenHeader, StackedScreen, WalletTypeIcon } from './moneyVisual';
 
 // 出金元の選択（docs/kakei.md §3.2）。mobile版の `mobile/src/components/money/WalletPicker.tsx` と同じ並び・文言。
-// 種類（財布・カード・口座…）ごとに並べる。ここで出金元を足す・直す・使わなくする。
+// 種類（財布・カード・口座…）ごとに並べる。ここで出金元を足す・直す・削除する。
 // カードは締め日・引き落とし日・引き落とし口座を持てる。そろうと、引き落とし日にカード代金の振替（見込み）が
 // 自動で作られる（docs/kakei.md §3.4）。
 
@@ -19,14 +19,14 @@ interface WalletPickerProps {
   onPick: (walletId: string) => void;
   onClose: () => void;
   onSave: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
-  onArchive: (wallet: MoneyWallet) => void;
+  onDelete: (wallet: MoneyWallet) => void;
 }
 
 const inputClass =
   'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
 const labelClass = 'block text-xs font-bold text-gray-700 mb-1.5';
 
-export default function WalletPicker({ title, wallets, selectedId, onPick, onClose, onSave, onArchive }: WalletPickerProps) {
+export default function WalletPicker({ title, wallets, selectedId, onPick, onClose, onSave, onDelete }: WalletPickerProps) {
   const [editing, setEditing] = useState<MoneyWallet | 'new' | null>(null);
   const usable = wallets.filter((wallet) => !wallet.archived);
 
@@ -103,13 +103,13 @@ export default function WalletPicker({ title, wallets, selectedId, onPick, onClo
             // 足したばかりの出金元は、そのまま選ぶ。
             if (saved && target === null) onPick(saved.id);
           }}
-          onArchive={
+          onDelete={
             editing === 'new'
               ? undefined
               : () => {
                   const target = editing;
                   setEditing(null);
-                  onArchive(target);
+                  onDelete(target);
                 }
           }
         />
@@ -129,14 +129,14 @@ export function WalletModal({
   wallets,
   onClose,
   onSubmit,
-  onArchive,
+  onDelete,
 }: {
   wallet: MoneyWallet | null;
   /** 引き落とし口座の候補に使う。 */
   wallets: MoneyWallet[];
   onClose: () => void;
   onSubmit: (draft: MoneyWalletDraft) => void;
-  onArchive?: () => void;
+  onDelete?: () => void;
 }) {
   const [name, setName] = useState(wallet?.name ?? '');
   const [type, setType] = useState<MoneyWalletType>(wallet?.type ?? 'card');
@@ -168,8 +168,8 @@ export function WalletModal({
     });
   };
 
-  const archive = () => {
-    if (window.confirm(`${wallet?.name ?? ''}を使わなくしますか？選べなくなりますが、記録には残ります。`)) onArchive?.();
+  const remove = () => {
+    if (window.confirm(`${wallet?.name ?? ''}を削除しますか？${WALLET_DELETE_NOTE}`)) onDelete?.();
   };
 
   return (
@@ -179,9 +179,9 @@ export function WalletModal({
       footer={
         <div className="space-y-1">
           <PrimaryButton label="保存する" onClick={submit} />
-          {onArchive && (
-            <button type="button" onClick={archive} className="w-full py-2 text-sm text-red-500">
-              使わなくする
+          {onDelete && (
+            <button type="button" onClick={remove} className="w-full py-2 text-sm text-red-500">
+              削除する
             </button>
           )}
         </div>

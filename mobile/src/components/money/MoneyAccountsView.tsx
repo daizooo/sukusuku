@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight, Inbox, Plus } from 'lucide-react-native';
 import type {
   MoneyCategory,
@@ -17,6 +17,7 @@ import {
   dateKeyOfDate,
   formatBalance,
   groupWalletSections,
+  WALLET_DELETE_NOTE,
   WALLET_TYPES,
   type WalletBalanceRow,
 } from '@/lib/moneyUtils';
@@ -51,7 +52,7 @@ interface MoneyAccountsViewProps {
   onConfirm: (walletId: string, balanceOn: string, amount: number, showInHistory: boolean) => void;
   onDeleteBalance: (balance: MoneyWalletBalance) => void;
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
-  onArchiveWallet: (wallet: MoneyWallet) => void;
+  onDeleteWallet: (wallet: MoneyWallet) => void;
   onRestoreWallet: (wallet: MoneyWallet) => void;
   onSaveSecurity: (walletId: string, target: MoneySecurity | null, draft: MoneySecurityDraft) => void;
   onArchiveSecurity: (walletId: string, security: MoneySecurity) => void;
@@ -73,7 +74,7 @@ export default function MoneyAccountsView({
   onConfirm,
   onDeleteBalance,
   onSaveWallet,
-  onArchiveWallet,
+  onDeleteWallet,
   onRestoreWallet,
   onSaveSecurity,
   onArchiveSecurity,
@@ -194,6 +195,19 @@ export default function MoneyAccountsView({
                   <Pressable accessibilityRole="button" onPress={() => onRestoreWallet(row.wallet)} hitSlop={8}>
                     <Text style={type.link}>また使う</Text>
                   </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${row.wallet.name}を削除`}
+                    onPress={() =>
+                      Alert.alert(`${row.wallet.name}を削除しますか？`, WALLET_DELETE_NOTE, [
+                        { text: 'やめる', style: 'cancel' },
+                        { text: '削除する', style: 'destructive', onPress: () => onDeleteWallet(row.wallet) },
+                      ])
+                    }
+                    hitSlop={8}
+                  >
+                    <Text style={[type.link, styles.deleteLink]}>削除</Text>
+                  </Pressable>
                 </View>
               ))}
             </View>
@@ -209,7 +223,7 @@ export default function MoneyAccountsView({
           securities={securities}
           onClose={() => setOpenId(null)}
           onSaveWallet={onSaveWallet}
-          onArchiveWallet={onArchiveWallet}
+          onDeleteWallet={onDeleteWallet}
           onSaveSecurity={onSaveSecurity}
           onArchiveSecurity={onArchiveSecurity}
         />
@@ -227,7 +241,7 @@ export default function MoneyAccountsView({
           onConfirm={onConfirm}
           onDeleteBalance={onDeleteBalance}
           onSaveWallet={onSaveWallet}
-          onArchiveWallet={onArchiveWallet}
+          onDeleteWallet={onDeleteWallet}
         />
       )}
       {showTrend && (
@@ -298,6 +312,7 @@ const styles = StyleSheet.create({
   tileAmount: { alignSelf: 'flex-end', fontSize: 21, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   tilePlus: { color: colors.moneyIncome },
   archivedName: { opacity: 0.7 },
+  deleteLink: { color: colors.danger },
   add: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 16 },
   addText: { fontSize: 15, fontWeight: '700', color: colors.money },
   feed: {
