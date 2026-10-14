@@ -39,6 +39,58 @@ module.exports = {
         },
       ],
       './plugins/withDevVariant',
+      // ホーム画面のウィジェット（docs/widgets.md）。name は src/widgets/widgetNames.ts と同じにする。
+      // 中身を出すものは30分ごと（Androidの最短）に描き直す。アプリを閉じたときにも描き直す。
+      [
+        'react-native-android-widget',
+        {
+          widgets: [
+            {
+              name: 'TabLauncher',
+              label: 'タブ',
+              description: '予定・ToDo・育児・家計をワンタップで開く',
+              minWidth: '250dp',
+              minHeight: '40dp',
+              targetCellWidth: 4,
+              targetCellHeight: 1,
+              resizeMode: 'horizontal|vertical',
+            },
+            {
+              name: 'CareQuick',
+              label: '育児',
+              description: '前回の授乳・次の目安と、授乳・おむつ・搾乳・体温の入力',
+              minWidth: '250dp',
+              minHeight: '110dp',
+              targetCellWidth: 4,
+              targetCellHeight: 2,
+              resizeMode: 'horizontal|vertical',
+              updatePeriodMillis: 1800000,
+            },
+            {
+              name: 'MoneyQuick',
+              label: '家計',
+              description: '今月・今日の支出と、支出・収入・振替・レシートの入力',
+              minWidth: '250dp',
+              minHeight: '110dp',
+              targetCellWidth: 4,
+              targetCellHeight: 2,
+              resizeMode: 'horizontal|vertical',
+              updatePeriodMillis: 1800000,
+            },
+            {
+              name: 'ListItems',
+              label: 'ToDo・買い物',
+              description: 'リストのまだ済んでいない項目',
+              minWidth: '110dp',
+              minHeight: '110dp',
+              targetCellWidth: 2,
+              targetCellHeight: 2,
+              resizeMode: 'horizontal|vertical',
+              updatePeriodMillis: 1800000,
+            },
+          ],
+        },
+      ],
     ],
   },
 };
