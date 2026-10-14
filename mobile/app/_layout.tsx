@@ -18,6 +18,7 @@ import {
   presentActionableNotification,
 } from '@/lib/notificationActions';
 import { colors } from '@/lib/theme';
+import { useWidgetRefresh } from '@/widgets/useWidgetRefresh';
 
 // アプリを開いている間に届いたお知らせも、そのまま画面の上に出す。
 // PWA版はService Workerが必ず showNotification() するので、開いていても出る
@@ -93,6 +94,8 @@ function AppEffects() {
   useSettledNotificationCleanup(session?.user.id ?? null);
   // 夜間の起床アラームの予約を、いまの授乳の目安に合わせて組み直す（Androidのネイティブ版だけ）。
   useWakeAlarmSync(session?.user.id ?? null);
+  // ホーム画面のウィジェットを、アプリを閉じるたびに描き直す（docs/widgets.md §3.3）。
+  useWidgetRefresh();
 
   return null;
 }

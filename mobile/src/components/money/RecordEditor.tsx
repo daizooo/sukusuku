@@ -92,6 +92,8 @@ export interface RecordEditorProps {
   onEditCategories: () => void;
   /** レシートの読み取りの結果。あれば、その内容を入れた新しい記録として開く（docs/kakei.md §10.4）。 */
   receipt?: ReceiptScan | null;
+  /** 新しく記録するときに最初に選んでおく種類（ホーム画面のウィジェットの「収入」「振替」から。docs/widgets.md §2.3）。 */
+  initialKind?: MoneyRecordKind;
 }
 
 /**
@@ -117,13 +119,14 @@ export default function RecordEditor({
   onArchiveWallet,
   onEditCategories,
   receipt = null,
+  initialKind = 'expense',
 }: RecordEditorProps) {
   const insets = useSafeAreaInsets();
-  const [kind, setKind] = useState<MoneyRecordKind>(record?.kind ?? 'expense');
+  const [kind, setKind] = useState<MoneyRecordKind>(record?.kind ?? (receipt ? 'expense' : initialKind));
   const [occurredOn, setOccurredOn] = useState(record?.occurredOn ?? receipt?.occurredOn ?? toDateString(new Date()));
   // レシートから出金元が当たらなかったときは、前回の出金元を入れて「確かめてください」を出す（§10.4）。
   const [initialWalletId] = useState<string | null>(() =>
-    record ? record.walletId : (receipt?.walletId ?? lastWalletId(records, wallets, 'expense')),
+    record ? record.walletId : (receipt?.walletId ?? lastWalletId(records, wallets, receipt ? 'expense' : initialKind)),
   );
   const [walletId, setWalletId] = useState<string | null>(initialWalletId);
   const [toWalletId, setToWalletId] = useState<string | null>(record?.toWalletId ?? null);

@@ -52,3 +52,34 @@ export const notificationTarget = (kind: unknown): NotificationTarget => {
       return { tab: 'schedule' };
   }
 };
+
+// ここから下はホーム画面のウィジェットからのリンク（docs/widgets.md）。
+// 育児の入力画面は、お知らせと同じ `open`（OPEN_LOG_PARAM）で開く。
+
+/** 家計タブで開く入力のパラメータ名（育児タブと同じ open）。 */
+export const OPEN_MONEY_PARAM = OPEN_LOG_PARAM;
+
+/** 家計タブで開く入力。支出・収入・振替は記録の入力画面、receipt はレシートの撮影から。 */
+export type MoneyOpen = 'expense' | 'income' | 'transfer' | 'receipt';
+
+const MONEY_OPENS: MoneyOpen[] = ['expense', 'income', 'transfer', 'receipt'];
+
+/** 家計タブのパラメータの open を解釈する。知らない値なら null（何も開かない）。 */
+export const parseMoneyOpen = (value: string | string[] | undefined): MoneyOpen | null => {
+  const first = Array.isArray(value) ? value[0] : value;
+  return MONEY_OPENS.find((open) => open === first) ?? null;
+};
+
+/** ToDoタブで開くリスト（リストのID）。開いたら消す（OPEN_LOG_PARAM と同じ）。 */
+export const OPEN_LIST_PARAM = 'list';
+
+/**
+ * アプリの外からタブを開くリンク（`sukusuku://care?open=milk`）。
+ * scheme は app.config.js の scheme。タブのパスはグループ名を含まない（app/index.tsx と同じ形）。
+ */
+export const appLink = (tab: TabId, params: Record<string, string> = {}): string => {
+  const query = Object.entries(params)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join('&');
+  return `sukusuku://${tab}${query ? `?${query}` : ''}`;
+};

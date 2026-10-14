@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Redirect } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type {
   MoneyBudget,
@@ -17,6 +17,7 @@ import type {
   MoneyWallet,
   MoneyWalletBalance,
   MoneyWalletDraft,
+  MoneyRecordKind,
   ReceiptScan,
 } from '@/types/app';
 import { supabase } from '@/lib/supabase';
@@ -25,6 +26,7 @@ import { colors } from '@/lib/theme';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { getMyMembership } from '@/lib/api/me';
 import { useFamilyRefresh } from '@/lib/familySync';
+import { OPEN_MONEY_PARAM, parseMoneyOpen } from '@/lib/appLinks';
 import {
   archiveMoneyWallet,
   deleteMoneyRecord,
@@ -138,6 +140,8 @@ export default function MoneyScreen() {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [period, setPeriod] = useState<ReviewPeriod>('month');
   const [editing, setEditing] = useState<Editing>(null);
+  // 新しい記録を開くときの種類（ホーム画面のウィジェットの「収入」「振替」から来たとき。ふだんは支出）。
+  const [newKind, setNewKind] = useState<MoneyRecordKind>('expense');
   // レシートの読み取りの結果（記録の入力に入れて開く）と、読み取り中か（docs/kakei.md §10）。
   const [receipt, setReceipt] = useState<ReceiptScan | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -329,6 +333,25 @@ export default function MoneyScreen() {
       setScanning(false);
     }
   };
+
+  // ホーム画面のウィジェットから来たときに、その入力を開く（docs/widgets.md §2.3）。
+  // 口座・お店の既定は読み込んだ記録から決めるので、読み終えてから開く。開いたらパラメータを消す
+  // （この画面へ戻るたびに開き直さないため。育児タブの open と同じ）。
+  const { open: requestedOpen } = useLocalSearchParams<{ open?: string }>();
+  useEffect(() => {
+    const open = parseMoneyOpen(requestedOpen);
+    if (!open || isLoading || !familyId) return;
+    router.setParams({ [OPEN_MONEY_PARAM]: '' });
+    if (open === 'receipt') {
+      void startReceiptScan();
+      return;
+    }
+    setReceipt(null);
+    setNewKind(open);
+    setEditing('new');
+    // startReceiptScan は描くたびに作り直されるが、開くのはパラメータが来たときの1回だけでよい。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedOpen, isLoading, familyId]);
 
   const removeRecord = async (record: MoneyRecord) => {
     setEditing(null);
@@ -537,7 +560,10 @@ export default function MoneyScreen() {
       <MoneyFab
         addDisabled={!familyId}
         settingsDisabled={!familyId}
-        onAdd={() => setEditing('new')}
+        onAdd={() => {
+          setNewKind('expense');
+          setEditing('new');
+        }}
         onScan={() => void startReceiptScan()}
         onSettings={() => setSettingsOpen(true)}
       />
@@ -551,9 +577,10 @@ export default function MoneyScreen() {
 
       {editing !== null && (
         <RecordEditor
-          key={editing === 'new' ? (receipt ? 'receipt' : 'new') : editing.id}
+          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newKind}`) : editing.id}
           record={editing === 'new' ? null : editing}
           receipt={editing === 'new' ? receipt : null}
+          initialKind={newKind}
           categories={categories}
           budgets={allBudgets}
           wallets={wallets}
