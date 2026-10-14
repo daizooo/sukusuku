@@ -70,7 +70,6 @@ id                 uuid pk
 family_id          uuid → families (on delete cascade)
 created_by         uuid → users (on delete set null)
 kind               text  check in ('rent','insurance','subscription','other')
-category           text  not null default ''      -- 小分類。画面からは外した（未使用。列は残している）
 title              text  not null
 company            text  not null default ''
 contractor_id      uuid → family_members (on delete set null)
@@ -213,5 +212,4 @@ mobile が正、PWA は同じ項目・文言（CLAUDE.md の第一優先）。
 
 ## 10. まだ決めていないこと
 
-- 小分類の列（`category`）を消すか。画面からは外した。消すのは `drop column` なので SQL Editor で流す
 - 契約の**終了**（解約した契約を消すか、「終了」にして残すか）。まずは削除だけにして、残したくなったら `ended_on` を足す
