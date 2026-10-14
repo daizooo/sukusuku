@@ -192,7 +192,6 @@ export type Database = {
         Row: {
           amount: number | null
           amount_cycle: string | null
-          category: string
           company: string
           contractor_id: string | null
           created_at: string
@@ -213,7 +212,6 @@ export type Database = {
         Insert: {
           amount?: number | null
           amount_cycle?: string | null
-          category?: string
           company?: string
           contractor_id?: string | null
           created_at?: string
@@ -234,7 +232,6 @@ export type Database = {
         Update: {
           amount?: number | null
           amount_cycle?: string | null
-          category?: string
           company?: string
           contractor_id?: string | null
           created_at?: string
