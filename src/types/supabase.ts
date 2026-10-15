@@ -1574,6 +1574,7 @@ export type Database = {
           category_id: string | null
           created_at: string
           day: number
+          end_month: string | null
           family_id: string
           holiday: string
           id: string
@@ -1582,6 +1583,7 @@ export type Database = {
           months: number[] | null
           name: string
           position: number
+          start_month: string | null
           store: string
           to_wallet_id: string | null
           updated_at: string
@@ -1596,6 +1598,7 @@ export type Database = {
           category_id?: string | null
           created_at?: string
           day: number
+          end_month?: string | null
           family_id: string
           holiday?: string
           id?: string
@@ -1604,6 +1607,7 @@ export type Database = {
           months?: number[] | null
           name?: string
           position?: number
+          start_month?: string | null
           store?: string
           to_wallet_id?: string | null
           updated_at?: string
@@ -1618,6 +1622,7 @@ export type Database = {
           category_id?: string | null
           created_at?: string
           day?: number
+          end_month?: string | null
           family_id?: string
           holiday?: string
           id?: string
@@ -1626,6 +1631,7 @@ export type Database = {
           months?: number[] | null
           name?: string
           position?: number
+          start_month?: string | null
           store?: string
           to_wallet_id?: string | null
           updated_at?: string

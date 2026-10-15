@@ -169,6 +169,44 @@ export function recurringScheduleLabel(
   return `${when}（${rule.holiday === 'none' ? '休日もそのまま' : `休日は${HOLIDAY_RULE_LABEL[rule.holiday]}`}）`;
 }
 
+/**
+ * ルールの期間（docs/kakei.md §3.3）。monthKey（YYYY-MM。どの月の分か＝入金・引き落としのある月）が期間の中か。
+ * 開始月・終了月の null は無期限。
+ */
+export function inRecurringPeriod(rule: Partial<Pick<MoneyRecurring, 'startMonth' | 'endMonth'>>, monthKey: string): boolean {
+  if (rule.startMonth != null && monthKey < rule.startMonth) return false;
+  if (rule.endMonth != null && monthKey > rule.endMonth) return false;
+  return true;
+}
+
+/** ルールの期間が、monthKey（YYYY-MM）より前に終わっているか。 */
+export const recurringEnded = (rule: Pick<MoneyRecurring, 'endMonth'>, monthKey: string): boolean =>
+  rule.endMonth !== null && rule.endMonth < monthKey;
+
+const periodMonthLabel = (monthKey: string) => `${monthKey.slice(0, 4)}/${Number(monthKey.slice(5, 7))}`;
+
+/** 「2027/9〜」「〜2027/8」「2026/10〜2027/8」。期間が無ければ空。 */
+export function recurringPeriodLabel(rule: Pick<MoneyRecurring, 'startMonth' | 'endMonth'>): string {
+  if (rule.startMonth === null && rule.endMonth === null) return '';
+  return `${rule.startMonth === null ? '' : periodMonthLabel(rule.startMonth)}〜${rule.endMonth === null ? '' : periodMonthLabel(rule.endMonth)}`;
+}
+
+/**
+ * 期間の入力（「2027/9」「2027-09」「2027年9月」）を YYYY-MM にする。空は null（無期限）。読めなければ undefined。
+ */
+export function parsePeriodMonth(text: string): string | null | undefined {
+  const value = text.trim().replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0));
+  if (value === '') return null;
+  const match = /^(\d{4})\s*(?:[/／\-.年])\s*(\d{1,2})\s*月?$/.exec(value);
+  if (!match) return undefined;
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return undefined;
+  return `${match[1]}-${pad2(month)}`;
+}
+
+/** YYYY-MM を期間の入力の形（2027/9）にする。null は空。 */
+export const periodMonthInput = (monthKey: string | null): string => (monthKey === null ? '' : periodMonthLabel(monthKey));
+
 /** 引き落とし月の選択肢（締め日の月から数える）。null は締め日のあとに来る最初の引き落とし日。 */
 export const PAY_MONTH_OPTIONS: { offset: number | null; label: string }[] = [
   { offset: null, label: '自動' },
@@ -190,12 +228,25 @@ export function cardScheduleLabel(wallet: Pick<MoneyWallet, 'closeDay' | 'payDay
 }
 
 /**
+ * 期間の始まりより前の記録か（見込みに使わない。時短後の給与の見込みが、出産前の給与の記録から出ないように）。
+ * そのルールが作った記録は期間に関係なく使う（DBの money_recurring_estimate と同じ）。
+ */
+const beforePeriod = (
+  rule: Partial<Pick<MoneyRecurring, 'id' | 'startMonth'>>,
+  record: Pick<MoneyRecord, 'occurredOn' | 'recurringId'>,
+): boolean =>
+  rule.startMonth != null &&
+  record.occurredOn < `${rule.startMonth}-01` &&
+  (rule.id === undefined || record.recurringId !== rule.id);
+
+/**
  * ルールの過去1年の記録（種類・出金元・お店が同じで、見込みでないもの。新しい順）。見込みの額のもとになる
  * （DBの money_recurring_estimate と同じ選び方。額の出し方は estimateRecurringAmount）。設定画面で、ルールが過去の記録と
  * 結びついているかを確かめるのに使う。1件の記録に同じ種類の品目が複数あれば合計する。
  */
 export function recurringHistory(
-  rule: Pick<MoneyRecurring, 'kind' | 'walletId' | 'toWalletId' | 'store' | 'categoryId'>,
+  rule: Pick<MoneyRecurring, 'kind' | 'walletId' | 'toWalletId' | 'store' | 'categoryId'> &
+    Partial<Pick<MoneyRecurring, 'id' | 'startMonth'>>,
   records: readonly MoneyRecord[],
   today: string,
 ): { occurredOn: string; amount: number }[] {
@@ -208,6 +259,7 @@ export function recurringHistory(
     if (rule.kind === 'transfer' && record.toWalletId !== rule.toWalletId) continue;
     if (record.store.trim() !== rule.store.trim()) continue;
     if (record.occurredOn < since || record.occurredOn >= today) continue;
+    if (beforePeriod(rule, record)) continue;
     const items = record.items.filter(matches);
     if (items.length === 0) continue;
     history.push({ occurredOn: record.occurredOn, amount: items.reduce((sum, item) => sum + item.amount, 0) });
@@ -448,7 +500,7 @@ const yearBefore = (dateKey: string): string =>
 /**
  * 見込みのルールの、その月（YYYY-MM）の額。DBの money_recurring_estimate と同じ:
  * 前年同月の記録（前年のその月の引き落とし日の前後10日。いちばん近いもの）があればその額、無ければ直近3回（過去1年）の平均、
- * 記録が1件も無ければルールに入れた額。同じ種類・出金元・お店の、見込みでない記録だけを使う。
+ * 記録が1件も無ければルールに入れた額。同じ種類・出金元・お店の、見込みでない記録だけを使う。期間の始まりより前の記録は使わない。
  */
 export function estimateRecurringAmount(rule: MoneyRecurring, monthKey: string, records: readonly MoneyRecord[]): number {
   if (rule.walletId === null) return rule.amount;
@@ -465,6 +517,7 @@ export function estimateRecurringAmount(rule: MoneyRecurring, monthKey: string, 
     if (rule.kind === 'transfer' && record.toWalletId !== rule.toWalletId) continue;
     if (record.store.trim() !== store) continue;
     if (record.occurredOn < from || record.occurredOn >= on) continue;
+    if (beforePeriod(rule, record)) continue;
     // その月のためにこのルールが作った記録は、作った時点では無かったので数えない。
     if (record.recurringId === rule.id && record.month === monthKey) continue;
     const items = rule.categoryId === null ? record.items : record.items.filter((item) => item.categoryId === rule.categoryId);
@@ -505,7 +558,7 @@ function recurringMonthAmount(
 /**
  * 固定費（支出のルール）から、大分類ごと・年ごとの1月〜12月の予算に足す額を出す（2026-10-11）。
  * 記録を作る条件と同じ（使っていて、出金元と種類が決まっているもの）で、生活費の大分類のものだけ。種類が小分類ならその大分類へ。
- * 記録する月（null は毎月）に、ルールを作った年から今年の翌年まで足す。作った年の中では、作った月より前の月にも足す（2026-10-12）。
+ * 記録する月（null は毎月）に、ルールを作った年から今年の翌年まで足す。期間（開始月・終了月）の外の月には足さない。作った年の中では、作った月より前の月にも足す（2026-10-12）。
  * 返す行は fixed: true で、手入力の予算の行といっしょに budgets に並べて使う。
  */
 export function fixedBudgetRows(
@@ -532,6 +585,7 @@ export function fixedBudgetRows(
       for (let month = 1; month <= 12; month += 1) {
         const monthKey = `${year}-${pad2(month)}`;
         if (rule.months !== null && !rule.months.includes(month)) continue;
+        if (!inRecurringPeriod(rule, monthKey)) continue;
         const amount = recurringMonthAmount(rule, monthKey, records, made);
         if (amount <= 0) continue;
         const key = `${top.id}|${year}`;

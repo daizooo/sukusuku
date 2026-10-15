@@ -26,6 +26,10 @@ import {
   estimateRecurringAmount,
   fixedBudgetFor,
   fixedBudgetRows,
+  inRecurringPeriod,
+  parsePeriodMonth,
+  recurringEnded,
+  recurringPeriodLabel,
   formatBalance,
   walletBalanceOn,
   walletDelta,
@@ -239,7 +243,31 @@ assert.equal(fixedBudgetFor(withFixed, 'house', '2025-12'), 0, 'ルールを作�
   assert.equal(budgetFor(withFixed, 'util', '2026-08'), 9000, '手入力が無い月は固定費だけ');
   assert.equal(budgetFor(withFixed, 'food', '2026-06'), 60000, '固定費の無い種類は今まで通り');
   assert.deepEqual(budgetMonths(withFixed, 'house', 2026), Array(12).fill(85000), '編集の初期値に固定費は入らない');
+
+  // 期間（開始月・終了月。docs/kakei.md §3.3）
+  const leave = rule({ id: 'r9', categoryId: 'rent', amount: 1000, startMonth: '2026-06', endMonth: '2026-08' });
+  const periodRows = fixedBudgetRows([leave], cats, [], today);
+  assert.equal(fixedBudgetFor(periodRows, 'house', '2026-05'), 0, '期間の前の月は足さない');
+  assert.equal(fixedBudgetFor(periodRows, 'house', '2026-06'), 1000, '期間の始まりの月から');
+  assert.equal(fixedBudgetFor(periodRows, 'house', '2026-08'), 1000, '期間の終わりの月まで');
+  assert.equal(fixedBudgetFor(periodRows, 'house', '2026-09'), 0, '期間のあとの月は足さない');
+  assert.equal(inRecurringPeriod({ startMonth: null, endMonth: null }, '2030-01'), true, '無期限');
+  assert.equal(recurringEnded(rule({ endMonth: '2026-09' }), '2026-10'), true);
+  assert.equal(recurringEnded(rule({ endMonth: '2026-10' }), '2026-10'), false, '終わりの月はまだ期間の中');
+  assert.equal(recurringPeriodLabel(rule({ startMonth: '2027-09', endMonth: null })), '2027/9〜');
+  assert.equal(recurringPeriodLabel(rule({ startMonth: null, endMonth: '2027-08' })), '〜2027/8');
+  assert.equal(recurringPeriodLabel(rule({ startMonth: null, endMonth: null })), '');
+  // 見込みは期間の始まりより前の記録を使わない（このルールが作った記録は使う）
+  const later = rule({ ...power, id: 'r10', startMonth: '2026-09' });
+  assert.equal(estimateRecurringAmount(later, '2026-11', history), 8500, '始まりより前の記録（8月まで）は使わない');
+  assert.equal(estimateRecurringAmount(rule({ ...power, id: 'r3', startMonth: '2026-12' }), '2027-01', history), 8500, 'このルールが作った記録は使う');
+  assert.equal(estimateRecurringAmount(rule({ ...power, id: 'r11', startMonth: '2026-12' }), '2027-01', history), 6000, '使える記録が無ければルールの額');
 }
+assert.equal(parsePeriodMonth(''), null, '空は無期限');
+assert.equal(parsePeriodMonth('2027/9'), '2027-09');
+assert.equal(parsePeriodMonth('２０２７年９月'), '2027-09', '全角・年月');
+assert.equal(parsePeriodMonth('2027-13'), undefined, '読めない');
+assert.equal(parsePeriodMonth('9月'), undefined, '年が無い');
 assert.equal(budgetMonthKey(2026, '2026-10-09'), '2026-10', '今年は今月');
 assert.equal(budgetMonthKey(2027, '2026-10-09'), '2027-01', 'これからの年は1月');
 assert.equal(budgetMonthKey(2025, '2026-10-09'), '2025-12', '過ぎた年は12月');

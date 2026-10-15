@@ -699,6 +699,9 @@ export interface MoneyRecurring {
   weekday: number | null;
   /** 記録する月（1〜12）。null は毎月。 */
   months: number[] | null;
+  /** 期間（YYYY-MM。どの月の分か＝入金・引き落としのある月）。null は無期限。docs/kakei.md §3.3 */
+  startMonth: string | null;
+  endMonth: string | null;
   holiday: MoneyHolidayRule;
   /** 固定額（fixed）は amount で確定として作る。見込む（estimate）は過去の記録から出す（無ければ amount）。 */
   amountMode: 'fixed' | 'estimate';
