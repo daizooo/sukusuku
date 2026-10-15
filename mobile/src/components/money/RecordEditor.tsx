@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { ArrowRight, CalendarDays, ChevronRight, CreditCard, Plus, Store, Trash2 } from 'lucide-react-native';
+import { ArrowRight, CalendarDays, ChevronRight, CreditCard, Plus, Square, SquareCheck, Store, Trash2 } from 'lucide-react-native';
 import type {
   MoneyBudget,
   MoneyCategory,
@@ -19,6 +19,7 @@ import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import { formatDateWithWeekday, toDateString } from '@/lib/dateUtils';
 import {
   budgetFor,
+  canCardNextPeriod,
   categoryPath,
   editorGroupTotal,
   evaluateCalc,
@@ -147,6 +148,8 @@ export default function RecordEditor({
   const [stack, setStack] = useState<Screen[]>([{ type: 'detail' }]);
   const [work, setWork] = useState<ItemsWork | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  // カードの引き落としを翌月分に回す（カードで25日以降の記録だけ。docs/kakei.md §3.4）。
+  const [cardNextPeriod, setCardNextPeriod] = useState(record?.cardNextPeriod ?? false);
 
   const screen = stack[stack.length - 1];
   const push = (next: Screen) => setStack((prev) => [...prev, next]);
@@ -162,6 +165,7 @@ export default function RecordEditor({
   const stillEstimate = record?.isEstimate === true && !confirmed && total === recordTotal(record);
 
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '';
+  const nextPeriodShown = canCardNextPeriod(kind, wallets.find((wallet) => wallet.id === walletId), occurredOn);
 
   /** まとまりの見出し（「食費 › 食料品」「医療費 › 病院」）。 */
   const groupTitle = (target: Pick<EditorGroup, 'categoryId' | 'categoryName'>) =>
@@ -331,6 +335,7 @@ export default function RecordEditor({
       store: kind === 'transfer' ? '' : store,
       registerStore: kind !== 'transfer' && store !== '' && registerStore,
       isEstimate: stillEstimate,
+      cardNextPeriod: nextPeriodShown && cardNextPeriod,
       items,
       ...(receipt && kind !== 'transfer' && { receiptStore: receipt.receiptStore }),
     });
@@ -515,6 +520,21 @@ export default function RecordEditor({
           </Text>
           <ChevronRight size={18} color={colors.textFaint} />
         </Pressable>
+        {nextPeriodShown && (
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: cardNextPeriod }}
+            onPress={() => setCardNextPeriod((prev) => !prev)}
+            style={styles.field}
+          >
+            {cardNextPeriod ? (
+              <SquareCheck size={20} color={colors.money} />
+            ) : (
+              <Square size={20} color={colors.textMuted} />
+            )}
+            <Text style={styles.fieldText}>カードの引き落としを翌月分に回す</Text>
+          </Pressable>
+        )}
         {kind === 'transfer' ? (
           <>
             <Pressable

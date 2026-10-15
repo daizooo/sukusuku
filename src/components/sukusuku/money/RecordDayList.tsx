@@ -14,7 +14,7 @@ import {
   topCategoryIdOf,
   type BalanceCheck,
 } from '@/lib/moneyUtils';
-import { CategoryIcon, EstimateBadge, TransferIcon, WalletTypeIcon, cardClass, incomeAmountClass } from './moneyVisual';
+import { CategoryIcon, EstimateBadge, NextPeriodBadge, TransferIcon, WalletTypeIcon, cardClass, incomeAmountClass } from './moneyVisual';
 
 // 記録を日ごと（新しい日から）に並べる一覧（docs/kakei.md §2.1）。家計タブの「記録」と、口座の詳細の「履歴」で同じものを使う。
 // mobile版の `mobile/src/components/money/RecordDayList.tsx` と同じ並び・文言。
@@ -145,6 +145,7 @@ export default function RecordDayList({
                       {sub !== '' && <span className="block truncate text-[11px] font-medium text-gray-500">{sub}</span>}
                     </span>
                     {record.isEstimate && <EstimateBadge />}
+                    {record.cardNextPeriod && <NextPeriodBadge />}
                     <span
                       className={
                         record.kind === 'transfer'

@@ -16,6 +16,7 @@ import type {
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
 import {
   budgetFor,
+  canCardNextPeriod,
   categoryPath,
   editorGroupTotal,
   evaluateCalc,
@@ -142,6 +143,8 @@ export default function RecordEditor({
   const [stack, setStack] = useState<Screen[]>([{ type: 'detail' }]);
   const [work, setWork] = useState<ItemsWork | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  // カードの引き落としを翌月分に回す（カードで25日以降の記録だけ。docs/kakei.md §3.4）。
+  const [cardNextPeriod, setCardNextPeriod] = useState(record?.cardNextPeriod ?? false);
 
   const screen = stack[stack.length - 1];
   const push = (next: Screen) => setStack((prev) => [...prev, next]);
@@ -157,6 +160,7 @@ export default function RecordEditor({
   const stillEstimate = record?.isEstimate === true && !confirmed && total === recordTotal(record);
 
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '';
+  const nextPeriodShown = canCardNextPeriod(kind, wallets.find((wallet) => wallet.id === walletId), occurredOn);
 
   /** まとまりの見出し（「食費 › 食料品」「医療費 › 病院」）。 */
   const groupTitle = (target: Pick<EditorGroup, 'categoryId' | 'categoryName'>) =>
@@ -306,6 +310,7 @@ export default function RecordEditor({
       store: kind === 'transfer' ? '' : store,
       registerStore: kind !== 'transfer' && store !== '' && registerStore,
       isEstimate: stillEstimate,
+      cardNextPeriod: nextPeriodShown && cardNextPeriod,
       items,
       ...(receipt && kind !== 'transfer' && { receiptStore: receipt.receiptStore }),
     });
@@ -496,6 +501,17 @@ export default function RecordEditor({
           </span>
           <ChevronRight size={18} className="text-gray-400" />
         </button>
+        {nextPeriodShown && (
+          <label className={fieldClass}>
+            <input
+              type="checkbox"
+              checked={cardNextPeriod}
+              onChange={(event) => setCardNextPeriod(event.target.checked)}
+              className="h-5 w-5"
+            />
+            <span className="flex-1 text-base text-gray-900">カードの引き落としを翌月分に回す</span>
+          </label>
+        )}
         {kind === 'transfer' ? (
           <>
             <button type="button" onClick={() => push({ type: 'wallet', field: 'toWalletId' })} className={fieldClass}>

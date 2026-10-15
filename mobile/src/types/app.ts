@@ -693,6 +693,8 @@ export interface MoneyRecord {
   recurringId: string | null;
   /** 自動で作った記録が、どの月の分か（YYYY-MM）。人が入れた記録は null。 */
   month: string | null;
+  /** カードの引き落としを翌月分に回す（日付の期間の次の引き落としで数える）。docs/kakei.md §3.4。 */
+  cardNextPeriod: boolean;
   items: MoneyItem[];
 }
 
@@ -710,6 +712,8 @@ export interface MoneyRecordDraft {
   registerStore?: boolean;
   /** 見込みのまま残すか。 */
   isEstimate: boolean;
+  /** カードの引き落としを翌月分に回すか（カードで25日以降の記録だけ。それ以外は false で保存する）。 */
+  cardNextPeriod: boolean;
   items: MoneyItemDraft[];
   /** レシートに印字された店名そのまま（読み取りで入れた記録だけ。docs/kakei.md §10.3）。 */
   receiptStore?: string;
