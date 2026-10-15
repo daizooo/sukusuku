@@ -8,6 +8,9 @@ import {
   balanceChecks,
   baseIconKey,
   buildCategoryAnalysis,
+  buildCategoryYearAnalysis,
+  recurringInYear,
+  yearActiveMonthKeys,
   canCardNextPeriod,
   cardBilling,
   cardCarriedIn,
@@ -389,6 +392,7 @@ const record = (id: string, fields: Partial<MoneyRecord>): MoneyRecord => ({
   recurringId: null,
   month: null,
   cardNextPeriod: false,
+  checkedAt: null,
   items: [],
   ...fields,
 });
@@ -1129,6 +1133,47 @@ assert.equal(yearOfMonth('2027-02'), 2027, '2027年2月は2027年');
   assert.equal(special.budget, null, '特別費は予算を置かない');
   assert.deepEqual(special.children.map((child) => [child.name, child.amount]), [['自動車税', 20000]]);
   assert.deepEqual(special.records.map((r) => r.id), ['a5'], '特別費の記録だけ');
+
+  // 年の分析は月の流用ではなく年の基準（2026-10-15）。使い始めた月（8月）から12月までの5か月が年の予算
+  assert.deepEqual(yearActiveMonthKeys(rs, 2026), ['2026-08', '2026-09', '2026-10', '2026-11', '2026-12']);
+  assert.equal(yearActiveMonthKeys(rs, 2027).length, 12, '先の年は全部の月');
+  assert.deepEqual(yearActiveMonthKeys(rs, 2025), [], '使い始める前の年は無い');
+  const yearly = buildCategoryYearAnalysis(rs, cats, buds, 'food', 2026, '2026-10');
+  assert.equal(yearly.actual, 8900, '年の実績');
+  assert.equal(yearly.budget, 250000, '年の予算＝使い始めた月から12月までの月の予算の合計');
+  assert.equal(yearly.diff, 241100);
+  assert.equal(yearly.yearly?.activeMonths, 5);
+  assert.equal(yearly.yearly?.elapsedMonths, 3, '今月までの月');
+  assert.equal(yearly.yearly?.elapsedBudget, 150000);
+  assert.equal(yearly.yearly?.elapsedActual, 8900);
+  assert.equal(yearly.yearly?.average, 4450, '実績のある月の平均');
+  assert.equal(yearly.yearly?.monthlyBudget, 50000);
+  assert.equal(yearly.yearly?.forecast, 4000 + 4900 + 50000 * 3, '過ぎた月は実績、今月と先の月は予算');
+  assert.equal(yearly.previous, null, '前年に記録のある月が無ければ比べない');
+  assert.equal(yearly.yearly?.comparedMonths, 0);
+  assert.equal(yearly.months.length, 5);
+  assert.equal(yearly.months[0].budget, 50000, '月ごとに月の予算を添える');
+}
+
+// ---- その年に効く固定の収支（予算の画面） ----
+{
+  const fixed = (id: string, position: number, over: Partial<MoneyRecurring>) =>
+    ({
+      id, kind: 'expense', months: null, amount: 0, categoryId: 'house', archived: false, walletId: 'w1', toWalletId: null,
+      store: '', name: '', day: 25, weekOfMonth: null, weekday: null, holiday: 'none', amountMode: 'fixed',
+      startMonth: null, endMonth: null, createdAt: '2026-04-10', position, ...over,
+    }) as MoneyRecurring;
+  const rules = [
+    fixed('rent', 0, { amount: 80000 }),
+    fixed('bonus', 1, { kind: 'income', months: [6, 12], amount: 200000 }),
+    fixed('end', 2, { amount: 10000, endMonth: '2026-11' }),
+    fixed('start', 3, { amount: 5000, startMonth: '2027-04' }),
+    fixed('old', 4, { amount: 9999, archived: true }),
+  ];
+  const totals = (year: number) => recurringInYear(rules, [], year).map((row) => [row.rule.id, row.total]);
+  assert.deepEqual(totals(2026), [['rent', 960000], ['bonus', 400000], ['end', 110000]], '期間の外・使っていないルールは数えない');
+  assert.deepEqual(totals(2027), [['rent', 960000], ['bonus', 400000], ['start', 45000]], '年をまたぐルールは、その年の月だけ');
+  assert.deepEqual(totals(2025), [], 'ルールを作る前の年は数えない');
 }
 
 console.log('moneyUtils: ok');

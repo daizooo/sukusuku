@@ -25,14 +25,18 @@ import {
  */
 
 /** これ未満の横移動は指の震え・タップの誤差とみなして無視する。 */
-const HORIZONTAL_THRESHOLD = 50;
+const HORIZONTAL_THRESHOLD = 36;
+/** 素早く払う動き（フリック）は、短い移動でも切り替える（2026-10-15。ゆっくり引かなくても反応するように）。 */
+const FLICK_DISTANCE = 14;
+/** フリックとみなす速さ（px/ms）。 */
+const FLICK_VELOCITY = 0.3;
 /** 縦のスクロールを奪わないよう、横方向がこれを超えて動くまでは判定を始めない。 */
-const DIRECTION_LOCK_SLOP = 10;
+const DIRECTION_LOCK_SLOP = 8;
 /** 進めない向きへ引いたときに、指の動きのどれだけ中身を動かすか。 */
 const EDGE_RESISTANCE = 0.3;
 /** 画面の外へ流れる時間と、反対側から流れ込む時間（ミリ秒）。 */
-const SLIDE_OUT_MS = 140;
-const SLIDE_IN_MS = 200;
+const SLIDE_OUT_MS = 90;
+const SLIDE_IN_MS = 150;
 
 /**
  * スワイプを受け持つ場所が入れ子になったとき（家計タブの面の切り替えの中に、振り返りの
@@ -114,11 +118,13 @@ export function useSwipeNavigation({
         onPanResponderTerminate: settle,
         onPanResponderRelease: (_event, gesture) => {
           const action = gesture.dx < 0 ? latest.current.onSwipeLeft : latest.current.onSwipeRight;
+          const distance = Math.abs(gesture.dx);
+          const flicked = distance >= FLICK_DISTANCE && Math.abs(gesture.vx) >= FLICK_VELOCITY;
           if (
             !latest.current.enabled ||
             !action ||
-            Math.abs(gesture.dx) < HORIZONTAL_THRESHOLD ||
-            Math.abs(gesture.dx) <= Math.abs(gesture.dy)
+            (distance < HORIZONTAL_THRESHOLD && !flicked) ||
+            distance <= Math.abs(gesture.dy)
           ) {
             settle();
             return;
@@ -134,13 +140,16 @@ export function useSwipeNavigation({
           }).start(() => {
             action();
             translateX.setValue(-direction * width);
+            // 切り替えた中身が描かれてから流し込む（重い画面でも、古い中身が流れ込まないように）。
             requestAnimationFrame(() =>
-              Animated.timing(translateX, {
-                toValue: 0,
-                duration: SLIDE_IN_MS,
-                easing: Easing.out(Easing.cubic),
-                useNativeDriver: true,
-              }).start(),
+              requestAnimationFrame(() =>
+                Animated.timing(translateX, {
+                  toValue: 0,
+                  duration: SLIDE_IN_MS,
+                  easing: Easing.out(Easing.cubic),
+                  useNativeDriver: true,
+                }).start(),
+              ),
             );
           });
         },

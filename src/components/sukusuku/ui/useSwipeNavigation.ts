@@ -18,14 +18,18 @@ import { useCallback, useRef, type TouchEvent } from 'react';
 const REGION_ATTRIBUTE = 'data-swipe-region';
 
 /** これ未満の横移動は指の震え・タップの誤差とみなして無視する（mobile と同じ値）。 */
-const HORIZONTAL_THRESHOLD = 50;
+const HORIZONTAL_THRESHOLD = 36;
+/** 素早く払う動き（フリック）は、短い移動でも切り替える（mobile と同じ値）。 */
+const FLICK_DISTANCE = 14;
+/** フリックとみなす速さ（px/ms。mobile と同じ値）。 */
+const FLICK_VELOCITY = 0.3;
 /** 縦のスクロールを奪わないよう、横方向がこれを超えて動くまでは判定を始めない（mobile と同じ値）。 */
-const DIRECTION_LOCK_SLOP = 10;
+const DIRECTION_LOCK_SLOP = 8;
 /** 進めない向きへ引いたときに、指の動きのどれだけ中身を動かすか（mobile と同じ値）。 */
 const EDGE_RESISTANCE = 0.3;
 /** 画面の外へ流れる時間と、反対側から流れ込む時間（ミリ秒。mobile と同じ値）。 */
-const SLIDE_OUT_MS = 140;
-const SLIDE_IN_MS = 200;
+const SLIDE_OUT_MS = 90;
+const SLIDE_IN_MS = 150;
 
 /** スワイプを受け持たない区切り。モーダルの枠・横スクロールの帯に足す。 */
 export const swipeBoundary = { [REGION_ATTRIBUTE]: '' };
@@ -46,7 +50,7 @@ const moveTo = (element: HTMLElement, x: number, transition = '') => {
 };
 
 export function useSwipeNavigation({ onSwipeLeft, onSwipeRight, enabled = true }: UseSwipeNavigationOptions) {
-  const start = useRef<{ x: number; y: number } | null>(null);
+  const start = useRef<{ x: number; y: number; at: number } | null>(null);
   /** 指の動きが横（スワイプ）か縦（スクロール）か。決まるまでは null。 */
   const direction = useRef<'horizontal' | 'vertical' | null>(null);
   const content = useRef<HTMLElement | null>(null);
@@ -72,7 +76,7 @@ export function useSwipeNavigation({ onSwipeLeft, onSwipeRight, enabled = true }
         if (target.closest(`[${REGION_ATTRIBUTE}]`) !== event.currentTarget) return;
         // 入力欄の中で指を横に動かすのは、文字の選択・カーソル移動。
         if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
-        start.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+        start.current = { x: event.touches[0].clientX, y: event.touches[0].clientY, at: Date.now() };
       },
       onTouchMove: (event: TouchEvent<HTMLElement>) => {
         const from = start.current;
@@ -94,10 +98,12 @@ export function useSwipeNavigation({ onSwipeLeft, onSwipeRight, enabled = true }
         const dx = event.changedTouches[0].clientX - from.x;
         const dy = event.changedTouches[0].clientY - from.y;
         const action = dx < 0 ? onSwipeLeft : onSwipeRight;
+        const flicked =
+          Math.abs(dx) >= FLICK_DISTANCE && Math.abs(dx) / Math.max(Date.now() - from.at, 1) >= FLICK_VELOCITY;
         if (
           direction.current === 'vertical' ||
           !action ||
-          Math.abs(dx) < HORIZONTAL_THRESHOLD ||
+          (Math.abs(dx) < HORIZONTAL_THRESHOLD && !flicked) ||
           Math.abs(dx) <= Math.abs(dy)
         ) {
           settle();

@@ -1,50 +1,40 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, GripVertical, Plus } from 'lucide-react';
+import { Check, ChevronRight, GripVertical, Plus } from 'lucide-react';
 import type { MoneyBudget, MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import {
-  budgetFor,
-  budgetMonthKey,
-  budgetMonths,
-  fixedBudgetFor,
   CATEGORY_ICON_COLORS,
-  dateKeyOfDate,
   childCategories,
-  formatYen,
   guessIconKey,
   iconKeyOf,
   MONEY_ICONS,
   topCategories,
-  formatYear,
-  parseAmountInput,
 } from '@/lib/moneyUtils';
 import {
   deleteMoneyCategory,
   insertDefaultMoneyCategories,
   insertMoneyCategory,
-  saveMoneyBudget,
   updateMoneyCategory,
 } from '@/lib/api/money';
 import { ModalShell } from '../modals/TaskForm';
 import { useDragReorder } from '../ui/useDragReorder';
 import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader } from './moneyVisual';
 
-// カテゴリ・予算（docs/kakei.md §3.1）。mobile版の `mobile/src/components/money/CategoryEditor.tsx` と同じ並び・文言。
+// カテゴリ（docs/kakei.md §3.1）。mobile版の `mobile/src/components/money/CategoryEditor.tsx` と同じ並び・文言。
 //
 // 大分類（予算を置く単位）と小分類の追加・名前の変更・並べ替え・削除。並べ替えは一覧のまま動かす
 // （大分類は左の持ち手をつかむ、小分類は長押し。マウスでも指でも。リストと同じ操作。ui/useDragReorder.ts）。
-// 大分類のアイコンは絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。予算は大分類ごと・年ごとの月額で、
-// その年に入れていなければ前の年の額のまま（ここで直すと、その年の額になる）。
+// 大分類のアイコンは絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。
+// 予算は年ごとに決めるものなので、ここには置かず、別の設定「予算」（BudgetEditor）にした（2026-10-15）。
 // カテゴリがまだ無い家族には「標準のカテゴリで始める」（Zaim のカテゴリをもとにした並び）。
 
 interface CategoryEditorProps {
   familyId: string;
-  year: number;
   categories: MoneyCategory[];
-  budgets: MoneyBudget[];
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
+  /** 大分類を消すと、その予算も消える（DBの cascade）ので、画面の予算からも外す。 */
   onBudgets: (update: (prev: MoneyBudget[]) => MoneyBudget[]) => void;
   onClose: () => void;
 }
@@ -56,33 +46,20 @@ const KIND_OPTIONS: { id: MoneyCategoryKind; label: string }[] = [
   { id: 'income', label: '収入' },
 ];
 
-const yearButtonClass =
-  'flex h-[30px] w-[30px] items-center justify-center rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200';
-
 export default function CategoryEditor({
   familyId,
-  year: initialYear,
   categories,
-  budgets,
   onCategories,
   onBudgets,
   onClose,
 }: CategoryEditorProps) {
   const supabase = useMemo(() => createClient(), []);
-  const [year, setYear] = useState(initialYear);
   const [kind, setKind] = useState<MoneyCategoryKind>('living');
   const [editing, setEditing] = useState<Editing>(null);
   const [busy, setBusy] = useState(false);
 
-  const today = dateKeyOfDate(new Date());
-  // 一覧に出す予算は、今年なら今月の額、これからの年なら1月、過ぎた年なら12月の額（年の途中で変えた年は、いま効いている額）。
-  const shownKey = budgetMonthKey(year, today);
   const tops = useMemo(() => topCategories(categories, kind, true), [categories, kind]);
   const ordered = [...tops.filter((top) => !top.archived), ...tops.filter((top) => top.archived)];
-  const totalBudget =
-    kind === 'living'
-      ? tops.filter((top) => !top.archived).reduce((sum, top) => sum + (budgetFor(budgets, top.id, shownKey) ?? 0), 0)
-      : 0;
 
   const failed = (what: string) => window.alert(`${what}できませんでした。もう一度お試しください。`);
   const replace = (updated: MoneyCategory) =>
@@ -158,15 +135,6 @@ export default function CategoryEditor({
           replace(category);
         }
       }
-      if (result.monthAmounts !== null) {
-        // 月ごとの手入力の額。変えた月があるときだけ保存する（固定費は計算で足されるので、ここには入れない）。
-        const current = budgetMonths(budgets, category.id, year);
-        const next = result.monthAmounts;
-        if (next.some((value, index) => value !== current[index])) {
-          const saved = await saveMoneyBudget(supabase, familyId, category.id, year, next);
-          onBudgets((prev) => [...prev.filter((entry) => entry.id !== saved.id), saved]);
-        }
-      }
     } catch {
       failed('保存');
     }
@@ -192,15 +160,8 @@ export default function CategoryEditor({
 
   return (
     <FullScreen onBack={onClose}>
-      <ScreenHeader title="カテゴリ・予算" onClose={onClose} />
+      <ScreenHeader title="カテゴリ" onClose={onClose} />
       <div className="shrink-0 flex items-center gap-2 px-4 py-2.5">
-        <button type="button" aria-label="前の年" onClick={() => setYear((current) => current - 1)} className={yearButtonClass}>
-          <ChevronLeft size={18} />
-        </button>
-        <span className="text-base font-bold text-gray-900 tabular-nums">{formatYear(year)}</span>
-        <button type="button" aria-label="次の年" onClick={() => setYear((current) => current + 1)} className={yearButtonClass}>
-          <ChevronRight size={18} />
-        </button>
         <span className="flex-1" />
         {KIND_OPTIONS.map((option) => (
           <button
@@ -216,9 +177,6 @@ export default function CategoryEditor({
           </button>
         ))}
       </div>
-      {kind === 'living' && tops.length > 0 && (
-        <p className="shrink-0 px-4 pb-1.5 text-xs font-semibold text-gray-500 tabular-nums">月の予算の合計 {formatYen(totalBudget)}</p>
-      )}
       {tops.length > 0 && (
         <p className="shrink-0 px-4 pb-1.5 text-[11px] text-gray-400">並べ替え: 大分類は左の持ち手、小分類は長押ししてそのまま動かす</p>
       )}
@@ -234,7 +192,6 @@ export default function CategoryEditor({
         )}
         {drag.arrange(`tops-${kind}`, ordered).map((top) => {
           const children = drag.arrange(`children-${top.id}`, childCategories(categories, top.id, true));
-          const budget = kind === 'living' ? budgetFor(budgets, top.id, shownKey) : null;
           return (
             <div
               key={top.id}
@@ -261,11 +218,6 @@ export default function CategoryEditor({
                   <span className="text-[15px] font-bold text-gray-900">{top.name}</span>
                   {top.archived && <span className="text-[11px] font-semibold text-gray-400">使わない</span>}
                   <span className="flex-1" />
-                  {kind === 'living' && (
-                    <span className="text-[13px] font-semibold text-gray-700 tabular-nums">
-                      {budget === null ? '予算なし' : `月 ${formatYen(budget)}`}
-                    </span>
-                  )}
                   <ChevronRight size={16} className="text-gray-400" />
                 </button>
               </div>
@@ -314,13 +266,6 @@ export default function CategoryEditor({
           key={editing.category?.id ?? `new-${editing.category === null ? editing.parentId : ''}`}
           category={editing.category}
           isTop={editing.category === null ? editing.parentId === null : editing.category.parentId === null}
-          showBudget={kind === 'living'}
-          year={year}
-          monthAmounts={editing.category ? budgetMonths(budgets, editing.category.id, year) : Array.from({ length: 12 }, () => null)}
-          // 固定費（毎月自動で記録するルール）から、その月の予算に足される額。
-          fixed={Array.from({ length: 12 }, (_, index) =>
-            editing.category ? fixedBudgetFor(budgets, editing.category.id, `${year}-${String(index + 1).padStart(2, '0')}`) : 0,
-          )}
           onClose={() => setEditing(null)}
           onSubmit={(result) => void save(result)}
           onDelete={editing.category ? () => void removeCategory(editing.category!) : undefined}
@@ -336,8 +281,6 @@ interface SheetResult {
   icon: string | null;
   /** アイコンの色（大分類だけ）。null は標準（アイコンごとの色）。 */
   iconColor: string | null;
-  /** 大分類の、その年の1月〜12月の手入力の予算（長さ12。null の月は予算なし）。小分類は null。 */
-  monthAmounts: (number | null)[] | null;
 }
 
 const inputClass =
@@ -347,53 +290,30 @@ const labelClass = 'block text-xs font-bold text-gray-700 mb-1.5';
 function CategoryModal({
   category,
   isTop,
-  showBudget,
-  year,
-  monthAmounts,
-  fixed,
   onClose,
   onSubmit,
   onDelete,
 }: {
   category: MoneyCategory | null;
   isTop: boolean;
-  showBudget: boolean;
-  year: number;
-  monthAmounts: (number | null)[];
-  fixed: number[];
   onClose: () => void;
   onSubmit: (result: SheetResult) => void;
   onDelete?: () => void;
 }) {
   const [name, setName] = useState(category?.name ?? '');
-  const [amounts, setAmounts] = useState<string[]>(() => monthAmounts.map((value) => (value === null ? '' : String(value))));
-  const [bulk, setBulk] = useState('');
   // 自動は無し。決めていないカテゴリは、今の名前から近いものを選んだ状態で始める。
   const [icon, setIcon] = useState<string>(category ? (category.icon ?? guessIconKey(category.name)) : 'other');
   const [iconColor, setIconColor] = useState<string | null>(category?.iconColor ?? null);
   const [pickingColor, setPickingColor] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const withBudget = isTop && showBudget;
 
   const submit = () => {
     if (name.trim() === '') return setError('名前を入れてください');
-    const values = amounts.map((text) => (text.trim() === '' ? null : parseAmountInput(text)));
-    if (withBudget && values.some((value, index) => value === null && amounts[index].trim() !== '')) {
-      return setError('予算は0以上の整数（円）で入れてください');
-    }
     onSubmit({
       name,
       icon: isTop ? icon : (category?.icon ?? null),
       iconColor: isTop ? iconColor : (category?.iconColor ?? null),
-      monthAmounts: withBudget ? values : null,
     });
-  };
-
-  const fillAll = () => {
-    const value = bulk.trim() === '' ? null : parseAmountInput(bulk);
-    if (value === null) return setError('まとめて入れる額は0以上の整数（円）で入れてください');
-    setError(null);
-    setAmounts(Array.from({ length: 12 }, () => String(value)));
   };
 
   return (
@@ -481,56 +401,6 @@ function CategoryModal({
                 </button>
               ))}
             </div>
-          </div>
-        )}
-        {withBudget && (
-          <div className="space-y-2">
-            <span className={labelClass}>{formatYear(year)}の月ごとの予算（円）</span>
-            <p className="text-[11px] text-gray-400">
-              月ごとに決められます。このカテゴリにひもづく固定費は、その月の予算に自動で足されます（固定費の設定の「カテゴリ」）。空の月は、固定費だけです
-            </p>
-            <div className="flex items-center gap-2">
-              <input
-                className={`${inputClass} tabular-nums`}
-                value={bulk}
-                onChange={(event) => setBulk(event.target.value)}
-                inputMode="numeric"
-                placeholder="同じ額をまとめて入れる"
-              />
-              <button
-                type="button"
-                onClick={fillAll}
-                className="shrink-0 rounded-lg bg-blue-50 px-3 py-2 text-[13px] font-bold text-blue-800"
-              >
-                全ての月に入れる
-              </button>
-            </div>
-            {amounts.map((text, index) => {
-              const manual = text.trim() === '' ? null : parseAmountInput(text);
-              const total = (manual ?? 0) + fixed[index];
-              return (
-                <div key={index} className="flex items-center gap-2">
-                  <span className="w-9 shrink-0 text-[13px] font-bold text-gray-700">{index + 1}月</span>
-                  <div className="w-32 shrink-0">
-                    <input
-                      className={`${inputClass} tabular-nums`}
-                      value={text}
-                      onChange={(event) =>
-                        setAmounts((prev) => prev.map((value, at) => (at === index ? event.target.value : value)))
-                      }
-                      inputMode="numeric"
-                      placeholder="未設定"
-                      aria-label={`${index + 1}月の予算`}
-                    />
-                  </div>
-                  {fixed[index] > 0 && (
-                    <span className="text-[11px] font-semibold text-gray-400 tabular-nums">
-                      ＋固定費 {formatYen(fixed[index])}＝{formatYen(total)}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
           </div>
         )}
         {error && <p className="text-xs text-red-500">{error}</p>}

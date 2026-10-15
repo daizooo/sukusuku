@@ -640,6 +640,47 @@ export function fixedBudgetRows(
   });
 }
 
+/** その年に効く固定の支出・収入のルール1件（月ごとの額と年の合計つき）。 */
+export interface RecurringYearRow {
+  rule: MoneyRecurring;
+  /** 1月〜12月の額（記録する月・期間の外は 0）。 */
+  amounts: number[];
+  total: number;
+}
+
+/**
+ * 固定の支出・収入のルールのうち、その年に効くもの（2026-10-15）。年をまたぐルール（期間・記録する月つき）も、その年の月だけを数える。
+ * 作る条件・額は予算に足す額と同じ（使っていて、出金元とカテゴリが決まっているもの。額は recurringMonthAmount）。振替は除く。
+ * 予算の画面で、年の収入の見込み（固定収入）と、予算に含まれる固定費を出すのに使う。
+ */
+export function recurringInYear(
+  recurring: readonly MoneyRecurring[],
+  records: readonly MoneyRecord[],
+  year: number,
+): RecurringYearRow[] {
+  const made = new Map<string, MoneyRecord>();
+  for (const record of records) {
+    if (record.recurringId !== null && record.month !== null && record.kind !== 'transfer') {
+      made.set(`${record.recurringId}|${record.month}`, record);
+    }
+  }
+  const rows: RecurringYearRow[] = [];
+  for (const rule of recurring) {
+    if (rule.archived || rule.kind === 'transfer' || rule.walletId === null || rule.categoryId === null) continue;
+    if (year < yearOfMonth(rule.createdAt.slice(0, 7))) continue;
+    const amounts = Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1;
+      const monthKey = `${year}-${pad2(month)}`;
+      if (rule.months !== null && !rule.months.includes(month)) return 0;
+      if (!inRecurringPeriod(rule, monthKey)) return 0;
+      return Math.max(recurringMonthAmount(rule, monthKey, records, made), 0);
+    });
+    const total = amounts.reduce((sum, value) => sum + value, 0);
+    if (total > 0) rows.push({ rule, amounts, total });
+  }
+  return rows.sort((a, b) => a.rule.position - b.rule.position);
+}
+
 /**
  * その月（YYYY-MM）の大分類の、手入力の月の予算（固定費は含まない）。予算は年ごとに12か月ぶんを持つので、
  * 年の途中で直しても、直した月より前の月は変わらない。
@@ -1301,10 +1342,35 @@ export interface CategoryAnalysis {
   previous: number | null;
   /** 小分類ごとの実績（多い順）。大分類そのものに付けた品目は「その他」。 */
   children: { id: string; name: string; amount: number }[];
-  /** 年のとき、月ごとの実績（1月→12月、見ている期間に含まれる月だけ）。 */
-  months: { monthKey: string; amount: number }[];
+  /** 年のとき、月ごとの実績（1月→12月、見ている期間に含まれる月だけ。年の分析では月の予算も）。 */
+  months: { monthKey: string; amount: number; budget?: number | null }[];
   /** この大分類の記録（品目をこの大分類のものだけに絞った）。新しい順は RecordDayList が並べる。 */
   records: MoneyRecord[];
+  /** 年の分析（buildCategoryYearAnalysis）のときだけ。月の分析は null。 */
+  yearly?: CategoryYearInfo | null;
+}
+
+/** 年の振り返りの内訳（大分類）に添える、年ならではの数字（2026-10-15。docs/kakei.md §4.2・§4.4）。 */
+export interface CategoryYearInfo {
+  /** 年の予算がかかる月の数（使い始めた月から12月まで）。 */
+  activeMonths: number;
+  /** 今月までの月の数（今月を含む。先の年は 0、過ぎた年は activeMonths）。 */
+  elapsedMonths: number;
+  /** 今月までの予算の合計（予算が無ければ null）。 */
+  elapsedBudget: number | null;
+  /** 今月までの実績の合計。 */
+  elapsedActual: number;
+  /** 年末の着地見込み＝過ぎた月は実績・今月は実績と予算の大きいほう・先の月は予算（無ければ月平均）。 */
+  forecast: number;
+  /** 実績のある月の平均（無ければ null）と、そのときの月の数。 */
+  average: number | null;
+  averageMonths: number;
+  /** 月の予算の平均＝年の予算 ÷ 年の予算がかかる月の数（予算が無ければ null）。 */
+  monthlyBudget: number | null;
+  /** 前年と比べた月の数（今年も前年も記録のある月）。0 なら比べない。 */
+  comparedMonths: number;
+  /** 比べた月の、今年の実績。 */
+  comparedActual: number;
 }
 
 /** 月の集まり（monthKeys）に含まれる記録のうち、keep が true の品目だけを残した記録。品目が残らない記録は落とす。 */
@@ -1377,6 +1443,103 @@ export function buildCategoryAnalysis(
     children,
     months,
     records: narrowed,
+  };
+}
+
+/** 使い始めた月（振替でない記録がいちばん古い月。YYYY-MM）。記録が1件も無ければ null。 */
+export function usageStartMonth(records: readonly MoneyRecord[]): string | null {
+  let start: string | null = null;
+  for (const record of records) {
+    if (record.kind === 'transfer') continue;
+    const monthKey = monthKeyOf(record.occurredOn);
+    if (start === null || monthKey < start) start = monthKey;
+  }
+  return start;
+}
+
+/**
+ * その年の予算がかかる月（使い始めた月から12月まで。使い始める前の月は数えない）。
+ * 年の振り返りの予算・実績は、この月の分で比べる（2026年は10月から使い始めたので、10〜12月の3か月ぶん）。
+ */
+export function yearActiveMonthKeys(records: readonly MoneyRecord[], year: number): string[] {
+  const start = usageStartMonth(records);
+  return start === null ? [] : yearMonthKeys(year).filter((monthKey) => monthKey >= start);
+}
+
+/** その年の大分類の予算（monthKeys の月ぶんの合計）。予算が1つも無ければ null。 */
+export function budgetForMonths(budgets: readonly MoneyBudget[], categoryId: string, monthKeys: readonly string[]): number | null {
+  const monthly = monthKeys
+    .map((monthKey) => budgetFor(budgets, categoryId, monthKey))
+    .filter((value): value is number => value !== null);
+  return monthly.length === 0 ? null : monthly.reduce((sum, value) => sum + value, 0);
+}
+
+/**
+ * 年の振り返りで、内訳の1つの大分類を分析する（2026-10-15）。月の分析（buildCategoryAnalysis）の流用ではなく、年の基準で出す:
+ * 予算は**年の予算**（予算がかかる月＝使い始めた月から12月まで。月の予算を足したもの）、実績は年の合計。
+ * 今月までの予算との差・年末の着地見込み・月平均（月の予算と並べる）・前年の同じ期間（両年とも記録のある月）との比べ・月ごとの実績と予算を添える。
+ * upTo は今月（YYYY-MM）。
+ */
+export function buildCategoryYearAnalysis(
+  records: readonly MoneyRecord[],
+  categories: readonly MoneyCategory[],
+  budgets: readonly MoneyBudget[],
+  topId: string,
+  year: number,
+  upTo: string,
+): CategoryAnalysis {
+  const active = yearActiveMonthKeys(records, year);
+  const base = buildCategoryAnalysis(records, categories, budgets, topId, active, null);
+  const inTop = (item: MoneyItem) =>
+    item.categoryId !== null && topCategoryIdOf(categories, item.categoryId) === topId;
+  const sumOf = (keys: readonly string[]) =>
+    narrowRecords(records, keys, (item) => inTop(item)).reduce(
+      (total, record) => total + record.items.reduce((inner, item) => inner + item.amount, 0),
+      0,
+    );
+
+  const budgetOf = (monthKey: string) => budgetFor(budgets, topId, monthKey);
+  const months = base.months.map((entry) => ({ ...entry, budget: budgetOf(entry.monthKey) }));
+  const elapsed = active.filter((monthKey) => monthKey <= upTo);
+  const elapsedBudget = budgetForMonths(budgets, topId, elapsed);
+  const elapsedActual = months.filter((entry) => entry.monthKey <= upTo).reduce((sum, entry) => sum + entry.amount, 0);
+
+  // 平均は、実績のある月（過ぎた月・今月）だけで出す。
+  const withActual = months.filter((entry) => entry.monthKey <= upTo && entry.amount > 0);
+  const average = withActual.length === 0 ? null : Math.round(withActual.reduce((sum, entry) => sum + entry.amount, 0) / withActual.length);
+
+  // 年末の着地見込み。先の月は予算、予算が無ければ平均で見込む。
+  const forecast = months.reduce((sum, entry) => {
+    if (entry.monthKey < upTo) return sum + entry.amount;
+    if (entry.monthKey === upTo) return sum + Math.max(entry.amount, entry.budget ?? 0);
+    return sum + (entry.budget ?? average ?? 0);
+  }, 0);
+
+  // 前年との比べ: 今年も前年も記録のある月だけを、月数をそろえて比べる。
+  const recorded = new Set<string>();
+  for (const record of records) {
+    if (record.kind !== 'transfer') recorded.add(monthKeyOf(record.occurredOn));
+  }
+  const compared = elapsed.filter((monthKey) => recorded.has(monthKey) && recorded.has(shiftMonth(monthKey, -12)));
+  const previous = compared.length === 0 ? null : sumOf(compared.map((monthKey) => shiftMonth(monthKey, -12)));
+
+  const budget = base.budget;
+  return {
+    ...base,
+    months,
+    previous,
+    yearly: {
+      activeMonths: active.length,
+      elapsedMonths: elapsed.length,
+      elapsedBudget,
+      elapsedActual,
+      forecast,
+      average,
+      averageMonths: withActual.length,
+      monthlyBudget: budget === null || active.length === 0 ? null : Math.round(budget / active.length),
+      comparedMonths: compared.length,
+      comparedActual: sumOf(compared),
+    },
   };
 }
 
