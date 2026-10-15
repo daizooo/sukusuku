@@ -7,6 +7,7 @@ import { type } from './moneyVisual';
 // 年の月ごとの収支（棒）と、年初からの累計（折れ線）。docs/kakei.md §0.4。
 // mobile版の `mobile/src/components/money/YearFlowChart.tsx` と同じ並び・文言。
 // 数える月だけに棒と点を出す（記録の無い月・開始月より前の月は空き）。増えた月の棒は緑、減った月は濃い灰。
+// 年末の着地見込み（§4.6）を出すときは、締めた月を実線、見込みの月（forecast）を点線（棒は枠だけ・点は白抜き）にする。
 
 const WIDTH = 360;
 const HEIGHT = 170;
@@ -15,9 +16,12 @@ const GREEN = '#43b02a';
 const GRAY = '#374151';
 const BLUE = '#2563eb';
 
-type Month = Pick<YearMonthRow, 'monthKey' | 'recorded' | 'balance' | 'cumulative'>;
+export type YearFlowMonth = Pick<YearMonthRow, 'monthKey' | 'recorded' | 'balance' | 'cumulative'> & {
+  /** 見込みの月（点線）。 */
+  forecast?: boolean;
+};
 
-export default function YearFlowChart({ months }: { months: Month[] }) {
+export default function YearFlowChart({ months }: { months: YearFlowMonth[] }) {
   const geometry = useMemo(() => {
     const counted = months.filter((month) => month.recorded);
     if (counted.length === 0) return null;
@@ -30,11 +34,15 @@ export default function YearFlowChart({ months }: { months: Month[] }) {
     const slot = plotWidth / months.length;
     const x = (index: number) => PAD.left + (index + 0.5) * slot;
     const y = (value: number) => PAD.top + (high === low ? plotHeight / 2 : (1 - (value - low) / (high - low)) * plotHeight);
-    const line = months
-      .map((month, index) => (month.recorded ? `${x(index)},${y(month.cumulative)}` : null))
-      .filter((point): point is string => point !== null)
-      .join(' ');
-    return { ticks, x, y, slot, line };
+    // 隣り合う数える月をつなぐ線。どちらかが見込みなら点線。
+    const points = months.flatMap((month, index) => (month.recorded ? [{ month, index }] : []));
+    const segments = points.slice(1).map((point, offset) => ({
+      key: point.month.monthKey,
+      from: points[offset],
+      to: point,
+      forecast: Boolean(points[offset].month.forecast || point.month.forecast),
+    }));
+    return { ticks, x, y, slot, segments };
   }, [months]);
 
   return (
@@ -68,6 +76,7 @@ export default function YearFlowChart({ months }: { months: Month[] }) {
           ))}
           {months.map((month, index) => {
             if (!month.recorded) return null;
+            const fill = month.balance >= 0 ? GREEN : GRAY;
             const top = Math.min(geometry.y(0), geometry.y(month.balance));
             const barHeight = Math.max(Math.abs(geometry.y(month.balance) - geometry.y(0)), 1);
             const barWidth = Math.min(geometry.slot * 0.5, 22);
@@ -79,16 +88,37 @@ export default function YearFlowChart({ months }: { months: Month[] }) {
                 width={barWidth}
                 height={barHeight}
                 rx={2}
-                fill={month.balance >= 0 ? GREEN : GRAY}
+                fill={month.forecast ? 'none' : fill}
+                stroke={month.forecast ? fill : undefined}
+                strokeWidth={month.forecast ? 1.5 : undefined}
+                strokeDasharray={month.forecast ? '3 2' : undefined}
               />
             );
           })}
-          {geometry.line.includes(' ') && (
-            <polyline points={geometry.line} fill="none" stroke={BLUE} strokeWidth={2.5} strokeLinejoin="round" />
-          )}
+          {geometry.segments.map((segment) => (
+            <line
+              key={`line-${segment.key}`}
+              x1={geometry.x(segment.from.index)}
+              y1={geometry.y(segment.from.month.cumulative)}
+              x2={geometry.x(segment.to.index)}
+              y2={geometry.y(segment.to.month.cumulative)}
+              stroke={BLUE}
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeDasharray={segment.forecast ? '5 4' : undefined}
+            />
+          ))}
           {months.map((month, index) =>
             month.recorded ? (
-              <circle key={`dot-${month.monthKey}`} cx={geometry.x(index)} cy={geometry.y(month.cumulative)} r={3.5} fill={BLUE} />
+              <circle
+                key={`dot-${month.monthKey}`}
+                cx={geometry.x(index)}
+                cy={geometry.y(month.cumulative)}
+                r={3.5}
+                fill={month.forecast ? '#ffffff' : BLUE}
+                stroke={month.forecast ? BLUE : undefined}
+                strokeWidth={month.forecast ? 1.5 : undefined}
+              />
             ) : null,
           )}
           {months.map((month, index) => (
@@ -115,6 +145,15 @@ export default function YearFlowChart({ months }: { months: Month[] }) {
           <span className="h-[3px] w-3.5 rounded-sm" style={{ backgroundColor: BLUE }} />
           年初からの累計
         </span>
+        {months.some((month) => month.recorded && month.forecast) && (
+          <span className={`flex items-center gap-1.5 ${type.faint}`}>
+            <span className="flex w-3.5 justify-between">
+              <span className="h-[3px] w-[5px] rounded-sm" style={{ backgroundColor: BLUE }} />
+              <span className="h-[3px] w-[5px] rounded-sm" style={{ backgroundColor: BLUE }} />
+            </span>
+            見込み
+          </span>
+        )}
       </div>
     </div>
   );

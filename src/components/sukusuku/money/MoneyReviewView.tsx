@@ -7,6 +7,7 @@ import {
   buildBudgetTiles,
   buildMonthSummary,
   buildCategoryAnalysis,
+  buildYearLanding,
   buildYearSummary,
   compareWithPreviousYear,
   dateKeyOfDate,
@@ -39,7 +40,7 @@ import {
   type ReviewPeriod,
 } from './moneyVisual';
 import ReviewDetailScreen, { type ReviewDetail } from './ReviewDetailScreen';
-import YearFlowChart from './YearFlowChart';
+import YearFlowChart, { type YearFlowMonth } from './YearFlowChart';
 import MonthCloseScreen from './MonthCloseScreen';
 
 // 家計タブの「振り返り」（docs/kakei.md §4）。mobile版の `mobile/src/components/money/MoneyReviewView.tsx` と同じ並び・文言。
@@ -56,6 +57,8 @@ import MonthCloseScreen from './MonthCloseScreen';
 // 見込みの額（毎月の記録で自動で作り、まだ確かめていない額）は実績に入れて数え、件数と額を添えて出す（§3.3・§4.1）。
 // 月の締め（§4.5）: 過ぎた月と今月の結論の下に「この月を締める」（月の最終週に締めることもあるため、今月も出す）（締めた月は「締めた月」）。押すと締めの画面（MonthCloseScreen）。
 // 締めていない過ぎた月があれば、いちばん上に「◯月が締まっていません」と出す（押すとその月の締めの画面）。
+// 年末の着地見込み（§4.6）: 年の結論に「年末の着地見込み」（締めた月の実額 ＋ 締めていない月の見込み）。グラフは締めた月を実線、ほかを年末まで点線。
+// 今年・先の年と、締めていない月が残る過ぎた年に出す。
 
 interface MoneyReviewViewProps {
   period: ReviewPeriod;
@@ -125,6 +128,26 @@ export default function MoneyReviewView({
   const yearSummary = useMemo(
     () => buildYearSummary(records, categories, budgets, year, today),
     [records, categories, budgets, year, today],
+  );
+  const landing = useMemo(() => {
+    if (isMonth) return null;
+    const result = buildYearLanding(records, categories, budgets, recurring, closings, year);
+    if (result === null) return null;
+    const open = result.months.some((row) => row.counted && !row.closed);
+    return year >= Number(today.slice(0, 4)) || open ? result : null;
+  }, [isMonth, records, categories, budgets, recurring, closings, year, today]);
+  const chartMonths = useMemo<YearFlowMonth[]>(
+    () =>
+      landing === null
+        ? yearSummary.months
+        : landing.months.map((row) => ({
+            monthKey: row.monthKey,
+            recorded: row.counted,
+            balance: row.balance,
+            cumulative: row.cumulative,
+            forecast: !row.closed,
+          })),
+    [landing, yearSummary],
   );
   // 月: 年初からの累計。年: 前の年の同じ月ぶんとの比べ。
   const ytd = useMemo(
@@ -203,6 +226,16 @@ export default function MoneyReviewView({
               plus={ytd > 0}
             />
           )}
+          {landing !== null && (
+            <StatRow
+              compact
+              label="年末の着地見込み"
+              note={`締めた月 ${landing.closedMonths}か月`}
+              value={formatSignedYen(landing.total)}
+              plus={landing.total > 0}
+              isMinus={landing.total < 0}
+            />
+          )}
           {!isMonth && yearSummary.average !== null && (
             <StatRow
               compact
@@ -271,11 +304,15 @@ export default function MoneyReviewView({
           </>
         ) : (
           <>
-            {yearSummary.recordedMonths > 0 && (
+            {chartMonths.some((row) => row.recorded) && (
               <>
-                <SectionHeader compact title="月ごとの推移" hint="棒は月の収支・線は年初からの累計" />
+                <SectionHeader
+                  compact
+                  title="月ごとの推移"
+                  hint={landing === null ? '棒は月の収支・線は年初からの累計' : '締めた月は実線・ほかは見込み（点線）'}
+                />
                 <div className={`${cardClass} overflow-hidden`}>
-                  <YearFlowChart months={yearSummary.months} />
+                  <YearFlowChart months={chartMonths} />
                 </div>
               </>
             )}

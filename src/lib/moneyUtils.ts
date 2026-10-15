@@ -1150,6 +1150,93 @@ export function yearToDateBalance(
   return row && row.recorded ? row.cumulative : null;
 }
 
+/**
+ * その月（YYYY-MM）の収支の見込み＝固定収入の見込み − 固定費の見込み − 変動費の予算（docs/kakei.md §4.6）。
+ * 固定収入・固定費は記録を作る条件と同じルール（使っていて、出金元と種類が決まっていて、記録する月・期間の中。振替は除く）で、
+ * 額は予算に足す額と同じ（recurringMonthAmount）。変動費の予算は生活費の大分類の手入力の予算（固定費は含まない）。
+ * 今月の実績は使わない。
+ */
+export function monthForecastBalance(
+  recurring: readonly MoneyRecurring[],
+  categories: readonly MoneyCategory[],
+  budgets: readonly MoneyBudget[],
+  records: readonly MoneyRecord[],
+  monthKey: string,
+): number {
+  const made = new Map<string, MoneyRecord>();
+  for (const record of records) {
+    if (record.recurringId !== null && record.month === monthKey) made.set(`${record.recurringId}|${monthKey}`, record);
+  }
+  const year = yearOfMonth(monthKey);
+  const month = Number(monthKey.slice(5, 7));
+  let balance = 0;
+  for (const rule of recurring) {
+    if (rule.archived || rule.kind === 'transfer' || rule.walletId === null || rule.categoryId === null) continue;
+    if (rule.months !== null && !rule.months.includes(month)) continue;
+    if (!inRecurringPeriod(rule, monthKey) || year < yearOfMonth(rule.createdAt.slice(0, 7))) continue;
+    const amount = recurringMonthAmount(rule, monthKey, records, made);
+    balance += rule.kind === 'income' ? amount : -amount;
+  }
+  for (const category of topCategories(categories, 'living')) {
+    balance -= manualBudgetFor(budgets, category.id, monthKey) ?? 0;
+  }
+  return balance;
+}
+
+export interface LandingMonth {
+  monthKey: string;
+  /** 着地見込みに数えるか（使い始めた月から）。 */
+  counted: boolean;
+  /** 締めた月（収支は実額）。締めていない月は見込み。 */
+  closed: boolean;
+  /** 収支（締めた月は実額、ほかは見込み）。 */
+  balance: number;
+  /** 年初からこの月までの累計（数えない月は、その前までの累計のまま）。 */
+  cumulative: number;
+}
+
+export interface YearLanding {
+  months: LandingMonth[];
+  /** 年末の着地見込み（12月の累計）。 */
+  total: number;
+  /** 締めた月の数。 */
+  closedMonths: number;
+}
+
+/**
+ * 年末の着地見込み（docs/kakei.md §4.6）＝締めた月の収支の累計 ＋ 締めていない月（今月・締め忘れの月・これからの月）の見込み。
+ * 数えるのは使い始めた月（振替でない記録がいちばん古い月）から。記録が1件も無ければ null。先の年は全部の月を見込みで出す。
+ */
+export function buildYearLanding(
+  records: readonly MoneyRecord[],
+  categories: readonly MoneyCategory[],
+  budgets: readonly MoneyBudget[],
+  recurring: readonly MoneyRecurring[],
+  closings: readonly MoneyMonth[],
+  year: number,
+): YearLanding | null {
+  let start: string | null = null;
+  for (const record of records) {
+    if (record.kind === 'transfer') continue;
+    const monthKey = monthKeyOf(record.occurredOn);
+    if (start === null || monthKey < start) start = monthKey;
+  }
+  if (start === null || start > `${year}-12`) return null;
+  let cumulative = 0;
+  let closedMonths = 0;
+  const months = yearMonthKeys(year).map((monthKey) => {
+    if (monthKey < start) return { monthKey, counted: false, closed: false, balance: 0, cumulative };
+    const closed = isMonthClosed(closings, monthKey);
+    const balance = closed
+      ? buildMonthSummary(records, categories, budgets, monthKey).balance
+      : monthForecastBalance(recurring, categories, budgets, records, monthKey);
+    if (closed) closedMonths += 1;
+    cumulative += balance;
+    return { monthKey, counted: true, closed, balance, cumulative };
+  });
+  return { months, total: cumulative, closedMonths };
+}
+
 export interface YearComparison {
   /** 比べた月の数（今年の数える月のうち、前の年の同じ月も数えられるもの）。 */
   months: number;
