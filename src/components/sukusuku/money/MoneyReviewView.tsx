@@ -61,7 +61,7 @@ import MonthCloseScreen from './MonthCloseScreen';
 // 貯金は記録なので式にも表示にも入れない。
 // 月には年初からの累計、年には月平均・前年の同じ月ぶんとの比べ・月ごとの収支と累計のグラフを添える（§0.4）。
 // 年と累計は、記録のある月だけを数える（記録は2026年10月から）。
-// その下の「内訳」は、大分類の一覧（種類の並び順）。
+// その下の「内訳」は、大分類の一覧（カテゴリの並び順）。
 // 内訳の行を押すと、簡単な分析と、その行に絞った記録の一覧が開く（ReviewDetailScreen。§4.4）。
 // 年は内訳の下に月ごとの収支（押すとその月へ）。
 // 見込みの額（毎月の記録で自動で作り、まだ確かめていない額）は実績に入れて数え、件数と額を添えて出す（§3.3・§4.1）。
@@ -303,7 +303,7 @@ export default function MoneyReviewView({
               }
             />
             {tiles.length === 0 && (
-              <p className="py-6 text-center text-[13px] text-gray-400">「カテゴリ・予算」で種類と月の予算を決めると、ここに予算との差が出ます</p>
+              <p className="py-6 text-center text-[13px] text-gray-400">「カテゴリ・予算」でカテゴリと月の予算を決めると、ここに予算との差が出ます</p>
             )}
             <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
               {tiles.map((tile) => (

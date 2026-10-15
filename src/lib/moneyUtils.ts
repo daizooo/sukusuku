@@ -1,4 +1,4 @@
-// 家計タブの数え方（月の集計・予算との差・種類の並び・電卓）。docs/kakei.md §3〜§5。
+// 家計タブの数え方（月の集計・予算との差・カテゴリの並び・電卓）。docs/kakei.md §3〜§5。
 // mobile版の `mobile/src/lib/moneyUtils.ts` と同じ中身にしてある（片方を直したらもう片方も直す）。
 //
 // 年はすべて暦年（1月〜12月。2026-10-09に、4月始まりの年度から変えた）。予算は大分類・年ごとの月額で、
@@ -72,7 +72,7 @@ export function formatSignedYen(value: number): string {
   return `${value > 0 ? '+' : '−'}${formatYen(value)}`;
 }
 
-// ---- 種類・出金元の決まりごと ----
+// ---- カテゴリ・出金元の決まりごと ----
 
 export const RECORD_KIND_LABEL: Record<MoneyRecordKind, string> = {
   expense: '支出',
@@ -241,9 +241,9 @@ const beforePeriod = (
   (rule.id === undefined || record.recurringId !== rule.id);
 
 /**
- * ルールの過去1年の記録（種類・出金元・お店が同じで、見込みでないもの。新しい順）。見込みの額のもとになる
+ * ルールの過去1年の記録（カテゴリ・出金元・お店が同じで、見込みでないもの。新しい順）。見込みの額のもとになる
  * （DBの money_recurring_estimate と同じ選び方。額の出し方は estimateRecurringAmount）。設定画面で、ルールが過去の記録と
- * 結びついているかを確かめるのに使う。1件の記録に同じ種類の品目が複数あれば合計する。
+ * 結びついているかを確かめるのに使う。1件の記録に同じカテゴリの品目が複数あれば合計する。
  */
 export function recurringHistory(
   rule: Pick<MoneyRecurring, 'kind' | 'walletId' | 'toWalletId' | 'store' | 'categoryId'> &
@@ -284,8 +284,8 @@ export const estimatesInMonth = (records: readonly MoneyRecord[], monthKey: stri
   recordsInMonth(records, monthKey).filter((record) => record.isEstimate && record.kind !== 'transfer');
 
 /**
- * 標準の種類（Zaim のカテゴリをもとにした、どの家族でも使える並び）。docs/kakei.md §3.1。
- * 種類がまだ1つも無い家族に「標準の種類で始める」で入れる。名前・並びはあとで家族が変える。
+ * 標準のカテゴリ（Zaim のカテゴリをもとにした、どの家族でも使える並び）。docs/kakei.md §3.1。
+ * カテゴリがまだ1つも無い家族に「標準のカテゴリで始める」で入れる。名前・並びはあとで家族が変える。
  */
 export const DEFAULT_CATEGORIES: { kind: MoneyCategoryKind; name: string; children: string[] }[] = [
   { kind: 'living', name: '住居費', children: ['家賃・ローン', '管理費', '修繕'] },
@@ -303,7 +303,7 @@ export const DEFAULT_CATEGORIES: { kind: MoneyCategoryKind; name: string; childr
   { kind: 'income', name: 'その他の収入', children: [] },
 ];
 
-// ---- 種類のアイコン（docs/kakei.md §3.1。Zaim と同じく種類ごとに絵と色） ----
+// ---- カテゴリのアイコン（docs/kakei.md §3.1。Zaim と同じくカテゴリごとに絵と色） ----
 
 /** 選べるアイコン。key を money_categories.icon に入れる。色はアイコンごとに決まっている（家族は絵だけ選ぶ）。 */
 export const MONEY_ICONS: { key: string; label: string; color: string; surface: string }[] = [
@@ -382,13 +382,13 @@ const ICON_RULES: [RegExp, string][] = [
   [/日用|雑貨/, 'daily'],
 ];
 
-/** 名前から近いアイコンを選ぶ（アイコンを決めていない種類に使う）。当たらなければ「その他」。 */
+/** 名前から近いアイコンを選ぶ（アイコンを決めていないカテゴリに使う）。当たらなければ「その他」。 */
 export function guessIconKey(name: string): string {
   return ICON_RULES.find(([pattern]) => pattern.test(name))?.[1] ?? 'other';
 }
 
 /**
- * 種類のアイコンの key（決めたもの、無ければ名前から）。色を選んでいる種類は "food|#e53935" の形で色まで持ち回る
+ * カテゴリのアイコンの key（決めたもの、無ければ名前から）。色を選んでいるカテゴリは "food|#e53935" の形で色まで持ち回る
  * （iconTone が色まで読む。key だけを見たいときは baseIconKey）。
  */
 export const iconKeyOf = (
@@ -437,7 +437,7 @@ export function childCategories(
     .sort(byPosition);
 }
 
-/** 種類の大分類の id（大分類ならそれ自身）。知らない id は null。 */
+/** カテゴリの大分類の id（大分類ならそれ自身）。知らない id は null。 */
 export function topCategoryIdOf(categories: readonly MoneyCategory[], categoryId: string): string | null {
   const category = categories.find((entry) => entry.id === categoryId);
   if (!category) return null;
@@ -501,7 +501,7 @@ const yearBefore = (dateKey: string): string =>
 /**
  * 見込みのルールの、その月（YYYY-MM）の額。DBの money_recurring_estimate と同じ:
  * 前年同月の記録（前年のその月の引き落とし日の前後10日。いちばん近いもの）があればその額、無ければ直近3回（過去1年）の平均、
- * 記録が1件も無ければルールに入れた額。同じ種類・出金元・お店の、見込みでない記録だけを使う。期間の始まりより前の記録は使わない。
+ * 記録が1件も無ければルールに入れた額。同じカテゴリ・出金元・お店の、見込みでない記録だけを使う。期間の始まりより前の記録は使わない。
  */
 export function estimateRecurringAmount(rule: MoneyRecurring, monthKey: string, records: readonly MoneyRecord[]): number {
   if (rule.walletId === null) return rule.amount;
@@ -548,7 +548,7 @@ export interface PendingRecurring {
 
 /**
  * その月（YYYY-MM）に、固定収入・固定費のルールでこれから自動で作られる記録（today〔YYYY-MM-DD〕より後の日のもの）。
- * 作る条件は DBの make_money_recurring_records と同じ（使っていて、出金元と種類が決まっていて、記録する月・期間の中で、
+ * 作る条件は DBの make_money_recurring_records と同じ（使っていて、出金元とカテゴリが決まっていて、記録する月・期間の中で、
  * ルールを作ったあとの日で、まだ作っていないもの）。収支に入らない振替は除く。
  * 自動の記録より前に月を締めるときに知らせる（docs/kakei.md §4.5）。日の早い順。
  */
@@ -596,7 +596,7 @@ function recurringMonthAmount(
 
 /**
  * 固定費（支出のルール）から、大分類ごと・年ごとの1月〜12月の予算に足す額を出す（2026-10-11）。
- * 記録を作る条件と同じ（使っていて、出金元と種類が決まっているもの）で、生活費の大分類のものだけ。種類が小分類ならその大分類へ。
+ * 記録を作る条件と同じ（使っていて、出金元とカテゴリが決まっているもの）で、生活費の大分類のものだけ。カテゴリが小分類ならその大分類へ。
  * 記録する月（null は毎月）に、ルールを作った年から今年の翌年まで足す。期間（開始月・終了月）の外の月には足さない。作った年の中では、作った月より前の月にも足す（2026-10-12）。
  * 返す行は fixed: true で、手入力の予算の行といっしょに budgets に並べて使う。
  */
@@ -758,7 +758,7 @@ export function groupRecordsByDay(records: readonly MoneyRecord[]): { date: stri
   return groups;
 }
 
-/** 品目の種類のまとまり（記録の詳細で、同じ種類の品目を1行に見せる）。 */
+/** 品目のカテゴリのまとまり（記録の詳細で、同じカテゴリの品目を1行に見せる）。 */
 export interface ItemGroup<T extends Omit<MoneyItem, 'id'>> {
   key: string;
   categoryId: string | null;
@@ -771,7 +771,7 @@ export interface ItemGroup<T extends Omit<MoneyItem, 'id'>> {
 export const itemGroupKey = (item: Pick<MoneyItem, 'categoryId' | 'categoryName'>) =>
   item.categoryId !== null ? `category:${item.categoryId}` : item.categoryName !== '' ? `deleted:${item.categoryName}` : 'none';
 
-/** 品目を種類ごとにまとめる。最初に出てきた順。 */
+/** 品目をカテゴリごとにまとめる。最初に出てきた順。 */
 export function groupItems<T extends Omit<MoneyItem, 'id'>>(items: readonly T[]): ItemGroup<T>[] {
   const groups: ItemGroup<T>[] = [];
   for (const item of items) {
@@ -815,7 +815,7 @@ export const lineAmount = (line: { quantity: number; unitPrice: number | null; a
 
 // ---- 入力の手助け ----
 
-/** よく使う小分類（直近の記録で多い順）。使わなくした種類は出さない。 */
+/** よく使う小分類（直近の記録で多い順）。使わなくしたカテゴリは出さない。 */
 export function frequentCategoryIds(
   records: readonly MoneyRecord[],
   categories: readonly MoneyCategory[],
@@ -931,7 +931,7 @@ export function reorderedPositions(
     .filter((change) => change.position !== byId.get(change.id)!.position);
 }
 
-/** 前回の出金元（その種類の記録でいちばん新しいもの）。使わなくした出金元は使わない。 */
+/** 前回の出金元（そのカテゴリの記録でいちばん新しいもの）。使わなくした出金元は使わない。 */
 export function lastWalletId(
   records: readonly MoneyRecord[],
   wallets: readonly MoneyWallet[],
@@ -977,7 +977,7 @@ export function livingSpendByTop(
 }
 
 /**
- * 生活費のタイル。種類の並び（大分類の並び順）のまま（2026-10-08に、予算を超えた順から変えた）。
+ * 生活費のタイル。カテゴリの並び（大分類の並び順）のまま（2026-10-08に、予算を超えた順から変えた）。
  * 使わなくした大分類は、その月に使っていれば出す。
  */
 export function buildBudgetTiles(
@@ -1164,7 +1164,7 @@ export function yearToDateBalance(
 
 /**
  * その月（YYYY-MM）の収支の見込み＝固定収入の見込み − 固定費の見込み − 変動費の予算（docs/kakei.md §4.6）。
- * 固定収入・固定費は記録を作る条件と同じルール（使っていて、出金元と種類が決まっていて、記録する月・期間の中。振替は除く）で、
+ * 固定収入・固定費は記録を作る条件と同じルール（使っていて、出金元とカテゴリが決まっていて、記録する月・期間の中。振替は除く）で、
  * 額は予算に足す額と同じ（recurringMonthAmount）。変動費の予算は生活費の大分類の手入力の予算（固定費は含まない）。
  * 今月の実績は使わない。
  */
@@ -1393,7 +1393,7 @@ export interface EditorLine {
   receiptName?: string | null;
 }
 
-/** 品目の種類のまとまり（記録の詳細の1行、品目の画面1枚）。 */
+/** 品目のカテゴリのまとまり（記録の詳細の1行、品目の画面1枚）。 */
 export interface EditorGroup {
   key: string;
   categoryId: string | null;
@@ -1410,7 +1410,7 @@ export const editorGroupTotal = (group: Pick<EditorGroup, 'lines'>) =>
 /** 品名も金額も無い行（空の行を押しただけ）。保存しない。 */
 export const isBlankLine = (line: EditorLine) => line.name.trim() === '' && line.unitPrice === 0;
 
-/** 保存してある品目を、入力の形にする（種類ごとにまとめる）。 */
+/** 保存してある品目を、入力の形にする（カテゴリごとにまとめる）。 */
 export function groupsFromItems(items: readonly MoneyItem[], nextKey: () => string): EditorGroup[] {
   return groupItems(items).map((group) => ({
     key: nextKey(),
@@ -1450,8 +1450,8 @@ export function itemsFromGroups(groups: readonly EditorGroup[]): MoneyItemDraft[
 }
 
 /**
- * レシートの読み取りの品目を、入力の形にする（種類ごとにまとめる。読んだ順）。
- * 種類が決まらなかった品目は、種類なしの1つのまとまりにする（「種類を選んでください」。docs/kakei.md §10.4）。
+ * レシートの読み取りの品目を、入力の形にする（カテゴリごとにまとめる。読んだ順）。
+ * カテゴリが決まらなかった品目は、カテゴリなしの1つのまとまりにする（「カテゴリを選んでください」。docs/kakei.md §10.4）。
  */
 export function groupsFromScan(items: readonly ReceiptScanItem[], nextKey: () => string): EditorGroup[] {
   const groups: EditorGroup[] = [];
@@ -1473,7 +1473,7 @@ export function groupsFromScan(items: readonly ReceiptScanItem[], nextKey: () =>
   return groups;
 }
 
-/** 同じ種類のまとまりか。 */
+/** 同じカテゴリのまとまりか。 */
 export const sameGroupTarget = (
   a: Pick<EditorGroup, 'categoryId' | 'categoryName'>,
   b: Pick<EditorGroup, 'categoryId' | 'categoryName'>,

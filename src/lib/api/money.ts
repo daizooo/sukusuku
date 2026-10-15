@@ -27,7 +27,7 @@ type RecurringRow = Tables<'money_recurring'>;
 type BalanceRow = Tables<'money_wallet_balances'>;
 type SupabaseDb = SupabaseClient<Database>;
 
-// 家計タブの読み書き（種類・予算・出金元・記録。docs/kakei.md §3・§5）。
+// 家計タブの読み書き（カテゴリ・予算・出金元・記録。docs/kakei.md §3・§5）。
 // mobile版の `mobile/src/lib/api/money.ts` と同じ。
 
 export const rowToCategory = (row: CategoryRow): MoneyCategory => ({
@@ -291,7 +291,7 @@ export async function deleteMoneyRecord(supabase: SupabaseDb, id: string): Promi
   if (error) throw error;
 }
 
-// ---- 種類・予算 ----
+// ---- カテゴリ・予算 ----
 
 export async function insertMoneyCategory(
   supabase: SupabaseDb,
@@ -344,8 +344,8 @@ export async function updateMoneyCategory(
 }
 
 /**
- * 種類（大分類・小分類）を消す。大分類を消すと小分類と予算も消える（外部キーの cascade）。
- * 記録の品目には消した種類の名前だけが残る（DBのトリガ money_categories_keep_name。docs/kakei.md §3.1）。
+ * カテゴリ（大分類・小分類）を消す。大分類を消すと小分類と予算も消える（外部キーの cascade）。
+ * 記録の品目には消したカテゴリの名前だけが残る（DBのトリガ money_categories_keep_name。docs/kakei.md §3.1）。
  */
 export async function deleteMoneyCategory(supabase: SupabaseDb, id: string): Promise<void> {
   const { error } = await supabase.from('money_categories').delete().eq('id', id);
@@ -353,9 +353,9 @@ export async function deleteMoneyCategory(supabase: SupabaseDb, id: string): Pro
 }
 
 /**
- * 標準の種類（moneyUtils の DEFAULT_CATEGORIES）を入れる。種類がまだ無い家族向け。
- * 読み込みに失敗して種類が空に見えているときに押されても二重に入らないよう、DBに種類が1つでもあれば何も足さない
- * （2026-10-08に、プレビューで読み込みに失敗したまま押されて、標準の種類が2回入った）。
+ * 標準のカテゴリ（moneyUtils の DEFAULT_CATEGORIES）を入れる。カテゴリがまだ無い家族向け。
+ * 読み込みに失敗してカテゴリが空に見えているときに押されても二重に入らないよう、DBにカテゴリが1つでもあれば何も足さない
+ * （2026-10-08に、プレビューで読み込みに失敗したまま押されて、標準のカテゴリが2回入った）。
  */
 export async function insertDefaultMoneyCategories(supabase: SupabaseDb, familyId: string): Promise<MoneyCategory[]> {
   const { count, error: countError } = await supabase
@@ -363,7 +363,7 @@ export async function insertDefaultMoneyCategories(supabase: SupabaseDb, familyI
     .select('id', { count: 'exact', head: true })
     .eq('family_id', familyId);
   if (countError) throw countError;
-  if ((count ?? 0) > 0) throw new Error('この家族にはもう種類があります');
+  if ((count ?? 0) > 0) throw new Error('この家族にはもうカテゴリがあります');
   const { data: parents, error } = await supabase
     .from('money_categories')
     .insert(

@@ -41,6 +41,9 @@ export const formatDateWithWeekday = (dateObj: Date | null): string => {
   return `${dateObj.getMonth() + 1}月${dateObj.getDate()}日 (${WEEKDAY_LABELS[dateObj.getDay()]})`;
 };
 
+// 年つきの日付（2026年10月28日 (水)）。家計の記録の詳細・編集で使う。
+export const formatDateWithYear = (dateObj: Date): string => `${dateObj.getFullYear()}年${formatDateWithWeekday(dateObj)}`;
+
 export const formatTimeString = (dateObj: Date | null): string => {
   if (!dateObj) return '';
   return `${String(dateObj.getHours()).padStart(2, '0')}:${String(

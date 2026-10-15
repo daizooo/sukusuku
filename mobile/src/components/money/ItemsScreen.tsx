@@ -16,15 +16,15 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 
 // 品目の画面（docs/kakei.md §3.2）。PWA版の `src/components/sukusuku/money/ItemsScreen.tsx` と同じ並び・文言。
 //
-// 1つの種類の品目を何行でもまとめて記録する。行＝品名・個数（−＋）・単価・金額。
-// 一覧のいちばん下に空の行を置き、押すと新しい行を足す（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）。
+// 1つのカテゴリの品目を何行でもまとめて記録する。行＝品名・個数（−＋）・単価・金額。
+// 一覧のいちばん下に空の行を置き、一覧の左端の「−」でその行を消し、いちばん下の「＋」で新しい行を足す（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）。
 // 選んだ行（青）の単価を下の電卓で直す（＋−×÷）。電卓はこの画面で初めて出る。
 // 値引き・割引・返金は「マイナスにする」で、選んだ行の金額をマイナスにする（docs/kakei.md §10.5）。
-// 種類は見出しの下に1行で小さく出す（押すと変えられる）。
+// カテゴリは見出しの下に1行で小さく出す（押すと変えられる）。
 
 /** 品目の画面で書きかけのもの（記録の入力が持ち、ほかの画面へ行って戻っても消えない）。 */
 export interface ItemsWork {
-  /** 直している種類のまとまり。新しい種類なら null。 */
+  /** 直しているカテゴリのまとまり。新しいカテゴリなら null。 */
   groupKey: string | null;
   categoryId: string | null;
   /** 削除したカテゴリの名前（categoryId が null のとき）。 */
@@ -49,9 +49,9 @@ export const blankLine = (): EditorLine => ({
 interface ItemsScreenProps {
   work: ItemsWork;
   onChange: (work: ItemsWork) => void;
-  /** 種類の見出し（「食費 › 食料品」）と、その下の一言（今月の残り）。 */
+  /** カテゴリの見出し（「食費 › 食料品」）と、その下の一言（今月の残り）。 */
   title: string;
-  /** 種類のアイコン。 */
+  /** カテゴリのアイコン。 */
   iconKey: string;
   subtitle: string;
   onChangeCategory: () => void;
@@ -122,8 +122,14 @@ export default function ItemsScreen({
     updateLine(selectedLine.key, { unitPrice: -selectedLine.unitPrice });
   };
 
-  const removeSelected = () =>
-    onChange({ ...work, lines: work.lines.filter((line) => line.key !== work.selected), selected: null, expr: '' });
+  // 行の左の「−」で、その行をすぐ消す（選んでいる行なら選びも外す）。
+  const removeLine = (key: string) =>
+    onChange({
+      ...work,
+      lines: work.lines.filter((line) => line.key !== key),
+      selected: work.selected === key ? null : work.selected,
+      expr: work.selected === key ? '' : work.expr,
+    });
 
   const showExpr = /[+\-*/]/.test(work.expr);
 
@@ -132,17 +138,18 @@ export default function ItemsScreen({
       <ScreenHeader
         title="品目"
         onClose={onClose}
+        closeAtEnd
         right={
           <View style={styles.headerRight}>
             {onDelete && (
-              <Pressable accessibilityRole="button" accessibilityLabel="この種類の品目を消す" onPress={onDelete} hitSlop={8}>
+              <Pressable accessibilityRole="button" accessibilityLabel="このカテゴリの品目を消す" onPress={onDelete} hitSlop={8}>
                 <Trash2 size={20} color={colors.textMuted} />
               </Pressable>
             )}
           </View>
         }
       />
-      <Pressable accessibilityRole="button" accessibilityLabel="種類を変える" onPress={onChangeCategory} style={styles.category}>
+      <Pressable accessibilityRole="button" accessibilityLabel="カテゴリを変える" onPress={onChangeCategory} style={styles.category}>
         <CategoryIcon iconKey={iconKey} size={20} />
         <Text style={styles.categoryName} numberOfLines={1}>
           {title}
@@ -173,6 +180,15 @@ export default function ItemsScreen({
               onPress={() => select(line)}
               style={[styles.line, selected && styles.lineSelected]}
             >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="この行を消す"
+                onPress={() => removeLine(line.key)}
+                hitSlop={8}
+                style={styles.removeButton}
+              >
+                <Minus size={12} color={colors.primaryText} />
+              </Pressable>
               <TextInput
                 style={styles.lineName}
                 value={line.name}
@@ -213,16 +229,14 @@ export default function ItemsScreen({
             </Pressable>
           );
         })}
-        <Pressable accessibilityRole="button" onPress={addLine} style={styles.blank}>
-          <Text style={styles.blankText}>品目を追加する</Text>
-          <Text style={styles.blankAmount}>¥0</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="品目を追加する" onPress={addLine} style={styles.blank}>
+          <View style={styles.addButton}>
+            <Plus size={14} color={colors.primaryText} />
+          </View>
         </Pressable>
         <View style={styles.subtotalRow}>
           {selectedLine !== null && (
             <>
-              <Pressable accessibilityRole="button" onPress={removeSelected} hitSlop={6}>
-                <Text style={styles.removeText}>選んだ行を消す</Text>
-              </Pressable>
               {/* 金額を入れてから切り替える（0円の行には出さない）。 */}
               {selectedLine.unitPrice !== 0 && (
                 <Pressable accessibilityRole="button" onPress={toggleSign} hitSlop={6}>
@@ -241,7 +255,7 @@ export default function ItemsScreen({
       <Calculator onKey={pressKey} />
       <View style={styles.footer}>
         <PrimaryButton
-          label={filled.length === 0 ? '金額を入れてください' : `この種類を保存（${filled.length}行 ${formatBalance(subtotal)}）`}
+          label={filled.length === 0 ? '金額を入れてください' : `このカテゴリを保存（${filled.length}行 ${formatBalance(subtotal)}）`}
           disabled={filled.length === 0}
           onPress={onSave}
         />
@@ -253,7 +267,7 @@ export default function ItemsScreen({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
-  // 種類は1行で小さく（品目と金額が主）。
+  // カテゴリは1行で小さく（品目と金額が主）。
   category: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -272,11 +286,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 16,
+    paddingLeft: 12,
+    paddingRight: 16,
     paddingVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  // 行の左端の「−」（赤い丸）。押すとその行を消す。
+  removeButton: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.danger },
   lineSelected: { backgroundColor: colors.moneySurface },
   lineName: { flex: 1, paddingVertical: 6, fontSize: 15, fontWeight: '500', color: colors.text },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -292,19 +309,19 @@ const styles = StyleSheet.create({
   unit: { width: 56, textAlign: 'right', fontSize: 12, fontWeight: '500', color: colors.textFaint },
   amount: { width: 72, textAlign: 'right', fontSize: 15, fontWeight: '700', color: colors.text },
   minus: { color: colors.danger },
+  // 一覧のいちばん下の「＋」だけの行（文字は無し）。
   blank: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingLeft: 12,
+    paddingRight: 16,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderStrong,
     borderStyle: 'dashed',
   },
-  blankText: { flex: 1, fontSize: 14, fontWeight: '500', color: colors.textFaint },
-  blankAmount: { fontSize: 15, fontWeight: '600', color: colors.borderStrong },
+  addButton: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.money },
   subtotalRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, paddingHorizontal: 16, paddingTop: 10 },
-  removeText: { fontSize: 12, fontWeight: '600', color: colors.danger },
   signText: { fontSize: 12, fontWeight: '600', color: colors.money },
   expr: { fontSize: 13, fontWeight: '500', color: colors.textMuted },
   subtotalLabel: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },

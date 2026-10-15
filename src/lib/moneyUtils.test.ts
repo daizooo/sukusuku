@@ -94,7 +94,7 @@ assert.equal(formatSignedYen(1200), '+¥1,200');
 assert.equal(formatSignedYen(-3800), '−¥3,800');
 assert.equal(formatSignedYen(0), '¥0');
 
-// ---- 種類 ----
+// ---- カテゴリ ----
 const cat = (id: string, name: string, parentId: string | null, extra: Partial<MoneyCategory> = {}): MoneyCategory => ({
   id,
   name,
@@ -113,7 +113,7 @@ const categories: MoneyCategory[] = [
   cat('med', '医療費', null, { position: 2 }),
   cat('drug', '薬', 'med'),
   cat('house', '住居費', null, { position: 0 }),
-  cat('old', '昔の種類', null, { position: 3, archived: true }),
+  cat('old', '昔のカテゴリ', null, { position: 3, archived: true }),
   cat('salary', '給料', null, { kind: 'income' }),
   cat('bonus', '賞与', 'salary', { kind: 'income' }),
   // 特別費も大分類のひとつ（docs/kakei.md §0.2）。予算は置かない
@@ -165,7 +165,7 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
   assert.equal(first[3], 30000);
 }
 
-// 固定費は、その種類の月の予算に自動で足される（額は記録を作るDBと同じ決め方）
+// 固定費は、そのカテゴリの月の予算に自動で足される（額は記録を作るDBと同じ決め方）
 {
   const cats = [
     { id: 'house', kind: 'living', parentId: null },
@@ -220,7 +220,7 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
       rent, tax, power,
       rule({ id: 'r4', categoryId: 'house', amount: 9999, archived: true }), // 使わない
       rule({ id: 'r5', categoryId: 'salary', amount: 300000, kind: 'income' }), // 収入は対象外
-      rule({ id: 'r6', categoryId: null, amount: 1000 }), // 種類なし
+      rule({ id: 'r6', categoryId: null, amount: 1000 }), // カテゴリなし
       rule({ id: 'r7', categoryId: 'food', amount: 0 }), // 額なし
       rule({ id: 'r8', categoryId: 'food', amount: 1000, walletId: null }), // 出金元なし（記録は作られない）
     ],
@@ -249,7 +249,7 @@ assert.equal(fixedBudgetFor(withFixed, 'house', '2025-12'), 0, 'ルールを作�
   assert.equal(budgetFor(withFixed, 'house', '2026-04'), 85000 + 80000, '手入力の予算＋固定費');
   assert.equal(budgetFor(withFixed, 'house', '2026-05'), 85000 + 110000);
   assert.equal(budgetFor(withFixed, 'util', '2026-08'), 9000, '手入力が無い月は固定費だけ');
-  assert.equal(budgetFor(withFixed, 'food', '2026-06'), 60000, '固定費の無い種類は今まで通り');
+  assert.equal(budgetFor(withFixed, 'food', '2026-06'), 60000, '固定費の無いカテゴリは今まで通り');
   assert.deepEqual(budgetMonths(withFixed, 'house', 2026), Array(12).fill(85000), '編集の初期値に固定費は入らない');
 
   // 締める月に、これから自動で作られる記録（docs/kakei.md §4.5）
@@ -472,7 +472,7 @@ assert.deepEqual(
     ['med', 4500, 10],
     ['special', -58000, null],
   ],
-  '種類の並び順のまま。特別費も大分類のひとつ（予算なし）。使っていない使わなくした大分類は出さない',
+  'カテゴリの並び順のまま。特別費も大分類のひとつ（予算なし）。使っていない使わなくした大分類は出さない',
 );
 
 assert.deepEqual(
@@ -494,7 +494,7 @@ assert.deepEqual(
     ['category:grocery', 564, 2],
     ['category:drug', 500, 1],
   ],
-  '同じ種類の品目は1つにまとめる',
+  '同じカテゴリの品目は1つにまとめる',
 );
 assert.equal(itemNamesLabel(groups[0].items), '牛乳 ×2・食パン');
 // 記録の一覧の2行目（品名の要約。docs/kakei.md §3.2）
@@ -719,7 +719,7 @@ assert.deepEqual(
   ],
 );
 
-// レシートの読み取り（docs/kakei.md §10.4）: 種類ごとにまとめ、種類の無い品目は1つにまとめる。表記は保存まで持ち回る
+// レシートの読み取り（docs/kakei.md §10.4）: カテゴリごとにまとめ、カテゴリの無い品目は1つにまとめる。表記は保存まで持ち回る
 const scanGroups = groupsFromScan(
   [
     { receiptName: 'ﾀﾏｺﾞ', name: 'たまご', quantity: 2, unitPrice: 319, amount: 638, categoryId: 'grocery', categorySource: 'ai' },
@@ -791,7 +791,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
   assert.deepEqual(history, [
     { occurredOn: '2026-09-28', amount: 7500 },
     { occurredOn: '2025-10-27', amount: 9000 },
-  ], '出金元・お店・種類が同じで、見込みでない過去1年の記録だけ（同じ種類の品目は合計）');
+  ], '出金元・お店・カテゴリが同じで、見込みでない過去1年の記録だけ（同じカテゴリの品目は合計）');
 }
 
 // ---- 口座の残高（docs/kakei.md §9.3） ----

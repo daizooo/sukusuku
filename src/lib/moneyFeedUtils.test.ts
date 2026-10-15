@@ -110,7 +110,7 @@ assert.deepEqual(
   assert.deepEqual(cardMonthChecks(rs, { linkedAmounts: {}, walletIds: [], since: null }, '2026-10'), { mismatched: [], unnotified: [] });
 }
 
-// お店でいちばん多く使った種類（カードの利用通知を記録にするときの初めの種類。§9.6）
+// お店でいちばん多く使ったカテゴリ（カードの利用通知を記録にするときの初めのカテゴリ。§9.6）
 {
   const at = (id: string, occurredOn: string, store: string, categoryIds: (string | null)[], kind: MoneyRecord['kind'] = 'expense') =>
     ({ ...record(id, { occurredOn, store, kind }, 0), items: categoryIds.map((categoryId, index) => ({ id: `${id}-${index}`, amount: 100, categoryId })) }) as unknown as MoneyRecord;
@@ -122,8 +122,8 @@ assert.deepEqual(
     at('s5', '2026-10-03', 'よかもんね', ['refund'], 'income'),
     at('s6', '2026-10-04', 'よかもんね', [null]),
   ];
-  assert.equal(storeCategoryGuess(rs, 'よかもんね', 'expense'), 'daily', '同じ数（2回ずつ）なら新しい記録の種類');
-  assert.equal(storeCategoryGuess([...rs, at('s7', '2026-08-01', 'よかもんね', ['food'])], 'よかもんね', 'expense'), 'food', 'いちばん多い種類');
+  assert.equal(storeCategoryGuess(rs, 'よかもんね', 'expense'), 'daily', '同じ数（2回ずつ）なら新しい記録のカテゴリ');
+  assert.equal(storeCategoryGuess([...rs, at('s7', '2026-08-01', 'よかもんね', ['food'])], 'よかもんね', 'expense'), 'food', 'いちばん多いカテゴリ');
   assert.equal(storeCategoryGuess(rs, 'よかもんね', 'income'), 'refund', '収入は収入の記録から');
   assert.equal(storeCategoryGuess(rs, 'ゆめタウン', 'expense'), null, '記録の無いお店');
   assert.equal(storeCategoryGuess(rs, '', 'expense'), null);

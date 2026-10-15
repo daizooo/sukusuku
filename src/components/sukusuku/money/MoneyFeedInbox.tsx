@@ -155,7 +155,7 @@ function FeedItemModal({
   const [fillAmount, setFillAmount] = useState('');
   const [walletId, setWalletId] = useState<string | null>(null);
   const [remember, setRemember] = useState(true);
-  // カードの利用通知は、利用先に当てたお店と、そのお店でいちばん多い種類を初めから入れておく（§9.6）
+  // カードの利用通知は、利用先に当てたお店と、そのお店でいちばん多いカテゴリを初めから入れておく（§9.6）
   const [categoryId, setCategoryId] = useState<string | null>(() =>
     item.storeHint ? storeCategoryGuess(records, item.storeHint, item.direction === 'in' ? 'income' : 'expense') : null,
   );
@@ -372,14 +372,14 @@ function FeedItemModal({
           {summary}
           {mode === 'record' && (
             <>
-              <Field label={kind === 'income' ? '収入の種類' : '支出の種類'}>
+              <Field label={kind === 'income' ? '収入のカテゴリ' : '支出のカテゴリ'}>
                 <button
                   type="button"
                   onClick={() => setPickingCategory(true)}
                   className="flex w-full items-center justify-between rounded-lg border border-gray-300 px-3 py-2 text-left"
                 >
                   <span className={`text-[15px] font-semibold ${categoryName ? 'text-gray-900' : 'text-gray-400'}`}>
-                    {categoryName ?? '種類を選ぶ'}
+                    {categoryName ?? 'カテゴリを選ぶ'}
                   </span>
                   <ChevronRight size={18} className="text-gray-400" />
                 </button>
@@ -439,7 +439,7 @@ function FeedItemModal({
               onPick={(value, register) => {
                 setStore(value);
                 setRegisterStore(register);
-                // 種類がまだなら、そのお店でいちばん多く使った種類を入れる
+                // カテゴリがまだなら、そのお店でいちばん多く使ったカテゴリを入れる
                 if (categoryId === null) setCategoryId(storeCategoryGuess(records, value, kind));
                 setPickingStore(false);
               }}
@@ -449,7 +449,7 @@ function FeedItemModal({
         </div>
       )}
       {pickingCategory && (
-        // 種類の選択は CategoryPicker（StackedScreen）が戻る操作の層を積むので、ここでは枠だけ
+        // カテゴリの選択は CategoryPicker（StackedScreen）が戻る操作の層を積むので、ここでは枠だけ
         <div className="fixed inset-0 z-50 flex justify-center bg-black/30">
           <div className="flex h-full w-full max-w-md flex-col bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
           <CategoryPicker
@@ -471,7 +471,7 @@ function FeedItemModal({
   );
 }
 
-/** 記録を1行で（日付・種類・出金元・額）。 */
+/** 記録を1行で（日付・カテゴリ・出金元・額）。 */
 function RecordLine({
   record,
   walletName,

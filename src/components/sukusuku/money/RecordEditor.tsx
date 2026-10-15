@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { ArrowRight, Camera, ChevronRight, CreditCard, Plus, Store, Trash2 } from 'lucide-react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { ArrowRight, CalendarDays, Camera, Plus, Store, Trash2, X } from 'lucide-react';
 import type {
   MoneyBudget,
   MoneyCategory,
@@ -13,7 +13,7 @@ import type {
   MoneyWalletDraft,
   ReceiptScan,
 } from '@/types/app';
-import { toDateStringInTimeZone } from '@/lib/dateUtils';
+import { formatDateWithYear, toDateStringInTimeZone } from '@/lib/dateUtils';
 import {
   budgetFor,
   canCardNextPeriod,
@@ -28,7 +28,6 @@ import {
   groupsFromScan,
   iconKeyOf,
   isBlankLine,
-  itemNamesLabel,
   itemsFromGroups,
   lastWalletId,
   livingSpendByTop,
@@ -46,22 +45,25 @@ import CategoryPicker, { type CategoryChoice } from './CategoryPicker';
 import ItemsScreen, { blankLine, type ItemsWork } from './ItemsScreen';
 import StorePicker from './StorePicker';
 import WalletPicker from './WalletPicker';
-import { CategoryIcon, EstimateBadge, FullScreen, PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
+import RecordDetailView from './RecordDetailView';
+import RecordItemGroups from './RecordItemGroups';
+import { EstimateBadge, FullScreen, PrimaryButton, ScreenHeader, StackedScreen, WalletTypeIcon } from './moneyVisual';
 
 // 記録の入力（docs/kakei.md §3.2。Zaim を踏襲）。mobile版の `mobile/src/components/money/RecordEditor.tsx` と同じ流れ・文言。
 //
-// 「＋」→ 記録の詳細（支出／収入／振替・日付・出金元・お店・品目）→ 品目を押す／「品目を追加する」→ 種類の選択 → 品目
-// （電卓はここで初めて出る）。出金元・お店はそれぞれ選ぶ画面へ。品目は種類ごとにまとめて1行で見せ、合計は品目から自動。
+// 既にある記録は、まず記録の詳細（読むだけ。RecordDetailView）を見せ、「編集する」でこの入力画面へ（2026-10-15）。
+// 「＋」→ 記録の編集（支出／収入／振替・日付・出金元・お店・翌月に回す・品目）→ 品目を押す／「＋」→ カテゴリの選択 → 品目
+// （電卓はここで初めて出る）。出金元・お店はそれぞれ選ぶ画面へ。品目はカテゴリごとにまとめて1行で見せ、合計は品目から自動。
 // 振替は 出金元 → 入金先 と金額だけ。置かないもの: 電話番号・時刻・タグ・写真。
 //
 // 画面は全部この1つの全画面の中で重ねる。重ねた画面はそれぞれ戻る操作の層を積み（StackedScreen）、
-// 戻る操作で1つ前の画面へ戻る。品目の書きかけは、種類の選択へ行って戻っても残る。
+// 戻る操作で1つ前の画面へ戻る。品目の書きかけは、カテゴリの選択へ行って戻っても残る。
 //
 // 見込みの額の記録（毎月の記録・カード代金で自動で作ったもの。§3.3）は、額を直すと確定になる。
 // 額が合っていたときは「この額で確定する」。額を変えずに保存したときは見込みのまま。
 
 type Screen =
-  | { type: 'detail' }
+  | { type: 'edit' }
   | { type: 'items' }
   | { type: 'category'; purpose: 'add' | 'change' }
   | { type: 'wallet'; field: 'walletId' | 'toWalletId' }
@@ -149,7 +151,9 @@ export default function RecordEditor({
     record?.kind === 'transfer' ? record.items.reduce((sum, item) => sum + item.amount, 0) : 0,
   );
   const [amountExpr, setAmountExpr] = useState('');
-  const [stack, setStack] = useState<Screen[]>([{ type: 'detail' }]);
+  const [stack, setStack] = useState<Screen[]>([{ type: 'edit' }]);
+  // 既にある記録を開いたときは、読むだけの詳細から（レシートを当てるときは入力画面から）。
+  const [viewing, setViewing] = useState(record !== null && receipt === null);
   const [work, setWork] = useState<ItemsWork | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   // カードの引き落としを翌月分に回す（カードで25日以降の記録だけ。docs/kakei.md §3.4）。
@@ -175,7 +179,7 @@ export default function RecordEditor({
   const groupTitle = (target: Pick<EditorGroup, 'categoryId' | 'categoryName'>) =>
     target.categoryId !== null
       ? categoryPath(categories, target.categoryId)
-      : target.categoryName || (receipt ? '種類を選んでください' : '');
+      : target.categoryName || (receipt ? 'カテゴリを選んでください' : '');
 
   // レシートの読み取りで、保存の前に確かめてほしいこと（§10.4・§10.5）。
   const receiptNotices = receipt
@@ -183,7 +187,7 @@ export default function RecordEditor({
         total !== receipt.receiptTotal &&
           `レシートの合計 ${formatYen(receipt.receiptTotal)} と ${formatYen(total - receipt.receiptTotal)} 違います`,
         !record && receipt.walletId === null && walletId === initialWalletId && '出金元を確かめてください（レシートから分かりませんでした）',
-        groups.some((group) => group.categoryId === null && group.categoryName === '') && '種類の決まっていない品目があります',
+        groups.some((group) => group.categoryId === null && group.categoryName === '') && 'カテゴリの決まっていない品目があります',
       ].filter((notice): notice is string => typeof notice === 'string')
     : [];
 
@@ -234,7 +238,7 @@ export default function RecordEditor({
     push({ type: 'items' });
   };
 
-  /** 種類を選んだ（品目の追加、または品目の画面で種類を変えた）。 */
+  /** カテゴリを選んだ（品目の追加、または品目の画面でカテゴリを変えた）。 */
   const pickCategory = (choice: CategoryChoice, purpose: 'add' | 'change') => {
     const target = { categoryId: choice.categoryId, categoryName: '' };
     if (purpose === 'change' && work) {
@@ -262,7 +266,7 @@ export default function RecordEditor({
       const target = { categoryId: work.categoryId, categoryName: work.categoryName };
       const same = next.find((group) => sameGroupTarget(group, target));
       if (same) {
-        // 同じ種類のまとまりがほかにあれば、そこへ足す（種類を変えた結果、同じになったとき）。
+        // 同じカテゴリのまとまりがほかにあれば、そこへ足す（カテゴリを変えた結果、同じになったとき）。
         next = next.map((group) => (group.key === same.key ? { ...group, lines: [...group.lines, ...lines] } : group));
         return next;
       }
@@ -279,7 +283,7 @@ export default function RecordEditor({
   const deleteWork = () => {
     if (!work) return;
     const key = work.groupKey;
-    if (!window.confirm('この種類の品目を消しますか？')) return;
+    if (!window.confirm('このカテゴリの品目を消しますか？')) return;
     setGroups((prev) => prev.filter((group) => group.key !== key));
     setWork(null);
     pop();
@@ -305,7 +309,7 @@ export default function RecordEditor({
             },
           ]
         : itemsFromGroups(groups);
-    if (items.length === 0) return window.alert('品目を入れてください。「品目を追加する」から種類を選びます。');
+    if (items.length === 0) return window.alert('品目を入れてください。「品目を追加する」からカテゴリを選びます。');
     // 品目はマイナスも入れられるが、記録の合計はマイナスにしない（docs/kakei.md §10.5。DB でも確かめる）。
     if (total < 0) return window.alert('合計がマイナスです。値引きの行の金額を確かめてください。');
     onSubmit({
@@ -422,17 +426,96 @@ export default function RecordEditor({
           </StackedScreen>
         );
       default:
-        return renderDetail();
+        return viewing && record ? renderView(record) : renderEdit();
     }
   };
 
-  const fieldClass = 'flex w-full items-center gap-3.5 border-b border-gray-200 py-3.5 text-left hover:bg-gray-50';
+  // 日付の上の案内（見込みの額・自動で作った記録）。詳細・編集の両方に出す。
+  const notices = (editable: boolean) => (
+    <>
+      {record?.isEstimate && (
+        <div className="mt-2 space-y-2 rounded-xl bg-amber-100 p-3">
+          <div className="flex items-center gap-2">
+            {stillEstimate && <EstimateBadge />}
+            <span className="flex-1 text-[13px] text-amber-800">
+              {stillEstimate
+                ? editable
+                  ? '見込みの額です。検針票・明細などを見て額を直すと確定します'
+                  : '見込みの額です。編集で額を直すと確定します'
+                : '保存すると確定します'}
+            </span>
+          </div>
+          {editable && stillEstimate && (
+            <button type="button" onClick={() => setConfirmed(true)} className="text-sm font-bold text-amber-800">
+              この額で確定する
+            </button>
+          )}
+        </div>
+      )}
+      {record?.month && (
+        <p className="mt-2.5 text-xs text-gray-400">
+          {autoRecordSource(record, wallets)}自動で作った記録（{formatMonthKey(record.month)}の分）
+        </p>
+      )}
+    </>
+  );
 
-  const renderDetail = () => (
+  /** 記録の詳細（読むだけ）。 */
+  const renderView = (target: MoneyRecord) => (
+    <RecordDetailView
+      kind={target.kind}
+      occurredOn={target.occurredOn}
+      total={recordTotal(target)}
+      wallet={wallets.find((wallet) => wallet.id === target.walletId) ?? null}
+      toWallet={wallets.find((wallet) => wallet.id === target.toWalletId) ?? null}
+      store={target.store}
+      cardNextPeriod={target.cardNextPeriod}
+      groups={groups}
+      groupTitle={groupTitle}
+      groupIconKey={groupIconKey}
+      notice={notices(false)}
+      onClose={onClose}
+      onDelete={confirmDelete}
+      onEdit={() => setViewing(false)}
+    />
+  );
+
+  const walletOf = (id: string | null) => wallets.find((wallet) => wallet.id === id) ?? null;
+
+  // 値の行: 左にアイコンの列、右に値。区切り線は値の列だけに引く。
+  const rowClass = 'flex w-full items-center gap-4 pl-5 text-left';
+  const valueClass = 'flex min-w-0 flex-1 items-center gap-2 border-b border-gray-200 pr-5';
+  const textClass = (empty: boolean) => `min-w-0 flex-1 truncate text-[15px] ${empty ? 'font-medium text-gray-400' : 'font-bold text-gray-900'}`;
+
+  /** 値の行。clear があれば右に小さな灰色の円に白い「×」。 */
+  const field = (icon: ReactNode, text: string, placeholder: string, onClick: () => void, clear?: { label: string; onClear: () => void }) => (
+    <div className={rowClass}>
+      <span className="flex w-6 shrink-0 justify-center">{icon}</span>
+      <div className={`${valueClass} py-[9px]`}>
+        <button type="button" onClick={onClick} className={`${textClass(text === '')} text-left`}>
+          {text || placeholder}
+        </button>
+        {clear && text !== '' && (
+          <button
+            type="button"
+            aria-label={clear.label}
+            onClick={clear.onClear}
+            className="relative flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gray-300 text-white after:absolute after:-inset-2 after:content-['']"
+          >
+            <X size={10} strokeWidth={3} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  /** 記録の編集（入力）。 */
+  const renderEdit = () => (
     <>
       <ScreenHeader
-        title="記録の詳細"
+        title={record ? '記録の編集' : '記録を追加'}
         onClose={onClose}
+        closeAtEnd
         right={
           record && (
             <button type="button" aria-label="この記録を消す" onClick={confirmDelete} className="text-gray-500">
@@ -441,15 +524,15 @@ export default function RecordEditor({
           )
         }
       />
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-6">
-        <div className="flex gap-2">
+      <div className="flex-1 min-h-0 overflow-y-auto pt-1 pb-4">
+        <div className="flex gap-2 px-4">
           {KINDS.map((entry) => (
             <button
               key={entry}
               type="button"
               aria-pressed={kind === entry}
               onClick={() => changeKind(entry)}
-              className={`rounded-full px-4 py-2 text-sm ${
+              className={`rounded-full px-3.5 py-1.5 text-[13px] ${
                 kind === entry ? 'bg-blue-100 font-bold text-blue-800' : 'bg-gray-100 font-semibold text-gray-700'
               }`}
             >
@@ -458,12 +541,24 @@ export default function RecordEditor({
           ))}
         </div>
 
-        <div className="flex items-end justify-between border-b border-gray-200 py-3.5">
-          <span className="pb-1.5 text-xs text-gray-400">{kind === 'transfer' ? '金額' : '合計（品目の合計）'}</span>
-          <span className="text-[34px] font-bold text-gray-900 tabular-nums">{formatBalance(total)}</span>
-        </div>
+        {/* 金額（右に大きく）。品目の合計で、振替だけは押して入れる。 */}
+        <button
+          type="button"
+          disabled={kind !== 'transfer'}
+          onClick={() => {
+            setAmountExpr(transferAmount > 0 ? String(transferAmount) : '');
+            push({ type: 'amount' });
+          }}
+          className="flex w-full items-center justify-between px-5 pt-1.5 pb-0.5 text-left disabled:cursor-default"
+        >
+          <span className="flex flex-col items-center leading-none">
+            <span className="text-[26px] font-extrabold text-gray-900">¥</span>
+            <span className="mt-0.5 text-[11px] font-bold text-gray-700">JPY</span>
+          </span>
+          <span className="text-[40px] font-extrabold text-gray-900 tabular-nums">{formatBalance(total).replace('¥', '')}</span>
+        </button>
         {receiptNotices.length > 0 && (
-          <div className="mt-3 space-y-1 rounded-xl bg-red-50 p-3">
+          <div className="mx-4 mt-2 space-y-1 rounded-xl bg-red-50 p-3">
             {receiptNotices.map((notice) => (
               <p key={notice} className="text-[13px] font-semibold text-red-500">
                 {notice}
@@ -471,128 +566,102 @@ export default function RecordEditor({
             ))}
           </div>
         )}
-        {record?.isEstimate && (
-          <div className="mt-3 space-y-2 rounded-xl bg-amber-100 p-3">
-            <div className="flex items-center gap-2">
-              {stillEstimate && <EstimateBadge />}
-              <span className="flex-1 text-[13px] text-amber-800">
-                {stillEstimate ? '見込みの額です。検針票・明細などを見て額を直すと確定します' : '保存すると確定します'}
-              </span>
-            </div>
-            {stillEstimate && (
-              <button type="button" onClick={() => setConfirmed(true)} className="text-sm font-bold text-amber-800">
-                この額で確定する
-              </button>
-            )}
-          </div>
-        )}
-        {record?.month && (
-          <p className="mt-2.5 text-xs text-gray-400">
-            {autoRecordSource(record, wallets)}自動で作った記録（{formatMonthKey(record.month)}の分）
-          </p>
-        )}
+        <div className="mx-4">{notices(true)}</div>
 
-        <label className={fieldClass}>
-          <span className="sr-only">日付</span>
-          <input
-            type="date"
-            value={occurredOn}
-            onChange={(event) => event.target.value && setOccurredOn(event.target.value)}
-            className="flex-1 bg-transparent text-base text-gray-900 focus:outline-none"
-          />
-        </label>
-        <button type="button" onClick={() => push({ type: 'wallet', field: 'walletId' })} className={fieldClass}>
-          <CreditCard size={20} className="text-gray-500" />
-          <span className={`flex-1 text-base ${walletId === null ? 'text-gray-400' : 'text-gray-900'}`}>
-            {walletName(walletId) || (kind === 'income' ? '入金先' : '出金元')}
+        <label className={rowClass}>
+          <span className="flex w-6 shrink-0 justify-center">
+            <CalendarDays size={22} className="text-gray-700" />
           </span>
-          <ChevronRight size={18} className="text-gray-400" />
-        </button>
-        {nextPeriodShown && (
-          <label className={fieldClass}>
+          <span className={`${valueClass} py-[9px]`}>
+            <span className="sr-only">日付</span>
             <input
-              type="checkbox"
-              checked={cardNextPeriod}
-              onChange={(event) => setCardNextPeriod(event.target.checked)}
-              className="h-5 w-5"
+              type="date"
+              value={occurredOn}
+              aria-label={formatDateWithYear(new Date(`${occurredOn}T00:00:00`))}
+              onChange={(event) => event.target.value && setOccurredOn(event.target.value)}
+              className="flex-1 bg-transparent text-[15px] font-bold text-gray-900 focus:outline-none"
             />
-            <span className="flex-1 text-base text-gray-900">カードの引き落としを翌月分に回す</span>
-          </label>
+          </span>
+        </label>
+        {field(
+          <WalletTypeIcon type={walletOf(walletId)?.type ?? 'cash'} size={22} color={walletOf(walletId)?.iconColor} />,
+          walletName(walletId),
+          kind === 'income' ? '入金先' : '出金元',
+          () => push({ type: 'wallet', field: 'walletId' }),
+          { label: '出金元を外す', onClear: () => setWalletId(null) },
         )}
         {kind === 'transfer' ? (
           <>
-            <button type="button" onClick={() => push({ type: 'wallet', field: 'toWalletId' })} className={fieldClass}>
-              <ArrowRight size={20} className="text-gray-500" />
-              <span className={`flex-1 text-base ${toWalletId === null ? 'text-gray-400' : 'text-gray-900'}`}>
-                {walletName(toWalletId) || '入金先'}
-              </span>
-              <ChevronRight size={18} className="text-gray-400" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAmountExpr(transferAmount > 0 ? String(transferAmount) : '');
-                push({ type: 'amount' });
-              }}
-              className={fieldClass}
-            >
-              <span className="flex-1 text-base text-gray-900">金額を入れる</span>
-              <ChevronRight size={18} className="text-gray-400" />
-            </button>
-            <p className="mt-2.5 text-xs text-gray-400">振替は集計に入れません</p>
+            {field(
+              <ArrowRight size={22} className="text-gray-500" />,
+              walletName(toWalletId),
+              '入金先',
+              () => push({ type: 'wallet', field: 'toWalletId' }),
+              { label: '入金先を外す', onClear: () => setToWalletId(null) },
+            )}
+            <p className="mx-5 mt-2.5 text-xs text-gray-400">振替は集計に入れません</p>
           </>
         ) : (
+          field(<Store size={22} className="text-gray-500" />, store, 'お店', () => push({ type: 'store' }), {
+            label: 'お店を外す',
+            onClear: () => setStore(''),
+          })
+        )}
+        {nextPeriodShown && (
+          <label className={rowClass}>
+            <span className="w-6 shrink-0" />
+            <span className={`${valueClass} py-1.5`}>
+              <input
+                type="checkbox"
+                checked={cardNextPeriod}
+                onChange={(event) => setCardNextPeriod(event.target.checked)}
+                className="h-5 w-5"
+              />
+              <span className="flex-1 text-sm font-semibold text-gray-700">引き落としを翌月分に回す</span>
+            </span>
+          </label>
+        )}
+
+        {kind !== 'transfer' && (
           <>
-            <button type="button" onClick={() => push({ type: 'store' })} className={fieldClass}>
-              <Store size={20} className="text-gray-500" />
-              <span className={`flex-1 text-base ${store === '' ? 'text-gray-400' : 'text-gray-900'}`}>{store || 'お店'}</span>
-              <ChevronRight size={18} className="text-gray-400" />
-            </button>
-
-            {record && !receipt && onScanReceipt && (
-              <button type="button" onClick={() => onScanReceipt(record)} className={fieldClass}>
-                <Camera size={20} className="text-gray-500" />
-                <span className="flex-1 text-base text-gray-900">レシートを撮って品目を入れる</span>
-                <ChevronRight size={18} className="text-gray-400" />
-              </button>
-            )}
-
-            <div className="mt-4 mb-1 flex items-baseline justify-between">
-              <span className="text-sm font-semibold text-gray-500">品目</span>
-              <span className="text-[11px] text-gray-400">種類ごとにまとめて表示</span>
-            </div>
-            {groups.map((group) => {
-              const names = itemNamesLabel(group.lines);
-              return (
-                <button
-                  key={group.key}
-                  type="button"
-                  onClick={() => openGroup(group)}
-                  className="flex w-full items-center gap-2.5 border-b border-gray-200 py-2 text-left hover:bg-gray-50"
-                >
-                  <CategoryIcon iconKey={groupIconKey(group)} size={24} />
-                  <span className="flex-1">
-                    <span className="block text-[13px] font-semibold text-gray-700">{groupTitle(group)}</span>
-                    {names !== '' && <span className="block text-[11px] text-gray-400">{names}</span>}
-                  </span>
-                  <span className="text-sm font-bold text-gray-900 tabular-nums">{formatBalance(editorGroupTotal(group))}</span>
+            <div className="mt-3 flex items-center justify-between border-b border-gray-200 px-5 py-1.5">
+              <span className="text-sm font-bold text-gray-500">品目一覧</span>
+              <span className="flex items-center gap-3.5">
+                {record && !receipt && onScanReceipt && (
+                  <button
+                    type="button"
+                    aria-label="レシートを撮って品目を入れる"
+                    onClick={() => onScanReceipt(record)}
+                    className="relative flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-700 after:absolute after:-inset-2 after:content-['']"
+                  >
+                    <Camera size={16} />
+                  </button>
+                )}
+                <button type="button" onClick={() => push({ type: 'category', purpose: 'add' })} className="text-[13px] font-bold text-blue-600">
+                  カテゴリを追加
                 </button>
-              );
-            })}
+              </span>
+            </div>
+            <div className="px-5">
+              <RecordItemGroups groups={groups} title={groupTitle} iconKey={groupIconKey} size="small" onOpen={openGroup} />
+            </div>
             <button
               type="button"
+              aria-label="カテゴリを追加する"
               onClick={() => push({ type: 'category', purpose: 'add' })}
-              className="flex w-full items-center gap-2.5 border-b border-gray-200 py-3.5 text-[15px] font-semibold text-blue-600 hover:bg-gray-50"
+              className="flex w-full items-center px-5 py-2.5"
             >
-              <Plus size={18} />
-              {groups.length === 0 ? '品目を追加する' : '品目を追加する（別の種類）'}
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                <Plus size={14} />
+              </span>
             </button>
           </>
         )}
       </div>
-      <div className="shrink-0 border-t border-gray-200 px-4 pt-2.5 pb-4">
-        <PrimaryButton label={record ? '保存する' : '記録する'} onClick={submit} />
-      </div>
+      {/* 下いっぱいの保存の帯（青）。 */}
+      <button type="button" onClick={submit} className="shrink-0 bg-blue-600 py-4 text-base font-extrabold text-white hover:bg-blue-700">
+        {record ? '保存する' : '記録する'}
+      </button>
     </>
   );
 

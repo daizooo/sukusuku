@@ -16,15 +16,15 @@ import { CategoryIcon, PrimaryButton, ScreenHeader, StackedScreen } from './mone
 
 // 品目の画面（docs/kakei.md §3.2）。mobile版の `mobile/src/components/money/ItemsScreen.tsx` と同じ並び・文言。
 //
-// 1つの種類の品目を何行でもまとめて記録する。行＝品名・個数（−＋）・単価・金額。
-// 一覧のいちばん下に空の行を置き、押すと新しい行を足す（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）。
+// 1つのカテゴリの品目を何行でもまとめて記録する。行＝品名・個数（−＋）・単価・金額。
+// 一覧のいちばん下に空の行を置き、一覧の左端の「−」でその行を消し、いちばん下の「＋」で新しい行を足す（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）。
 // 選んだ行（青）の単価を下の電卓で直す（＋−×÷）。電卓はこの画面で初めて出る。
 // 値引き・割引・返金は「マイナスにする」で、選んだ行の金額をマイナスにする（docs/kakei.md §10.5）。
-// 種類は見出しの下に1行で小さく出す（押すと変えられる）。
+// カテゴリは見出しの下に1行で小さく出す（押すと変えられる）。
 
 /** 品目の画面で書きかけのもの（記録の入力が持ち、ほかの画面へ行って戻っても消えない）。 */
 export interface ItemsWork {
-  /** 直している種類のまとまり。新しい種類なら null。 */
+  /** 直しているカテゴリのまとまり。新しいカテゴリなら null。 */
   groupKey: string | null;
   categoryId: string | null;
   /** 削除したカテゴリの名前（categoryId が null のとき）。 */
@@ -50,7 +50,7 @@ interface ItemsScreenProps {
   work: ItemsWork;
   onChange: (work: ItemsWork) => void;
   title: string;
-  /** 種類のアイコン。 */
+  /** カテゴリのアイコン。 */
   iconKey: string;
   subtitle: string;
   onChangeCategory: () => void;
@@ -126,8 +126,14 @@ export default function ItemsScreen({
     updateLine(selectedLine.key, { unitPrice: -selectedLine.unitPrice });
   };
 
-  const removeSelected = () =>
-    onChange({ ...work, lines: work.lines.filter((line) => line.key !== work.selected), selected: null, expr: '' });
+  // 行の左の「−」で、その行をすぐ消す（選んでいる行なら選びも外す）。
+  const removeLine = (key: string) =>
+    onChange({
+      ...work,
+      lines: work.lines.filter((line) => line.key !== key),
+      selected: work.selected === key ? null : work.selected,
+      expr: work.selected === key ? '' : work.expr,
+    });
 
   const showExpr = /[+\-*/]/.test(work.expr);
   const stepClass = 'flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-gray-500';
@@ -137,10 +143,11 @@ export default function ItemsScreen({
       <ScreenHeader
         title="品目"
         onClose={onClose}
+        closeAtEnd
         right={
           <span className="flex items-center gap-3.5">
             {onDelete && (
-              <button type="button" aria-label="この種類の品目を消す" onClick={onDelete} className="text-gray-500">
+              <button type="button" aria-label="このカテゴリの品目を消す" onClick={onDelete} className="text-gray-500">
                 <Trash2 size={20} />
               </button>
             )}
@@ -149,7 +156,7 @@ export default function ItemsScreen({
       />
       <button
         type="button"
-        aria-label="種類を変える"
+        aria-label="カテゴリを変える"
         onClick={onChangeCategory}
         className="shrink-0 flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-4 py-1.5 text-left hover:bg-gray-100"
       >
@@ -166,8 +173,19 @@ export default function ItemsScreen({
             <div
               key={line.key}
               onClick={() => (selected ? undefined : select(line))}
-              className={`flex items-center gap-2 border-b border-gray-200 px-4 py-1.5 ${selected ? 'bg-blue-50' : ''}`}
+              className={`flex items-center gap-2 border-b border-gray-200 pl-3 pr-4 py-1.5 ${selected ? 'bg-blue-50' : ''}`}
             >
+              <button
+                type="button"
+                aria-label="この行を消す"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  removeLine(line.key);
+                }}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-500 text-white"
+              >
+                <Minus size={12} />
+              </button>
               <input
                 className="min-w-0 flex-1 bg-transparent py-1.5 text-[15px] focus:outline-none"
                 value={line.name}
@@ -216,17 +234,16 @@ export default function ItemsScreen({
           ref={addButton}
           type="button"
           onClick={addLine}
-          className="flex w-full items-center border-b border-dashed border-gray-300 px-4 py-3.5 text-left hover:bg-gray-50"
+          aria-label="品目を追加する"
+          className="flex w-full items-center border-b border-dashed border-gray-300 pl-3 pr-4 py-2.5 text-left hover:bg-gray-50"
         >
-          <span className="flex-1 text-sm text-gray-400">品目を追加する</span>
-          <span className="text-[15px] font-semibold text-gray-300">¥0</span>
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white">
+            <Plus size={14} />
+          </span>
         </button>
         <div className="flex items-baseline gap-1.5 px-4 pt-2.5">
           {selectedLine !== null && (
             <>
-              <button type="button" onClick={removeSelected} className="text-xs font-semibold text-red-500">
-                選んだ行を消す
-              </button>
               {/* 金額を入れてから切り替える（0円の行には出さない）。 */}
               {selectedLine.unitPrice !== 0 && (
                 <button type="button" onClick={toggleSign} className="text-xs font-semibold text-blue-600">
@@ -245,7 +262,7 @@ export default function ItemsScreen({
       <Calculator onKey={pressKey} />
       <div className="shrink-0 px-4 pt-1 pb-4">
         <PrimaryButton
-          label={filled.length === 0 ? '金額を入れてください' : `この種類を保存（${filled.length}行 ${formatBalance(subtotal)}）`}
+          label={filled.length === 0 ? '金額を入れてください' : `このカテゴリを保存（${filled.length}行 ${formatBalance(subtotal)}）`}
           disabled={filled.length === 0}
           onClick={onSave}
         />

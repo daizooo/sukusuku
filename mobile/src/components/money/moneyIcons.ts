@@ -39,7 +39,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 
-// 種類のアイコンの絵（moneyUtils の MONEY_ICONS の key と対応）。PWA版の
+// カテゴリのアイコンの絵（moneyUtils の MONEY_ICONS の key と対応）。PWA版の
 // `src/components/sukusuku/money/moneyIcons.ts` と同じ割り当て。
 export const MONEY_ICON_COMPONENTS: Record<string, LucideIcon> = {
   home: House,

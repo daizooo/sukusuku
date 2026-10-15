@@ -295,7 +295,7 @@ export function UsageRing({ percent, size = 52 }: { percent: number | null; size
   );
 }
 
-/** 種類のアイコン（色つきの丸）。key は moneyUtils の MONEY_ICONS。 */
+/** カテゴリのアイコン（色つきの丸）。key は moneyUtils の MONEY_ICONS。 */
 export function CategoryIcon({ iconKey, size = 32 }: { iconKey: string; size?: number }) {
   const tone = iconTone(iconKey);
   const Icon = MONEY_ICON_COMPONENTS[tone.key] ?? MONEY_ICON_COMPONENTS.other;
@@ -367,26 +367,36 @@ export function ScreenHeader({
   onClose,
   icon = 'close',
   right,
+  closeAtEnd,
 }: {
   title: string;
   onClose: () => void;
   icon?: 'close' | 'back';
   right?: ReactNode;
+  /** 閉じる「×」を左でなく右端の小さな丸ボタンにする（記録の編集・品目。Zaim と同じ）。右の操作（ごみ箱など）はその左。 */
+  closeAtEnd?: boolean;
 }) {
   const Icon = icon === 'back' ? ArrowLeft : X;
   return (
     <View style={styles.header}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={icon === 'back' ? '戻る' : '閉じる'}
-        onPress={onClose}
-        hitSlop={10}
-      >
-        <Icon size={22} color={colors.textSubtle} />
-      </Pressable>
+      {!closeAtEnd && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={icon === 'back' ? '戻る' : '閉じる'}
+          onPress={onClose}
+          hitSlop={10}
+        >
+          <Icon size={22} color={colors.textSubtle} />
+        </Pressable>
+      )}
       <Text style={styles.headerTitle}>{title}</Text>
       <View style={styles.flex} />
       {right}
+      {closeAtEnd && (
+        <Pressable accessibilityRole="button" accessibilityLabel="閉じる" onPress={onClose} hitSlop={10} style={styles.closeSmall}>
+          <X size={14} color={colors.textMuted} />
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -481,6 +491,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
+  // 右端の小さな丸の閉じるボタン（見える大きさは28。押せる範囲は hitSlop で足す）。
+  closeSmall: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.neutralSurface },
   primary: { borderRadius: 14, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.moneySoft },
   primaryDisabled: { opacity: 0.5 },
   primaryText: { fontSize: 15, fontWeight: '700', color: colors.moneyText },

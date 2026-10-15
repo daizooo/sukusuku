@@ -37,7 +37,7 @@ import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader } from './moneyVi
 // （大分類は左の持ち手をつかむ、小分類は長押し。マウスでも指でも。リストと同じ操作。ui/useDragReorder.ts）。
 // 大分類のアイコンは絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。予算は大分類ごと・年ごとの月額で、
 // その年に入れていなければ前の年の額のまま（ここで直すと、その年の額になる）。
-// 種類がまだ無い家族には「標準の種類で始める」（Zaim のカテゴリをもとにした並び）。
+// カテゴリがまだ無い家族には「標準のカテゴリで始める」（Zaim のカテゴリをもとにした並び）。
 
 interface CategoryEditorProps {
   familyId: string;
@@ -227,9 +227,9 @@ export default function CategoryEditor({
         {categories.length === 0 && (
           <div className="space-y-3 py-4">
             <p className="text-sm leading-relaxed text-gray-500">
-              種類がまだありません。Zaim のカテゴリをもとにした標準の種類で始めて、名前や並びをあとで直せます。
+              カテゴリがまだありません。Zaim のカテゴリをもとにした標準のカテゴリで始めて、名前や並びをあとで直せます。
             </p>
-            <PrimaryButton label="標準の種類で始める" onClick={() => void seed()} disabled={busy} />
+            <PrimaryButton label="標準のカテゴリで始める" onClick={() => void seed()} disabled={busy} />
           </div>
         )}
         {drag.arrange(`tops-${kind}`, ordered).map((top) => {
@@ -368,7 +368,7 @@ function CategoryModal({
   const [name, setName] = useState(category?.name ?? '');
   const [amounts, setAmounts] = useState<string[]>(() => monthAmounts.map((value) => (value === null ? '' : String(value))));
   const [bulk, setBulk] = useState('');
-  // 自動は無し。決めていない種類は、今の名前から近いものを選んだ状態で始める。
+  // 自動は無し。決めていないカテゴリは、今の名前から近いものを選んだ状態で始める。
   const [icon, setIcon] = useState<string>(category ? (category.icon ?? guessIconKey(category.name)) : 'other');
   const [iconColor, setIconColor] = useState<string | null>(category?.iconColor ?? null);
   const [pickingColor, setPickingColor] = useState(false);
@@ -487,7 +487,7 @@ function CategoryModal({
           <div className="space-y-2">
             <span className={labelClass}>{formatYear(year)}の月ごとの予算（円）</span>
             <p className="text-[11px] text-gray-400">
-              月ごとに決められます。この種類にひもづく固定費は、その月の予算に自動で足されます（固定費の設定の「種類」）。空の月は、固定費だけです
+              月ごとに決められます。このカテゴリにひもづく固定費は、その月の予算に自動で足されます（固定費の設定の「カテゴリ」）。空の月は、固定費だけです
             </p>
             <div className="flex items-center gap-2">
               <input

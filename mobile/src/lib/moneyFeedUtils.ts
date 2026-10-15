@@ -124,7 +124,7 @@ export const feedRuleAction = (
   switch (rule.action) {
     case 'record': {
       const kind = rule.recordKind === 'income' ? '収入' : '支出';
-      const category = rule.categoryId ? names.category(rule.categoryId) : '種類なし';
+      const category = rule.categoryId ? names.category(rule.categoryId) : 'カテゴリなし';
       return `${kind}・${category}${rule.store !== '' ? `・${rule.store}` : ''}`;
     }
     case 'transfer':
@@ -177,7 +177,7 @@ export const cardMonthChecks = (records: readonly MoneyRecord[], cardFeed: Money
 };
 
 /**
- * お店でいちばん多く使った種類（品目の数で数える。同じ数なら新しい記録のもの）。カードの利用通知を記録にするときの初めの種類（§9.6）。
+ * お店でいちばん多く使ったカテゴリ（品目の数で数える。同じ数なら新しい記録のもの）。カードの利用通知を記録にするときの初めのカテゴリ（§9.6）。
  * そのお店の記録が無ければ null。
  */
 export const storeCategoryGuess = (

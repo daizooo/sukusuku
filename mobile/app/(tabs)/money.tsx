@@ -156,7 +156,7 @@ export default function MoneyScreen() {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [period, setPeriod] = useState<ReviewPeriod>('month');
   const [editing, setEditing] = useState<Editing>(null);
-  // 新しい記録を開くときの種類（ホーム画面のウィジェットの「収入」「振替」から来たとき。ふだんは支出）。
+  // 新しい記録を開くときのカテゴリ（ホーム画面のウィジェットの「収入」「振替」から来たとき。ふだんは支出）。
   const [newKind, setNewKind] = useState<MoneyRecordKind>('expense');
   // 記録の一覧の、日の見出しの「＋」から足すときの日。それ以外は null（今日）。
   const [newDate, setNewDate] = useState<string | null>(null);
