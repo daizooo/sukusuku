@@ -58,7 +58,7 @@ interface MoneyAccountsViewProps {
   onArchiveSecurity: (walletId: string, security: MoneySecurity) => void;
   /** 推移・証券口座の詳細を開いたときに、評価額の履歴を読ませる（一覧は最新の1行だけで出す）。 */
   onNeedSecurityHistory: () => void | Promise<void>;
-  /** Zaim から取り込んだ明細のうち、片づいていないものの数（docs/kakei.md §9.5.6.1）。0 なら出さない。 */
+  /** Gmail から取り込んだ明細のうち、片づいていないものの数（docs/kakei.md §9.5.6.1）。0 なら出さない。 */
   feedOpenCount: number;
   onOpenFeed: () => void;
 }
@@ -166,7 +166,7 @@ export default function MoneyAccountsView({
           >
             <Inbox size={18} />
             <span className="text-[15px] font-extrabold">未確認 {feedOpenCount}件</span>
-            <span className="flex-1 text-xs">Zaim から取り込んだ明細</span>
+            <span className="flex-1 text-xs">Gmail から取り込んだ明細</span>
             <ChevronRight size={16} />
           </button>
         )}

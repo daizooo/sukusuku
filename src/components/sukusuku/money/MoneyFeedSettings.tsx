@@ -143,7 +143,7 @@ export default function MoneyFeedSettings({
   if (!feed) {
     return (
       <StackedScreen onBack={onBack}>
-        <ScreenHeader title="Zaim 取り込み" icon="back" onClose={onBack} />
+        <ScreenHeader title="Gmail 取り込み" icon="back" onClose={onBack} />
         <p className="py-6 text-center text-sm text-gray-400">読み込み中...</p>
       </StackedScreen>
     );
@@ -227,10 +227,10 @@ export default function MoneyFeedSettings({
 
   return (
     <StackedScreen onBack={onBack}>
-      <ScreenHeader title="Zaim 取り込み" icon="back" onClose={onBack} />
+      <ScreenHeader title="Gmail 取り込み" icon="back" onClose={onBack} />
       <div className="flex-1 min-h-0 overflow-y-auto space-y-2 p-4 pb-10">
         <p className="text-[13px] leading-relaxed text-gray-500">
-          Zaim の入出金通知メールを Gmail の Apps Script が送り、口座の明細として取り込みます。振替・自動の記録・手入力と突き合わせ、
+          Gmail に届く通知メール（カードの利用通知・Zaim の入出金通知）を Apps Script が送り、明細として取り込みます。振替・自動の記録・手入力と突き合わせ、
           当たらないものは「口座」の面の「未確認」に残ります。
         </p>
 
@@ -247,7 +247,7 @@ export default function MoneyFeedSettings({
         </div>
 
         <p className={sectionTitleClass}>口座の対応</p>
-        <p className={subClass}>Zaim の口座名を、かぞく手帳の出金元に結びます。所持者で、同じ銀行の口座を分けます。</p>
+        <p className={subClass}>メールの口座名（カード名・銀行名）を、かぞく手帳の出金元に結びます。所持者で、同じ銀行の口座を分けます。</p>
         <div className={cardClass}>
           {accountRows.length === 0 && <p className="p-3.5 text-[13px] text-gray-400">まだ明細が届いていません</p>}
           {accountRows.map((row, index) => (
@@ -468,7 +468,7 @@ function AccountModal({
         <Field label="所持者（例: 本人・妻・子）">
           <input className={feedInputClass} value={holderName} onChange={(event) => setHolderName(event.target.value)} placeholder="本人" />
         </Field>
-        <Field label="所持者の Zaim のアカウント（通知の宛先）" hint="同じ銀行の口座が2つあるとき、宛先で分けます。">
+        <Field label="所持者の通知の宛先（メールアドレス）" hint="同じ銀行の口座が2つあるとき、宛先で分けます。">
           <input
             className={feedInputClass}
             type="email"
