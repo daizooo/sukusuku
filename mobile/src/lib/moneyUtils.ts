@@ -18,6 +18,7 @@ import type {
   ReceiptScanItem,
   MoneyItemDraft,
   MoneyHolidayRule,
+  MoneyMonth,
   MoneyRecord,
   MoneyRecordKind,
   MoneyRecurring,
@@ -676,6 +677,25 @@ export function sortRecordsDesc<T extends { occurredOn: string }>(records: reado
 
 export const recordsInMonth = (records: readonly MoneyRecord[], monthKey: string) =>
   records.filter((record) => monthKeyOf(record.occurredOn) === monthKey);
+
+/** その月（YYYY-MM）を締めたか（docs/kakei.md §4.5）。 */
+export const isMonthClosed = (months: readonly MoneyMonth[], monthKey: string): boolean =>
+  months.some((entry) => entry.month === monthKey && entry.closedAt !== null);
+
+/**
+ * 締めていない過ぎた月（古い順）。記録のある月（振替だけの月は数えない。年の数え方と同じ）のうち、今月より前で締めていないもの。
+ * 振り返りの上に「◯月が締まっていません」と出す（docs/kakei.md §4.5）。today は YYYY-MM-DD。
+ */
+export function unclosedMonths(records: readonly MoneyRecord[], months: readonly MoneyMonth[], today: string): string[] {
+  const current = today.slice(0, 7);
+  const recorded = new Set<string>();
+  for (const record of records) {
+    if (record.kind === 'transfer') continue;
+    const monthKey = monthKeyOf(record.occurredOn);
+    if (monthKey < current) recorded.add(monthKey);
+  }
+  return [...recorded].filter((monthKey) => !isMonthClosed(months, monthKey)).sort();
+}
 
 /** 日ごとにまとめる（新しい日から）。 */
 export function groupRecordsByDay(records: readonly MoneyRecord[]): { date: string; records: MoneyRecord[] }[] {

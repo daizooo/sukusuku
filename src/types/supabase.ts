@@ -1427,6 +1427,38 @@ export type Database = {
           },
         ]
       }
+      money_months: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          family_id: string
+          month: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          family_id: string
+          month: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          family_id?: string
+          month?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_months_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_receipt_scans: {
         Row: {
           created_at: string

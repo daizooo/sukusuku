@@ -5,6 +5,7 @@ import {
   rowToBalance,
   rowToBudget,
   rowToCategory,
+  rowToMonth,
   rowToRecord,
   rowToRecurring,
   rowToStore,
@@ -55,6 +56,7 @@ export async function loadMoneyBootstrap(
       records: rows<Parameters<typeof rowToRecord>[0]>('records').map(rowToRecord),
       recurring: rows<Tables<'money_recurring'>>('recurring').map(rowToRecurring),
       balances: rows<Tables<'money_wallet_balances'>>('balances').map(rowToBalance),
+      months: rows<Tables<'money_months'>>('months').map(rowToMonth),
     },
     securities: {
       securities: rows<Tables<'money_securities'>>('securities').map(rowToSecurity),

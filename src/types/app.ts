@@ -535,6 +535,14 @@ export type MoneyWalletDraft = Omit<MoneyWallet, 'id' | 'position' | 'archived'>
  * 確定した残高（通帳・銀行のアプリの残高）。money_wallet_balances に対応。
  * 出金元の残高 = 最後に確定した残高 + その後の記録（docs/kakei.md §9.3）。
  */
+/** 月の締め（振り返りの確定）。money_months に対応。docs/kakei.md §4.5。 */
+export interface MoneyMonth {
+  /** YYYY-MM。 */
+  month: string;
+  /** 締めた日時。null は締めていない（締めを外した）。 */
+  closedAt: string | null;
+}
+
 export interface MoneyWalletBalance {
   id: string;
   walletId: string;

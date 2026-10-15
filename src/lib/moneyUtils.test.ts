@@ -27,6 +27,8 @@ import {
   fixedBudgetFor,
   fixedBudgetRows,
   inRecurringPeriod,
+  isMonthClosed,
+  unclosedMonths,
   parsePeriodMonth,
   recurringEnded,
   recurringPeriodLabel,
@@ -262,6 +264,25 @@ assert.equal(fixedBudgetFor(withFixed, 'house', '2025-12'), 0, 'ルールを作�
   assert.equal(estimateRecurringAmount(later, '2026-11', history), 8500, '始まりより前の記録（8月まで）は使わない');
   assert.equal(estimateRecurringAmount(rule({ ...power, id: 'r3', startMonth: '2026-12' }), '2027-01', history), 8500, 'このルールが作った記録は使う');
   assert.equal(estimateRecurringAmount(rule({ ...power, id: 'r11', startMonth: '2026-12' }), '2027-01', history), 6000, '使える記録が無ければルールの額');
+}
+{
+  // 月の締め（docs/kakei.md §4.5）
+  const r = (occurredOn: string, kind: MoneyRecord['kind'] = 'expense') => ({ occurredOn, kind }) as unknown as MoneyRecord;
+  const closings = [
+    { month: '2026-09', closedAt: '2026-10-02T00:00:00Z' },
+    { month: '2026-08', closedAt: null }, // 締めを外した
+  ];
+  assert.equal(isMonthClosed(closings, '2026-09'), true);
+  assert.equal(isMonthClosed(closings, '2026-08'), false, '締めを外した月');
+  assert.deepEqual(
+    unclosedMonths(
+      [r('2026-07-03'), r('2026-08-10'), r('2026-09-01'), r('2026-06-05', 'transfer'), r('2026-10-01')],
+      closings,
+      '2026-10-15',
+    ),
+    ['2026-07', '2026-08'],
+    '記録のある過ぎた月のうち締めていないもの（振替だけの月・今月は数えない）',
+  );
 }
 assert.equal(parsePeriodMonth(''), null, '空は無期限');
 assert.equal(parsePeriodMonth('2027/9'), '2027-09');

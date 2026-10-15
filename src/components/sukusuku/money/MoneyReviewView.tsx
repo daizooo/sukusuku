@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import type { MoneyBudget, MoneyCategory, MoneyRecord, MoneyWallet } from '@/types/app';
+import type { MoneyBudget, MoneyCategory, MoneyFeedItem, MoneyMonth, MoneyRecord, MoneyWallet } from '@/types/app';
 import {
   buildBudgetTiles,
   buildMonthSummary,
@@ -15,9 +15,11 @@ import {
   formatYear,
   formatYen,
   iconKeyOf,
+  isMonthClosed,
   monthKeyOfDate,
   recordTotal,
   shiftMonth,
+  unclosedMonths,
   yearMonthKeys,
   yearToDateBalance,
   type BudgetTile,
@@ -37,6 +39,7 @@ import {
 } from './moneyVisual';
 import ReviewDetailScreen, { type ReviewDetail } from './ReviewDetailScreen';
 import YearFlowChart from './YearFlowChart';
+import MonthCloseScreen from './MonthCloseScreen';
 
 // 家計タブの「振り返り」（docs/kakei.md §4）。mobile版の `mobile/src/components/money/MoneyReviewView.tsx` と同じ並び・文言。
 //
@@ -50,6 +53,8 @@ import YearFlowChart from './YearFlowChart';
 // 内訳の行を押すと、簡単な分析と、その行に絞った記録の一覧が開く（ReviewDetailScreen。§4.4）。
 // 年は内訳の下に月ごとの収支（押すとその月へ）。
 // 見込みの額（毎月の記録で自動で作り、まだ確かめていない額）は実績に入れて数え、件数と額を添えて出す（§3.3・§4.1）。
+// 月の締め（§4.5）: 過ぎた月の結論の下に「この月を締める」（締めた月は「締めた月」）。押すと締めの画面（MonthCloseScreen）。
+// 締めていない過ぎた月があれば、いちばん上に「◯月が締まっていません」と出す（押すとその月の締めの画面）。
 
 interface MoneyReviewViewProps {
   period: ReviewPeriod;
@@ -67,6 +72,13 @@ interface MoneyReviewViewProps {
   onEditCategories: () => void;
   /** 内訳の詳細の中で記録を押したとき。詳細を閉じて、記録の詳細を開く。 */
   onOpenRecord: (record: MoneyRecord) => void;
+  /** 月の締め（docs/kakei.md §4.5）。 */
+  months: MoneyMonth[];
+  /** 未確認の明細（締めの画面に、その月の件数を出す）。 */
+  feedItems: MoneyFeedItem[];
+  onConfirmEstimate: (record: MoneyRecord) => Promise<void>;
+  onSetMonthClosed: (monthKey: string, closed: boolean) => void;
+  onOpenFeed: () => void;
 }
 
 export default function MoneyReviewView({
@@ -83,10 +95,24 @@ export default function MoneyReviewView({
   onSelectMonth,
   onEditCategories,
   onOpenRecord,
+  months: closings,
+  feedItems,
+  onConfirmEstimate,
+  onSetMonthClosed,
+  onOpenFeed,
 }: MoneyReviewViewProps) {
   const isMonth = period === 'month';
   const today = monthKeyOfDate(new Date());
   const [detail, setDetail] = useState<ReviewDetail | null>(null);
+  // 締めの画面を開いている月。
+  const [closing, setClosing] = useState<string | null>(null);
+  const unclosed = useMemo(() => unclosedMonths(records, closings, today), [records, closings, today]);
+  const monthClosed = isMonthClosed(closings, monthKey);
+  const openClosing = (target: string) => {
+    if (isMonth) onMonth(target);
+    else onSelectMonth(target);
+    setClosing(target);
+  };
 
   const month = useMemo(
     () => buildMonthSummary(records, categories, budgets, monthKey),
@@ -144,6 +170,18 @@ export default function MoneyReviewView({
       />
       {/* 右下の「＋」に一覧の最後が隠れないよう、下を空ける。 */}
       <div className="flex-1 min-h-0 overflow-y-auto pb-24">
+        {unclosed.length > 0 && (
+          <button
+            type="button"
+            onClick={() => openClosing(unclosed[0])}
+            className="mb-2 flex w-full items-center gap-2 rounded-xl bg-amber-100 px-3 py-2.5 text-left hover:bg-amber-200"
+          >
+            <span className="flex-1 text-[13px] font-semibold text-amber-800">
+              {`${Number(unclosed[0].slice(5, 7))}月が締まっていません${unclosed.length > 1 ? `（ほか${unclosed.length - 1}か月）` : ''}。収支を確かめて締めましょう`}
+            </span>
+            <ChevronRight size={16} className="text-amber-800" />
+          </button>
+        )}
         <Hero
           compact
           label={isMonth ? '収支' : '収支（年）'}
@@ -186,6 +224,18 @@ export default function MoneyReviewView({
                 見込みの額 {estimates.count}件（{formatYen(estimates.amount)}）を含みます。額を確かめて直すと確定します
               </span>
             </div>
+          )}
+          {isMonth && (monthClosed || monthKey < today) && (
+            <button
+              type="button"
+              onClick={() => setClosing(monthKey)}
+              className="mt-2 flex w-full items-center gap-2 border-t border-gray-200 pt-2 text-left"
+            >
+              <span className={`flex-1 text-sm ${monthClosed ? 'font-semibold text-gray-500' : 'font-bold text-blue-600'}`}>
+                {monthClosed ? '締めた月' : 'この月を締める'}
+              </span>
+              <ChevronRight size={16} className="text-gray-400" />
+            </button>
           )}
         </Hero>
 
@@ -272,6 +322,7 @@ export default function MoneyReviewView({
                         )}
                       </span>
                       {estimatesInMonth(records, row.monthKey).length > 0 && <EstimateBadge />}
+                      {isMonthClosed(closings, row.monthKey) && <span className="text-[11px] font-bold text-gray-400">締め</span>}
                       {row.recorded && (
                         <span
                           className={`text-[17px] font-extrabold tabular-nums ${row.balance > 0 ? incomeAmountClass : 'text-gray-900'}`}
@@ -288,6 +339,33 @@ export default function MoneyReviewView({
           </>
         )}
       </div>
+
+      {closing !== null && (
+        <MonthCloseScreen
+          monthKey={closing}
+          records={records}
+          categories={categories}
+          budgets={budgets}
+          feedCount={feedItems.filter((item) => item.occurredOn !== null && item.occurredOn.startsWith(`${closing}-`)).length}
+          closed={isMonthClosed(closings, closing)}
+          closedAt={closings.find((entry) => entry.month === closing)?.closedAt ?? null}
+          onConfirmEstimate={onConfirmEstimate}
+          onOpenRecord={(record) => {
+            setClosing(null);
+            onOpenRecord(record);
+          }}
+          onOpenFeed={() => {
+            setClosing(null);
+            onOpenFeed();
+          }}
+          onCloseMonth={() => {
+            onSetMonthClosed(closing, true);
+            setClosing(null);
+          }}
+          onReopenMonth={() => onSetMonthClosed(closing, false)}
+          onClose={() => setClosing(null)}
+        />
+      )}
 
       {detail !== null && (
         <ReviewDetailScreen

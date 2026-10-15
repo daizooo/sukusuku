@@ -5,6 +5,7 @@ import type {
   MoneyCategory,
   MoneyCategoryKind,
   MoneyItem,
+  MoneyMonth,
   MoneyRecord,
   MoneyRecordDraft,
   MoneyRecurring,
@@ -174,10 +175,12 @@ export interface MoneyData {
   records: MoneyRecord[];
   recurring: MoneyRecurring[];
   balances: MoneyWalletBalance[];
+  /** 月の締め（docs/kakei.md §4.5）。 */
+  months: MoneyMonth[];
 }
 
 export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise<MoneyData> {
-  const [categoryResult, budgetResult, walletResult, storeResult, recurringResult, balanceResult, records] =
+  const [categoryResult, budgetResult, walletResult, storeResult, recurringResult, balanceResult, monthResult, records] =
     await Promise.all([
       supabase.from('money_categories').select('*').eq('family_id', familyId),
       supabase.from('money_budgets').select('*').eq('family_id', familyId),
@@ -185,6 +188,7 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
       supabase.from('money_stores').select('*').eq('family_id', familyId).order('position', { ascending: true }).order('name', { ascending: true }),
       supabase.from('money_recurring').select('*').eq('family_id', familyId).order('position', { ascending: true }),
       supabase.from('money_wallet_balances').select('*').eq('family_id', familyId),
+      supabase.from('money_months').select('*').eq('family_id', familyId),
       loadRecords(supabase, familyId),
     ]);
   if (categoryResult.error) throw categoryResult.error;
@@ -193,6 +197,7 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
   if (storeResult.error) throw storeResult.error;
   if (recurringResult.error) throw recurringResult.error;
   if (balanceResult.error) throw balanceResult.error;
+  if (monthResult.error) throw monthResult.error;
   return {
     categories: (categoryResult.data ?? []).map(rowToCategory),
     budgets: (budgetResult.data ?? []).map(rowToBudget),
@@ -201,7 +206,40 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
     records,
     recurring: (recurringResult.data ?? []).map(rowToRecurring),
     balances: (balanceResult.data ?? []).map(rowToBalance),
+    months: (monthResult.data ?? []).map(rowToMonth),
   };
+}
+
+// ---- 月の締め（docs/kakei.md §4.5） ----
+
+export const rowToMonth = (row: Tables<'money_months'>): MoneyMonth => ({
+  month: row.month.slice(0, 7),
+  closedAt: row.closed_at,
+});
+
+/** その月（YYYY-MM）を締める／締めを外す。締めを外しても行は残し、closed_at を空にする。 */
+export async function setMoneyMonthClosed(
+  supabase: SupabaseDb,
+  familyId: string,
+  month: string,
+  closed: boolean,
+): Promise<MoneyMonth> {
+  const { data, error } = await supabase
+    .from('money_months')
+    .upsert(
+      { family_id: familyId, month: `${month}-01`, closed_at: closed ? new Date().toISOString() : null },
+      { onConflict: 'family_id,month' },
+    )
+    .select('*')
+    .single();
+  if (error) throw error;
+  return rowToMonth(data);
+}
+
+/** 見込みの記録を、今の額のまま確定する（締めの画面の「確定」。記録の詳細の「この額で確定する」と同じ結果）。 */
+export async function confirmMoneyEstimate(supabase: SupabaseDb, recordId: string): Promise<void> {
+  const { error } = await supabase.from('money_records').update({ is_estimate: false }).eq('id', recordId);
+  if (error) throw error;
 }
 
 // ---- 記録 ----
