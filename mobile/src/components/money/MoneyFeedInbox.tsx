@@ -15,6 +15,7 @@ import {
   feedLinkCandidates,
   feedStatusLabel,
   sortFeedInbox,
+  storeCategoryGuess,
 } from '@/lib/moneyFeedUtils';
 import SheetModal from '@/components/ui/SheetModal';
 import LogModalShell from '@/components/log/LogModalShell';
@@ -142,8 +143,11 @@ function FeedItemSheet({
   const [fillAmount, setFillAmount] = useState('');
   const [walletId, setWalletId] = useState<string | null>(null);
   const [remember, setRemember] = useState(true);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [store, setStore] = useState('');
+  // カードの利用通知は、利用先に当てたお店と、そのお店でいちばん多い種類を初めから入れておく（§9.6）
+  const [categoryId, setCategoryId] = useState<string | null>(() =>
+    item.storeHint ? storeCategoryGuess(records, item.storeHint, item.direction === 'in' ? 'income' : 'expense') : null,
+  );
+  const [store, setStore] = useState(item.storeHint ?? '');
   const [toWalletId, setToWalletId] = useState<string | null>(null);
   const [linkId, setLinkId] = useState<string | null>(null);
   const [learn, setLearn] = useState(true);
@@ -372,7 +376,10 @@ function FeedItemSheet({
                 <ChevronRight size={18} color={colors.textFaint} />
               </Pressable>
             </Field>
-            <Field label="お店（任意）">
+            <Field
+              label="お店（任意）"
+              hint={item.storeHint ? `利用先「${item.description}」から当てました。違えば直してください。` : undefined}
+            >
               <TextInput
                 style={styles.input}
                 value={store}

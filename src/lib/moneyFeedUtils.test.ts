@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 
 import type { MoneyFeedItem, MoneyRecord } from '../types/app.ts';
-import { feedDuplicates, feedLinkCandidates, sortFeedInbox } from './moneyFeedUtils.ts';
+import { feedDuplicates, feedLinkCandidates, sortFeedInbox, storeCategoryGuess } from './moneyFeedUtils.ts';
 
 const record = (id: string, patch: Partial<MoneyRecord>, amount: number): MoneyRecord =>
   ({
@@ -69,6 +69,8 @@ const item = (patch: Partial<MoneyFeedItem>): MoneyFeedItem => ({
   pairId: null,
   recordId: null,
   candidateRecordIds: [],
+  source: 'zaim_mail',
+  storeHint: null,
   ...patch,
 });
 
@@ -86,5 +88,24 @@ assert.deepEqual(
   ]).map((entry) => entry.id),
   ['c', 'w', 'p', 'u'],
 );
+
+// お店でいちばん多く使った種類（カードの利用通知を記録にするときの初めの種類。§9.6）
+{
+  const at = (id: string, occurredOn: string, store: string, categoryIds: (string | null)[], kind: MoneyRecord['kind'] = 'expense') =>
+    ({ ...record(id, { occurredOn, store, kind }, 0), items: categoryIds.map((categoryId, index) => ({ id: `${id}-${index}`, amount: 100, categoryId })) }) as unknown as MoneyRecord;
+  const rs = [
+    at('s1', '2026-09-01', 'よかもんね', ['food']),
+    at('s2', '2026-09-10', 'よかもんね', ['food', 'daily']),
+    at('s3', '2026-10-01', 'よかもんね ', ['daily']),
+    at('s4', '2026-10-02', 'しまむら', ['clothes']),
+    at('s5', '2026-10-03', 'よかもんね', ['refund'], 'income'),
+    at('s6', '2026-10-04', 'よかもんね', [null]),
+  ];
+  assert.equal(storeCategoryGuess(rs, 'よかもんね', 'expense'), 'daily', '同じ数（2回ずつ）なら新しい記録の種類');
+  assert.equal(storeCategoryGuess([...rs, at('s7', '2026-08-01', 'よかもんね', ['food'])], 'よかもんね', 'expense'), 'food', 'いちばん多い種類');
+  assert.equal(storeCategoryGuess(rs, 'よかもんね', 'income'), 'refund', '収入は収入の記録から');
+  assert.equal(storeCategoryGuess(rs, 'ゆめタウン', 'expense'), null, '記録の無いお店');
+  assert.equal(storeCategoryGuess(rs, '', 'expense'), null);
+}
 
 console.log('moneyFeedUtils: ok');

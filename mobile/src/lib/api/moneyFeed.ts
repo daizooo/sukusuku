@@ -27,6 +27,8 @@ type FeedRow = Pick<
   | 'pair_id'
   | 'record_id'
   | 'candidate_record_ids'
+  | 'source'
+  | 'store_hint'
 >;
 type RuleRow = Tables<'money_feed_rules'>;
 
@@ -34,7 +36,7 @@ type RuleRow = Tables<'money_feed_rules'>;
 // 明細を入れるのはサーバー（Edge Function money-feed-ingest）。アプリは読む・片づける（money_feed_resolve）・設定を直す。
 
 const FEED_COLUMNS =
-  'id, received_at, to_email, subject, direction, occurred_on, amount, account_name, description, wallet_id, status, pair_id, record_id, candidate_record_ids';
+  'id, received_at, to_email, subject, direction, occurred_on, amount, account_name, description, wallet_id, status, pair_id, record_id, candidate_record_ids, source, store_hint';
 
 /** 片づいていない明細（未確認・確認・読めない）。 */
 export const OPEN_FEED_STATUSES = ['pending', 'confirm', 'unreadable'] as const;
@@ -56,6 +58,8 @@ const rowToFeed = (row: FeedRow): MoneyFeedItem => ({
   pairId: row.pair_id,
   recordId: row.record_id,
   candidateRecordIds: row.candidate_record_ids ?? [],
+  source: row.source === 'card_mail' ? 'card_mail' : 'zaim_mail',
+  storeHint: row.store_hint,
 });
 
 const rowToRule = (row: RuleRow): MoneyFeedRule => ({

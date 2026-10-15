@@ -6,7 +6,14 @@ import type { MoneyBudget, MoneyCategory, MoneyFeedItem, MoneyRecord, MoneyWalle
 import type { MoneyFeedFill, MoneyFeedResolve } from '@/lib/api/moneyFeed';
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
 import { formatYen, monthKeyOfDate, recordTotal } from '@/lib/moneyUtils';
-import { feedAmountLabel, feedDayLabel, feedLinkCandidates, feedStatusLabel, sortFeedInbox } from '@/lib/moneyFeedUtils';
+import {
+  feedAmountLabel,
+  feedDayLabel,
+  feedLinkCandidates,
+  feedStatusLabel,
+  sortFeedInbox,
+  storeCategoryGuess,
+} from '@/lib/moneyFeedUtils';
 import { ModalShell } from '../modals/TaskForm';
 import CategoryPicker from './CategoryPicker';
 import { FullScreen, PrimaryButton, ScreenHeader, incomeAmountClass } from './moneyVisual';
@@ -141,8 +148,11 @@ function FeedItemModal({
   const [fillAmount, setFillAmount] = useState('');
   const [walletId, setWalletId] = useState<string | null>(null);
   const [remember, setRemember] = useState(true);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [store, setStore] = useState('');
+  // カードの利用通知は、利用先に当てたお店と、そのお店でいちばん多い種類を初めから入れておく（§9.6）
+  const [categoryId, setCategoryId] = useState<string | null>(() =>
+    item.storeHint ? storeCategoryGuess(records, item.storeHint, item.direction === 'in' ? 'income' : 'expense') : null,
+  );
+  const [store, setStore] = useState(item.storeHint ?? '');
   const [toWalletId, setToWalletId] = useState<string | null>(null);
   const [linkId, setLinkId] = useState<string | null>(null);
   const [learn, setLearn] = useState(true);
@@ -361,7 +371,10 @@ function FeedItemModal({
                   <ChevronRight size={18} className="text-gray-400" />
                 </button>
               </Field>
-              <Field label="お店（任意）">
+              <Field
+                label="お店（任意）"
+                hint={item.storeHint ? `利用先「${item.description}」から当てました。違えば直してください。` : undefined}
+              >
                 <input className={feedInputClass} value={store} onChange={(event) => setStore(event.target.value)} placeholder="例: 水道局" />
               </Field>
             </>

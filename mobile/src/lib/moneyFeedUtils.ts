@@ -137,3 +137,34 @@ export const feedRuleAction = (
       return '記録しない';
   }
 };
+
+/**
+ * お店でいちばん多く使った種類（品目の数で数える。同じ数なら新しい記録のもの）。カードの利用通知を記録にするときの初めの種類（§9.6）。
+ * そのお店の記録が無ければ null。
+ */
+export const storeCategoryGuess = (
+  records: readonly MoneyRecord[],
+  store: string,
+  kind: 'expense' | 'income',
+): string | null => {
+  const name = store.trim();
+  if (name === '') return null;
+  const counts = new Map<string, { count: number; latest: string }>();
+  for (const record of records) {
+    if (record.kind !== kind || record.store.trim() !== name) continue;
+    for (const item of record.items) {
+      if (item.categoryId === null) continue;
+      const entry = counts.get(item.categoryId) ?? { count: 0, latest: '' };
+      entry.count += 1;
+      if (record.occurredOn > entry.latest) entry.latest = record.occurredOn;
+      counts.set(item.categoryId, entry);
+    }
+  }
+  let best: { id: string; count: number; latest: string } | null = null;
+  for (const [id, entry] of counts) {
+    if (best === null || entry.count > best.count || (entry.count === best.count && entry.latest > best.latest)) {
+      best = { id, ...entry };
+    }
+  }
+  return best?.id ?? null;
+};
