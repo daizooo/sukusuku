@@ -1,6 +1,6 @@
 'use client';
 
-import { Scale } from 'lucide-react';
+import { ClipboardList, Plus, Scale } from 'lucide-react';
 import type { MoneyCategory, MoneyRecord, MoneyWallet } from '@/types/app';
 import { WEEKDAY_LABELS } from '@/lib/dateUtils';
 import {
@@ -14,15 +14,17 @@ import {
   topCategoryIdOf,
   type BalanceCheck,
 } from '@/lib/moneyUtils';
-import { CategoryIcon, EstimateBadge, NextPeriodBadge, TransferIcon, WalletTypeIcon, cardClass, incomeAmountClass } from './moneyVisual';
+import { CategoryIcon, EstimateBadge, NextPeriodBadge, TransferIcon, WalletTypeIcon, incomeAmountClass } from './moneyVisual';
 
 // 記録を日ごと（新しい日から）に並べる一覧（docs/kakei.md §2.1）。家計タブの「記録」と、口座の詳細の「履歴」で同じものを使う。
 // mobile版の `mobile/src/components/money/RecordDayList.tsx` と同じ並び・文言。
-// 1行＝1件の記録。Zaim の履歴と同じく、1行目は「小分類 @ お店」（大分類はアイコンで分かる）、2行目は品名の要約
-// （「牛乳、卵ほか」）、金額の右に出金元の種類のアイコン。振替は回る矢印のアイコンで、出金元 → 入金先。
-// 毎月の記録・カード代金で自動で作り、まだ額を確かめていないものは金額の左に「見込み」（§3.3）。
-// 口座の履歴では、残高の補正（corrections）も同じ日の先頭に1行で混ぜる（その日の終わりの残高なので）。押すと取り消しの確認。
-// 補正の行は、総額が画面の上にあるので「差」だけを出す（はじめの残高だけは差が無いので、その額）。
+// Zaim の履歴と同じ作り（2026-10-15）。左に日付（土曜は青・日曜は赤）と縦の時間軸、右に1件1枚のカード。
+// 日の見出しは「支出 その日の合計」と、その日に記録を足す「＋」（onAddOnDate があるときだけ）。
+// カードは、金額を一番大きく左上に、出金元の種類のアイコンを右上に。次に「小分類 @ お店」（大分類は時間軸の丸のアイコンで分かる）、
+// 最後にメモのアイコンをつけた品名の要約（「牛乳、卵ほか」）。振替は回る矢印の丸で、「振替 出金元 → 入金先」。
+// 毎月の記録・カード代金で自動で作り、まだ額を確かめていないものは金額の右に「見込み」（§3.3）。
+// 口座の履歴では、残高の補正（corrections）も同じ日の先頭に1件のカードで混ぜる（その日の終わりの残高なので）。押すと取り消しの確認。
+// 補正のカードは、総額が画面の上にあるので「差」だけを出す（はじめの残高だけは差が無いので、その額）。
 // スクロールは持たない（親のスクロールの中に置く）。
 
 interface RecordDayListProps {
@@ -33,6 +35,8 @@ interface RecordDayListProps {
   /** 口座の履歴に混ぜる、残高の補正。 */
   corrections?: BalanceCheck[];
   onOpenCorrection?: (check: BalanceCheck) => void;
+  /** 日の見出しの「＋」を押したとき、その日（YYYY-MM-DD）で記録を足す。無ければ「＋」は出さない。 */
+  onAddOnDate?: (date: string) => void;
 }
 
 const dayLabel = (dateKey: string) => {
@@ -40,9 +44,25 @@ const dayLabel = (dateKey: string) => {
   return `${month}月${day}日（${WEEKDAY_LABELS[new Date(year, month - 1, day).getDay()]}）`;
 };
 
-// 名前は太く濃く、金額は大きく極太（収入は緑・支出は黒。符号はつけない）。mobile版の RecordDayList の styles と同じ。
-const rowTitle = 'text-sm font-bold text-gray-900';
-const amount = 'text-[17px] font-extrabold text-gray-900 tabular-nums';
+/** 左の日付の列の2行（10/15 と (木)）と、曜日の色（土＝青・日＝赤）。mobile版の dateParts と同じ。 */
+const dateParts = (dateKey: string) => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const weekday = new Date(year, month - 1, day).getDay();
+  return {
+    main: `${month}/${day}`,
+    week: `(${WEEKDAY_LABELS[weekday]})`,
+    color: weekday === 0 ? 'text-red-500' : weekday === 6 ? 'text-blue-500' : null,
+  };
+};
+
+// 日の見出しも、カードも、「日付の列 | 時間軸 | 右の中身」の3列の行。時間軸の線は、行ごとに上から下まで引いてつなぐ。
+const rowClass = 'flex items-start';
+const axisClass = 'relative flex w-10 shrink-0 self-stretch justify-center';
+const lineClass = 'absolute inset-y-0 w-0.5 bg-gray-300';
+// 金額は大きく極太（収入は緑・支出は黒。符号はつけない）。「小分類 @ お店」は中くらい、メモは濃いめ。mobile版の styles と同じ。
+const amountClass = 'text-[21px] font-extrabold tabular-nums text-gray-900';
+const cardClass =
+  'ml-1.5 mb-2 min-w-0 flex-1 rounded-[14px] border border-gray-200 bg-white px-3 pt-2 pb-2.5 text-left hover:bg-gray-50';
 
 export default function RecordDayList({
   records,
@@ -51,6 +71,7 @@ export default function RecordDayList({
   onOpen,
   corrections = [],
   onOpenCorrection,
+  onAddOnDate,
 }: RecordDayListProps) {
   // 記録のある日と補正のある日を合わせて、新しい日から。
   const recordDays = groupRecordsByDay(records);
@@ -69,8 +90,8 @@ export default function RecordDayList({
     if (record.kind === 'transfer') {
       return {
         icon: null,
-        title: '振替',
-        sub: `${walletName(record.walletId) || '?'} → ${walletName(record.toWalletId) || '?'}`,
+        title: `振替　${walletName(record.walletId) || '?'} → ${walletName(record.toWalletId) || '?'}`,
+        sub: '',
       };
     }
     const groups = groupItems(record.items);
@@ -88,7 +109,7 @@ export default function RecordDayList({
     };
   };
 
-  /** 金額の右に出す出金元のアイコン（振替は出金元と入金先）。 */
+  /** カードの右上に出す出金元のアイコン（振替は出金元と入金先）。 */
   const walletIcons = (record: MoneyRecord) =>
     (record.kind === 'transfer' ? [record.walletId, record.toWalletId] : [record.walletId])
       .map(walletOf)
@@ -101,71 +122,102 @@ export default function RecordDayList({
           .filter((record) => record.kind === 'expense')
           .flatMap((record) => record.items)
           .reduce((sum, item) => sum + item.amount, 0);
+        const date = dateParts(day.date);
+        const dateColor = date.color ?? 'text-gray-900';
         return (
-          <section key={day.date} className="mt-2.5">
-            <div className="flex items-baseline justify-between px-1 pb-1">
-              <h4 className="text-xs font-bold text-gray-700">{dayLabel(day.date)}</h4>
-              {spent > 0 && <span className="text-xs font-bold tabular-nums text-gray-500">{formatYen(spent)}</span>}
-            </div>
-            <div className={`${cardClass} overflow-hidden`}>
-              {day.corrections.map((check, index) => (
-                <button
-                  key={check.balance.id}
-                  type="button"
-                  aria-label="残高の補正"
-                  onClick={() => onOpenCorrection?.(check)}
-                  className={`flex w-full items-center gap-2.5 px-3 py-[7px] text-left hover:bg-gray-50 ${
-                    index > 0 ? 'border-t border-gray-200' : ''
-                  }`}
-                >
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#5b7a99] text-white">
-                    <Scale size={14} />
-                  </span>
-                  <span className={`min-w-0 flex-1 truncate ${rowTitle}`}>{check.diff === null ? 'はじめの残高' : '残高を補正'}</span>
-                  <span className={check.diff !== null && check.diff > 0 ? amount.replace('text-gray-900', incomeAmountClass) : amount}>
-                    {formatBalance(check.diff === null ? check.balance.amount : check.diff)}
-                  </span>
-                </button>
-              ))}
-              {day.records.map((record, indexInDay) => {
-                const index = day.corrections.length + indexInDay;
-                const { icon, title, sub } = describe(record);
-                return (
+          <section key={day.date} className="mt-1">
+            <div className={rowClass}>
+              <div className="w-[42px] shrink-0 pt-1.5">
+                <p className={`text-xs font-extrabold tabular-nums ${dateColor}`}>{date.main}</p>
+                <p className={`text-[11px] font-bold ${date.color ?? 'text-gray-500'}`}>{date.week}</p>
+              </div>
+              <div className={axisClass}>
+                <span className={lineClass} />
+                <span className="relative mt-3 h-3.5 w-3.5 rounded-full bg-gray-300" />
+              </div>
+              <div className="ml-1.5 flex min-h-[38px] min-w-0 flex-1 items-center justify-between">
+                <h4 className="text-[13px] font-bold text-gray-500">
+                  支出　<span className="tabular-nums">{formatYen(spent)}</span>
+                </h4>
+                {onAddOnDate && (
                   <button
-                    key={record.id}
                     type="button"
-                    onClick={() => onOpen(record)}
-                    className={`flex w-full items-center gap-2.5 px-3 py-[7px] text-left hover:bg-gray-50 ${
-                      index > 0 ? 'border-t border-gray-200' : ''
+                    aria-label={`${dayLabel(day.date)}に記録を追加`}
+                    onClick={() => onAddOnDate(day.date)}
+                    className="flex h-7 w-7 items-center justify-center text-gray-700"
+                  >
+                    <Plus size={20} />
+                  </button>
+                )}
+              </div>
+            </div>
+            {day.corrections.map((check) => (
+              <div key={check.balance.id} className={rowClass}>
+                <div className="w-[42px] shrink-0" />
+                <div className={axisClass}>
+                  <span className={lineClass} />
+                  <span className="relative mt-2.5 flex h-9 w-9 items-center justify-center rounded-full bg-[#5b7a99] text-white">
+                    <Scale size={18} />
+                  </span>
+                </div>
+                <button type="button" aria-label="残高の補正" onClick={() => onOpenCorrection?.(check)} className={cardClass}>
+                  <span
+                    className={`block ${
+                      check.diff !== null && check.diff > 0 ? amountClass.replace('text-gray-900', incomeAmountClass) : amountClass
                     }`}
                   >
-                    {icon === null ? <TransferIcon size={28} /> : <CategoryIcon iconKey={icon} size={28} />}
-                    <span className="min-w-0 flex-1">
-                      <span className={`block truncate ${rowTitle}`}>{title}</span>
-                      {sub !== '' && <span className="block truncate text-[11px] font-medium text-gray-500">{sub}</span>}
+                    {formatBalance(check.diff === null ? check.balance.amount : check.diff)}
+                  </span>
+                  <span className="mt-px block truncate text-[13px] font-semibold text-gray-700">
+                    {check.diff === null ? 'はじめの残高' : '残高を補正'}
+                  </span>
+                </button>
+              </div>
+            ))}
+            {day.records.map((record) => {
+              const { icon, title, sub } = describe(record);
+              return (
+                <div key={record.id} className={rowClass}>
+                  <div className="w-[42px] shrink-0" />
+                  <div className={axisClass}>
+                    <span className={lineClass} />
+                    <span className="relative mt-2.5">
+                      {icon === null ? <TransferIcon size={36} /> : <CategoryIcon iconKey={icon} size={36} />}
                     </span>
-                    {record.isEstimate && <EstimateBadge />}
-                    {record.cardNextPeriod && <NextPeriodBadge />}
-                    <span
-                      className={
-                        record.kind === 'transfer'
-                          ? amount.replace('text-gray-900', 'text-gray-500')
-                          : record.kind === 'income'
-                            ? amount.replace('text-gray-900', incomeAmountClass)
-                            : amount
-                      }
-                    >
-                      {formatYen(recordTotal(record))}
+                  </div>
+                  <button type="button" onClick={() => onOpen(record)} className={cardClass}>
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className={
+                          record.kind === 'transfer'
+                            ? amountClass.replace('text-gray-900', 'text-gray-500')
+                            : record.kind === 'income'
+                              ? amountClass.replace('text-gray-900', incomeAmountClass)
+                              : amountClass
+                        }
+                      >
+                        {formatYen(recordTotal(record))}
+                      </span>
+                      {record.isEstimate && <EstimateBadge />}
+                      {record.cardNextPeriod && <NextPeriodBadge />}
+                      <span className="flex-1" />
+                      <span className="flex min-w-[16px] gap-1">
+                        {walletIcons(record).map((wallet, iconIndex) => (
+                          <WalletTypeIcon key={`${wallet.id}-${iconIndex}`} type={wallet.type} size={16} color={wallet.iconColor} />
+                        ))}
+                      </span>
                     </span>
-                    <span className="flex min-w-[15px] gap-0.5">
-                      {walletIcons(record).map((wallet, iconIndex) => (
-                        <WalletTypeIcon key={`${wallet.id}-${iconIndex}`} type={wallet.type} color={wallet.iconColor} />
-                      ))}
-                    </span>
+                    <span className="mt-px block truncate text-[13px] font-semibold text-gray-700">{title}</span>
+                    {sub !== '' && (
+                      <span className="mt-[5px] flex items-center gap-1.5 text-[13px] font-bold text-gray-700">
+                        <ClipboardList size={14} className="shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{sub}</span>
+                      </span>
+                    )}
                   </button>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
           </section>
         );
       })}

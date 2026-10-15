@@ -19,6 +19,8 @@ interface MoneyRecordsViewProps {
   wallets: MoneyWallet[];
   isLoading: boolean;
   onOpen: (record: MoneyRecord) => void;
+  /** 日の見出しの「＋」。その日（YYYY-MM-DD）で記録を足す。 */
+  onAddOnDate: (date: string) => void;
 }
 
 export default function MoneyRecordsView({
@@ -29,6 +31,7 @@ export default function MoneyRecordsView({
   wallets,
   isLoading,
   onOpen,
+  onAddOnDate,
 }: MoneyRecordsViewProps) {
   const inMonth = useMemo(() => recordsInMonth(records, monthKey), [records, monthKey]);
 
@@ -41,7 +44,7 @@ export default function MoneyRecordsView({
         ) : inMonth.length === 0 ? (
           <Text style={styles.message}>この月の記録はまだありません。右下の「＋」で記録します</Text>
         ) : (
-          <RecordDayList records={inMonth} categories={categories} wallets={wallets} onOpen={onOpen} />
+          <RecordDayList records={inMonth} categories={categories} wallets={wallets} onOpen={onOpen} onAddOnDate={onAddOnDate} />
         )}
       </ScrollView>
     </View>

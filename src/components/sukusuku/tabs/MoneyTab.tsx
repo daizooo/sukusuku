@@ -148,6 +148,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [period, setPeriod] = useState<ReviewPeriod>('month');
   const [editing, setEditing] = useState<Editing>(null);
+  // 記録の一覧の、日の見出しの「＋」から足すときの日。それ以外は null（今日）。
+  const [newDate, setNewDate] = useState<string | null>(null);
   // レシートの読み取りの結果（記録の入力に入れて開く）と、読み取り中か（docs/kakei.md §10）。
   const [receipt, setReceipt] = useState<ReceiptScan | null>(null);
   // レシートを当てている既にある記録（§10.8）。null は新しい記録の読み取り。
@@ -390,6 +392,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       if (!target) {
         setReceiptFor(null);
         setReceipt(scan);
+        setNewDate(null);
         setEditing('new');
         return;
       }
@@ -562,6 +565,11 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               wallets={wallets}
               isLoading={isLoading}
               onOpen={setEditing}
+              onAddOnDate={(date) => {
+                setReceipt(null);
+                setNewDate(date);
+                setEditing('new');
+              }}
             />
           ) : view === 'review' ? (
             <MoneyReviewView
@@ -615,7 +623,10 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
 
       {/* 右下の1つの大きなボタン。押すと「記録を追加」「レシートを読む」「家計の設定」が開く（2026-10-10）。 */}
       <MoneyFab
-        onAdd={() => setEditing('new')}
+        onAdd={() => {
+          setNewDate(null);
+          setEditing('new');
+        }}
         onScan={() => {
           receiptTarget.current = null;
           receiptInput.current?.click();
@@ -642,9 +653,10 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
 
       {editing !== null && (
         <RecordEditor
-          key={editing === 'new' ? (receipt ? 'receipt' : 'new') : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
+          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newDate ?? ''}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
           record={editing === 'new' ? null : editing}
           receipt={editing === 'new' || receiptFor === editing.id ? receipt : null}
+          initialDate={newDate}
           onScanReceipt={(target) => {
             receiptTarget.current = target;
             receiptInput.current?.click();

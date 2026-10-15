@@ -93,6 +93,8 @@ export interface RecordEditorProps {
    * 既にある記録（record）と一緒に渡すと、出金元・日付はそのままで、品目をレシートの品目に入れ替えて開く（§10.8）。
    */
   receipt?: ReceiptScan | null;
+  /** 新しく記録するときに最初に選んでおく日（YYYY-MM-DD。記録の一覧の、日の見出しの「＋」から）。無ければ今日。 */
+  initialDate?: string | null;
   /** 既にある記録にレシートを撮って品目を入れる（支出・収入の記録だけ。§10.8）。 */
   onScanReceipt?: (record: MoneyRecord) => void;
 }
@@ -120,11 +122,12 @@ export default function RecordEditor({
   onDeleteWallet,
   onEditCategories,
   receipt = null,
+  initialDate = null,
   onScanReceipt,
 }: RecordEditorProps) {
   const [kind, setKind] = useState<MoneyRecordKind>(record?.kind ?? 'expense');
   const [occurredOn, setOccurredOn] = useState(
-    record?.occurredOn ?? receipt?.occurredOn ?? toDateStringInTimeZone(new Date()),
+    record?.occurredOn ?? receipt?.occurredOn ?? initialDate ?? toDateStringInTimeZone(new Date()),
   );
   // レシートから出金元が当たらなかったときは、前回の出金元を入れて「確かめてください」を出す（§10.4）。
   const [initialWalletId] = useState<string | null>(() =>

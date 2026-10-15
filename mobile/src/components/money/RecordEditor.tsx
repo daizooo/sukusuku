@@ -100,6 +100,8 @@ export interface RecordEditorProps {
   onScanReceipt?: (record: MoneyRecord) => void;
   /** 新しく記録するときに最初に選んでおく種類（ホーム画面のウィジェットの「収入」「振替」から。docs/widgets.md §2.3）。 */
   initialKind?: MoneyRecordKind;
+  /** 新しく記録するときに最初に選んでおく日（YYYY-MM-DD。記録の一覧の、日の見出しの「＋」から）。無ければ今日。 */
+  initialDate?: string | null;
 }
 
 /**
@@ -127,10 +129,11 @@ export default function RecordEditor({
   receipt = null,
   onScanReceipt,
   initialKind = 'expense',
+  initialDate = null,
 }: RecordEditorProps) {
   const insets = useSafeAreaInsets();
   const [kind, setKind] = useState<MoneyRecordKind>(record?.kind ?? (receipt ? 'expense' : initialKind));
-  const [occurredOn, setOccurredOn] = useState(record?.occurredOn ?? receipt?.occurredOn ?? toDateString(new Date()));
+  const [occurredOn, setOccurredOn] = useState(record?.occurredOn ?? receipt?.occurredOn ?? initialDate ?? toDateString(new Date()));
   // レシートから出金元が当たらなかったときは、前回の出金元を入れて「確かめてください」を出す（§10.4）。
   const [initialWalletId] = useState<string | null>(() =>
     record ? record.walletId : (receipt?.walletId ?? lastWalletId(records, wallets, receipt ? 'expense' : initialKind)),
