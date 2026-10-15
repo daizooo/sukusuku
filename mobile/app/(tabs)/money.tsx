@@ -604,6 +604,7 @@ export default function MoneyScreen() {
               onEditCategories={() => setEditingCategories(true)}
               onOpenRecord={setEditing}
               months={closings}
+              recurring={recurring}
               feedItems={feed?.open ?? []}
               onConfirmEstimate={confirmEstimate}
               onSetMonthClosed={(target, closed) => void setMonthClosed(target, closed)}

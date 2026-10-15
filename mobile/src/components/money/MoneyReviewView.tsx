@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
-import type { MoneyBudget, MoneyCategory, MoneyFeedItem, MoneyMonth, MoneyRecord, MoneyWallet } from '@/types/app';
+import type { MoneyBudget, MoneyCategory, MoneyFeedItem, MoneyMonth, MoneyRecord, MoneyRecurring, MoneyWallet } from '@/types/app';
 import { colors } from '@/lib/theme';
 import {
   buildBudgetTiles,
@@ -9,6 +9,7 @@ import {
   buildCategoryAnalysis,
   buildYearSummary,
   compareWithPreviousYear,
+  dateKeyOfDate,
   estimatesInMonth,
   formatBalance,
   formatSignedYen,
@@ -72,6 +73,8 @@ interface MoneyReviewViewProps {
   onOpenRecord: (record: MoneyRecord) => void;
   /** 月の締め（docs/kakei.md §4.5）。 */
   months: MoneyMonth[];
+  /** 固定収入・固定費のルール（締めの画面に、これから自動で作られる記録を出す）。 */
+  recurring: MoneyRecurring[];
   /** 未確認の明細（締めの画面に、その月の件数を出す）。 */
   feedItems: MoneyFeedItem[];
   onConfirmEstimate: (record: MoneyRecord) => Promise<void>;
@@ -94,6 +97,7 @@ export default function MoneyReviewView({
   onEditCategories,
   onOpenRecord,
   months: closings,
+  recurring,
   feedItems,
   onConfirmEstimate,
   onSetMonthClosed,
@@ -341,6 +345,8 @@ export default function MoneyReviewView({
           records={records}
           categories={categories}
           budgets={budgets}
+          recurring={recurring}
+          today={dateKeyOfDate(new Date())}
           feedCount={feedItems.filter((item) => item.occurredOn !== null && item.occurredOn.startsWith(`${closing}-`)).length}
           closed={isMonthClosed(closings, closing)}
           closedAt={closings.find((entry) => entry.month === closing)?.closedAt ?? null}

@@ -29,6 +29,7 @@ import {
   inRecurringPeriod,
   isMonthClosed,
   unclosedMonths,
+  pendingRecurringInMonth,
   parsePeriodMonth,
   recurringEnded,
   recurringPeriodLabel,
@@ -245,6 +246,22 @@ assert.equal(fixedBudgetFor(withFixed, 'house', '2025-12'), 0, 'ルールを作�
   assert.equal(budgetFor(withFixed, 'util', '2026-08'), 9000, '手入力が無い月は固定費だけ');
   assert.equal(budgetFor(withFixed, 'food', '2026-06'), 60000, '固定費の無い種類は今まで通り');
   assert.deepEqual(budgetMonths(withFixed, 'house', 2026), Array(12).fill(85000), '編集の初期値に固定費は入らない');
+
+  // 締める月に、これから自動で作られる記録（docs/kakei.md §4.5）
+  const salary = rule({ id: 'p1', kind: 'income', categoryId: 'salary', amount: 200000, day: 25, holiday: 'prev' });
+  const madeRent = rule({ id: 'p2', categoryId: 'rent', amount: 80000, day: 27 });
+  const pendingList = pendingRecurringInMonth(
+    [salary, madeRent, rule({ id: 'p3', categoryId: 'rent', amount: 1, day: 5 }), rule({ id: 'p4', kind: 'transfer', categoryId: null, toWalletId: 'w2', day: 28 })],
+    [rec('pm', '2026-10-27', 80000, { recurringId: 'p2', month: '2026-10' })],
+    '2026-10',
+    '2026-10-20',
+  );
+  assert.deepEqual(
+    pendingList.map((entry) => [entry.rule.id, entry.date, entry.amount]),
+    [['p1', '2026-10-23', 200000]],
+    'まだ来ていない日のものだけ（作ったもの・過ぎた日・振替は除く。25日が日曜なので前営業日の23日）',
+  );
+  assert.deepEqual(pendingRecurringInMonth([salary], [], '2026-09', '2026-10-20'), [], '過ぎた月は無い');
 
   // 期間（開始月・終了月。docs/kakei.md §3.3）
   const leave = rule({ id: 'r9', categoryId: 'rent', amount: 1000, startMonth: '2026-06', endMonth: '2026-08' });

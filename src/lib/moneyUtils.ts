@@ -538,6 +538,44 @@ export function estimateRecurringAmount(rule: MoneyRecurring, monthKey: string, 
   return rule.amount;
 }
 
+export interface PendingRecurring {
+  rule: MoneyRecurring;
+  /** その月の記録する日（YYYY-MM-DD）。 */
+  date: string;
+  /** 記録される額（見込みのルールは見込みの額）。 */
+  amount: number;
+}
+
+/**
+ * その月（YYYY-MM）に、固定収入・固定費のルールでこれから自動で作られる記録（today〔YYYY-MM-DD〕より後の日のもの）。
+ * 作る条件は DBの make_money_recurring_records と同じ（使っていて、出金元と種類が決まっていて、記録する月・期間の中で、
+ * ルールを作ったあとの日で、まだ作っていないもの）。収支に入らない振替は除く。
+ * 自動の記録より前に月を締めるときに知らせる（docs/kakei.md §4.5）。日の早い順。
+ */
+export function pendingRecurringInMonth(
+  recurring: readonly MoneyRecurring[],
+  records: readonly MoneyRecord[],
+  monthKey: string,
+  today: string,
+): PendingRecurring[] {
+  const year = yearOfMonth(monthKey);
+  const month = Number(monthKey.slice(5, 7));
+  const made = new Set(
+    records.filter((record) => record.recurringId !== null && record.month === monthKey).map((record) => record.recurringId),
+  );
+  const pending: PendingRecurring[] = [];
+  for (const rule of recurring) {
+    if (rule.archived || rule.kind === 'transfer' || rule.walletId === null || rule.categoryId === null) continue;
+    if (rule.months !== null && !rule.months.includes(month)) continue;
+    if (!inRecurringPeriod(rule, monthKey) || made.has(rule.id)) continue;
+    const date = recurringDateOf(year, month, rule);
+    if (date <= today || date < rule.createdAt) continue;
+    const amount = rule.amountMode === 'fixed' ? rule.amount : estimateRecurringAmount(rule, monthKey, records);
+    pending.push({ rule, date, amount });
+  }
+  return pending.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
 /**
  * 固定費のルールのその月（YYYY-MM）の額＝記録と同じ額。
  * そのルールが作った記録が見込みのまま（固定額なら確定していても）あれば、その記録の額。額を見込むルールで確定したあとは、
