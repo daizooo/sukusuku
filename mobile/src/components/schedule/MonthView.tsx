@@ -186,9 +186,8 @@ export default function MonthView({
                   {hasLabel && (
                     <Text
                       numberOfLines={1}
-                      // マスの幅（約47dp）に「スポーツの日」などは10で収まらないため、長いものだけ縮める。
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.8}
+                      // 予定の帯と同じ大きさのまま、長いものは縮めずにマスの幅で切る。
+                      ellipsizeMode="clip"
                       style={[styles.milestone, holiday !== null && styles.holidayLabel]}
                     >
                       {holiday ?? milestone}
@@ -292,7 +291,7 @@ const styles = StyleSheet.create({
   dateTextOtherMonth: { color: colors.textFaint },
   dateTextSunday: { color: colors.sunday },
   dateTextSaturday: { color: colors.navActive },
-  milestone: { fontSize: 10, lineHeight: 13, textAlign: 'center', color: colors.milestone, fontWeight: '500' },
+  milestone: { fontSize: 9, lineHeight: 13, textAlign: 'center', color: colors.milestone, fontWeight: '600' },
   holidayLabel: { color: colors.sunday },
   chips: { marginTop: CHIP_GAP, gap: CHIP_GAP },
   chip: {

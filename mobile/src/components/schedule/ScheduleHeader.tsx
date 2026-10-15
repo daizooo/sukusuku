@@ -75,10 +75,10 @@ export default function ScheduleHeader({
       {view !== 'list' && (
         <>
           <Pressable accessibilityRole="button" accessibilityLabel="前へ" onPress={() => onStep(-1)} hitSlop={6}>
-            <ChevronLeft size={22} color={colors.textSubtle} />
+            <ChevronLeft size={24} color={colors.textSubtle} />
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="次へ" onPress={() => onStep(1)} hitSlop={6}>
-            <ChevronRight size={22} color={colors.textSubtle} />
+            <ChevronRight size={24} color={colors.textSubtle} />
           </Pressable>
         </>
       )}
@@ -94,7 +94,7 @@ export default function ScheduleHeader({
         </Text>
       </Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="予定を検索" onPress={onStartSearch} hitSlop={8}>
-        <Search size={20} color={colors.textSubtle} />
+        <Search size={22} color={colors.textSubtle} />
       </Pressable>
       <SelectField
         options={VIEW_OPTIONS}
@@ -109,19 +109,19 @@ export default function ScheduleHeader({
 }
 
 const styles = StyleSheet.create({
-  bar: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36 },
+  bar: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 48 },
   todayButton: {
     borderWidth: 1,
     borderColor: colors.borderStrong,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
-  todayText: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
+  todayText: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },
   titleButton: { flex: 1, minWidth: 0 },
-  title: { fontSize: 16, fontWeight: '700', color: colors.text },
-  viewSelect: { minHeight: 30, paddingHorizontal: 10, gap: 4, borderRadius: 999, borderColor: colors.borderStrong },
-  viewSelectText: { fontSize: 12 },
+  title: { fontSize: 18, fontWeight: '700', color: colors.text },
+  viewSelect: { minHeight: 36, paddingHorizontal: 12, gap: 4, borderRadius: 999, borderColor: colors.borderStrong },
+  viewSelectText: { fontSize: 13 },
   searchInput: {
     flex: 1,
     fontSize: 15,

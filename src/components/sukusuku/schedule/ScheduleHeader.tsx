@@ -73,26 +73,26 @@ export default function ScheduleHeader({
   }
 
   return (
-    <div className="flex-none flex items-center gap-2 md:gap-3 mb-3 min-h-9">
+    <div className="flex-none flex items-center gap-2 md:gap-3 mb-3 min-h-12">
       <button
         onClick={onToday}
-        className="flex-none text-xs md:text-sm font-bold text-gray-700 border border-gray-300 rounded-full px-2.5 md:px-4 py-1 md:py-1.5 hover:bg-gray-100 transition"
+        className="flex-none text-[13px] md:text-sm font-bold text-gray-700 border border-gray-300 rounded-full px-3 md:px-4 py-[7px] md:py-2 hover:bg-gray-100 transition"
       >
         今日
       </button>
       {view !== 'list' && (
         <div className="flex-none flex items-center">
           <button onClick={() => onStep(-1)} aria-label="前へ" className="p-1 text-gray-700 rounded-full hover:bg-gray-100">
-            <ChevronLeft size={22} />
+            <ChevronLeft size={24} />
           </button>
           <button onClick={() => onStep(1)} aria-label="次へ" className="p-1 text-gray-700 rounded-full hover:bg-gray-100">
-            <ChevronRight size={22} />
+            <ChevronRight size={24} />
           </button>
         </div>
       )}
       {/* 年月・日付を押すと、ネイティブのピッカーで任意の月・日へ直接ジャンプする */}
       <div className="relative flex-1 min-w-0">
-        <h3 className="text-base md:text-xl font-bold md:font-medium text-gray-900 truncate">{title}</h3>
+        <h3 className="text-lg md:text-xl font-bold md:font-medium text-gray-900 truncate">{title}</h3>
         {view === 'month' && (
           <input
             type="month"
@@ -119,9 +119,9 @@ export default function ScheduleHeader({
         )}
       </div>
       <button onClick={onStartSearch} aria-label="予定を検索" className="flex-none p-1 text-gray-700 rounded-full hover:bg-gray-100">
-        <Search size={20} />
+        <Search size={22} />
       </button>
-      <label className="relative flex-none flex items-center gap-1 text-xs md:text-sm font-bold text-gray-700 border border-gray-300 rounded-full pl-2.5 pr-2 md:pl-4 md:pr-3 py-1 md:py-1.5 hover:bg-gray-100 transition">
+      <label className="relative flex-none flex items-center gap-1 text-[13px] md:text-sm font-bold text-gray-700 border border-gray-300 rounded-full pl-3 pr-2 md:pl-4 md:pr-3 py-[7px] md:py-2 hover:bg-gray-100 transition">
         {VIEW_OPTIONS.find((option) => option.value === view)?.label}
         <ChevronDown size={14} className="text-gray-500" />
         <select
