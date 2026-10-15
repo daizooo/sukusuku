@@ -24,9 +24,13 @@ import {
   HOLIDAY_RULE_LABEL,
   incomeRecordsInYear,
   monthKeyOfDate,
+  parsePeriodMonth,
+  periodMonthInput,
   RECORD_KIND_LABEL,
   recordTotal,
+  recurringEnded,
   recurringHistory,
+  recurringPeriodLabel,
   recurringScheduleLabel,
   reorderedPositions,
   storeChoices,
@@ -58,6 +62,9 @@ import { EstimateBadge, PrimaryButton, ScreenHeader, StackedScreen, incomeAmount
 //
 // 並べ替え（左の持ち手をつかんで動かす。リストと同じ操作）は、種類（支出・振替）ごとの中で動かせる。
 // 複製は、編集の画面の「複製して足す」から。日・月・額など全部を写し、品名に「のコピー」を付けた新規の編集を開き、直して保存すると足される。
+//
+// 期間（開始月・終了月。2026-10-15）: 育休給付金 〜2027/8、時短後の給与 2027/9〜 のように、期間の外の月は記録も予算も作らない。
+// 期間が終わったルールは、一覧の下に畳んで出す（押すと開く）。
 
 interface RecurringSettingsProps {
   /** 'expense'＝固定支出（支出・振替）、'income'＝固定収入（給与・賞与）。 */
@@ -104,7 +111,10 @@ export default function RecurringSettings({
   // 「複製して足す」の元。日・月・額など全部を写し、品名に「のコピー」を付けて新規の編集を開く。
   const [template, setTemplate] = useState<MoneyRecurring | null>(null);
   const inMode = recurring.filter((rule) => (rule.kind === 'income') === isIncome);
-  const usable = inMode.filter((rule) => !rule.archived);
+  const thisMonth = monthKeyOfDate(new Date());
+  const usable = inMode.filter((rule) => !rule.archived && !recurringEnded(rule, thisMonth));
+  const ended = inMode.filter((rule) => !rule.archived && recurringEnded(rule, thisMonth));
+  const [showEnded, setShowEnded] = useState(false);
   const archived = inMode.filter((rule) => rule.archived);
   // 同じ種類に2件以上あるときだけ動かせる。
   const canReorder = (isIncome ? ['income'] : KINDS).some((kind) => usable.filter((rule) => rule.kind === kind).length > 1);
@@ -261,7 +271,7 @@ export default function RecurringSettings({
                             {ruleTitle(rule, categories)}
                           </span>
                           {ruleDetail(rule) !== '' && <span className={subClass}>{ruleDetail(rule)}</span>}
-                          <span className={subClass}>{recurringScheduleLabel(rule)}</span>
+                          <span className={subClass}>{scheduleWithPeriod(rule)}</span>
                           <span className={`${subClass} tabular-nums`}>
                             {rule.kind === 'transfer'
                               ? `${walletName(rule.walletId) || '?'} → ${walletName(rule.toWalletId) || '?'}`
@@ -304,6 +314,35 @@ export default function RecurringSettings({
                     </div>
                   );
                 })}
+              </section>
+            )}
+
+            {ended.length > 0 && (
+              <section className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowEnded((value) => !value)}
+                  className="text-left text-xs font-bold text-gray-500"
+                >
+                  {`期間が終わった${isIncome ? '固定収入' : '固定支出'} ${ended.length}件（${showEnded ? '閉じる' : '押すと開く'}）`}
+                </button>
+                {showEnded &&
+                  ended.map((rule) => (
+                    <button
+                      key={rule.id}
+                      type="button"
+                      aria-label={`${ruleTitle(rule, categories)}を編集`}
+                      onClick={() => setEditing(rule)}
+                      className="flex w-full items-center gap-2.5 rounded-lg border border-gray-200 px-3 py-3 text-left opacity-70"
+                    >
+                      <span className="flex-1">
+                        <span className="block text-[15px] font-semibold text-gray-900">{ruleTitle(rule, categories)}</span>
+                        {ruleDetail(rule) !== '' && <span className={subClass}>{ruleDetail(rule)}</span>}
+                        <span className={subClass}>{scheduleWithPeriod(rule)}</span>
+                      </span>
+                      <Pencil size={16} className="text-gray-400" />
+                    </button>
+                  ))}
               </section>
             )}
 
@@ -393,6 +432,12 @@ function ruleTitle(rule: MoneyRecurring, categories: MoneyCategory[]): string {
   return path !== '' ? path : RECORD_KIND_LABEL[rule.kind];
 }
 
+/** 日取りと期間。「毎月25日（休日は前営業日）・2027/9〜」。 */
+function scheduleWithPeriod(rule: MoneyRecurring): string {
+  const period = recurringPeriodLabel(rule);
+  return period === '' ? recurringScheduleLabel(rule) : `${recurringScheduleLabel(rule)}・${period}`;
+}
+
 /** お店（相手先）と品名。見出しの下に添える（どちらも無ければ空）。 */
 function ruleDetail(rule: MoneyRecurring): string {
   return [rule.store, rule.name]
@@ -457,6 +502,9 @@ function RecurringEditor({
   // 給与は休日の前の営業日に振り込まれることが多い。
   const [holiday, setHoliday] = useState<MoneyHolidayRule>(base?.holiday ?? (isIncome ? 'prev' : 'next'));
   const [months, setMonths] = useState<number[] | null>((rule ?? template)?.months ?? null);
+  // 期間（2027/9 の形で入れる。空は無期限）。
+  const [startInput, setStartInput] = useState(periodMonthInput(base?.startMonth ?? null));
+  const [endInput, setEndInput] = useState(periodMonthInput(base?.endMonth ?? null));
   const [amountMode, setAmountMode] = useState<MoneyRecurring['amountMode']>(base?.amountMode ?? 'estimate');
   const [amount, setAmount] = useState(base && base.amount > 0 ? String(base.amount) : '');
   const [error, setError] = useState<string | null>(null);
@@ -469,9 +517,15 @@ function RecurringEditor({
   );
   const storeOptions = useMemo(() => storeChoices(stores, records), [stores, records]);
   const today = toDateString(new Date());
+  const startForHistory = parsePeriodMonth(startInput) ?? null;
   const history = useMemo(
-    () => recurringHistory({ kind, walletId, toWalletId, store, categoryId }, records, today),
-    [kind, walletId, toWalletId, store, categoryId, records, today],
+    () =>
+      recurringHistory(
+        { id: rule?.id, kind, walletId, toWalletId, store, categoryId, startMonth: startForHistory },
+        records,
+        today,
+      ),
+    [rule?.id, kind, walletId, toWalletId, store, categoryId, startForHistory, records, today],
   );
   const target = categoryId !== null ? categoryPath(categories, categoryId) : '';
 
@@ -500,6 +554,10 @@ function RecurringEditor({
     if (kind === 'transfer' && (toWalletId === null || toWalletId === walletId)) return setError('入金先を選んでください（出金元と別の口座）');
     if (kind !== 'transfer' && categoryId === null) return setError('種類を選んでください');
     if (months !== null && months.length === 0) return setError('記録する月を選んでください');
+    const startMonth = parsePeriodMonth(startInput);
+    const endMonth = parsePeriodMonth(endInput);
+    if (startMonth === undefined || endMonth === undefined) return setError('期間は「2027/9」の形で入れてください（無期限は空）');
+    if (startMonth !== null && endMonth !== null && startMonth > endMonth) return setError('期間の終わりを始まりより後にしてください');
     const amountValue = amount.trim() === '' ? 0 : Number(amount.trim());
     if (!Number.isInteger(amountValue) || amountValue < 0) return setError('額は0以上の整数で入れてください');
     if (amountMode === 'fixed' && amountValue === 0) return setError('固定額を入れてください');
@@ -509,6 +567,8 @@ function RecurringEditor({
       weekOfMonth: byWeekday ? weekOfMonth : null,
       weekday: byWeekday ? weekday : null,
       months,
+      startMonth,
+      endMonth,
       holiday,
       amountMode,
       amount: amountValue,
@@ -679,6 +739,27 @@ function RecurringEditor({
                 {isIncome
                   ? '給与は毎月。賞与は支給される月を選びます（年に2回なら、回ごとに足します）'
                   : '年に数回のものは、月を選びます（毎月の見込みを崩さないため）'}
+              </span>
+            </div>
+            <div className="space-y-2">
+              <span className={labelClass}>期間（任意）</span>
+              <div className="flex items-center gap-2">
+                <input
+                  className={inputClass}
+                  value={startInput}
+                  onChange={(event) => setStartInput(event.target.value)}
+                  placeholder="始まり 例: 2027/9"
+                />
+                <span className="text-[15px] font-semibold text-gray-500">〜</span>
+                <input
+                  className={inputClass}
+                  value={endInput}
+                  onChange={(event) => setEndInput(event.target.value)}
+                  placeholder="終わり 例: 2027/8"
+                />
+              </div>
+              <span className={subClass}>
+                {`${isIncome ? '入金' : '引き落とし'}のある月で決めます（空は無期限）。期間の外の月は記録も予算も作りません。見込みの額は、期間の始まりより前の記録を使いません`}
               </span>
             </div>
 

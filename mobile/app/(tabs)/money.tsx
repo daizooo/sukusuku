@@ -7,6 +7,7 @@ import type {
   MoneyCategory,
   MoneyFeedData,
   MoneyFeedItem,
+  MoneyMonth,
   MoneyRecord,
   MoneyRecordDraft,
   MoneyRecurring,
@@ -28,6 +29,7 @@ import { getMyMembership } from '@/lib/api/me';
 import { useFamilyRefresh } from '@/lib/familySync';
 import { OPEN_MONEY_PARAM, parseMoneyOpen } from '@/lib/appLinks';
 import {
+  confirmMoneyEstimate,
   deleteMoneyWallet,
   deleteMoneyRecord,
   deleteMoneyWalletBalance,
@@ -36,6 +38,7 @@ import {
   restoreMoneyWallet,
   saveMoneyRecord,
   saveMoneyWalletBalance,
+  setMoneyMonthClosed,
   updateMoneyWallet,
 } from '@/lib/api/money';
 import {
@@ -56,7 +59,16 @@ import {
   type MoneyFeedResolve,
 } from '@/lib/api/moneyFeed';
 import { feedDayLabel, feedDuplicates } from '@/lib/moneyFeedUtils';
-import { dateKeyOfDate, fixedBudgetRows, formatYen, monthKeyOf, monthKeyOfDate, recordTotal, yearOfMonth } from '@/lib/moneyUtils';
+import {
+  dateKeyOfDate,
+  fixedBudgetRows,
+  formatYen,
+  isMonthClosed,
+  monthKeyOf,
+  monthKeyOfDate,
+  recordTotal,
+  yearOfMonth,
+} from '@/lib/moneyUtils';
 import MoneyAccountsView from '@/components/money/MoneyAccountsView';
 import MoneyRecordsView from '@/components/money/MoneyRecordsView';
 import MoneyReviewView from '@/components/money/MoneyReviewView';
@@ -108,6 +120,7 @@ const MONEY_TABLES = [
   'money_holding_values',
   'money_holdings',
   'money_items',
+  'money_months',
   'money_records',
   'money_recurring',
   'money_securities',
@@ -133,6 +146,8 @@ export default function MoneyScreen() {
     [budgets, recurring, categories, records],
   );
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
+  // 月の締め（docs/kakei.md §4.5）。
+  const [closings, setClosings] = useState<MoneyMonth[]>([]);
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
   const [isLoading, setIsLoading] = useState(true);
   const [view, setView] = useState<View3>('accounts');
@@ -170,6 +185,7 @@ export default function MoneyScreen() {
     setRecords(money.records);
     setRecurring(money.recurring);
     setBalances(money.balances);
+    setClosings(money.months);
     setSecurities(loadedSecurities);
   }, []);
 
@@ -260,7 +276,60 @@ export default function MoneyScreen() {
     );
   };
 
+  /** 月を締める／締めを外す（docs/kakei.md §4.5）。 */
+  const setMonthClosed = async (target: string, closed: boolean) => {
+    if (!familyId) return;
+    try {
+      const saved = await setMoneyMonthClosed(supabase, familyId, target, closed);
+      setClosings((prev) => [...prev.filter((entry) => entry.month !== saved.month), saved]);
+    } catch {
+      Alert.alert(closed ? '締められませんでした' : '締めを外せませんでした', 'もう一度お試しください。');
+    }
+  };
+
+  /**
+   * 締めた月の記録を直す・足す・消す前に、締めを外すか聞く（docs/kakei.md §4.5）。外さないなら false。
+   * monthKeys は、直す前と直したあとの記録の月。
+   */
+  const confirmReopen = (monthKeys: string[]): Promise<boolean> => {
+    const closed = [...new Set(monthKeys)].filter((key) => isMonthClosed(closings, key)).sort();
+    if (closed.length === 0) return Promise.resolve(true);
+    const label = closed.map((key) => `${Number(key.slice(5, 7))}月`).join('・');
+    return new Promise((resolve) =>
+      Alert.alert(
+        `${label}は締めてあります`,
+        '直すと締めを外します。直したあと、振り返りでもう一度締めてください。',
+        [
+          { text: 'やめる', style: 'cancel', onPress: () => resolve(false) },
+          {
+            text: '締めを外して直す',
+            onPress: () => {
+              void Promise.all(closed.map((key) => setMonthClosed(key, false))).then(() => resolve(true));
+            },
+          },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) },
+      ),
+    );
+  };
+
+  const monthsOfDraft = (draft: MoneyRecordDraft): string[] => {
+    const previous = draft.id === null ? null : records.find((record) => record.id === draft.id);
+    return [monthKeyOf(draft.occurredOn), ...(previous ? [monthKeyOf(previous.occurredOn)] : [])];
+  };
+
+  /** 見込みの記録を今の額のまま確定する（締めの画面の「確定」）。 */
+  const confirmEstimate = async (record: MoneyRecord) => {
+    try {
+      await confirmMoneyEstimate(supabase, record.id);
+      setRecords((prev) => prev.map((entry) => (entry.id === record.id ? { ...entry, isEstimate: false } : entry)));
+    } catch {
+      failed('確定');
+    }
+  };
+
   const saveRecord = async (draft: MoneyRecordDraft) => {
+    if (!(await confirmReopen(monthsOfDraft(draft)))) return;
     if (!(await confirmNotDuplicate(draft))) return;
     setEditing(null);
     setReceipt(null);
@@ -354,6 +423,7 @@ export default function MoneyScreen() {
   }, [requestedOpen, isLoading, familyId]);
 
   const removeRecord = async (record: MoneyRecord) => {
+    if (!(await confirmReopen([monthKeyOf(record.occurredOn)]))) return;
     setEditing(null);
     const previous = records;
     setRecords((prev) => prev.filter((entry) => entry.id !== record.id));
@@ -533,6 +603,12 @@ export default function MoneyScreen() {
               }}
               onEditCategories={() => setEditingCategories(true)}
               onOpenRecord={setEditing}
+              months={closings}
+              recurring={recurring}
+              feedItems={feed?.open ?? []}
+              onConfirmEstimate={confirmEstimate}
+              onSetMonthClosed={(target, closed) => void setMonthClosed(target, closed)}
+              onOpenFeed={() => setFeedOpen(true)}
             />
           ) : (
             <MoneyAccountsView

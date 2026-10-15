@@ -26,6 +26,13 @@ import {
   estimateRecurringAmount,
   fixedBudgetFor,
   fixedBudgetRows,
+  inRecurringPeriod,
+  isMonthClosed,
+  unclosedMonths,
+  pendingRecurringInMonth,
+  parsePeriodMonth,
+  recurringEnded,
+  recurringPeriodLabel,
   formatBalance,
   walletBalanceOn,
   walletDelta,
@@ -239,7 +246,66 @@ assert.equal(fixedBudgetFor(withFixed, 'house', '2025-12'), 0, 'ルールを作�
   assert.equal(budgetFor(withFixed, 'util', '2026-08'), 9000, '手入力が無い月は固定費だけ');
   assert.equal(budgetFor(withFixed, 'food', '2026-06'), 60000, '固定費の無い種類は今まで通り');
   assert.deepEqual(budgetMonths(withFixed, 'house', 2026), Array(12).fill(85000), '編集の初期値に固定費は入らない');
+
+  // 締める月に、これから自動で作られる記録（docs/kakei.md §4.5）
+  const salary = rule({ id: 'p1', kind: 'income', categoryId: 'salary', amount: 200000, day: 25, holiday: 'prev' });
+  const madeRent = rule({ id: 'p2', categoryId: 'rent', amount: 80000, day: 27 });
+  const pendingList = pendingRecurringInMonth(
+    [salary, madeRent, rule({ id: 'p3', categoryId: 'rent', amount: 1, day: 5 }), rule({ id: 'p4', kind: 'transfer', categoryId: null, toWalletId: 'w2', day: 28 })],
+    [rec('pm', '2026-10-27', 80000, { recurringId: 'p2', month: '2026-10' })],
+    '2026-10',
+    '2026-10-20',
+  );
+  assert.deepEqual(
+    pendingList.map((entry) => [entry.rule.id, entry.date, entry.amount]),
+    [['p1', '2026-10-23', 200000]],
+    'まだ来ていない日のものだけ（作ったもの・過ぎた日・振替は除く。25日が日曜なので前営業日の23日）',
+  );
+  assert.deepEqual(pendingRecurringInMonth([salary], [], '2026-09', '2026-10-20'), [], '過ぎた月は無い');
+
+  // 期間（開始月・終了月。docs/kakei.md §3.3）
+  const leave = rule({ id: 'r9', categoryId: 'rent', amount: 1000, startMonth: '2026-06', endMonth: '2026-08' });
+  const periodRows = fixedBudgetRows([leave], cats, [], today);
+  assert.equal(fixedBudgetFor(periodRows, 'house', '2026-05'), 0, '期間の前の月は足さない');
+  assert.equal(fixedBudgetFor(periodRows, 'house', '2026-06'), 1000, '期間の始まりの月から');
+  assert.equal(fixedBudgetFor(periodRows, 'house', '2026-08'), 1000, '期間の終わりの月まで');
+  assert.equal(fixedBudgetFor(periodRows, 'house', '2026-09'), 0, '期間のあとの月は足さない');
+  assert.equal(inRecurringPeriod({ startMonth: null, endMonth: null }, '2030-01'), true, '無期限');
+  assert.equal(recurringEnded(rule({ endMonth: '2026-09' }), '2026-10'), true);
+  assert.equal(recurringEnded(rule({ endMonth: '2026-10' }), '2026-10'), false, '終わりの月はまだ期間の中');
+  assert.equal(recurringPeriodLabel(rule({ startMonth: '2027-09', endMonth: null })), '2027/9〜');
+  assert.equal(recurringPeriodLabel(rule({ startMonth: null, endMonth: '2027-08' })), '〜2027/8');
+  assert.equal(recurringPeriodLabel(rule({ startMonth: null, endMonth: null })), '');
+  // 見込みは期間の始まりより前の記録を使わない（このルールが作った記録は使う）
+  const later = rule({ ...power, id: 'r10', startMonth: '2026-09' });
+  assert.equal(estimateRecurringAmount(later, '2026-11', history), 8500, '始まりより前の記録（8月まで）は使わない');
+  assert.equal(estimateRecurringAmount(rule({ ...power, id: 'r3', startMonth: '2026-12' }), '2027-01', history), 8500, 'このルールが作った記録は使う');
+  assert.equal(estimateRecurringAmount(rule({ ...power, id: 'r11', startMonth: '2026-12' }), '2027-01', history), 6000, '使える記録が無ければルールの額');
 }
+{
+  // 月の締め（docs/kakei.md §4.5）
+  const r = (occurredOn: string, kind: MoneyRecord['kind'] = 'expense') => ({ occurredOn, kind }) as unknown as MoneyRecord;
+  const closings = [
+    { month: '2026-09', closedAt: '2026-10-02T00:00:00Z' },
+    { month: '2026-08', closedAt: null }, // 締めを外した
+  ];
+  assert.equal(isMonthClosed(closings, '2026-09'), true);
+  assert.equal(isMonthClosed(closings, '2026-08'), false, '締めを外した月');
+  assert.deepEqual(
+    unclosedMonths(
+      [r('2026-07-03'), r('2026-08-10'), r('2026-09-01'), r('2026-06-05', 'transfer'), r('2026-10-01')],
+      closings,
+      '2026-10-15',
+    ),
+    ['2026-07', '2026-08'],
+    '記録のある過ぎた月のうち締めていないもの（振替だけの月・今月は数えない）',
+  );
+}
+assert.equal(parsePeriodMonth(''), null, '空は無期限');
+assert.equal(parsePeriodMonth('2027/9'), '2027-09');
+assert.equal(parsePeriodMonth('２０２７年９月'), '2027-09', '全角・年月');
+assert.equal(parsePeriodMonth('2027-13'), undefined, '読めない');
+assert.equal(parsePeriodMonth('9月'), undefined, '年が無い');
 assert.equal(budgetMonthKey(2026, '2026-10-09'), '2026-10', '今年は今月');
 assert.equal(budgetMonthKey(2027, '2026-10-09'), '2027-01', 'これからの年は1月');
 assert.equal(budgetMonthKey(2025, '2026-10-09'), '2025-12', '過ぎた年は12月');
