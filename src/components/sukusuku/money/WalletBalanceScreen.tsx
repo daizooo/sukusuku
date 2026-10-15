@@ -12,6 +12,7 @@ import type {
 import {
   balanceChecks,
   cardBilling,
+  cardCarriedIn,
   cardPaymentHistory,
   cardUsagePeriod,
   dailyBalances,
@@ -207,6 +208,7 @@ export default function WalletBalanceScreen({
                 <div className="mt-3 divide-y divide-gray-200 overflow-hidden rounded-2xl border border-gray-200 bg-white">
                   {payments.map((payment) => {
                     const period = cardUsagePeriod(wallet, payment.monthKey);
+                    const carried = cardCarriedIn(wallet, payment.monthKey, records);
                     return (
                       <div key={payment.monthKey} className="flex items-center gap-2 px-3.5 py-3">
                         <div className="min-w-0 flex-1">
@@ -215,6 +217,11 @@ export default function WalletBalanceScreen({
                             {period ? `ご利用 ${shortDay(period.from)}〜${shortDay(period.to)}・` : ''}
                             {monthDayLabel(payment.lastOn)}に引き落とし
                           </p>
+                          {carried && (
+                            <p className={type.faint}>
+                              うち{Number(carried.monthKey.slice(5))}月分（翌月払い） {formatYen(carried.amount)}
+                            </p>
+                          )}
                         </div>
                         {payment.estimate && <EstimateBadge />}
                         <span className={type.amount}>{formatYen(payment.amount)}</span>

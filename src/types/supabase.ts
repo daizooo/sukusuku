@@ -1493,6 +1493,7 @@ export type Database = {
       }
       money_records: {
         Row: {
+          card_next_period: boolean
           created_at: string
           created_by: string | null
           draw_id: string | null
@@ -1511,6 +1512,7 @@ export type Database = {
           wallet_id: string | null
         }
         Insert: {
+          card_next_period?: boolean
           created_at?: string
           created_by?: string | null
           draw_id?: string | null
@@ -1529,6 +1531,7 @@ export type Database = {
           wallet_id?: string | null
         }
         Update: {
+          card_next_period?: boolean
           created_at?: string
           created_by?: string | null
           draw_id?: string | null

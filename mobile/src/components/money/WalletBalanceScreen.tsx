@@ -15,6 +15,7 @@ import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import {
   balanceChecks,
   cardBilling,
+  cardCarriedIn,
   cardPaymentHistory,
   cardUsagePeriod,
   dailyBalances,
@@ -211,6 +212,7 @@ export default function WalletBalanceScreen({
                   <View style={styles.paymentCard}>
                     {payments.map((payment, index) => {
                       const period = cardUsagePeriod(wallet, payment.monthKey);
+                      const carried = cardCarriedIn(wallet, payment.monthKey, records);
                       return (
                         <View key={payment.monthKey} style={[styles.paymentRow, index > 0 && styles.paymentDivided]}>
                           <View style={styles.flex}>
@@ -219,6 +221,11 @@ export default function WalletBalanceScreen({
                               {period ? `ご利用 ${shortDay(period.from)}〜${shortDay(period.to)}・` : ''}
                               {monthDayLabel(payment.lastOn)}に引き落とし
                             </Text>
+                            {carried && (
+                              <Text style={type.faint}>
+                                うち{Number(carried.monthKey.slice(5))}月分（翌月払い） {formatYen(carried.amount)}
+                              </Text>
+                            )}
                           </View>
                           {payment.estimate && <EstimateBadge />}
                           <Text style={type.amount}>{formatYen(payment.amount)}</Text>
