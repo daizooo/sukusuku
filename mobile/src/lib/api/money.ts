@@ -105,6 +105,7 @@ export const rowToRecord = (row: RecordRow & { money_items: ItemRow[] }): MoneyR
   isEstimate: row.is_estimate,
   recurringId: row.recurring_id,
   month: row.month === null ? null : row.month.slice(0, 7),
+  cardNextPeriod: row.card_next_period,
   items: [...row.money_items].sort((a, b) => a.position - b.position).map(rowToItem),
 });
 
@@ -276,6 +277,12 @@ export async function saveMoneyRecord(supabase: SupabaseDb, draft: MoneyRecordDr
   }));
   const { data, error } = await supabase.rpc('save_money_record', { p_record: record, p_items: items });
   if (error) throw error;
+  // 「翌月分に回す」は save_money_record が持たない列なので、保存のあとに入れる（docs/kakei.md §3.4。0104）。
+  const cardNextPeriod = draft.cardNextPeriod;
+  if (cardNextPeriod || draft.id !== null) {
+    const { error: flagError } = await supabase.from('money_records').update({ card_next_period: cardNextPeriod }).eq('id', data);
+    if (flagError) throw flagError;
+  }
   return loadRecord(supabase, data);
 }
 

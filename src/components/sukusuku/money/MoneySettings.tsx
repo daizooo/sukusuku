@@ -85,7 +85,7 @@ export default function MoneySettings({
     { id: 'stores', label: 'よく行くお店', summary: `登録したお店 ${storeCount}件`, icon: Store },
     {
       id: 'feed',
-      label: 'Zaim 取り込み',
+      label: 'Gmail 取り込み',
       summary: feed ? `口座の対応・取り込みのルール ${feed.rules.length}件` : '口座の対応・取り込みのルール',
       icon: Mail,
     },
@@ -100,7 +100,7 @@ export default function MoneySettings({
           <ScreenHeader title="家計の設定" onClose={onClose} />
           <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 p-4">
             <p className="pb-1 text-[13px] leading-relaxed text-gray-500">
-              カテゴリ・予算・固定支出・固定収入・よく行くお店・Zaim 取り込みを、いつでも編集・追加できます。直すのは設定だけで、記録は変わりません。
+              カテゴリ・予算・固定支出・固定収入・よく行くお店・Gmail 取り込みを、いつでも編集・追加できます。直すのは設定だけで、記録は変わりません。
             </p>
             {rows.map((row) => {
               const Icon = row.icon;

@@ -140,7 +140,7 @@ export default function MoneyFeedSettings({
   if (!feed) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Zaim 取り込み" icon="back" onClose={onBack} />
+        <ScreenHeader title="Gmail 取り込み" icon="back" onClose={onBack} />
         <Text style={styles.empty}>読み込み中...</Text>
       </View>
     );
@@ -230,10 +230,10 @@ export default function MoneyFeedSettings({
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="Zaim 取り込み" icon="back" onClose={onBack} />
+      <ScreenHeader title="Gmail 取り込み" icon="back" onClose={onBack} />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.note}>
-          Zaim の入出金通知メールを Gmail の Apps Script が送り、口座の明細として取り込みます。振替・自動の記録・手入力と突き合わせ、
+          Gmail に届く通知メール（カードの利用通知・Zaim の入出金通知）を Apps Script が送り、明細として取り込みます。振替・自動の記録・手入力と突き合わせ、
           当たらないものは「口座」の面の「未確認」に残ります。
         </Text>
 
@@ -250,7 +250,7 @@ export default function MoneyFeedSettings({
         </View>
 
         <Text style={styles.sectionTitle}>口座の対応</Text>
-        <Text style={styles.sub}>Zaim の口座名を、かぞく手帳の出金元に結びます。所持者で、同じ銀行の口座を分けます。</Text>
+        <Text style={styles.sub}>メールの口座名（カード名・銀行名）を、かぞく手帳の出金元に結びます。所持者で、同じ銀行の口座を分けます。</Text>
         <View style={styles.card}>
           {accountRows.length === 0 && <Text style={styles.cardEmpty}>まだ明細が届いていません</Text>}
           {accountRows.map((row, index) => (
@@ -468,7 +468,7 @@ function AccountSheet({
         <Field label="所持者（例: 本人・妻・子）">
           <TextInput style={styles.input} value={holderName} onChangeText={setHolderName} placeholder="本人" placeholderTextColor={colors.textFaint} />
         </Field>
-        <Field label="所持者の Zaim のアカウント（通知の宛先）" hint="同じ銀行の口座が2つあるとき、宛先で分けます。">
+        <Field label="所持者の通知の宛先（メールアドレス）" hint="同じ銀行の口座が2つあるとき、宛先で分けます。">
           <TextInput
             style={styles.input}
             value={email}

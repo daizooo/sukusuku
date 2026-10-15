@@ -365,6 +365,11 @@ export function EstimateBadge() {
   );
 }
 
+/** カードの引き落としを翌月分に回した記録の印（docs/kakei.md §3.4）。 */
+export function NextPeriodBadge() {
+  return <span className="shrink-0 rounded-md bg-gray-100 px-1.5 py-px text-[10px] font-bold text-gray-500">翌月払い</span>;
+}
+
 /**
  * 全画面の入力の枠。戻る操作（ブラウザ・スマホ）で onBack を呼ぶ。
  * 横幅の広い画面（タブレット・PC）で両脇に出る暗い部分を押しても onBack を呼ぶ。

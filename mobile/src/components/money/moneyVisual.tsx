@@ -414,6 +414,15 @@ export function EstimateBadge() {
   );
 }
 
+/** カードの引き落としを翌月分に回した記録の印（docs/kakei.md §3.4）。 */
+export function NextPeriodBadge() {
+  return (
+    <View style={styles.nextPeriod}>
+      <Text style={styles.nextPeriodText}>翌月払い</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   gain: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   flex: { flex: 1 },
@@ -477,4 +486,6 @@ const styles = StyleSheet.create({
   primaryText: { fontSize: 15, fontWeight: '700', color: colors.moneyText },
   estimate: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, backgroundColor: colors.moneyEstimateSurface },
   estimateText: { fontSize: 10, fontWeight: '700', color: colors.moneyEstimate },
+  nextPeriod: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, backgroundColor: colors.neutralSurface },
+  nextPeriodText: { fontSize: 10, fontWeight: '700', color: colors.textMuted },
 });

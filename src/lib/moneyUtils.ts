@@ -1785,10 +1785,18 @@ const monthDay = (year: number, month: number, day: number): string => {
   return `${year}-${pad2(month)}-${pad2(Math.min(day, last))}`;
 };
 
+/** 「カードの引き落としを翌月分に回す」を選べる記録か（出金元がカードで、日付が25日以降。振替は除く）。docs/kakei.md §3.4。 */
+export const canCardNextPeriod = (
+  kind: MoneyRecordKind,
+  wallet: Pick<MoneyWallet, 'type'> | null | undefined,
+  occurredOn: string,
+): boolean => kind !== 'transfer' && wallet?.type === 'card' && Number(occurredOn.slice(8, 10)) >= 25;
+
 /**
  * カードの請求の内訳。残高（マイナス＝未払い）が「請求済み」と「未請求」に分かれる。
  * 引き落としは締め日ごとにまとめて口座から落ちるので、残高には先月の請求と今月の利用が両方入っている。
  * 締め日が未設定のカードは null。未請求 ＝ 締め日のあとの利用（支出 − 返品。振替は入れない）、請求済み ＝ 未払い − 未請求。
+ * 「翌月分に回す」記録（cardNextPeriod）は、日付の期間の次の期間の利用として数える（締め日の前の1期間ぶんも未請求に入る）。
  */
 export function cardBilling(
   wallet: Pick<MoneyWallet, 'id' | 'closeDay' | 'payDay' | 'payMonthOffset'>,
@@ -1805,9 +1813,15 @@ export function cardBilling(
       : month === 1
         ? monthDay(year - 1, 12, wallet.closeDay)
         : monthDay(year, month - 1, wallet.closeDay);
+  const [closedYear, closedMonth] = shiftMonth(monthKeyOf(closedOn), -1).split('-').map(Number);
+  const closedBefore = monthDay(closedYear, closedMonth, wallet.closeDay);
   const unbilled = records
     .filter((record) => record.kind !== 'transfer' && record.walletId === wallet.id)
-    .filter((record) => record.occurredOn > closedOn && record.occurredOn <= asOf)
+    .filter(
+      (record) =>
+        record.occurredOn <= asOf &&
+        (record.occurredOn > closedOn || (record.cardNextPeriod && record.occurredOn > closedBefore)),
+    )
     .reduce((sum, record) => sum - walletDelta(record, wallet.id), 0);
   const owed = Math.max(0, -amount);
   const unbilledOwed = Math.min(Math.max(0, unbilled), owed);
@@ -1849,6 +1863,32 @@ export function cardUsagePeriod(
   }
   const before = closeOn(shiftMonth(monthKeyOf(to), -1));
   return { from: addDays(before, 1), to };
+}
+
+/**
+ * 引き落とし月の利用に、前の期間から「翌月分に回す」で回ってきた額（支出 − 返品）と、その期間の締め日の月（YYYY-MM）。
+ * カードの引き落としの内訳に「9月分」と添える。回ってきた記録が無ければ null。docs/kakei.md §3.4。
+ */
+export function cardCarriedIn(
+  wallet: Pick<MoneyWallet, 'id' | 'closeDay' | 'payDay' | 'payMonthOffset'>,
+  payMonthKey: string,
+  records: readonly MoneyRecord[],
+): { monthKey: string; amount: number } | null {
+  const period = cardUsagePeriod(wallet, payMonthKey);
+  if (period === null || wallet.closeDay === null) return null;
+  const to = addDays(period.from, -1);
+  const [year, month] = shiftMonth(monthKeyOf(to), -1).split('-').map(Number);
+  const after = monthDay(year, month, wallet.closeDay);
+  const carried = records.filter(
+    (record) =>
+      record.cardNextPeriod &&
+      record.kind !== 'transfer' &&
+      record.walletId === wallet.id &&
+      record.occurredOn > after &&
+      record.occurredOn <= to,
+  );
+  if (carried.length === 0) return null;
+  return { monthKey: monthKeyOf(to), amount: carried.reduce((sum, record) => sum - walletDelta(record, wallet.id), 0) };
 }
 
 export interface CardPaymentMonth {
