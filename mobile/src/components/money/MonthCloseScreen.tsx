@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronRight } from 'lucide-react-native';
-import type { MoneyBudget, MoneyCategory, MoneyRecord, MoneyRecurring } from '@/types/app';
+import type { MoneyBudget, MoneyCategory, MoneyRecord, MoneyRecurring, MoneyWallet } from '@/types/app';
+import type { CardMonthChecks } from '@/lib/moneyFeedUtils';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import {
@@ -37,6 +38,9 @@ interface MonthCloseScreenProps {
   today: string;
   /** その月の日付の、未確認の明細の件数。 */
   feedCount: number;
+  /** カードの記録を明細と見比べるための一覧（利用通知を取り込んでいるときだけ。docs/kakei.md §9.6.5 の C）。 */
+  cardChecks: CardMonthChecks | null;
+  wallets: MoneyWallet[];
   closed: boolean;
   /** 締めた日時（締めた月だけ）。 */
   closedAt: string | null;
@@ -75,6 +79,8 @@ export default function MonthCloseScreen({
   recurring,
   today,
   feedCount,
+  cardChecks,
+  wallets,
   closed,
   closedAt,
   onConfirmEstimate,
@@ -94,6 +100,14 @@ export default function MonthCloseScreen({
   // 確定を押した記録（読み直しが届くまで、二度押せないように）。
   const [confirming, setConfirming] = useState<string | null>(null);
   const label = `${Number(monthKey.slice(5, 7))}月`;
+  const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '';
+  // カードの明細と見比べるもの: 利用通知と額の違う記録 → 通知の来ていない記録
+  const cardRows = cardChecks
+    ? [
+        ...cardChecks.mismatched.map(({ record, feedAmount }) => ({ record, note: `通知の ${formatYen(feedAmount)} と違います` })),
+        ...cardChecks.unnotified.map((record) => ({ record, note: '利用通知が来ていません' })),
+      ]
+    : [];
 
   // これから自動で作られる記録があれば、締める前に確かめる。
   const closeMonth = () => {
@@ -183,6 +197,37 @@ export default function MonthCloseScreen({
               </View>
               <Text style={type.faint}>
                 固定収入・固定費で、この月のうちにまだ自動で記録されていないものです。上の収支には入っていません。記録されてから締めると確かです
+              </Text>
+            </>
+          )}
+
+          {cardRows.length > 0 && (
+            <>
+              <SectionHeader compact title="カードの明細と見比べるもの" hint={`${cardRows.length}件`} />
+              <View style={styles.card}>
+                {cardRows.map(({ record, note }, index) => (
+                  <Pressable
+                    key={record.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${recordTitle(record, categories)}の記録を開く`}
+                    onPress={() => onOpenRecord(record)}
+                    style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.date}>{formatShortDate(record.occurredOn)}</Text>
+                    <View style={styles.flex}>
+                      <Text style={styles.rowName} numberOfLines={1}>
+                        {recordTitle(record, categories)}
+                      </Text>
+                      <Text style={type.faint} numberOfLines={1}>
+                        {note}・{walletName(record.walletId)}
+                      </Text>
+                    </View>
+                    <Text style={styles.amount}>{formatYen(recordTotal(record))}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={type.faint}>
+                カード会社の明細と見比べ、違っていれば押して直してください。携帯電話・サブスクなどの継続的な支払いは利用通知が来ません
               </Text>
             </>
           )}

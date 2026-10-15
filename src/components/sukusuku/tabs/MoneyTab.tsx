@@ -553,6 +553,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               months={closings}
               recurring={recurring}
               feedItems={feed?.open ?? []}
+              cardFeed={feed?.cardFeed ?? null}
               onConfirmEstimate={confirmEstimate}
               onSetMonthClosed={(target, closed) => void setMonthClosed(target, closed)}
               onOpenFeed={() => setFeedOpen(true)}

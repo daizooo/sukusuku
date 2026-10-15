@@ -846,6 +846,18 @@ export interface MoneyFeedData {
   lastReceivedAt: string | null;
   /** この30日に届いた明細の数。 */
   recentCount: number;
+  /** カードの利用通知の取り込み（月の締めの照合に使う。docs/kakei.md §9.6.5 の C）。 */
+  cardFeed: MoneyCardFeed;
+}
+
+/** カードの利用通知の取り込みのようす（新しい500件の明細から）。 */
+export interface MoneyCardFeed {
+  /** 利用通知から来た記録の、通知の額（記録の id → 円）。 */
+  linkedAmounts: Record<string, number>;
+  /** 利用通知が届いたことのあるカード（出金元の id）。 */
+  walletIds: string[];
+  /** いちばん古い利用通知の利用日（YYYY-MM-DD）。これより前のカードの記録は「通知が来ていない」に数えない。 */
+  since: string | null;
 }
 
 /** レシートの読み取りの結果（Edge Function money-receipt-scan。docs/kakei.md §10.4）。記録の入力に入れて開く。 */
