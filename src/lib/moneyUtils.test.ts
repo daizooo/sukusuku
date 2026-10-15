@@ -80,6 +80,7 @@ import {
   yearToDateBalance,
   incomeRecordsInYear,
   recurringDayLabel,
+  receiptReplaceNotices,
 } from './moneyUtils.ts';
 import type { MoneyBudget, MoneyCategory, MoneyHolding, MoneyHoldingValue, MoneyItem, MoneyRecord, MoneyRecurring, MoneySecurity, MoneyStore, MoneyWallet, MoneyWalletBalance } from '../types/app.ts';
 
@@ -1118,3 +1119,16 @@ assert.deepEqual(
   [{ id: 'a', position: 1 }],
   'position が重なっていても並びが決まる',
 );
+
+// ---- 既にある記録にレシートを当てる前の確認（docs/kakei.md §10.8） ----
+{
+  // カードの利用通知から作った記録（品名の無い品目1つ）で合計が同じなら、確かめずに入れ替える
+  const fromMail = record('rm', { items: [item({ amount: 4415 })] });
+  assert.deepEqual(receiptReplaceNotices(fromMail, 4415), []);
+  assert.deepEqual(receiptReplaceNotices(fromMail, 4400), ['記録の ¥4,415 とレシートの ¥4,400 で合計が違います']);
+  // 手で入れた品目（2つ以上・品名あり）は確かめる
+  const manual = record('rh', { items: [item({ amount: 4000 }), item({ amount: 415 })] });
+  assert.deepEqual(receiptReplaceNotices(manual, 4415), ['手で入れた品目があります']);
+  const named = record('rn', { items: [item({ amount: 4415, name: '牛乳' })] });
+  assert.deepEqual(receiptReplaceNotices(named, 4000), ['記録の ¥4,415 とレシートの ¥4,000 で合計が違います', '手で入れた品目があります']);
+}

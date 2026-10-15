@@ -60,6 +60,7 @@ import {
   isMonthClosed,
   monthKeyOf,
   monthKeyOfDate,
+  receiptReplaceNotices,
   recordTotal,
   yearOfMonth,
 } from '@/lib/moneyUtils';
@@ -149,6 +150,10 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [editing, setEditing] = useState<Editing>(null);
   // レシートの読み取りの結果（記録の入力に入れて開く）と、読み取り中か（docs/kakei.md §10）。
   const [receipt, setReceipt] = useState<ReceiptScan | null>(null);
+  // レシートを当てている既にある記録（§10.8）。null は新しい記録の読み取り。
+  const [receiptFor, setReceiptFor] = useState<string | null>(null);
+  // 写真を選ぶ前に「どの記録に当てるか」を覚えておく（ファイルの選択は別の流れで返ってくるため）
+  const receiptTarget = useRef<MoneyRecord | null>(null);
   const [scanning, setScanning] = useState(false);
   const receiptInput = useRef<HTMLInputElement>(null);
   const [editingCategories, setEditingCategories] = useState(false);
@@ -316,6 +321,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     if (!confirmNotDuplicate(draft)) return;
     setEditing(null);
     setReceipt(null);
+    setReceiptFor(null);
     try {
       const saved = await saveMoneyRecord(supabase, draft);
       setRecords((prev) => [...prev.filter((record) => record.id !== saved.id), saved]);
@@ -362,16 +368,41 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     }
   };
 
-  /** 撮った・選んだレシートの写真を読み取り、その内容を入れた記録の入力を開く（docs/kakei.md §10）。 */
+  /**
+   * 撮った・選んだレシートの写真を読み取り、その内容を入れた記録の入力を開く（docs/kakei.md §10）。
+   * 既にある記録に当てるとき（receiptTarget）は、出金元・日付はそのままで品目をレシートの品目に入れ替えて開く。合計が違う・
+   * 手で入れた品目があるときは、置き換えるかスキップするかを先に選ぶ（§10.8）。保存は人がする。
+   */
   const readReceipt = async (files: FileList | null) => {
+    const target = receiptTarget.current;
+    receiptTarget.current = null;
     if (!files || files.length === 0) return;
+    // 読み取っている間は記録の入力を閉じる（読み取り中の表示が見えるように）
+    if (target) setEditing(null);
     setScanning(true);
     try {
       const images = await receiptImagesFromFiles(files);
-      if (images.length === 0) return;
-      setReceipt(await scanReceipt(supabase, images));
-      setEditing('new');
+      if (images.length === 0) {
+        if (target) setEditing(target);
+        return;
+      }
+      const scan = await scanReceipt(supabase, images);
+      if (!target) {
+        setReceiptFor(null);
+        setReceipt(scan);
+        setEditing('new');
+        return;
+      }
+      const notices = receiptReplaceNotices(target, scan.receiptTotal);
+      if (notices.length > 0 && !window.confirm(`品目をレシートの品目に置き換えますか？\n${notices.join('\n')}`)) {
+        setEditing(target);
+        return;
+      }
+      setReceipt(scan);
+      setReceiptFor(target.id);
+      setEditing(target);
     } catch (error) {
+      if (target) setEditing(target);
       window.alert(`レシートを読み取れませんでした。${error instanceof Error ? error.message : ''}`);
     } finally {
       setScanning(false);
@@ -584,7 +615,10 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       {/* 右下の1つの大きなボタン。押すと「記録を追加」「レシートを読む」「家計の設定」が開く（2026-10-10）。 */}
       <MoneyFab
         onAdd={() => setEditing('new')}
-        onScan={() => receiptInput.current?.click()}
+        onScan={() => {
+          receiptTarget.current = null;
+          receiptInput.current?.click();
+        }}
         onSettings={() => setSettingsOpen(true)}
       />
 
@@ -607,9 +641,13 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
 
       {editing !== null && (
         <RecordEditor
-          key={editing === 'new' ? (receipt ? 'receipt' : 'new') : editing.id}
+          key={editing === 'new' ? (receipt ? 'receipt' : 'new') : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
           record={editing === 'new' ? null : editing}
-          receipt={editing === 'new' ? receipt : null}
+          receipt={editing === 'new' || receiptFor === editing.id ? receipt : null}
+          onScanReceipt={(target) => {
+            receiptTarget.current = target;
+            receiptInput.current?.click();
+          }}
           categories={categories}
           budgets={allBudgets}
           wallets={wallets}
@@ -618,6 +656,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           onClose={() => {
             setEditing(null);
             setReceipt(null);
+            setReceiptFor(null);
           }}
           onSubmit={(draft) => void saveRecord(draft)}
           onDelete={(record) => void removeRecord(record)}
