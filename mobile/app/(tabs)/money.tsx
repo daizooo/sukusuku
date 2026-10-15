@@ -66,6 +66,7 @@ import {
   isMonthClosed,
   monthKeyOf,
   monthKeyOfDate,
+  receiptReplaceNotices,
   recordTotal,
   yearOfMonth,
 } from '@/lib/moneyUtils';
@@ -159,6 +160,8 @@ export default function MoneyScreen() {
   const [newKind, setNewKind] = useState<MoneyRecordKind>('expense');
   // レシートの読み取りの結果（記録の入力に入れて開く）と、読み取り中か（docs/kakei.md §10）。
   const [receipt, setReceipt] = useState<ReceiptScan | null>(null);
+  // レシートを当てている既にある記録（§10.8）。null は新しい記録の読み取り。
+  const [receiptFor, setReceiptFor] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [editingCategories, setEditingCategories] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -333,6 +336,7 @@ export default function MoneyScreen() {
     if (!(await confirmNotDuplicate(draft))) return;
     setEditing(null);
     setReceipt(null);
+    setReceiptFor(null);
     try {
       const saved = await saveMoneyRecord(supabase, draft);
       setRecords((prev) => [...prev.filter((record) => record.id !== saved.id), saved]);
@@ -382,8 +386,12 @@ export default function MoneyScreen() {
     }
   };
 
-  /** レシートを撮って読み取り、その内容を入れた記録の入力を開く（docs/kakei.md §10）。 */
-  const startReceiptScan = async () => {
+  /**
+   * レシートを撮って読み取り、その内容を入れた記録の入力を開く（docs/kakei.md §10）。
+   * target（既にある記録）があれば、出金元・日付はそのままで品目をレシートの品目に入れ替えて開く。合計が違う・手で入れた品目が
+   * あるときは、置き換えるかスキップするかを先に選ぶ（§10.8）。保存は人がする。
+   */
+  const startReceiptScan = async (target?: MoneyRecord) => {
     let images: Awaited<ReturnType<typeof captureReceipt>>;
     try {
       images = await captureReceipt();
@@ -392,11 +400,33 @@ export default function MoneyScreen() {
       return;
     }
     if (!images) return;
+    // 読み取っている間は記録の入力を閉じる（読み取り中の表示が見えるように）
+    if (target) setEditing(null);
     setScanning(true);
     try {
-      setReceipt(await scanReceipt(supabase, images));
-      setEditing('new');
+      const scan = await scanReceipt(supabase, images);
+      if (!target) {
+        setReceiptFor(null);
+        setReceipt(scan);
+        setEditing('new');
+        return;
+      }
+      const apply = () => {
+        setReceipt(scan);
+        setReceiptFor(target.id);
+        setEditing(target);
+      };
+      const notices = receiptReplaceNotices(target, scan.receiptTotal);
+      if (notices.length === 0) {
+        apply();
+        return;
+      }
+      Alert.alert('品目をレシートの品目に置き換えますか？', notices.join('\n'), [
+        { text: 'スキップ', style: 'cancel', onPress: () => setEditing(target) },
+        { text: '置き換える', onPress: apply },
+      ]);
     } catch (error) {
+      if (target) setEditing(target);
       Alert.alert('レシートを読み取れませんでした', error instanceof Error ? error.message : undefined);
     } finally {
       setScanning(false);
@@ -655,9 +685,10 @@ export default function MoneyScreen() {
 
       {editing !== null && (
         <RecordEditor
-          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newKind}`) : editing.id}
+          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newKind}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
           record={editing === 'new' ? null : editing}
-          receipt={editing === 'new' ? receipt : null}
+          receipt={editing === 'new' || receiptFor === editing.id ? receipt : null}
+          onScanReceipt={(target) => void startReceiptScan(target)}
           initialKind={newKind}
           categories={categories}
           budgets={allBudgets}
@@ -667,6 +698,7 @@ export default function MoneyScreen() {
           onClose={() => {
             setEditing(null);
             setReceipt(null);
+            setReceiptFor(null);
           }}
           onSubmit={(draft) => void saveRecord(draft)}
           onDelete={(record) => void removeRecord(record)}

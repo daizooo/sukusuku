@@ -701,6 +701,18 @@ export function budgetMonthKey(year: number, today: string): string {
 export const recordTotal = (record: Pick<MoneyRecord, 'items'>): number =>
   record.items.reduce((sum, item) => sum + item.amount, 0);
 
+/**
+ * 既にある記録にレシートを当てる前に確かめること（docs/kakei.md §10.8）。無ければ空で、そのまま品目を入れ替えてよい。
+ * 合計が違う・手で入れた品目（2つ以上か、品名のある品目）があれば、置き換えるかスキップするかを選んでもらう。
+ */
+export function receiptReplaceNotices(record: Pick<MoneyRecord, 'items'>, receiptTotal: number): string[] {
+  const notices: string[] = [];
+  const total = recordTotal(record);
+  if (total !== receiptTotal) notices.push(`記録の ${formatYen(total)} とレシートの ${formatYen(receiptTotal)} で合計が違います`);
+  if (record.items.length > 1 || record.items.some((item) => item.name.trim() !== '')) notices.push('手で入れた品目があります');
+  return notices;
+}
+
 /** 新しい順（日付が同じなら入った順の逆）。 */
 export function sortRecordsDesc<T extends { occurredOn: string }>(records: readonly T[]): T[] {
   return records

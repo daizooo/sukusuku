@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ArrowRight, ChevronRight, CreditCard, Plus, Store, Trash2 } from 'lucide-react';
+import { ArrowRight, Camera, ChevronRight, CreditCard, Plus, Store, Trash2 } from 'lucide-react';
 import type {
   MoneyBudget,
   MoneyCategory,
@@ -88,8 +88,13 @@ export interface RecordEditorProps {
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onDeleteWallet: (wallet: MoneyWallet) => void;
   onEditCategories: () => void;
-  /** レシートの読み取りの結果。あれば、その内容を入れた新しい記録として開く（docs/kakei.md §10.4）。 */
+  /**
+   * レシートの読み取りの結果。あれば、その内容を入れた新しい記録として開く（docs/kakei.md §10.4）。
+   * 既にある記録（record）と一緒に渡すと、出金元・日付はそのままで、品目をレシートの品目に入れ替えて開く（§10.8）。
+   */
   receipt?: ReceiptScan | null;
+  /** 既にある記録にレシートを撮って品目を入れる（支出・収入の記録だけ。§10.8）。 */
+  onScanReceipt?: (record: MoneyRecord) => void;
 }
 
 /**
@@ -115,6 +120,7 @@ export default function RecordEditor({
   onDeleteWallet,
   onEditCategories,
   receipt = null,
+  onScanReceipt,
 }: RecordEditorProps) {
   const [kind, setKind] = useState<MoneyRecordKind>(record?.kind ?? 'expense');
   const [occurredOn, setOccurredOn] = useState(
@@ -126,14 +132,14 @@ export default function RecordEditor({
   );
   const [walletId, setWalletId] = useState<string | null>(initialWalletId);
   const [toWalletId, setToWalletId] = useState<string | null>(record?.toWalletId ?? null);
-  const [store, setStore] = useState(record?.store ?? receipt?.store ?? '');
+  const [store, setStore] = useState(record?.store || receipt?.store || '');
   // お店の選択で「お店に登録して使う」を選んだか（保存のときにお店の設定に登録する。docs/kakei.md §3.5）。
   const [registerStore, setRegisterStore] = useState(false);
   const [groups, setGroups] = useState<EditorGroup[]>(() =>
-    record && record.kind !== 'transfer'
-      ? groupsFromItems(record.items, newGroupKey)
-      : receipt
-        ? groupsFromScan(receipt.items, newGroupKey)
+    receipt && record?.kind !== 'transfer'
+      ? groupsFromScan(receipt.items, newGroupKey)
+      : record && record.kind !== 'transfer'
+        ? groupsFromItems(record.items, newGroupKey)
         : [],
   );
   const [transferAmount, setTransferAmount] = useState(() =>
@@ -173,7 +179,7 @@ export default function RecordEditor({
     ? [
         total !== receipt.receiptTotal &&
           `レシートの合計 ${formatYen(receipt.receiptTotal)} と ${formatYen(total - receipt.receiptTotal)} 違います`,
-        receipt.walletId === null && walletId === initialWalletId && '出金元を確かめてください（レシートから分かりませんでした）',
+        !record && receipt.walletId === null && walletId === initialWalletId && '出金元を確かめてください（レシートから分かりませんでした）',
         groups.some((group) => group.categoryId === null && group.categoryName === '') && '種類の決まっていない品目があります',
       ].filter((notice): notice is string => typeof notice === 'string')
     : [];
@@ -541,6 +547,14 @@ export default function RecordEditor({
               <span className={`flex-1 text-base ${store === '' ? 'text-gray-400' : 'text-gray-900'}`}>{store || 'お店'}</span>
               <ChevronRight size={18} className="text-gray-400" />
             </button>
+
+            {record && !receipt && onScanReceipt && (
+              <button type="button" onClick={() => onScanReceipt(record)} className={fieldClass}>
+                <Camera size={20} className="text-gray-500" />
+                <span className="flex-1 text-base text-gray-900">レシートを撮って品目を入れる</span>
+                <ChevronRight size={18} className="text-gray-400" />
+              </button>
+            )}
 
             <div className="mt-4 mb-1 flex items-baseline justify-between">
               <span className="text-sm font-semibold text-gray-500">品目</span>
