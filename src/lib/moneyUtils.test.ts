@@ -29,6 +29,8 @@ import {
   inRecurringPeriod,
   isMonthClosed,
   unclosedMonths,
+  buildYearLanding,
+  monthForecastBalance,
   pendingRecurringInMonth,
   parsePeriodMonth,
   recurringEnded,
@@ -300,6 +302,55 @@ assert.equal(fixedBudgetFor(withFixed, 'house', '2025-12'), 0, 'ルールを作�
     ['2026-07', '2026-08'],
     '記録のある過ぎた月のうち締めていないもの（振替だけの月・今月は数えない）',
   );
+}
+{
+  // 年末の着地見込み（docs/kakei.md §4.6）
+  const cats = [
+    { id: 'food', kind: 'living', parentId: null, archived: false, position: 0, name: '食費' },
+    { id: 'house', kind: 'living', parentId: null, archived: false, position: 1, name: '住居費' },
+    { id: 'salary', kind: 'income', parentId: null, archived: false, position: 0, name: '給料' },
+  ] as unknown as MoneyCategory[];
+  const buds: MoneyBudget[] = [{ id: 'b1', categoryId: 'food', year: 2026, monthAmounts: Array.from({ length: 12 }, () => 50000) }];
+  const rule = (over: Partial<MoneyRecurring>): MoneyRecurring =>
+    ({
+      kind: 'expense', months: null, amount: 0, categoryId: null, archived: false, walletId: 'w1', toWalletId: null,
+      store: '', day: 25, weekOfMonth: null, weekday: null, holiday: 'none', amountMode: 'fixed', createdAt: '2026-09-01',
+      startMonth: null, endMonth: null, ...over,
+    }) as MoneyRecurring;
+  const rules = [
+    rule({ id: 'sal', kind: 'income', categoryId: 'salary', amount: 300000 }),
+    rule({ id: 'rent', categoryId: 'house', amount: 80000 }),
+    rule({ id: 'save', kind: 'transfer', categoryId: 'house', toWalletId: 'w2', amount: 50000 }), // 振替は数えない
+    rule({ id: 'old', categoryId: 'house', amount: 9999, archived: true }), // 使っていないルール
+    rule({ id: 'end', categoryId: 'house', amount: 10000, endMonth: '2026-11' }), // 11月まで
+  ];
+  const r = (id: string, occurredOn: string, kind: MoneyRecord['kind'], amount: number, categoryId: string) =>
+    ({ id, occurredOn, kind, isEstimate: false, recurringId: null, month: null, items: [{ id: `i-${id}`, amount, categoryId }] }) as unknown as MoneyRecord;
+  const rs = [r('a', '2026-10-25', 'income', 300000, 'salary'), r('b', '2026-10-03', 'expense', 100000, 'food')];
+  const closings = [{ month: '2026-10', closedAt: '2026-11-01T00:00:00Z' }];
+
+  assert.equal(monthForecastBalance(rules, cats, buds, rs, '2026-11'), 300000 - 80000 - 10000 - 50000, '固定収入 − 固定費 − 変動費の予算');
+  assert.equal(monthForecastBalance(rules, cats, buds, rs, '2026-12'), 170000, '期間の外のルールは数えない');
+  assert.equal(monthForecastBalance(rules, cats, buds, rs, '2027-03'), 170000, '先の年の予算は前の年の12月の額');
+
+  const landing = buildYearLanding(rs, cats, buds, rules, closings, 2026);
+  assert.ok(landing);
+  assert.deepEqual(
+    landing.months.filter((m) => m.counted).map((m) => [m.monthKey, m.closed, m.balance, m.cumulative]),
+    [['2026-10', true, 200000, 200000], ['2026-11', false, 160000, 360000], ['2026-12', false, 170000, 530000]],
+    '使い始めた月から。締めた月は実額、ほかは見込み',
+  );
+  assert.equal(landing.total, 530000);
+  assert.equal(landing.closedMonths, 1);
+
+  const open = buildYearLanding(rs, cats, buds, rules, [], 2026);
+  assert.equal(open?.months[9].balance, 160000, '締めていない月は実績（200000）を使わず見込み');
+
+  const next = buildYearLanding(rs, cats, buds, rules, closings, 2027);
+  assert.equal(next?.months.every((m) => m.counted && !m.closed), true, '先の年は全部の月を見込み');
+  assert.equal(next?.total, 170000 * 12);
+  assert.equal(buildYearLanding([], cats, buds, rules, closings, 2026), null, '記録が無ければ出さない');
+  assert.equal(buildYearLanding(rs, cats, buds, rules, closings, 2025), null, '使い始める前の年は出さない');
 }
 assert.equal(parsePeriodMonth(''), null, '空は無期限');
 assert.equal(parsePeriodMonth('2027/9'), '2027-09');
