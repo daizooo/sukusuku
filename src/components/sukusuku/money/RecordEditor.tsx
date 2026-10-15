@@ -230,7 +230,6 @@ export default function RecordEditor({
       lines,
       selected: null,
       expr: '',
-      focusKey: null,
     });
     push({ type: 'items' });
   };
@@ -251,7 +250,6 @@ export default function RecordEditor({
       lines: [...(existing?.lines ?? []), line],
       selected: line.key,
       expr: '',
-      focusKey: null,
     });
     replaceTop({ type: 'items' });
   };

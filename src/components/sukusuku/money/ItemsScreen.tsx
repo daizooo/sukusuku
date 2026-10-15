@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { ChevronRight, Minus, Plus, Trash2 } from 'lucide-react';
 import {
   editorLineAmount,
@@ -16,7 +17,7 @@ import { CategoryIcon, PrimaryButton, ScreenHeader, StackedScreen } from './mone
 // 品目の画面（docs/kakei.md §3.2）。mobile版の `mobile/src/components/money/ItemsScreen.tsx` と同じ並び・文言。
 //
 // 1つの種類の品目を何行でもまとめて記録する。行＝品名・個数（−＋）・単価・金額。
-// 一覧のいちばん下に空の行を置き、押すとそこに新しく入力する（入れると次の空の行が出る）。
+// 一覧のいちばん下に空の行を置き、押すと新しい行を足す（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）。
 // 選んだ行（青）の単価を下の電卓で直す（＋−×÷）。電卓はこの画面で初めて出る。
 // 値引き・割引・返金は「マイナスにする」で、選んだ行の金額をマイナスにする（docs/kakei.md §10.5）。
 // 種類は見出しの下に1行で小さく出す（押すと変えられる）。
@@ -32,8 +33,6 @@ export interface ItemsWork {
   selected: string | null;
   /** 選んだ行の電卓の式。 */
   expr: string;
-  /** 品名の欄を開いたままにする行（空の行を押した直後）。 */
-  focusKey: string | null;
 }
 
 let lineSeq = 0;
@@ -78,17 +77,27 @@ export default function ItemsScreen({
     onChange({ ...work, lines: work.lines.map((line) => (line.key === key ? { ...line, ...patch } : line)) });
 
   const select = (line: EditorLine) =>
-    onChange({ ...work, selected: line.key, expr: line.unitPrice !== 0 ? String(Math.abs(line.unitPrice)) : '', focusKey: null });
+    onChange({ ...work, selected: line.key, expr: line.unitPrice !== 0 ? String(Math.abs(line.unitPrice)) : '' });
+
+  // 行を足したとき、新しい行が見える所まで一覧を送る（品名の欄は開かない）。
+  const addButton = useRef<HTMLButtonElement>(null);
+  const scrollToNew = useRef(false);
+  useEffect(() => {
+    if (!scrollToNew.current) return;
+    scrollToNew.current = false;
+    addButton.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [work.lines.length, work.selected]);
 
   const addLine = () => {
     // 書きかけの空の行は残さない（空の行は保存もしない）。
+    // 品名の欄は開かない（キーボードが立ち上がって電卓と一覧が隠れるため。品名は欄を押して入れる）。
     const line = blankLine();
+    scrollToNew.current = true;
     onChange({
       ...work,
       lines: [...work.lines.filter((entry) => !isBlankLine(entry)), line],
       selected: line.key,
       expr: '',
-      focusKey: line.key,
     });
   };
 
@@ -103,7 +112,6 @@ export default function ItemsScreen({
     onChange({
       ...current,
       expr,
-      focusKey: null,
       // 電卓は金額の大きさだけを扱い、マイナスの行はマイナスのまま。
       lines: current.lines.map((line) =>
         line.key === current.selected ? { ...line, unitPrice: line.unitPrice < 0 ? -value : value } : line,
@@ -166,7 +174,6 @@ export default function ItemsScreen({
                 onChange={(event) => updateLine(line.key, { name: event.target.value })}
                 onFocus={() => (selected ? undefined : select(line))}
                 placeholder="品名"
-                autoFocus={line.key === work.focusKey}
               />
               <span className="flex items-center gap-1.5">
                 <button
@@ -206,11 +213,12 @@ export default function ItemsScreen({
           );
         })}
         <button
+          ref={addButton}
           type="button"
           onClick={addLine}
           className="flex w-full items-center border-b border-dashed border-gray-300 px-4 py-3.5 text-left hover:bg-gray-50"
         >
-          <span className="flex-1 text-sm text-gray-400">品名（押すと新しい行に入力）</span>
+          <span className="flex-1 text-sm text-gray-400">品目を追加する</span>
           <span className="text-[15px] font-semibold text-gray-300">¥0</span>
         </button>
         <div className="flex items-baseline gap-1.5 px-4 pt-2.5">

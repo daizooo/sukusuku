@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ChevronRight, Minus, Plus, Trash2 } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
@@ -16,7 +17,7 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 // 品目の画面（docs/kakei.md §3.2）。PWA版の `src/components/sukusuku/money/ItemsScreen.tsx` と同じ並び・文言。
 //
 // 1つの種類の品目を何行でもまとめて記録する。行＝品名・個数（−＋）・単価・金額。
-// 一覧のいちばん下に空の行を置き、押すとそこに新しく入力する（入れると次の空の行が出る）。
+// 一覧のいちばん下に空の行を置き、押すと新しい行を足す（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）。
 // 選んだ行（青）の単価を下の電卓で直す（＋−×÷）。電卓はこの画面で初めて出る。
 // 値引き・割引・返金は「マイナスにする」で、選んだ行の金額をマイナスにする（docs/kakei.md §10.5）。
 // 種類は見出しの下に1行で小さく出す（押すと変えられる）。
@@ -32,8 +33,6 @@ export interface ItemsWork {
   selected: string | null;
   /** 選んだ行の電卓の式。 */
   expr: string;
-  /** 品名の欄を開いたままにする行（空の行を押した直後）。 */
-  focusKey: string | null;
 }
 
 let lineSeq = 0;
@@ -79,17 +78,22 @@ export default function ItemsScreen({
     onChange({ ...work, lines: work.lines.map((line) => (line.key === key ? { ...line, ...patch } : line)) });
 
   const select = (line: EditorLine) =>
-    onChange({ ...work, selected: line.key, expr: line.unitPrice !== 0 ? String(Math.abs(line.unitPrice)) : '', focusKey: null });
+    onChange({ ...work, selected: line.key, expr: line.unitPrice !== 0 ? String(Math.abs(line.unitPrice)) : '' });
+
+  // 行を足したとき、新しい行が見える所まで一覧を送る（品名の欄は開かない）。
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollToNew = useRef(false);
 
   const addLine = () => {
     // 書きかけの空の行は残さない（空の行は保存もしない）。
+    // 品名の欄は開かない（キーボードが立ち上がって電卓と一覧が隠れるため。品名は欄を押して入れる）。
     const line = blankLine();
+    scrollToNew.current = !work.lines.some(isBlankLine);
     onChange({
       ...work,
       lines: [...work.lines.filter((entry) => !isBlankLine(entry)), line],
       selected: line.key,
       expr: '',
-      focusKey: line.key,
     });
   };
 
@@ -104,7 +108,6 @@ export default function ItemsScreen({
     onChange({
       ...current,
       expr,
-      focusKey: null,
       // 電卓は金額の大きさだけを扱い、マイナスの行はマイナスのまま。
       lines: current.lines.map((line) =>
         line.key === current.selected ? { ...line, unitPrice: line.unitPrice < 0 ? -value : value } : line,
@@ -149,7 +152,17 @@ export default function ItemsScreen({
         <ChevronRight size={16} color={colors.textFaint} />
       </Pressable>
 
-      <ScrollView style={styles.flex} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        style={styles.flex}
+        contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => {
+          if (!scrollToNew.current) return;
+          scrollToNew.current = false;
+          scrollRef.current?.scrollToEnd({ animated: true });
+        }}
+      >
         {work.lines.map((line) => {
           const selected = line.key === work.selected;
           return (
@@ -167,7 +180,6 @@ export default function ItemsScreen({
                 onFocus={() => (selected ? undefined : select(line))}
                 placeholder="品名"
                 placeholderTextColor={colors.textFaint}
-                autoFocus={line.key === work.focusKey}
                 returnKeyType="done"
               />
               <View style={styles.stepper}>
@@ -202,7 +214,7 @@ export default function ItemsScreen({
           );
         })}
         <Pressable accessibilityRole="button" onPress={addLine} style={styles.blank}>
-          <Text style={styles.blankText}>品名（押すと新しい行に入力）</Text>
+          <Text style={styles.blankText}>品目を追加する</Text>
           <Text style={styles.blankAmount}>¥0</Text>
         </Pressable>
         <View style={styles.subtotalRow}>
