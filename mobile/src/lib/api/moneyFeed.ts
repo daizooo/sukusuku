@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Tables } from '@/types/supabase';
 import type {
+  MoneyCardFeed,
   MoneyFeedAccount,
   MoneyFeedData,
   MoneyFeedItem,
@@ -81,6 +82,22 @@ const rowToRule = (row: RuleRow): MoneyFeedRule => ({
   learned: row.learned,
 });
 
+/** カードの利用通知の明細から、月の締めの照合に使うもの（docs/kakei.md §9.6.5 の C）。 */
+const cardFeedOf = (
+  rows: readonly { source: string; record_id: string | null; amount: number | null; wallet_id: string | null; occurred_on: string | null }[],
+): MoneyCardFeed => {
+  const linkedAmounts: Record<string, number> = {};
+  const walletIds = new Set<string>();
+  let since: string | null = null;
+  for (const row of rows) {
+    if (row.source !== 'card_mail') continue;
+    if (row.record_id && row.amount !== null) linkedAmounts[row.record_id] = row.amount;
+    if (row.wallet_id) walletIds.add(row.wallet_id);
+    if (row.occurred_on && (since === null || row.occurred_on < since)) since = row.occurred_on;
+  }
+  return { linkedAmounts, walletIds: [...walletIds], since };
+};
+
 /** 取り込みの画面に要るもの（明細・ルール・設定・口座の対応）を並べて読む。 */
 export async function loadMoneyFeed(supabase: SupabaseDb, familyId: string): Promise<MoneyFeedData> {
   const since = new Date(Date.now() - 30 * 86400_000).toISOString();
@@ -96,7 +113,7 @@ export async function loadMoneyFeed(supabase: SupabaseDb, familyId: string): Pro
     // 届いた口座名と、最後に届いた日時・この30日の件数・明細から来た記録（新しい500件から）
     supabase
       .from('money_feed')
-      .select('account_name, to_email, received_at, record_id')
+      .select('account_name, to_email, received_at, record_id, source, amount, wallet_id, occurred_on')
       .eq('family_id', familyId)
       .order('received_at', { ascending: false })
       .limit(500),
@@ -152,6 +169,7 @@ export async function loadMoneyFeed(supabase: SupabaseDb, familyId: string): Pro
     linkedRecordIds: [...new Set(recentRows.flatMap((row) => (row.record_id ? [row.record_id] : [])))],
     lastReceivedAt: recentRows[0]?.received_at ?? null,
     recentCount: recentRows.filter((row) => row.received_at >= since).length,
+    cardFeed: cardFeedOf(recentRows),
   };
 }
 

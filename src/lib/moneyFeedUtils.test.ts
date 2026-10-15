@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 
 import type { MoneyFeedItem, MoneyRecord } from '../types/app.ts';
-import { feedDuplicates, feedLinkCandidates, sortFeedInbox, storeCategoryGuess } from './moneyFeedUtils.ts';
+import { cardMonthChecks, feedDuplicates, feedLinkCandidates, sortFeedInbox, storeCategoryGuess } from './moneyFeedUtils.ts';
 
 const record = (id: string, patch: Partial<MoneyRecord>, amount: number): MoneyRecord =>
   ({
@@ -88,6 +88,27 @@ assert.deepEqual(
   ]).map((entry) => entry.id),
   ['c', 'w', 'p', 'u'],
 );
+
+// 月の締めで、カードの記録を明細と見比べる一覧（§9.6.5 の C）
+{
+  const at = (id: string, occurredOn: string, amount: number, patch: Partial<MoneyRecord> = {}) =>
+    record(id, { occurredOn, walletId: 'smbc', ...patch }, amount);
+  const rs = [
+    at('c-before', '2026-10-01', 500), // 通知を取り込む前
+    at('c-same', '2026-10-15', 4415), // 通知と同じ額
+    at('c-fixed', '2026-10-16', 4300), // レシートで直して額が変わった
+    at('c-manual', '2026-10-20', 2980), // 通知が来ていない（サブスクなど）
+    at('c-auto', '2026-10-21', 1000, { month: '2026-10' }), // 自動で作った記録は数えない
+    at('c-transfer', '2026-10-22', 9000, { kind: 'transfer', toWalletId: 'smbc', walletId: 'bank' }),
+    at('c-other', '2026-10-23', 700, { walletId: 'cash' }), // 通知の来ない出金元
+    at('c-next', '2026-11-01', 300), // 別の月
+  ];
+  const cardFeed = { linkedAmounts: { 'c-same': 4415, 'c-fixed': 4415 }, walletIds: ['smbc'], since: '2026-10-15' };
+  const checks = cardMonthChecks(rs, cardFeed, '2026-10');
+  assert.deepEqual(checks.mismatched.map((entry) => [entry.record.id, entry.feedAmount]), [['c-fixed', 4415]]);
+  assert.deepEqual(checks.unnotified.map((entry) => entry.id), ['c-manual']);
+  assert.deepEqual(cardMonthChecks(rs, { linkedAmounts: {}, walletIds: [], since: null }, '2026-10'), { mismatched: [], unnotified: [] });
+}
 
 // お店でいちばん多く使った種類（カードの利用通知を記録にするときの初めの種類。§9.6）
 {

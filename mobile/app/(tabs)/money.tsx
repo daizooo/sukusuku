@@ -636,6 +636,7 @@ export default function MoneyScreen() {
               months={closings}
               recurring={recurring}
               feedItems={feed?.open ?? []}
+              cardFeed={feed?.cardFeed ?? null}
               onConfirmEstimate={confirmEstimate}
               onSetMonthClosed={(target, closed) => void setMonthClosed(target, closed)}
               onOpenFeed={() => setFeedOpen(true)}

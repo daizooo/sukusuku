@@ -1,4 +1,4 @@
-import type { MoneyFeedItem, MoneyFeedRule, MoneyRecord, MoneyRecordDraft } from '@/types/app';
+import type { MoneyCardFeed, MoneyFeedItem, MoneyFeedRule, MoneyRecord, MoneyRecordDraft } from '@/types/app';
 import { formatYen, recordTotal } from './moneyUtils.ts';
 
 // Zaim 取り込みの画面で使う、数え方・言葉（docs/kakei.md §9.5）。mobile版の `mobile/src/lib/moneyFeedUtils.ts` と同じ中身。
@@ -136,6 +136,44 @@ export const feedRuleAction = (
     case 'ignore':
       return '記録しない';
   }
+};
+
+export interface CardMonthChecks {
+  /** 利用通知と額の違う記録（レシートや明細で直したもの・通知のあとで額が変わったもの）。 */
+  mismatched: { record: MoneyRecord; feedAmount: number }[];
+  /** 通知の来ていないカードの記録（携帯電話・サブスクなど通知されない利用や、手で入れたもの）。 */
+  unnotified: MoneyRecord[];
+}
+
+/**
+ * 月の締めで、カードの記録をカードの明細と見比べるための一覧（docs/kakei.md §9.6.5 の C）。日付の古い順。
+ * 「通知が来ていない」は、利用通知が届いたことのあるカードの、いちばん古い通知の利用日より後の支出だけ（自動で作った記録は除く）。
+ */
+export const cardMonthChecks = (records: readonly MoneyRecord[], cardFeed: MoneyCardFeed, monthKey: string): CardMonthChecks => {
+  const wallets = new Set(cardFeed.walletIds);
+  const inMonth = records
+    .filter((record) => record.occurredOn.startsWith(`${monthKey}-`) && record.kind !== 'transfer')
+    .sort((a, b) => (a.occurredOn < b.occurredOn ? -1 : a.occurredOn > b.occurredOn ? 1 : 0));
+  const mismatched: CardMonthChecks['mismatched'] = [];
+  const unnotified: MoneyRecord[] = [];
+  for (const record of inMonth) {
+    const feedAmount = cardFeed.linkedAmounts[record.id];
+    if (feedAmount !== undefined) {
+      if (recordTotal(record) !== feedAmount) mismatched.push({ record, feedAmount });
+      continue;
+    }
+    if (
+      record.kind === 'expense' &&
+      record.month === null &&
+      record.walletId !== null &&
+      wallets.has(record.walletId) &&
+      cardFeed.since !== null &&
+      record.occurredOn >= cardFeed.since
+    ) {
+      unnotified.push(record);
+    }
+  }
+  return { mismatched, unnotified };
 };
 
 /**

@@ -1,7 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
-import type { MoneyBudget, MoneyCategory, MoneyFeedItem, MoneyMonth, MoneyRecord, MoneyRecurring, MoneyWallet } from '@/types/app';
+import type {
+  MoneyBudget,
+  MoneyCardFeed,
+  MoneyCategory,
+  MoneyFeedItem,
+  MoneyMonth,
+  MoneyRecord,
+  MoneyRecurring,
+  MoneyWallet,
+} from '@/types/app';
+import { cardMonthChecks } from '@/lib/moneyFeedUtils';
 import { colors } from '@/lib/theme';
 import {
   buildBudgetTiles,
@@ -80,6 +90,8 @@ interface MoneyReviewViewProps {
   recurring: MoneyRecurring[];
   /** 未確認の明細（締めの画面に、その月の件数を出す）。 */
   feedItems: MoneyFeedItem[];
+  /** カードの利用通知の取り込み（締めの画面で、カードの記録を明細と見比べる）。読み込み前は null。 */
+  cardFeed: MoneyCardFeed | null;
   onConfirmEstimate: (record: MoneyRecord) => Promise<void>;
   onSetMonthClosed: (monthKey: string, closed: boolean) => void;
   onOpenFeed: () => void;
@@ -102,6 +114,7 @@ export default function MoneyReviewView({
   months: closings,
   recurring,
   feedItems,
+  cardFeed,
   onConfirmEstimate,
   onSetMonthClosed,
   onOpenFeed,
@@ -385,6 +398,8 @@ export default function MoneyReviewView({
           recurring={recurring}
           today={dateKeyOfDate(new Date())}
           feedCount={feedItems.filter((item) => item.occurredOn !== null && item.occurredOn.startsWith(`${closing}-`)).length}
+          cardChecks={cardFeed && cardFeed.walletIds.length > 0 ? cardMonthChecks(records, cardFeed, closing) : null}
+          wallets={wallets}
           closed={isMonthClosed(closings, closing)}
           closedAt={closings.find((entry) => entry.month === closing)?.closedAt ?? null}
           onConfirmEstimate={onConfirmEstimate}

@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import type { MoneyBudget, MoneyCategory, MoneyRecord, MoneyRecurring } from '@/types/app';
+import type { MoneyBudget, MoneyCategory, MoneyRecord, MoneyRecurring, MoneyWallet } from '@/types/app';
+import type { CardMonthChecks } from '@/lib/moneyFeedUtils';
 import {
   buildMonthSummary,
   categoryPath,
@@ -35,6 +36,9 @@ interface MonthCloseScreenProps {
   today: string;
   /** その月の日付の、未確認の明細の件数。 */
   feedCount: number;
+  /** カードの記録を明細と見比べるための一覧（利用通知を取り込んでいるときだけ。docs/kakei.md §9.6.5 の C）。 */
+  cardChecks: CardMonthChecks | null;
+  wallets: MoneyWallet[];
   closed: boolean;
   /** 締めた日時（締めた月だけ）。 */
   closedAt: string | null;
@@ -73,6 +77,8 @@ export default function MonthCloseScreen({
   recurring,
   today,
   feedCount,
+  cardChecks,
+  wallets,
   closed,
   closedAt,
   onConfirmEstimate,
@@ -91,6 +97,14 @@ export default function MonthCloseScreen({
   // 確定を押した記録（読み直しが届くまで、二度押せないように）。
   const [confirming, setConfirming] = useState<string | null>(null);
   const label = `${Number(monthKey.slice(5, 7))}月`;
+  const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '';
+  // カードの明細と見比べるもの: 利用通知と額の違う記録 → 通知の来ていない記録
+  const cardRows = cardChecks
+    ? [
+        ...cardChecks.mismatched.map(({ record, feedAmount }) => ({ record, note: `通知の ${formatYen(feedAmount)} と違います` })),
+        ...cardChecks.unnotified.map((record) => ({ record, note: '利用通知が来ていません' })),
+      ]
+    : [];
 
   // これから自動で作られる記録があれば、締める前に確かめる。
   const closeMonth = () => {
@@ -175,6 +189,35 @@ export default function MonthCloseScreen({
             </div>
             <p className={`${type.faint} mt-1`}>
               固定収入・固定費で、この月のうちにまだ自動で記録されていないものです。上の収支には入っていません。記録されてから締めると確かです
+            </p>
+          </>
+        )}
+
+        {cardRows.length > 0 && (
+          <>
+            <SectionHeader compact title="カードの明細と見比べるもの" hint={`${cardRows.length}件`} />
+            <div className={`${cardClass} overflow-hidden`}>
+              {cardRows.map(({ record, note }, index) => (
+                <button
+                  key={record.id}
+                  type="button"
+                  aria-label={`${recordTitle(record, categories)}の記録を開く`}
+                  onClick={() => onOpenRecord(record)}
+                  className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-gray-50 ${index > 0 ? 'border-t border-gray-200' : ''}`}
+                >
+                  <span className="w-11 shrink-0 text-[13px] font-semibold text-gray-500 tabular-nums">{formatShortDate(record.occurredOn)}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-gray-900">{recordTitle(record, categories)}</span>
+                    <span className="block truncate text-xs text-gray-400">
+                      {note}・{walletName(record.walletId)}
+                    </span>
+                  </span>
+                  <span className="text-[15px] font-extrabold tabular-nums text-gray-900">{formatYen(recordTotal(record))}</span>
+                </button>
+              ))}
+            </div>
+            <p className={`${type.faint} mt-1`}>
+              カード会社の明細と見比べ、違っていれば押して直してください。携帯電話・サブスクなどの継続的な支払いは利用通知が来ません
             </p>
           </>
         )}
