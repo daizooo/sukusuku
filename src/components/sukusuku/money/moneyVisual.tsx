@@ -344,7 +344,7 @@ export function UsageRing({ percent, size = 52 }: { percent: number | null; size
   );
 }
 
-/** 種類のアイコン（色つきの丸）。key は moneyUtils の MONEY_ICONS。 */
+/** カテゴリのアイコン（色つきの丸）。key は moneyUtils の MONEY_ICONS。 */
 export function CategoryIcon({ iconKey, size = 32 }: { iconKey: string; size?: number }) {
   const tone = iconTone(iconKey);
   const Icon = MONEY_ICON_COMPONENTS[tone.key] ?? MONEY_ICON_COMPONENTS.other;
@@ -387,7 +387,7 @@ export function FullScreen({ onBack, children }: { onBack: () => void; children:
 }
 
 /**
- * 全画面の中で重ねる画面（品目・種類の選択など）。開いている間だけ戻る操作で閉じる層を積む。
+ * 全画面の中で重ねる画面（品目・カテゴリの選択など）。開いている間だけ戻る操作で閉じる層を積む。
  * 記録の詳細の上に重ねて出し、戻る操作では一番上の画面だけを閉じる。
  */
 export function StackedScreen({ onBack, children }: { onBack: () => void; children: ReactNode }) {
@@ -421,21 +421,37 @@ export function ScreenHeader({
   onClose,
   icon = 'close',
   right,
+  closeAtEnd,
 }: {
   title: string;
   onClose: () => void;
   icon?: 'close' | 'back';
   right?: ReactNode;
+  /** 閉じる「×」を左でなく右端の小さな丸ボタンにする（記録の編集・品目。Zaim と同じ）。右の操作（ごみ箱など）はその左。 */
+  closeAtEnd?: boolean;
 }) {
   const Icon = icon === 'back' ? ArrowLeft : X;
   return (
     <div className="shrink-0 flex items-center gap-3.5 border-b border-gray-200 px-4 py-3.5">
-      <button type="button" aria-label={icon === 'back' ? '戻る' : '閉じる'} onClick={onClose} className="text-gray-700">
-        <Icon size={22} />
-      </button>
+      {!closeAtEnd && (
+        <button type="button" aria-label={icon === 'back' ? '戻る' : '閉じる'} onClick={onClose} className="text-gray-700">
+          <Icon size={22} />
+        </button>
+      )}
       <h3 className="text-lg font-bold text-gray-900">{title}</h3>
       <span className="flex-1" />
       {right}
+      {closeAtEnd && (
+        // 見える大きさは28px。押せる範囲は after で外へ広げる。
+        <button
+          type="button"
+          aria-label="閉じる"
+          onClick={onClose}
+          className="relative flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-500 after:absolute after:-inset-2 after:content-['']"
+        >
+          <X size={14} />
+        </button>
+      )}
     </div>
   );
 }

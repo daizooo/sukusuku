@@ -475,10 +475,10 @@ export interface LotteryCoupon {
   isTest: boolean;
 }
 
-/** 家計の種類のまとまり。生活費と収入（docs/kakei.md §3.1）。 */
+/** 家計のカテゴリのまとまり。生活費と収入（docs/kakei.md §3.1）。 */
 export type MoneyCategoryKind = 'living' | 'income';
 
-/** 家計の種類。money_categories に対応。parentId が null なら大分類（予算を置く単位）。 */
+/** 家計のカテゴリ。money_categories に対応。parentId が null なら大分類（予算を置く単位）。 */
 export interface MoneyCategory {
   id: string;
   kind: MoneyCategoryKind;
@@ -636,7 +636,7 @@ export interface MoneyStore {
 /** 記録の種類。支出・収入・振替。 */
 export type MoneyRecordKind = 'expense' | 'income' | 'transfer';
 
-/** 品目。money_items に対応。種類（categoryId）を持つ。振替は無い。 */
+/** 品目。money_items に対応。カテゴリ（categoryId）を持つ。振替は無い。 */
 export interface MoneyItem {
   id: string;
   amount: number;
@@ -867,7 +867,7 @@ export interface ReceiptScanItem {
   unitPrice: number;
   amount: number;
   categoryId: string | null;
-  /** 種類をどこから決めたか。none は「種類を選んでください」。 */
+  /** カテゴリをどこから決めたか。none は「カテゴリを選んでください」。 */
   categorySource: 'history' | 'ai' | 'none';
 }
 

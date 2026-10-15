@@ -160,7 +160,7 @@ function FeedItemSheet({
   const [fillAmount, setFillAmount] = useState('');
   const [walletId, setWalletId] = useState<string | null>(null);
   const [remember, setRemember] = useState(true);
-  // カードの利用通知は、利用先に当てたお店と、そのお店でいちばん多い種類を初めから入れておく（§9.6）
+  // カードの利用通知は、利用先に当てたお店と、そのお店でいちばん多いカテゴリを初めから入れておく（§9.6）
   const [categoryId, setCategoryId] = useState<string | null>(() =>
     item.storeHint ? storeCategoryGuess(records, item.storeHint, item.direction === 'in' ? 'income' : 'expense') : null,
   );
@@ -393,9 +393,9 @@ function FeedItemSheet({
         {summary}
         {mode === 'record' && (
           <>
-            <Field label={kind === 'income' ? '収入の種類' : '支出の種類'}>
+            <Field label={kind === 'income' ? '収入のカテゴリ' : '支出のカテゴリ'}>
               <Pressable accessibilityRole="button" onPress={() => setPickingCategory(true)} style={styles.select}>
-                <Text style={[styles.selectText, !categoryName && styles.placeholder]}>{categoryName ?? '種類を選ぶ'}</Text>
+                <Text style={[styles.selectText, !categoryName && styles.placeholder]}>{categoryName ?? 'カテゴリを選ぶ'}</Text>
                 <ChevronRight size={18} color={colors.textFaint} />
               </Pressable>
             </Field>
@@ -446,7 +446,7 @@ function FeedItemSheet({
               onPick={(value, register) => {
                 setStore(value);
                 setRegisterStore(register);
-                // 種類がまだなら、そのお店でいちばん多く使った種類を入れる
+                // カテゴリがまだなら、そのお店でいちばん多く使ったカテゴリを入れる
                 if (categoryId === null) setCategoryId(storeCategoryGuess(records, value, kind));
                 setPickingStore(false);
               }}
@@ -477,7 +477,7 @@ function FeedItemSheet({
   );
 }
 
-/** 記録を1行で（日付・種類・出金元・額）。 */
+/** 記録を1行で（日付・カテゴリ・出金元・額）。 */
 function RecordLine({
   record,
   walletName,

@@ -52,7 +52,7 @@ import { EstimateBadge, PrimaryButton, ScreenHeader } from '@/components/money/m
 // 毎月の記録の設定（docs/kakei.md §3.3・§3.4・§3.5）。PWA版の `src/components/sukusuku/money/RecurringSettings.tsx` と同じ並び・文言。
 //
 // 口座から落ちる固定支出・口座に入る給料などを、項目ごとのルールにする。サーバーが毎朝、その日に当たる記録を作る
-// （DBの make_money_recurring_records）。額を見込むものは、過去1年の記録（種類・出金元・お店が同じもの）から出す。
+// （DBの make_money_recurring_records）。額を見込むものは、過去1年の記録（カテゴリ・出金元・お店が同じもの）から出す。
 // カード代金はここではなく、出金元のカードに締め日・引き落とし日・引き落とし口座を入れると作られる（一覧だけ出す）。
 // 直すのはルールだけで、もう作った記録は変わらない。
 //
@@ -415,7 +415,7 @@ function IncomeHistory({ records, categories }: { records: MoneyRecord[]; catego
   );
 }
 
-/** ルールの見出し。種類（カテゴリ）に統一する。振替など種類のないものは取引の種別。 */
+/** ルールの見出し。カテゴリに統一する。振替などカテゴリのないものは取引の種別。 */
 function ruleTitle(rule: MoneyRecurring, categories: MoneyCategory[]): string {
   const path = rule.categoryId !== null ? categoryPath(categories, rule.categoryId) : '';
   return path !== '' ? path : RECORD_KIND_LABEL[rule.kind];
@@ -435,7 +435,7 @@ function ruleDetail(rule: MoneyRecurring): string {
     .join('・');
 }
 
-/** 複製の品名。品名があれば「◯◯のコピー」、無ければ種類（見出し）に「のコピー」を付ける。 */
+/** 複製の品名。品名があれば「◯◯のコピー」、無ければカテゴリ（見出し）に「のコピー」を付ける。 */
 function copyName(source: MoneyRecurring, categories: MoneyCategory[]): string {
   const name = source.name.trim();
   return `${name !== '' ? name : ruleTitle(source, categories)}のコピー`;
@@ -546,7 +546,7 @@ function RecurringEditor({
     }
     if (walletId === null) return setError(kind === 'income' ? '入金先を選んでください' : '出金元を選んでください');
     if (kind === 'transfer' && (toWalletId === null || toWalletId === walletId)) return setError('入金先を選んでください（出金元と別の口座）');
-    if (kind !== 'transfer' && categoryId === null) return setError('種類を選んでください');
+    if (kind !== 'transfer' && categoryId === null) return setError('カテゴリを選んでください');
     if (months !== null && months.length === 0) return setError('記録する月を選んでください');
     const startMonth = parsePeriodMonth(startInput);
     const endMonth = parsePeriodMonth(endInput);
@@ -639,7 +639,7 @@ function RecurringEditor({
 
         {kind !== 'transfer' && (
           <Pressable accessibilityRole="button" onPress={() => setScreen('category')} style={styles.pick}>
-            <Text style={styles.label}>種類</Text>
+            <Text style={styles.label}>カテゴリ</Text>
             <Text style={[styles.pickText, target === '' && styles.placeholder]}>{target || '選ぶ'}</Text>
             <ChevronRight size={18} color={colors.textFaint} />
           </Pressable>
@@ -787,7 +787,7 @@ function RecurringEditor({
           {amountMode === 'estimate' && (
             <Text style={styles.sub}>
               {history.length === 0
-                ? '過去1年に、種類・出金元・お店が同じ記録はまだありません'
+                ? '過去1年に、カテゴリ・出金元・お店が同じ記録はまだありません'
                 : `過去1年の記録 ${history.length}件（直近 ${formatShortDate(history[0].occurredOn)} ${formatYen(history[0].amount)}）`}
             </Text>
           )}

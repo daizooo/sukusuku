@@ -156,8 +156,10 @@ export default function MoneyScreen() {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [period, setPeriod] = useState<ReviewPeriod>('month');
   const [editing, setEditing] = useState<Editing>(null);
-  // 新しい記録を開くときの種類（ホーム画面のウィジェットの「収入」「振替」から来たとき。ふだんは支出）。
+  // 新しい記録を開くときのカテゴリ（ホーム画面のウィジェットの「収入」「振替」から来たとき。ふだんは支出）。
   const [newKind, setNewKind] = useState<MoneyRecordKind>('expense');
+  // 記録の一覧の、日の見出しの「＋」から足すときの日。それ以外は null（今日）。
+  const [newDate, setNewDate] = useState<string | null>(null);
   // レシートの読み取りの結果（記録の入力に入れて開く）と、読み取り中か（docs/kakei.md §10）。
   const [receipt, setReceipt] = useState<ReceiptScan | null>(null);
   // レシートを当てている既にある記録（§10.8）。null は新しい記録の読み取り。
@@ -408,6 +410,7 @@ export default function MoneyScreen() {
       if (!target) {
         setReceiptFor(null);
         setReceipt(scan);
+        setNewDate(null);
         setEditing('new');
         return;
       }
@@ -447,6 +450,7 @@ export default function MoneyScreen() {
     }
     setReceipt(null);
     setNewKind(open);
+    setNewDate(null);
     setEditing('new');
     // startReceiptScan は描くたびに作り直されるが、開くのはパラメータが来たときの1回だけでよい。
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -614,6 +618,12 @@ export default function MoneyScreen() {
               wallets={wallets}
               isLoading={isLoading}
               onOpen={setEditing}
+              onAddOnDate={(date) => {
+                setReceipt(null);
+                setNewKind('expense');
+                setNewDate(date);
+                setEditing('new');
+              }}
             />
           ) : view === 'review' ? (
             <MoneyReviewView
@@ -671,6 +681,7 @@ export default function MoneyScreen() {
         settingsDisabled={!familyId}
         onAdd={() => {
           setNewKind('expense');
+          setNewDate(null);
           setEditing('new');
         }}
         onScan={() => void startReceiptScan()}
@@ -686,11 +697,12 @@ export default function MoneyScreen() {
 
       {editing !== null && (
         <RecordEditor
-          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newKind}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
+          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newKind}-${newDate ?? ''}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
           record={editing === 'new' ? null : editing}
           receipt={editing === 'new' || receiptFor === editing.id ? receipt : null}
           onScanReceipt={(target) => void startReceiptScan(target)}
           initialKind={newKind}
+          initialDate={newDate}
           categories={categories}
           budgets={allBudgets}
           wallets={wallets}

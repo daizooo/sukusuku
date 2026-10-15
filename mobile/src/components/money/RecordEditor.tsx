@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { ArrowRight, CalendarDays, Camera, ChevronRight, CreditCard, Plus, Square, SquareCheck, Store, Trash2 } from 'lucide-react-native';
+import { ArrowRight, CalendarDays, Camera, Plus, Square, SquareCheck, Store, Trash2, X } from 'lucide-react-native';
 import type {
   MoneyBudget,
   MoneyCategory,
@@ -16,7 +16,7 @@ import type {
 } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
-import { formatDateWithWeekday, toDateString } from '@/lib/dateUtils';
+import { formatDateWithYear, toDateString } from '@/lib/dateUtils';
 import {
   budgetFor,
   canCardNextPeriod,
@@ -31,7 +31,6 @@ import {
   groupsFromScan,
   iconKeyOf,
   isBlankLine,
-  itemNamesLabel,
   itemsFromGroups,
   lastWalletId,
   livingSpendByTop,
@@ -49,22 +48,25 @@ import CategoryPicker, { type CategoryChoice } from '@/components/money/Category
 import ItemsScreen, { blankLine, type ItemsWork } from '@/components/money/ItemsScreen';
 import StorePicker from '@/components/money/StorePicker';
 import WalletPicker from '@/components/money/WalletPicker';
-import { CategoryIcon, EstimateBadge, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
+import RecordDetailView from '@/components/money/RecordDetailView';
+import RecordItemGroups from '@/components/money/RecordItemGroups';
+import { EstimateBadge, PrimaryButton, ScreenHeader, WalletTypeIcon } from '@/components/money/moneyVisual';
 
 // 記録の入力（docs/kakei.md §3.2。Zaim を踏襲）。PWA版の `src/components/sukusuku/money/RecordEditor.tsx` と同じ流れ・文言。
 //
-// 「＋」→ 記録の詳細（支出／収入／振替・日付・出金元・お店・品目）→ 品目を押す／「品目を追加する」→ 種類の選択 → 品目
-// （電卓はここで初めて出る）。出金元・お店はそれぞれ選ぶ画面へ。品目は種類ごとにまとめて1行で見せ、合計は品目から自動。
+// 既にある記録は、まず記録の詳細（読むだけ。RecordDetailView）を見せ、「編集する」でこの入力画面へ（2026-10-15）。
+// 「＋」→ 記録の編集（支出／収入／振替・日付・出金元・お店・翌月に回す・品目）→ 品目を押す／「＋」→ カテゴリの選択 → 品目
+// （電卓はここで初めて出る）。出金元・お店はそれぞれ選ぶ画面へ。品目はカテゴリごとにまとめて1行で見せ、合計は品目から自動。
 // 振替は 出金元 → 入金先 と金額だけ。置かないもの: 電話番号・時刻・タグ・写真。
 //
 // 画面は全部この1つの全画面の中で重ねる（戻る操作で1つ前の画面へ）。品目の書きかけは、
-// 種類の選択へ行って戻っても残る。
+// カテゴリの選択へ行って戻っても残る。
 //
 // 見込みの額の記録（毎月の記録・カード代金で自動で作ったもの。§3.3）は、額を直すと確定になる。
 // 額が合っていたときは「この額で確定する」。額を変えずに保存したときは見込みのまま。
 
 type Screen =
-  | { type: 'detail' }
+  | { type: 'edit' }
   | { type: 'items' }
   | { type: 'category'; purpose: 'add' | 'change' }
   | { type: 'wallet'; field: 'walletId' | 'toWalletId' }
@@ -100,6 +102,8 @@ export interface RecordEditorProps {
   onScanReceipt?: (record: MoneyRecord) => void;
   /** 新しく記録するときに最初に選んでおく種類（ホーム画面のウィジェットの「収入」「振替」から。docs/widgets.md §2.3）。 */
   initialKind?: MoneyRecordKind;
+  /** 新しく記録するときに最初に選んでおく日（YYYY-MM-DD。記録の一覧の、日の見出しの「＋」から）。無ければ今日。 */
+  initialDate?: string | null;
 }
 
 /**
@@ -127,10 +131,11 @@ export default function RecordEditor({
   receipt = null,
   onScanReceipt,
   initialKind = 'expense',
+  initialDate = null,
 }: RecordEditorProps) {
   const insets = useSafeAreaInsets();
   const [kind, setKind] = useState<MoneyRecordKind>(record?.kind ?? (receipt ? 'expense' : initialKind));
-  const [occurredOn, setOccurredOn] = useState(record?.occurredOn ?? receipt?.occurredOn ?? toDateString(new Date()));
+  const [occurredOn, setOccurredOn] = useState(record?.occurredOn ?? receipt?.occurredOn ?? initialDate ?? toDateString(new Date()));
   // レシートから出金元が当たらなかったときは、前回の出金元を入れて「確かめてください」を出す（§10.4）。
   const [initialWalletId] = useState<string | null>(() =>
     record ? record.walletId : (receipt?.walletId ?? lastWalletId(records, wallets, receipt ? 'expense' : initialKind)),
@@ -151,7 +156,9 @@ export default function RecordEditor({
     record?.kind === 'transfer' ? record.items.reduce((sum, item) => sum + item.amount, 0) : 0,
   );
   const [amountExpr, setAmountExpr] = useState('');
-  const [stack, setStack] = useState<Screen[]>([{ type: 'detail' }]);
+  const [stack, setStack] = useState<Screen[]>([{ type: 'edit' }]);
+  // 既にある記録を開いたときは、読むだけの詳細から（レシートを当てるときは入力画面から）。
+  const [viewing, setViewing] = useState(record !== null && receipt === null);
   const [work, setWork] = useState<ItemsWork | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   // カードの引き落としを翌月分に回す（カードで25日以降の記録だけ。docs/kakei.md §3.4）。
@@ -177,7 +184,7 @@ export default function RecordEditor({
   const groupTitle = (target: Pick<EditorGroup, 'categoryId' | 'categoryName'>) =>
     target.categoryId !== null
       ? categoryPath(categories, target.categoryId)
-      : target.categoryName || (receipt ? '種類を選んでください' : '');
+      : target.categoryName || (receipt ? 'カテゴリを選んでください' : '');
 
   // レシートの読み取りで、保存の前に確かめてほしいこと（§10.4・§10.5）。
   const receiptNotices = receipt
@@ -185,7 +192,7 @@ export default function RecordEditor({
         total !== receipt.receiptTotal &&
           `レシートの合計 ${formatYen(receipt.receiptTotal)} と ${formatYen(total - receipt.receiptTotal)} 違います`,
         !record && receipt.walletId === null && walletId === initialWalletId && '出金元を確かめてください（レシートから分かりませんでした）',
-        groups.some((group) => group.categoryId === null && group.categoryName === '') && '種類の決まっていない品目があります',
+        groups.some((group) => group.categoryId === null && group.categoryName === '') && 'カテゴリの決まっていない品目があります',
       ].filter((notice): notice is string => typeof notice === 'string')
     : [];
 
@@ -244,12 +251,11 @@ export default function RecordEditor({
       lines,
       selected: null,
       expr: '',
-      focusKey: null,
     });
     push({ type: 'items' });
   };
 
-  /** 種類を選んだ（品目の追加、または品目の画面で種類を変えた）。 */
+  /** カテゴリを選んだ（品目の追加、または品目の画面でカテゴリを変えた）。 */
   const pickCategory = (choice: CategoryChoice, purpose: 'add' | 'change') => {
     const target = { categoryId: choice.categoryId, categoryName: '' };
     if (purpose === 'change' && work) {
@@ -265,7 +271,6 @@ export default function RecordEditor({
       lines: [...(existing?.lines ?? []), line],
       selected: line.key,
       expr: '',
-      focusKey: null,
     });
     replaceTop({ type: 'items' });
   };
@@ -278,7 +283,7 @@ export default function RecordEditor({
       const target = { categoryId: work.categoryId, categoryName: work.categoryName };
       const same = next.find((group) => sameGroupTarget(group, target));
       if (same) {
-        // 同じ種類のまとまりがほかにあれば、そこへ足す（種類を変えた結果、同じになったとき）。
+        // 同じカテゴリのまとまりがほかにあれば、そこへ足す（カテゴリを変えた結果、同じになったとき）。
         next = next.map((group) => (group.key === same.key ? { ...group, lines: [...group.lines, ...lines] } : group));
         return next;
       }
@@ -295,7 +300,7 @@ export default function RecordEditor({
   const deleteWork = () => {
     if (!work) return;
     const key = work.groupKey;
-    Alert.alert('この種類の品目を消しますか？', undefined, [
+    Alert.alert('このカテゴリの品目を消しますか？', undefined, [
       { text: 'やめる', style: 'cancel' },
       {
         text: '消す',
@@ -329,7 +334,7 @@ export default function RecordEditor({
             },
           ]
         : itemsFromGroups(groups);
-    if (items.length === 0) return Alert.alert('品目を入れてください', '「品目を追加する」から種類を選びます。');
+    if (items.length === 0) return Alert.alert('品目を入れてください', '「品目を追加する」からカテゴリを選びます。');
     // 品目はマイナスも入れられるが、記録の合計はマイナスにしない（docs/kakei.md §10.5。DB でも確かめる）。
     if (total < 0) return Alert.alert('合計がマイナスです', '値引きの行の金額を確かめてください。');
     onSubmit({
@@ -447,15 +452,92 @@ export default function RecordEditor({
           </View>
         );
       default:
-        return renderDetail();
+        return viewing && record ? renderView(record) : renderEdit();
     }
   };
 
-  const renderDetail = () => (
+  // 日付の上の案内（見込みの額・自動で作った記録）。詳細・編集の両方に出す。
+  const notices = (editable: boolean) => (
+    <>
+      {record?.isEstimate && (
+        <View style={styles.estimate}>
+          <View style={styles.estimateHead}>
+            {stillEstimate && <EstimateBadge />}
+            <Text style={[styles.estimateText, styles.flex]}>
+              {stillEstimate
+                ? editable
+                  ? '見込みの額です。検針票・明細などを見て額を直すと確定します'
+                  : '見込みの額です。編集で額を直すと確定します'
+                : '保存すると確定します'}
+            </Text>
+          </View>
+          {editable && stillEstimate && (
+            <Pressable accessibilityRole="button" onPress={() => setConfirmed(true)} hitSlop={8}>
+              <Text style={styles.estimateLink}>この額で確定する</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+      {record?.month && (
+        <Text style={styles.note}>
+          {autoRecordSource(record, wallets)}自動で作った記録（{formatMonthKey(record.month)}の分）
+        </Text>
+      )}
+    </>
+  );
+
+  /** 記録の詳細（読むだけ）。 */
+  const renderView = (target: MoneyRecord) => (
+    <RecordDetailView
+      kind={target.kind}
+      occurredOn={target.occurredOn}
+      total={recordTotal(target)}
+      wallet={wallets.find((wallet) => wallet.id === target.walletId) ?? null}
+      toWallet={wallets.find((wallet) => wallet.id === target.toWalletId) ?? null}
+      store={target.store}
+      cardNextPeriod={target.cardNextPeriod}
+      groups={groups}
+      groupTitle={groupTitle}
+      groupIconKey={groupIconKey}
+      notice={notices(false)}
+      onClose={onClose}
+      onDelete={confirmDelete}
+      onEdit={() => setViewing(false)}
+    />
+  );
+
+  const walletOf = (id: string | null) => wallets.find((wallet) => wallet.id === id) ?? null;
+
+  /** 値の行（左にアイコン、右に値。区切り線は値の列だけ）。clear があれば右に小さな「×」。 */
+  const field = (
+    icon: ReactNode,
+    text: string,
+    placeholder: string,
+    onPress: () => void,
+    clear?: { label: string; onClear: () => void },
+  ) => (
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.fieldRow}>
+      <View style={styles.fieldIcon}>{icon}</View>
+      <View style={styles.fieldValue}>
+        <Text style={[styles.fieldText, text === '' && styles.placeholder]} numberOfLines={1}>
+          {text || placeholder}
+        </Text>
+        {clear && text !== '' && (
+          <Pressable accessibilityRole="button" accessibilityLabel={clear.label} onPress={clear.onClear} hitSlop={10} style={styles.clear}>
+            <X size={10} color={colors.primaryText} strokeWidth={3} />
+          </Pressable>
+        )}
+      </View>
+    </Pressable>
+  );
+
+  /** 記録の編集（入力）。 */
+  const renderEdit = () => (
     <View style={styles.screen}>
       <ScreenHeader
-        title="記録の詳細"
+        title={record ? '記録の編集' : '記録を追加'}
         onClose={onClose}
+        closeAtEnd
         right={
           record && (
             <Pressable accessibilityRole="button" accessibilityLabel="この記録を消す" onPress={confirmDelete} hitSlop={8}>
@@ -479,10 +561,22 @@ export default function RecordEditor({
           ))}
         </View>
 
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>{kind === 'transfer' ? '金額' : '合計（品目の合計）'}</Text>
-          <Text style={styles.total}>{formatBalance(total)}</Text>
-        </View>
+        {/* 金額（右に大きく）。品目の合計で、振替だけは押して入れる。 */}
+        <Pressable
+          accessibilityRole={kind === 'transfer' ? 'button' : undefined}
+          disabled={kind !== 'transfer'}
+          onPress={() => {
+            setAmountExpr(transferAmount > 0 ? String(transferAmount) : '');
+            push({ type: 'amount' });
+          }}
+          style={styles.amountRow}
+        >
+          <View style={styles.currency}>
+            <Text style={styles.currencyMark}>¥</Text>
+            <Text style={styles.currencyCode}>JPY</Text>
+          </View>
+          <Text style={styles.total}>{formatBalance(total).replace('¥', '')}</Text>
+        </Pressable>
         {receiptNotices.length > 0 && (
           <View style={styles.receiptNotice}>
             {receiptNotices.map((notice) => (
@@ -492,130 +586,93 @@ export default function RecordEditor({
             ))}
           </View>
         )}
-        {record?.isEstimate && (
-          <View style={styles.estimate}>
-            <View style={styles.estimateHead}>
-              {stillEstimate && <EstimateBadge />}
-              <Text style={[styles.estimateText, styles.flex]}>
-                {stillEstimate
-                  ? '見込みの額です。検針票・明細などを見て額を直すと確定します'
-                  : '保存すると確定します'}
-              </Text>
-            </View>
-            {stillEstimate && (
-              <Pressable accessibilityRole="button" onPress={() => setConfirmed(true)} hitSlop={8}>
-                <Text style={styles.estimateLink}>この額で確定する</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-        {record?.month && (
-          <Text style={styles.note}>
-            {autoRecordSource(record, wallets)}自動で作った記録（{formatMonthKey(record.month)}の分）
-          </Text>
-        )}
+        {notices(true)}
 
-        <Pressable accessibilityRole="button" onPress={openDate} style={styles.field}>
-          <CalendarDays size={20} color={colors.textMuted} />
-          <Text style={styles.fieldText}>{formatDateWithWeekday(new Date(`${occurredOn}T00:00:00`))}</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => push({ type: 'wallet', field: 'walletId' })} style={styles.field}>
-          <CreditCard size={20} color={colors.textMuted} />
-          <Text style={[styles.fieldText, walletId === null && styles.placeholder]}>
-            {walletName(walletId) || (kind === 'income' ? '入金先' : '出金元')}
-          </Text>
-          <ChevronRight size={18} color={colors.textFaint} />
-        </Pressable>
+        {field(<CalendarDays size={22} color={colors.textSubtle} />, formatDateWithYear(new Date(`${occurredOn}T00:00:00`)), '', openDate)}
+        {field(
+          <WalletTypeIcon type={walletOf(walletId)?.type ?? 'cash'} size={22} color={walletOf(walletId)?.iconColor} />,
+          walletName(walletId),
+          kind === 'income' ? '入金先' : '出金元',
+          () => push({ type: 'wallet', field: 'walletId' }),
+          { label: '出金元を外す', onClear: () => setWalletId(null) },
+        )}
+        {kind === 'transfer' ? (
+          <>
+            {field(
+              <ArrowRight size={22} color={colors.textMuted} />,
+              walletName(toWalletId),
+              '入金先',
+              () => push({ type: 'wallet', field: 'toWalletId' }),
+              { label: '入金先を外す', onClear: () => setToWalletId(null) },
+            )}
+            <Text style={styles.note}>振替は集計に入れません</Text>
+          </>
+        ) : (
+          field(
+            <Store size={22} color={colors.textMuted} />,
+            store,
+            'お店',
+            () => push({ type: 'store' }),
+            { label: 'お店を外す', onClear: () => setStore('') },
+          )
+        )}
         {nextPeriodShown && (
           <Pressable
             accessibilityRole="checkbox"
             accessibilityState={{ checked: cardNextPeriod }}
             onPress={() => setCardNextPeriod((prev) => !prev)}
-            style={styles.field}
+            style={styles.fieldRow}
           >
-            {cardNextPeriod ? (
-              <SquareCheck size={20} color={colors.money} />
-            ) : (
-              <Square size={20} color={colors.textMuted} />
-            )}
-            <Text style={styles.fieldText}>カードの引き落としを翌月分に回す</Text>
+            <View style={styles.fieldIcon} />
+            <View style={[styles.fieldValue, styles.fieldValueSmall]}>
+              {cardNextPeriod ? (
+                <SquareCheck size={20} color={colors.money} />
+              ) : (
+                <Square size={20} color={colors.textMuted} />
+              )}
+              <Text style={[styles.fieldText, styles.fieldTextSmall]}>引き落としを翌月分に回す</Text>
+            </View>
           </Pressable>
         )}
-        {kind === 'transfer' ? (
-          <>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => push({ type: 'wallet', field: 'toWalletId' })}
-              style={styles.field}
-            >
-              <ArrowRight size={20} color={colors.textMuted} />
-              <Text style={[styles.fieldText, toWalletId === null && styles.placeholder]}>
-                {walletName(toWalletId) || '入金先'}
-              </Text>
-              <ChevronRight size={18} color={colors.textFaint} />
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                setAmountExpr(transferAmount > 0 ? String(transferAmount) : '');
-                push({ type: 'amount' });
-              }}
-              style={styles.field}
-            >
-              <Text style={styles.fieldText}>金額を入れる</Text>
-              <ChevronRight size={18} color={colors.textFaint} />
-            </Pressable>
-            <Text style={styles.note}>振替は集計に入れません</Text>
-          </>
-        ) : (
-          <>
-            <Pressable accessibilityRole="button" onPress={() => push({ type: 'store' })} style={styles.field}>
-              <Store size={20} color={colors.textMuted} />
-              <Text style={[styles.fieldText, store === '' && styles.placeholder]}>{store || 'お店'}</Text>
-              <ChevronRight size={18} color={colors.textFaint} />
-            </Pressable>
 
-            {record && !receipt && onScanReceipt && (
-              <Pressable accessibilityRole="button" onPress={() => onScanReceipt(record)} style={styles.field}>
-                <Camera size={20} color={colors.textMuted} />
-                <Text style={styles.fieldText}>レシートを撮って品目を入れる</Text>
-                <ChevronRight size={18} color={colors.textFaint} />
-              </Pressable>
-            )}
-
+        {kind !== 'transfer' && (
+          <>
             <View style={styles.itemsHead}>
-              <Text style={styles.itemsTitle}>品目</Text>
-              <Text style={styles.itemsHint}>種類ごとにまとめて表示</Text>
-            </View>
-            {groups.map((group) => {
-              const names = itemNamesLabel(group.lines);
-              return (
-                <Pressable key={group.key} accessibilityRole="button" onPress={() => openGroup(group)} style={styles.group}>
-                  <CategoryIcon iconKey={groupIconKey(group)} size={24} />
-                  <View style={styles.flex}>
-                    <Text style={styles.groupTitle}>{groupTitle(group)}</Text>
-                    {names !== '' && <Text style={styles.groupNames}>{names}</Text>}
-                  </View>
-                  <Text style={styles.groupTotal}>{formatBalance(editorGroupTotal(group))}</Text>
+              <Text style={styles.itemsTitle}>品目一覧</Text>
+              <View style={styles.itemsTools}>
+                {record && !receipt && onScanReceipt && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="レシートを撮って品目を入れる"
+                    onPress={() => onScanReceipt(record)}
+                    hitSlop={8}
+                    style={styles.camera}
+                  >
+                    <Camera size={16} color={colors.textSubtle} />
+                  </Pressable>
+                )}
+                <Pressable accessibilityRole="button" onPress={() => push({ type: 'category', purpose: 'add' })} hitSlop={8}>
+                  <Text style={styles.itemsLink}>カテゴリを追加</Text>
                 </Pressable>
-              );
-            })}
+              </View>
+            </View>
+            <RecordItemGroups groups={groups} title={groupTitle} iconKey={groupIconKey} size="small" onOpen={openGroup} />
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="カテゴリを追加する"
               onPress={() => push({ type: 'category', purpose: 'add' })}
               style={styles.addGroup}
             >
-              <Plus size={18} color={colors.money} />
-              <Text style={styles.addGroupText}>
-                {groups.length === 0 ? '品目を追加する' : '品目を追加する（別の種類）'}
-              </Text>
+              <View style={styles.addMark}>
+                <Plus size={14} color={colors.money} />
+              </View>
             </Pressable>
           </>
         )}
       </ScrollView>
-      <View style={styles.footer}>
-        <PrimaryButton label={record ? '保存する' : '記録する'} onPress={submit} />
-      </View>
+      <Pressable accessibilityRole="button" onPress={submit} style={styles.saveBar}>
+        <Text style={styles.saveText}>{record ? '保存する' : '記録する'}</Text>
+      </Pressable>
     </View>
   );
 
@@ -630,63 +687,65 @@ const styles = StyleSheet.create({
   frame: { flex: 1, backgroundColor: colors.surface },
   screen: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 },
-  kinds: { flexDirection: 'row', gap: 8 },
-  kind: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.neutralSurface },
+  content: { paddingTop: 4, paddingBottom: 16 },
+  kinds: { flexDirection: 'row', gap: 8, paddingHorizontal: 16 },
+  kind: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.neutralSurface },
   kindSelected: { backgroundColor: colors.moneySoft },
-  kindText: { fontSize: 14, fontWeight: '600', color: colors.textSubtle },
+  kindText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
   kindTextSelected: { color: colors.moneyText, fontWeight: '700' },
-  totalRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  totalLabel: { fontSize: 12, fontWeight: '500', color: colors.textFaint, paddingBottom: 6 },
-  total: { fontSize: 34, fontWeight: '700', color: colors.text },
-  field: {
+  // 金額: 左に「¥ JPY」、右に大きな数字（Zaim と同じ。数字を出す Text には fontWeight を必ず付ける）。
+  amountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 6, paddingBottom: 2 },
+  currency: { alignItems: 'center' },
+  currencyMark: { fontSize: 26, fontWeight: '800', color: colors.text },
+  currencyCode: { fontSize: 11, fontWeight: '700', color: colors.textSubtle },
+  total: { fontSize: 40, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
+  // 値の行: 左にアイコンの列、右に値。区切り線は値の列だけに引く。
+  fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingLeft: 20 },
+  fieldIcon: { width: 24, alignItems: 'center' },
+  fieldValue: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingVertical: 15,
+    gap: 8,
+    paddingVertical: 9,
+    paddingRight: 20,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  fieldText: { flex: 1, fontSize: 16, fontWeight: '500', color: colors.text },
-  placeholder: { color: colors.textFaint },
-  note: { fontSize: 12, fontWeight: '500', color: colors.textFaint, marginTop: 10 },
-  receiptNotice: { marginTop: 12, padding: 12, gap: 4, borderRadius: 12, backgroundColor: colors.dangerSurface },
+  fieldValueSmall: { paddingVertical: 6 },
+  fieldText: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.text },
+  fieldTextSmall: { fontSize: 14, fontWeight: '600', color: colors.textSubtle },
+  placeholder: { color: colors.textFaint, fontWeight: '500' },
+  // 右の小さな灰色の円に白い「×」（値を外す）。
+  clear: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.borderStrong },
+  note: { fontSize: 12, fontWeight: '500', color: colors.textFaint, marginTop: 10, marginHorizontal: 20 },
+  receiptNotice: { marginTop: 8, marginHorizontal: 16, padding: 12, gap: 4, borderRadius: 12, backgroundColor: colors.dangerSurface },
   receiptNoticeText: { fontSize: 13, fontWeight: '600', color: colors.danger },
-  estimate: { marginTop: 12, padding: 12, gap: 8, borderRadius: 12, backgroundColor: colors.moneyEstimateSurface },
+  estimate: { marginTop: 8, marginHorizontal: 16, padding: 12, gap: 8, borderRadius: 12, backgroundColor: colors.moneyEstimateSurface },
   estimateHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   estimateText: { fontSize: 13, fontWeight: '500', color: colors.moneyEstimate },
   estimateLink: { fontSize: 14, fontWeight: '700', color: colors.moneyEstimate },
-  itemsHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 18, marginBottom: 4 },
-  itemsTitle: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
-  itemsHint: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
-  // 種類のまとまりの行は小さく（品目が主。docs/kakei.md §3.2）。
-  group: {
+  itemsHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 8,
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: 6,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  groupTitle: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
-  groupNames: { fontSize: 11, fontWeight: '500', color: colors.textFaint, marginTop: 1 },
-  groupTotal: { fontSize: 14, fontWeight: '700', color: colors.text },
-  addGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  addGroupText: { fontSize: 15, fontWeight: '600', color: colors.money },
+  itemsTitle: { fontSize: 14, fontWeight: '700', color: colors.textMuted },
+  itemsTools: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  camera: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.neutralSurface },
+  itemsLink: { fontSize: 13, fontWeight: '700', color: colors.money },
+  addGroup: { paddingHorizontal: 20, paddingVertical: 10 },
+  addMark: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.moneySoft },
+  // 下いっぱいの保存の帯（青）。
+  saveBar: { alignItems: 'center', paddingVertical: 16, backgroundColor: colors.money },
+  saveText: { fontSize: 16, fontWeight: '800', color: colors.primaryText },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1, borderTopColor: colors.border },
   amountBox: { alignItems: 'flex-end', paddingHorizontal: 20, paddingVertical: 24, flex: 1, justifyContent: 'flex-end' },
   amountExpr: { fontSize: 14, fontWeight: '500', color: colors.textMuted },

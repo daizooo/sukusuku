@@ -108,7 +108,7 @@ export default function MoneyFeedSettings({
   const walletName = (id: string) => wallets.find((wallet) => wallet.id === id)?.name ?? '（使わない出金元）';
   const names = {
     wallet: walletName,
-    category: (id: string) => categories.find((category) => category.id === id)?.name ?? '（削除した種類）',
+    category: (id: string) => categories.find((category) => category.id === id)?.name ?? '（削除したカテゴリ）',
     recurring: (id: string) => recurring.find((entry) => entry.id === id)?.name || '（固定の記録）',
   };
 
@@ -608,14 +608,14 @@ function RuleModal({
                 <Chip label="支出" selected={draft.recordKind !== 'income'} onClick={() => set({ recordKind: 'expense', categoryId: null })} />
                 <Chip label="収入" selected={draft.recordKind === 'income'} onClick={() => set({ recordKind: 'income', categoryId: null })} />
               </ChipRow>
-              <Field label="種類">
+              <Field label="カテゴリ">
                 <button
                   type="button"
                   onClick={() => setPickingCategory(true)}
                   className="flex w-full items-center justify-between rounded-lg border border-gray-300 px-3 py-2 text-left"
                 >
                   <span className={`text-[15px] font-semibold ${categoryName ? 'text-gray-900' : 'text-gray-400'}`}>
-                    {categoryName ?? '種類を選ぶ'}
+                    {categoryName ?? 'カテゴリを選ぶ'}
                   </span>
                   <ChevronRight size={18} className="text-gray-400" />
                 </button>
@@ -653,7 +653,7 @@ function RuleModal({
         </div>
       </ModalShell>
       {pickingCategory && (
-        // 種類の選択は CategoryPicker（StackedScreen）が戻る操作の層を積むので、ここでは枠だけ
+        // カテゴリの選択は CategoryPicker（StackedScreen）が戻る操作の層を積むので、ここでは枠だけ
         <div className="fixed inset-0 z-50 flex justify-center bg-black/30">
           <div className="flex h-full w-full max-w-md flex-col bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
           <CategoryPicker

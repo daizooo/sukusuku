@@ -52,7 +52,7 @@ interface MonthCloseScreenProps {
   onClose: () => void;
 }
 
-/** 見込みの記録の見出し。お店、無ければ品名、無ければ種類。 */
+/** 見込みの記録の見出し。お店、無ければ品名、無ければカテゴリ。 */
 function recordTitle(record: MoneyRecord, categories: MoneyCategory[]): string {
   if (record.store.trim() !== '') return record.store;
   const names = itemSummary(record.items);
@@ -60,7 +60,7 @@ function recordTitle(record: MoneyRecord, categories: MoneyCategory[]): string {
   return categoryPath(categories, record.items[0]?.categoryId ?? null) || (record.kind === 'income' ? '収入' : '支出');
 }
 
-/** 固定のルールの見出し。品名、無ければお店、無ければ種類。 */
+/** 固定のルールの見出し。品名、無ければお店、無ければカテゴリ。 */
 function ruleTitle(rule: MoneyRecurring, categories: MoneyCategory[]): string {
   const name = rule.name.trim() || rule.store.trim();
   return name !== '' ? name : categoryPath(categories, rule.categoryId) || (rule.kind === 'income' ? '収入' : '支出');

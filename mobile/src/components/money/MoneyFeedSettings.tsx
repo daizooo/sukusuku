@@ -105,7 +105,7 @@ export default function MoneyFeedSettings({
   const walletName = (id: string) => wallets.find((wallet) => wallet.id === id)?.name ?? '（使わない出金元）';
   const names = {
     wallet: walletName,
-    category: (id: string) => categories.find((category) => category.id === id)?.name ?? '（削除した種類）',
+    category: (id: string) => categories.find((category) => category.id === id)?.name ?? '（削除したカテゴリ）',
     recurring: (id: string) => recurring.find((entry) => entry.id === id)?.name || '（固定の記録）',
   };
 
@@ -607,9 +607,9 @@ function RuleSheet({
               <Chip label="支出" selected={draft.recordKind !== 'income'} onPress={() => set({ recordKind: 'expense', categoryId: null })} />
               <Chip label="収入" selected={draft.recordKind === 'income'} onPress={() => set({ recordKind: 'income', categoryId: null })} />
             </ChipRow>
-            <Field label="種類">
+            <Field label="カテゴリ">
               <Pressable accessibilityRole="button" onPress={() => setPickingCategory(true)} style={styles.select}>
-                <Text style={[styles.selectText, !categoryName && styles.placeholder]}>{categoryName ?? '種類を選ぶ'}</Text>
+                <Text style={[styles.selectText, !categoryName && styles.placeholder]}>{categoryName ?? 'カテゴリを選ぶ'}</Text>
                 <ChevronRight size={18} color={colors.textFaint} />
               </Pressable>
             </Field>

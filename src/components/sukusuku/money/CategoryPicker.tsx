@@ -14,7 +14,7 @@ import {
 } from '@/lib/moneyUtils';
 import { CategoryIcon, ScreenHeader, StackedScreen } from './moneyVisual';
 
-// 種類の選択（docs/kakei.md §3.1・§3.2）。mobile版の `mobile/src/components/money/CategoryPicker.tsx` と同じ並び・文言。
+// カテゴリの選択（docs/kakei.md §3.1・§3.2）。mobile版の `mobile/src/components/money/CategoryPicker.tsx` と同じ並び・文言。
 //
 // 上によく使う小分類。その下に大分類ごとの枠（見出しに今月の残り、中に小分類のチップ）。押すと大分類も決まる。
 // 大分類ごとに枠で囲み、見出しに色を付けて、どこからどこまでが同じ大分類かを分かるようにする。
@@ -60,7 +60,7 @@ export default function CategoryPicker({
   return (
     <StackedScreen onBack={onClose}>
       <ScreenHeader
-        title="種類を選ぶ"
+        title="カテゴリを選ぶ"
         icon="back"
         onClose={onClose}
         right={
@@ -73,7 +73,7 @@ export default function CategoryPicker({
       />
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
         {tops.length === 0 && (
-          <p className="py-6 text-center text-sm text-gray-400">種類がまだありません。右上の歯車から種類を作れます</p>
+          <p className="py-6 text-center text-sm text-gray-400">カテゴリがまだありません。右上の歯車からカテゴリを作れます</p>
         )}
         {frequent.length > 0 && (
           <section className="space-y-2">

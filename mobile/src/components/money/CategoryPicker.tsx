@@ -14,7 +14,7 @@ import {
 } from '@/lib/moneyUtils';
 import { CategoryIcon, ScreenHeader } from '@/components/money/moneyVisual';
 
-// 種類の選択（docs/kakei.md §3.1・§3.2）。PWA版の `src/components/sukusuku/money/CategoryPicker.tsx` と同じ並び・文言。
+// カテゴリの選択（docs/kakei.md §3.1・§3.2）。PWA版の `src/components/sukusuku/money/CategoryPicker.tsx` と同じ並び・文言。
 //
 // 上によく使う小分類。その下に大分類ごとの枠（見出しに今月の残り、中に小分類のチップ）。押すと大分類も決まる。
 // 大分類ごとに枠で囲み、見出しに色を付けて、どこからどこまでが同じ大分類かを分かるようにする。
@@ -59,7 +59,7 @@ export default function CategoryPicker({
   return (
     <View style={styles.screen}>
       <ScreenHeader
-        title="種類を選ぶ"
+        title="カテゴリを選ぶ"
         icon="back"
         onClose={onClose}
         right={
@@ -72,7 +72,7 @@ export default function CategoryPicker({
       />
       <ScrollView contentContainerStyle={styles.content}>
         {tops.length === 0 && (
-          <Text style={styles.empty}>種類がまだありません。右上の歯車から種類を作れます</Text>
+          <Text style={styles.empty}>カテゴリがまだありません。右上の歯車からカテゴリを作れます</Text>
         )}
         {frequent.length > 0 && (
           <View style={styles.section}>
