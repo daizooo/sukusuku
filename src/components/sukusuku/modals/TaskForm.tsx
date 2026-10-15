@@ -37,6 +37,8 @@ export type TaskDraft = Omit<Task, 'id' | 'done' | 'doneDates'>;
 interface TaskFormProps {
   value: TaskDraft;
   onChange: (draft: TaskDraft) => void;
+  /** 新しく作るとき。種別を切り替えたら、共有設定を触っていなければその種別の既定にそろえる。 */
+  isNew?: boolean;
 }
 
 const KIND_TABS: { value: TaskKind; label: string }[] = [
@@ -57,7 +59,10 @@ const switcherTab = (selected: boolean) =>
 const FIELD =
   'w-full border border-gray-300 rounded-lg p-2.5 text-sm outline-none focus:border-blue-500 bg-white text-gray-800';
 
-export default function TaskForm({ value, onChange }: TaskFormProps) {
+// 共有設定の既定は、予定は共有、タスクは自分だけ（docs/calendar.md「共有設定」）。
+const defaultPrivate = (kind: TaskKind): boolean => kind === 'task';
+
+export default function TaskForm({ value, onChange, isNew = false }: TaskFormProps) {
   // 参加者として選べるのは家族メンバー（設定タブの「家族」の表示名の並び）。
   const roster = useFamilyRoster();
   // 予定に入っているが家族にいない名前（前の名前など）も、外せるように並べておく。
@@ -74,10 +79,13 @@ export default function TaskForm({ value, onChange }: TaskFormProps) {
     // タスクは場所・参加者・終わりの時刻を持たない。予定へ戻したときのために
     // 参加者は残し、タスクにするときは終わりの時刻だけ外す（始まりの時刻は残る）。
     // 生後日数指定は新しく作れない（古いタスクに残るだけ）。予定に切り替えたときは日付指定へ戻す。
+    // 共有設定は、新しく作るときに触っていなければ種別の既定にそろえる（編集中の予定は変えない）。
+    const sharing =
+      isNew && value.isPrivate === defaultPrivate(value.kind) ? { isPrivate: defaultPrivate(kind) } : {};
     if (kind === 'task') {
-      set({ kind, endTime: null });
+      set({ kind, endTime: null, ...sharing });
     } else {
-      set(value.anchorType === 'birth_relative' ? { kind, anchorType: 'absolute' } : { kind });
+      set(value.anchorType === 'birth_relative' ? { kind, anchorType: 'absolute', ...sharing } : { kind, ...sharing });
     }
   };
 

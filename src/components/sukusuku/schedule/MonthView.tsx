@@ -214,10 +214,11 @@ export default function MonthView({
 
                   {/* 祝日と節目が重なる日は祝日を出す。1マスの高さに収めるため1行だけにする。 */}
                   {hasLabel && (
+                    // 予定の帯と同じ大きさのまま、長いものは縮めずにマスの幅で切る。
                     <p
-                      className={`text-[10px] leading-[13px] text-center truncate ${
-                        holiday ? 'text-red-500' : 'text-amber-600'
-                      }`}
+                      className={`leading-[13px] text-center font-semibold whitespace-nowrap overflow-hidden text-clip ${
+                        isWide ? 'text-xs' : 'text-[9px]'
+                      } ${holiday ? 'text-red-500' : 'text-amber-600'}`}
                     >
                       {holiday ?? milestone}
                     </p>
