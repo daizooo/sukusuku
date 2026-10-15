@@ -970,6 +970,7 @@ export type Database = {
           source: string
           source_id: string
           status: string
+          store_hint: string | null
           subject: string
           to_email: string | null
           updated_at: string
@@ -996,6 +997,7 @@ export type Database = {
           source?: string
           source_id: string
           status?: string
+          store_hint?: string | null
           subject?: string
           to_email?: string | null
           updated_at?: string
@@ -1022,6 +1024,7 @@ export type Database = {
           source?: string
           source_id?: string
           status?: string
+          store_hint?: string | null
           subject?: string
           to_email?: string | null
           updated_at?: string

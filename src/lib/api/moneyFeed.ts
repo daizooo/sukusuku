@@ -27,6 +27,8 @@ type FeedRow = Pick<
   | 'pair_id'
   | 'record_id'
   | 'candidate_record_ids'
+  | 'source'
+  | 'store_hint'
 >;
 type RuleRow = Tables<'money_feed_rules'>;
 
@@ -34,7 +36,7 @@ type RuleRow = Tables<'money_feed_rules'>;
 // 明細を入れるのはサーバー（Edge Function money-feed-ingest）。アプリは読む・片づける（money_feed_resolve）・設定を直す。
 
 const FEED_COLUMNS =
-  'id, received_at, to_email, subject, direction, occurred_on, amount, account_name, description, wallet_id, status, pair_id, record_id, candidate_record_ids';
+  'id, received_at, to_email, subject, direction, occurred_on, amount, account_name, description, wallet_id, status, pair_id, record_id, candidate_record_ids, source, store_hint';
 
 /** 片づいていない明細（未確認・確認・読めない）。 */
 export const OPEN_FEED_STATUSES = ['pending', 'confirm', 'unreadable'] as const;
@@ -56,6 +58,8 @@ const rowToFeed = (row: FeedRow): MoneyFeedItem => ({
   pairId: row.pair_id,
   recordId: row.record_id,
   candidateRecordIds: row.candidate_record_ids ?? [],
+  source: row.source === 'card_mail' ? 'card_mail' : 'zaim_mail',
+  storeHint: row.store_hint,
 });
 
 const rowToRule = (row: RuleRow): MoneyFeedRule => ({
@@ -157,7 +161,7 @@ export type MoneyFeedResolve =
   | { action: 'link'; recordId: string; learn: boolean }
   | { action: 'replace'; recordId: string }
   | { action: 'separate' }
-  | { action: 'record'; categoryId: string; store: string; learn: boolean }
+  | { action: 'record'; categoryId: string; store: string; registerStore: boolean; learn: boolean }
   | { action: 'transfer'; toWalletId: string; learn: boolean }
   | { action: 'ignore'; learn: boolean };
 
@@ -168,7 +172,13 @@ export async function resolveMoneyFeed(supabase: SupabaseDb, feedId: string, res
   if (resolve.action === 'link') Object.assign(args, { record_id: resolve.recordId, learn: resolve.learn });
   if (resolve.action === 'replace') Object.assign(args, { record_id: resolve.recordId });
   if (resolve.action === 'record') {
-    Object.assign(args, { category_id: resolve.categoryId, store: resolve.store, learn: resolve.learn });
+    Object.assign(args, {
+      category_id: resolve.categoryId,
+      store: resolve.store,
+      // 「お店に登録して使う」を選んだら、DB がお店の設定に登録する（0106）
+      register_store: resolve.registerStore,
+      learn: resolve.learn,
+    });
   }
   if (resolve.action === 'transfer') Object.assign(args, { to_wallet_id: resolve.toWalletId, learn: resolve.learn });
   if (resolve.action === 'ignore') Object.assign(args, { learn: resolve.learn });
