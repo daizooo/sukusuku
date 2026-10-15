@@ -44,7 +44,7 @@ export default function AddTaskModal({
       }
     >
       {show ? (
-        <TaskForm value={newTask} onChange={onChange} />
+        <TaskForm value={newTask} onChange={onChange} isNew />
       ) : null}
     </TaskModalShell>
   );

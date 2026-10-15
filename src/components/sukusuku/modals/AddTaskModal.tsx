@@ -40,7 +40,7 @@ export default function AddTaskModal({
         </button>
       }
     >
-      <TaskForm value={newTask} onChange={onChange} />
+      <TaskForm value={newTask} onChange={onChange} isNew />
     </ModalShell>
   );
 }
