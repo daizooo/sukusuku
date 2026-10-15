@@ -165,7 +165,7 @@ export default function MoneyScreen() {
   const [scanning, setScanning] = useState(false);
   const [editingCategories, setEditingCategories] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // Zaim から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
+  // Gmail から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
   const [feed, setFeed] = useState<MoneyFeedData | null>(null);
   const [feedOpen, setFeedOpen] = useState(false);
 
@@ -250,7 +250,7 @@ export default function MoneyScreen() {
   const failed = (what: string) => Alert.alert(`${what}できませんでした`, 'もう一度お試しください。');
 
   /**
-   * 新しく入れる記録が、Zaim から取り込んだ明細の記録と重なっていないか（docs/kakei.md §9.5.5 の最後）。
+   * 新しく入れる記録が、Gmail から取り込んだ明細の記録と重なっていないか（docs/kakei.md §9.5.5 の最後）。
    * 同じ口座・同じ額・前後の日（手入力との確認の幅）の記録があれば、入れるか聞く。入れないなら false。
    */
   const confirmNotDuplicate = (draft: MoneyRecordDraft): Promise<boolean> => {
@@ -269,7 +269,7 @@ export default function MoneyScreen() {
     return new Promise((resolve) =>
       Alert.alert(
         '同じ取引が取り込まれています',
-        `Zaim から取り込んだ記録に、同じ口座・同じ額のものがあります。\n${lines}\n\nそれでも入れますか？`,
+        `Gmail から取り込んだ記録に、同じ口座・同じ額のものがあります。\n${lines}\n\nそれでも入れますか？`,
         [
           { text: '入れない', style: 'cancel', onPress: () => resolve(false) },
           { text: '入れる', onPress: () => resolve(true) },
@@ -734,6 +734,7 @@ export default function MoneyScreen() {
           linkedRecordIds={feed.linkedRecordIds}
           wallets={wallets}
           records={records}
+          stores={stores}
           categories={categories}
           budgets={allBudgets}
           onResolve={resolveFeed}

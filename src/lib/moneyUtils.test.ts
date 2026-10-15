@@ -8,7 +8,9 @@ import {
   balanceChecks,
   baseIconKey,
   buildCategoryAnalysis,
+  canCardNextPeriod,
   cardBilling,
+  cardCarriedIn,
   cardPaymentHistory,
   cardUsagePeriod,
   dailyBalances,
@@ -386,6 +388,7 @@ const record = (id: string, fields: Partial<MoneyRecord>): MoneyRecord => ({
   isEstimate: false,
   recurringId: null,
   month: null,
+  cardNextPeriod: false,
   items: [],
   ...fields,
 });
@@ -1002,6 +1005,33 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
   assert.equal(formatGainRate(-0.05), '−5.00%');
   assert.equal(formatQuantity(123456), '123,456');
   assert.equal(formatQuantity(10.5), '10.5');
+}
+// ---- カードの引き落としを翌月分に回す（card_next_period。docs/kakei.md §3.4） ----
+{
+  const cardWallet = { type: 'card' as const };
+  assert.equal(canCardNextPeriod('expense', cardWallet, '2026-09-25'), true, 'カードで25日以降');
+  assert.equal(canCardNextPeriod('income', cardWallet, '2026-09-30'), true, '返品も');
+  assert.equal(canCardNextPeriod('expense', cardWallet, '2026-09-24'), false, '24日までは出さない');
+  assert.equal(canCardNextPeriod('transfer', cardWallet, '2026-09-28'), false, '振替は出さない');
+  assert.equal(canCardNextPeriod('expense', { type: 'bank' }, '2026-09-28'), false, 'カードでない出金元は出さない');
+  assert.equal(canCardNextPeriod('expense', undefined, '2026-09-28'), false);
+
+  // 末日締め・27日払い。9/28 の 4千 を翌月分に回すと、10月27日でなく11月27日の引き落としに入る。
+  const card = { id: 'card', closeDay: 31, payDay: 27, payMonthOffset: null };
+  const spend = (id: string, occurredOn: string, amount: number, cardNextPeriod = false) =>
+    record(id, { walletId: 'card', occurredOn, cardNextPeriod, items: [item({ amount })] });
+  const rs = [spend('n1', '2026-09-10', 6000), spend('n2', '2026-09-28', 4000, true), spend('n3', '2026-10-02', 3000)];
+  assert.deepEqual(
+    cardBilling(card, -13000, rs, '2026-10-10'),
+    { billed: 6000, unbilled: 7000, closedOn: '2026-09-30', payOn: '2026-10-27' },
+    '回した記録は締め日の前でも未請求',
+  );
+  assert.deepEqual(cardCarriedIn(card, '2026-11', rs), { monthKey: '2026-09', amount: 4000 }, '11月の引き落としに9月分が回ってくる');
+  assert.equal(cardCarriedIn(card, '2026-10', rs), null, '回ってきた記録が無ければ null');
+  assert.equal(cardCarriedIn({ id: 'card', closeDay: null, payDay: 27, payMonthOffset: null }, '2026-11', rs), null);
+  // 返品（収入）も回せる。回した額は 支出 − 返品
+  const refund = record('n4', { kind: 'income', walletId: 'card', occurredOn: '2026-09-29', cardNextPeriod: true, items: [item({ amount: 1000 })] });
+  assert.deepEqual(cardCarriedIn(card, '2026-11', [...rs, refund]), { monthKey: '2026-09', amount: 3000 });
 }
 
 // ---- 翌々月払いのカード（月末締めの翌々月2日払いなど。2026-10-09） ----

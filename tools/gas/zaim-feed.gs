@@ -1,4 +1,7 @@
-// かぞく手帳: Zaim の入出金通知メールを、かぞく手帳へ送る（docs/kakei.md §9.5.2）
+// かぞく手帳: Zaim の入出金通知メールと、カード会社の利用通知メールを、かぞく手帳へ送る（docs/kakei.md §9.5.2・§9.6）
+//
+// カードは三井住友カード（statement@vpass.ne.jp）と楽天カード（…@mail.rakuten-card.co.jp）の利用通知。
+// 2026-10-15 にカードを足した。前の版を貼ってある場合は、このファイルの中身で貼り直す（スクリプト プロパティ・トリガーはそのまま）。
 //
 // 使い方（通知が届く Gmail のアカウントで、1回だけ）
 //   1. https://script.google.com で新しいプロジェクトを作り、このファイルの中身を貼る
@@ -13,6 +16,8 @@
 
 var LABEL = 'かぞく手帳済';
 var BATCH = 50; // Edge Function が1回に受ける数
+// 送るメールの差出人（Zaim・カード会社）
+var SENDERS = ['info@zaim.net', 'statement@vpass.ne.jp', 'rakuten-card.co.jp'];
 
 function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
@@ -30,7 +35,8 @@ function sendZaimMails() {
   var startAt = new Date(props.getProperty('START_AT') || 0);
   var label = GmailApp.getUserLabelByName(LABEL) || GmailApp.createLabel(LABEL);
 
-  var query = 'from:info@zaim.net subject:(入金がありました OR 出金がありました) -label:' + LABEL +
+  var query = '{from:info@zaim.net from:statement@vpass.ne.jp from:rakuten-card.co.jp}' +
+    ' {subject:入金がありました subject:出金がありました subject:利用} -label:' + LABEL +
     ' after:' + Utilities.formatDate(new Date(startAt.getTime() - 86400000), 'Asia/Tokyo', 'yyyy/MM/dd');
   var threads = GmailApp.search(query, 0, BATCH);
   if (threads.length === 0) return;
@@ -41,11 +47,13 @@ function sendZaimMails() {
     byThread[thread.getId()] = { thread: thread, ids: [] };
     thread.getMessages().forEach(function (m) {
       if (m.getDate() < startAt) return;
-      if (m.getFrom().indexOf('info@zaim.net') < 0) return;
+      var from = m.getFrom();
+      if (!SENDERS.some(function (s) { return from.indexOf(s) >= 0; })) return;
       byThread[thread.getId()].ids.push(m.getId());
       messages.push({
         id: m.getId(),
         received_at: m.getDate().toISOString(),
+        from: from,
         to: m.getTo(),
         subject: m.getSubject(),
         body: m.getPlainBody(),

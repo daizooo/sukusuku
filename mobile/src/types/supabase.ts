@@ -970,6 +970,7 @@ export type Database = {
           source: string
           source_id: string
           status: string
+          store_hint: string | null
           subject: string
           to_email: string | null
           updated_at: string
@@ -996,6 +997,7 @@ export type Database = {
           source?: string
           source_id: string
           status?: string
+          store_hint?: string | null
           subject?: string
           to_email?: string | null
           updated_at?: string
@@ -1022,6 +1024,7 @@ export type Database = {
           source?: string
           source_id?: string
           status?: string
+          store_hint?: string | null
           subject?: string
           to_email?: string | null
           updated_at?: string
@@ -1493,6 +1496,7 @@ export type Database = {
       }
       money_records: {
         Row: {
+          card_next_period: boolean
           created_at: string
           created_by: string | null
           draw_id: string | null
@@ -1511,6 +1515,7 @@ export type Database = {
           wallet_id: string | null
         }
         Insert: {
+          card_next_period?: boolean
           created_at?: string
           created_by?: string | null
           draw_id?: string | null
@@ -1529,6 +1534,7 @@ export type Database = {
           wallet_id?: string | null
         }
         Update: {
+          card_next_period?: boolean
           created_at?: string
           created_by?: string | null
           draw_id?: string | null

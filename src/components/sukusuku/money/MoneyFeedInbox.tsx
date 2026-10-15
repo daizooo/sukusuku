@@ -2,13 +2,21 @@
 
 import { useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import type { MoneyBudget, MoneyCategory, MoneyFeedItem, MoneyRecord, MoneyWallet } from '@/types/app';
+import type { MoneyBudget, MoneyCategory, MoneyFeedItem, MoneyRecord, MoneyStore, MoneyWallet } from '@/types/app';
 import type { MoneyFeedFill, MoneyFeedResolve } from '@/lib/api/moneyFeed';
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
-import { formatYen, monthKeyOfDate, recordTotal } from '@/lib/moneyUtils';
-import { feedAmountLabel, feedDayLabel, feedLinkCandidates, feedStatusLabel, sortFeedInbox } from '@/lib/moneyFeedUtils';
+import { formatYen, monthKeyOfDate, recordTotal, storeChoices } from '@/lib/moneyUtils';
+import {
+  feedAmountLabel,
+  feedDayLabel,
+  feedLinkCandidates,
+  feedStatusLabel,
+  sortFeedInbox,
+  storeCategoryGuess,
+} from '@/lib/moneyFeedUtils';
 import { ModalShell } from '../modals/TaskForm';
 import CategoryPicker from './CategoryPicker';
+import StorePicker from './StorePicker';
 import { FullScreen, PrimaryButton, ScreenHeader, incomeAmountClass } from './moneyVisual';
 import { Chip, ChipRow, Field, ToggleRow, WalletChoices, feedInputClass } from './feedParts';
 
@@ -24,6 +32,8 @@ interface MoneyFeedInboxProps {
   linkedRecordIds: string[];
   wallets: MoneyWallet[];
   records: MoneyRecord[];
+  /** お店の設定（記録にするときのお店の選択に使う）。 */
+  stores: MoneyStore[];
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   onResolve: (item: MoneyFeedItem, resolve: MoneyFeedResolve) => Promise<boolean>;
@@ -37,6 +47,7 @@ export default function MoneyFeedInbox({
   linkedRecordIds,
   wallets,
   records,
+  stores,
   categories,
   budgets,
   onResolve,
@@ -86,6 +97,7 @@ export default function MoneyFeedInbox({
           linkedRecordIds={linkedRecordIds}
           wallets={wallets}
           records={records}
+          stores={stores}
           categories={categories}
           budgets={budgets}
           onClose={() => setOpenId(null)}
@@ -118,6 +130,7 @@ function FeedItemModal({
   linkedRecordIds,
   wallets,
   records,
+  stores,
   categories,
   budgets,
   onClose,
@@ -128,6 +141,7 @@ function FeedItemModal({
   linkedRecordIds: string[];
   wallets: MoneyWallet[];
   records: MoneyRecord[];
+  stores: MoneyStore[];
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   onClose: () => void;
@@ -141,8 +155,15 @@ function FeedItemModal({
   const [fillAmount, setFillAmount] = useState('');
   const [walletId, setWalletId] = useState<string | null>(null);
   const [remember, setRemember] = useState(true);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [store, setStore] = useState('');
+  // カードの利用通知は、利用先に当てたお店と、そのお店でいちばん多い種類を初めから入れておく（§9.6）
+  const [categoryId, setCategoryId] = useState<string | null>(() =>
+    item.storeHint ? storeCategoryGuess(records, item.storeHint, item.direction === 'in' ? 'income' : 'expense') : null,
+  );
+  const [store, setStore] = useState(item.storeHint ?? '');
+  // お店の選択で「お店に登録して使う」を選んだか（記録の入力と同じ。docs/kakei.md §3.5）
+  const [registerStore, setRegisterStore] = useState(false);
+  const [pickingStore, setPickingStore] = useState(false);
+  const storeOptions = useMemo(() => storeChoices(stores, records), [stores, records]);
   const [toWalletId, setToWalletId] = useState<string | null>(null);
   const [linkId, setLinkId] = useState<string | null>(null);
   const [learn, setLearn] = useState(true);
@@ -331,7 +352,9 @@ function FeedItemModal({
     !busy &&
     (mode === 'record' ? categoryId !== null : mode === 'transfer' ? toWalletId !== null : mode === 'link' ? linkId !== null : true);
   const save = () => {
-    if (mode === 'record' && categoryId) void run({ action: 'record', categoryId, store, learn });
+    if (mode === 'record' && categoryId) {
+      void run({ action: 'record', categoryId, store, registerStore: store !== '' && registerStore, learn });
+    }
     if (mode === 'transfer' && toWalletId) void run({ action: 'transfer', toWalletId, learn });
     if (mode === 'link' && linkId) void run({ action: 'link', recordId: linkId, learn });
     if (mode === 'ignore') void run({ action: 'ignore', learn });
@@ -361,8 +384,18 @@ function FeedItemModal({
                   <ChevronRight size={18} className="text-gray-400" />
                 </button>
               </Field>
-              <Field label="お店（任意）">
-                <input className={feedInputClass} value={store} onChange={(event) => setStore(event.target.value)} placeholder="例: 水道局" />
+              <Field
+                label="お店（任意）"
+                hint={item.storeHint ? `利用先「${item.description}」から当てました。違えば直してください。` : undefined}
+              >
+                <button
+                  type="button"
+                  onClick={() => setPickingStore(true)}
+                  className="flex w-full items-center justify-between rounded-lg border border-gray-300 px-3 py-2 text-left"
+                >
+                  <span className={`text-[15px] font-semibold ${store ? 'text-gray-900' : 'text-gray-400'}`}>{store || 'お店を選ぶ'}</span>
+                  <ChevronRight size={18} className="text-gray-400" />
+                </button>
               </Field>
             </>
           )}
@@ -393,6 +426,28 @@ function FeedItemModal({
           <ToggleRow label="次から同じ内容は自動で" value={learn} onChange={setLearn} />
         </div>
       </ModalShell>
+      {pickingStore && (
+        // お店の選択は StorePicker（StackedScreen）が戻る操作の層を積むので、ここでは枠だけ
+        <div className="fixed inset-0 z-50 flex justify-center bg-black/30">
+          <div className="flex h-full w-full max-w-md flex-col bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+            <StorePicker
+              value={store}
+              registered={storeOptions.registered}
+              recent={storeOptions.recent}
+              others={storeOptions.others}
+              canRegister
+              onPick={(value, register) => {
+                setStore(value);
+                setRegisterStore(register);
+                // 種類がまだなら、そのお店でいちばん多く使った種類を入れる
+                if (categoryId === null) setCategoryId(storeCategoryGuess(records, value, kind));
+                setPickingStore(false);
+              }}
+              onClose={() => setPickingStore(false)}
+            />
+          </div>
+        </div>
+      )}
       {pickingCategory && (
         // 種類の選択は CategoryPicker（StackedScreen）が戻る操作の層を積むので、ここでは枠だけ
         <div className="fixed inset-0 z-50 flex justify-center bg-black/30">
