@@ -53,7 +53,7 @@ import MonthCloseScreen from './MonthCloseScreen';
 // 内訳の行を押すと、簡単な分析と、その行に絞った記録の一覧が開く（ReviewDetailScreen。§4.4）。
 // 年は内訳の下に月ごとの収支（押すとその月へ）。
 // 見込みの額（毎月の記録で自動で作り、まだ確かめていない額）は実績に入れて数え、件数と額を添えて出す（§3.3・§4.1）。
-// 月の締め（§4.5）: 過ぎた月の結論の下に「この月を締める」（締めた月は「締めた月」）。押すと締めの画面（MonthCloseScreen）。
+// 月の締め（§4.5）: 過ぎた月と今月の結論の下に「この月を締める」（月の最終週に締めることもあるため、今月も出す）（締めた月は「締めた月」）。押すと締めの画面（MonthCloseScreen）。
 // 締めていない過ぎた月があれば、いちばん上に「◯月が締まっていません」と出す（押すとその月の締めの画面）。
 
 interface MoneyReviewViewProps {
@@ -225,7 +225,7 @@ export default function MoneyReviewView({
               </span>
             </div>
           )}
-          {isMonth && (monthClosed || monthKey < today) && (
+          {isMonth && (monthClosed || monthKey <= today) && (
             <button
               type="button"
               onClick={() => setClosing(monthKey)}
