@@ -702,6 +702,7 @@ export default function MoneyScreen() {
           linkedRecordIds={feed.linkedRecordIds}
           wallets={wallets}
           records={records}
+          stores={stores}
           categories={categories}
           budgets={allBudgets}
           onResolve={resolveFeed}

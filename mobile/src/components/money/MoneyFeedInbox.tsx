@@ -3,12 +3,12 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronRight } from 'lucide-react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import type { MoneyBudget, MoneyCategory, MoneyFeedItem, MoneyRecord, MoneyWallet } from '@/types/app';
+import type { MoneyBudget, MoneyCategory, MoneyFeedItem, MoneyRecord, MoneyStore, MoneyWallet } from '@/types/app';
 import type { MoneyFeedFill, MoneyFeedResolve } from '@/lib/api/moneyFeed';
 import { formatDateWithWeekday, toDateString } from '@/lib/dateUtils';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
-import { formatYen, monthKeyOfDate, recordTotal } from '@/lib/moneyUtils';
+import { formatYen, monthKeyOfDate, recordTotal, storeChoices } from '@/lib/moneyUtils';
 import {
   feedAmountLabel,
   feedDayLabel,
@@ -20,6 +20,7 @@ import {
 import SheetModal from '@/components/ui/SheetModal';
 import LogModalShell from '@/components/log/LogModalShell';
 import CategoryPicker from '@/components/money/CategoryPicker';
+import StorePicker from '@/components/money/StorePicker';
 import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 import { Chip, ChipRow, Field, ToggleRow, WalletChoices } from '@/components/money/feedParts';
 
@@ -35,6 +36,8 @@ interface MoneyFeedInboxProps {
   linkedRecordIds: string[];
   wallets: MoneyWallet[];
   records: MoneyRecord[];
+  /** お店の設定（記録にするときのお店の選択に使う）。 */
+  stores: MoneyStore[];
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   onResolve: (item: MoneyFeedItem, resolve: MoneyFeedResolve) => Promise<boolean>;
@@ -43,7 +46,18 @@ interface MoneyFeedInboxProps {
   onClose: () => void;
 }
 
-export default function MoneyFeedInbox({ items, linkedRecordIds, wallets, records, categories, budgets, onResolve, onFill, onClose }: MoneyFeedInboxProps) {
+export default function MoneyFeedInbox({
+  items,
+  linkedRecordIds,
+  wallets,
+  records,
+  stores,
+  categories,
+  budgets,
+  onResolve,
+  onFill,
+  onClose,
+}: MoneyFeedInboxProps) {
   const insets = useSafeAreaInsets();
   const [openId, setOpenId] = useState<string | null>(null);
   const sorted = useMemo(() => sortFeedInbox(items), [items]);
@@ -90,6 +104,7 @@ export default function MoneyFeedInbox({ items, linkedRecordIds, wallets, record
           linkedRecordIds={linkedRecordIds}
           wallets={wallets}
           records={records}
+          stores={stores}
           categories={categories}
           budgets={budgets}
           onClose={() => setOpenId(null)}
@@ -120,6 +135,7 @@ function FeedItemSheet({
   linkedRecordIds,
   wallets,
   records,
+  stores,
   categories,
   budgets,
   onClose,
@@ -130,6 +146,7 @@ function FeedItemSheet({
   linkedRecordIds: string[];
   wallets: MoneyWallet[];
   records: MoneyRecord[];
+  stores: MoneyStore[];
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   onClose: () => void;
@@ -148,6 +165,10 @@ function FeedItemSheet({
     item.storeHint ? storeCategoryGuess(records, item.storeHint, item.direction === 'in' ? 'income' : 'expense') : null,
   );
   const [store, setStore] = useState(item.storeHint ?? '');
+  // お店の選択で「お店に登録して使う」を選んだか（記録の入力と同じ。docs/kakei.md §3.5）
+  const [registerStore, setRegisterStore] = useState(false);
+  const [pickingStore, setPickingStore] = useState(false);
+  const storeOptions = useMemo(() => storeChoices(stores, records), [stores, records]);
   const [toWalletId, setToWalletId] = useState<string | null>(null);
   const [linkId, setLinkId] = useState<string | null>(null);
   const [learn, setLearn] = useState(true);
@@ -347,7 +368,9 @@ function FeedItemSheet({
     !busy &&
     (mode === 'record' ? categoryId !== null : mode === 'transfer' ? toWalletId !== null : mode === 'link' ? linkId !== null : true);
   const save = () => {
-    if (mode === 'record' && categoryId) void run({ action: 'record', categoryId, store, learn });
+    if (mode === 'record' && categoryId) {
+      void run({ action: 'record', categoryId, store, registerStore: store !== '' && registerStore, learn });
+    }
     if (mode === 'transfer' && toWalletId) void run({ action: 'transfer', toWalletId, learn });
     if (mode === 'link' && linkId) void run({ action: 'link', recordId: linkId, learn });
     if (mode === 'ignore') void run({ action: 'ignore', learn });
@@ -380,13 +403,10 @@ function FeedItemSheet({
               label="お店（任意）"
               hint={item.storeHint ? `利用先「${item.description}」から当てました。違えば直してください。` : undefined}
             >
-              <TextInput
-                style={styles.input}
-                value={store}
-                onChangeText={setStore}
-                placeholder="例: 水道局"
-                placeholderTextColor={colors.textFaint}
-              />
+              <Pressable accessibilityRole="button" onPress={() => setPickingStore(true)} style={styles.select}>
+                <Text style={[styles.selectText, store === '' && styles.placeholder]}>{store || 'お店を選ぶ'}</Text>
+                <ChevronRight size={18} color={colors.textFaint} />
+              </Pressable>
             </Field>
           </>
         )}
@@ -414,6 +434,27 @@ function FeedItemSheet({
         {mode === 'ignore' && <Text style={styles.hint}>記録を作りません。残高がずれたら、口座の詳細から補正してください。</Text>}
         <ToggleRow label="次から同じ内容は自動で" value={learn} onChange={setLearn} />
       </LogModalShell>
+      {pickingStore && (
+        <Modal visible animationType="slide" onRequestClose={() => setPickingStore(false)}>
+          <View style={[styles.picker, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
+            <StorePicker
+              value={store}
+              registered={storeOptions.registered}
+              recent={storeOptions.recent}
+              others={storeOptions.others}
+              canRegister
+              onPick={(value, register) => {
+                setStore(value);
+                setRegisterStore(register);
+                // 種類がまだなら、そのお店でいちばん多く使った種類を入れる
+                if (categoryId === null) setCategoryId(storeCategoryGuess(records, value, kind));
+                setPickingStore(false);
+              }}
+              onClose={() => setPickingStore(false)}
+            />
+          </View>
+        </Modal>
+      )}
       {pickingCategory && (
         <Modal visible animationType="slide" onRequestClose={() => setPickingCategory(false)}>
           <View style={[styles.picker, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>

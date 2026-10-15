@@ -161,7 +161,7 @@ export type MoneyFeedResolve =
   | { action: 'link'; recordId: string; learn: boolean }
   | { action: 'replace'; recordId: string }
   | { action: 'separate' }
-  | { action: 'record'; categoryId: string; store: string; learn: boolean }
+  | { action: 'record'; categoryId: string; store: string; registerStore: boolean; learn: boolean }
   | { action: 'transfer'; toWalletId: string; learn: boolean }
   | { action: 'ignore'; learn: boolean };
 
@@ -172,7 +172,13 @@ export async function resolveMoneyFeed(supabase: SupabaseDb, feedId: string, res
   if (resolve.action === 'link') Object.assign(args, { record_id: resolve.recordId, learn: resolve.learn });
   if (resolve.action === 'replace') Object.assign(args, { record_id: resolve.recordId });
   if (resolve.action === 'record') {
-    Object.assign(args, { category_id: resolve.categoryId, store: resolve.store, learn: resolve.learn });
+    Object.assign(args, {
+      category_id: resolve.categoryId,
+      store: resolve.store,
+      // 「お店に登録して使う」を選んだら、DB がお店の設定に登録する（0106）
+      register_store: resolve.registerStore,
+      learn: resolve.learn,
+    });
   }
   if (resolve.action === 'transfer') Object.assign(args, { to_wallet_id: resolve.toWalletId, learn: resolve.learn });
   if (resolve.action === 'ignore') Object.assign(args, { learn: resolve.learn });

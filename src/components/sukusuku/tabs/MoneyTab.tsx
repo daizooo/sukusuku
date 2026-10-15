@@ -653,6 +653,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           linkedRecordIds={feed.linkedRecordIds}
           wallets={wallets}
           records={records}
+          stores={stores}
           categories={categories}
           budgets={allBudgets}
           onResolve={resolveFeed}
