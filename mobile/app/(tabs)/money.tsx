@@ -653,6 +653,7 @@ export default function MoneyScreen() {
           {(view === 'review' || mountedViews.has('review')) && (
             <View style={view === 'review' ? styles.body : styles.hidden}>
             <MoneyReviewView
+              active={view === 'review'}
               period={period}
               onPeriod={changePeriod}
               monthKey={monthKey}
@@ -684,6 +685,7 @@ export default function MoneyScreen() {
           {(view === 'accounts' || mountedViews.has('accounts')) && (
             <View style={view === 'accounts' ? styles.body : styles.hidden}>
             <MoneyAccountsView
+              active={view === 'accounts'}
               wallets={wallets}
               records={records}
               balances={balances}

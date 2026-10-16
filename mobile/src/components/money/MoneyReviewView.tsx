@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import type {
@@ -69,6 +69,8 @@ import {
 // 今年・先の年と、締めていない月が残る過ぎた年に出す。
 
 interface MoneyReviewViewProps {
+  /** この面を開いているか。false から true になったとき、いちばん上へ戻す。 */
+  active: boolean;
   period: ReviewPeriod;
   onPeriod: (period: ReviewPeriod) => void;
   monthKey: string;
@@ -102,6 +104,7 @@ interface MoneyReviewViewProps {
 }
 
 export default function MoneyReviewView({
+  active,
   period,
   onPeriod,
   monthKey,
@@ -213,6 +216,14 @@ export default function MoneyReviewView({
   );
   const periodLabel = isMonth ? `${Number(monthKey.slice(5, 7))}月` : formatYear(year);
 
+  // この面を開くたびに、いちばん上から（隠していただけの面に、前のスクロールが残らないように。2026-10-16）。
+  const scrollRef = useRef<ScrollView>(null);
+  const wasActive = useRef(active);
+  useEffect(() => {
+    if (active && !wasActive.current) scrollRef.current?.scrollTo({ y: 0, animated: false });
+    wasActive.current = active;
+  }, [active]);
+
   return (
     <View style={styles.flex}>
       <PeriodBar
@@ -223,7 +234,7 @@ export default function MoneyReviewView({
         year={year}
         onYear={onYear}
       />
-      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollRef} style={styles.flex} contentContainerStyle={styles.content}>
         {unclosed.length > 0 && (
           <Pressable
             accessibilityRole="button"
@@ -452,7 +463,7 @@ function SettingLinks({ onEditCategories, onEditBudgets }: { onEditCategories: (
   );
 }
 
-/** 大分類の1行（Zaim と同じく小さく）。アイコン・名前・実績、使った割合の帯、予算・割合（残りは出さない。2026-10-16）。 */
+/** 大分類の1行（Zaim と同じく小さく）。アイコン・名前・**予算との差**（予算 − 実績。黒字は緑・赤字は「−」の黒）、使った割合の帯、実績・予算（2026-10-16）。 */
 function CategoryRow({ tile, divided, onPress }: { tile: BudgetTile; divided: boolean; onPress: () => void }) {
   const over = tile.budget !== null && tile.diff < 0;
   return (
@@ -468,18 +479,21 @@ function CategoryRow({ tile, divided, onPress }: { tile: BudgetTile; divided: bo
           <Text style={styles.rowName} numberOfLines={1}>
             {tile.category.name}
           </Text>
-          <Text style={styles.rowHeadline}>{formatYen(tile.actual)}</Text>
+          {tile.budget === null ? (
+            <Text style={[styles.rowHeadline, styles.muted]}>予算なし</Text>
+          ) : (
+            <Text style={[styles.rowHeadline, tile.diff > 0 && styles.plus]}>{formatBalance(tile.diff)}</Text>
+          )}
         </View>
         <View style={styles.rowBar}>
           <View style={styles.flex}>
             <ProgressBar ratio={tile.budget ? tile.actual / tile.budget : 0} over={over} />
           </View>
-          {tile.budget !== null && (
-            <Text style={type.faint}>
-              {formatYen(tile.budget)}
-              {tile.percent !== null ? `・${tile.percent}%` : ''}
-            </Text>
-          )}
+          <Text style={type.faint}>
+            {formatYen(tile.actual)}
+            {tile.budget !== null ? ` / ${formatYen(tile.budget)}` : ''}
+            {tile.percent !== null ? `・${tile.percent}%` : ''}
+          </Text>
         </View>
       </View>
       <ChevronRight size={16} color={colors.textFaint} />

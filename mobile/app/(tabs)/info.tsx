@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ClipboardCheck, Settings } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import { useScrollTopOnFocus } from '@/hooks/useScrollTopOnFocus';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
@@ -45,6 +46,10 @@ export default function InfoScreen() {
     };
   }, [userId]);
 
+  // タブを開くたびに、スクロールはいちばん上から（2026-10-16）。
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollTopOnFocus(scrollRef);
+
   if (isSessionLoading) {
     return (
       <SafeAreaView edges={['top']} style={[styles.screen, styles.centered]}>
@@ -56,7 +61,7 @@ export default function InfoScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
         <Text style={styles.title}>その他</Text>
 
         <View style={styles.group}>

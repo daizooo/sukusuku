@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,6 +6,7 @@ import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { CornerDownRight, Plus } from 'lucide-react-native';
 import type { CareLog, DynamicTask, Participant, ScheduleView, Task } from '@/types/app';
 import { supabase } from '@/lib/supabase';
+import { useScrollTopOnFocus } from '@/hooks/useScrollTopOnFocus';
 import { useSession } from '@/lib/session';
 import { useFamilyRefresh } from '@/lib/familySync';
 import { colors } from '@/lib/theme';
@@ -483,6 +484,10 @@ export default function ScheduleScreen() {
   const openLogTabForDate = (date: Date) =>
     router.push({ pathname: '/care', params: { date: toDateString(date) } });
 
+  // タブを開くたびに、スクロールはいちばん上から（2026-10-16）。
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollTopOnFocus(scrollRef);
+
   if (isSessionLoading) {
     return (
       <SafeAreaView edges={['top']} style={[styles.screen, styles.centered]}>
@@ -547,7 +552,7 @@ export default function ScheduleScreen() {
         )}
 
         {view === 'day' && (
-          <Animated.ScrollView style={[styles.body, swipe.style]} contentContainerStyle={styles.scrollContent}>
+          <Animated.ScrollView ref={scrollRef} style={[styles.body, swipe.style]} contentContainerStyle={styles.scrollContent}>
             <DayView
               date={selectedDate}
               today={today}

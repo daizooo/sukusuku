@@ -21,6 +21,7 @@ import type {
 } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { useSwipeTabs } from '../ui/useSwipeTabs';
+import { useSessionState } from '@/lib/sessionState';
 import { useFamilyRefresh } from '@/lib/familySync';
 import {
   confirmMoneyEstimate,
@@ -144,13 +145,14 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [closings, setClosings] = useState<MoneyMonth[]>([]);
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
   const [isLoading, setIsLoading] = useState(true);
-  const [view, setView] = useState<MoneyView>('accounts');
+  // 家計の面・月・年・期間は、ブラウザの更新をしても今のまま戻す（2026-10-16）。
+  const [view, setView] = useSessionState<MoneyView>('money.view', 'accounts');
   // 一度開いた面は、開いたまま残して隠すだけにする（面の切り替えで毎回作り直すと、スワイプのあと表示が出るまで待たされるため。
   // mobile版と同じ。2026-10-15）。読み込みが終わって落ち着いたら、残りの面もあらかじめ作っておく。
   const [mountedViews, setMountedViews] = useState<ReadonlySet<MoneyView>>(() => new Set<MoneyView>(['accounts']));
-  const [monthKey, setMonthKey] = useState(() => monthKeyOfDate(new Date()));
-  const [year, setYear] = useState(() => new Date().getFullYear());
-  const [period, setPeriod] = useState<ReviewPeriod>('month');
+  const [monthKey, setMonthKey] = useSessionState('money.month', monthKeyOfDate(new Date()));
+  const [year, setYear] = useSessionState('money.year', new Date().getFullYear());
+  const [period, setPeriod] = useSessionState<ReviewPeriod>('money.period', 'month');
   const [editing, setEditing] = useState<Editing>(null);
   // 記録の一覧の、日の見出しの「＋」から足すときの日。それ以外は null（今日）。
   const [newDate, setNewDate] = useState<string | null>(null);
@@ -542,6 +544,13 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     return () => window.clearTimeout(timer);
   }, [isLoading]);
 
+  // 面を切り替えたら、開いた面は必ずいちばん上から（隠していただけの面に、前のスクロールが残らないように。2026-10-16）。
+  useEffect(() => {
+    document.querySelectorAll<HTMLElement>(`[data-money-view="${view}"] *`).forEach((element) => {
+      if (element.scrollTop > 0) element.scrollTop = 0;
+    });
+  }, [view]);
+
   const showView = useCallback((next: MoneyView) => {
     setMountedViews((prev) => (prev.has(next) ? prev : new Set([...prev, next])));
     setView(next);
@@ -582,7 +591,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
 
         <div ref={attachContent} className="flex min-h-0 flex-1 flex-col">
           {(view === 'records' || mountedViews.has('records')) && (
-            <div className={view === 'records' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+            <div data-money-view="records" className={view === 'records' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
             <MoneyRecordsView
               active={view === 'records'}
               records={records}
@@ -595,7 +604,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
             </div>
           )}
           {(view === 'review' || mountedViews.has('review')) && (
-            <div className={view === 'review' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+            <div data-money-view="review" className={view === 'review' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
             <MoneyReviewView
               period={period}
               onPeriod={changePeriod}
@@ -626,7 +635,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
             </div>
           )}
           {(view === 'accounts' || mountedViews.has('accounts')) && (
-            <div className={view === 'accounts' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+            <div data-money-view="accounts" className={view === 'accounts' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
             <MoneyAccountsView
               wallets={wallets}
               records={records}

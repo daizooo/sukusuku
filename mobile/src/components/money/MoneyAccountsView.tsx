@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight, Inbox, Plus } from 'lucide-react-native';
 import type {
@@ -42,6 +42,8 @@ interface WalletSection {
 }
 
 interface MoneyAccountsViewProps {
+  /** この面を開いているか。false から true になったとき、いちばん上へ戻す。 */
+  active: boolean;
   wallets: MoneyWallet[];
   records: MoneyRecord[];
   balances: MoneyWalletBalance[];
@@ -64,6 +66,7 @@ interface MoneyAccountsViewProps {
 }
 
 export default function MoneyAccountsView({
+  active,
   wallets,
   records,
   balances,
@@ -135,10 +138,18 @@ export default function MoneyAccountsView({
     </View>
   );
 
+  // この面を開くたびに、いちばん上から（隠していただけの面に、前のスクロールが残らないように。2026-10-16）。
+  const scrollRef = useRef<ScrollView>(null);
+  const wasActive = useRef(active);
+  useEffect(() => {
+    if (active && !wasActive.current) scrollRef.current?.scrollTo({ y: 0, animated: false });
+    wasActive.current = active;
+  }, [active]);
+
   return (
     <View style={styles.flex}>
       {/* 総残高も一覧と一緒に流れる（固定しない。2026-10-08）。 */}
-      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollRef} style={styles.flex} contentContainerStyle={styles.content}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="総残高の推移を見る"

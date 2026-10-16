@@ -39,6 +39,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { OPEN_LOG_PARAM, TAB_PARAM } from '@/lib/appLinks';
 import { onNavPop, syncNav } from '@/lib/browserHistory';
+import { dateCodec, useSessionState } from '@/lib/sessionState';
 import {
   deleteTask as deleteTaskApi,
   insertTask,
@@ -369,8 +370,9 @@ function SukusukuAppContent({
   // --- スケジュール（カレンダー） ---
   // 既定は月表示。日をタップすると日表示へ移り、そこで予定と育児記録を合わせて見る。
   const [scheduleView, setScheduleView] = useState<ScheduleView>('month');
-  const [currentCalendarDate, setCurrentCalendarDate] = useState(today);
-  const [selectedScheduleDate, setSelectedScheduleDate] = useState(today);
+  // 予定の日付は、ブラウザの更新をしても今のまま戻す（2026-10-16）。
+  const [currentCalendarDate, setCurrentCalendarDate] = useSessionState('schedule.calendar', today, dateCodec);
+  const [selectedScheduleDate, setSelectedScheduleDate] = useSessionState('schedule.selected', today, dateCodec);
   // 日表示に出す育児記録。記録タブの1日分(logs)とは表示範囲が違うため別に持つ。
   const [scheduleLogs, setScheduleLogs] = useState<CareLog[]>([]);
   const [loadedScheduleLogRange, setLoadedScheduleLogRange] = useState<string | null>(null);

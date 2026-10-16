@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { useSessionState } from '@/lib/sessionState';
 import { ClipboardCheck, Settings } from 'lucide-react';
 import ContractMoreRow from '@/components/sukusuku/living/ContractMoreRow';
 import LotteryMoreRow from '@/components/sukusuku/living/LotteryMoreRow';
@@ -50,7 +51,8 @@ export default function InfoTab({
   hokatsuPanel,
 }: InfoTabProps) {
   // 開いている画面。null のあいだはその他タブの一覧を出す（戻る操作で一覧へ戻る）。
-  const [screen, setScreen] = useState<Screen | null>(null);
+  // ブラウザの更新をしても、開いている画面のまま戻す（2026-10-16）。
+  const [screen, setScreen] = useSessionState<Screen | null>('info.screen', null);
   const close = () => setScreen(null);
 
   if (screen === 'lottery') return <LotteryScreen familyId={familyId} userId={userId} onClose={close} />;

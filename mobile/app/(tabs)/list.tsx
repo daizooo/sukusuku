@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react-native';
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
 import { supabase } from '@/lib/supabase';
+import { useScrollTopOnFocus } from '@/hooks/useScrollTopOnFocus';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
@@ -541,6 +542,10 @@ export default function ListScreen() {
 
   // --- 画面 ---
 
+  // タブを開くたびに、スクロールはいちばん上から（2026-10-16）。
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollTopOnFocus(scrollRef);
+
   if (isSessionLoading) {
     return (
       <SafeAreaView edges={['top']} style={[styles.screen, styles.centered]}>
@@ -790,6 +795,7 @@ export default function ListScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.screen}>
       <ScrollView
+        ref={scrollRef}
         style={styles.page}
         contentContainerStyle={styles.overviewContent}
         // 持ち上げているあいだは指で並べ替えるので、スクロールを止める。

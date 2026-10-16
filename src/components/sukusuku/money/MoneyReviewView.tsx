@@ -453,7 +453,7 @@ function SettingLinks({ onEditCategories, onEditBudgets }: { onEditCategories: (
   );
 }
 
-/** 大分類の1行（Zaim と同じく小さく）。アイコン・名前・実績、使った割合の帯、予算・割合（残りは出さない。2026-10-16）。 */
+/** 大分類の1行（Zaim と同じく小さく）。アイコン・名前・**予算との差**（予算 − 実績。黒字は緑・赤字は「−」の黒）、使った割合の帯、実績・予算（2026-10-16）。 */
 function CategoryRow({ tile, onClick }: { tile: BudgetTile; onClick: () => void }) {
   const over = tile.budget !== null && tile.diff < 0;
   return (
@@ -467,18 +467,23 @@ function CategoryRow({ tile, onClick }: { tile: BudgetTile; onClick: () => void 
       <div className="min-w-0 flex-1 space-y-[3px]">
         <div className="flex items-baseline gap-2">
           <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">{tile.category.name}</span>
-          <span className="text-[15px] font-extrabold tabular-nums text-gray-900">{formatYen(tile.actual)}</span>
+          {tile.budget === null ? (
+            <span className="text-[15px] font-extrabold text-gray-400">予算なし</span>
+          ) : (
+            <span className={`text-[15px] font-extrabold tabular-nums ${tile.diff > 0 ? incomeAmountClass : 'text-gray-900'}`}>
+              {formatBalance(tile.diff)}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
             <ProgressBar ratio={tile.budget ? tile.actual / tile.budget : 0} over={over} />
           </div>
-          {tile.budget !== null && (
-            <span className={`shrink-0 ${type.faint}`}>
-              {formatYen(tile.budget)}
-              {tile.percent !== null ? `・${tile.percent}%` : ''}
-            </span>
-          )}
+          <span className={`shrink-0 ${type.faint}`}>
+            {formatYen(tile.actual)}
+            {tile.budget !== null ? ` / ${formatYen(tile.budget)}` : ''}
+            {tile.percent !== null ? `・${tile.percent}%` : ''}
+          </span>
         </div>
       </div>
       <ChevronRight size={16} className="text-gray-400" />

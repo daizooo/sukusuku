@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -35,6 +35,7 @@ import type {
   TemperatureLog,
 } from '@/types/app';
 import { supabase } from '@/lib/supabase';
+import { useScrollTopOnFocus } from '@/hooks/useScrollTopOnFocus';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
@@ -748,6 +749,10 @@ export default function CareScreen() {
     }
   };
 
+  // タブを開くたびに、スクロールはいちばん上から（2026-10-16）。
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollTopOnFocus(scrollRef);
+
   if (isSessionLoading) {
     return (
       <SafeAreaView edges={['top']} style={[styles.screen, styles.centered]}>
@@ -953,6 +958,7 @@ export default function CareScreen() {
 
           {/* スクロールするのはこの一覧だけ。 */}
           <ScrollView
+            ref={scrollRef}
             style={styles.flex}
             contentContainerStyle={styles.list}
             refreshControl={
