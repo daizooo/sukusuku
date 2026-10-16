@@ -18,9 +18,21 @@ if (Platform.OS === 'android') {
   TaskManager.defineTask<Notifications.NotificationTaskPayload>(
     NOTIFICATION_ACTION_TASK,
     async ({ data, error }) => {
-      if (error || !data || !('actionIdentifier' in data)) return;
+      // 調査用: 押下がここまで届いているか、届いた形はどうかを端末のログ（logcat の ReactNativeJS）に残す。
+      console.log(
+        '[notification-action] task run',
+        error ? String(error) : 'no-error',
+        data ? JSON.stringify(data).slice(0, 800) : 'no-data',
+      );
+      if (error || !data) return;
+      // 押下は NotificationResponse そのもの、または data に包まれて届く（版・経路で形が違いうる）。
+      const response = [data, (data as { data?: unknown }).data].find(
+        (v): v is Notifications.NotificationResponse =>
+          !!v && typeof v === 'object' && 'actionIdentifier' in v && 'notification' in v,
+      );
+      if (!response) return;
       try {
-        await handleNotificationAction(data);
+        await handleNotificationAction(response);
       } catch (err) {
         console.error('Failed to handle notification action:', err);
       }

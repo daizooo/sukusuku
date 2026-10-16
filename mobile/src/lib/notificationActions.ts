@@ -1,5 +1,4 @@
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { supabase } from '@/lib/supabase';
 import { updateTaskDone, updateTaskDoneDates } from '@/lib/api/tasks';
@@ -14,8 +13,9 @@ import { updateTaskDone, updateTaskDoneDates } from '@/lib/api/tasks';
 //   - アプリを開いている: お知らせの応答の受け手（app/_layout.tsx）
 //   - 閉じている間に押されて背景の処理が動かなかった分: 次に開いたとき、同じ受け手に届く
 //
-// 同じ押下が2つの入口から届くことがあるので、一度済ませた押下は覚えておいて二度は行わない
-// （完了は何度しても同じだが、余計な書き込みを避ける）。
+// 同じ押下が2つの入口から届くことがあるが、完了は何度行っても結果が同じなので、
+// 処理中の押下だけを重ねて行わないようにする（端末には控えない。控えを持つと、残った控えのせいで
+// 以後の押下が黙って捨てられ、押しても何も起きなくなりうる）。
 
 /** ボタンの組の名前。送る側（_shared/deliver.ts の categoryId）と合わせる。 */
 export const NOTIFICATION_CATEGORY = {
@@ -23,10 +23,6 @@ export const NOTIFICATION_CATEGORY = {
 } as const;
 
 const ACTION_COMPLETE = 'complete';
-
-/** 済ませた押下の控え。新しいものから残す数。 */
-const HANDLED_KEY = 'sukusuku.notificationActions.handled';
-const HANDLED_LIMIT = 50;
 
 /**
  * ボタンの組を端末に登録する。起動のたびに呼んでよい（同じ名前なら上書きされるだけ）。
@@ -93,22 +89,8 @@ export async function presentActionableNotification(
   });
 }
 
-const handledInMemory = new Set<string>();
-
-/** この押下をまだ済ませていなければ、済ませたことにして true を返す。 */
-async function claim(key: string): Promise<boolean> {
-  if (handledInMemory.has(key)) return false;
-  handledInMemory.add(key);
-  try {
-    const raw = await AsyncStorage.getItem(HANDLED_KEY);
-    const handled: string[] = raw ? (JSON.parse(raw) as string[]) : [];
-    if (handled.includes(key)) return false;
-    await AsyncStorage.setItem(HANDLED_KEY, JSON.stringify([key, ...handled].slice(0, HANDLED_LIMIT)));
-  } catch {
-    // 控えが読めなくても、押されたことは済ませる（二重になるよりは、やらないほうが困る）
-  }
-  return true;
-}
+/** いま処理している押下。同じ押下が2つの入口から同時に届いても、行うのは一度だけにする。 */
+const inFlight = new Set<string>();
 
 /**
  * タスクを完了にする。繰り返すタスクは、お知らせの回（date）だけを完了にする
@@ -137,22 +119,56 @@ export async function handleNotificationAction(
   response: Notifications.NotificationResponse,
 ): Promise<boolean> {
   const { actionIdentifier, notification } = response;
+  console.log('[notification-action] received', actionIdentifier, notification?.request?.identifier);
   if (actionIdentifier !== ACTION_COMPLETE) return false;
 
   const { request } = notification;
   const key = [request.identifier, notification.date, actionIdentifier].join('|');
-  if (!(await claim(key))) return true;
+  if (inFlight.has(key)) return true;
+  inFlight.add(key);
 
   const data = (request.content.data ?? {}) as NotificationData;
-
   const taskId = stringOf(data.taskId);
-  if (!taskId) return true;
+
+  // Googleカレンダーのタスクと同じく、押したらすぐお知らせを消す（完了の書き込みを待たない）。
+  // できなかったときは下で本文を差し替えて出し直す。
+  await dismissTaskNotifications(request.identifier, taskId);
+
   try {
+    if (!taskId) throw new Error(`お知らせにタスクのidがありません: ${JSON.stringify(Object.keys(data))}`);
     await completeTask(taskId, stringOf(data.date));
-  } catch {
-    await presentAgain(request, '完了にできませんでした。アプリを開いて完了にしてください。');
+    console.log('[notification-action] completed', taskId, stringOf(data.date));
+  } catch (err) {
+    // 黙って終えない。できなかったことを本文にして出し直し、もう一度押せるようにする。
+    // （押下の控えは持たない。以前は端末に控えていて、一度でも控えが残ると以後の押下が黙って捨てられた）
+    console.error('Failed to complete task from notification:', err);
+    await presentAgain(request, '完了にできませんでした。アプリを開いて完了にしてください。').catch(
+      (presentErr: unknown) => console.error('Failed to present notification again:', presentErr),
+    );
     return true;
+  } finally {
+    inFlight.delete(key);
   }
-  await Notifications.dismissNotificationAsync(request.identifier);
   return true;
+}
+
+/**
+ * このタスクのお知らせを端末から消す。押されたお知らせのidで消し、idが合わなかった場合に備えて、
+ * 出ているお知らせのうち同じタスクのものも消す（同じ用件が積み上がっていても残さない）。
+ */
+async function dismissTaskNotifications(identifier: string, taskId: string | null): Promise<void> {
+  await Notifications.dismissNotificationAsync(identifier).catch((err: unknown) =>
+    console.error('Failed to dismiss notification:', err),
+  );
+  if (!taskId) return;
+  try {
+    const presented = await Notifications.getPresentedNotificationsAsync();
+    await Promise.all(
+      presented
+        .filter((n) => stringOf((n.request.content.data as NotificationData | undefined)?.taskId) === taskId)
+        .map((n) => Notifications.dismissNotificationAsync(n.request.identifier)),
+    );
+  } catch (err) {
+    console.error('Failed to dismiss presented notifications:', err);
+  }
 }
