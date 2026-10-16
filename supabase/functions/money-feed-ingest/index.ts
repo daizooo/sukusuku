@@ -173,7 +173,11 @@ async function receiveAmazonOrders(
   mail: { id: string; receivedAt: string; subject: string; body: string },
 ): Promise<string> {
   const orders: AmazonOrder[] | null = parseAmazonOrderMail(mail.subject, mail.body);
-  if (orders === null) return 'ignored';
+  if (orders === null) {
+    // 読めない形（書式が変わった等）。送り済みの印は付くので、関数のログで気づけるようにしておく
+    console.error('amazon order mail unreadable');
+    return 'ignored';
+  }
 
   const names = [...new Set(orders.flatMap((order) => order.lines.map((line) => line.receiptName)))];
   const categories = await categoriesForOrderLines(admin, familyId, names);

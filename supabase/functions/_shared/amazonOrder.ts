@@ -42,8 +42,9 @@ export const isAmazonCharge = (merchant: string, accountName: string): boolean =
   /amazon|アマゾン/i.test(`${merchant} ${accountName}`.normalize('NFKC'));
 
 const ORDER_NO_RE = /注文番号\s*[:：]?\s*(\d{3}-\d{7}-\d{7})/g;
+// 品目: 「* 品名」の次の行に「数量: N」、その次に単価。空行や箇条書きの記号の有無の揺れは読む
 const LINE_RE =
-  /^[ \t]*[*・●■-][ \t]*([^\r\n]+?)[ \t]*\r?\n[ \t]*数量\s*[:：]\s*(\d+)[ \t]*\r?\n[ \t]*(?:(?:¥|￥)\s*([\d,]+)|([\d,]+)\s*(?:JPY|円))/gm;
+  /^[ \t]*(?:[*・●■-][ \t]*)?([^\r\n]+?)[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*数量\s*[:：]\s*(\d+)\s*(?:(?:¥|￥)\s*([\d,]+)|([\d,]+)\s*(?:JPY|円))/gm;
 const TOTAL_RE = /合計\s*[:：]?\s*(?:(?:¥|￥)\s*([\d,]+)|([\d,]+)\s*(?:JPY|円))/;
 
 const toInt = (value: string): number => Number(value.replace(/,/g, ''));

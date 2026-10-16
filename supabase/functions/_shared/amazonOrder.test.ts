@@ -100,6 +100,14 @@ assert.equal(
   600,
 );
 
+// 箇条書きの記号が無い・空行が挟まる書き方も読む
+assert.deepEqual(
+  parseAmazonOrderMail('注文済み: 「A」', '注文番号\r\n111-1111111-1111111\r\n\r\nA商品\r\n\r\n  数量: 2\r\n\r\n  300 JPY\r\n\r\n合計\r\n600 JPY')?.[0].lines.map(
+    (line) => [line.receiptName, line.quantity, line.unitPrice],
+  ),
+  [['A商品', 2, 300]],
+);
+
 assert.equal(shortItemName('【EC限定】ディアナ'), 'ディアナ');
 assert.equal(shortItemName('【A】【B】 ほげ'), 'ほげ');
 assert.equal(shortItemName('【全部かっこ】'), '【全部かっこ】');
