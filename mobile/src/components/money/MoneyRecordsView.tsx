@@ -12,7 +12,7 @@ import FastScrollBar, { useFastScroll } from '@/components/money/FastScrollBar';
 //
 // 記録を日ごと（新しい日から）に、**これまでの分をすべて**1本の一覧で並べる（2026-10-15。以前は月ごとだった）。
 // 一覧そのものは RecordDayList の1日ぶん（RecordDayBlock）。長いので、見えるところだけ描く（FlatList）。
-// 右端の早送りのバーをつかんで動かすと、過去へすぐ飛べる（バーが出ているあいだは位置の日付が出る）。
+// 右端の早送りのバーをつかんで動かすと、過去へすぐ飛べる（つかんでいるあいだだけ位置の日付が出る）。
 // 今日から過去へ15件さかのぼると、上に「今日に戻る」を出す（一番上にいるときは出さない）。その月に使った額は「振り返り」で見るので、ここには出さない（2026-10-08）。
 // 押すと記録の詳細。
 
@@ -97,7 +97,11 @@ export default function MoneyRecordsView({
     (_width: number, height: number) => {
       if (openedAtToday.current || height <= 0 || daysRef.current.length === 0) return;
       openedAtToday.current = true;
-      if (todayIndex > 0) jumpToIndex(todayIndex, false);
+      if (todayIndex > 0) {
+        jumpToIndex(todayIndex, false);
+        // 描いていない日は高さが定まらず位置がずれることがあるので、描いたあとにもう一度合わせる。
+        setTimeout(() => jumpToIndex(todayIndex, false), 300);
+      }
     },
     [todayIndex, jumpToIndex],
   );

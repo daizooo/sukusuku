@@ -168,7 +168,7 @@ export default function MonthCloseScreen({
       <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
         <ScreenHeader title={`${label}の締め`} icon="back" onClose={onClose} />
         <ScrollView contentContainerStyle={styles.content}>
-          <Hero compact label={`収支（${label}）`} value={formatBalance(month.balance)} plus={month.balance > 0} note="収入 − 支出（見込みの額も含む）">
+          <Hero compact label={`収支（${label}）`} value={formatBalance(month.balance)} plus={month.balance > 0}>
             <StatRow compact label="収入" value={formatYen(month.income)} plus={month.income > 0} />
             <StatRow compact label="支出" value={`−${formatYen(month.living)}`} />
             {estimates.length > 0 && (

@@ -22,9 +22,9 @@ import {
 } from './moneyVisual';
 
 // 振り返りの内訳をタップしたときの画面（docs/kakei.md §4.4）。mobile版の `mobile/src/components/money/ReviewDetailScreen.tsx` と同じ並び・文言。
-// 上に**振り返りの画面と同じ作りの収支**（予算 − 支出を大きく、予算と支出を下に）、次に小分類ごとの割合、下にその行に絞った記録の一覧
-// （2026-10-16。「分析」の欄は無くした）。
-// 年のときは、小分類のあとに**締めた月ごとの実績**（月の予算と並べる）を出す。月の行を押すと、その月のカテゴリの詳細が開く。
+// 上に**振り返りの画面と同じ作りの収支**（予算 − 支出を大きく、予算と支出を下に。年は年末の着地見込みを一番下に）、次に小分類の割合、下にその行に絞った記録の一覧
+// （2026-10-16。「分析」の欄・注釈は無くした。年の詳細には記録の一覧を出さない）。
+// 年のときは、小分類のあとに**締めた月の実績**（月の予算と並べる）を出す。月の行を押すと、その月のカテゴリの詳細が開く。
 // 記録を押すと、この画面を閉じて記録の詳細を開く。
 
 export type ReviewDetail = { type: 'category'; category: MoneyCategory };
@@ -37,6 +37,8 @@ interface ReviewDetailScreenProps {
   analysis: CategoryAnalysis | null;
   /** 年のとき、締めた月ごとの実績と月の予算（新しい月から）。月のときは null。 */
   closedMonths: { monthKey: string; amount: number; budget: number | null }[] | null;
+  /** 年のとき、年末の着地見込み（締めた月は実績、ほかの月は月の予算）。月のときは null。 */
+  landing: number | null;
   /** 締めた月の行を押したとき、その月のカテゴリの詳細を開く。 */
   onOpenMonth: (monthKey: string) => void;
   categories: MoneyCategory[];
@@ -52,6 +54,7 @@ export default function ReviewDetailScreen({
   periodLabel,
   analysis,
   closedMonths,
+  landing,
   onOpenMonth,
   categories,
   wallets,
@@ -70,20 +73,25 @@ export default function ReviewDetailScreen({
         right={<CategoryIcon iconKey={iconKeyOf(detail.category)} size={28} />}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-3">
-        {analysis !== null && <SummaryHero analysis={analysis} periodLabel={periodLabel} />}
+        {analysis !== null && <SummaryHero analysis={analysis} landing={landing} />}
         {analysis !== null && <ChildrenSection analysis={analysis} />}
         {closedMonths !== null && <ClosedMonths rows={closedMonths} onOpenMonth={onOpenMonth} />}
 
-        <SectionHeader title="記録" hint={`${records.length}件`} />
-        {records.length === 0 ? (
-          <p className="py-6 text-center text-[13px] text-gray-400">この期間の記録はありません</p>
-        ) : (
-          <RecordDayList
-            records={records}
-            categories={categories}
-            wallets={wallets}
-            onOpen={onOpenRecord}
-          />
+        {/* 年の詳細には記録の一覧は出さない（締めた月の行からその月へ飛んで見る。2026-10-16） */}
+        {closedMonths === null && (
+          <>
+          <SectionHeader title="記録" hint={`${records.length}件`} />
+          {records.length === 0 ? (
+            <p className="py-6 text-center text-[13px] text-gray-400">この期間の記録はありません</p>
+          ) : (
+            <RecordDayList
+              records={records}
+              categories={categories}
+              wallets={wallets}
+              onOpen={onOpenRecord}
+            />
+          )}
+          </>
         )}
       </div>
     </FullScreen>
@@ -96,7 +104,7 @@ function ChildrenSection({ analysis }: { analysis: CategoryAnalysis }) {
   if (analysis.children.length === 0) return null;
   return (
     <>
-      <SectionHeader title="小分類ごと" />
+      <SectionHeader title="小分類" />
       <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
         {analysis.children.map((child) => (
           <div key={child.id} className="space-y-1.5 px-3.5 py-2.5">
@@ -114,19 +122,19 @@ function ChildrenSection({ analysis }: { analysis: CategoryAnalysis }) {
 }
 
 /** 上の収支。振り返りの画面と同じ作りで、収支＝予算 − 支出（予算が無ければ支出だけ）。 */
-function SummaryHero({ analysis, periodLabel }: { analysis: CategoryAnalysis; periodLabel: string }) {
+function SummaryHero({ analysis, landing }: { analysis: CategoryAnalysis; landing: number | null }) {
   const hasBudget = analysis.budget !== null;
   const over = hasBudget && analysis.diff < 0;
   return (
     <Hero
       compact
-      label={`収支（${periodLabel}。予算 − 支出）`}
+      label="収支"
       value={formatBalance(analysis.diff)}
       plus={hasBudget && analysis.diff > 0}
-      note={hasBudget ? undefined : '予算なし'}
     >
       <StatRow compact label="予算" value={hasBudget ? formatYen(analysis.budget ?? 0) : '−'} />
       <StatRow compact label="支出" value={`−${formatYen(analysis.actual)}`} />
+      {landing !== null && <StatRow compact label="年末の着地見込み" value={formatYen(landing)} />}
       {hasBudget && (
         <div className="pt-2">
           <ProgressBar ratio={(analysis.budget ?? 0) > 0 ? analysis.actual / (analysis.budget ?? 1) : 0} over={over} />
@@ -146,7 +154,7 @@ function ClosedMonths({
 }) {
   return (
     <>
-      <SectionHeader title="締めた月ごと" hint="押すとその月の内訳" />
+      <SectionHeader title="締めた月" />
       {rows.length === 0 ? (
         <p className="py-6 text-center text-[13px] text-gray-400">締めた月はまだありません</p>
       ) : (

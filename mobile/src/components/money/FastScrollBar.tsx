@@ -15,7 +15,7 @@ import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 
 // 長い一覧の右端に出す、つかんで動かせる「早送りのバー」（2026-10-15。家計の記録の一覧で、過去へすぐ飛ぶため）。
 // PWA版の `src/components/sukusuku/money/FastScrollBar.tsx` と同じ決まり。
-// スクロールすると現れ、少し止まると消える。つかんで上下に動かすと、動かした割合の位置へ一覧が飛ぶ。バーが出ているあいだは、横にその位置の見出し（日付）が出る。
+// スクロールすると現れ、少し止まると消える。つかんで上下に動かすと、動かした割合の位置へ一覧が飛び、**つかんでいるあいだだけ**、横にその位置の見出し（日付）が出る。
 // 一覧の高さは描いた分から見積もるので、遠くへ飛んだあとに少しずれることがある（スクロールすれば合う）。
 
 /** バーのつまみの高さ。 */
@@ -138,7 +138,7 @@ export default function FastScrollBar({ controller, label }: { controller: FastS
         pointerEvents={controller.visible ? 'box-none' : 'none'}
         style={[styles.thumb, { opacity: controller.opacity, transform: [{ translateY: controller.thumbTop }] }]}
       >
-        {label !== '' && (
+        {controller.dragging && label !== '' && (
           <View style={styles.bubble}>
             <Text style={styles.bubbleText}>{label}</Text>
           </View>

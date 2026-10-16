@@ -279,9 +279,17 @@ export function incomeRecordsInYear(records: readonly MoneyRecord[], year: numbe
     .sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : a.occurredOn > b.occurredOn ? -1 : 0));
 }
 
-/** その月の、見込みの額のままの記録（振替を除く。収支に入るものだけ）。 */
+/**
+ * 「見込み」の記録か。**固定収入・固定支出の見込みの額で自動で作ったまま、まだ確定していないものだけ**（2026-10-16）。
+ * 財布・デビットの記録は入れた時点で確定、カードも Gmail から取り込んで確かめてから記録に入るので、見込みは無い。
+ * 振替（カード代金の引き落とし）は見込みとして扱わない。
+ */
+export const isFixedEstimate = (record: Pick<MoneyRecord, 'isEstimate' | 'recurringId' | 'kind'>): boolean =>
+  record.isEstimate && record.recurringId !== null && record.kind !== 'transfer';
+
+/** その月の、見込みの額のままの記録（固定収入・固定支出のものだけ。isFixedEstimate）。 */
 export const estimatesInMonth = (records: readonly MoneyRecord[], monthKey: string): MoneyRecord[] =>
-  recordsInMonth(records, monthKey).filter((record) => record.isEstimate && record.kind !== 'transfer');
+  recordsInMonth(records, monthKey).filter(isFixedEstimate);
 
 /**
  * 標準のカテゴリ（Zaim のカテゴリをもとにした、どの家族でも使える並び）。docs/kakei.md §3.1。
@@ -1441,6 +1449,19 @@ export function usageStartMonth(records: readonly MoneyRecord[]): string | null 
 export function yearActiveMonthKeys(records: readonly MoneyRecord[], year: number): string[] {
   const start = usageStartMonth(records);
   return start === null ? [] : yearMonthKeys(year).filter((monthKey) => monthKey >= start);
+}
+
+/**
+ * 年の振り返りの、1つの大分類の年末の着地見込み（2026-10-16）＝**締めた月は実績、ほかの月は月の予算**（予算が無い月は、締めた月の平均。それも無ければ 0）。
+ * 年全体の着地見込み（buildYearLanding）と同じく、締めていない月は実績を使わない。months は buildCategoryAnalysis の月ごと。
+ */
+export function categoryYearLanding(
+  months: readonly { monthKey: string; amount: number; budget: number | null }[],
+  closedKeys: ReadonlySet<string>,
+): number {
+  const closed = months.filter((entry) => closedKeys.has(entry.monthKey));
+  const average = closed.length === 0 ? null : Math.round(closed.reduce((sum, entry) => sum + entry.amount, 0) / closed.length);
+  return months.reduce((sum, entry) => sum + (closedKeys.has(entry.monthKey) ? entry.amount : (entry.budget ?? average ?? 0)), 0);
 }
 
 // ---- 記録の入力（記録の詳細・品目の画面）の形 ----

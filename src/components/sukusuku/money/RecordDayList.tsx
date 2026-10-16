@@ -10,6 +10,7 @@ import {
   groupItems,
   groupRecordsByDay,
   iconKeyOf,
+  isFixedEstimate,
   itemSummary,
   recordTotal,
   topCategoryIdOf,
@@ -103,7 +104,7 @@ const LAZY_DAY_STYLE = { contentVisibility: 'auto', containIntrinsicSize: 'auto 
 
 /** 月の締めのカードの右上。見込みの記録だけ「確定」を出す。 */
 function ClosingControl({ record, closing }: { record: MoneyRecord; closing: RecordClosing }) {
-  if (!record.isEstimate) return null;
+  if (!isFixedEstimate(record)) return null;
   return (
     <span
       role="button"
@@ -244,7 +245,7 @@ export const RecordDayBlock = memo(function RecordDayBlock({
                 >
                   {formatYen(recordTotal(record))}
                 </span>
-                {record.isEstimate && <EstimateBadge />}
+                {isFixedEstimate(record) && <EstimateBadge />}
                 {record.cardNextPeriod && <NextPeriodBadge />}
                 <span className="flex-1" />
                 <span className="flex min-w-[16px] gap-1">

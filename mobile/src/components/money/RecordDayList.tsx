@@ -10,6 +10,7 @@ import {
   groupItems,
   groupRecordsByDay,
   iconKeyOf,
+  isFixedEstimate,
   itemSummary,
   recordTotal,
   topCategoryIdOf,
@@ -91,7 +92,7 @@ interface RecordDayBlockProps {
 
 /** 月の締めのカードの右上。見込みの記録だけ「確定」を出す。 */
 function ClosingControl({ record, closing }: { record: MoneyRecord; closing: RecordClosing }) {
-  if (!record.isEstimate) return null;
+  if (!isFixedEstimate(record)) return null;
   return (
     <Pressable
       accessibilityRole="button"
@@ -229,7 +230,7 @@ export const RecordDayBlock = memo(function RecordDayBlock({
                 <Text style={[styles.amount, record.kind === 'transfer' && styles.muted, record.kind === 'income' && styles.income]}>
                   {formatYen(total)}
                 </Text>
-                {record.isEstimate && <EstimateBadge />}
+                {isFixedEstimate(record) && <EstimateBadge />}
                 {record.cardNextPeriod && <NextPeriodBadge />}
                 <View style={styles.flex} />
                 <View style={styles.walletIcons}>

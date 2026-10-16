@@ -12,7 +12,7 @@ import FastScrollBar from './FastScrollBar';
 //
 // 記録を日ごと（新しい日から）に、**これまでの分をすべて**1本の一覧で並べる（2026-10-15。以前は月ごとだった）。
 // 一覧そのものは RecordDayList の1日ぶん（RecordDayBlock）。右端の早送りのバーをつかんで動かすと、過去へすぐ飛べる
-// （バーが出ているあいだは位置の日付が出る）。今日から過去へ15件さかのぼると、上に「今日に戻る」を出す（一番上にいるときは出さない）。
+// （つかんでいるあいだだけ位置の日付が出る）。今日から過去へ15件さかのぼると、上に「今日に戻る」を出す（一番上にいるときは出さない）。
 // その月に使った額は「振り返り」で見るので、ここには出さない（2026-10-08）。押すと記録の詳細。
 
 interface MoneyRecordsViewProps {
@@ -84,7 +84,11 @@ export default function MoneyRecordsView({ records, categories, wallets, isLoadi
     const observer = new ResizeObserver(() => {
       if (openedAtToday.current || scroller.clientHeight <= 0 || days.length === 0) return;
       openedAtToday.current = true;
-      if (todayIndex > 0) scrollToIndex(todayIndex, false);
+      if (todayIndex > 0) {
+        scrollToIndex(todayIndex, false);
+        // 画面の外の日は描くまで高さが定まらず、位置がずれることがあるので、描いたあとにもう一度合わせる。
+        window.setTimeout(() => scrollToIndex(todayIndex, false), 120);
+      }
     });
     observer.observe(scroller);
     return () => observer.disconnect();

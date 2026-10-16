@@ -8,6 +8,8 @@ import {
   balanceChecks,
   baseIconKey,
   buildCategoryAnalysis,
+  categoryYearLanding,
+  isFixedEstimate,
   recurringInYear,
   yearActiveMonthKeys,
   canCardNextPeriod,
@@ -765,14 +767,15 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
 {
   const estimates = estimatesInMonth(
     [
-      record('e1', { occurredOn: '2026-10-27', isEstimate: true, items: [item({ amount: 8000, categoryId: 'c' })] }),
+      record('e1', { occurredOn: '2026-10-27', isEstimate: true, recurringId: 'r1', items: [item({ amount: 8000, categoryId: 'c' })] }),
+      record('e5', { occurredOn: '2026-10-20', isEstimate: true, items: [item({ amount: 300, categoryId: 'c' })] }),
       record('e2', { occurredOn: '2026-10-28', items: [item({ amount: 100, categoryId: 'c' })] }),
       record('e3', { occurredOn: '2026-10-10', kind: 'transfer', isEstimate: true, items: [item({ amount: 5000 })] }),
-      record('e4', { occurredOn: '2026-11-27', isEstimate: true, items: [item({ amount: 8000, categoryId: 'c' })] }),
+      record('e4', { occurredOn: '2026-11-27', isEstimate: true, recurringId: 'r1', items: [item({ amount: 8000, categoryId: 'c' })] }),
     ],
     '2026-10',
   );
-  assert.deepEqual(estimates.map((entry) => entry.id), ['e1'], '収支に入る見込みだけ（カード代金の振替は除く）');
+  assert.deepEqual(estimates.map((entry) => entry.id), ['e1'], '固定収入・固定支出の見込みだけ（手入力・カード代金の振替は除く）');
 }
 
 {
@@ -1143,7 +1146,22 @@ assert.equal(yearOfMonth('2027-02'), 2027, '2027年2月は2027年');
   assert.deepEqual(wholeYearMonths.months.map((m) => [m.monthKey, m.amount, m.budget]).slice(0, 3), [
     ['2026-08', 4000, 50000], ['2026-09', 4900, 50000], ['2026-10', 0, 50000],
   ], '月ごとの実績と月の予算');
+
+  // 年の着地見込み: 締めた月は実績、ほかの月は月の予算（予算が無ければ締めた月の平均）
+  const landing = categoryYearLanding(wholeYearMonths.months, new Set(['2026-08', '2026-09']));
+  assert.equal(landing, 4000 + 4900 + 50000 * 3, '締めた月は実績・ほかは月の予算');
+  assert.equal(
+    categoryYearLanding([{ monthKey: '2026-08', amount: 4000, budget: null }, { monthKey: '2026-09', amount: 0, budget: null }], new Set(['2026-08'])),
+    8000,
+    '予算が無い月は、締めた月の平均',
+  );
 }
+
+// ---- 見込み（固定収入・固定支出の見込みの額だけ） ----
+assert.equal(isFixedEstimate({ isEstimate: true, recurringId: 'r1', kind: 'expense' }), true);
+assert.equal(isFixedEstimate({ isEstimate: true, recurringId: null, kind: 'expense' }), false, '手で入れた記録は見込みでない');
+assert.equal(isFixedEstimate({ isEstimate: true, recurringId: 'r1', kind: 'transfer' }), false, 'カード代金の振替は見込みとして扱わない');
+assert.equal(isFixedEstimate({ isEstimate: false, recurringId: 'r1', kind: 'income' }), false, '確定したものは見込みでない');
 
 // ---- その年に効く固定の収支（予算の画面） ----
 {
