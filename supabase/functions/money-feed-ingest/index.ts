@@ -217,13 +217,13 @@ async function amazonAllocationFor(admin: Admin, familyId: string, amount: numbe
   const since = new Date(Date.now() - 90 * 86400_000).toISOString().slice(0, 10);
   const { data: orders } = await admin
     .from('money_amazon_orders')
-    .select('id, ordered_on, total, adjust, adjust_feed_id, discount_rate')
+    .select('id, ordered_on, total, adjust, adjust_feed_id, discount_used')
     .eq('family_id', familyId)
     .gte('ordered_on', since)
     .order('ordered_on', { ascending: false })
     .limit(100)
     .returns<
-      { id: string; ordered_on: string; total: number; adjust: number; adjust_feed_id: string | null; discount_rate: number | null }[]
+      { id: string; ordered_on: string; total: number; adjust: number; adjust_feed_id: string | null; discount_used: number }[]
     >();
   if (!orders || orders.length === 0) return null;
   const { data: lines } = await admin
@@ -233,20 +233,15 @@ async function amazonAllocationFor(admin: Admin, familyId: string, amount: numbe
     .is('feed_id', null)
     .in('order_id', orders.map((order) => order.id))
     .returns<{ id: string; order_id: string; amount: number; position: number }[]>();
-  // 注文メールの合計が品目の和より安ければ、その差（クーポンなど）が割引率の初めの値。高ければ送料などの上乗せ（§9.7.3）
-  const open: OpenAmazonOrder[] = orders.map((order) => {
-    const itemsSum = order.total - order.adjust;
-    const observed = order.discount_rate !== null;
-    return {
-      orderId: order.id,
-      orderedOn: order.ordered_on,
-      rate: observed ? Number(order.discount_rate) : order.adjust < 0 && itemsSum > 0 ? -order.adjust / itemsSum : 0,
-      rateObserved: observed,
-      fee: order.adjust > 0 ? order.adjust : 0,
-      feeOpen: order.adjust_feed_id === null,
-      lines: (lines ?? []).filter((line) => line.order_id === order.id),
-    };
-  });
+  // 注文メールの合計が品目の和より安いぶんが値引きの予算（クーポン・定期おトク便など。どの商品かは分からない）。高ければ送料などの上乗せ（§9.7.3）
+  const open: OpenAmazonOrder[] = orders.map((order) => ({
+    orderId: order.id,
+    orderedOn: order.ordered_on,
+    discountLeft: Math.max(0, (order.adjust < 0 ? -order.adjust : 0) - order.discount_used),
+    fee: order.adjust > 0 ? order.adjust : 0,
+    feeOpen: order.adjust_feed_id === null,
+    lines: (lines ?? []).filter((line) => line.order_id === order.id),
+  }));
   const match = matchAmazonCharge(amount, open);
   return match && { amazon_order_id: match.orderId, amazon_line_ids: match.lineIds, amazon_with_adjust: match.withFee };
 }
