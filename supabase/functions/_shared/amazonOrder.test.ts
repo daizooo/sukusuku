@@ -100,6 +100,24 @@ assert.equal(
   600,
 );
 
+// 合計が0円の注文（品目に値段が載っていても、カードに請求が立たない）は覚えない。2026-10-17の実物
+const zeroBody = '注文番号 503-6829870-0030251\n\nキュレル リップケアスティック 4.2g\n数量: 1\n￥935\n\nキュレル リップケアバーム\n数量: 1\n￥1,320\n\n合計\n￥0\n';
+assert.equal(parseAmazonOrderMail('注文済み: 「キュレル」とさらに1点の商品', zeroBody), null);
+// 0円の注文と払う注文が1通に入るときは、払う注文だけ読む
+assert.deepEqual(
+  parseAmazonOrderMail('注文済み: 「A」', `${zeroBody}注文番号 111-1111111-1111111\n* B\n  数量: 1\n  ￥500\n合計\n￥500\n`)?.map(
+    (order) => [order.orderNo, order.total],
+  ),
+  [['111-1111111-1111111', 500]],
+);
+// 0円の品目は覚えない
+assert.deepEqual(
+  parseAmazonOrderMail('注文済み: 「A」', '注文番号 111-1111111-1111111\n* 無料サンプル\n  数量: 1\n  ￥0\n* B\n  数量: 1\n  ￥500\n合計\n￥500\n')?.[0].lines.map(
+    (line) => line.receiptName,
+  ),
+  ['B'],
+);
+
 // 箇条書きの記号が無い・空行が挟まる書き方も読む
 assert.deepEqual(
   parseAmazonOrderMail('注文済み: 「A」', '注文番号\r\n111-1111111-1111111\r\n\r\nA商品\r\n\r\n  数量: 2\r\n\r\n  300 JPY\r\n\r\n合計\r\n600 JPY')?.[0].lines.map(
