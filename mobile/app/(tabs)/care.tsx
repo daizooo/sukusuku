@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -35,6 +35,7 @@ import type {
   TemperatureLog,
 } from '@/types/app';
 import { supabase } from '@/lib/supabase';
+import { useScrollTopOnFocus } from '@/hooks/useScrollTopOnFocus';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
 import { getMyMembership } from '@/lib/api/me';
@@ -748,6 +749,10 @@ export default function CareScreen() {
     }
   };
 
+  // タブを開くたびに、スクロールはいちばん上から（2026-10-16）。
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollTopOnFocus(scrollRef);
+
   if (isSessionLoading) {
     return (
       <SafeAreaView edges={['top']} style={[styles.screen, styles.centered]}>
@@ -788,8 +793,9 @@ export default function CareScreen() {
       ) : (
       <>
       {/* グループ2: 日付・記録ボタン・その日の記録を、スレート色の1枚のパネルにまとめる。 */}
-      <Animated.View style={[styles.dayPanel, swipe.style]}>
-      {/* 日付送り。タブを開いた時点では常に今日なので、「今日」は今日以外を見ているときだけ出す。 */}
+      <View style={styles.dayPanel}>
+      {/* 日付送り。タブを開いた時点では常に今日なので、「今日」は今日以外を見ているときだけ出す。
+          見出しは固定で、横に動くのはこの下の中身だけ（予定タブと同じ。2026-10-15）。 */}
       <View style={styles.header}>
         <Pressable
           accessibilityRole="button"
@@ -840,6 +846,7 @@ export default function CareScreen() {
         </Pressable>
       </View>
 
+      <Animated.View style={[styles.flex, swipe.style]}>
       {!familyId ? (
         <View style={styles.centered}>
           <Text style={styles.centeredText}>
@@ -951,6 +958,7 @@ export default function CareScreen() {
 
           {/* スクロールするのはこの一覧だけ。 */}
           <ScrollView
+            ref={scrollRef}
             style={styles.flex}
             contentContainerStyle={styles.list}
             refreshControl={
@@ -986,6 +994,7 @@ export default function CareScreen() {
         </>
       )}
       </Animated.View>
+      </View>
       </>
       )}
 

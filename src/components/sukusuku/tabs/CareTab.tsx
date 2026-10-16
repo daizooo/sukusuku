@@ -275,8 +275,9 @@ export default function CareTab({
       </div>
 
       {/* グループ2: 日付・記録ボタン・その日の記録を、スレート色の1枚のパネルにまとめる。 */}
-      <div ref={attachContent} className="flex-1 min-h-0 flex flex-col bg-slate-100 rounded-[20px] overflow-hidden">
-      <div className="shrink-0 space-y-2 px-3 pt-2.5 pb-2">
+      <div className="flex-1 min-h-0 flex flex-col bg-slate-100 rounded-[20px] overflow-hidden">
+      {/* 日付の見出しは固定で、指に合わせて横に動くのはこの下の中身だけ（予定タブと同じ。2026-10-15）。 */}
+      <div className="shrink-0 px-3 pt-2.5 pb-2">
         <>
             {/* 日付の送り: 1日区切りで過去の記録を遡る。タブを開いた時点では常に今日なので、
                 「今日」の表示は今日以外を見ているときに戻るボタンとしてだけ出す。
@@ -328,7 +329,12 @@ export default function CareTab({
                 <ChevronRight size={20} />
               </button>
             </div>
+        </>
+      </div>
 
+      <div ref={attachContent} className="flex-1 min-h-0 flex flex-col">
+      <div className="shrink-0 space-y-2 px-3 pb-2">
+        <>
             {/* 計測中の授乳。アプリを開いた人が最初に気づけるよう一番上に出す */}
             {nursingTimer.hasSession && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center justify-between">
@@ -495,6 +501,7 @@ export default function CareTab({
                 })}
               </div>
         </div>
+      </div>
       </div>
       </div>
       </>

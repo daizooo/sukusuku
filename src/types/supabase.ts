@@ -1497,6 +1497,7 @@ export type Database = {
       money_records: {
         Row: {
           card_next_period: boolean
+          checked_at: string | null
           created_at: string
           created_by: string | null
           draw_id: string | null
@@ -1516,6 +1517,7 @@ export type Database = {
         }
         Insert: {
           card_next_period?: boolean
+          checked_at?: string | null
           created_at?: string
           created_by?: string | null
           draw_id?: string | null
@@ -1535,6 +1537,7 @@ export type Database = {
         }
         Update: {
           card_next_period?: boolean
+          checked_at?: string | null
           created_at?: string
           created_by?: string | null
           draw_id?: string | null

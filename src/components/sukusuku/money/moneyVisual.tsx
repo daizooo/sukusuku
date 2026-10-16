@@ -34,9 +34,9 @@ export const type = {
   link: 'text-[13px] font-bold text-blue-600',
 } as const;
 
-/** マイナス・超過は赤（tailwind の打ち消しを避けるため、色だけ差し替える）。 */
+/** マイナス・超過は、赤にせず「−」をつけた黒（黒字は緑。2026-10-16に改めて徹底）。 */
 export const minus = (base: string, isMinus: boolean | undefined) =>
-  isMinus ? base.replace(/text-gray-\d+/, 'text-red-600') : base;
+  isMinus ? base.replace(/text-gray-\d+/, 'text-gray-900') : base;
 
 export const cardClass = 'rounded-2xl border border-gray-200 bg-white';
 

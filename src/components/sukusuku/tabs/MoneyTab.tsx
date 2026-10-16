@@ -21,6 +21,7 @@ import type {
 } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { useSwipeTabs } from '../ui/useSwipeTabs';
+import { useSessionState } from '@/lib/sessionState';
 import { useFamilyRefresh } from '@/lib/familySync';
 import {
   confirmMoneyEstimate,
@@ -69,6 +70,7 @@ import MoneyRecordsView from '../money/MoneyRecordsView';
 import MoneyReviewView from '../money/MoneyReviewView';
 import RecordEditor from '../money/RecordEditor';
 import CategoryEditor from '../money/CategoryEditor';
+import BudgetEditor from '../money/BudgetEditor';
 import MoneySettings from '../money/MoneySettings';
 import MoneyFab from '../money/MoneyFab';
 import MoneyFeedInbox from '../money/MoneyFeedInbox';
@@ -143,10 +145,14 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [closings, setClosings] = useState<MoneyMonth[]>([]);
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
   const [isLoading, setIsLoading] = useState(true);
-  const [view, setView] = useState<MoneyView>('accounts');
-  const [monthKey, setMonthKey] = useState(() => monthKeyOfDate(new Date()));
-  const [year, setYear] = useState(() => new Date().getFullYear());
-  const [period, setPeriod] = useState<ReviewPeriod>('month');
+  // 家計の面・月・年・期間は、ブラウザの更新をしても今のまま戻す（2026-10-16）。
+  const [view, setView] = useSessionState<MoneyView>('money.view', 'accounts');
+  // 一度開いた面は、開いたまま残して隠すだけにする（面の切り替えで毎回作り直すと、スワイプのあと表示が出るまで待たされるため。
+  // mobile版と同じ。2026-10-15）。読み込みが終わって落ち着いたら、残りの面もあらかじめ作っておく。
+  const [mountedViews, setMountedViews] = useState<ReadonlySet<MoneyView>>(() => new Set<MoneyView>(['accounts']));
+  const [monthKey, setMonthKey] = useSessionState('money.month', monthKeyOfDate(new Date()));
+  const [year, setYear] = useSessionState('money.year', new Date().getFullYear());
+  const [period, setPeriod] = useSessionState<ReviewPeriod>('money.period', 'month');
   const [editing, setEditing] = useState<Editing>(null);
   // 記録の一覧の、日の見出しの「＋」から足すときの日。それ以外は null（今日）。
   const [newDate, setNewDate] = useState<string | null>(null);
@@ -159,6 +165,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [scanning, setScanning] = useState(false);
   const receiptInput = useRef<HTMLInputElement>(null);
   const [editingCategories, setEditingCategories] = useState(false);
+  // 予算（年ごと）を開いている年。null は閉じている（docs/kakei.md §3.1）。
+  const [budgetYear, setBudgetYear] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Gmail から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
   const [feed, setFeed] = useState<MoneyFeedData | null>(null);
@@ -522,12 +530,38 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     }
   };
 
+  // 記録の一覧の、日の見出しの「＋」。一覧の行を作り直さないよう、関数は固定しておく。
+  const addOnDate = useCallback((date: string) => {
+    setReceipt(null);
+    setNewDate(date);
+    setEditing('new');
+  }, []);
+
+  // 読み込みが終わったら、まだ開いていない面もあらかじめ作っておく（最初のスワイプで待たされないように）。
+  useEffect(() => {
+    if (isLoading) return undefined;
+    const timer = window.setTimeout(() => setMountedViews(new Set<MoneyView>(['accounts', 'records', 'review'])), 600);
+    return () => window.clearTimeout(timer);
+  }, [isLoading]);
+
+  // 面を切り替えたら、開いた面は必ずいちばん上から（隠していただけの面に、前のスクロールが残らないように。2026-10-16）。
+  useEffect(() => {
+    document.querySelectorAll<HTMLElement>(`[data-money-view="${view}"] *`).forEach((element) => {
+      if (element.scrollTop > 0) element.scrollTop = 0;
+    });
+  }, [view]);
+
+  const showView = useCallback((next: MoneyView) => {
+    setMountedViews((prev) => (prev.has(next) ? prev : new Set([...prev, next])));
+    setView(next);
+  }, []);
+
   // 口座/記録/振り返りは、帯と中身の上の左右スワイプでも切り替える
   // 帯の下の中身は指に合わせて横に動く。
   const { handlers: swipeHandlers, attachContent } = useSwipeTabs(
     VIEWS.map((entry) => entry.id),
     view,
-    setView,
+    showView,
   );
 
   return (
@@ -543,7 +577,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
                 type="button"
                 role="tab"
                 aria-selected={selected}
-                onClick={() => setView(entry.id)}
+                onClick={() => showView(entry.id)}
                 className="flex flex-1 flex-col items-center pt-2"
               >
                 <span className={`text-[15px] ${selected ? 'font-bold text-gray-900' : 'font-semibold text-gray-400'}`}>
@@ -556,22 +590,21 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
         </div>
 
         <div ref={attachContent} className="flex min-h-0 flex-1 flex-col">
-          {view === 'records' ? (
+          {(view === 'records' || mountedViews.has('records')) && (
+            <div data-money-view="records" className={view === 'records' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
             <MoneyRecordsView
-              monthKey={monthKey}
-              onMonth={setMonthKey}
+              active={view === 'records'}
               records={records}
               categories={categories}
               wallets={wallets}
               isLoading={isLoading}
               onOpen={setEditing}
-              onAddOnDate={(date) => {
-                setReceipt(null);
-                setNewDate(date);
-                setEditing('new');
-              }}
+              onAddOnDate={addOnDate}
             />
-          ) : view === 'review' ? (
+            </div>
+          )}
+          {(view === 'review' || mountedViews.has('review')) && (
+            <div data-money-view="review" className={view === 'review' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
             <MoneyReviewView
               period={period}
               onPeriod={changePeriod}
@@ -583,11 +616,13 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               categories={categories}
               budgets={allBudgets}
               wallets={wallets}
+              balances={balances}
               onSelectMonth={(next) => {
                 setMonthKey(next);
                 setPeriod('month');
               }}
               onEditCategories={() => setEditingCategories(true)}
+              onEditBudgets={() => setBudgetYear(period === 'year' ? year : yearOfMonth(monthKey))}
               onOpenRecord={setEditing}
               months={closings}
               recurring={recurring}
@@ -597,7 +632,10 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               onSetMonthClosed={(target, closed) => void setMonthClosed(target, closed)}
               onOpenFeed={() => setFeedOpen(true)}
             />
-          ) : (
+            </div>
+          )}
+          {(view === 'accounts' || mountedViews.has('accounts')) && (
+            <div data-money-view="accounts" className={view === 'accounts' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
             <MoneyAccountsView
               wallets={wallets}
               records={records}
@@ -617,6 +655,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               feedOpenCount={feed?.open.length ?? 0}
               onOpenFeed={() => setFeedOpen(true)}
             />
+            </div>
           )}
         </div>
       </div>
@@ -717,12 +756,23 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       {editingCategories && (
         <CategoryEditor
           familyId={familyId}
-          year={yearOfMonth(monthKey)}
           categories={categories}
-          budgets={allBudgets}
           onCategories={setCategories}
           onBudgets={setBudgets}
           onClose={() => setEditingCategories(false)}
+        />
+      )}
+
+      {budgetYear !== null && (
+        <BudgetEditor
+          familyId={familyId}
+          year={budgetYear}
+          categories={categories}
+          budgets={allBudgets}
+          recurring={recurring}
+          records={records}
+          onBudgets={setBudgets}
+          onClose={() => setBudgetYear(null)}
         />
       )}
     </div>

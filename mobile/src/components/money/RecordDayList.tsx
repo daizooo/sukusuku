@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ClipboardList, Plus, Scale } from 'lucide-react-native';
 import type { MoneyCategory, MoneyRecord, MoneyWallet } from '@/types/app';
@@ -9,6 +10,7 @@ import {
   groupItems,
   groupRecordsByDay,
   iconKeyOf,
+  isFixedEstimate,
   itemSummary,
   recordTotal,
   topCategoryIdOf,
@@ -37,6 +39,8 @@ interface RecordDayListProps {
   onOpenCorrection?: (check: BalanceCheck) => void;
   /** 日の見出しの「＋」を押したとき、その日（YYYY-MM-DD）で記録を足す。無ければ「＋」は出さない。 */
   onAddOnDate?: (date: string) => void;
+  /** 月の締めの画面で、各カードにチェックボックスを出す（docs/kakei.md §4.5）。 */
+  closing?: RecordClosing;
 }
 
 const dayLabel = (dateKey: string) => {
@@ -55,25 +59,63 @@ const dateParts = (dateKey: string) => {
   };
 };
 
-export default function RecordDayList({
-  records,
+/** 1日ぶん（日の見出しと、その日の記録・補正のカード）。長い一覧を仮想化して並べるときに、1行として使う。 */
+export interface RecordDay {
+  date: string;
+  records: MoneyRecord[];
+  corrections: BalanceCheck[];
+}
+
+/**
+ * 月の締めの画面で、見込みの記録に「確定」を出すための指定（docs/kakei.md §4.5。2026-10-16）。
+ * 「確定」は今の額のまま確定する。額が違うものは、カードを押して記録の詳細で直す。
+ */
+export interface RecordClosing {
+  /** 締めた月は、確定できない。 */
+  locked: boolean;
+  onConfirm: (record: MoneyRecord) => void;
+  /** 確定の処理中の記録（二度押せないように）。 */
+  busyId: string | null;
+  /** カードの下に添える注意（記録の id → 文言。カードの利用通知と額が違うものなど）。 */
+  notes: ReadonlyMap<string, string>;
+}
+
+interface RecordDayBlockProps {
+  day: RecordDay;
+  categories: MoneyCategory[];
+  wallets: MoneyWallet[];
+  onOpen: (record: MoneyRecord) => void;
+  onOpenCorrection?: (check: BalanceCheck) => void;
+  onAddOnDate?: (date: string) => void;
+  closing?: RecordClosing;
+}
+
+/** 月の締めのカードの右上。見込みの記録だけ「確定」を出す。 */
+function ClosingControl({ record, closing }: { record: MoneyRecord; closing: RecordClosing }) {
+  if (!isFixedEstimate(record)) return null;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="この額で確定する"
+      disabled={closing.locked || closing.busyId !== null}
+      onPress={() => closing.onConfirm(record)}
+      hitSlop={6}
+      style={[styles.confirm, closing.busyId === record.id && styles.confirmBusy]}
+    >
+      <Text style={styles.confirmText}>確定</Text>
+    </Pressable>
+  );
+}
+
+export const RecordDayBlock = memo(function RecordDayBlock({
+  day,
   categories,
   wallets,
   onOpen,
-  corrections = [],
   onOpenCorrection,
   onAddOnDate,
-}: RecordDayListProps) {
-  // 記録のある日と補正のある日を合わせて、新しい日から。
-  const recordDays = groupRecordsByDay(records);
-  const dates = [...new Set([...recordDays.map((day) => day.date), ...corrections.map((check) => check.balance.balanceOn)])].sort(
-    (a, b) => b.localeCompare(a),
-  );
-  const days = dates.map((date) => ({
-    date,
-    records: recordDays.find((day) => day.date === date)?.records ?? [],
-    corrections: corrections.filter((check) => check.balance.balanceOn === date),
-  }));
+  closing,
+}: RecordDayBlockProps) {
   const walletOf = (id: string | null) => wallets.find((wallet) => wallet.id === id) ?? null;
   const walletName = (id: string | null) => walletOf(id)?.name ?? '';
 
@@ -106,121 +148,163 @@ export default function RecordDayList({
       .map(walletOf)
       .filter((wallet): wallet is MoneyWallet => wallet !== null);
 
+  const spent = day.records
+    .filter((record) => record.kind === 'expense')
+    .flatMap((record) => record.items)
+    .reduce((sum, item) => sum + item.amount, 0);
+  const date = dateParts(day.date);
   return (
-    <>
-      {days.map((day) => {
-        const spent = day.records
-          .filter((record) => record.kind === 'expense')
-          .flatMap((record) => record.items)
-          .reduce((sum, item) => sum + item.amount, 0);
-        const date = dateParts(day.date);
-        return (
-          <View key={day.date} style={styles.day}>
-            <View style={styles.row}>
-              <View style={styles.dateCol}>
-                <Text style={[styles.dateMain, date.color !== undefined && { color: date.color }]}>{date.main}</Text>
-                <Text style={[styles.dateWeek, date.color !== undefined && { color: date.color }]}>{date.week}</Text>
-              </View>
-              <View style={styles.axis}>
-                <View style={styles.line} />
-                <View style={styles.dot} />
-              </View>
-              <View style={styles.head}>
-                <Text style={styles.headText}>
-                  支出　<Text style={styles.headSum}>{formatYen(spent)}</Text>
-                </Text>
-                {onAddOnDate && (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`${dayLabel(day.date)}に記録を追加`}
-                    onPress={() => onAddOnDate(day.date)}
-                    hitSlop={8}
-                    style={styles.plus}
-                  >
-                    <Plus size={20} color={colors.textSubtle} />
-                  </Pressable>
-                )}
+    <View style={styles.day}>
+      <View style={styles.row}>
+        <View style={styles.dateCol}>
+          <Text style={[styles.dateMain, date.color !== undefined && { color: date.color }]}>{date.main}</Text>
+          <Text style={[styles.dateWeek, date.color !== undefined && { color: date.color }]}>{date.week}</Text>
+        </View>
+        <View style={styles.axis}>
+          <View style={styles.line} />
+          <View style={styles.dot} />
+        </View>
+        <View style={styles.head}>
+          <Text style={styles.headText}>
+            支出　<Text style={styles.headSum}>{formatYen(spent)}</Text>
+          </Text>
+          {onAddOnDate && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${dayLabel(day.date)}に記録を追加`}
+              onPress={() => onAddOnDate(day.date)}
+              hitSlop={8}
+              style={styles.plus}
+            >
+              <Plus size={20} color={colors.textSubtle} />
+            </Pressable>
+          )}
+        </View>
+      </View>
+      {day.corrections.map((check) => (
+        <View key={check.balance.id} style={styles.row}>
+          <View style={styles.dateCol} />
+          <View style={styles.axis}>
+            <View style={styles.line} />
+            <View style={styles.circle}>
+              <View style={styles.correctionIcon}>
+                <Scale size={18} color="#ffffff" />
               </View>
             </View>
-            {day.corrections.map((check) => (
-              <View key={check.balance.id} style={styles.row}>
-                <View style={styles.dateCol} />
-                <View style={styles.axis}>
-                  <View style={styles.line} />
-                  <View style={styles.circle}>
-                    <View style={styles.correctionIcon}>
-                      <Scale size={18} color="#ffffff" />
-                    </View>
-                  </View>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="残高の補正"
-                  onPress={() => onOpenCorrection?.(check)}
-                  style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-                >
-                  <View style={styles.top}>
-                    <Text style={[styles.amount, check.diff !== null && check.diff > 0 && styles.income]}>
-                      {formatBalance(check.diff === null ? check.balance.amount : check.diff)}
-                    </Text>
-                  </View>
-                  <Text style={styles.title} numberOfLines={1}>
-                    {check.diff === null ? 'はじめの残高' : '残高を補正'}
-                  </Text>
-                </Pressable>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="残高の補正"
+            onPress={() => onOpenCorrection?.(check)}
+            style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+          >
+            <View style={styles.top}>
+              <Text style={[styles.amount, check.diff !== null && check.diff > 0 && styles.income]}>
+                {formatBalance(check.diff === null ? check.balance.amount : check.diff)}
+              </Text>
+            </View>
+            <Text style={styles.title} numberOfLines={1}>
+              {check.diff === null ? 'はじめの残高' : '残高を補正'}
+            </Text>
+          </Pressable>
+        </View>
+      ))}
+      {day.records.map((record) => {
+        const { icon, title, sub } = describe(record);
+        const total = recordTotal(record);
+        return (
+          <View key={record.id} style={styles.row}>
+            <View style={styles.dateCol} />
+            <View style={styles.axis}>
+              <View style={styles.line} />
+              <View style={styles.circle}>
+                {icon === null ? <TransferIcon size={36} /> : <CategoryIcon iconKey={icon} size={36} />}
               </View>
-            ))}
-            {day.records.map((record) => {
-              const { icon, title, sub } = describe(record);
-              const total = recordTotal(record);
-              return (
-                <View key={record.id} style={styles.row}>
-                  <View style={styles.dateCol} />
-                  <View style={styles.axis}>
-                    <View style={styles.line} />
-                    <View style={styles.circle}>
-                      {icon === null ? <TransferIcon size={36} /> : <CategoryIcon iconKey={icon} size={36} />}
-                    </View>
-                  </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => onOpen(record)}
-                    style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-                  >
-                    <View style={styles.top}>
-                      <Text style={[styles.amount, record.kind === 'transfer' && styles.muted, record.kind === 'income' && styles.income]}>
-                        {formatYen(total)}
-                      </Text>
-                      {record.isEstimate && <EstimateBadge />}
-                      {record.cardNextPeriod && <NextPeriodBadge />}
-                      <View style={styles.flex} />
-                      <View style={styles.walletIcons}>
-                        {walletIcons(record).map((wallet, iconIndex) => (
-                          <WalletTypeIcon key={`${wallet.id}-${iconIndex}`} type={wallet.type} size={16} color={wallet.iconColor} />
-                        ))}
-                      </View>
-                    </View>
-                    <Text style={styles.title} numberOfLines={1}>
-                      {title}
-                    </Text>
-                    {sub !== '' && (
-                      <View style={styles.memo}>
-                        <ClipboardList size={14} color={colors.textSubtle} />
-                        <Text style={styles.memoText} numberOfLines={1}>
-                          {sub}
-                        </Text>
-                      </View>
-                    )}
-                  </Pressable>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onOpen(record)}
+              style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+            >
+              <View style={styles.top}>
+                <Text style={[styles.amount, record.kind === 'transfer' && styles.muted, record.kind === 'income' && styles.income]}>
+                  {formatYen(total)}
+                </Text>
+                {isFixedEstimate(record) && <EstimateBadge />}
+                {record.cardNextPeriod && <NextPeriodBadge />}
+                <View style={styles.flex} />
+                <View style={styles.walletIcons}>
+                  {walletIcons(record).map((wallet, iconIndex) => (
+                    <WalletTypeIcon key={`${wallet.id}-${iconIndex}`} type={wallet.type} size={16} color={wallet.iconColor} />
+                  ))}
                 </View>
-              );
-            })}
+                {closing && (
+                  <ClosingControl record={record} closing={closing} />
+                )}
+              </View>
+              <Text style={styles.title} numberOfLines={1}>
+                {title}
+              </Text>
+              {closing?.notes.get(record.id) !== undefined && (
+                <Text style={styles.note} numberOfLines={2}>
+                  {closing.notes.get(record.id)}
+                </Text>
+              )}
+              {sub !== '' && (
+                <View style={styles.memo}>
+                  <ClipboardList size={14} color={colors.textSubtle} />
+                  <Text style={styles.memoText} numberOfLines={1}>
+                    {sub}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
           </View>
         );
       })}
+    </View>
+  );
+});
+
+export default function RecordDayList({
+  records,
+  categories,
+  wallets,
+  onOpen,
+  corrections = [],
+  onOpenCorrection,
+  onAddOnDate,
+  closing,
+}: RecordDayListProps) {
+  // 記録のある日と補正のある日を合わせて、新しい日から。
+  const recordDays = groupRecordsByDay(records);
+  const dates = [...new Set([...recordDays.map((day) => day.date), ...corrections.map((check) => check.balance.balanceOn)])].sort(
+    (a, b) => b.localeCompare(a),
+  );
+  const days = dates.map((date) => ({
+    date,
+    records: recordDays.find((day) => day.date === date)?.records ?? [],
+    corrections: corrections.filter((check) => check.balance.balanceOn === date),
+  }));
+
+  return (
+    <>
+      {days.map((day) => (
+        <RecordDayBlock
+          key={day.date}
+          day={day}
+          categories={categories}
+          wallets={wallets}
+          onOpen={onOpen}
+          onOpenCorrection={onOpenCorrection}
+          onAddOnDate={onAddOnDate}
+          closing={closing}
+        />
+      ))}
     </>
   );
 }
+
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
@@ -261,6 +345,11 @@ const styles = StyleSheet.create({
   memo: { marginTop: 5, flexDirection: 'row', alignItems: 'center', gap: 6 },
   memoText: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.textSubtle },
   pressed: { backgroundColor: colors.background },
+  // 月の締め: 見込みの「確定」・カードの下の注意。
+  confirm: { marginLeft: 4, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, backgroundColor: colors.moneyEstimateSurface },
+  confirmBusy: { opacity: 0.5 },
+  confirmText: { fontSize: 13, fontWeight: '700', color: colors.moneyEstimate },
+  note: { marginTop: 4, fontSize: 12, fontWeight: '600', color: colors.moneyEstimate },
   muted: { color: colors.textMuted },
   // 収入の額は緑（支出と見分けがつくように）。
   income: { color: colors.moneyIncome },

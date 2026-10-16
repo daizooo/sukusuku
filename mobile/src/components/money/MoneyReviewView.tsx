@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import type {
@@ -10,6 +10,7 @@ import type {
   MoneyRecord,
   MoneyRecurring,
   MoneyWallet,
+  MoneyWalletBalance,
 } from '@/types/app';
 import { cardMonthChecks } from '@/lib/moneyFeedUtils';
 import { colors } from '@/lib/theme';
@@ -17,6 +18,7 @@ import {
   buildBudgetTiles,
   buildMonthSummary,
   buildCategoryAnalysis,
+  categoryYearLanding,
   buildYearLanding,
   buildYearSummary,
   compareWithPreviousYear,
@@ -30,14 +32,12 @@ import {
   isMonthClosed,
   monthKeyOfDate,
   recordTotal,
-  shiftMonth,
   unclosedMonths,
+  yearActiveMonthKeys,
   yearMonthKeys,
-  yearToDateBalance,
   type BudgetTile,
 } from '@/lib/moneyUtils';
 import ReviewDetailScreen, { type ReviewDetail } from '@/components/money/ReviewDetailScreen';
-import YearFlowChart, { type YearFlowMonth } from '@/components/money/YearFlowChart';
 import MonthCloseScreen from '@/components/money/MonthCloseScreen';
 import {
   CategoryIcon,
@@ -69,6 +69,8 @@ import {
 // 今年・先の年と、締めていない月が残る過ぎた年に出す。
 
 interface MoneyReviewViewProps {
+  /** この面を開いているか。false から true になったとき、いちばん上へ戻す。 */
+  active: boolean;
   period: ReviewPeriod;
   onPeriod: (period: ReviewPeriod) => void;
   monthKey: string;
@@ -79,9 +81,13 @@ interface MoneyReviewViewProps {
   categories: MoneyCategory[];
   budgets: MoneyBudget[];
   wallets: MoneyWallet[];
+  /** 確定した残高（月の締めで、月末の残高を出す）。 */
+  balances: MoneyWalletBalance[];
   /** 年の「月ごと」の行を押したとき。その月の月の振り返りへ。 */
   onSelectMonth: (monthKey: string) => void;
   onEditCategories: () => void;
+  /** 予算（年ごと。カテゴリとは別の設定）を開く。 */
+  onEditBudgets: () => void;
   /** 内訳の詳細の中で記録を押したとき。詳細を閉じて、記録の詳細を開く。 */
   onOpenRecord: (record: MoneyRecord) => void;
   /** 月の締め（docs/kakei.md §4.5）。 */
@@ -98,6 +104,7 @@ interface MoneyReviewViewProps {
 }
 
 export default function MoneyReviewView({
+  active,
   period,
   onPeriod,
   monthKey,
@@ -108,8 +115,10 @@ export default function MoneyReviewView({
   categories,
   budgets,
   wallets,
+  balances,
   onSelectMonth,
   onEditCategories,
+  onEditBudgets,
   onOpenRecord,
   months: closings,
   recurring,
@@ -123,6 +132,7 @@ export default function MoneyReviewView({
   const today = monthKeyOfDate(new Date());
   const year = yearProp;
   const [detail, setDetail] = useState<ReviewDetail | null>(null);
+  const [monthDetail, setMonthDetail] = useState<{ category: MoneyCategory; monthKey: string } | null>(null);
   // 締めの画面を開いている月。
   const [closing, setClosing] = useState<string | null>(null);
   const unclosed = useMemo(() => unclosedMonths(records, closings, today), [records, closings, today]);
@@ -148,32 +158,15 @@ export default function MoneyReviewView({
     const open = result.months.some((row) => row.counted && !row.closed);
     return year >= Number(today.slice(0, 4)) || open ? result : null;
   }, [isMonth, records, categories, budgets, recurring, closings, year, today]);
-  const chartMonths = useMemo<YearFlowMonth[]>(
-    () =>
-      landing === null
-        ? yearSummary.months
-        : landing.months.map((row) => ({
-            monthKey: row.monthKey,
-            recorded: row.counted,
-            balance: row.balance,
-            cumulative: row.cumulative,
-            forecast: !row.closed,
-          })),
-    [landing, yearSummary],
-  );
-  // 月: 年初からの累計。年: 前の年の同じ月ぶんとの比べ。
-  const ytd = useMemo(
-    () => (isMonth ? yearToDateBalance(records, categories, budgets, monthKey) : null),
-    [isMonth, records, categories, budgets, monthKey],
-  );
+  // 年: 前の年の同じ期間との比べ。
   const comparison = useMemo(
     () => (isMonth ? null : compareWithPreviousYear(records, categories, budgets, year, today)),
     [isMonth, records, categories, budgets, year, today],
   );
-  // 見ている期間の月。月なら1つ、年なら記録のある月だけ（記録の無い月の予算は数えない）。
+  // 見ている期間の月。月なら1つ、年なら使い始めた月から12月まで（年の予算がかかる月。使い始める前の月の予算は数えない。2026-10-15）。
   const periodKeys = useMemo(
-    () => (isMonth ? [monthKey] : yearSummary.months.filter((row) => row.recorded).map((row) => row.monthKey)),
-    [isMonth, monthKey, yearSummary],
+    () => (isMonth ? [monthKey] : yearActiveMonthKeys(records, year)),
+    [isMonth, monthKey, records, year],
   );
   const tiles = useMemo(
     () => (periodKeys.length === 0 ? [] : buildBudgetTiles(records, categories, budgets, periodKeys)),
@@ -188,15 +181,48 @@ export default function MoneyReviewView({
     const list = keys.flatMap((key) => estimatesInMonth(records, key));
     return { count: list.length, amount: list.reduce((sum, record) => sum + recordTotal(record), 0) };
   }, [isMonth, monthKey, year, today, records]);
-  const months = yearSummary.months.filter((row) => row.monthKey <= today && row.recorded).reverse();
 
-  // 内訳の行を押したときの分析。前の期間（月なら前の月、年なら前の年の同じ月ぶん）と比べる。
-  const analysis = useMemo(() => {
-    if (detail === null || detail.type !== 'category') return null;
-    const previousKeys = isMonth ? [shiftMonth(monthKey, -1)] : periodKeys.map((key) => shiftMonth(key, -12));
-    return buildCategoryAnalysis(records, categories, budgets, detail.category.id, periodKeys, previousKeys);
-  }, [detail, isMonth, monthKey, periodKeys, records, categories, budgets]);
+  // 年の「月」の一覧（1月から。記録のある月だけ。未来の月は出さない）。
+  const months = yearSummary.months.filter((row) => row.monthKey <= today && row.recorded);
+
+  // 内訳の行を押したときの分析。見ている期間の予算（年は年の予算）・実績・小分類ごと・記録。年は締めた月ごとの実績も出す（2026-10-16）。
+  const analysis = useMemo(
+    () => (detail === null ? null : buildCategoryAnalysis(records, categories, budgets, detail.category.id, periodKeys, null)),
+    [detail, periodKeys, records, categories, budgets],
+  );
+  // 年の詳細の月ごとの行（1月から。締めていない月も入る。2026-10-16）。
+  const monthRows = useMemo(
+    () =>
+      isMonth || analysis === null
+        ? null
+        : analysis.months.map((entry) => ({ ...entry, closed: isMonthClosed(closings, entry.monthKey) })),
+    [isMonth, analysis, closings],
+  );
+  // 年の詳細の年末の着地見込み（締めた月は実績、ほかの月は月の予算）。
+  const categoryLanding = useMemo(
+    () =>
+      isMonth || analysis === null
+        ? null
+        : categoryYearLanding(analysis.months, new Set(analysis.months.filter((entry) => isMonthClosed(closings, entry.monthKey)).map((entry) => entry.monthKey))),
+    [isMonth, analysis, closings],
+  );
+  // 年の詳細の月の行を押したときの、その月のカテゴリの詳細。
+  const monthAnalysis = useMemo(
+    () =>
+      monthDetail === null
+        ? null
+        : buildCategoryAnalysis(records, categories, budgets, monthDetail.category.id, [monthDetail.monthKey], null),
+    [monthDetail, records, categories, budgets],
+  );
   const periodLabel = isMonth ? `${Number(monthKey.slice(5, 7))}月` : formatYear(year);
+
+  // この面を開くたびに、いちばん上から（隠していただけの面に、前のスクロールが残らないように。2026-10-16）。
+  const scrollRef = useRef<ScrollView>(null);
+  const wasActive = useRef(active);
+  useEffect(() => {
+    if (active && !wasActive.current) scrollRef.current?.scrollTo({ y: 0, animated: false });
+    wasActive.current = active;
+  }, [active]);
 
   return (
     <View style={styles.flex}>
@@ -208,7 +234,7 @@ export default function MoneyReviewView({
         year={year}
         onYear={onYear}
       />
-      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollRef} style={styles.flex} contentContainerStyle={styles.content}>
         {unclosed.length > 0 && (
           <Pressable
             accessibilityRole="button"
@@ -223,56 +249,50 @@ export default function MoneyReviewView({
         )}
         <Hero
           compact
-          label={isMonth ? '収支' : '収支（年）'}
+          label="収支"
           value={formatBalance(balance)}
           plus={balance > 0}
-          note="収入 − 支出"
         >
           <StatRow compact label="収入" value={formatYen(income)} plus={income > 0} />
           <StatRow compact label="支出" value={`−${formatYen(living)}`} />
-          {ytd !== null && (
-            <StatRow
-              compact
-              label="年初からの累計"
-              value={formatBalance(ytd)}
-              plus={ytd > 0}
-            />
-          )}
-          {landing !== null && (
-            <StatRow
-              compact
-              label="年末の着地見込み"
-              note={`締めた月 ${landing.closedMonths}か月`}
-              value={formatSignedYen(landing.total)}
-              plus={landing.total > 0}
-              minus={landing.total < 0}
-            />
-          )}
-          {!isMonth && yearSummary.average !== null && (
-            <StatRow
-              compact
-              label="月平均"
-              note={`記録のある${yearSummary.recordedMonths}か月ぶん`}
-              value={formatBalance(yearSummary.average.balance)}
-              plus={yearSummary.average.balance > 0}
-            />
-          )}
-          {comparison !== null && (
-            <StatRow
-              compact
-              label="前年の同じ月より"
-              note={`前年 ${formatBalance(comparison.previousBalance)}（${comparison.months}か月ぶん）`}
-              value={formatSignedYen(comparison.diff)}
-              minus={comparison.diff < 0}
-            />
-          )}
           {estimates.count > 0 && (
             <View style={styles.estimate}>
               <EstimateBadge />
               <Text style={[type.faint, styles.flex]}>
-                見込みの額 {estimates.count}件（{formatYen(estimates.amount)}）を含みます。額を確かめて直すと確定します
+                見込み {estimates.count}件（{formatYen(estimates.amount)}）
               </Text>
             </View>
+          )}
+          {/* 年の月平均・前年との比べ・着地見込みは、収支と混同しないよう、線で分ける（2026-10-16） */}
+          {!isMonth && (
+            <>
+              <View style={styles.heroDivider} />
+              {yearSummary.average !== null && (
+                <StatRow
+                  compact
+                  label="月平均"
+                  value={formatBalance(yearSummary.average.balance)}
+                  plus={yearSummary.average.balance > 0}
+                />
+              )}
+              {comparison !== null && (
+                <StatRow
+                  compact
+                  label="前年の同じ期間より"
+                  value={formatSignedYen(comparison.diff)}
+                  plus={comparison.diff > 0}
+                />
+              )}
+              {landing !== null && (
+                <StatRow
+                  compact
+                  label="年末の着地見込み"
+                  value={formatSignedYen(landing.total)}
+                  plus={landing.total > 0}
+                  minus={landing.total < 0}
+                />
+              )}
+            </>
           )}
           {isMonth && (monthClosed || monthKey <= today) && (
             <Pressable
@@ -294,15 +314,10 @@ export default function MoneyReviewView({
             <SectionHeader
               compact
               title="内訳"
-              hint="押すと分析と記録"
-              right={
-                <Pressable accessibilityRole="button" onPress={onEditCategories} hitSlop={8}>
-                  <Text style={type.link}>カテゴリ・予算</Text>
-                </Pressable>
-              }
+              right={<SettingLinks onEditCategories={onEditCategories} onEditBudgets={onEditBudgets} />}
             />
             {tiles.length === 0 && (
-              <Text style={styles.message}>「カテゴリ・予算」でカテゴリと月の予算を決めると、ここに予算との差が出ます</Text>
+              <Text style={styles.message}>「カテゴリ」と「予算」を決めると、ここに予算との差が出ます</Text>
             )}
             <View style={styles.card}>
               {tiles.map((tile, index) => (
@@ -317,28 +332,14 @@ export default function MoneyReviewView({
           </>
         ) : (
           <>
-            {chartMonths.some((row) => row.recorded) && (
-              <>
-                <SectionHeader
-                  compact
-                  title="月ごとの推移"
-                  hint={landing === null ? '棒は月の収支・線は年初からの累計' : '締めた月は実線・ほかは見込み（点線）'}
-                />
-                <View style={styles.card}>
-                  <YearFlowChart months={chartMonths} />
-                </View>
-              </>
-            )}
             <SectionHeader
               compact
-              title="内訳"
-              hint="押すと分析と記録"
-              right={
-                <Pressable accessibilityRole="button" onPress={onEditCategories} hitSlop={8}>
-                  <Text style={type.link}>カテゴリ・予算</Text>
-                </Pressable>
-              }
+              title="カテゴリ"
+              right={<SettingLinks onEditCategories={onEditCategories} onEditBudgets={onEditBudgets} />}
             />
+            {tiles.length === 0 && (
+              <Text style={styles.message}>「カテゴリ」と「予算」を決めると、ここに年の予算との差が出ます</Text>
+            )}
             <View style={styles.card}>
               {tiles.map((tile, index) => (
                 <CategoryRow
@@ -349,7 +350,7 @@ export default function MoneyReviewView({
                 />
               ))}
             </View>
-            <SectionHeader compact title="月ごと" hint="押すとその月へ" />
+            <SectionHeader compact title="月" />
             {months.length === 0 ? (
               <Text style={styles.message}>この年はまだ記録がありません</Text>
             ) : (
@@ -364,21 +365,8 @@ export default function MoneyReviewView({
                       onPress={() => onSelectMonth(row.monthKey)}
                       style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.pressed]}
                     >
-                      <Text style={styles.month}>{number}月</Text>
-                      <View style={styles.flex}>
-                        {row.recorded ? (
-                          <Text style={type.faint} numberOfLines={1}>
-                            収入 {formatYen(row.income)}・支出 {formatYen(row.living)}
-                          </Text>
-                        ) : (
-                          <Text style={type.faint}>記録なし</Text>
-                        )}
-                      </View>
-                      {estimatesInMonth(records, row.monthKey).length > 0 && <EstimateBadge />}
-                      {isMonthClosed(closings, row.monthKey) && <Text style={styles.closedMark}>締め</Text>}
-                      {row.recorded && (
-                        <Text style={[styles.monthBalance, row.balance > 0 && styles.plus]}>{formatBalance(row.balance)}</Text>
-                      )}
+                      <Text style={[styles.month, styles.flex]}>{number}月</Text>
+                      <Text style={[styles.monthBalance, row.balance > 0 && styles.plus]}>{formatBalance(row.balance)}</Text>
                       <ChevronRight size={16} color={colors.textFaint} />
                     </Pressable>
                   );
@@ -400,6 +388,7 @@ export default function MoneyReviewView({
           feedCount={feedItems.filter((item) => item.occurredOn !== null && item.occurredOn.startsWith(`${closing}-`)).length}
           cardChecks={cardFeed && cardFeed.walletIds.length > 0 ? cardMonthChecks(records, cardFeed, closing) : null}
           wallets={wallets}
+          balances={balances}
           closed={isMonthClosed(closings, closing)}
           closedAt={closings.find((entry) => entry.month === closing)?.closedAt ?? null}
           onConfirmEstimate={onConfirmEstimate}
@@ -424,8 +413,10 @@ export default function MoneyReviewView({
         <ReviewDetailScreen
           detail={detail}
           periodLabel={periodLabel}
-          isMonth={isMonth}
           analysis={analysis}
+          monthRows={monthRows}
+          landing={categoryLanding}
+          onOpenMonth={(key) => setMonthDetail({ category: detail.category, monthKey: key })}
           categories={categories}
           wallets={wallets}
           onClose={() => setDetail(null)}
@@ -435,25 +426,50 @@ export default function MoneyReviewView({
           }}
         />
       )}
+
+      {monthDetail !== null && (
+        <ReviewDetailScreen
+          detail={{ type: 'category', category: monthDetail.category }}
+          periodLabel={`${Number(monthDetail.monthKey.slice(5, 7))}月`}
+          analysis={monthAnalysis}
+          monthRows={null}
+          landing={null}
+          onOpenMonth={() => undefined}
+          categories={categories}
+          wallets={wallets}
+          onClose={() => setMonthDetail(null)}
+          onOpenRecord={(record) => {
+            setMonthDetail(null);
+            setDetail(null);
+            onOpenRecord(records.find((entry) => entry.id === record.id) ?? record);
+          }}
+        />
+      )}
     </View>
   );
 }
 
-/** 大分類の1行（Zaim と同じく小さく）。アイコン・名前・超えた額／残り額、使った割合の帯、実績 / 予算。 */
+/** 内訳の見出しの右の、設定への入口（カテゴリと予算は別の設定。2026-10-15）。 */
+function SettingLinks({ onEditCategories, onEditBudgets }: { onEditCategories: () => void; onEditBudgets: () => void }) {
+  return (
+    <View style={styles.links}>
+      <Pressable accessibilityRole="button" onPress={onEditCategories} hitSlop={8}>
+        <Text style={type.link}>カテゴリ</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" onPress={onEditBudgets} hitSlop={8}>
+        <Text style={type.link}>予算</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** 大分類の1行（Zaim と同じく小さく）。アイコン・名前・**予算との差**（予算 − 実績。黒字は緑・赤字は「−」の黒）、使った割合の帯、実績・予算（2026-10-16）。 */
 function CategoryRow({ tile, divided, onPress }: { tile: BudgetTile; divided: boolean; onPress: () => void }) {
   const over = tile.budget !== null && tile.diff < 0;
-  const quiet = tile.budget === null || tile.diff === 0;
-  // 残りの額が大きく、予算を超えたら「残り −¥1,234」（符号をつけた黒。超えたことは帯の赤で見せる）。
-  const headline =
-    tile.budget === null
-      ? '予算なし'
-      : tile.diff === 0
-        ? '予算どおり'
-        : `残り ${formatBalance(tile.diff)}`;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${tile.category.name}の分析と記録を見る`}
+      accessibilityLabel={`${tile.category.name}の内訳を見る`}
       onPress={onPress}
       style={({ pressed }) => [styles.row, styles.categoryRow, divided && styles.rowDivided, pressed && styles.pressed]}
     >
@@ -463,7 +479,11 @@ function CategoryRow({ tile, divided, onPress }: { tile: BudgetTile; divided: bo
           <Text style={styles.rowName} numberOfLines={1}>
             {tile.category.name}
           </Text>
-          <Text style={[styles.rowHeadline, quiet && styles.muted]}>{headline}</Text>
+          {tile.budget === null ? (
+            <Text style={[styles.rowHeadline, styles.muted]}>予算なし</Text>
+          ) : (
+            <Text style={[styles.rowHeadline, tile.diff > 0 && styles.plus]}>{formatBalance(tile.diff)}</Text>
+          )}
         </View>
         <View style={styles.rowBar}>
           <View style={styles.flex}>
@@ -486,6 +506,8 @@ const styles = StyleSheet.create({
   // 右下の「＋」に一覧の最後が隠れないよう、下を空ける。
   content: { paddingHorizontal: 16, paddingBottom: 96 },
   gap: { height: 12 },
+  links: { flexDirection: 'row', gap: 14 },
+  heroDivider: { height: 1, marginVertical: 6, backgroundColor: colors.borderStrong },
   estimate: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8 },
   bar: { paddingVertical: 6 },
   message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },

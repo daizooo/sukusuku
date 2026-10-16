@@ -5,6 +5,7 @@ import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { Check, ChevronDown, ChevronRight, GripVertical, Lock, Pin, PinOff, Plus, Trash2, X } from 'lucide-react';
 import type { ListBoard, ListGroup, ListItem } from '@/types/app';
 import { useDragReorder } from '../ui/useDragReorder';
+import { useSessionState } from '@/lib/sessionState';
 import ListEditorModal, { DEFAULT_GROUP_LABEL, type ListDraft } from '../modals/ListEditorModal';
 
 /**
@@ -636,7 +637,8 @@ export default function ListTab({
   onReorderItems,
 }: ListTabProps) {
   // nullのあいだはリストを並べた一覧だけを出す。カードを押すとそのリストを編集モードで開く。
-  const [openListId, setOpenListId] = useState<string | null>(null);
+  // ブラウザの更新をしても、開いているリストのまま戻す（2026-10-16）。
+  const [openListId, setOpenListId] = useSessionState<string | null>('list.open', null);
   // 今の編集が「新しく作ったリスト」か。見出しへ入力を移し、何も書かずに閉じたら消す。
   const [isNewList, setIsNewList] = useState(false);
   const [showDone, setShowDone] = useState(false);

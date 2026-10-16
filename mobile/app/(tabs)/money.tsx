@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, InteractionManager, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type {
@@ -75,6 +75,7 @@ import MoneyRecordsView from '@/components/money/MoneyRecordsView';
 import MoneyReviewView from '@/components/money/MoneyReviewView';
 import RecordEditor from '@/components/money/RecordEditor';
 import CategoryEditor from '@/components/money/CategoryEditor';
+import BudgetEditor from '@/components/money/BudgetEditor';
 import MoneySettings from '@/components/money/MoneySettings';
 import MoneyFab from '@/components/money/MoneyFab';
 import MoneyFeedInbox from '@/components/money/MoneyFeedInbox';
@@ -152,6 +153,9 @@ export default function MoneyScreen() {
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
   const [isLoading, setIsLoading] = useState(true);
   const [view, setView] = useState<View3>('accounts');
+  // 一度開いた面は、開いたまま残して隠すだけにする（面の切り替えで毎回作り直すと、スワイプのあと表示が出るまで待たされるため。2026-10-15）。
+  // 読み込みが終わって落ち着いたら、残りの面もあらかじめ作っておく。
+  const [mountedViews, setMountedViews] = useState<ReadonlySet<View3>>(() => new Set<View3>(['accounts']));
   const [monthKey, setMonthKey] = useState(() => monthKeyOfDate(new Date()));
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [period, setPeriod] = useState<ReviewPeriod>('month');
@@ -166,6 +170,8 @@ export default function MoneyScreen() {
   const [receiptFor, setReceiptFor] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [editingCategories, setEditingCategories] = useState(false);
+  // 予算（年ごと）を開いている年。null は閉じている（docs/kakei.md §3.1）。
+  const [budgetYear, setBudgetYear] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Gmail から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
   const [feed, setFeed] = useState<MoneyFeedData | null>(null);
@@ -570,12 +576,34 @@ export default function MoneyScreen() {
     }
   };
 
+  // 記録の一覧の、日の見出しの「＋」。一覧の行を作り直さないよう、関数は固定しておく。
+  const addOnDate = useCallback((date: string) => {
+    setReceipt(null);
+    setNewKind('expense');
+    setNewDate(date);
+    setEditing('new');
+  }, []);
+
+  // 読み込みが終わったら、まだ開いていない面もあらかじめ作っておく（最初のスワイプで待たされないように）。
+  useEffect(() => {
+    if (isLoading) return undefined;
+    const handle = InteractionManager.runAfterInteractions(() => {
+      setMountedViews(new Set<View3>(['accounts', 'records', 'review']));
+    });
+    return () => handle.cancel();
+  }, [isLoading]);
+
+  const showView = useCallback((next: View3) => {
+    setMountedViews((prev) => (prev.has(next) ? prev : new Set([...prev, next])));
+    setView(next);
+  }, []);
+
   // 口座/記録/振り返りは、帯と中身の上の左右スワイプでも切り替える
   // 帯の下の中身は指に合わせて横に動く。
   const viewSwipe = useSwipeTabs(
     VIEWS.map((entry) => entry.id),
     view,
-    setView,
+    showView,
   );
 
   if (isSessionLoading) {
@@ -598,7 +626,7 @@ export default function MoneyScreen() {
                 key={entry.id}
                 accessibilityRole="tab"
                 accessibilityState={{ selected }}
-                onPress={() => setView(entry.id)}
+                onPress={() => showView(entry.id)}
                 style={styles.viewTab}
               >
                 <Text style={[styles.viewText, selected && styles.viewTextSelected]}>{entry.label}</Text>
@@ -609,24 +637,23 @@ export default function MoneyScreen() {
         </View>
 
         <Animated.View style={[styles.body, viewSwipe.style]}>
-          {view === 'records' ? (
+          {(view === 'records' || mountedViews.has('records')) && (
+            <View style={view === 'records' ? styles.body : styles.hidden}>
             <MoneyRecordsView
-              monthKey={monthKey}
-              onMonth={setMonthKey}
+              active={view === 'records'}
               records={records}
               categories={categories}
               wallets={wallets}
               isLoading={isLoading}
               onOpen={setEditing}
-              onAddOnDate={(date) => {
-                setReceipt(null);
-                setNewKind('expense');
-                setNewDate(date);
-                setEditing('new');
-              }}
+              onAddOnDate={addOnDate}
             />
-          ) : view === 'review' ? (
+            </View>
+          )}
+          {(view === 'review' || mountedViews.has('review')) && (
+            <View style={view === 'review' ? styles.body : styles.hidden}>
             <MoneyReviewView
+              active={view === 'review'}
               period={period}
               onPeriod={changePeriod}
               monthKey={monthKey}
@@ -637,11 +664,13 @@ export default function MoneyScreen() {
               categories={categories}
               budgets={allBudgets}
               wallets={wallets}
+              balances={balances}
               onSelectMonth={(next) => {
                 setMonthKey(next);
                 setPeriod('month');
               }}
               onEditCategories={() => setEditingCategories(true)}
+              onEditBudgets={() => setBudgetYear(period === 'year' ? year : yearOfMonth(monthKey))}
               onOpenRecord={setEditing}
               months={closings}
               recurring={recurring}
@@ -651,8 +680,12 @@ export default function MoneyScreen() {
               onSetMonthClosed={(target, closed) => void setMonthClosed(target, closed)}
               onOpenFeed={() => setFeedOpen(true)}
             />
-          ) : (
+            </View>
+          )}
+          {(view === 'accounts' || mountedViews.has('accounts')) && (
+            <View style={view === 'accounts' ? styles.body : styles.hidden}>
             <MoneyAccountsView
+              active={view === 'accounts'}
               wallets={wallets}
               records={records}
               balances={balances}
@@ -671,6 +704,7 @@ export default function MoneyScreen() {
               feedOpenCount={feed?.open.length ?? 0}
               onOpenFeed={() => setFeedOpen(true)}
             />
+            </View>
           )}
         </Animated.View>
       </View>
@@ -759,12 +793,23 @@ export default function MoneyScreen() {
       {editingCategories && familyId && (
         <CategoryEditor
           familyId={familyId}
-          year={yearOfMonth(monthKey)}
           categories={categories}
-          budgets={allBudgets}
           onCategories={setCategories}
           onBudgets={setBudgets}
           onClose={() => setEditingCategories(false)}
+        />
+      )}
+
+      {budgetYear !== null && familyId && (
+        <BudgetEditor
+          familyId={familyId}
+          year={budgetYear}
+          categories={categories}
+          budgets={allBudgets}
+          recurring={recurring}
+          records={records}
+          onBudgets={setBudgets}
+          onClose={() => setBudgetYear(null)}
         />
       )}
     </SafeAreaView>
@@ -783,6 +828,8 @@ const styles = StyleSheet.create({
   scanningText: { fontSize: 15, fontWeight: '600', color: colors.primaryText },
   screen: { flex: 1, backgroundColor: colors.background },
   body: { flex: 1 },
+  // 開いたことのある面のうち、いま見ていないもの（作り直さず隠すだけ）。
+  hidden: { display: 'none' },
   centered: { alignItems: 'center', justifyContent: 'center' },
   // 3つの面の切り替え。等幅に並べ、選んでいる面は濃い文字と青い下線。
   views: {

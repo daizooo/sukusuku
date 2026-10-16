@@ -1,32 +1,23 @@
 import { useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, ChevronLeft, ChevronRight, GripVertical, Plus } from 'lucide-react-native';
+import { Check, ChevronRight, GripVertical, Plus } from 'lucide-react-native';
 import type { MoneyBudget, MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import {
-  budgetFor,
-  budgetMonthKey,
-  budgetMonths,
-  fixedBudgetFor,
   CATEGORY_ICON_COLORS,
-  dateKeyOfDate,
   childCategories,
-  formatYen,
   guessIconKey,
   iconKeyOf,
   MONEY_ICONS,
   topCategories,
-  formatYear,
-  parseAmountInput,
 } from '@/lib/moneyUtils';
 import {
   insertDefaultMoneyCategories,
   deleteMoneyCategory,
   insertMoneyCategory,
-  saveMoneyBudget,
   updateMoneyCategory,
 } from '@/lib/api/money';
 import { useDragReorder } from '@/components/list/useDragReorder';
@@ -34,20 +25,19 @@ import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 
-// カテゴリ・予算（docs/kakei.md §3.1）。PWA版の `src/components/sukusuku/money/CategoryEditor.tsx` と同じ並び・文言。
+// カテゴリ（docs/kakei.md §3.1）。PWA版の `src/components/sukusuku/money/CategoryEditor.tsx` と同じ並び・文言。
 //
 // 大分類（予算を置く単位）と小分類の追加・名前の変更・並べ替え・削除。並べ替えは一覧のまま指で動かす
 // （大分類は左の持ち手をつかむ、小分類は長押し。リストと同じ操作。components/list/useDragReorder.ts）。
-// 大分類のアイコンは絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。予算は大分類ごと・年ごとの月額で、
-// その年に入れていなければ前の年の額のまま（ここで直すと、その年の額になる）。
+// 大分類のアイコンは絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。
+// 予算は年ごとに決めるものなので、ここには置かず、別の設定「予算」（BudgetEditor）にした（2026-10-15）。
 // カテゴリがまだ無い家族には「標準のカテゴリで始める」（Zaim のカテゴリをもとにした並び）。
 
 interface CategoryEditorProps {
   familyId: string;
-  year: number;
   categories: MoneyCategory[];
-  budgets: MoneyBudget[];
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
+  /** 大分類を消すと、その予算も消える（DBの cascade）ので、画面の予算からも外す。 */
   onBudgets: (update: (prev: MoneyBudget[]) => MoneyBudget[]) => void;
   onClose: () => void;
 }
@@ -64,28 +54,18 @@ const KIND_OPTIONS: { id: MoneyCategoryKind; label: string }[] = [
 
 export default function CategoryEditor({
   familyId,
-  year: initialYear,
   categories,
-  budgets,
   onCategories,
   onBudgets,
   onClose,
 }: CategoryEditorProps) {
   const insets = useSafeAreaInsets();
-  const [year, setYear] = useState(initialYear);
   const [kind, setKind] = useState<MoneyCategoryKind>('living');
   const [editing, setEditing] = useState<Editing>(null);
   const [busy, setBusy] = useState(false);
 
-  const today = dateKeyOfDate(new Date());
-  // 一覧に出す予算は、今年なら今月の額、これからの年なら1月、過ぎた年なら12月の額（年の途中で変えた年は、いま効いている額）。
-  const shownKey = budgetMonthKey(year, today);
   const tops = useMemo(() => topCategories(categories, kind, true), [categories, kind]);
   const ordered = [...tops.filter((top) => !top.archived), ...tops.filter((top) => top.archived)];
-  const totalBudget =
-    kind === 'living'
-      ? tops.filter((top) => !top.archived).reduce((sum, top) => sum + (budgetFor(budgets, top.id, shownKey) ?? 0), 0)
-      : 0;
 
   const failed = (what: string) => Alert.alert(`${what}できませんでした`, 'もう一度お試しください。');
   const replace = (updated: MoneyCategory) =>
@@ -161,15 +141,6 @@ export default function CategoryEditor({
           replace(category);
         }
       }
-      if (result.monthAmounts !== null) {
-        // 月ごとの手入力の額。変えた月があるときだけ保存する（固定費は計算で足されるので、ここには入れない）。
-        const current = budgetMonths(budgets, category.id, year);
-        const next = result.monthAmounts;
-        if (next.some((value, index) => value !== current[index])) {
-          const saved = await saveMoneyBudget(supabase, familyId, category.id, year, next);
-          onBudgets((prev) => [...prev.filter((entry) => entry.id !== saved.id), saved]);
-        }
-      }
     } catch {
       failed('保存');
     }
@@ -203,27 +174,8 @@ export default function CategoryEditor({
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
-        <ScreenHeader title="カテゴリ・予算" onClose={onClose} />
+        <ScreenHeader title="カテゴリ" onClose={onClose} />
         <View style={styles.bar}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="前の年"
-            onPress={() => setYear((current) => current - 1)}
-            hitSlop={8}
-            style={styles.yearButton}
-          >
-            <ChevronLeft size={18} color={colors.textSubtle} />
-          </Pressable>
-          <Text style={styles.year}>{formatYear(year)}</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="次の年"
-            onPress={() => setYear((current) => current + 1)}
-            hitSlop={8}
-            style={styles.yearButton}
-          >
-            <ChevronRight size={18} color={colors.textSubtle} />
-          </Pressable>
           <View style={styles.flex} />
           {KIND_OPTIONS.map((option) => (
             <Pressable
@@ -237,9 +189,6 @@ export default function CategoryEditor({
             </Pressable>
           ))}
         </View>
-        {kind === 'living' && tops.length > 0 && (
-          <Text style={styles.total}>月の予算の合計 {formatYen(totalBudget)}</Text>
-        )}
         {tops.length > 0 && <Text style={styles.reorderHint}>並べ替え: 大分類は左の持ち手、小分類は長押ししてそのまま動かす</Text>}
 
         <ScrollView style={styles.flex} contentContainerStyle={styles.content} scrollEnabled={!drag.isActive}>
@@ -254,7 +203,6 @@ export default function CategoryEditor({
           <View {...drag.panHandlers} style={styles.list}>
           {ordered.map((top) => {
             const children = childCategories(categories, top.id, true);
-            const budget = kind === 'living' ? budgetFor(budgets, top.id, shownKey) : null;
             const topSection = `tops-${kind}`;
             return (
               <View
@@ -271,9 +219,6 @@ export default function CategoryEditor({
                   <Text style={styles.topName}>{top.name}</Text>
                   {top.archived && <Text style={styles.archivedLabel}>使わない</Text>}
                   <View style={styles.flex} />
-                  {kind === 'living' && (
-                    <Text style={styles.budget}>{budget === null ? '予算なし' : `月 ${formatYen(budget)}`}</Text>
-                  )}
                   <ChevronRight size={16} color={colors.textFaint} />
                 </Pressable>
                 </View>
@@ -326,13 +271,6 @@ export default function CategoryEditor({
             key={editing.category?.id ?? `new-${editing.category === null ? editing.parentId : ''}`}
             category={editing.category}
             isTop={editing.category === null ? editing.parentId === null : editing.category.parentId === null}
-            showBudget={kind === 'living'}
-            year={year}
-            monthAmounts={editing.category ? budgetMonths(budgets, editing.category.id, year) : Array.from({ length: 12 }, () => null)}
-            // 固定費（毎月自動で記録するルール）から、その月の予算に足される額。
-            fixed={Array.from({ length: 12 }, (_, index) =>
-              editing.category ? fixedBudgetFor(budgets, editing.category.id, `${year}-${String(index + 1).padStart(2, '0')}`) : 0,
-            )}
             onClose={() => setEditing(null)}
             onSubmit={(result) => void save(result)}
             onDelete={editing.category ? () => confirmDelete(editing.category!) : undefined}
@@ -349,59 +287,35 @@ interface SheetResult {
   icon: string | null;
   /** アイコンの色（大分類だけ）。null は標準（アイコンごとの色）。 */
   iconColor: string | null;
-  /** 大分類の、その年の1月〜12月の手入力の予算（長さ12。null の月は予算なし）。小分類は null。 */
-  monthAmounts: (number | null)[] | null;
 }
 
 function CategorySheet({
   category,
   isTop,
-  showBudget,
-  year,
-  monthAmounts,
-  fixed,
   onClose,
   onSubmit,
   onDelete,
 }: {
   category: MoneyCategory | null;
   isTop: boolean;
-  showBudget: boolean;
-  year: number;
-  monthAmounts: (number | null)[];
-  fixed: number[];
   onClose: () => void;
   onSubmit: (result: SheetResult) => void;
   onDelete?: () => void;
 }) {
   const [name, setName] = useState(category?.name ?? '');
-  const [amounts, setAmounts] = useState<string[]>(() => monthAmounts.map((value) => (value === null ? '' : String(value))));
-  const [bulk, setBulk] = useState('');
   // 自動は無し。決めていないカテゴリは、今の名前から近いものを選んだ状態で始める。
   const [icon, setIcon] = useState<string>(category ? (category.icon ?? guessIconKey(category.name)) : 'other');
   const [iconColor, setIconColor] = useState<string | null>(category?.iconColor ?? null);
   const [pickingColor, setPickingColor] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const withBudget = isTop && showBudget;
 
   const submit = () => {
     if (name.trim() === '') return setError('名前を入れてください');
-    const values = amounts.map((text) => (text.trim() === '' ? null : parseAmountInput(text)));
-    if (withBudget && values.some((value, index) => value === null && amounts[index].trim() !== '')) {
-      return setError('予算は0以上の整数（円）で入れてください');
-    }
     onSubmit({
       name,
       icon: isTop ? icon : (category?.icon ?? null),
       iconColor: isTop ? iconColor : (category?.iconColor ?? null),
-      monthAmounts: withBudget ? values : null,
     });
-  };
-
-  const fillAll = () => {
-    if (bulk.trim() === '' || parseAmountInput(bulk) === null) return setError('まとめて入れる額は0以上の整数（円）で入れてください');
-    setError(null);
-    setAmounts(Array.from({ length: 12 }, () => String(parseAmountInput(bulk))));
   };
 
   return (
@@ -485,49 +399,6 @@ function CategorySheet({
             </View>
           </View>
         )}
-        {withBudget && (
-          <View style={styles.field}>
-            <Text style={styles.label}>{formatYear(year)}の月ごとの予算（円）</Text>
-            <Text style={styles.hint}>
-              月ごとに決められます。このカテゴリにひもづく固定費は、その月の予算に自動で足されます（固定費の設定の「カテゴリ」）。空の月は、固定費だけです
-            </Text>
-            <View style={styles.bulkRow}>
-              <TextInput
-                style={[styles.input, styles.flex]}
-                value={bulk}
-                onChangeText={setBulk}
-                keyboardType="number-pad"
-                placeholder="同じ額をまとめて入れる"
-                placeholderTextColor={colors.textFaint}
-              />
-              <Pressable accessibilityRole="button" onPress={fillAll} style={styles.bulkButton}>
-                <Text style={styles.bulkButtonText}>全ての月に入れる</Text>
-              </Pressable>
-            </View>
-            {amounts.map((text, index) => {
-              const manual = text.trim() === '' ? null : parseAmountInput(text);
-              const total = (manual ?? 0) + fixed[index];
-              return (
-                <View key={index} style={styles.monthRow}>
-                  <Text style={styles.monthLabel}>{index + 1}月</Text>
-                  <TextInput
-                    style={[styles.input, styles.monthInput]}
-                    value={text}
-                    onChangeText={(next) => setAmounts((prev) => prev.map((value, at) => (at === index ? next : value)))}
-                    keyboardType="number-pad"
-                    placeholder="未設定"
-                    placeholderTextColor={colors.textFaint}
-                  />
-                  {fixed[index] > 0 && (
-                    <Text style={styles.fixedText}>
-                      ＋固定費 {formatYen(fixed[index])}＝{formatYen(total)}
-                    </Text>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        )}
         {error && <Text style={styles.error}>{error}</Text>}
       </LogModalShell>
     </SheetModal>
@@ -538,21 +409,11 @@ const styles = StyleSheet.create({
   frame: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   bar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
-  yearButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.neutralSurface,
-  },
-  year: { fontSize: 16, fontWeight: '700', color: colors.text },
   kind: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.neutralSurface },
   kindSelected: { backgroundColor: colors.moneySoft },
   kindText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
   kindTextSelected: { color: colors.moneyText, fontWeight: '700' },
   reorderHint: { fontSize: 11, fontWeight: '500', color: colors.textFaint, paddingHorizontal: 16, paddingBottom: 6 },
-  total: { fontSize: 12, fontWeight: '600', color: colors.textMuted, paddingHorizontal: 16, paddingBottom: 6 },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 10 },
   seed: { gap: 12, paddingVertical: 16 },
   seedText: { fontSize: 14, fontWeight: '500', color: colors.textMuted, lineHeight: 21 },
@@ -568,7 +429,6 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topName: { fontSize: 15, fontWeight: '700', color: colors.text },
   archivedLabel: { fontSize: 11, fontWeight: '600', color: colors.textFaint },
-  budget: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: {
     flexDirection: 'row',
@@ -613,13 +473,6 @@ const styles = StyleSheet.create({
   colors: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingVertical: 4 },
   swatch: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   swatchDefault: { backgroundColor: colors.neutralSurface },
-  bulkRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  bulkButton: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.moneySoft },
-  bulkButtonText: { fontSize: 13, fontWeight: '700', color: colors.moneyText },
-  monthRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  monthLabel: { width: 36, fontSize: 13, fontWeight: '700', color: colors.textSubtle },
-  monthInput: { width: 120 },
-  fixedText: { flex: 1, fontSize: 11, fontWeight: '600', color: colors.textFaint },
   swatchSelected: { borderWidth: 3, borderColor: colors.text },
   list: { gap: 10 },
   topLine: { flexDirection: 'row', alignItems: 'center' },
