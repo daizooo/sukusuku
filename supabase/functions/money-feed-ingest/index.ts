@@ -3,6 +3,8 @@
 // 呼ぶのは Gmail の Apps Script（tools/gas/zaim-feed.gs）。5分ごとに、まだ送っていない通知メールをまとめて送る。
 //   POST { messages: [{ id: GmailのメッセージID, received_at: ISO, from: 差出人, to: 宛先, subject: 件名, body: 本文（プレーンテキスト） }] }
 //   差出人がカード会社なら利用通知（source = 'card_mail'。1通に何件もあれば source_id を「ID#2」…と分ける）。それ以外は Zaim。
+//   差出人が Amazon（auto-confirm@amazon.co.jp）なら注文メール。品目を覚えておき（money_amazon_*）、Amazon のカードの利用通知が
+//   届いたら、請求額に合う品目を割り振って品目つきの記録にする（_shared/amazonOrder.ts。docs/kakei.md §9.7）。
 //   Authorization: Bearer {取り込みの鍵}
 // 返り値 { results: [{ id, status }] }。status が error 以外のメールは、Apps Script が送り済みの印を付ける。
 //
@@ -15,6 +17,17 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.2';
 import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
 import { parseZaimMail } from '../_shared/zaimMail.ts';
+import {
+  CATEGORY_PICK_SCHEMA,
+  CATEGORY_PICK_SYSTEM_PROMPT,
+  isAmazonCharge,
+  isAmazonOrderSender,
+  matchAmazonCharge,
+  parseAmazonOrderMail,
+  readCategoryPicks,
+  type AmazonOrder,
+  type OpenAmazonOrder,
+} from '../_shared/amazonOrder.ts';
 import {
   cardIssuerOf,
   matchStoreByRomaji,
@@ -97,6 +110,138 @@ async function storeHintFor(admin: Admin, familyId: string, merchant: string, st
   }
 }
 
+/** 注文メールの品目に付ける種類。同じ品名の過去の品目 → AI（小分類の一覧から選ばせる）。決まらなければ null。 */
+async function categoriesForOrderLines(admin: Admin, familyId: string, receiptNames: string[]): Promise<Map<string, string | null>> {
+  const result = new Map<string, string | null>(receiptNames.map((name) => [name, null]));
+  if (receiptNames.length === 0) return result;
+
+  const { data: categories } = await admin
+    .from('money_categories')
+    .select('id, name, parent_id, kind')
+    .eq('family_id', familyId)
+    .is('archived_at', null)
+    .returns<{ id: string; name: string; parent_id: string | null; kind: string }[]>();
+  const topName = new Map((categories ?? []).filter((c) => c.parent_id === null).map((c) => [c.id, c.name]));
+  const subs = (categories ?? []).filter((c) => c.parent_id !== null && c.kind === 'living');
+  const categoryIds = new Set(subs.map((c) => c.id));
+
+  // 同じ品名の、いちばん新しい品目の種類（品名が長いので1件ずつ引く）
+  await Promise.all(
+    receiptNames.map(async (name) => {
+      const { data } = await admin
+        .from('money_items')
+        .select('category_id')
+        .eq('family_id', familyId)
+        .eq('receipt_name', name)
+        .not('category_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle<{ category_id: string }>();
+      if (data && categoryIds.has(data.category_id)) result.set(name, data.category_id);
+    }),
+  );
+
+  const unknown = receiptNames.filter((name) => result.get(name) === null);
+  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+  if (unknown.length === 0 || !apiKey || subs.length === 0) return result;
+  try {
+    const categoryLines = subs.map((c) => `${c.id}: ${topName.get(c.parent_id!) ?? ''} › ${c.name}`).join('\n');
+    const itemLines = unknown.map((name, index) => `${index}: ${name.slice(0, 150)}`).join('\n');
+    const response = await new Anthropic({ apiKey }).messages.create({
+      model: MODEL,
+      max_tokens: 4000,
+      system: CATEGORY_PICK_SYSTEM_PROMPT,
+      output_config: { format: { type: 'json_schema', schema: CATEGORY_PICK_SCHEMA } },
+      messages: [{ role: 'user', content: `小分類の一覧（id: 大分類 › 小分類）:\n${categoryLines}\n\n商品（番号: 名前）:\n${itemLines}` }],
+    });
+    const block = response.content.find((entry) => entry.type === 'text');
+    if (block && block.type === 'text') {
+      const picks = readCategoryPicks(JSON.parse(block.text), unknown.length, categoryIds);
+      unknown.forEach((name, index) => result.set(name, picks[index]));
+    }
+  } catch {
+    // 種類が決まらなくても、品目は覚える（記録の入力で選ぶ）
+    console.error('category pick failed');
+  }
+  return result;
+}
+
+/** 注文メールの注文を覚える。返り値はメールの状態（error 以外は Apps Script が送り済みの印を付ける）。 */
+async function receiveAmazonOrders(
+  admin: Admin,
+  familyId: string,
+  mail: { id: string; receivedAt: string; subject: string; body: string },
+): Promise<string> {
+  const orders: AmazonOrder[] | null = parseAmazonOrderMail(mail.subject, mail.body);
+  if (orders === null) return 'ignored';
+
+  const names = [...new Set(orders.flatMap((order) => order.lines.map((line) => line.receiptName)))];
+  const categories = await categoriesForOrderLines(admin, familyId, names);
+  // 注文した日（日本時間）
+  const orderedOn = new Date(Date.parse(mail.receivedAt) + 9 * 3600_000).toISOString().slice(0, 10);
+
+  const statuses: string[] = [];
+  for (const order of orders) {
+    const sum = order.lines.reduce((acc, line) => acc + line.amount, 0);
+    const { data, error } = await admin.rpc('money_amazon_order_receive', {
+      p_family: familyId,
+      p_order: {
+        order_no: order.orderNo,
+        source_id: mail.id,
+        received_at: mail.receivedAt,
+        ordered_on: orderedOn,
+        total: order.total,
+        adjust: order.total - sum,
+        lines: order.lines.map((line) => ({
+          receipt_name: line.receiptName,
+          name: line.name,
+          quantity: line.quantity,
+          unit_price: line.unitPrice,
+          amount: line.amount,
+          category_id: categories.get(line.receiptName) ?? null,
+        })),
+      },
+    });
+    if (error) {
+      console.error('money_amazon_order_receive failed', error.code);
+      statuses.push('error');
+    } else {
+      statuses.push(String((data as { status?: string })?.status ?? 'error'));
+    }
+  }
+  return statuses.includes('error') ? 'error' : 'saved';
+}
+
+/** 覚えている注文の、まだ割り振っていない品目から、カードの請求額に合う組み合わせを探す。 */
+async function amazonAllocationFor(admin: Admin, familyId: string, amount: number) {
+  const since = new Date(Date.now() - 90 * 86400_000).toISOString().slice(0, 10);
+  const { data: orders } = await admin
+    .from('money_amazon_orders')
+    .select('id, ordered_on, adjust, adjust_feed_id')
+    .eq('family_id', familyId)
+    .gte('ordered_on', since)
+    .order('ordered_on', { ascending: false })
+    .limit(100)
+    .returns<{ id: string; ordered_on: string; adjust: number; adjust_feed_id: string | null }[]>();
+  if (!orders || orders.length === 0) return null;
+  const { data: lines } = await admin
+    .from('money_amazon_lines')
+    .select('id, order_id, amount, position')
+    .eq('family_id', familyId)
+    .is('feed_id', null)
+    .in('order_id', orders.map((order) => order.id))
+    .returns<{ id: string; order_id: string; amount: number; position: number }[]>();
+  const open: OpenAmazonOrder[] = orders.map((order) => ({
+    orderId: order.id,
+    orderedOn: order.ordered_on,
+    adjust: order.adjust,
+    adjustOpen: order.adjust_feed_id === null,
+    lines: (lines ?? []).filter((line) => line.order_id === order.id),
+  }));
+  const match = matchAmazonCharge(amount, open);
+  return match && { amazon_order_id: match.orderId, amazon_line_ids: match.lineIds, amazon_with_adjust: match.withAdjust };
+}
+
 Deno.serve(async (request) => {
   if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405);
 
@@ -161,6 +306,12 @@ Deno.serve(async (request) => {
       subject: subject.slice(0, 500),
     };
 
+    // Amazon の注文メール（§9.7）。品目を覚えておく
+    if (isAmazonOrderSender(text(message.from))) {
+      results.push({ id, status: await receiveAmazonOrders(supabase, familyId, { id, receivedAt, subject, body }) });
+      continue;
+    }
+
     // カード会社の利用通知（§9.6）。1通に何件もあれば、件ごとに明細にする。読めなければ「読めない」で1件
     if (cardIssuerOf(text(message.from)) !== null) {
       const entries = parseCardMail(text(message.from), subject, body);
@@ -169,6 +320,10 @@ Deno.serve(async (request) => {
         statuses.push(await receive({ ...base, source: 'card_mail', source_id: id, raw_line: '' }));
       } else {
         for (const [index, entry] of entries.entries()) {
+          // Amazon の利用なら、注文メールで覚えた品目から請求額に合うものを割り振る（§9.7）
+          const amazon = isAmazonCharge(entry.merchant, entry.accountName)
+            ? await amazonAllocationFor(supabase, familyId, entry.amount)
+            : null;
           statuses.push(
             await receive({
               ...base,
@@ -181,6 +336,7 @@ Deno.serve(async (request) => {
               account_name: entry.accountName,
               description: entry.merchant,
               store_hint: await storeHintFor(supabase, familyId, entry.merchant, await loadStores()),
+              ...amazon,
             }),
           );
         }

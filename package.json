@@ -29,6 +29,7 @@
     "test:family-sync": "node --experimental-strip-types src/lib/familySyncStamps.test.ts",
     "test:family-sync-mobile": "node --experimental-strip-types mobile/src/lib/familySyncStamps.test.ts",
     "test:zaim-mail": "node --experimental-strip-types supabase/functions/_shared/zaimMail.test.ts",
+    "test:amazon-order": "node --experimental-strip-types supabase/functions/_shared/amazonOrder.test.ts",
     "test:card-mail": "node --experimental-strip-types supabase/functions/_shared/cardMail.test.ts",
     "test:money-feed": "node --experimental-strip-types src/lib/moneyFeedUtils.test.ts",
     "test:receipt-scan": "node --experimental-strip-types supabase/functions/_shared/receiptScan.test.ts",
