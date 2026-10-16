@@ -584,6 +584,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           {(view === 'records' || mountedViews.has('records')) && (
             <div className={view === 'records' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
             <MoneyRecordsView
+              active={view === 'records'}
               records={records}
               categories={categories}
               wallets={wallets}

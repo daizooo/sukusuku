@@ -640,6 +640,7 @@ export default function MoneyScreen() {
           {(view === 'records' || mountedViews.has('records')) && (
             <View style={view === 'records' ? styles.body : styles.hidden}>
             <MoneyRecordsView
+              active={view === 'records'}
               records={records}
               categories={categories}
               wallets={wallets}

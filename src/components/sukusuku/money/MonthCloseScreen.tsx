@@ -19,6 +19,7 @@ import {
   walletBalanceOn,
 } from '@/lib/moneyUtils';
 import RecordDayList, { type RecordClosing } from './RecordDayList';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 import { EstimateBadge, FullScreen, Hero, PrimaryButton, ScreenHeader, SectionHeader, StatRow, cardClass, incomeAmountClass, type } from './moneyVisual';
 
 // 月の締め（振り返りの確定。docs/kakei.md §4.5）。mobile版の `mobile/src/components/money/MonthCloseScreen.tsx` と同じ並び・文言。
@@ -28,6 +29,7 @@ import { EstimateBadge, FullScreen, Hero, PrimaryButton, ScreenHeader, SectionHe
 // 「見込み」は、固定収入・固定費の見込みの額で自動で作ったまま、まだ確定していない記録だけ（財布・デビット・Gmail から取り込んだカードの記録に見込みは無い）。
 // 見込みの記録には「見込み」の印と「確定」（今の額のまま確定）を付ける。額が違うものは、押して記録の詳細で直す。
 // カードの利用通知と額が違う記録には、その旨を添える（通知が来ていない記録は、継続払いなど通知されないものもあるので出さない）。
+// 記録の一覧は、**口座（出金元）ごとに絞り込める**（財布・カードごとに見て、月末の残高と合わせるため。2026-10-16）。
 // 一覧のあとに、これから自動で作られる記録・未確認の明細・月末の残高（実際の残高と見比べる）を出す。
 // 片づいていないものが残っていても「この月を締める」で締められる。年初からの累計は出さない（その月の締めなので）。
 // その月に、固定収入・固定費でこれから自動で作られる記録がある（自動の記録より前に締める）ときは、一覧で知らせ、
@@ -100,6 +102,8 @@ export default function MonthCloseScreen({
     () => pendingRecurringInMonth(recurring, records, monthKey, today),
     [recurring, records, monthKey, today],
   );
+  // 一覧の絞り込み。'all' はすべて、それ以外は出金元の id。
+  const [filter, setFilter] = useState<string>('all');
   const [showBalances, setShowBalances] = useState(false);
   // 確定を押した記録（読み直しが届くまで、二度押せないように）。
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -127,6 +131,22 @@ export default function MonthCloseScreen({
       .map((wallet) => ({ wallet, amount: walletBalanceOn(wallet.id, lastDay, records, balances).amount }))
       .filter((row) => row.amount !== 0 || used.has(row.wallet.id));
   }, [wallets, records, balances, lastDay, inMonth]);
+
+  // 絞り込みに使う出金元（その月に使われているもの）と、絞り込んだ記録。
+  const usedWallets = useMemo(() => {
+    const ids = new Set<string>();
+    for (const record of inMonth) {
+      if (record.walletId) ids.add(record.walletId);
+      if (record.toWalletId) ids.add(record.toWalletId);
+    }
+    return wallets.filter((wallet) => ids.has(wallet.id));
+  }, [inMonth, wallets]);
+  const shown = useMemo(
+    () => (filter === 'all' ? inMonth : inMonth.filter((record) => record.walletId === filter || record.toWalletId === filter)),
+    [inMonth, filter],
+  );
+  const filterWallet = wallets.find((wallet) => wallet.id === filter) ?? null;
+  const filterBalance = filterWallet ? balanceRows.find((row) => row.wallet.id === filterWallet.id) : undefined;
 
   const confirm = async (record: MoneyRecord) => {
     setConfirming(record.id);
@@ -174,11 +194,35 @@ export default function MonthCloseScreen({
           )}
         </Hero>
 
-        <SectionHeader compact title="記録" hint={`${inMonth.length}件`} />
-        {inMonth.length === 0 ? (
-          <p className="py-4 text-center text-[13px] text-gray-400">この月の記録はありません</p>
+        <SectionHeader compact title="記録" hint={`${shown.length}件`} />
+        {usedWallets.length > 1 && (
+          <div className="flex gap-1.5 overflow-x-auto pb-2" {...swipeBoundary}>
+            {[{ id: 'all', name: 'すべて' }, ...usedWallets.map((wallet) => ({ id: wallet.id, name: wallet.name }))].map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                aria-pressed={filter === chip.id}
+                onClick={() => setFilter(chip.id)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] ${
+                  filter === chip.id ? 'bg-blue-100 font-bold text-blue-800' : 'bg-gray-100 font-semibold text-gray-700'
+                }`}
+              >
+                {chip.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {filterWallet !== null && filterBalance !== undefined && (
+          <p className={`${type.faint} pb-1.5`}>
+            {filterWallet.name} の月末の{filterWallet.type === 'card' ? '利用残高' : '残高'} {formatBalance(filterBalance.amount)}
+          </p>
+        )}
+        {shown.length === 0 ? (
+          <p className="py-4 text-center text-[13px] text-gray-400">
+            {inMonth.length === 0 ? 'この月の記録はありません' : 'この口座の記録はありません'}
+          </p>
         ) : (
-          <RecordDayList records={inMonth} categories={categories} wallets={wallets} onOpen={onOpenRecord} closing={closing} />
+          <RecordDayList records={shown} categories={categories} wallets={wallets} onOpen={onOpenRecord} closing={closing} />
         )}
 
         {pending.length > 0 && (

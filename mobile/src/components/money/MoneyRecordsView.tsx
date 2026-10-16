@@ -1,10 +1,10 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View, type ViewToken } from 'react-native';
 import { Undo2 } from 'lucide-react-native';
 import type { MoneyCategory, MoneyRecord, MoneyWallet } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { WEEKDAY_LABELS } from '@/lib/dateUtils';
-import { dateKeyOfDate, groupRecordsByDay, type BalanceCheck } from '@/lib/moneyUtils';
+import { groupRecordsByDay, type BalanceCheck } from '@/lib/moneyUtils';
 import { RecordDayBlock, type RecordDay } from '@/components/money/RecordDayList';
 import FastScrollBar, { useFastScroll } from '@/components/money/FastScrollBar';
 
@@ -12,11 +12,14 @@ import FastScrollBar, { useFastScroll } from '@/components/money/FastScrollBar';
 //
 // 記録を日ごと（新しい日から）に、**これまでの分をすべて**1本の一覧で並べる（2026-10-15。以前は月ごとだった）。
 // 一覧そのものは RecordDayList の1日ぶん（RecordDayBlock）。長いので、見えるところだけ描く（FlatList）。
-// 右端の早送りのバーをつかんで動かすと、過去へすぐ飛べる（つかんでいるあいだだけ位置の日付が出る）。
-// 今日から過去へ15件さかのぼると、上に「今日に戻る」を出す（一番上にいるときは出さない）。その月に使った額は「振り返り」で見るので、ここには出さない（2026-10-08）。
-// 押すと記録の詳細。
+// **この面を開くたびに、いちばん上（新しい記録）から**見せる（2026-10-16。ほかの面から戻ったときも）。
+// 右端の早送りバーは最初から出ていて、帯のどこを触っても、つかんで動かしても、その位置へ飛べる（触っているあいだだけ位置の日付が出る）。
+// いちばん上から15件さかのぼると、上に「今日に戻る」を出す（押すと、いちばん上へ戻る）。
+// その月に使った額は「振り返り」で見るので、ここには出さない（2026-10-08）。押すと記録の詳細。
 
 interface MoneyRecordsViewProps {
+  /** この面を開いているか。false から true になったとき、いちばん上へ戻す。 */
+  active: boolean;
   records: MoneyRecord[];
   categories: MoneyCategory[];
   wallets: MoneyWallet[];
@@ -29,8 +32,8 @@ interface MoneyRecordsViewProps {
 /** 補正は口座の履歴にだけ混ぜるので、ここでは持たない。 */
 const NO_CORRECTIONS: BalanceCheck[] = [];
 
-/** 今日より過去へ、これだけ（記録の件数）さかのぼったら「今日に戻る」を出す（2026-10-16）。 */
-const FAR_FROM_TODAY = 15;
+/** いちばん上から、これだけ（記録の件数）さかのぼったら「今日に戻る」を出す。 */
+const FAR_FROM_TOP = 15;
 
 const bubbleLabel = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number);
@@ -41,6 +44,7 @@ const bubbleLabel = (dateKey: string) => {
 const VIEWABILITY = { itemVisiblePercentThreshold: 1 } as const;
 
 export default function MoneyRecordsView({
+  active,
   records,
   categories,
   wallets,
@@ -52,20 +56,11 @@ export default function MoneyRecordsView({
     () => groupRecordsByDay(records).map((day) => ({ ...day, corrections: NO_CORRECTIONS })),
     [records],
   );
-  // 今日（以前の日のうち、いちばん新しいもの）の位置。先の日付の記録があるときは、その下になる。
-  const todayIndex = useMemo(() => {
-    const today = dateKeyOfDate(new Date());
-    const index = days.findIndex((day) => day.date <= today);
-    return index < 0 ? 0 : index;
-  }, [days]);
 
   const listRef = useRef<FlatList<RecordDay>>(null);
   const fastScroll = useFastScroll(listRef);
-  const daysRef = useRef(days);
-  daysRef.current = days;
-  // いま上に見えている日の位置（見出し・「今日に戻る」の判定に使う）。
+  // いま上に見えている日の位置（バーの日付・「今日に戻る」の判定に使う）。
   const [firstIndex, setFirstIndex] = useState(0);
-  const openedAtToday = useRef(false);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const first = viewableItems.reduce<number | null>(
@@ -75,38 +70,21 @@ export default function MoneyRecordsView({
     if (first !== null) setFirstIndex(first);
   }).current;
 
-  const jumpToIndex = useCallback((index: number, animated: boolean) => {
-    if (index <= 0) {
-      listRef.current?.scrollToOffset({ offset: 0, animated });
-      return;
-    }
-    listRef.current?.scrollToIndex({ index, animated, viewPosition: 0 });
+  const scrollToTop = useCallback((animated: boolean) => {
+    listRef.current?.scrollToOffset({ offset: 0, animated });
   }, []);
 
-  // 描いていない遠くへ飛ぶときは、平均の高さで近くまで動かしてから、あらためて合わせる。
-  const onScrollToIndexFailed = useCallback(
-    (info: { index: number; averageItemLength: number }) => {
-      listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
-      setTimeout(() => jumpToIndex(Math.min(info.index, daysRef.current.length - 1), false), 120);
-    },
-    [jumpToIndex],
-  );
+  // ほかの面から戻ったときは、必ずいちばん上から。
+  const wasActive = useRef(active);
+  useEffect(() => {
+    if (active && !wasActive.current) {
+      scrollToTop(false);
+      setFirstIndex(0);
+    }
+    wasActive.current = active;
+  }, [active, scrollToTop]);
 
-  // 先の日付の記録があるときは、はじめに今日の位置へ合わせる（面が出て、一覧の高さが分かったとき1回だけ）。
-  const onContentSizeChange = useCallback(
-    (_width: number, height: number) => {
-      if (openedAtToday.current || height <= 0 || daysRef.current.length === 0) return;
-      openedAtToday.current = true;
-      if (todayIndex > 0) {
-        jumpToIndex(todayIndex, false);
-        // 描いていない日は高さが定まらず位置がずれることがあるので、描いたあとにもう一度合わせる。
-        setTimeout(() => jumpToIndex(todayIndex, false), 300);
-      }
-    },
-    [todayIndex, jumpToIndex],
-  );
-
-  // 日ごとの先頭までの記録の件数（今日から過去へ、何件さかのぼったかを数える）。
+  // 日ごとの先頭までの記録の件数（いちばん上から、何件さかのぼったかを数える）。
   const recordsBefore = useMemo(() => {
     const counts: number[] = [];
     let total = 0;
@@ -116,7 +94,7 @@ export default function MoneyRecordsView({
     }
     return counts;
   }, [days]);
-  const farFromToday = firstIndex > todayIndex && recordsBefore[firstIndex] - recordsBefore[todayIndex] > FAR_FROM_TODAY;
+  const farFromTop = (recordsBefore[firstIndex] ?? 0) > FAR_FROM_TOP;
   const label = days[firstIndex] ? bubbleLabel(days[firstIndex].date) : '';
 
   const renderItem = useCallback(
@@ -141,22 +119,20 @@ export default function MoneyRecordsView({
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         onScroll={fastScroll.onScroll}
-        onContentSizeChange={onContentSizeChange}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={VIEWABILITY}
-        onScrollToIndexFailed={onScrollToIndexFailed}
         ListEmptyComponent={
           <Text style={styles.message}>
             {isLoading ? '読み込み中...' : 'まだ記録がありません。右下の「＋」で記録します'}
           </Text>
         }
       />
-      {farFromToday && (
+      {farFromTop && (
         <View pointerEvents="box-none" style={styles.todayWrap}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="今日の記録へ戻る"
-            onPress={() => jumpToIndex(todayIndex, firstIndex - todayIndex < 40)}
+            onPress={() => scrollToTop(recordsBefore[firstIndex] < 200)}
             style={({ pressed }) => [styles.today, pressed && styles.todayPressed]}
           >
             <Undo2 size={16} color="#ffffff" />
@@ -171,8 +147,8 @@ export default function MoneyRecordsView({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  // 右下の「＋」に一覧の最後が隠れないよう、下を空ける。
-  content: { paddingHorizontal: 16, paddingBottom: 96 },
+  // 右端のバーと、右下の「＋」に一覧の最後が隠れないよう、右と下を空ける。
+  content: { paddingLeft: 16, paddingRight: 24, paddingBottom: 96 },
   message: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
   todayWrap: { position: 'absolute', top: 10, left: 0, right: 0, alignItems: 'center' },
   today: {

@@ -30,6 +30,7 @@ import { EstimateBadge, Hero, PrimaryButton, ScreenHeader, SectionHeader, StatRo
 // 「見込み」は、固定収入・固定費の見込みの額で自動で作ったまま、まだ確定していない記録だけ（財布・デビット・Gmail から取り込んだカードの記録に見込みは無い）。
 // 見込みの記録には「見込み」の印と「確定」（今の額のまま確定）を付ける。額が違うものは、押して記録の詳細で直す。
 // カードの利用通知と額が違う記録には、その旨を添える（通知が来ていない記録は、継続払いなど通知されないものもあるので出さない）。
+// 記録の一覧は、**口座（出金元）ごとに絞り込める**（財布・カードごとに見て、月末の残高と合わせるため。2026-10-16）。
 // 一覧のあとに、これから自動で作られる記録・未確認の明細・月末の残高（実際の残高と見比べる）を出す。
 // 片づいていないものが残っていても「この月を締める」で締められる。年初からの累計は出さない（その月の締めなので）。
 // その月に、固定収入・固定費でこれから自動で作られる記録がある（自動の記録より前に締める）ときは、一覧で知らせ、
@@ -103,6 +104,8 @@ export default function MonthCloseScreen({
     () => pendingRecurringInMonth(recurring, records, monthKey, today),
     [recurring, records, monthKey, today],
   );
+  // 一覧の絞り込み。'all' はすべて、それ以外は出金元の id。
+  const [filter, setFilter] = useState<string>('all');
   const [showBalances, setShowBalances] = useState(false);
   // 確定を押した記録（読み直しが届くまで、二度押せないように）。
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -130,6 +133,22 @@ export default function MonthCloseScreen({
       .map((wallet) => ({ wallet, amount: walletBalanceOn(wallet.id, lastDay, records, balances).amount }))
       .filter((row) => row.amount !== 0 || used.has(row.wallet.id));
   }, [wallets, records, balances, lastDay, inMonth]);
+
+  // 絞り込みに使う出金元（その月に使われているもの）と、絞り込んだ記録。
+  const usedWallets = useMemo(() => {
+    const ids = new Set<string>();
+    for (const record of inMonth) {
+      if (record.walletId) ids.add(record.walletId);
+      if (record.toWalletId) ids.add(record.toWalletId);
+    }
+    return wallets.filter((wallet) => ids.has(wallet.id));
+  }, [inMonth, wallets]);
+  const shown = useMemo(
+    () => (filter === 'all' ? inMonth : inMonth.filter((record) => record.walletId === filter || record.toWalletId === filter)),
+    [inMonth, filter],
+  );
+  const filterWallet = wallets.find((wallet) => wallet.id === filter) ?? null;
+  const filterBalance = filterWallet ? balanceRows.find((row) => row.wallet.id === filterWallet.id) : undefined;
 
   const confirm = async (record: MoneyRecord) => {
     setConfirming(record.id);
@@ -181,11 +200,31 @@ export default function MonthCloseScreen({
             )}
           </Hero>
 
-          <SectionHeader compact title="記録" hint={`${inMonth.length}件`} />
-          {inMonth.length === 0 ? (
-            <Text style={styles.message}>この月の記録はありません</Text>
+          <SectionHeader compact title="記録" hint={`${shown.length}件`} />
+          {usedWallets.length > 1 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} {...swipeBoundary}>
+              {[{ id: 'all', name: 'すべて' }, ...usedWallets.map((wallet) => ({ id: wallet.id, name: wallet.name }))].map((chip) => (
+                <Pressable
+                  key={chip.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: filter === chip.id }}
+                  onPress={() => setFilter(chip.id)}
+                  style={[styles.chip, filter === chip.id && styles.chipSelected]}
+                >
+                  <Text style={[styles.chipText, filter === chip.id && styles.chipTextSelected]}>{chip.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+          {filterWallet !== null && filterBalance !== undefined && (
+            <Text style={[type.faint, styles.filterBalance]}>
+              {filterWallet.name} の月末の{filterWallet.type === 'card' ? '利用残高' : '残高'} {formatBalance(filterBalance.amount)}
+            </Text>
+          )}
+          {shown.length === 0 ? (
+            <Text style={styles.message}>{inMonth.length === 0 ? 'この月の記録はありません' : 'この口座の記録はありません'}</Text>
           ) : (
-            <RecordDayList records={inMonth} categories={categories} wallets={wallets} onOpen={onOpenRecord} closing={closing} />
+            <RecordDayList records={shown} categories={categories} wallets={wallets} onOpen={onOpenRecord} closing={closing} />
           )}
 
           {pending.length > 0 && (
@@ -262,6 +301,12 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32, gap: 4 },
   estimate: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8 },
+  chips: { gap: 6, paddingBottom: 8 },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.neutralSurface },
+  chipSelected: { backgroundColor: colors.moneySoft },
+  chipText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
+  chipTextSelected: { color: colors.moneyText, fontWeight: '700' },
+  filterBalance: { paddingBottom: 6 },
   message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
   card: {
     borderRadius: 16,

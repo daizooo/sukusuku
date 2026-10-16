@@ -16,7 +16,7 @@ import { CategoryIcon, Hero, ProgressBar, ScreenHeader, SectionHeader, StatRow, 
 // 振り返りの内訳をタップしたときの画面（docs/kakei.md §4.4）。PWA版の `src/components/sukusuku/money/ReviewDetailScreen.tsx` と同じ並び・文言。
 // 上に**振り返りの画面と同じ作りの収支**（予算 − 支出を大きく、予算と支出を下に。年は年末の着地見込みを一番下に）、次に小分類の割合、下にその行に絞った記録の一覧
 // （2026-10-16。「分析」の欄・注釈は無くした。年の詳細には記録の一覧を出さない）。
-// 年のときは、小分類のあとに**締めた月の実績**（月の予算と並べる）を出す。月の行を押すと、その月のカテゴリの詳細が開く。
+// 年のときは、小分類のあとに**月ごとの実績**（締めていない月も。月の予算と並べる）を出す。月の行を押すと、その月のカテゴリの詳細が開く。
 // 記録を押すと、この画面を閉じて記録の詳細を開く。
 
 export type ReviewDetail = { type: 'category'; category: MoneyCategory };
@@ -27,11 +27,11 @@ interface ReviewDetailScreenProps {
   periodLabel: string;
   /** 大分類の分析（期間の予算・実績・小分類ごと・記録）。 */
   analysis: CategoryAnalysis | null;
-  /** 年のとき、締めた月ごとの実績と月の予算（新しい月から）。月のときは null。 */
-  closedMonths: { monthKey: string; amount: number; budget: number | null }[] | null;
+  /** 年のとき、月ごとの実績と月の予算（1月から。締めていない月も入る）。月のときは null。 */
+  monthRows: { monthKey: string; amount: number; budget: number | null; closed: boolean }[] | null;
   /** 年のとき、年末の着地見込み（締めた月は実績、ほかの月は月の予算）。月のときは null。 */
   landing: number | null;
-  /** 締めた月の行を押したとき、その月のカテゴリの詳細を開く。 */
+  /** 月の行を押したとき、その月のカテゴリの詳細を開く。 */
   onOpenMonth: (monthKey: string) => void;
   categories: MoneyCategory[];
   wallets: MoneyWallet[];
@@ -45,7 +45,7 @@ export default function ReviewDetailScreen({
   detail,
   periodLabel,
   analysis,
-  closedMonths,
+  monthRows,
   landing,
   onOpenMonth,
   categories,
@@ -69,10 +69,10 @@ export default function ReviewDetailScreen({
         <ScrollView contentContainerStyle={styles.content}>
           {analysis !== null && <SummaryHero analysis={analysis} landing={landing} />}
           {analysis !== null && <ChildrenSection analysis={analysis} />}
-          {closedMonths !== null && <ClosedMonths rows={closedMonths} onOpenMonth={onOpenMonth} />}
+          {monthRows !== null && <MonthRows rows={monthRows} onOpenMonth={onOpenMonth} />}
 
-          {/* 年の詳細には記録の一覧は出さない（締めた月の行からその月へ飛んで見る。2026-10-16） */}
-          {closedMonths === null && (
+          {/* 年の詳細には記録の一覧は出さない（月の行からその月へ飛んで見る。2026-10-16） */}
+          {monthRows === null && (
             <>
             <SectionHeader title="記録" hint={`${records.length}件`} />
             {records.length === 0 ? (
@@ -141,19 +141,19 @@ function SummaryHero({ analysis, landing }: { analysis: CategoryAnalysis; landin
   );
 }
 
-/** 年のとき、締めた月ごとの実績。押すとその月のカテゴリの詳細。 */
-function ClosedMonths({
+/** 年のとき、月の実績（締めていない月も）。押すとその月のカテゴリの詳細。 */
+function MonthRows({
   rows,
   onOpenMonth,
 }: {
-  rows: { monthKey: string; amount: number; budget: number | null }[];
+  rows: { monthKey: string; amount: number; budget: number | null; closed: boolean }[];
   onOpenMonth: (monthKey: string) => void;
 }) {
   return (
     <>
-      <SectionHeader title="締めた月" />
+      <SectionHeader title="月" />
       {rows.length === 0 ? (
-        <Text style={styles.message}>締めた月はまだありません</Text>
+        <Text style={styles.message}>この年の月はまだありません</Text>
       ) : (
         <View style={styles.card}>
           {rows.map((row, index) => {
@@ -169,6 +169,7 @@ function ClosedMonths({
                 <View style={styles.childTop}>
                   <Text style={[type.row, styles.flex]}>{Number(row.monthKey.slice(5, 7))}月</Text>
                   <Text style={type.faint}>{row.budget !== null ? `予算 ${formatYen(row.budget)}` : '予算なし'}</Text>
+                  {row.closed && <Text style={type.faint}>締め</Text>}
                   <Text style={type.amount}>{formatYen(row.amount)}</Text>
                   <ChevronRight size={16} color={colors.textFaint} />
                 </View>
