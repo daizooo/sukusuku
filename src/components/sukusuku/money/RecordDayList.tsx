@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { Check, ClipboardList, Plus, Scale } from 'lucide-react';
+import { ClipboardList, Plus, Scale } from 'lucide-react';
 import type { MoneyCategory, MoneyRecord, MoneyWallet } from '@/types/app';
 import { WEEKDAY_LABELS } from '@/lib/dateUtils';
 import {
@@ -75,18 +75,16 @@ export interface RecordDay {
 }
 
 /**
- * 月の締めの画面で、各カードにチェックボックスを出すための指定（docs/kakei.md §4.5。2026-10-15）。mobile版の RecordClosing と同じ。
- * 見込みの記録はチェックボックスの代わりに「確定」を出す（今の額で確定し、そのままチェックも付く）。
+ * 月の締めの画面で、見込みの記録に「確定」を出すための指定（docs/kakei.md §4.5。2026-10-16）。mobile版の RecordClosing と同じ。
+ * 「確定」は今の額のまま確定する。額が違うものは、カードを押して記録の詳細で直す。
  */
 export interface RecordClosing {
-  checked: (record: MoneyRecord) => boolean;
-  /** 締めた月は、チェックを変えられない。 */
+  /** 締めた月は、確定できない。 */
   locked: boolean;
-  onToggle: (record: MoneyRecord) => void;
   onConfirm: (record: MoneyRecord) => void;
   /** 確定の処理中の記録（二度押せないように）。 */
   busyId: string | null;
-  /** カードの下に添える注意（記録の id → 文言。カードの利用通知と見比べた結果など）。 */
+  /** カードの下に添える注意（記録の id → 文言。カードの利用通知と額が違うものなど）。 */
   notes: ReadonlyMap<string, string>;
 }
 
@@ -103,44 +101,24 @@ interface RecordDayBlockProps {
 // 画面の外の日は描画を後回しにする（全期間を1本の一覧で出すとき、重くならないように。2026-10-15）。
 const LAZY_DAY_STYLE = { contentVisibility: 'auto', containIntrinsicSize: 'auto 120px' } as const;
 
-/** 月の締めのカードの右上。見込みは「確定」、ほかはチェックボックス。 */
+/** 月の締めのカードの右上。見込みの記録だけ「確定」を出す。 */
 function ClosingControl({ record, closing }: { record: MoneyRecord; closing: RecordClosing }) {
-  if (record.isEstimate) {
-    return (
-      <span
-        role="button"
-        tabIndex={closing.locked || closing.busyId !== null ? -1 : 0}
-        aria-label="この額で確定してチェックする"
-        aria-disabled={closing.locked || closing.busyId !== null}
-        onClick={(event) => {
-          event.stopPropagation();
-          if (!closing.locked && closing.busyId === null) closing.onConfirm(record);
-        }}
-        className={`ml-1 shrink-0 cursor-pointer rounded-full bg-amber-100 px-3 py-1 text-[13px] font-bold text-amber-800 ${
-          closing.busyId === record.id ? 'opacity-50' : ''
-        }`}
-      >
-        確定
-      </span>
-    );
-  }
-  const checked = closing.checked(record);
+  if (!record.isEstimate) return null;
   return (
     <span
-      role="checkbox"
-      tabIndex={closing.locked ? -1 : 0}
-      aria-checked={checked}
-      aria-disabled={closing.locked}
-      aria-label="確かめた"
+      role="button"
+      tabIndex={closing.locked || closing.busyId !== null ? -1 : 0}
+      aria-label="この額で確定する"
+      aria-disabled={closing.locked || closing.busyId !== null}
       onClick={(event) => {
         event.stopPropagation();
-        if (!closing.locked) closing.onToggle(record);
+        if (!closing.locked && closing.busyId === null) closing.onConfirm(record);
       }}
-      className={`ml-1 flex h-[26px] w-[26px] shrink-0 cursor-pointer items-center justify-center rounded-[7px] border-2 text-white ${
-        checked ? 'border-blue-600 bg-blue-600' : 'border-gray-300 bg-white'
-      } ${closing.locked ? 'opacity-50' : ''}`}
+      className={`ml-1 shrink-0 cursor-pointer rounded-full bg-blue-100 px-3 py-1 text-[13px] font-bold text-blue-800 ${
+        closing.busyId === record.id ? 'opacity-50' : ''
+      }`}
     >
-      {checked && <Check size={16} />}
+      確定
     </span>
   );
 }

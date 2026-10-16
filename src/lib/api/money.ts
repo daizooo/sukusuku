@@ -106,7 +106,6 @@ export const rowToRecord = (row: RecordRow & { money_items: ItemRow[] }): MoneyR
   recurringId: row.recurring_id,
   month: row.month === null ? null : row.month.slice(0, 7),
   cardNextPeriod: row.card_next_period,
-  checkedAt: row.checked_at,
   items: [...row.money_items].sort((a, b) => a.position - b.position).map(rowToItem),
 });
 
@@ -279,29 +278,12 @@ export async function saveMoneyRecord(supabase: SupabaseDb, draft: MoneyRecordDr
   const { data, error } = await supabase.rpc('save_money_record', { p_record: record, p_items: items });
   if (error) throw error;
   // 「翌月分に回す」は save_money_record が持たない列なので、保存のあとに入れる（docs/kakei.md §3.4。0104）。
-  // 直した記録は、月の締めのチェックを外す（直した内容をもう一度確かめるため。docs/kakei.md §4.5。0108）。
   const cardNextPeriod = draft.cardNextPeriod;
   if (cardNextPeriod || draft.id !== null) {
-    const { error: flagError } = await supabase
-      .from('money_records')
-      .update({ card_next_period: cardNextPeriod, checked_at: null })
-      .eq('id', data);
+    const { error: flagError } = await supabase.from('money_records').update({ card_next_period: cardNextPeriod }).eq('id', data);
     if (flagError) throw flagError;
   }
   return loadRecord(supabase, data);
-}
-
-/** 月の締めのチェックを付ける・外す（docs/kakei.md §4.5。0108）。ids は同じ家族の記録。付けた日時を返す（外すときは null）。 */
-export async function setMoneyRecordsChecked(
-  supabase: SupabaseDb,
-  ids: readonly string[],
-  checked: boolean,
-): Promise<string | null> {
-  if (ids.length === 0) return null;
-  const checkedAt = checked ? new Date().toISOString() : null;
-  const { error } = await supabase.from('money_records').update({ checked_at: checkedAt }).in('id', [...ids]);
-  if (error) throw error;
-  return checkedAt;
 }
 
 export async function deleteMoneyRecord(supabase: SupabaseDb, id: string): Promise<void> {

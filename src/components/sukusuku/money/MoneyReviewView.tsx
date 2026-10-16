@@ -18,7 +18,6 @@ import {
   buildBudgetTiles,
   buildMonthSummary,
   buildCategoryAnalysis,
-  buildCategoryYearAnalysis,
   buildYearLanding,
   buildYearSummary,
   compareWithPreviousYear,
@@ -32,7 +31,6 @@ import {
   isMonthClosed,
   monthKeyOfDate,
   recordTotal,
-  shiftMonth,
   unclosedMonths,
   yearActiveMonthKeys,
   yearMonthKeys,
@@ -102,8 +100,6 @@ interface MoneyReviewViewProps {
   /** カードの利用通知の取り込み（締めの画面で、カードの記録を明細と見比べる）。読み込み前は null。 */
   cardFeed: MoneyCardFeed | null;
   onConfirmEstimate: (record: MoneyRecord) => Promise<void>;
-  /** 月の締めのチェックを付ける・外す。 */
-  onSetChecked: (records: MoneyRecord[], checked: boolean) => Promise<void>;
   onSetMonthClosed: (monthKey: string, closed: boolean) => void;
   onOpenFeed: () => void;
 }
@@ -129,13 +125,13 @@ export default function MoneyReviewView({
   feedItems,
   cardFeed,
   onConfirmEstimate,
-  onSetChecked,
   onSetMonthClosed,
   onOpenFeed,
 }: MoneyReviewViewProps) {
   const isMonth = period === 'month';
   const today = monthKeyOfDate(new Date());
   const [detail, setDetail] = useState<ReviewDetail | null>(null);
+  const [monthDetail, setMonthDetail] = useState<{ category: MoneyCategory; monthKey: string } | null>(null);
   // 締めの画面を開いている月。
   const [closing, setClosing] = useState<string | null>(null);
   const unclosed = useMemo(() => unclosedMonths(records, closings, today), [records, closings, today]);
@@ -202,12 +198,23 @@ export default function MoneyReviewView({
   }, [isMonth, monthKey, year, today, records]);
   const months = yearSummary.months.filter((row) => row.monthKey <= today && row.recorded).reverse();
 
-  // 内訳の行を押したときの分析。月は先月と比べる。年は年の予算・年末の着地見込み・前年の同じ期間と比べる（buildCategoryYearAnalysis）。
-  const analysis = useMemo(() => {
-    if (detail === null || detail.type !== 'category') return null;
-    if (!isMonth) return buildCategoryYearAnalysis(records, categories, budgets, detail.category.id, year, today);
-    return buildCategoryAnalysis(records, categories, budgets, detail.category.id, periodKeys, [shiftMonth(monthKey, -1)]);
-  }, [detail, isMonth, monthKey, year, today, periodKeys, records, categories, budgets]);
+  // 内訳の行を押したときの分析。見ている期間の予算（年は年の予算）・実績・小分類ごと・記録。年は締めた月ごとの実績も出す（2026-10-16）。
+  const analysis = useMemo(
+    () => (detail === null ? null : buildCategoryAnalysis(records, categories, budgets, detail.category.id, periodKeys, null)),
+    [detail, periodKeys, records, categories, budgets],
+  );
+  const closedMonths = useMemo(
+    () => (isMonth || analysis === null ? null : analysis.months.filter((entry) => isMonthClosed(closings, entry.monthKey)).reverse()),
+    [isMonth, analysis, closings],
+  );
+  // 年の詳細の「締めた月ごと」の行を押したときの、その月のカテゴリの詳細。
+  const monthAnalysis = useMemo(
+    () =>
+      monthDetail === null
+        ? null
+        : buildCategoryAnalysis(records, categories, budgets, monthDetail.category.id, [monthDetail.monthKey], null),
+    [monthDetail, records, categories, budgets],
+  );
   const periodLabel = isMonth ? `${Number(monthKey.slice(5, 7))}月` : formatYear(year);
 
   return (
@@ -422,7 +429,6 @@ export default function MoneyReviewView({
           closed={isMonthClosed(closings, closing)}
           closedAt={closings.find((entry) => entry.month === closing)?.closedAt ?? null}
           onConfirmEstimate={onConfirmEstimate}
-          onSetChecked={onSetChecked}
           onOpenRecord={(record) => {
             setClosing(null);
             onOpenRecord(record);
@@ -445,10 +451,30 @@ export default function MoneyReviewView({
           detail={detail}
           periodLabel={periodLabel}
           analysis={analysis}
+          closedMonths={closedMonths}
+          onOpenMonth={(key) => setMonthDetail({ category: detail.category, monthKey: key })}
           categories={categories}
           wallets={wallets}
           onClose={() => setDetail(null)}
           onOpenRecord={(record) => {
+            setDetail(null);
+            onOpenRecord(records.find((entry) => entry.id === record.id) ?? record);
+          }}
+        />
+      )}
+
+      {monthDetail !== null && (
+        <ReviewDetailScreen
+          detail={{ type: 'category', category: monthDetail.category }}
+          periodLabel={`${Number(monthDetail.monthKey.slice(5, 7))}月`}
+          analysis={monthAnalysis}
+          closedMonths={null}
+          onOpenMonth={() => undefined}
+          categories={categories}
+          wallets={wallets}
+          onClose={() => setMonthDetail(null)}
+          onOpenRecord={(record) => {
+            setMonthDetail(null);
             setDetail(null);
             onOpenRecord(records.find((entry) => entry.id === record.id) ?? record);
           }}

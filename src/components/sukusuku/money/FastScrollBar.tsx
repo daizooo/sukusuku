@@ -5,7 +5,7 @@ import { swipeBoundary } from '../ui/useSwipeNavigation';
 
 // 長い一覧の右端に出す、つかんで動かせる「早送りのバー」（2026-10-15。家計の記録の一覧で、過去へすぐ飛ぶため）。
 // mobile版の `mobile/src/components/money/FastScrollBar.tsx` と同じ決まり。
-// スクロールすると現れ、少し止まると消える。つかんで上下に動かすと、動かした割合の位置へ一覧が飛び、横にその位置の見出し（日付）が出る。
+// スクロールすると現れ、少し止まると消える。つかんで上下に動かすと、動かした割合の位置へ一覧が飛ぶ。バーが出ているあいだは、横にその位置の見出し（日付）が出る。
 // 親は、スクロールする要素（scrollRef）と同じ大きさの相対位置の枠の中に置く。
 
 /** バーのつまみの高さ。 */
@@ -16,7 +16,6 @@ const HIDE_DELAY_MS = 1400;
 export default function FastScrollBar({ scrollRef, label }: { scrollRef: RefObject<HTMLElement | null>; label: string }) {
   const [top, setTop] = useState(0);
   const [visible, setVisible] = useState(false);
-  const [dragging, setDragging] = useState(false);
   const isDragging = useRef(false);
   const dragStart = useRef({ y: 0, top: 0 });
   const hideTimer = useRef<number | undefined>(undefined);
@@ -60,7 +59,6 @@ export default function FastScrollBar({ scrollRef, label }: { scrollRef: RefObje
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
     isDragging.current = true;
-    setDragging(true);
     dragStart.current = { y: event.clientY, top };
     window.clearTimeout(hideTimer.current);
   };
@@ -69,7 +67,6 @@ export default function FastScrollBar({ scrollRef, label }: { scrollRef: RefObje
   };
   const onPointerEnd = () => {
     isDragging.current = false;
-    setDragging(false);
     hideSoon();
   };
 
@@ -81,7 +78,7 @@ export default function FastScrollBar({ scrollRef, label }: { scrollRef: RefObje
       }`}
       style={{ height: THUMB_HEIGHT, transform: `translateY(${top}px)` }}
     >
-      {dragging && label !== '' && (
+      {label !== '' && (
         <span className="mr-1.5 whitespace-nowrap rounded-full bg-blue-600 px-3.5 py-2 text-[15px] font-bold tabular-nums text-white shadow-md">
           {label}
         </span>

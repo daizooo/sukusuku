@@ -39,7 +39,6 @@ import {
   saveMoneyRecord,
   saveMoneyWalletBalance,
   setMoneyMonthClosed,
-  setMoneyRecordsChecked,
   updateMoneyWallet,
 } from '@/lib/api/money';
 import {
@@ -330,28 +329,13 @@ export default function MoneyScreen() {
     return [monthKeyOf(draft.occurredOn), ...(previous ? [monthKeyOf(previous.occurredOn)] : [])];
   };
 
-  /** 見込みの記録を今の額のまま確定し、締めのチェックも付ける（締めの画面の「確定」）。 */
+  /** 見込みの記録を今の額のまま確定する（締めの画面の「確定」）。 */
   const confirmEstimate = async (record: MoneyRecord) => {
     try {
       await confirmMoneyEstimate(supabase, record.id);
-      const checkedAt = await setMoneyRecordsChecked(supabase, [record.id], true);
-      setRecords((prev) => prev.map((entry) => (entry.id === record.id ? { ...entry, isEstimate: false, checkedAt } : entry)));
+      setRecords((prev) => prev.map((entry) => (entry.id === record.id ? { ...entry, isEstimate: false } : entry)));
     } catch {
       failed('確定');
-    }
-  };
-
-  /** 月の締めのチェックを付ける・外す。先に画面へ反映し、保存できなかったら戻す（docs/kakei.md §4.5）。 */
-  const setChecked = async (targets: MoneyRecord[], checked: boolean) => {
-    const ids = new Set(targets.map((record) => record.id));
-    const before = new Map(targets.map((record) => [record.id, record.checkedAt]));
-    const optimistic = checked ? new Date().toISOString() : null;
-    setRecords((prev) => prev.map((entry) => (ids.has(entry.id) ? { ...entry, checkedAt: optimistic } : entry)));
-    try {
-      await setMoneyRecordsChecked(supabase, [...ids], checked);
-    } catch {
-      setRecords((prev) => prev.map((entry) => (ids.has(entry.id) ? { ...entry, checkedAt: before.get(entry.id) ?? null } : entry)));
-      failed('チェック');
     }
   };
 
@@ -691,7 +675,6 @@ export default function MoneyScreen() {
               feedItems={feed?.open ?? []}
               cardFeed={feed?.cardFeed ?? null}
               onConfirmEstimate={confirmEstimate}
-              onSetChecked={setChecked}
               onSetMonthClosed={(target, closed) => void setMonthClosed(target, closed)}
               onOpenFeed={() => setFeedOpen(true)}
             />

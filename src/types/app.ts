@@ -672,8 +672,6 @@ export interface MoneyRecord {
   month: string | null;
   /** カードの引き落としを翌月分に回す（日付の期間の次の引き落としで数える）。docs/kakei.md §3.4。 */
   cardNextPeriod: boolean;
-  /** 月の締めで確かめた日時（YYYY-MM-DDTHH:mm:ss…）。null は未チェック。docs/kakei.md §4.5。 */
-  checkedAt: string | null;
   items: MoneyItem[];
 }
 

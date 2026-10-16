@@ -12,7 +12,7 @@ import FastScrollBar from './FastScrollBar';
 //
 // 記録を日ごと（新しい日から）に、**これまでの分をすべて**1本の一覧で並べる（2026-10-15。以前は月ごとだった）。
 // 一覧そのものは RecordDayList の1日ぶん（RecordDayBlock）。右端の早送りのバーをつかんで動かすと、過去へすぐ飛べる
-// （つかんでいるあいだは位置の日付が出る）。今日から離れた位置まで下がると、上に「今日に戻る」を出す。
+// （バーが出ているあいだは位置の日付が出る）。今日から過去へ15件さかのぼると、上に「今日に戻る」を出す（一番上にいるときは出さない）。
 // その月に使った額は「振り返り」で見るので、ここには出さない（2026-10-08）。押すと記録の詳細。
 
 interface MoneyRecordsViewProps {
@@ -28,8 +28,8 @@ interface MoneyRecordsViewProps {
 /** 補正は口座の履歴にだけ混ぜるので、ここでは持たない。 */
 const NO_CORRECTIONS: BalanceCheck[] = [];
 
-/** 今日の位置から、これだけ（日の数）離れたら「今日に戻る」を出す。 */
-const FAR_FROM_TODAY = 3;
+/** 今日より過去へ、これだけ（記録の件数）さかのぼったら「今日に戻る」を出す（2026-10-16）。 */
+const FAR_FROM_TODAY = 15;
 
 const bubbleLabel = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number);
@@ -90,13 +90,23 @@ export default function MoneyRecordsView({ records, categories, wallets, isLoadi
     return () => observer.disconnect();
   }, [days.length, todayIndex, scrollToIndex]);
 
-  const farFromToday = days.length > 0 && Math.abs(firstIndex - todayIndex) > FAR_FROM_TODAY;
+  // 日ごとの先頭までの記録の件数（今日から過去へ、何件さかのぼったかを数える）。
+  const recordsBefore = useMemo(() => {
+    const counts: number[] = [];
+    let total = 0;
+    for (const day of days) {
+      counts.push(total);
+      total += day.records.length;
+    }
+    return counts;
+  }, [days]);
+  const farFromToday = firstIndex > todayIndex && recordsBefore[firstIndex] - recordsBefore[todayIndex] > FAR_FROM_TODAY;
   const label = days[firstIndex] ? bubbleLabel(days[firstIndex].date) : '';
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       {/* 右下の「＋」に一覧の最後が隠れないよう、下を空ける。 */}
-      <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto pb-24">
+      <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto pb-24 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {isLoading ? (
           <p className="py-8 text-center text-sm text-gray-400">読み込み中...</p>
         ) : days.length === 0 ? (
@@ -114,7 +124,7 @@ export default function MoneyRecordsView({ records, categories, wallets, isLoadi
           <button
             type="button"
             aria-label="今日の記録へ戻る"
-            onClick={() => scrollToIndex(todayIndex, Math.abs(firstIndex - todayIndex) < 40)}
+            onClick={() => scrollToIndex(todayIndex, firstIndex - todayIndex < 40)}
             className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-blue-600 px-[18px] py-2.5 text-[15px] font-bold text-white shadow-md transition active:opacity-85"
           >
             <Undo2 size={16} />

@@ -12,8 +12,8 @@ import FastScrollBar, { useFastScroll } from '@/components/money/FastScrollBar';
 //
 // 記録を日ごと（新しい日から）に、**これまでの分をすべて**1本の一覧で並べる（2026-10-15。以前は月ごとだった）。
 // 一覧そのものは RecordDayList の1日ぶん（RecordDayBlock）。長いので、見えるところだけ描く（FlatList）。
-// 右端の早送りのバーをつかんで動かすと、過去へすぐ飛べる（つかんでいるあいだは位置の日付が出る）。
-// 今日から離れた位置まで下がると、上に「今日に戻る」を出す。その月に使った額は「振り返り」で見るので、ここには出さない（2026-10-08）。
+// 右端の早送りのバーをつかんで動かすと、過去へすぐ飛べる（バーが出ているあいだは位置の日付が出る）。
+// 今日から過去へ15件さかのぼると、上に「今日に戻る」を出す（一番上にいるときは出さない）。その月に使った額は「振り返り」で見るので、ここには出さない（2026-10-08）。
 // 押すと記録の詳細。
 
 interface MoneyRecordsViewProps {
@@ -29,8 +29,8 @@ interface MoneyRecordsViewProps {
 /** 補正は口座の履歴にだけ混ぜるので、ここでは持たない。 */
 const NO_CORRECTIONS: BalanceCheck[] = [];
 
-/** 今日の位置から、これだけ（日の数）離れたら「今日に戻る」を出す。 */
-const FAR_FROM_TODAY = 3;
+/** 今日より過去へ、これだけ（記録の件数）さかのぼったら「今日に戻る」を出す（2026-10-16）。 */
+const FAR_FROM_TODAY = 15;
 
 const bubbleLabel = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number);
@@ -102,7 +102,17 @@ export default function MoneyRecordsView({
     [todayIndex, jumpToIndex],
   );
 
-  const farFromToday = days.length > 0 && Math.abs(firstIndex - todayIndex) > FAR_FROM_TODAY;
+  // 日ごとの先頭までの記録の件数（今日から過去へ、何件さかのぼったかを数える）。
+  const recordsBefore = useMemo(() => {
+    const counts: number[] = [];
+    let total = 0;
+    for (const day of days) {
+      counts.push(total);
+      total += day.records.length;
+    }
+    return counts;
+  }, [days]);
+  const farFromToday = firstIndex > todayIndex && recordsBefore[firstIndex] - recordsBefore[todayIndex] > FAR_FROM_TODAY;
   const label = days[firstIndex] ? bubbleLabel(days[firstIndex].date) : '';
 
   const renderItem = useCallback(
@@ -125,6 +135,7 @@ export default function MoneyRecordsView({
         maxToRenderPerBatch={10}
         windowSize={9}
         scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
         onScroll={fastScroll.onScroll}
         onContentSizeChange={onContentSizeChange}
         onViewableItemsChanged={onViewableItemsChanged}
@@ -141,7 +152,7 @@ export default function MoneyRecordsView({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="今日の記録へ戻る"
-            onPress={() => jumpToIndex(todayIndex, Math.abs(firstIndex - todayIndex) < 40)}
+            onPress={() => jumpToIndex(todayIndex, firstIndex - todayIndex < 40)}
             style={({ pressed }) => [styles.today, pressed && styles.todayPressed]}
           >
             <Undo2 size={16} color="#ffffff" />

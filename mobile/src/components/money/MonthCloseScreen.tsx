@@ -16,24 +16,24 @@ import {
   formatYen,
   pendingRecurringInMonth,
   recordsInMonth,
+  recordTotal,
   shiftMonth,
   walletBalanceOn,
 } from '@/lib/moneyUtils';
 import RecordDayList, { type RecordClosing } from '@/components/money/RecordDayList';
-import { PrimaryButton, ProgressBar, ScreenHeader, SectionHeader, type } from '@/components/money/moneyVisual';
+import { EstimateBadge, Hero, PrimaryButton, ScreenHeader, SectionHeader, StatRow, type } from '@/components/money/moneyVisual';
 
 // 月の締め（振り返りの確定。docs/kakei.md §4.5）。PWA版の `src/components/sukusuku/money/MonthCloseScreen.tsx` と同じ並び・文言。
 //
 // 月の締めは、1か月を振り返って、変な支出や収入が無いかを調べ、家族の財布の残高とカードの利用残高を合わせるもの。
-// その月の記録を、記録の画面と同じ一覧で出し（カードも財布も口座の振替も）、**各記録にチェックボックス**を付ける（2026-10-15）。
-// すべてチェックがついたら「この月を締める」が押せる。
-// - 見込みの記録（自動で作ったまま、額を確かめていないもの）は黄色の「見込み」で、チェックボックスの代わりに「確定」を出す。
-//   今の額で確定すると、確定してチェックも付く。額が違うものは、押して記録の詳細で直す（直した記録はチェックが外れる）
-// - カードの利用通知を取り込んでいるカードの記録は、通知と額が違うもの・通知が来ていないものに注意を添える（docs/kakei.md §4.7）
-// - 絞り込み: すべて / 未チェック / 見込み / 出金元ごと（財布・カードごとに合わせるため）。「表示中をまとめてチェック」もできる
-// - 月末の残高: 出金元ごとの月末の残高を見られる（実際の残高と見比べ、違えば口座の面で補正する）
-// - 年初からの累計は出さない（その月の締めなので）。これから自動で作られる記録・未確認の明細は、一覧の上下に知らせる
-// 締めた月は、チェックを変えられない（「締めを外す」で外してから）。
+// 上に収支を大きく（見込みの額も含む）、その下に**その月の記録を、記録の画面と同じ一覧**で並べる（2026-10-16。チェックボックスは付けない）。
+// 「見込み」は、固定収入・固定費の見込みの額で自動で作ったまま、まだ確定していない記録だけ（財布・デビット・Gmail から取り込んだカードの記録に見込みは無い）。
+// 見込みの記録には「見込み」の印と「確定」（今の額のまま確定）を付ける。額が違うものは、押して記録の詳細で直す。
+// カードの利用通知と額が違う記録には、その旨を添える（通知が来ていない記録は、継続払いなど通知されないものもあるので出さない）。
+// 一覧のあとに、これから自動で作られる記録・未確認の明細・月末の残高（実際の残高と見比べる）を出す。
+// 片づいていないものが残っていても「この月を締める」で締められる。年初からの累計は出さない（その月の締めなので）。
+// その月に、固定収入・固定費でこれから自動で作られる記録がある（自動の記録より前に締める）ときは、一覧で知らせ、
+// 締めるときにも確かめる（締めたあとに作られた記録は、締めた収支に入っていないため）。
 
 interface MonthCloseScreenProps {
   monthKey: string;
@@ -46,7 +46,7 @@ interface MonthCloseScreenProps {
   today: string;
   /** その月の日付の、未確認の明細の件数。 */
   feedCount: number;
-  /** カードの記録を明細と見比べるための一覧（利用通知を取り込んでいるときだけ。docs/kakei.md §9.6.5 の C）。 */
+  /** カードの記録を利用通知と見比べるための一覧（利用通知を取り込んでいるときだけ。docs/kakei.md §9.6.5 の C）。 */
   cardChecks: CardMonthChecks | null;
   wallets: MoneyWallet[];
   /** 確定した残高（月末の残高を出す）。 */
@@ -54,19 +54,14 @@ interface MonthCloseScreenProps {
   closed: boolean;
   /** 締めた日時（締めた月だけ）。 */
   closedAt: string | null;
-  /** 見込みの記録を今の額で確定し、チェックも付ける。 */
+  /** 見込みの記録を今の額で確定する。 */
   onConfirmEstimate: (record: MoneyRecord) => Promise<void>;
-  /** チェックを付ける・外す。 */
-  onSetChecked: (records: MoneyRecord[], checked: boolean) => Promise<void>;
   onOpenRecord: (record: MoneyRecord) => void;
   onOpenFeed: () => void;
   onCloseMonth: () => void;
   onReopenMonth: () => void;
   onClose: () => void;
 }
-
-/** 絞り込み。'all' すべて・'unchecked' 未チェック・'estimate' 見込み・それ以外は出金元の id。 */
-type Filter = string;
 
 /** 固定のルールの見出し。品名、無ければお店、無ければカテゴリ。 */
 function ruleTitle(rule: MoneyRecurring, categories: MoneyCategory[]): string {
@@ -93,7 +88,6 @@ export default function MonthCloseScreen({
   closed,
   closedAt,
   onConfirmEstimate,
-  onSetChecked,
   onOpenRecord,
   onOpenFeed,
   onCloseMonth,
@@ -104,64 +98,38 @@ export default function MonthCloseScreen({
   const month = useMemo(() => buildMonthSummary(records, categories, budgets, monthKey), [records, categories, budgets, monthKey]);
   const inMonth = useMemo(() => recordsInMonth(records, monthKey), [records, monthKey]);
   const estimates = useMemo(() => estimatesInMonth(records, monthKey), [records, monthKey]);
+  const estimateAmount = estimates.reduce((sum, record) => sum + recordTotal(record), 0);
   const pending = useMemo(
     () => pendingRecurringInMonth(recurring, records, monthKey, today),
     [recurring, records, monthKey, today],
   );
-  const [filter, setFilter] = useState<Filter>('all');
   const [showBalances, setShowBalances] = useState(false);
   // 確定を押した記録（読み直しが届くまで、二度押せないように）。
   const [confirming, setConfirming] = useState<string | null>(null);
   const label = `${Number(monthKey.slice(5, 7))}月`;
 
-  // 見込み以外で、チェックがついている数。見込みは確定するまで「未チェック」。
-  const isDone = (record: MoneyRecord) => !record.isEstimate && record.checkedAt !== null;
-  const doneCount = inMonth.filter(isDone).length;
-  const remaining = inMonth.length - doneCount;
-
-  // 利用通知と見比べた結果（記録の id → 注意の文言）。
+  // 利用通知と額が違う記録（記録の id → 注意の文言）。
   const notes = useMemo(() => {
     const map = new Map<string, string>();
-    if (cardChecks) {
-      for (const { record, feedAmount } of cardChecks.mismatched) {
-        map.set(record.id, `カードの利用通知は ${formatYen(feedAmount)}。額が違います`);
-      }
-      for (const record of cardChecks.unnotified) map.set(record.id, 'カードの利用通知が来ていません（明細で確かめる）');
+    for (const { record, feedAmount } of cardChecks?.mismatched ?? []) {
+      map.set(record.id, `カードの利用通知は ${formatYen(feedAmount)}。額が違います`);
     }
     return map;
   }, [cardChecks]);
 
-  // 絞り込みに使う出金元（その月に使われているもの）。
-  const usedWallets = useMemo(() => {
-    const ids = new Set<string>();
-    for (const record of inMonth) {
-      if (record.walletId) ids.add(record.walletId);
-      if (record.toWalletId) ids.add(record.toWalletId);
-    }
-    return wallets.filter((wallet) => ids.has(wallet.id));
-  }, [inMonth, wallets]);
-
-  const shown = useMemo(() => {
-    if (filter === 'all') return inMonth;
-    if (filter === 'unchecked') return inMonth.filter((record) => !isDone(record));
-    if (filter === 'estimate') return inMonth.filter((record) => record.isEstimate);
-    return inMonth.filter((record) => record.walletId === filter || record.toWalletId === filter);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inMonth, filter]);
-  const bulkTargets = shown.filter((record) => !record.isEstimate && record.checkedAt === null);
-
   // 月末（その月の最終日）の出金元ごとの残高。証券は記録から出せないので入れない。
   const lastDay = addDays(`${shiftMonth(monthKey, 1)}-01`, -1);
-  const balanceRows = useMemo(
-    () =>
-      wallets
-        .filter((wallet) => !wallet.archived && wallet.type !== 'securities')
-        .map((wallet) => ({ wallet, amount: walletBalanceOn(wallet.id, lastDay, records, balances).amount }))
-        .filter((row) => row.amount !== 0 || usedWallets.some((wallet) => wallet.id === row.wallet.id)),
-    [wallets, records, balances, lastDay, usedWallets],
-  );
-  const filterWallet = wallets.find((wallet) => wallet.id === filter) ?? null;
-  const filterBalance = filterWallet ? balanceRows.find((row) => row.wallet.id === filterWallet.id) : undefined;
+  const balanceRows = useMemo(() => {
+    const used = new Set<string>();
+    for (const record of inMonth) {
+      if (record.walletId) used.add(record.walletId);
+      if (record.toWalletId) used.add(record.toWalletId);
+    }
+    return wallets
+      .filter((wallet) => !wallet.archived && wallet.type !== 'securities')
+      .map((wallet) => ({ wallet, amount: walletBalanceOn(wallet.id, lastDay, records, balances).amount }))
+      .filter((row) => row.amount !== 0 || used.has(row.wallet.id));
+  }, [wallets, records, balances, lastDay, inMonth]);
 
   const confirm = async (record: MoneyRecord) => {
     setConfirming(record.id);
@@ -173,9 +141,7 @@ export default function MonthCloseScreen({
   };
 
   const closing: RecordClosing = {
-    checked: (record) => record.checkedAt !== null,
     locked: closed,
-    onToggle: (record) => void onSetChecked([record], record.checkedAt === null),
     onConfirm: (record) => void confirm(record),
     busyId: confirming,
     notes,
@@ -197,129 +163,29 @@ export default function MonthCloseScreen({
     );
   };
 
-  const closeUnchecked = () =>
-    Alert.alert(
-      `チェックのないものが${remaining}件あります`,
-      'チェックしないまま締めます。あとから締めを外して確かめることもできます。',
-      [
-        { text: 'やめる', style: 'cancel' },
-        { text: 'このまま締める', onPress: closeMonth },
-      ],
-    );
-
-  const chips: { id: Filter; label: string }[] = [
-    { id: 'all', label: `すべて ${inMonth.length}` },
-    { id: 'unchecked', label: `未チェック ${remaining}` },
-    ...(estimates.length > 0 ? [{ id: 'estimate', label: `見込み ${estimates.length}` }] : []),
-    ...usedWallets.map((wallet) => ({ id: wallet.id, label: wallet.name })),
-  ];
-
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
         <ScreenHeader title={`${label}の締め`} icon="back" onClose={onClose} />
-
-        {/* 固定: 収支・チェックの進み具合・絞り込み。スクロールするのは下の一覧だけ。 */}
-        <View style={styles.top}>
-          <View style={styles.summary}>
-            <View style={styles.flex}>
-              <Text style={type.sub}>収支（{label}。見込みを含む）</Text>
-              <Text style={[styles.balance, month.balance > 0 && styles.plus, month.balance < 0 && type.minus]}>
-                {formatBalance(month.balance)}
-              </Text>
-            </View>
-            <View style={styles.summarySide}>
-              <Text style={type.sub}>収入 {formatYen(month.income)}</Text>
-              <Text style={type.sub}>支出 {formatYen(month.living)}</Text>
-            </View>
-          </View>
-          <View style={styles.progressRow}>
-            <View style={styles.flex}>
-              <ProgressBar ratio={inMonth.length > 0 ? doneCount / inMonth.length : 0} />
-            </View>
-            <Text style={styles.progressText}>
-              チェック {doneCount} / {inMonth.length}件
-            </Text>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} {...swipeBoundary}>
-            {chips.map((chip) => (
-              <Pressable
-                key={chip.id}
-                accessibilityRole="button"
-                accessibilityState={{ selected: filter === chip.id }}
-                onPress={() => setFilter(chip.id)}
-                style={[styles.chip, filter === chip.id && styles.chipSelected]}
-              >
-                <Text style={[styles.chipText, filter === chip.id && styles.chipTextSelected]}>{chip.label}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-
         <ScrollView contentContainerStyle={styles.content}>
-          {feedCount > 0 && (
-            <Pressable accessibilityRole="button" onPress={onOpenFeed} style={({ pressed }) => [styles.notice, pressed && styles.pressed]}>
-              <Text style={[styles.noticeText, styles.flex]}>未確認の明細が{feedCount}件あります。先に片づけると確かです</Text>
-              <ChevronRight size={16} color={colors.textMuted} />
-            </Pressable>
-          )}
+          <Hero compact label={`収支（${label}）`} value={formatBalance(month.balance)} plus={month.balance > 0} note="収入 − 支出（見込みの額も含む）">
+            <StatRow compact label="収入" value={formatYen(month.income)} plus={month.income > 0} />
+            <StatRow compact label="支出" value={`−${formatYen(month.living)}`} />
+            {estimates.length > 0 && (
+              <View style={styles.estimate}>
+                <EstimateBadge />
+                <Text style={[type.faint, styles.flex]}>
+                  見込みの額 {estimates.length}件（{formatYen(estimateAmount)}）を含みます。額を確かめて、直すか「確定」を押してください
+                </Text>
+              </View>
+            )}
+          </Hero>
 
-          <Pressable accessibilityRole="button" onPress={() => setShowBalances((open) => !open)} style={styles.balanceToggle}>
-            <Text style={[type.title, styles.flex]}>月末の残高</Text>
-            <Text style={type.faint}>{showBalances ? '閉じる' : '実際の残高と見比べる'}</Text>
-            {showBalances ? <ChevronUp size={16} color={colors.textFaint} /> : <ChevronDown size={16} color={colors.textFaint} />}
-          </Pressable>
-          {showBalances && (
-            <View style={styles.card}>
-              {balanceRows.map((row, index) => (
-                <View key={row.wallet.id} style={[styles.balanceRow, index > 0 && styles.divided]}>
-                  <Text style={[styles.rowName, styles.flex]} numberOfLines={1}>
-                    {row.wallet.name}
-                  </Text>
-                  <Text style={type.faint}>{row.wallet.type === 'card' ? '利用残高' : '残高'}</Text>
-                  <Text style={styles.amount}>{formatBalance(row.amount)}</Text>
-                </View>
-              ))}
-              <Text style={[type.faint, styles.balanceNote]}>
-                {lastDay.slice(5).replace('-', '/')}の終わりの、記録から出した額です。違えば、口座の面で残高を補正します
-              </Text>
-            </View>
-          )}
-          {filterWallet !== null && filterBalance !== undefined && !showBalances && (
-            <Text style={[type.faint, styles.filterBalance]}>
-              {filterWallet.name} の月末の{filterWallet.type === 'card' ? '利用残高' : '残高'} {formatBalance(filterBalance.amount)}
-            </Text>
-          )}
-
-          <SectionHeader
-            compact
-            title="記録"
-            hint={`${shown.length}件`}
-            right={
-              !closed && bulkTargets.length > 0 ? (
-                <Pressable accessibilityRole="button" onPress={() => void onSetChecked(bulkTargets, true)} hitSlop={8}>
-                  <Text style={type.link}>表示中をまとめてチェック（{bulkTargets.length}件）</Text>
-                </Pressable>
-              ) : undefined
-            }
-          />
-          {shown.length === 0 ? (
-            <Text style={styles.message}>
-              {inMonth.length === 0 ? 'この月の記録はありません' : filter === 'unchecked' ? 'すべてチェックしました' : 'この絞り込みの記録はありません'}
-            </Text>
+          <SectionHeader compact title="記録" hint={`${inMonth.length}件`} />
+          {inMonth.length === 0 ? (
+            <Text style={styles.message}>この月の記録はありません</Text>
           ) : (
-            <RecordDayList
-              records={shown}
-              categories={categories}
-              wallets={wallets}
-              onOpen={onOpenRecord}
-              closing={closing}
-            />
-          )}
-          {estimates.length > 0 && (
-            <Text style={type.faint}>
-              黄色の「見込み」は、まだ額を確かめていない記録です。「確定」は今の額のまま確定します。額が違うものは、押して記録の詳細で直してください
-            </Text>
+            <RecordDayList records={inMonth} categories={categories} wallets={wallets} onOpen={onOpenRecord} closing={closing} />
           )}
 
           {pending.length > 0 && (
@@ -341,8 +207,36 @@ export default function MonthCloseScreen({
               </Text>
             </>
           )}
-        </ScrollView>
 
+          {feedCount > 0 && (
+            <Pressable accessibilityRole="button" onPress={onOpenFeed} style={({ pressed }) => [styles.notice, pressed && styles.pressed]}>
+              <Text style={[styles.noticeText, styles.flex]}>未確認の明細が{feedCount}件あります。先に片づけると確かです</Text>
+              <ChevronRight size={16} color={colors.textMuted} />
+            </Pressable>
+          )}
+
+          <Pressable accessibilityRole="button" onPress={() => setShowBalances((open) => !open)} style={styles.balanceToggle}>
+            <Text style={[type.title, styles.flex]}>月末の残高</Text>
+            <Text style={type.faint}>{showBalances ? '閉じる' : '実際の残高と見比べる'}</Text>
+            {showBalances ? <ChevronUp size={16} color={colors.textFaint} /> : <ChevronDown size={16} color={colors.textFaint} />}
+          </Pressable>
+          {showBalances && (
+            <View style={styles.card}>
+              {balanceRows.map((row, index) => (
+                <View key={row.wallet.id} style={[styles.row, index > 0 && styles.divided]}>
+                  <Text style={[styles.rowName, styles.flex]} numberOfLines={1}>
+                    {row.wallet.name}
+                  </Text>
+                  <Text style={type.faint}>{row.wallet.type === 'card' ? '利用残高' : '残高'}</Text>
+                  <Text style={styles.amount}>{formatBalance(row.amount)}</Text>
+                </View>
+              ))}
+              <Text style={[type.faint, styles.balanceNote]}>
+                {lastDay.slice(5).replace('-', '/')}の終わりの、記録から出した額です。違えば、口座の面で残高を補正します
+              </Text>
+            </View>
+          )}
+        </ScrollView>
         <View style={styles.footer}>
           {closed ? (
             <>
@@ -353,17 +247,8 @@ export default function MonthCloseScreen({
             </>
           ) : (
             <>
-              <PrimaryButton label="この月を締める" onPress={closeMonth} disabled={remaining > 0} />
-              {remaining > 0 ? (
-                <>
-                  <Text style={styles.footerNote}>あと{remaining}件チェックすると締められます</Text>
-                  <Pressable accessibilityRole="button" onPress={closeUnchecked} hitSlop={8} style={styles.secondary}>
-                    <Text style={styles.skipText}>チェックしないで締める</Text>
-                  </Pressable>
-                </>
-              ) : (
-                <Text style={styles.footerNote}>すべてチェックしました</Text>
-              )}
+              <PrimaryButton label="この月を締める" onPress={closeMonth} />
+              <Text style={styles.footerNote}>見込みのままの記録や未確認の明細が残っていても締められます</Text>
             </>
           )}
         </View>
@@ -375,35 +260,8 @@ export default function MonthCloseScreen({
 const styles = StyleSheet.create({
   frame: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  top: { paddingHorizontal: 16, paddingTop: 8, gap: 8, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface },
-  summary: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
-  summarySide: { alignItems: 'flex-end' },
-  // 数字を出す Text は fontWeight を必ず付ける（CLAUDE.md）。
-  balance: { fontSize: 26, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
-  plus: { color: colors.moneyIncome },
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  progressText: { fontSize: 12, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  chips: { gap: 6, paddingBottom: 10 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.neutralSurface },
-  chipSelected: { backgroundColor: colors.moneySoft },
-  chipText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle, fontVariant: ['tabular-nums'] },
-  chipTextSelected: { color: colors.moneyText, fontWeight: '700' },
-  content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32, gap: 4 },
-  notice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: colors.moneyEstimateSurface,
-  },
-  noticeText: { fontSize: 13, fontWeight: '600', color: colors.moneyEstimate },
-  pressed: { backgroundColor: colors.background },
-  balanceToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 },
-  balanceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 9 },
-  balanceNote: { paddingHorizontal: 14, paddingBottom: 8 },
-  filterBalance: { paddingBottom: 4 },
+  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32, gap: 4 },
+  estimate: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8 },
   message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
   card: {
     borderRadius: 16,
@@ -414,14 +272,28 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10 },
   divided: { borderTopWidth: 1, borderTopColor: colors.border },
+  pressed: { backgroundColor: colors.background },
   date: { width: 44, fontSize: 13, fontWeight: '600', color: colors.textMuted },
   rowName: { fontSize: 14, fontWeight: '600', color: colors.text },
   amount: { fontSize: 15, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
+  plus: { color: colors.moneyIncome },
   pendingCard: { borderColor: colors.moneyEstimateSurface, backgroundColor: colors.surface },
-  footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 4, backgroundColor: colors.surface },
-  footerNote: { fontSize: 12, fontWeight: '600', color: colors.textMuted, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.moneyEstimateSurface,
+  },
+  noticeText: { fontSize: 13, fontWeight: '600', color: colors.moneyEstimate },
+  balanceToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, marginTop: 8 },
+  balanceNote: { paddingHorizontal: 14, paddingBottom: 8 },
+  footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1, borderTopColor: colors.border, gap: 6 },
+  footerNote: { fontSize: 12, fontWeight: '500', color: colors.textFaint, textAlign: 'center' },
   closedNote: { fontSize: 13, fontWeight: '600', color: colors.textMuted, textAlign: 'center', fontVariant: ['tabular-nums'] },
-  secondary: { paddingVertical: 6, alignItems: 'center' },
+  secondary: { paddingVertical: 10, alignItems: 'center' },
   reopenText: { fontSize: 13, fontWeight: '700', color: colors.danger },
-  skipText: { fontSize: 12, fontWeight: '600', color: colors.textFaint },
 });

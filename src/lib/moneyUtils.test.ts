@@ -8,7 +8,6 @@ import {
   balanceChecks,
   baseIconKey,
   buildCategoryAnalysis,
-  buildCategoryYearAnalysis,
   recurringInYear,
   yearActiveMonthKeys,
   canCardNextPeriod,
@@ -392,7 +391,6 @@ const record = (id: string, fields: Partial<MoneyRecord>): MoneyRecord => ({
   recurringId: null,
   month: null,
   cardNextPeriod: false,
-  checkedAt: null,
   items: [],
   ...fields,
 });
@@ -1135,24 +1133,16 @@ assert.equal(yearOfMonth('2027-02'), 2027, '2027年2月は2027年');
   assert.deepEqual(special.records.map((r) => r.id), ['a5'], '特別費の記録だけ');
 
   // 年の分析は月の流用ではなく年の基準（2026-10-15）。使い始めた月（8月）から12月までの5か月が年の予算
-  assert.deepEqual(yearActiveMonthKeys(rs, 2026), ['2026-08', '2026-09', '2026-10', '2026-11', '2026-12']);
-  assert.equal(yearActiveMonthKeys(rs, 2027).length, 12, '先の年は全部の月');
+  assert.deepEqual(yearActiveMonthKeys(rs, 2026), ['2026-08', '2026-09', '2026-10', '2026-11', '2026-12'], '使い始めた年だけ、使い始めた月から');
+  assert.equal(yearActiveMonthKeys(rs, 2027).length, 12, '次の年からは、その年すべて');
   assert.deepEqual(yearActiveMonthKeys(rs, 2025), [], '使い始める前の年は無い');
-  const yearly = buildCategoryYearAnalysis(rs, cats, buds, 'food', 2026, '2026-10');
-  assert.equal(yearly.actual, 8900, '年の実績');
-  assert.equal(yearly.budget, 250000, '年の予算＝使い始めた月から12月までの月の予算の合計');
-  assert.equal(yearly.diff, 241100);
-  assert.equal(yearly.yearly?.activeMonths, 5);
-  assert.equal(yearly.yearly?.elapsedMonths, 3, '今月までの月');
-  assert.equal(yearly.yearly?.elapsedBudget, 150000);
-  assert.equal(yearly.yearly?.elapsedActual, 8900);
-  assert.equal(yearly.yearly?.average, 4450, '実績のある月の平均');
-  assert.equal(yearly.yearly?.monthlyBudget, 50000);
-  assert.equal(yearly.yearly?.forecast, 4000 + 4900 + 50000 * 3, '過ぎた月は実績、今月と先の月は予算');
-  assert.equal(yearly.previous, null, '前年に記録のある月が無ければ比べない');
-  assert.equal(yearly.yearly?.comparedMonths, 0);
-  assert.equal(yearly.months.length, 5);
-  assert.equal(yearly.months[0].budget, 50000, '月ごとに月の予算を添える');
+  // 年の振り返りの月ごとは、月の実績と月の予算を並べる
+  const wholeYearMonths = buildCategoryAnalysis(rs, cats, buds, 'food', yearActiveMonthKeys(rs, 2026), null);
+  assert.equal(wholeYearMonths.actual, 8900, '年の実績');
+  assert.equal(wholeYearMonths.budget, 250000, '年の予算＝使い始めた月から12月までの月の予算の合計');
+  assert.deepEqual(wholeYearMonths.months.map((m) => [m.monthKey, m.amount, m.budget]).slice(0, 3), [
+    ['2026-08', 4000, 50000], ['2026-09', 4900, 50000], ['2026-10', 0, 50000],
+  ], '月ごとの実績と月の予算');
 }
 
 // ---- その年に効く固定の収支（予算の画面） ----

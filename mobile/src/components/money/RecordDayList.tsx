@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Check, ClipboardList, Plus, Scale } from 'lucide-react-native';
+import { ClipboardList, Plus, Scale } from 'lucide-react-native';
 import type { MoneyCategory, MoneyRecord, MoneyWallet } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { WEEKDAY_LABELS } from '@/lib/dateUtils';
@@ -66,18 +66,16 @@ export interface RecordDay {
 }
 
 /**
- * 月の締めの画面で、各カードにチェックボックスを出すための指定（docs/kakei.md §4.5。2026-10-15）。
- * 見込みの記録はチェックボックスの代わりに「確定」を出す（今の額で確定し、そのままチェックも付く）。
+ * 月の締めの画面で、見込みの記録に「確定」を出すための指定（docs/kakei.md §4.5。2026-10-16）。
+ * 「確定」は今の額のまま確定する。額が違うものは、カードを押して記録の詳細で直す。
  */
 export interface RecordClosing {
-  checked: (record: MoneyRecord) => boolean;
-  /** 締めた月は、チェックを変えられない。 */
+  /** 締めた月は、確定できない。 */
   locked: boolean;
-  onToggle: (record: MoneyRecord) => void;
   onConfirm: (record: MoneyRecord) => void;
   /** 確定の処理中の記録（二度押せないように）。 */
   busyId: string | null;
-  /** カードの下に添える注意（記録の id → 文言。カードの利用通知と見比べた結果など）。 */
+  /** カードの下に添える注意（記録の id → 文言。カードの利用通知と額が違うものなど）。 */
   notes: ReadonlyMap<string, string>;
 }
 
@@ -91,34 +89,19 @@ interface RecordDayBlockProps {
   closing?: RecordClosing;
 }
 
-/** 月の締めのカードの右上。見込みは「確定」、ほかはチェックボックス。 */
+/** 月の締めのカードの右上。見込みの記録だけ「確定」を出す。 */
 function ClosingControl({ record, closing }: { record: MoneyRecord; closing: RecordClosing }) {
-  if (record.isEstimate) {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="この額で確定してチェックする"
-        disabled={closing.locked || closing.busyId !== null}
-        onPress={() => closing.onConfirm(record)}
-        hitSlop={6}
-        style={[styles.confirm, closing.busyId === record.id && styles.confirmBusy]}
-      >
-        <Text style={styles.confirmText}>確定</Text>
-      </Pressable>
-    );
-  }
-  const checked = closing.checked(record);
+  if (!record.isEstimate) return null;
   return (
     <Pressable
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked, disabled: closing.locked }}
-      accessibilityLabel="確かめた"
-      disabled={closing.locked}
-      onPress={() => closing.onToggle(record)}
-      hitSlop={8}
-      style={[styles.checkbox, checked && styles.checkboxOn, closing.locked && styles.checkboxLocked]}
+      accessibilityRole="button"
+      accessibilityLabel="この額で確定する"
+      disabled={closing.locked || closing.busyId !== null}
+      onPress={() => closing.onConfirm(record)}
+      hitSlop={6}
+      style={[styles.confirm, closing.busyId === record.id && styles.confirmBusy]}
     >
-      {checked && <Check size={16} color="#ffffff" />}
+      <Text style={styles.confirmText}>確定</Text>
     </Pressable>
   );
 }
@@ -361,19 +344,7 @@ const styles = StyleSheet.create({
   memo: { marginTop: 5, flexDirection: 'row', alignItems: 'center', gap: 6 },
   memoText: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.textSubtle },
   pressed: { backgroundColor: colors.background },
-  // 月の締め: チェックボックス・見込みの「確定」・カードの下の注意。
-  checkbox: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
-    borderWidth: 2,
-    borderColor: colors.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
-  },
-  checkboxOn: { backgroundColor: colors.money, borderColor: colors.money },
-  checkboxLocked: { opacity: 0.5 },
+  // 月の締め: 見込みの「確定」・カードの下の注意。
   confirm: { marginLeft: 4, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, backgroundColor: colors.moneyEstimateSurface },
   confirmBusy: { opacity: 0.5 },
   confirmText: { fontSize: 13, fontWeight: '700', color: colors.moneyEstimate },
