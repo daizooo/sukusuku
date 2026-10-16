@@ -127,9 +127,14 @@ export async function handleNotificationAction(
   if (inFlight.has(key)) return true;
   inFlight.add(key);
 
+  const data = (request.content.data ?? {}) as NotificationData;
+  const taskId = stringOf(data.taskId);
+
+  // Googleカレンダーのタスクと同じく、押したらすぐお知らせを消す（完了の書き込みを待たない）。
+  // できなかったときは下で本文を差し替えて出し直す。
+  await dismissTaskNotifications(request.identifier, taskId);
+
   try {
-    const data = (request.content.data ?? {}) as NotificationData;
-    const taskId = stringOf(data.taskId);
     if (!taskId) throw new Error(`お知らせにタスクのidがありません: ${JSON.stringify(Object.keys(data))}`);
     await completeTask(taskId, stringOf(data.date));
     console.log('[notification-action] completed', taskId, stringOf(data.date));
@@ -144,8 +149,26 @@ export async function handleNotificationAction(
   } finally {
     inFlight.delete(key);
   }
-  await Notifications.dismissNotificationAsync(request.identifier).catch((err: unknown) =>
+  return true;
+}
+
+/**
+ * このタスクのお知らせを端末から消す。押されたお知らせのidで消し、idが合わなかった場合に備えて、
+ * 出ているお知らせのうち同じタスクのものも消す（同じ用件が積み上がっていても残さない）。
+ */
+async function dismissTaskNotifications(identifier: string, taskId: string | null): Promise<void> {
+  await Notifications.dismissNotificationAsync(identifier).catch((err: unknown) =>
     console.error('Failed to dismiss notification:', err),
   );
-  return true;
+  if (!taskId) return;
+  try {
+    const presented = await Notifications.getPresentedNotificationsAsync();
+    await Promise.all(
+      presented
+        .filter((n) => stringOf((n.request.content.data as NotificationData | undefined)?.taskId) === taskId)
+        .map((n) => Notifications.dismissNotificationAsync(n.request.identifier)),
+    );
+  } catch (err) {
+    console.error('Failed to dismiss presented notifications:', err);
+  }
 }

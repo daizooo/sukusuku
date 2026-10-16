@@ -24,9 +24,15 @@ if (Platform.OS === 'android') {
         error ? String(error) : 'no-error',
         data ? JSON.stringify(data).slice(0, 800) : 'no-data',
       );
-      if (error || !data || !('actionIdentifier' in data)) return;
+      if (error || !data) return;
+      // 押下は NotificationResponse そのもの、または data に包まれて届く（版・経路で形が違いうる）。
+      const response = [data, (data as { data?: unknown }).data].find(
+        (v): v is Notifications.NotificationResponse =>
+          !!v && typeof v === 'object' && 'actionIdentifier' in v && 'notification' in v,
+      );
+      if (!response) return;
       try {
-        await handleNotificationAction(data);
+        await handleNotificationAction(response);
       } catch (err) {
         console.error('Failed to handle notification action:', err);
       }
