@@ -9,7 +9,7 @@ import RecordItemGroups from '@/components/money/RecordItemGroups';
 import { NextPeriodBadge, PrimaryButton, ScreenHeader, WalletTypeIcon } from '@/components/money/moneyVisual';
 
 // 記録の詳細（読むだけ。docs/kakei.md §3.2）。PWA版の `src/components/sukusuku/money/RecordDetailView.tsx` と同じ並び・文言。
-// 既にある記録を開くと、まずこれを見せる（2026-10-15。Zaim と同じ）。直すときは下の「編集する」で入力画面（RecordEditor）へ。
+// 既にある記録を開くと、まずこれを見せる（2026-10-15。Zaim と同じ）。直すときは下の「編集する」か、日付・金額・出金元・お店・品目のどこかを押して入力画面（RecordEditor）へ。
 // 日付を中央、金額を一番大きく、出金元とお店はアイコンつきの2行、その下に品目一覧（カテゴリごとに内訳。RecordItemGroups）。
 
 interface RecordDetailViewProps {
@@ -74,38 +74,41 @@ export default function RecordDetailView({
       />
       <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
         {notice}
-        <Text style={styles.date}>{formatDateWithYear(new Date(`${occurredOn}T00:00:00`))}</Text>
-        <Text style={[styles.amount, kind === 'income' && styles.income, kind === 'transfer' && styles.muted]}>{formatYen(total)}</Text>
-        <View style={styles.rows}>
-          <WalletRow wallet={wallet} badge={cardNextPeriod} />
-          {kind === 'transfer' ? (
-            <View style={styles.row}>
-              <View style={styles.rowIcon}>
-                <ArrowRight size={20} color={colors.textMuted} />
-              </View>
-              <Text style={styles.rowText} numberOfLines={1}>
-                {toWallet?.name ?? '入金先なし'}
-              </Text>
-            </View>
-          ) : (
-            store !== '' && (
+        {/* 日付・金額・出金元・お店・品目のどこを押しても編集画面へ（2026-10-16）。 */}
+        <Pressable accessibilityRole="button" accessibilityLabel="この記録を編集する" onPress={onEdit}>
+          <Text style={styles.date}>{formatDateWithYear(new Date(`${occurredOn}T00:00:00`))}</Text>
+          <Text style={[styles.amount, kind === 'income' && styles.income, kind === 'transfer' && styles.muted]}>{formatYen(total)}</Text>
+          <View style={styles.rows}>
+            <WalletRow wallet={wallet} badge={cardNextPeriod} />
+            {kind === 'transfer' ? (
               <View style={styles.row}>
                 <View style={styles.rowIcon}>
-                  <Store size={20} color={colors.textMuted} />
+                  <ArrowRight size={20} color={colors.textMuted} />
                 </View>
                 <Text style={styles.rowText} numberOfLines={1}>
-                  {store}
+                  {toWallet?.name ?? '入金先なし'}
                 </Text>
               </View>
-            )
+            ) : (
+              store !== '' && (
+                <View style={styles.row}>
+                  <View style={styles.rowIcon}>
+                    <Store size={20} color={colors.textMuted} />
+                  </View>
+                  <Text style={styles.rowText} numberOfLines={1}>
+                    {store}
+                  </Text>
+                </View>
+              )
+            )}
+          </View>
+          {kind !== 'transfer' && groups.length > 0 && (
+            <>
+              <Text style={styles.section}>品目一覧</Text>
+              <RecordItemGroups groups={groups} title={groupTitle} iconKey={groupIconKey} size="large" />
+            </>
           )}
-        </View>
-        {kind !== 'transfer' && groups.length > 0 && (
-          <>
-            <Text style={styles.section}>品目一覧</Text>
-            <RecordItemGroups groups={groups} title={groupTitle} iconKey={groupIconKey} size="large" />
-          </>
-        )}
+        </Pressable>
       </ScrollView>
       <View style={styles.footer}>
         <PrimaryButton label="編集する" onPress={onEdit} />

@@ -639,22 +639,18 @@ export default function RecordEditor({
           <>
             <View style={styles.itemsHead}>
               <Text style={styles.itemsTitle}>品目一覧</Text>
-              <View style={styles.itemsTools}>
-                {record && !receipt && onScanReceipt && (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="レシートを撮って品目を入れる"
-                    onPress={() => onScanReceipt(record)}
-                    hitSlop={8}
-                    style={styles.camera}
-                  >
-                    <Camera size={16} color={colors.textSubtle} />
-                  </Pressable>
-                )}
-                <Pressable accessibilityRole="button" onPress={() => push({ type: 'category', purpose: 'add' })} hitSlop={8}>
-                  <Text style={styles.itemsLink}>カテゴリを追加</Text>
+              {record && !receipt && onScanReceipt && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="レシートから追加"
+                  onPress={() => onScanReceipt(record)}
+                  hitSlop={8}
+                  style={styles.camera}
+                >
+                  <Camera size={16} color={colors.textSubtle} />
+                  <Text style={styles.cameraText}>レシートから追加</Text>
                 </Pressable>
-              </View>
+              )}
             </View>
             <RecordItemGroups groups={groups} title={groupTitle} iconKey={groupIconKey} size="small" onOpen={openGroup} />
             <Pressable
@@ -738,9 +734,9 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   itemsTitle: { fontSize: 14, fontWeight: '700', color: colors.textMuted },
-  itemsTools: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  camera: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.neutralSurface },
-  itemsLink: { fontSize: 13, fontWeight: '700', color: colors.money },
+  // 「レシートから追加」は右寄せ（「カテゴリを追加」の文字リンクは、下の＋と重なるので外した。2026-10-16）。
+  camera: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, height: 28, borderRadius: 14, backgroundColor: colors.neutralSurface },
+  cameraText: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },
   addGroup: { paddingHorizontal: 20, paddingVertical: 10 },
   addMark: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.moneySoft },
   // 下いっぱいの保存の帯（青）。
