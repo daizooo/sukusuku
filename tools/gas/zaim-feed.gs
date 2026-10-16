@@ -16,8 +16,13 @@
 //
 // 送ったメールのスレッドにはラベル「かぞく手帳済」を付け、次からは探さない。
 // 送れなかったもの（かぞく手帳が止まっていた等）はラベルを付けず、次の回にまた送る。
+// かぞく手帳が「覚えるものが無い」と答えたもの（Amazon の合計0円の注文）には、「かぞく手帳済」ではなくラベル「かぞく手帳対象外」を付ける
+// （2026-10-17 に足した。前の版を貼ってある場合は貼り直す。前の版のままでも、0円の注文には「かぞく手帳済」が付くだけで困らない）。
+// ラベルを付けたスレッドは、受信トレイからアーカイブする（ラベルの中には残る。2026-10-17）。
+// すでにラベルが付いて受信トレイに残っているものは、関数 archiveLabeledThreads を手で実行すると片づく（100件ずつ。残りがあれば繰り返す）。
 
 var LABEL = 'かぞく手帳済';
+var LABEL_SKIPPED = 'かぞく手帳対象外';
 var BATCH = 50; // Edge Function が1回に受ける数
 // 送るメールの差出人（Zaim・カード会社・Amazon の注文）
 var SENDERS = ['info@zaim.net', 'statement@vpass.ne.jp', 'rakuten-card.co.jp', 'auto-confirm@amazon.co.jp'];
@@ -37,9 +42,10 @@ function sendZaimMails() {
   var token = props.getProperty('FEED_TOKEN');
   var startAt = new Date(props.getProperty('START_AT') || 0);
   var label = GmailApp.getUserLabelByName(LABEL) || GmailApp.createLabel(LABEL);
+  var skippedLabel = GmailApp.getUserLabelByName(LABEL_SKIPPED) || GmailApp.createLabel(LABEL_SKIPPED);
 
   var query = '{from:info@zaim.net from:statement@vpass.ne.jp from:rakuten-card.co.jp from:auto-confirm@amazon.co.jp}' +
-    ' {subject:入金がありました subject:出金がありました subject:利用 subject:注文済み} -label:' + LABEL +
+    ' {subject:入金がありました subject:出金がありました subject:利用 subject:注文済み} -label:' + LABEL + ' -label:' + LABEL_SKIPPED +
     ' after:' + Utilities.formatDate(new Date(startAt.getTime() - 86400000), 'Asia/Tokyo', 'yyyy/MM/dd');
   var threads = GmailApp.search(query, 0, BATCH);
   if (threads.length === 0) return;
@@ -80,10 +86,26 @@ function sendZaimMails() {
     JSON.parse(res.getContentText()).results.forEach(function (r) { results[r.id] = r.status; });
   }
 
-  // スレッドの中のメールが全部受け付けられたら、ラベルを付ける（開始より前だけのスレッドも付ける）
+  // スレッドの中のメールが全部受け付けられたら、ラベルを付ける（開始より前だけのスレッドも付ける）。
+  // 全部が「覚えるものが無い」（skipped）なら「対象外」、そうでなければ「済」
   Object.keys(byThread).forEach(function (key) {
     var entry = byThread[key];
     var done = entry.ids.every(function (id) { return results[id] && results[id] !== 'error'; });
-    if (done) entry.thread.addLabel(label);
+    if (!done) return;
+    var allSkipped = entry.ids.length > 0 && entry.ids.every(function (id) { return results[id] === 'skipped'; });
+    entry.thread.addLabel(allSkipped ? skippedLabel : label);
+    // 受信トレイからはアーカイブする（ラベルの中には残る。未読のまま）
+    entry.thread.moveToArchive();
   });
+}
+
+// すでにラベルが付いて受信トレイに残っているスレッドを、アーカイブする（手で実行する。100件ずつ）
+function archiveLabeledThreads() {
+  var count = 0;
+  [LABEL, LABEL_SKIPPED].forEach(function (name) {
+    var threads = GmailApp.search('in:inbox label:' + name, 0, 100);
+    threads.forEach(function (thread) { thread.moveToArchive(); });
+    count += threads.length;
+  });
+  console.log('アーカイブした数: ' + count);
 }

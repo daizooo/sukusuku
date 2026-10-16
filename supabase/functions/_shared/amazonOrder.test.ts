@@ -102,7 +102,13 @@ assert.equal(
 
 // 合計が0円の注文（品目に値段が載っていても、カードに請求が立たない）は覚えない。2026-10-17の実物
 const zeroBody = '注文番号 503-6829870-0030251\n\nキュレル リップケアスティック 4.2g\n数量: 1\n￥935\n\nキュレル リップケアバーム\n数量: 1\n￥1,320\n\n合計\n￥0\n';
-assert.equal(parseAmazonOrderMail('注文済み: 「キュレル」とさらに1点の商品', zeroBody), null);
+// （読めない null とは区別して、空の配列。Apps Script が「対象外」のラベルを付ける）
+assert.deepEqual(parseAmazonOrderMail('注文済み: 「キュレル」とさらに1点の商品', zeroBody), []);
+// 品目がすべて0円の注文も同じ
+assert.deepEqual(
+  parseAmazonOrderMail('注文済み: 「A」', '注文番号 111-1111111-1111111\n* 無料サンプル\n  数量: 1\n  ￥0\n'),
+  [],
+);
 // 0円の注文と払う注文が1通に入るときは、払う注文だけ読む
 assert.deepEqual(
   parseAmazonOrderMail('注文済み: 「A」', `${zeroBody}注文番号 111-1111111-1111111\n* B\n  数量: 1\n  ￥500\n合計\n￥500\n`)?.map(
