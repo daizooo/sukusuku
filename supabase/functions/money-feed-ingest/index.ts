@@ -178,6 +178,8 @@ async function receiveAmazonOrders(
     console.error('amazon order mail unreadable');
     return 'ignored';
   }
+  // 読めたが、覚えるものが無い（合計0円の注文など）。Apps Script が「対象外」のラベルを付ける
+  if (orders.length === 0) return 'skipped';
 
   const names = [...new Set(orders.flatMap((order) => order.lines.map((line) => line.receiptName)))];
   const categories = await categoriesForOrderLines(admin, familyId, names);
