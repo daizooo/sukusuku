@@ -121,21 +121,20 @@ export default function BudgetEditor({
         <button type="button" aria-label="次の年" onClick={() => setYear((current) => current + 1)} className={yearButtonClass}>
           <ChevronRight size={18} />
         </button>
-        <span className="flex-1 text-right text-[11px] font-medium text-gray-400">1月〜12月・来年以降も決められます</span>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pb-8">
         <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
           <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
-            <span className="flex-1 text-[13px] font-semibold text-gray-500">固定収入（年）</span>
+            <span className="flex-1 text-[13px] font-semibold text-gray-500">固定収入</span>
             <span className={`text-base font-extrabold tabular-nums ${incomeAmountClass}`}>{formatYen(incomeTotal)}</span>
           </div>
           <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
-            <span className="flex-1 text-[13px] font-semibold text-gray-500">支出の予算（年。固定費を含む）</span>
+            <span className="flex-1 text-[13px] font-semibold text-gray-500">支出の予算</span>
             <span className="text-base font-extrabold tabular-nums text-gray-900">{formatYen(expenseTotal)}</span>
           </div>
           <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
-            <span className="flex-1 text-[13px] font-semibold text-gray-500">年の見込み（収入 − 予算）</span>
+            <span className="flex-1 text-[13px] font-semibold text-gray-500">収支</span>
             <span className={`text-base font-extrabold tabular-nums ${plan > 0 ? incomeAmountClass : 'text-gray-900'}`}>
               {plan < 0 ? '−' : ''}
               {formatYen(plan)}
@@ -143,7 +142,7 @@ export default function BudgetEditor({
           </div>
         </div>
 
-        <SectionHeader compact title="大分類ごとの予算" hint="押すと月ごとに決める" />
+        <SectionHeader compact title="大分類ごとの予算" />
         {rows.length === 0 ? (
           <p className="py-4 text-center text-[13px] font-medium text-gray-400">生活費の大分類がありません。先に「カテゴリ」で作ってください</p>
         ) : (
@@ -172,7 +171,7 @@ export default function BudgetEditor({
           </div>
         )}
 
-        <SectionHeader compact title={`${formatYear(year)}に効く固定の収支`} hint="設定の固定収入・固定支出で直す" />
+        <SectionHeader compact title={`${formatYear(year)}に効く固定の収支`} />
         {fixedRows.length === 0 ? (
           <p className="py-4 text-center text-[13px] font-medium text-gray-400">この年に効く固定収入・固定支出はありません</p>
         ) : (
@@ -196,9 +195,6 @@ export default function BudgetEditor({
             })}
           </div>
         )}
-        <p className="pt-2 text-[11px] leading-relaxed text-gray-400">
-          固定支出は、結びついた大分類の月の予算に自動で足されます。期間（開始月・終了月）と記録する月を決めた固定収入・固定支出は、年をまたいでも、その年の月の分だけを数えます。
-        </p>
       </div>
 
       {editing !== null && (
@@ -265,9 +261,6 @@ function BudgetModal({
       footer={<PrimaryButton label="保存する" onClick={submit} />}
     >
       <div className="space-y-2">
-        <p className="text-[11px] text-gray-400">
-          月ごとに決められます。このカテゴリにひもづく固定費は、その月の予算に自動で足されます（固定支出の設定の「カテゴリ」）。空の月は、固定費だけです
-        </p>
         <div className="flex items-center gap-2">
           <input
             className={`${inputClass} tabular-nums`}

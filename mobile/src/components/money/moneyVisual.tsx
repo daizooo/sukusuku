@@ -28,8 +28,8 @@ export const type = StyleSheet.create({
   sub: { fontSize: 12, fontWeight: '500', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   /** 薄い補足（予算・件数など）。 */
   faint: { fontSize: 11, fontWeight: '500', color: colors.textFaint, fontVariant: ['tabular-nums'] },
-  /** マイナス・超過。 */
-  minus: { color: colors.moneyOver },
+  /** マイナス・超過は、赤にせず「−」をつけた黒（黒字は緑。2026-10-16に改めて徹底）。 */
+  minus: { color: colors.text },
   /** 押せる文字。 */
   link: { fontSize: 13, fontWeight: '700', color: colors.money },
 });

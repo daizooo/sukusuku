@@ -21,6 +21,7 @@ import {
   walletBalanceOn,
 } from '@/lib/moneyUtils';
 import RecordDayList, { type RecordClosing } from '@/components/money/RecordDayList';
+import SelectField from '@/components/ui/SelectField';
 import { EstimateBadge, Hero, PrimaryButton, ScreenHeader, SectionHeader, StatRow, type } from '@/components/money/moneyVisual';
 
 // 月の締め（振り返りの確定。docs/kakei.md §4.5）。PWA版の `src/components/sukusuku/money/MonthCloseScreen.tsx` と同じ並び・文言。
@@ -194,28 +195,29 @@ export default function MonthCloseScreen({
               <View style={styles.estimate}>
                 <EstimateBadge />
                 <Text style={[type.faint, styles.flex]}>
-                  見込みの額 {estimates.length}件（{formatYen(estimateAmount)}）を含みます。額を確かめて、直すか「確定」を押してください
+                  見込み {estimates.length}件（{formatYen(estimateAmount)}）
                 </Text>
               </View>
             )}
           </Hero>
 
-          <SectionHeader compact title="記録" hint={`${shown.length}件`} />
-          {usedWallets.length > 1 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} {...swipeBoundary}>
-              {[{ id: 'all', name: 'すべて' }, ...usedWallets.map((wallet) => ({ id: wallet.id, name: wallet.name }))].map((chip) => (
-                <Pressable
-                  key={chip.id}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: filter === chip.id }}
-                  onPress={() => setFilter(chip.id)}
-                  style={[styles.chip, filter === chip.id && styles.chipSelected]}
-                >
-                  <Text style={[styles.chipText, filter === chip.id && styles.chipTextSelected]}>{chip.name}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
+          <SectionHeader
+            compact
+            title="記録"
+            hint={`${shown.length}件`}
+            right={
+              usedWallets.length > 1 ? (
+                <SelectField
+                  accessibilityLabel="口座"
+                  options={[{ value: 'all', label: 'すべての口座' }, ...usedWallets.map((wallet) => ({ value: wallet.id, label: wallet.name }))]}
+                  value={filter}
+                  onChange={setFilter}
+                  style={styles.filterField}
+                  textStyle={styles.filterText}
+                />
+              ) : undefined
+            }
+          />
           {filterWallet !== null && filterBalance !== undefined && (
             <Text style={[type.faint, styles.filterBalance]}>
               {filterWallet.name} の月末の{filterWallet.type === 'card' ? '利用残高' : '残高'} {formatBalance(filterBalance.amount)}
@@ -241,22 +243,18 @@ export default function MonthCloseScreen({
                   </View>
                 ))}
               </View>
-              <Text style={type.faint}>
-                固定収入・固定費で、この月のうちにまだ自動で記録されていないものです。上の収支には入っていません。記録されてから締めると確かです
-              </Text>
             </>
           )}
 
           {feedCount > 0 && (
             <Pressable accessibilityRole="button" onPress={onOpenFeed} style={({ pressed }) => [styles.notice, pressed && styles.pressed]}>
-              <Text style={[styles.noticeText, styles.flex]}>未確認の明細が{feedCount}件あります。先に片づけると確かです</Text>
+              <Text style={[styles.noticeText, styles.flex]}>未確認の明細 {feedCount}件</Text>
               <ChevronRight size={16} color={colors.textMuted} />
             </Pressable>
           )}
 
           <Pressable accessibilityRole="button" onPress={() => setShowBalances((open) => !open)} style={styles.balanceToggle}>
             <Text style={[type.title, styles.flex]}>月末の残高</Text>
-            <Text style={type.faint}>{showBalances ? '閉じる' : '実際の残高と見比べる'}</Text>
             {showBalances ? <ChevronUp size={16} color={colors.textFaint} /> : <ChevronDown size={16} color={colors.textFaint} />}
           </Pressable>
           {showBalances && (
@@ -270,9 +268,6 @@ export default function MonthCloseScreen({
                   <Text style={styles.amount}>{formatBalance(row.amount)}</Text>
                 </View>
               ))}
-              <Text style={[type.faint, styles.balanceNote]}>
-                {lastDay.slice(5).replace('-', '/')}の終わりの、記録から出した額です。違えば、口座の面で残高を補正します
-              </Text>
             </View>
           )}
         </ScrollView>
@@ -287,7 +282,6 @@ export default function MonthCloseScreen({
           ) : (
             <>
               <PrimaryButton label="この月を締める" onPress={closeMonth} />
-              <Text style={styles.footerNote}>見込みのままの記録や未確認の明細が残っていても締められます</Text>
             </>
           )}
         </View>
@@ -301,11 +295,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32, gap: 4 },
   estimate: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8 },
-  chips: { gap: 6, paddingBottom: 8 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.neutralSurface },
-  chipSelected: { backgroundColor: colors.moneySoft },
-  chipText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
-  chipTextSelected: { color: colors.moneyText, fontWeight: '700' },
+  filterField: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, backgroundColor: colors.neutralSurface },
+  filterText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
   filterBalance: { paddingBottom: 6 },
   message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
   card: {
@@ -335,9 +326,7 @@ const styles = StyleSheet.create({
   },
   noticeText: { fontSize: 13, fontWeight: '600', color: colors.moneyEstimate },
   balanceToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, marginTop: 8 },
-  balanceNote: { paddingHorizontal: 14, paddingBottom: 8 },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1, borderTopColor: colors.border, gap: 6 },
-  footerNote: { fontSize: 12, fontWeight: '500', color: colors.textFaint, textAlign: 'center' },
   closedNote: { fontSize: 13, fontWeight: '600', color: colors.textMuted, textAlign: 'center', fontVariant: ['tabular-nums'] },
   secondary: { paddingVertical: 10, alignItems: 'center' },
   reopenText: { fontSize: 13, fontWeight: '700', color: colors.danger },

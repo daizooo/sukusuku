@@ -19,7 +19,6 @@ import {
   walletBalanceOn,
 } from '@/lib/moneyUtils';
 import RecordDayList, { type RecordClosing } from './RecordDayList';
-import { swipeBoundary } from '../ui/useSwipeNavigation';
 import { EstimateBadge, FullScreen, Hero, PrimaryButton, ScreenHeader, SectionHeader, StatRow, cardClass, incomeAmountClass, type } from './moneyVisual';
 
 // 月の締め（振り返りの確定。docs/kakei.md §4.5）。mobile版の `mobile/src/components/money/MonthCloseScreen.tsx` と同じ並び・文言。
@@ -188,27 +187,87 @@ export default function MonthCloseScreen({
             <div className="flex items-center gap-2 pt-2">
               <EstimateBadge />
               <p className={`min-w-0 flex-1 ${type.faint}`}>
-                見込みの額 {estimates.length}件（{formatYen(estimateAmount)}）を含みます。額を確かめて、直すか「確定」を押してください
+                見込み {estimates.length}件（{formatYen(estimateAmount)}）
               </p>
             </div>
           )}
         </Hero>
 
-        <SectionHeader compact title="記録" hint={`${shown.length}件`} />
-        {usedWallets.length > 1 && (
-          <div className="flex gap-1.5 overflow-x-auto pb-2" {...swipeBoundary}>
-            {[{ id: 'all', name: 'すべて' }, ...usedWallets.map((wallet) => ({ id: wallet.id, name: wallet.name }))].map((chip) => (
-              <button
-                key={chip.id}
-                type="button"
-                aria-pressed={filter === chip.id}
-                onClick={() => setFilter(chip.id)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] ${
-                  filter === chip.id ? 'bg-blue-100 font-bold text-blue-800' : 'bg-gray-100 font-semibold text-gray-700'
-                }`}
+        <SectionHeader
+          compact
+          title="記録"
+          hint={`${shown.length}件`}
+          right={
+            usedWallets.length > 1 ? (
+              <select
+                aria-label="口座で絞り込む"
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                className="max-w-[10rem] rounded-full bg-gray-100 px-3 py-1.5 text-[13px] font-semibold text-gray-700"
               >
-                {chip.name}
-              </button>
+                <option value="all">すべての口座</option>
+                {usedWallets.map((wallet) => (
+                  <option key={wallet.id} value={wallet.id}>
+                    {wallet.name}
+                  </option>
+                ))}
+              </select>
+            ) : undefined
+          }
+        />
+        {filterWallet !== null && filterBalance !== undefined && (
+          <p className={`${type.faint} pb-1.5`}>
+            {filterWallet.name} の月末の{filterWallet.type === 'card' ? '利用残高' : '残高'} {formatBalance(filterBalance.amount)}
+          </p>
+        )}
+        {shown.length === 0 ? (
+          <p className="py-4 text-center text-[13px] text-gray-400">
+            {inMonth.length === 0 ? 'この月の記録はありません' : 'この口座の記録はありません'}
+          </p>
+        ) : (
+          <RecordDayList records={shown} categories={categories} wallets={wallets} onOpen={onOpenRecord} closing={closing} />
+        )}
+
+        {pending.length > 0 && (
+          <>
+            <SectionHeader compact title="これから自動で記録されるもの" hint={`${pending.length}件`} />
+            <div className="overflow-hidden rounded-2xl border border-amber-100 bg-white">
+              {pending.map((entry, index) => (
+                <div key={entry.rule.id} className={`flex items-center gap-2.5 px-3.5 py-2.5 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
+                  <span className="w-11 shrink-0 text-[13px] font-semibold text-gray-500 tabular-nums">{formatShortDate(entry.date)}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{ruleTitle(entry.rule, categories)}</span>
+                  <span className={`text-[15px] font-extrabold tabular-nums ${entry.rule.kind === 'income' ? incomeAmountClass : 'text-gray-900'}`}>
+                    {formatYen(entry.amount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {feedCount > 0 && (
+          <button
+            type="button"
+            onClick={onOpenFeed}
+            className="mt-2 flex w-full items-center gap-2 rounded-xl bg-amber-100 px-3 py-2.5 text-left hover:bg-amber-200"
+          >
+            <span className="flex-1 text-[13px] font-semibold text-amber-800">未確認の明細 {feedCount}件</span>
+            <ChevronRight size={16} className="text-gray-500" />
+          </button>
+        )}
+
+        <button type="button" onClick={() => setShowBalances((open) => !open)} className="mt-2 flex w-full items-center gap-1.5 py-2 text-left">
+          <span className={`flex-1 ${type.title}`}>月末の残高</span>
+          {showBalances ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+        </button>
+        {showBalances && (
+          <div className={`${cardClass} overflow-hidden`}>
+            {balanceRows.map((row, index) => (
+              <div key={row.wallet.id} className={`flex items-center gap-2 px-3.5 py-2.5 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{row.wallet.name}</span>
+                <span className={type.faint}>{row.wallet.type === 'card' ? '利用残高' : '残高'}</span>
+                <span className="text-[15px] font-extrabold tabular-nums text-gray-900">{formatBalance(row.amount)}</span>
+              </div>
             ))}
           </div>
         )}
@@ -239,9 +298,6 @@ export default function MonthCloseScreen({
                 </div>
               ))}
             </div>
-            <p className={`${type.faint} mt-1`}>
-              固定収入・固定費で、この月のうちにまだ自動で記録されていないものです。上の収支には入っていません。記録されてから締めると確かです
-            </p>
           </>
         )}
 
@@ -251,14 +307,13 @@ export default function MonthCloseScreen({
             onClick={onOpenFeed}
             className="mt-2 flex w-full items-center gap-2 rounded-xl bg-amber-100 px-3 py-2.5 text-left hover:bg-amber-200"
           >
-            <span className="flex-1 text-[13px] font-semibold text-amber-800">未確認の明細が{feedCount}件あります。先に片づけると確かです</span>
+            <span className="flex-1 text-[13px] font-semibold text-amber-800">未確認の明細 {feedCount}件</span>
             <ChevronRight size={16} className="text-gray-500" />
           </button>
         )}
 
         <button type="button" onClick={() => setShowBalances((open) => !open)} className="mt-2 flex w-full items-center gap-1.5 py-2 text-left">
           <span className={`flex-1 ${type.title}`}>月末の残高</span>
-          <span className={type.faint}>{showBalances ? '閉じる' : '実際の残高と見比べる'}</span>
           {showBalances ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
         </button>
         {showBalances && (
@@ -289,7 +344,6 @@ export default function MonthCloseScreen({
         ) : (
           <>
             <PrimaryButton label="この月を締める" onClick={closeMonth} />
-            <p className="text-center text-xs font-medium text-gray-400">見込みのままの記録や未確認の明細が残っていても締められます</p>
           </>
         )}
       </div>

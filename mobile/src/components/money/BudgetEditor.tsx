@@ -135,21 +135,20 @@ export default function BudgetEditor({
           >
             <ChevronRight size={18} color={colors.textSubtle} />
           </Pressable>
-          <Text style={styles.barHint}>1月〜12月・来年以降も決められます</Text>
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.card}>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>固定収入（年）</Text>
+              <Text style={styles.summaryLabel}>固定収入</Text>
               <Text style={[styles.summaryValue, styles.income]}>{formatYen(incomeTotal)}</Text>
             </View>
             <View style={[styles.summaryRow, styles.divided]}>
-              <Text style={styles.summaryLabel}>支出の予算（年。固定費を含む）</Text>
+              <Text style={styles.summaryLabel}>支出の予算</Text>
               <Text style={styles.summaryValue}>{formatYen(expenseTotal)}</Text>
             </View>
             <View style={[styles.summaryRow, styles.divided]}>
-              <Text style={styles.summaryLabel}>年の見込み（収入 − 予算）</Text>
+              <Text style={styles.summaryLabel}>収支</Text>
               <Text style={[styles.summaryValue, plan > 0 && styles.income]}>
                 {plan < 0 ? '−' : ''}
                 {formatYen(plan)}
@@ -157,7 +156,7 @@ export default function BudgetEditor({
             </View>
           </View>
 
-          <SectionHeader compact title="大分類ごとの予算" hint="押すと月ごとに決める" />
+          <SectionHeader compact title="大分類ごとの予算" />
           {rows.length === 0 ? (
             <Text style={styles.message}>生活費の大分類がありません。先に「カテゴリ」で作ってください</Text>
           ) : (
@@ -188,7 +187,7 @@ export default function BudgetEditor({
             </View>
           )}
 
-          <SectionHeader compact title={`${formatYear(year)}に効く固定の収支`} hint="設定の固定収入・固定支出で直す" />
+          <SectionHeader compact title={`${formatYear(year)}に効く固定の収支`} />
           {fixedRows.length === 0 ? (
             <Text style={styles.message}>この年に効く固定収入・固定支出はありません</Text>
           ) : (
@@ -212,9 +211,6 @@ export default function BudgetEditor({
               })}
             </View>
           )}
-          <Text style={styles.note}>
-            固定支出は、結びついた大分類の月の予算に自動で足されます。期間（開始月・終了月）と記録する月を決めた固定収入・固定支出は、年をまたいでも、その年の月の分だけを数えます。
-          </Text>
         </ScrollView>
 
         {editing !== null && (
@@ -283,9 +279,6 @@ function BudgetSheet({
         footer={<PrimaryButton label="保存する" onPress={submit} />}
       >
         <View style={styles.field}>
-          <Text style={styles.hint}>
-            月ごとに決められます。このカテゴリにひもづく固定費は、その月の予算に自動で足されます（固定支出の設定の「カテゴリ」）。空の月は、固定費だけです
-          </Text>
           <View style={styles.bulkRow}>
             <TextInput
               style={[styles.input, styles.flex]}
