@@ -1056,6 +1056,10 @@ Amazon は注文した日ではなく**発送した日**にカードへ請求が
 - 品目の種類（カテゴリ）はこのとき決めておく: **同じ品名（`money_items.receipt_name`）の過去の品目の種類 → 無ければ Claude Haiku 5.5 に小分類の一覧から選ばせる**
   （§10.3 と同じ手本の考え方。決まらなければ空のまま）。記録の品目の `receipt_name` にはメールの品名をそのまま入れるので、
   直して保存すると次の注文の手本になる。記録の品名（`name`）は、先頭の【EC限定】などを外して40字までに縮めたもの
+- **直した品名・種類は、次から自動で当てる**（2026-10-16）。Amazon の品名は長い（検索用の言葉が並ぶ）ので、記録の入力で「Babygoo おむつ防臭袋」のように直して保存する。
+  記録を作る時点（`money_feed_amazon_create`。0113）で、**同じ品名（メールの表記 = `money_items.receipt_name`）の、いちばん新しい品目**の品名・種類を引いて入れる
+  （種類は使える種類のものだけ。無ければ注文のときに決めた短くした品名・AI の種類）。注文のあとに直したものも反映される。
+  記録の入力で保存しても `receipt_name` は持ち回る（`MoneyItem.receiptName`）ので、直したものが次の手本になる。メールの品名が少しでも変われば別の品として扱う
 
 #### 9.7.3 割り振る（Amazon のカードの利用通知が届いたとき）
 - **値引きは商品ごとに掛かる**（2026-10-16。実物で確認）。2026-09-14の注文（アタック 1,379円・ブラックキャップ 1,509円。小計 2,888円・割引 −138円・請求 2,750円）は、
@@ -1100,7 +1104,7 @@ Amazon は注文した日ではなく**発送した日**にカードへ請求が
 #### 9.7.5 DB・進め方
 - migration `0109_money_amazon_orders.sql`: 表 `money_amazon_orders`（注文番号・注文日・合計・調整額・調整額を使った明細）・`money_amazon_lines`（品名・個数・単価・金額・種類・割り振った明細。
   null がまだ割り振っていない品目）、`money_feed` に `amazon_order_id`・`amazon_line_ids`・`amazon_with_adjust`、関数 `money_amazon_order_receive`・`money_feed_amazon_create`、
-  `money_feed_receive`・`money_feed_process` の置き換え。0110〜0112: `money_feed_amazon_create` を置き換え（0112 で `money_amazon_orders.discount_used` を足し、値引きを「商品ごとの予算」で扱う形に。0111 の割引率 `discount_rate` は使わなくなった）。表はアプリからは読み書きしない（ポリシー無し）。家族の同期（`attach_family_sync`）には付ける。削除を含む文は無い
+  `money_feed_receive`・`money_feed_process` の置き換え。0110〜0113: `money_feed_amazon_create` を置き換え（0113 で、直した品名・種類を同じ品名の過去の品目から引く形に。0112 で `money_amazon_orders.discount_used` を足し、値引きを「商品ごとの予算」で扱う形に。0111 の割引率 `discount_rate` は使わなくなった）。表はアプリからは読み書きしない（ポリシー無し）。家族の同期（`attach_family_sync`）には付ける。削除を含む文は無い
 - 適用の順序: migration → Edge Function `money-feed-ingest` のデプロイ → Apps Script の貼り直し
 
 ## 10. レシートの読み取り（2026-10-12に検討）
