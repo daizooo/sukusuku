@@ -626,21 +626,17 @@ export default function RecordEditor({
           <>
             <div className="mt-3 flex items-center justify-between border-b border-gray-200 px-5 py-1.5">
               <span className="text-sm font-bold text-gray-500">品目一覧</span>
-              <span className="flex items-center gap-3.5">
-                {record && !receipt && onScanReceipt && (
-                  <button
-                    type="button"
-                    aria-label="レシートを撮って品目を入れる"
-                    onClick={() => onScanReceipt(record)}
-                    className="relative flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-700 after:absolute after:-inset-2 after:content-['']"
-                  >
-                    <Camera size={16} />
-                  </button>
-                )}
-                <button type="button" onClick={() => push({ type: 'category', purpose: 'add' })} className="text-[13px] font-bold text-blue-600">
-                  カテゴリを追加
+              {record && !receipt && onScanReceipt && (
+                <button
+                  type="button"
+                  aria-label="レシートから追加"
+                  onClick={() => onScanReceipt(record)}
+                  className="relative flex h-7 items-center gap-1.5 rounded-full bg-gray-100 px-2.5 text-[13px] font-bold text-gray-700 after:absolute after:-inset-2 after:content-['']"
+                >
+                  <Camera size={16} />
+                  レシートから追加
                 </button>
-              </span>
+              )}
             </div>
             <div className="px-5">
               <RecordItemGroups groups={groups} title={groupTitle} iconKey={groupIconKey} size="small" onOpen={openGroup} />
