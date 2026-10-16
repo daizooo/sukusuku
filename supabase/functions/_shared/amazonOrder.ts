@@ -77,7 +77,8 @@ export function parseAmazonOrderMail(subject: string, body: string): AmazonOrder
     for (const match of block.matchAll(LINE_RE)) {
       const quantity = Math.min(9999, Math.max(1, Number(match[2])));
       const unitPrice = toInt(match[3] ?? match[4]);
-      if (!Number.isSafeInteger(unitPrice) || unitPrice < 0) continue;
+      // 0円の品目（無料の商品・サンプル）は、カードに請求が立たないので覚えない
+      if (!Number.isSafeInteger(unitPrice) || unitPrice <= 0) continue;
       const receiptName = match[1].trim();
       lines.push({ receiptName, name: shortItemName(receiptName), quantity, unitPrice, amount: unitPrice * quantity });
     }
@@ -86,6 +87,8 @@ export function parseAmazonOrderMail(subject: string, body: string): AmazonOrder
     const totalMatch = TOTAL_RE.exec(block);
     const sum = lines.reduce((acc, line) => acc + line.amount, 0);
     const total = totalMatch ? toInt(totalMatch[1] ?? totalMatch[2]) : sum;
+    // 「合計 ￥0」（全額ポイント・ギフト券など）の注文は、カードに請求が立たないので覚えない
+    if (totalMatch && total === 0) continue;
     orders.push({ orderNo: head[1], lines, total: Number.isSafeInteger(total) && total > 0 ? total : sum });
   }
   return orders.length > 0 ? orders : null;
