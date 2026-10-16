@@ -121,13 +121,13 @@ const order = (over: Partial<OpenAmazonOrder> & Pick<OpenAmazonOrder, 'orderId' 
 
 // 依頼の例: 注文（A500・B300・C250）に、500円と550円の2通
 const abc = order({ orderId: 'o1', lines: [line('A', 500, 0), line('B', 300, 1), line('C', 250, 2)] });
-assert.deepEqual(matchAmazonCharge(500, [abc]), { orderId: 'o1', lineIds: ['A'], withAdjust: false });
+assert.deepEqual(matchAmazonCharge(500, [abc]), { orderId: 'o1', lineIds: ['A'], withAdjust: false, discount: 0 });
 const afterFirst = order({ orderId: 'o1', lines: [line('B', 300, 1), line('C', 250, 2)] });
-assert.deepEqual(matchAmazonCharge(550, [afterFirst]), { orderId: 'o1', lineIds: ['B', 'C'], withAdjust: false });
+assert.deepEqual(matchAmazonCharge(550, [afterFirst]), { orderId: 'o1', lineIds: ['B', 'C'], withAdjust: false, discount: 0 });
 // 先に550円が来ても同じ（A は残る）
-assert.deepEqual(matchAmazonCharge(550, [abc]), { orderId: 'o1', lineIds: ['B', 'C'], withAdjust: false });
-// 当たらない額
-assert.equal(matchAmazonCharge(777, [abc]), null);
+assert.deepEqual(matchAmazonCharge(550, [abc]), { orderId: 'o1', lineIds: ['B', 'C'], withAdjust: false, discount: 0 });
+// 当たらない額（どの組み合わせの和よりも高い）
+assert.equal(matchAmazonCharge(1500, [abc]), null);
 assert.equal(matchAmazonCharge(500, []), null);
 
 // 値引きのある注文が1回で請求された（品目の和 4859 − 252 = 合計 4607）
@@ -136,29 +136,52 @@ const discounted = order({
   adjust: -252,
   lines: [line('x', 1100, 0), line('y', 2340, 1), line('z', 1419, 2)],
 });
-assert.deepEqual(matchAmazonCharge(4607, [discounted]), { orderId: 'o2', lineIds: ['x', 'y', 'z'], withAdjust: true });
+assert.deepEqual(matchAmazonCharge(4607, [discounted]), { orderId: 'o2', lineIds: ['x', 'y', 'z'], withAdjust: true, discount: 0 });
 // 値引きが済んだ（別の請求に含めた）あとは、品目の和どおりだけ当たる
-assert.equal(matchAmazonCharge(4607, [{ ...discounted, adjustOpen: false }]), null);
+// 調整額が使えなければ、品目の和 4859 より 252 安い請求として、注文メールに出ない値引き（ポイントなど）で当てる
+assert.deepEqual(matchAmazonCharge(4607, [{ ...discounted, adjustOpen: false }]), {
+  orderId: 'o2',
+  lineIds: ['x', 'y', 'z'],
+  withAdjust: false,
+  discount: 252,
+});
 assert.deepEqual(matchAmazonCharge(1100, [{ ...discounted, adjustOpen: false }]), {
   orderId: 'o2',
   lineIds: ['x'],
   withAdjust: false,
+  discount: 0,
 });
 // 値引きを片方の請求にまとめて引いた場合（1100 − 252 = 848）
-assert.deepEqual(matchAmazonCharge(848, [discounted]), { orderId: 'o2', lineIds: ['x'], withAdjust: true });
+assert.deepEqual(matchAmazonCharge(848, [discounted]), { orderId: 'o2', lineIds: ['x'], withAdjust: true, discount: 0 });
 
 // 古い注文から当てる。同じ額が複数ある（同額の品目）ときは、先に並んだ品目
 const older = order({ orderId: 'old', orderedOn: '2026-10-01', lines: [line('p', 300, 0), line('q', 300, 1)] });
 const newer = order({ orderId: 'new', orderedOn: '2026-10-05', lines: [line('r', 300, 0)] });
-assert.deepEqual(matchAmazonCharge(300, [newer, older]), { orderId: 'old', lineIds: ['p'], withAdjust: false });
-assert.deepEqual(matchAmazonCharge(600, [newer, older]), { orderId: 'old', lineIds: ['p', 'q'], withAdjust: false });
+assert.deepEqual(matchAmazonCharge(300, [newer, older]), { orderId: 'old', lineIds: ['p'], withAdjust: false, discount: 0 });
+assert.deepEqual(matchAmazonCharge(600, [newer, older]), { orderId: 'old', lineIds: ['p', 'q'], withAdjust: false, discount: 0 });
 // 注文をまたぐ組み合わせは当てない
 assert.equal(matchAmazonCharge(900, [newer, older]), null);
+
+// ---- 注文メールに出ない値引き（ポイント・クーポン）----
+// 請求が品目の和より安い。値引きの額は載っていないので、差の割合が小さく、紛れる候補が無いときだけ当てる
+// 全部まとめて請求（1,050円の注文に、ポイントで50円引かれた1,000円）
+assert.deepEqual(matchAmazonCharge(1000, [abc]), { orderId: 'o1', lineIds: ['A', 'B', 'C'], withAdjust: false, discount: 50 });
+// 調整額（−252）の残った注文の全部が、さらにポイントで安くなった（合計4,607円から207円引き）
+assert.deepEqual(matchAmazonCharge(4400, [discounted]), { orderId: 'o2', lineIds: ['x', 'y', 'z'], withAdjust: true, discount: 207 });
+// 一部の発送で、候補が1つだけ（A500 のうち、50円引きの450円。B+C=550 は差が18%で紛れる）→ 紛れるので当てない
+assert.equal(matchAmazonCharge(450, [abc]), null);
+// 紛れる候補が無ければ当てる（B+C=550 に対して 540。ほかは差が大きすぎる）
+assert.deepEqual(matchAmazonCharge(540, [abc]), { orderId: 'o1', lineIds: ['B', 'C'], withAdjust: false, discount: 10 });
+// 値引きが大きすぎる（品目の和の2割を超える）請求は、別の請求とみなして当てない
+assert.equal(matchAmazonCharge(400, [order({ orderId: 'big', lines: [line('P', 1000, 0)] })]), null);
+// 同じ額の品目どうしなら、紛れない（先に並んだ方）
+assert.deepEqual(matchAmazonCharge(290, [older]), { orderId: 'old', lineIds: ['p'], withAdjust: false, discount: 10 });
 
 // 品目が多い注文は、残りの全部だけを当てる
 const many = order({ orderId: 'many', lines: Array.from({ length: 20 }, (_, i) => line(`m${i}`, 10, i)) });
 assert.equal(matchAmazonCharge(10, [many]), null);
 assert.equal(matchAmazonCharge(200, [many])?.lineIds.length, 20);
+assert.equal(matchAmazonCharge(195, [many])?.discount, 5);
 
 // ---- 種類の答えを読む ----
 const ids = new Set(['c1', 'c2']);

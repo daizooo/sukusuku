@@ -108,30 +108,55 @@ export interface AmazonMatch {
   lineIds: string[];
   /** 値引き・送料などの差も一緒に請求された。 */
   withAdjust: boolean;
+  /**
+   * 注文メールに出ない値引き（Amazon ポイントの利用・クーポンなど）の推定額。品目の和（+ 差）より請求が安かったぶん。
+   * 額が合ったときは 0。記録には「ポイント・値引き」のマイナスの1行で入る（DB の money_feed_amazon_create が差から出す）。
+   */
+  discount: number;
 }
+
+/**
+ * 注文メールに出ない値引きとして許す上限（品目の和に対する割合）。Amazon の注文メール・発送メールの品目の額は値引き前で、
+ * ポイントの利用額は載らない（「注文時にポイント残高から差し引かれます」とあるだけ）。これを超える差は別の請求とみなし当てない。
+ */
+export const MAX_UNKNOWN_DISCOUNT = 0.2;
 
 /** 品目の組み合わせを数え上げる上限（これより多い注文は、残りの全部だけを当てる）。 */
 const MAX_SUBSET_LINES = 16;
 
 /**
- * カードの請求額に合う品目の組み合わせを探す。
+ * カードの請求額に合う品目の組み合わせを探す。2段で探す。
+ * ① 額が合うもの（discount = 0）
  *   - 同じ注文の中で、まだ割り振っていない品目の和が請求額に等しい組み合わせ
  *   - 値引き・送料などの差（adjust）が残っていれば、品目の和 + 差 が等しい組み合わせ（注文全体が1回で請求されたとき）
- * 古い注文から探し、見つけた最初のものを返す。同じ額になる組み合わせが複数あるときは、注文メールで先に並んだ品目を選ぶ
- * （額は合うので、違っていても人が品目を直せばよい）。当たらなければ null（今までどおり未確認に回す）。
+ *   古い注文から探し、見つけた最初のものを返す。同じ額になる組み合わせが複数あるときは、注文メールで先に並んだ品目を選ぶ
+ *   （額は合うので、違っていても人が品目を直せばよい）
+ * ② ①で当たらないとき: 注文メールに出ない値引き（ポイント・クーポン）で、請求が品目の和より安いものとして探す。
+ *   請求より高い組み合わせのうち、差が品目の和の MAX_UNKNOWN_DISCOUNT 以下のものを候補にし、差の割合がいちばん小さいものを選ぶ。
+ *   ただし**ほかに有力な候補（別の額の組み合わせで、差の割合が2倍以内）があれば、当てない**（誤って割り振らず、未確認に回す）。
+ *   注文の品目の残りを全部まとめて請求されたときは、注文メールの差（adjust）も含めた額を品目の和として見る
+ * 当たらなければ null（今までどおり未確認に回す）。注文をまたぐ組み合わせは当てない。
  */
 export function matchAmazonCharge(amount: number, orders: readonly OpenAmazonOrder[]): AmazonMatch | null {
   const sorted = [...orders].sort((a, b) => a.orderedOn.localeCompare(b.orderedOn) || a.orderId.localeCompare(b.orderId));
+  const exact = matchExact(amount, sorted);
+  return exact ?? matchWithDiscount(amount, sorted);
+}
+
+const sortedLines = (order: OpenAmazonOrder) => [...order.lines].sort((a, b) => a.position - b.position);
+const canAdjust = (order: OpenAmazonOrder) => order.adjustOpen && order.adjust !== 0;
+
+function matchExact(amount: number, sorted: readonly OpenAmazonOrder[]): AmazonMatch | null {
   for (const order of sorted) {
-    const lines = [...order.lines].sort((a, b) => a.position - b.position);
+    const lines = sortedLines(order);
     if (lines.length === 0) continue;
-    const useAdjust = order.adjustOpen && order.adjust !== 0;
+    const useAdjust = canAdjust(order);
 
     if (lines.length > MAX_SUBSET_LINES) {
       const sum = lines.reduce((acc, line) => acc + line.amount, 0);
       const ids = lines.map((line) => line.id);
-      if (sum === amount) return { orderId: order.orderId, lineIds: ids, withAdjust: false };
-      if (useAdjust && sum + order.adjust === amount) return { orderId: order.orderId, lineIds: ids, withAdjust: true };
+      if (sum === amount) return { orderId: order.orderId, lineIds: ids, withAdjust: false, discount: 0 };
+      if (useAdjust && sum + order.adjust === amount) return { orderId: order.orderId, lineIds: ids, withAdjust: true, discount: 0 };
       continue;
     }
 
@@ -141,11 +166,47 @@ export function matchAmazonCharge(amount: number, orders: readonly OpenAmazonOrd
       const withAdjust = !(sum === amount) && useAdjust && sum + order.adjust === amount;
       if (sum === amount || withAdjust) {
         const lineIds = lines.filter((_, i) => mask & (1 << i)).map((line) => line.id);
-        return { orderId: order.orderId, lineIds, withAdjust };
+        return { orderId: order.orderId, lineIds, withAdjust, discount: 0 };
       }
     }
   }
   return null;
+}
+
+interface DiscountCandidate extends AmazonMatch {
+  base: number;
+  ratio: number;
+}
+
+function matchWithDiscount(amount: number, sorted: readonly OpenAmazonOrder[]): AmazonMatch | null {
+  const candidates: DiscountCandidate[] = [];
+  for (const order of sorted) {
+    const lines = sortedLines(order);
+    if (lines.length === 0) continue;
+    const useAdjust = canAdjust(order);
+    // 数え上げられない大きな注文は、残りの全部だけを見る
+    const subsets =
+      lines.length > MAX_SUBSET_LINES
+        ? [lines]
+        : Array.from({ length: (1 << lines.length) - 1 }, (_, i) => lines.filter((_, j) => (i + 1) & (1 << j)));
+    for (const chosen of subsets) {
+      const all = chosen.length === lines.length;
+      const withAdjust = all && useAdjust;
+      const base = chosen.reduce((acc, line) => acc + line.amount, 0) + (withAdjust ? order.adjust : 0);
+      if (base <= amount) continue;
+      const discount = base - amount;
+      const ratio = discount / base;
+      if (ratio > MAX_UNKNOWN_DISCOUNT) continue;
+      candidates.push({ orderId: order.orderId, lineIds: chosen.map((line) => line.id), withAdjust, discount, base, ratio });
+    }
+  }
+  if (candidates.length === 0) return null;
+  // 差の割合の小さい順（同じなら古い注文・先に並んだ品目）。Array.sort は安定なので、数え上げた順がそのまま同順位の順
+  candidates.sort((a, b) => a.ratio - b.ratio);
+  const best = candidates[0];
+  // 額の違う別の組み合わせが、同じくらい有力なら当てない（同じ額の品目どうしなら、先に並んだ方で足りる）
+  if (candidates.some((other) => other.base !== best.base && other.ratio <= best.ratio * 2)) return null;
+  return { orderId: best.orderId, lineIds: best.lineIds, withAdjust: best.withAdjust, discount: best.discount };
 }
 
 // ---- 品目の種類（カテゴリ）を AI に選ばせる ----
