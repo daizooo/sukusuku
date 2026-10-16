@@ -119,6 +119,7 @@ export async function handleNotificationAction(
   response: Notifications.NotificationResponse,
 ): Promise<boolean> {
   const { actionIdentifier, notification } = response;
+  console.log('[notification-action] received', actionIdentifier, notification?.request?.identifier);
   if (actionIdentifier !== ACTION_COMPLETE) return false;
 
   const { request } = notification;
@@ -131,6 +132,7 @@ export async function handleNotificationAction(
     const taskId = stringOf(data.taskId);
     if (!taskId) throw new Error(`お知らせにタスクのidがありません: ${JSON.stringify(Object.keys(data))}`);
     await completeTask(taskId, stringOf(data.date));
+    console.log('[notification-action] completed', taskId, stringOf(data.date));
   } catch (err) {
     // 黙って終えない。できなかったことを本文にして出し直し、もう一度押せるようにする。
     // （押下の控えは持たない。以前は端末に控えていて、一度でも控えが残ると以後の押下が黙って捨てられた）

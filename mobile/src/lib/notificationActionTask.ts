@@ -18,6 +18,12 @@ if (Platform.OS === 'android') {
   TaskManager.defineTask<Notifications.NotificationTaskPayload>(
     NOTIFICATION_ACTION_TASK,
     async ({ data, error }) => {
+      // 調査用: 押下がここまで届いているか、届いた形はどうかを端末のログ（logcat の ReactNativeJS）に残す。
+      console.log(
+        '[notification-action] task run',
+        error ? String(error) : 'no-error',
+        data ? Object.keys(data as object).join(',') : 'no-data',
+      );
       if (error || !data || !('actionIdentifier' in data)) return;
       try {
         await handleNotificationAction(data);
