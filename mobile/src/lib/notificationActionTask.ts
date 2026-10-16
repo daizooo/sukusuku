@@ -22,7 +22,7 @@ if (Platform.OS === 'android') {
       console.log(
         '[notification-action] task run',
         error ? String(error) : 'no-error',
-        data ? Object.keys(data as object).join(',') : 'no-data',
+        data ? JSON.stringify(data).slice(0, 800) : 'no-data',
       );
       if (error || !data || !('actionIdentifier' in data)) return;
       try {
