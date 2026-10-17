@@ -52,6 +52,8 @@ import {
 } from './moneyVisual';
 import ReviewDetailScreen, { type ReviewDetail } from './ReviewDetailScreen';
 import MonthCloseScreen from './MonthCloseScreen';
+import YearTrendChart from './YearTrendChart';
+import { yearTrendPoints } from '@/lib/yearTrend';
 
 // 家計タブの「振り返り」（docs/kakei.md §4）。mobile版の `mobile/src/components/money/MoneyReviewView.tsx` と同じ並び・文言。
 //
@@ -67,8 +69,8 @@ import MonthCloseScreen from './MonthCloseScreen';
 // 見込みの額（毎月の記録で自動で作り、まだ確かめていない額）は実績に入れて数え、件数と額を添えて出す（§3.3・§4.1）。
 // 月の締め（§4.5）: 過ぎた月と今月の結論の下に「この月を締める」（月の最終週に締めることもあるため、今月も出す）（締めた月は「締めた月」）。押すと締めの画面（MonthCloseScreen）。
 // 締めていない過ぎた月があれば、いちばん上に「◯月が締まっていません」と出す（押すとその月の締めの画面）。
-// 年末の着地見込み（§4.6）: 年の結論に「年末の着地見込み」（締めた月の実額 ＋ 締めていない月の見込み）。グラフは締めた月を実線、ほかを年末まで点線。
-// 今年・先の年と、締めていない月が残る過ぎた年に出す。
+// 年の「推移」（§4.8）: 結論とカテゴリの間に、月ごとの収支（棒）と年初からの累計（折れ線）。締めた月は実線、ほかは年末まで点線（年末の着地見込みと同じ数え方。§4.6）。
+// 月を押すと吹き出しで収支と累計、吹き出しを押すとその月の振り返りへ。
 
 interface MoneyReviewViewProps {
   period: ReviewPeriod;
@@ -149,13 +151,12 @@ export default function MoneyReviewView({
     () => buildYearSummary(records, categories, budgets, year, today),
     [records, categories, budgets, year, today],
   );
-  const landing = useMemo(() => {
-    if (isMonth) return null;
+  // 年の「推移」グラフ（§4.8）。締めた月は実額、ほかは年末まで見込み（年末の着地見込みと同じ数え方。§4.6）。
+  const trend = useMemo(() => {
+    if (isMonth) return [];
     const result = buildYearLanding(records, categories, budgets, recurring, closings, year);
-    if (result === null) return null;
-    const open = result.months.some((row) => row.counted && !row.closed);
-    return year >= Number(today.slice(0, 4)) || open ? result : null;
-  }, [isMonth, records, categories, budgets, recurring, closings, year, today]);
+    return result === null ? [] : yearTrendPoints(result.months);
+  }, [isMonth, records, categories, budgets, recurring, closings, year]);
   // 年: 前の年の同じ期間との比べ。
   const comparison = useMemo(
     () => (isMonth ? null : compareWithPreviousYear(records, categories, budgets, year, today)),
@@ -253,7 +254,7 @@ export default function MoneyReviewView({
               </span>
             </div>
           )}
-          {/* 年の月平均・前年との比べ・着地見込みは、収支と混同しないよう、線で分ける（2026-10-16） */}
+          {/* 年の月平均・前年との比べは、収支と混同しないよう、線で分ける（2026-10-16） */}
           {!isMonth && (
             <>
               <div className="my-1.5 border-t border-gray-300" />
@@ -271,15 +272,6 @@ export default function MoneyReviewView({
                   label="前年の同じ期間より"
                   value={formatSignedYen(comparison.diff)}
                   plus={comparison.diff > 0}
-                />
-              )}
-              {landing !== null && (
-                <StatRow
-                  compact
-                  label="年末の着地見込み"
-                  value={formatSignedYen(landing.total)}
-                  plus={landing.total > 0}
-                  isMinus={landing.total < 0}
                 />
               )}
             </>
@@ -321,11 +313,15 @@ export default function MoneyReviewView({
           </>
         ) : (
           <>
-            <SectionHeader
-              compact
-              title="カテゴリ"
-              right={<SettingLinks onEditCategories={onEditCategories} onEditBudgets={onEditBudgets} />}
-            />
+            {trend.length > 0 && (
+              <>
+                <SectionHeader compact title="推移" right={<TrendLegend />} />
+                <div className={`${cardClass} px-1 py-1`}>
+                  <YearTrendChart points={trend} initialMonthKey={today} onSelectMonth={onSelectMonth} />
+                </div>
+              </>
+            )}
+            <SectionHeader compact title="カテゴリ" />
             {tiles.length === 0 && (
               <p className="py-6 text-center text-[13px] text-gray-400">「カテゴリ」と「予算」を決めると、ここに年の予算との差が出ます</p>
             )}
@@ -435,6 +431,22 @@ export default function MoneyReviewView({
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** 「推移」の見出しの右の凡例（棒＝収支、折れ線＝年の累計）。 */
+function TrendLegend() {
+  return (
+    <div className="flex items-center gap-3">
+      <span className={`flex items-center gap-1 ${type.faint}`}>
+        <span className="h-2.5 w-2.5 rounded-sm bg-blue-300" />
+        収支
+      </span>
+      <span className={`flex items-center gap-1 ${type.faint}`}>
+        <span className="h-0.5 w-4 bg-blue-600" />
+        年の累計
+      </span>
     </div>
   );
 }

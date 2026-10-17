@@ -39,6 +39,8 @@ import {
 } from '@/lib/moneyUtils';
 import ReviewDetailScreen, { type ReviewDetail } from '@/components/money/ReviewDetailScreen';
 import MonthCloseScreen from '@/components/money/MonthCloseScreen';
+import YearTrendChart from '@/components/money/YearTrendChart';
+import { yearTrendPoints } from '@/lib/yearTrend';
 import {
   CategoryIcon,
   EstimateBadge,
@@ -65,8 +67,8 @@ import {
 // 見込みの額（毎月の記録で自動で作り、まだ確かめていない額）は実績に入れて数え、件数と額を添えて出す（§3.3・§4.1）。
 // 月の締め（§4.5）: 過ぎた月と今月の結論の下に「この月を締める」（月の最終週に締めることもあるため、今月も出す）（締めた月は「締めた月」）。押すと締めの画面（MonthCloseScreen）。
 // 締めていない過ぎた月があれば、いちばん上に「◯月が締まっていません」と出す（押すとその月の締めの画面）。
-// 年末の着地見込み（§4.6）: 年の結論に「年末の着地見込み」（締めた月の実額 ＋ 締めていない月の見込み）。グラフは締めた月を実線、ほかを年末まで点線。
-// 今年・先の年と、締めていない月が残る過ぎた年に出す。
+// 年の「推移」（§4.8）: 結論とカテゴリの間に、月ごとの収支（棒）と年初からの累計（折れ線）。締めた月は実線、ほかは年末まで点線（年末の着地見込みと同じ数え方。§4.6）。
+// 月を押すと吹き出しで収支と累計、吹き出しを押すとその月の振り返りへ。
 
 interface MoneyReviewViewProps {
   /** この面を開いているか。false から true になったとき、いちばん上へ戻す。 */
@@ -151,13 +153,12 @@ export default function MoneyReviewView({
     () => buildYearSummary(records, categories, budgets, year, today),
     [records, categories, budgets, year, today],
   );
-  const landing = useMemo(() => {
-    if (isMonth) return null;
+  // 年の「推移」グラフ（§4.8）。締めた月は実額、ほかは年末まで見込み（年末の着地見込みと同じ数え方。§4.6）。
+  const trend = useMemo(() => {
+    if (isMonth) return [];
     const result = buildYearLanding(records, categories, budgets, recurring, closings, year);
-    if (result === null) return null;
-    const open = result.months.some((row) => row.counted && !row.closed);
-    return year >= Number(today.slice(0, 4)) || open ? result : null;
-  }, [isMonth, records, categories, budgets, recurring, closings, year, today]);
+    return result === null ? [] : yearTrendPoints(result.months);
+  }, [isMonth, records, categories, budgets, recurring, closings, year]);
   // 年: 前の年の同じ期間との比べ。
   const comparison = useMemo(
     () => (isMonth ? null : compareWithPreviousYear(records, categories, budgets, year, today)),
@@ -263,7 +264,7 @@ export default function MoneyReviewView({
               </Text>
             </View>
           )}
-          {/* 年の月平均・前年との比べ・着地見込みは、収支と混同しないよう、線で分ける（2026-10-16） */}
+          {/* 年の月平均・前年との比べは、収支と混同しないよう、線で分ける（2026-10-16） */}
           {!isMonth && (
             <>
               <View style={styles.heroDivider} />
@@ -281,15 +282,6 @@ export default function MoneyReviewView({
                   label="前年の同じ期間より"
                   value={formatSignedYen(comparison.diff)}
                   plus={comparison.diff > 0}
-                />
-              )}
-              {landing !== null && (
-                <StatRow
-                  compact
-                  label="年末の着地見込み"
-                  value={formatSignedYen(landing.total)}
-                  plus={landing.total > 0}
-                  minus={landing.total < 0}
                 />
               )}
             </>
@@ -332,11 +324,15 @@ export default function MoneyReviewView({
           </>
         ) : (
           <>
-            <SectionHeader
-              compact
-              title="カテゴリ"
-              right={<SettingLinks onEditCategories={onEditCategories} onEditBudgets={onEditBudgets} />}
-            />
+            {trend.length > 0 && (
+              <>
+                <SectionHeader compact title="推移" right={<TrendLegend />} />
+                <View style={[styles.card, styles.trendCard]}>
+                  <YearTrendChart points={trend} initialMonthKey={today} onSelectMonth={onSelectMonth} />
+                </View>
+              </>
+            )}
+            <SectionHeader compact title="カテゴリ" />
             {tiles.length === 0 && (
               <Text style={styles.message}>「カテゴリ」と「予算」を決めると、ここに年の予算との差が出ます</Text>
             )}
@@ -449,6 +445,22 @@ export default function MoneyReviewView({
   );
 }
 
+/** 「推移」の見出しの右の凡例（棒＝収支、折れ線＝年の累計）。 */
+function TrendLegend() {
+  return (
+    <View style={styles.links}>
+      <View style={styles.legendItem}>
+        <View style={styles.legendBar} />
+        <Text style={type.faint}>収支</Text>
+      </View>
+      <View style={styles.legendItem}>
+        <View style={styles.legendLine} />
+        <Text style={type.faint}>年の累計</Text>
+      </View>
+    </View>
+  );
+}
+
 /** 内訳の見出しの右の、設定への入口（カテゴリと予算は別の設定。2026-10-15）。 */
 function SettingLinks({ onEditCategories, onEditBudgets }: { onEditCategories: () => void; onEditBudgets: () => void }) {
   return (
@@ -507,6 +519,10 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 96 },
   gap: { height: 12 },
   links: { flexDirection: 'row', gap: 14 },
+  trendCard: { paddingVertical: 4, paddingHorizontal: 4 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  legendBar: { width: 10, height: 10, borderRadius: 2, backgroundColor: colors.moneyRing },
+  legendLine: { width: 16, height: 2, backgroundColor: colors.money },
   heroDivider: { height: 1, marginVertical: 6, backgroundColor: colors.borderStrong },
   estimate: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8 },
   bar: { paddingVertical: 6 },
