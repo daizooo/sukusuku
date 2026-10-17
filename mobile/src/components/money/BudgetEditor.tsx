@@ -235,15 +235,13 @@ export default function BudgetEditor({
 
   const fixedRow = (row: RecurringYearRow) => (
     <View key={row.rule.id} style={[styles.row, styles.divided]}>
-      <View style={styles.flex}>
-        <Text style={styles.rowName} numberOfLines={1}>
-          {ruleTitle(row.rule, categories)}
-        </Text>
-        <Text style={styles.faint} numberOfLines={1}>
-          {scheduleText(row)}
-        </Text>
+      <Text style={[styles.rowName, styles.flex]} numberOfLines={1}>
+        {ruleTitle(row.rule, categories)}
+      </Text>
+      <View style={styles.right}>
+        <Text style={styles.rowAmount}>年 {formatYen(row.total)}</Text>
+        <Text style={styles.note}>{scheduleText(row)}</Text>
       </View>
-      <Text style={styles.rowAmount}>年 {formatYen(row.total)}</Text>
     </View>
   );
 
@@ -345,16 +343,10 @@ export default function BudgetEditor({
                   style={({ pressed }) => [styles.row, index > 0 && styles.divided, pressed && styles.pressed]}
                 >
                   <CategoryIcon iconKey={iconKeyOf(row.top)} size={28} />
-                  <View style={styles.flex}>
-                    <Text style={styles.rowName} numberOfLines={1}>
-                      {row.top.name}
-                    </Text>
-                    <Text style={styles.faint} numberOfLines={1}>
-                      {row.total === 0 ? '予算なし' : row.even ? '毎月' : '月平均'}
-                      {row.inherited && row.total > 0 ? '・前年から引き継ぎ' : ''}
-                    </Text>
-                  </View>
-                  <Text style={styles.rowAmount}>{row.total === 0 ? '−' : formatYen(row.even ? row.total / 12 : row.average)}</Text>
+                  <Text style={[styles.rowName, styles.flex]} numberOfLines={1}>
+                    {row.top.name}
+                  </Text>
+                  <Text style={styles.rowAmount}>{row.total === 0 ? '−' : `年 ${formatYen(row.total)}`}</Text>
                   <ChevronRight size={16} color={colors.textFaint} />
                 </Pressable>
               ))}
@@ -375,16 +367,20 @@ export default function BudgetEditor({
                   onPress={() => openOccurrence(entry)}
                   style={({ pressed }) => [styles.row, styles.divided, pressed && styles.pressed]}
                 >
-                  <Text style={styles.occurrenceMonth}>{monthLabel(entry.actualMonth ?? entry.plannedMonth)}</Text>
-                  <Text style={[styles.rowName, styles.flex, entry.status === 'skipped' && styles.skipped]} numberOfLines={1}>
-                    {ruleTitle(entry.rule, categories)}
-                  </Text>
-                  {entry.status === 'done' && (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>済</Text>
-                    </View>
-                  )}
-                  <Text style={[styles.rowAmount, entry.status === 'skipped' && styles.skipped]}>{formatYen(entry.amount)}</Text>
+                  <View style={[styles.flex, styles.nameLine]}>
+                    <Text style={[styles.rowName, styles.shrink, entry.status === 'skipped' && styles.skipped]} numberOfLines={1}>
+                      {ruleTitle(entry.rule, categories)}
+                    </Text>
+                    {entry.status === 'done' && (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>済</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.right}>
+                    <Text style={[styles.rowAmount, entry.status === 'skipped' && styles.skipped]}>{formatYen(entry.amount)}</Text>
+                    <Text style={styles.note}>{monthLabel(entry.actualMonth ?? entry.plannedMonth)}</Text>
+                  </View>
                 </Pressable>
               ))}
           </View>
@@ -601,33 +597,37 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 14, paddingVertical: 11 },
-  summaryLabel: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.textMuted },
-  summaryValue: { fontSize: 16, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
+  summaryLabel: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.textMuted },
+  summaryValue: { fontSize: 17, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   income: { color: colors.moneyIncome },
   partRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingRight: 14, paddingLeft: 26, paddingBottom: 6 },
   partRowSub: { paddingLeft: 40, paddingBottom: 4 },
-  partLabel: { flex: 1, fontSize: 12, fontWeight: '500', color: colors.textMuted },
-  partValue: { fontSize: 12, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  partSub: { fontSize: 11, color: colors.textFaint },
+  partLabel: { flex: 1, fontSize: 14, fontWeight: '500', color: colors.textMuted },
+  partValue: { fontSize: 14, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  partSub: { fontSize: 13, color: colors.textFaint },
   strong: { fontWeight: '700', color: colors.text },
-  big: { fontSize: 18 },
+  big: { fontSize: 22 },
   section: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 16, paddingBottom: 6, paddingHorizontal: 2 },
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: colors.text },
-  sectionTotal: { fontSize: 13, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
+  sectionTotal: { fontSize: 15, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   group: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: colors.background },
-  groupTitle: { fontSize: 14, fontWeight: '700', color: colors.textSubtle },
-  groupTotal: { fontSize: 13, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  groupTitle: { fontSize: 16, fontWeight: '700', color: colors.textSubtle },
+  groupTotal: { fontSize: 15, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   occurrenceMonth: { width: 34, fontSize: 13, fontWeight: '700', color: colors.textSubtle },
   skipped: { color: colors.textFaint, textDecorationLine: 'line-through' },
   badge: { paddingHorizontal: 7, paddingVertical: 1, borderRadius: 999, backgroundColor: colors.neutralSurface },
-  badgeText: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
-  addText: { fontSize: 14, fontWeight: '700', color: colors.money },
+  badgeText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  addText: { fontSize: 16, fontWeight: '700', color: colors.money },
   divided: { borderTopWidth: 1, borderTopColor: colors.border },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   pressed: { backgroundColor: colors.background },
-  rowName: { fontSize: 14, fontWeight: '600', color: colors.text },
-  rowAmount: { fontSize: 14, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
+  rowName: { fontSize: 16, fontWeight: '600', color: colors.text },
+  rowAmount: { fontSize: 16, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   faint: { fontSize: 11, fontWeight: '500', color: colors.textFaint, marginTop: 1 },
+  right: { alignItems: 'flex-end' },
+  note: { fontSize: 13, fontWeight: '500', color: colors.textMuted, marginTop: 2, fontVariant: ['tabular-nums'] },
+  nameLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  shrink: { flexShrink: 1 },
   message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
   note: { fontSize: 11, fontWeight: '500', color: colors.textFaint, lineHeight: 17, paddingTop: 8 },
   field: { gap: 6 },

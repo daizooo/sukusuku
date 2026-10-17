@@ -28,7 +28,7 @@ import { toDateString } from '@/lib/dateUtils';
 import { saveMoneyBudget, saveMoneyReserve, setMoneyCategoryReserve, updateMoneyRecurringSkipped } from '@/lib/api/money';
 import { ModalShell } from '../modals/TaskForm';
 import CategoryPicker from './CategoryPicker';
-import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader, StackedScreen, cardClass, incomeAmountClass, type } from './moneyVisual';
+import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader, StackedScreen, cardClass, incomeAmountClass } from './moneyVisual';
 
 // 予算（docs/kakei.md §3.1・§3.5・§3.6・§3.7）。mobile版の `mobile/src/components/money/BudgetEditor.tsx` と同じ並び・文言。
 //
@@ -67,7 +67,7 @@ const yearButtonClass =
   'flex h-[30px] w-[30px] items-center justify-center rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200';
 const inputClass =
   'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
-const rowClass = 'flex w-full items-center gap-2.5 border-t border-gray-200 px-3.5 py-2.5 text-left';
+const rowClass = 'flex w-full items-center gap-3 border-t border-gray-200 px-3.5 py-3 text-left';
 
 /** 「3月」。 */
 const monthLabel = (monthKey: string) => `${Number(monthKey.slice(5, 7))}月`;
@@ -219,26 +219,26 @@ export default function BudgetEditor({
       className={`flex w-full items-center gap-2 bg-gray-50 px-3.5 py-2.5 text-left ${first ? '' : 'border-t border-gray-200'}`}
     >
       {open[key] ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
-      <span className="flex-1 text-sm font-bold text-gray-700">{title}</span>
-      {total !== null && <span className="text-[13px] font-bold tabular-nums text-gray-500">年 {formatYen(total)}</span>}
+      <span className="flex-1 text-base font-bold text-gray-700">{title}</span>
+      {total !== null && <span className="text-[15px] font-bold tabular-nums text-gray-500">年 {formatYen(total)}</span>}
     </button>
   );
 
   const fixedRow = (row: RecurringYearRow) => (
     <div key={row.rule.id} className={rowClass}>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-gray-900">{ruleTitle(row.rule, categories)}</span>
-        <span className={`block truncate ${type.faint}`}>{scheduleText(row)}</span>
+      <span className="min-w-0 flex-1 truncate text-base font-semibold text-gray-900">{ruleTitle(row.rule, categories)}</span>
+      <span className="shrink-0 text-right">
+        <span className="block text-base font-extrabold tabular-nums text-gray-900">年 {formatYen(row.total)}</span>
+        <span className="block text-[13px] font-medium tabular-nums text-gray-500">{scheduleText(row)}</span>
       </span>
-      <span className="text-sm font-extrabold tabular-nums text-gray-900">年 {formatYen(row.total)}</span>
     </div>
   );
 
   const sectionHeader = (title: string, total: number, onClick?: () => void) => {
     const inner = (
       <>
-        <span className="flex-1 text-[15px] font-extrabold text-gray-900">{title}</span>
-        <span className="text-[13px] font-bold tabular-nums text-gray-500">年 {formatYen(total)}</span>
+        <span className="flex-1 text-lg font-extrabold text-gray-900">{title}</span>
+        <span className="text-[15px] font-bold tabular-nums text-gray-500">年 {formatYen(total)}</span>
         {onClick && <ChevronRight size={16} className="text-gray-400" />}
       </>
     );
@@ -281,12 +281,12 @@ export default function BudgetEditor({
           <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pb-8">
             <div className={`${cardClass} overflow-hidden`}>
               <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
-                <span className="flex-1 text-[13px] font-semibold text-gray-500">固定収入</span>
-                <span className={`text-base font-extrabold tabular-nums ${incomeAmountClass}`}>{formatYen(incomeTotal)}</span>
+                <span className="flex-1 text-[15px] font-semibold text-gray-500">固定収入</span>
+                <span className={`text-[17px] font-extrabold tabular-nums ${incomeAmountClass}`}>{formatYen(incomeTotal)}</span>
               </div>
               <div className="flex items-center justify-between gap-2 border-t border-gray-200 px-3.5 py-2.5">
-                <span className="flex-1 text-[13px] font-semibold text-gray-500">支出の予算</span>
-                <span className="text-base font-extrabold tabular-nums text-gray-900">{formatYen(expenseTotal)}</span>
+                <span className="flex-1 text-[15px] font-semibold text-gray-500">支出の予算</span>
+                <span className="text-[17px] font-extrabold tabular-nums text-gray-900">{formatYen(expenseTotal)}</span>
               </div>
               <div className="pb-1.5">
                 {[
@@ -297,16 +297,16 @@ export default function BudgetEditor({
                   { label: '予備費', value: reserveAmount, sub: false },
                 ].map((part) => (
                   <div key={part.label} className={`flex items-center justify-between gap-2 py-0.5 pr-3.5 ${part.sub ? 'pl-10' : 'pl-6'}`}>
-                    <span className={`flex-1 ${part.sub ? 'text-[11px] text-gray-400' : 'text-xs text-gray-500'}`}>{part.label}</span>
-                    <span className={`font-bold tabular-nums ${part.sub ? 'text-[11px] text-gray-400' : 'text-xs text-gray-500'}`}>
+                    <span className={`flex-1 ${part.sub ? 'text-[13px] text-gray-400' : 'text-sm text-gray-500'}`}>{part.label}</span>
+                    <span className={`font-bold tabular-nums ${part.sub ? 'text-[13px] text-gray-400' : 'text-sm text-gray-500'}`}>
                       {formatYen(part.value)}
                     </span>
                   </div>
                 ))}
               </div>
               <div className="flex items-center justify-between gap-2 border-t border-gray-200 px-3.5 py-2.5">
-                <span className="flex-1 text-[13px] font-bold text-gray-900">収支の見込み</span>
-                <span className={`text-lg font-extrabold tabular-nums ${plan > 0 ? incomeAmountClass : 'text-gray-900'}`}>
+                <span className="flex-1 text-[15px] font-bold text-gray-900">収支の見込み</span>
+                <span className={`text-[22px] font-extrabold tabular-nums ${plan > 0 ? incomeAmountClass : 'text-gray-900'}`}>
                   {plan < 0 ? '−' : plan > 0 ? '＋' : ''}
                   {formatYen(plan)}
                 </span>
@@ -324,19 +324,11 @@ export default function BudgetEditor({
                     type="button"
                     aria-label={`${row.top.name}の${formatYear(year)}の予算を決める`}
                     onClick={() => setEditing(row.top)}
-                    className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-gray-50"
+                    className="flex w-full items-center gap-3 px-3.5 py-3 text-left hover:bg-gray-50"
                   >
                     <CategoryIcon iconKey={iconKeyOf(row.top)} size={28} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-gray-900">{row.top.name}</span>
-                      <span className={`block truncate ${type.faint}`}>
-                        {row.total === 0 ? '予算なし' : row.even ? '毎月' : '月平均'}
-                        {row.inherited && row.total > 0 ? '・前年から引き継ぎ' : ''}
-                      </span>
-                    </span>
-                    <span className="text-sm font-extrabold tabular-nums text-gray-900">
-                      {row.total === 0 ? '−' : formatYen(row.even ? row.total / 12 : row.average)}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate text-base font-semibold text-gray-900">{row.top.name}</span>
+                    <span className="text-base font-extrabold tabular-nums text-gray-900">{row.total === 0 ? '−' : `年 ${formatYen(row.total)}`}</span>
                     <ChevronRight size={16} className="text-gray-400" />
                   </button>
                 ))}
@@ -357,21 +349,23 @@ export default function BudgetEditor({
                     onClick={() => void openOccurrence(entry)}
                     className={`${rowClass} hover:bg-gray-50`}
                   >
-                    <span className="w-9 shrink-0 text-[13px] font-bold tabular-nums text-gray-700">
-                      {monthLabel(entry.actualMonth ?? entry.plannedMonth)}
+                    <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                      <span
+                        className={`min-w-0 truncate text-base font-semibold ${entry.status === 'skipped' ? 'text-gray-400 line-through' : 'text-gray-900'}`}
+                      >
+                        {ruleTitle(entry.rule, categories)}
+                      </span>
+                      {entry.status === 'done' && (
+                        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-px text-xs font-bold text-gray-500">済</span>
+                      )}
                     </span>
-                    <span
-                      className={`min-w-0 flex-1 truncate text-sm font-semibold ${entry.status === 'skipped' ? 'text-gray-400 line-through' : 'text-gray-900'}`}
-                    >
-                      {ruleTitle(entry.rule, categories)}
-                    </span>
-                    {entry.status === 'done' && (
-                      <span className="shrink-0 rounded-full bg-gray-100 px-2 py-px text-[11px] font-bold text-gray-500">済</span>
-                    )}
-                    <span
-                      className={`text-sm font-extrabold tabular-nums ${entry.status === 'skipped' ? 'text-gray-400 line-through' : 'text-gray-900'}`}
-                    >
-                      {formatYen(entry.amount)}
+                    <span className="shrink-0 text-right">
+                      <span
+                        className={`block text-base font-extrabold tabular-nums ${entry.status === 'skipped' ? 'text-gray-400 line-through' : 'text-gray-900'}`}
+                      >
+                        {formatYen(entry.amount)}
+                      </span>
+                      <span className="block text-[13px] font-medium tabular-nums text-gray-500">{monthLabel(entry.actualMonth ?? entry.plannedMonth)}</span>
                     </span>
                   </button>
                 ))}
@@ -383,12 +377,12 @@ export default function BudgetEditor({
               {open.reserve &&
                 reserveLinked.map((category) => (
                   <button key={category.id} type="button" onClick={() => unlink(category)} className={`${rowClass} hover:bg-gray-50`}>
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{categoryPath(categories, category.id)}</span>
+                    <span className="min-w-0 flex-1 truncate text-base font-semibold text-gray-900">{categoryPath(categories, category.id)}</span>
                     <ChevronRight size={16} className="text-gray-400" />
                   </button>
                 ))}
               {open.reserve && (
-                <button type="button" onClick={() => setPickingReserve(true)} className={`${rowClass} text-sm font-bold text-blue-600 hover:bg-gray-50`}>
+                <button type="button" onClick={() => setPickingReserve(true)} className={`${rowClass} text-base font-bold text-blue-600 hover:bg-gray-50`}>
                   <Plus size={16} />
                   追加する
                 </button>
