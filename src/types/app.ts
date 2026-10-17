@@ -491,6 +491,14 @@ export interface MoneyCategory {
   position: number;
   /** 使わなくした（選べないが、記録には残る）。 */
   archived: boolean;
+  /** 予備費に紐づけた小分類（この小分類の記録は予備費の予算で数える。docs/kakei.md §3.7）。 */
+  reserve: boolean;
+}
+
+/** その年の予備費の額（docs/kakei.md §3.7）。money_reserves に対応。 */
+export interface MoneyReserve {
+  year: number;
+  amount: number;
 }
 
 /**
@@ -507,6 +515,8 @@ export interface MoneyBudget {
   fixed?: boolean;
   /** 見積費から出した行（fixed も true。estimateBudgetRows。docs/kakei.md §3.6）。 */
   estimate?: boolean;
+  /** 予備費から出した行（fixed も true。reserveBudgetRows。docs/kakei.md §3.7）。categoryId が RESERVE_ROW の行は、まだ使っていない予備費。 */
+  reserve?: boolean;
 }
 
 /** 出金元の種類。 */

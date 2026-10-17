@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import type { MoneyBudget, MoneyCategory, MoneyRecord, MoneyRecurring } from '@/types/app';
+import { ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import type { MoneyBudget, MoneyCategory, MoneyRecord, MoneyRecurring, MoneyReserve } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import {
   budgetMonths,
@@ -14,31 +14,34 @@ import {
   formatYen,
   iconKeyOf,
   manualBudgetFor,
+  monthKeyOfDate,
   parseAmountInput,
   recurringInYear,
   recurringPeriodLabel,
+  reserveAmountFor,
   topCategories,
   yearMonthKeys,
   type EstimateCostOccurrence,
+  type RecurringYearRow,
 } from '@/lib/moneyUtils';
 import { toDateString } from '@/lib/dateUtils';
-import { saveMoneyBudget, updateMoneyRecurringSkipped } from '@/lib/api/money';
+import { saveMoneyBudget, saveMoneyReserve, setMoneyCategoryReserve, updateMoneyRecurringSkipped } from '@/lib/api/money';
 import { ModalShell } from '../modals/TaskForm';
-import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader, SectionHeader, cardClass, incomeAmountClass, type } from './moneyVisual';
+import CategoryPicker from './CategoryPicker';
+import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader, StackedScreen, cardClass, incomeAmountClass, type } from './moneyVisual';
 
-// 予算（docs/kakei.md §3.1・§3.5）。mobile版の `mobile/src/components/money/BudgetEditor.tsx` と同じ並び・文言。
+// 予算（docs/kakei.md §3.1・§3.5・§3.6・§3.7）。mobile版の `mobile/src/components/money/BudgetEditor.tsx` と同じ並び・文言。
 //
 // カテゴリ（CategoryEditor）とは別の設定にした（2026-10-15）。カテゴリは名前・並び・アイコンで年に関係なく、
-// 予算は**年ごと**に決めるもの（来年の予算も、いつでも決められる）。上の年の送りで年を替え、大分類ごとにその年の1月〜12月の月の予算を決める。
-// 決めていない年は、前の年の12月の額を引き継ぐ（「前年から引き継ぎ」）。固定費（毎月自動で記録するルール）は、その月の予算に自動で足される。
-// 固定支出・固定収入は年をまたぐものもあるので、期間（開始月・終了月）と記録する月から、**その年に効くものだけ**を年の額で下に並べる。
-// 上の「年の見込み」は、固定収入の年の合計と、支出の予算（固定費を含む）の年の合計、その差。
+// 予算は**年ごと**に決めるもの（来年の予算も、いつでも決められる）。上の年の送りで年を替える。
 //
-// 2026-10-17（docs/kakei.md §3.6）: 支出の予算を性質で3段に分けて並べる。
-// - 変動費: 大分類ごとの手入力の月額（日々のやりくりで守る額）。押すと月ごとの予算を決める
-// - 固定費: 自動で記録する固定支出（読むだけ。直すのは「固定支出」）
-// - 見積費: 記録を作らない固定支出（車検・ふるさと納税など）の回を月の順に。実績の結びつき（済・これから・記録なし・今年はなし）を出し、
-//   押すと「今年はなし」にできる（足す・直すのは「固定支出」）
+// 支出の予算は「変動費・固定費・予備費」の3つ（2026-10-18）。
+// - 変動費: 大分類ごとの手入力の月額。押すと1月〜12月の月の予算を決める。決めていない年は前の年の12月の額を引き継ぐ
+// - 固定費: 固定支出のルール。「確定」（額が固定額のもの）と「予定」（額が変わるもの。電気のように自動で記録して額を見込むものと、
+//   車検・ふるさと納税のように記録を作らないもの）に分け、それぞれ折りたためる。記録を作らない回は月の順に並べ、実績があれば「済」。
+//   押すと「今年はなし」にできる。足す・直すのは「固定支出」
+// - 予備費: 年の額と、紐づけた小分類（この小分類の記録は予備費の予算で数える）。見出しを押すと額を決め、枠の中で小分類を紐づける・外す
+// 上の枠は、固定収入・支出の予算（内訳つき）・収支の見込み。
 
 interface BudgetEditorProps {
   familyId: string;
@@ -49,47 +52,37 @@ interface BudgetEditorProps {
   budgets: MoneyBudget[];
   recurring: MoneyRecurring[];
   records: MoneyRecord[];
+  /** 予備費の年の額（docs/kakei.md §3.7）。 */
+  reserves: MoneyReserve[];
   onBudgets: (update: (prev: MoneyBudget[]) => MoneyBudget[]) => void;
-  /** 見積費の「今年はなし」を直したあと。 */
+  /** 記録を作らない固定支出の「今年はなし」を直したあと。 */
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
+  onReserves: (update: (prev: MoneyReserve[]) => MoneyReserve[]) => void;
+  /** 予備費に小分類を紐づけた・外したあと。 */
+  onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
   onClose: () => void;
-}
-
-/** 「3月」。 */
-const monthLabel = (monthKey: string) => `${Number(monthKey.slice(5, 7))}月`;
-
-/** 見積費の回の状態の言い方（docs/kakei.md §3.6）。 */
-function occurrenceStatus(entry: EstimateCostOccurrence, thisMonth: string): string {
-  switch (entry.status) {
-    case 'done':
-      return entry.actualMonth !== null && entry.actualMonth !== entry.plannedMonth
-        ? `実績 ${formatYen(entry.actual)}（${monthLabel(entry.plannedMonth)}の予定 → ${monthLabel(entry.actualMonth)}に移しました）`
-        : `実績 ${formatYen(entry.actual)}`;
-    case 'overdue':
-      return entry.placedMonth === thisMonth
-        ? `${monthLabel(entry.plannedMonth)}の予定に記録がありません・今月へ送っています`
-        : `${monthLabel(entry.plannedMonth)}の予定に記録がありませんでした`;
-    case 'skipped':
-      return '今年はなし';
-    default:
-      return entry.basisMonth !== null ? `これから・前回の実績から見込み` : 'これから';
-  }
-}
-
-/** 見積費の見出し。品名、無ければカテゴリ。 */
-function occurrenceTitle(rule: MoneyRecurring, categories: MoneyCategory[]): string {
-  return rule.name.trim() || categoryPath(categories, rule.categoryId) || '見積費';
 }
 
 const yearButtonClass =
   'flex h-[30px] w-[30px] items-center justify-center rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200';
 const inputClass =
   'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
+const rowClass = 'flex w-full items-center gap-2.5 border-t border-gray-200 px-3.5 py-2.5 text-left';
+
+/** 「3月」。 */
+const monthLabel = (monthKey: string) => `${Number(monthKey.slice(5, 7))}月`;
+
+/** 記録する月の言い方（「毎月」「3・9月」）と期間。 */
+function scheduleText(rule: MoneyRecurring): string {
+  const months = rule.months === null ? '毎月' : `${[...rule.months].sort((a, b) => a - b).join('・')}月`;
+  const period = recurringPeriodLabel(rule);
+  return period === '' ? months : `${months}・${period}`;
+}
 
 /** 固定のルールの見出し。品名、無ければお店、無ければカテゴリ。 */
 function ruleTitle(rule: MoneyRecurring, categories: MoneyCategory[]): string {
   const name = rule.name.trim() || rule.store.trim();
-  return name !== '' ? name : categoryPath(categories, rule.categoryId) || (rule.kind === 'income' ? '収入' : '支出');
+  return name !== '' ? name : categoryPath(categories, rule.categoryId) || '支出';
 }
 
 export default function BudgetEditor({
@@ -99,29 +92,32 @@ export default function BudgetEditor({
   budgets,
   recurring,
   records,
+  reserves,
   onBudgets,
   onRecurring,
+  onReserves,
+  onCategories,
   onClose,
 }: BudgetEditorProps) {
   const supabase = useMemo(() => createClient(), []);
   const [year, setYear] = useState(initialYear);
   const [editing, setEditing] = useState<MoneyCategory | null>(null);
+  const [editingReserve, setEditingReserve] = useState(false);
+  const [pickingReserve, setPickingReserve] = useState(false);
+  // 固定費の「確定」「予定」と、予備費の小分類の開閉。
+  const [open, setOpen] = useState({ confirmed: false, planned: true, reserve: true });
+  const toggle = (key: keyof typeof open) => setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const monthKeys = useMemo(() => yearMonthKeys(year), [year]);
   const tops = useMemo(() => topCategories(categories, 'living', true).filter((top) => !top.archived), [categories]);
   const rows = useMemo(
     () =>
       tops.map((top) => {
-        // 変動費＝手入力の額だけ（固定費・見積費は下の段に分けて出す）。
         const monthly = monthKeys.map((key) => manualBudgetFor(budgets, top.id, key) ?? 0);
-        const fixed = monthKeys.reduce((sum, key) => sum + fixedBudgetFor(budgets, top.id, key), 0);
-        const estimate = monthKeys.reduce((sum, key) => sum + estimateBudgetFor(budgets, top.id, key), 0);
         const total = monthly.reduce((sum, value) => sum + value, 0);
         return {
           top,
           total,
-          fixed,
-          estimate,
           even: monthly.every((value) => value === monthly[0]),
           average: Math.round(total / 12),
           // その年の手入力の予算を決めていない（前の年の12月の額を引き継いでいる）。
@@ -130,59 +126,42 @@ export default function BudgetEditor({
       }),
     [tops, monthKeys, budgets, year],
   );
-  const variableTotal = rows.reduce((sum, row) => sum + row.total, 0);
-  const fixedTotal = rows.reduce((sum, row) => sum + row.fixed, 0);
-  const estimateTotal = rows.reduce((sum, row) => sum + row.estimate, 0);
-  const expenseTotal = variableTotal + fixedTotal + estimateTotal;
   const today = toDateString(new Date());
-  const thisMonth = today.slice(0, 7);
   const occurrences = useMemo(() => estimateCostsInYear(recurring, records, year, today), [recurring, records, year, today]);
   const fixedRows = useMemo(() => recurringInYear(recurring, records, year), [recurring, records, year]);
-  const incomeRows = fixedRows.filter((row) => row.rule.kind === 'income');
-  const outgoRows = fixedRows.filter((row) => row.rule.kind !== 'income');
-  const incomeTotal = incomeRows.reduce((sum, row) => sum + row.total, 0);
+  const incomeTotal = fixedRows.filter((row) => row.rule.kind === 'income').reduce((sum, row) => sum + row.total, 0);
+  const outgoRows = fixedRows.filter((row) => row.rule.kind === 'expense');
+  const confirmedRows = outgoRows.filter((row) => row.rule.amountMode === 'fixed');
+  const plannedRows = outgoRows.filter((row) => row.rule.amountMode !== 'fixed');
+  const counted = occurrences.filter((entry) => entry.status !== 'skipped');
+  const variableTotal = rows.reduce((sum, row) => sum + row.total, 0);
+  const confirmedTotal = confirmedRows.reduce((sum, row) => sum + row.total, 0);
+  const plannedTotal =
+    plannedRows.reduce((sum, row) => sum + row.total, 0) + counted.reduce((sum, entry) => sum + entry.amount, 0);
+  const reserveAmount = reserveAmountFor(reserves, year);
+  const reserveLinked = categories.filter((category) => category.reserve && !category.archived);
+  const expenseTotal = variableTotal + confirmedTotal + plannedTotal + reserveAmount;
   const plan = incomeTotal - expenseTotal;
 
-  // 見積費の回を「今年はなし」にする・戻す（その回の予定の月を skippedMonths に出し入れする）。
+  const failed = () => window.alert('保存できませんでした。もう一度お試しください。');
+
+  // 記録を作らない回を「今年はなし」にする・戻す（その回の予定の月を skippedMonths に出し入れする）。
   const openOccurrence = async (entry: EstimateCostOccurrence) => {
-    const title = `${occurrenceTitle(entry.rule, categories)}（${monthLabel(entry.plannedMonth)}の予定）`;
+    const title = `${ruleTitle(entry.rule, categories)}（${monthLabel(entry.plannedMonth)}）`;
     if (entry.status === 'done') {
-      window.alert(`${title}\n見積 ${formatYen(entry.amount)}・実績 ${formatYen(entry.actual)}。見積額・月を直すのは「固定支出」から。`);
+      window.alert(`${title}\n予定 ${formatYen(entry.amount)}・実績 ${formatYen(entry.actual)}`);
       return;
     }
     const skipped = entry.rule.skippedMonths ?? [];
     const isSkipped = skipped.includes(entry.plannedMonth);
-    const ok = window.confirm(
-      isSkipped
-        ? `${title}\nこの回を今年の予算と着地見込みに戻しますか？`
-        : `${title}\nこの回を今年はなしにしますか？ 今年の予算と着地見込みから外します（来年からは元どおり）。`,
-    );
-    if (!ok) return;
+    if (!window.confirm(`${title}\n${isSkipped ? '今年の予算に戻しますか？' : '今年はなしにしますか？'}`)) return;
     const next = isSkipped ? skipped.filter((monthKey) => monthKey !== entry.plannedMonth) : [...skipped, entry.plannedMonth].sort();
     try {
       const saved = await updateMoneyRecurringSkipped(supabase, entry.rule.id, next);
       onRecurring((prev) => prev.map((rule) => (rule.id === saved.id ? saved : rule)));
     } catch {
-      window.alert('保存できませんでした。もう一度お試しください。');
+      failed();
     }
-  };
-
-  const fixedRow = (row: (typeof fixedRows)[number]) => {
-    const period = recurringPeriodLabel(row.rule);
-    const active = row.amounts.filter((value) => value > 0).length;
-    return (
-      <div key={row.rule.id} className="flex items-center gap-2.5 px-3.5 py-2.5">
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-gray-900">{ruleTitle(row.rule, categories)}</span>
-          <span className={`block truncate ${type.faint}`}>
-            {row.rule.kind === 'income' ? '収入' : '支出'}・{active}か月{period !== '' ? `・${period}` : ''}
-          </span>
-        </span>
-        <span className={`text-sm font-extrabold tabular-nums ${row.rule.kind === 'income' ? incomeAmountClass : 'text-gray-900'}`}>
-          年 {formatYen(row.total)}
-        </span>
-      </div>
-    );
   };
 
   const save = async (category: MoneyCategory, amounts: (number | null)[]) => {
@@ -196,133 +175,220 @@ export default function BudgetEditor({
       const saved = await saveMoneyBudget(supabase, familyId, category.id, year, amounts);
       onBudgets((prev) => [...prev.filter((entry) => entry.id !== saved.id), saved]);
     } catch {
-      window.alert('保存できませんでした。もう一度お試しください。');
+      failed();
     }
+  };
+
+  const saveReserve = async (amount: number) => {
+    setEditingReserve(false);
+    try {
+      const saved = await saveMoneyReserve(supabase, familyId, year, amount);
+      onReserves((prev) => [...prev.filter((entry) => entry.year !== saved.year), saved]);
+    } catch {
+      failed();
+    }
+  };
+
+  const setReserveLink = async (categoryId: string, value: boolean) => {
+    setPickingReserve(false);
+    try {
+      const saved = await setMoneyCategoryReserve(supabase, categoryId, value);
+      onCategories((prev) => prev.map((category) => (category.id === saved.id ? saved : category)));
+    } catch {
+      failed();
+    }
+  };
+
+  const unlink = (category: MoneyCategory) => {
+    if (window.confirm(`${categoryPath(categories, category.id)}を予備費から外しますか？`)) void setReserveLink(category.id, false);
+  };
+
+  const groupHeader = (key: keyof typeof open, title: string, total: number | null, first: boolean) => (
+    <button
+      type="button"
+      aria-expanded={open[key]}
+      onClick={() => toggle(key)}
+      className={`flex w-full items-center gap-2 bg-gray-50 px-3.5 py-2.5 text-left ${first ? '' : 'border-t border-gray-200'}`}
+    >
+      {open[key] ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
+      <span className="flex-1 text-sm font-bold text-gray-700">{title}</span>
+      {total !== null && <span className="text-[13px] font-bold tabular-nums text-gray-500">年 {formatYen(total)}</span>}
+    </button>
+  );
+
+  const fixedRow = (row: RecurringYearRow) => (
+    <div key={row.rule.id} className={rowClass}>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-gray-900">{ruleTitle(row.rule, categories)}</span>
+        <span className={`block truncate ${type.faint}`}>{scheduleText(row.rule)}</span>
+      </span>
+      <span className="text-sm font-extrabold tabular-nums text-gray-900">年 {formatYen(row.total)}</span>
+    </div>
+  );
+
+  const sectionHeader = (title: string, total: number, onClick?: () => void) => {
+    const inner = (
+      <>
+        <span className="flex-1 text-[15px] font-extrabold text-gray-900">{title}</span>
+        <span className="text-[13px] font-bold tabular-nums text-gray-500">年 {formatYen(total)}</span>
+        {onClick && <ChevronRight size={16} className="text-gray-400" />}
+      </>
+    );
+    return onClick ? (
+      <button type="button" onClick={onClick} className="flex w-full items-center gap-1.5 px-0.5 pt-4 pb-1.5 text-left">
+        {inner}
+      </button>
+    ) : (
+      <div className="flex items-center gap-1.5 px-0.5 pt-4 pb-1.5">{inner}</div>
+    );
   };
 
   return (
     <FullScreen onBack={onClose}>
-      <ScreenHeader title="予算" onClose={onClose} />
-      <div className="shrink-0 flex items-center gap-2 px-4 py-2.5">
-        <button type="button" aria-label="前の年" onClick={() => setYear((current) => current - 1)} className={yearButtonClass}>
-          <ChevronLeft size={18} />
-        </button>
-        <span className="text-base font-bold text-gray-900 tabular-nums">{formatYear(year)}</span>
-        <button type="button" aria-label="次の年" onClick={() => setYear((current) => current + 1)} className={yearButtonClass}>
-          <ChevronRight size={18} />
-        </button>
-      </div>
+      {pickingReserve ? (
+        <StackedScreen onBack={() => setPickingReserve(false)}>
+          <CategoryPicker
+            kind="expense"
+            monthKey={monthKeyOfDate(new Date())}
+            categories={categories}
+            budgets={budgets}
+            records={records}
+            onPick={(choice) => void setReserveLink(choice.categoryId, true)}
+            onClose={() => setPickingReserve(false)}
+          />
+        </StackedScreen>
+      ) : (
+        <>
+          <ScreenHeader title="予算" onClose={onClose} />
+          <div className="shrink-0 flex items-center gap-2 px-4 py-2.5">
+            <button type="button" aria-label="前の年" onClick={() => setYear((current) => current - 1)} className={yearButtonClass}>
+              <ChevronLeft size={18} />
+            </button>
+            <span className="text-base font-bold text-gray-900 tabular-nums">{formatYear(year)}</span>
+            <button type="button" aria-label="次の年" onClick={() => setYear((current) => current + 1)} className={yearButtonClass}>
+              <ChevronRight size={18} />
+            </button>
+          </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pb-8">
-        <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
-          <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
-            <span className="flex-1 text-[13px] font-semibold text-gray-500">固定収入</span>
-            <span className={`text-base font-extrabold tabular-nums ${incomeAmountClass}`}>{formatYen(incomeTotal)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
-            <span className="flex-1 text-[13px] font-semibold text-gray-500">支出の予算</span>
-            <span className="text-base font-extrabold tabular-nums text-gray-900">{formatYen(expenseTotal)}</span>
-          </div>
-          <div className="px-3.5 py-1.5">
-            {[
-              { label: '変動費', value: variableTotal },
-              { label: '固定費', value: fixedTotal },
-              { label: '見積費', value: estimateTotal },
-            ].map((part) => (
-              <div key={part.label} className="flex items-center justify-between gap-2 py-0.5 pl-3.5">
-                <span className="flex-1 text-xs font-medium text-gray-400">{part.label}</span>
-                <span className="text-xs font-bold tabular-nums text-gray-500">{formatYen(part.value)}</span>
+          <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pb-8">
+            <div className={`${cardClass} overflow-hidden`}>
+              <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
+                <span className="flex-1 text-[13px] font-semibold text-gray-500">固定収入</span>
+                <span className={`text-base font-extrabold tabular-nums ${incomeAmountClass}`}>{formatYen(incomeTotal)}</span>
               </div>
-            ))}
-          </div>
-          <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
-            <span className="flex-1 text-[13px] font-semibold text-gray-500">収支</span>
-            <span className={`text-base font-extrabold tabular-nums ${plan > 0 ? incomeAmountClass : 'text-gray-900'}`}>
-              {plan < 0 ? '−' : ''}
-              {formatYen(plan)}
-            </span>
-          </div>
-        </div>
-
-        <SectionHeader compact title="変動費（大分類ごとの月の予算）" />
-        {rows.length === 0 ? (
-          <p className="py-4 text-center text-[13px] font-medium text-gray-400">生活費の大分類がありません。先に「カテゴリ」で作ってください</p>
-        ) : (
-          <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
-            {rows.map((row) => (
-              <button
-                key={row.top.id}
-                type="button"
-                aria-label={`${row.top.name}の${formatYear(year)}の予算を決める`}
-                onClick={() => setEditing(row.top)}
-                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-gray-50"
-              >
-                <CategoryIcon iconKey={iconKeyOf(row.top)} size={28} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-gray-900">{row.top.name}</span>
-                  <span className={`block truncate ${type.faint}`}>
-                    {row.total === 0 ? '予算なし' : `${row.even ? '毎月' : '月平均'} ${formatYen(row.average)}`}
-                    {row.fixed + row.estimate > 0 ? `・ほかに固定費・見積費 年${formatYen(row.fixed + row.estimate)}` : ''}
-                    {row.inherited && row.total > 0 ? '・前年から引き継ぎ' : ''}
-                  </span>
+              <div className="flex items-center justify-between gap-2 border-t border-gray-200 px-3.5 py-2.5">
+                <span className="flex-1 text-[13px] font-semibold text-gray-500">支出の予算</span>
+                <span className="text-base font-extrabold tabular-nums text-gray-900">{formatYen(expenseTotal)}</span>
+              </div>
+              <div className="pb-1.5">
+                {[
+                  { label: '変動費', value: variableTotal, sub: false },
+                  { label: '固定費', value: confirmedTotal + plannedTotal, sub: false },
+                  { label: '確定', value: confirmedTotal, sub: true },
+                  { label: '予定', value: plannedTotal, sub: true },
+                  { label: '予備費', value: reserveAmount, sub: false },
+                ].map((part) => (
+                  <div key={part.label} className={`flex items-center justify-between gap-2 py-0.5 pr-3.5 ${part.sub ? 'pl-10' : 'pl-6'}`}>
+                    <span className={`flex-1 ${part.sub ? 'text-[11px] text-gray-400' : 'text-xs text-gray-500'}`}>{part.label}</span>
+                    <span className={`font-bold tabular-nums ${part.sub ? 'text-[11px] text-gray-400' : 'text-xs text-gray-500'}`}>
+                      {formatYen(part.value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between gap-2 border-t border-gray-200 px-3.5 py-2.5">
+                <span className="flex-1 text-[13px] font-bold text-gray-900">収支の見込み</span>
+                <span className={`text-lg font-extrabold tabular-nums ${plan > 0 ? incomeAmountClass : 'text-gray-900'}`}>
+                  {plan < 0 ? '−' : plan > 0 ? '＋' : ''}
+                  {formatYen(plan)}
                 </span>
-                <span className="text-sm font-extrabold tabular-nums text-gray-900">{row.total === 0 ? '−' : `年 ${formatYen(row.total)}`}</span>
-                <ChevronRight size={16} className="text-gray-400" />
-              </button>
-            ))}
+              </div>
+            </div>
+
+            {sectionHeader('変動費', variableTotal)}
+            {rows.length === 0 ? (
+              <p className="py-4 text-center text-[13px] font-medium text-gray-400">生活費の大分類がありません。先に「カテゴリ」で作ってください</p>
+            ) : (
+              <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
+                {rows.map((row) => (
+                  <button
+                    key={row.top.id}
+                    type="button"
+                    aria-label={`${row.top.name}の${formatYear(year)}の予算を決める`}
+                    onClick={() => setEditing(row.top)}
+                    className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-gray-50"
+                  >
+                    <CategoryIcon iconKey={iconKeyOf(row.top)} size={28} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-gray-900">{row.top.name}</span>
+                      <span className={`block truncate ${type.faint}`}>
+                        {row.total === 0 ? '予算なし' : row.even ? '毎月' : '月平均'}
+                        {row.inherited && row.total > 0 ? '・前年から引き継ぎ' : ''}
+                      </span>
+                    </span>
+                    <span className="text-sm font-extrabold tabular-nums text-gray-900">
+                      {row.total === 0 ? '−' : formatYen(row.even ? row.total / 12 : row.average)}
+                    </span>
+                    <ChevronRight size={16} className="text-gray-400" />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {sectionHeader('固定費', confirmedTotal + plannedTotal)}
+            <div className={`${cardClass} overflow-hidden`}>
+              {groupHeader('confirmed', '確定', confirmedTotal, true)}
+              {open.confirmed && confirmedRows.map(fixedRow)}
+              {groupHeader('planned', '予定', plannedTotal, false)}
+              {open.planned && plannedRows.map(fixedRow)}
+              {open.planned &&
+                occurrences.map((entry) => (
+                  <button
+                    key={`${entry.rule.id}-${entry.plannedMonth}`}
+                    type="button"
+                    onClick={() => void openOccurrence(entry)}
+                    className={`${rowClass} hover:bg-gray-50`}
+                  >
+                    <span className="w-9 shrink-0 text-[13px] font-bold tabular-nums text-gray-700">
+                      {monthLabel(entry.actualMonth ?? entry.plannedMonth)}
+                    </span>
+                    <span
+                      className={`min-w-0 flex-1 truncate text-sm font-semibold ${entry.status === 'skipped' ? 'text-gray-400 line-through' : 'text-gray-900'}`}
+                    >
+                      {ruleTitle(entry.rule, categories)}
+                    </span>
+                    {entry.status === 'done' && (
+                      <span className="shrink-0 rounded-full bg-gray-100 px-2 py-px text-[11px] font-bold text-gray-500">済</span>
+                    )}
+                    <span
+                      className={`text-sm font-extrabold tabular-nums ${entry.status === 'skipped' ? 'text-gray-400 line-through' : 'text-gray-900'}`}
+                    >
+                      {formatYen(entry.amount)}
+                    </span>
+                  </button>
+                ))}
+            </div>
+
+            {sectionHeader('予備費', reserveAmount, () => setEditingReserve(true))}
+            <div className={`${cardClass} overflow-hidden`}>
+              {groupHeader('reserve', '小分類', null, true)}
+              {open.reserve &&
+                reserveLinked.map((category) => (
+                  <button key={category.id} type="button" onClick={() => unlink(category)} className={`${rowClass} hover:bg-gray-50`}>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{categoryPath(categories, category.id)}</span>
+                    <ChevronRight size={16} className="text-gray-400" />
+                  </button>
+                ))}
+              {open.reserve && (
+                <button type="button" onClick={() => setPickingReserve(true)} className={`${rowClass} text-sm font-bold text-blue-600 hover:bg-gray-50`}>
+                  <Plus size={16} />
+                  小分類を紐づける
+                </button>
+              )}
+            </div>
           </div>
-        )}
-
-        <SectionHeader compact title="固定費（自動で記録）" />
-        {outgoRows.length === 0 ? (
-          <p className="py-4 text-center text-[13px] font-medium text-gray-400">この年に効く固定支出はありません</p>
-        ) : (
-          <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>{outgoRows.map(fixedRow)}</div>
-        )}
-
-        <SectionHeader compact title="見積費（記録は作らない）" />
-        {occurrences.length === 0 ? (
-          <p className="py-4 text-center text-[13px] font-medium text-gray-400">
-            この年の見積費はありません。車検・ふるさと納税などは「固定支出」で見積費として足します
-          </p>
-        ) : (
-          <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
-            {occurrences.map((entry) => (
-              <button
-                key={`${entry.rule.id}-${entry.plannedMonth}`}
-                type="button"
-                onClick={() => void openOccurrence(entry)}
-                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-gray-50"
-              >
-                <span className={`w-9 shrink-0 text-[13px] font-bold tabular-nums ${entry.status === 'overdue' ? 'text-amber-800' : 'text-blue-800'}`}>
-                  {monthLabel(entry.actualMonth ?? entry.plannedMonth)}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className={`block truncate text-sm font-semibold ${entry.status === 'skipped' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
-                    {occurrenceTitle(entry.rule, categories)}
-                  </span>
-                  <span className={`block ${entry.status === 'overdue' ? 'text-[11px] font-medium text-amber-800' : type.faint}`}>
-                    {occurrenceStatus(entry, thisMonth)}
-                  </span>
-                </span>
-                <span className={`text-sm font-extrabold tabular-nums ${entry.status === 'skipped' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
-                  {formatYen(entry.amount)}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {incomeRows.length > 0 && (
-          <>
-            <SectionHeader compact title="固定収入" />
-            <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>{incomeRows.map(fixedRow)}</div>
-          </>
-        )}
-        <p className="pt-2 text-[11px] font-medium leading-relaxed text-gray-400">
-          固定費・見積費・固定収入を足す・直すのは、家計の設定の「固定支出」「固定収入」から
-        </p>
-      </div>
+        </>
+      )}
 
       {editing !== null && (
         <BudgetModal
@@ -331,13 +397,51 @@ export default function BudgetEditor({
           year={year}
           monthAmounts={budgetMonths(budgets, editing.id, year)}
           previousAmounts={budgetMonths(budgets, editing.id, year - 1)}
-          fixed={monthKeys.map((key) => fixedBudgetFor(budgets, editing.id, key))}
-          estimate={monthKeys.map((key) => estimateBudgetFor(budgets, editing.id, key))}
+          fixed={monthKeys.map((key) => fixedBudgetFor(budgets, editing.id, key) + estimateBudgetFor(budgets, editing.id, key))}
           onClose={() => setEditing(null)}
           onSubmit={(amounts) => void save(editing, amounts)}
         />
       )}
+      {editingReserve && (
+        <ReserveModal year={year} amount={reserveAmount} onClose={() => setEditingReserve(false)} onSubmit={(amount) => void saveReserve(amount)} />
+      )}
     </FullScreen>
+  );
+}
+
+/** 予備費の年の額。 */
+function ReserveModal({
+  year,
+  amount,
+  onClose,
+  onSubmit,
+}: {
+  year: number;
+  amount: number;
+  onClose: () => void;
+  onSubmit: (amount: number) => void;
+}) {
+  const [text, setText] = useState(amount > 0 ? String(amount) : '');
+  const [error, setError] = useState<string | null>(null);
+  const submit = () => {
+    const value = text.trim() === '' ? 0 : parseAmountInput(text);
+    if (value === null) return setError('0以上の整数（円）で入れてください');
+    onSubmit(value);
+  };
+  return (
+    <ModalShell title={`予備費（${formatYear(year)}）`} onClose={onClose} footer={<PrimaryButton label="保存する" onClick={submit} />}>
+      <div className="space-y-2">
+        <input
+          className={`${inputClass} tabular-nums`}
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          inputMode="numeric"
+          placeholder="年の額（円）"
+          aria-label="予備費の年の額"
+        />
+        {error && <p className="text-xs text-red-500">{error}</p>}
+      </div>
+    </ModalShell>
   );
 }
 
@@ -347,7 +451,6 @@ function BudgetModal({
   monthAmounts,
   previousAmounts,
   fixed,
-  estimate,
   onClose,
   onSubmit,
 }: {
@@ -355,9 +458,8 @@ function BudgetModal({
   year: number;
   monthAmounts: (number | null)[];
   previousAmounts: (number | null)[];
+  /** その月に足される固定費（確定と予定）。 */
   fixed: number[];
-  /** その月に足される見積費（docs/kakei.md §3.6）。 */
-  estimate: number[];
   onClose: () => void;
   onSubmit: (amounts: (number | null)[]) => void;
 }) {
@@ -409,11 +511,8 @@ function BudgetModal({
         </button>
         {amounts.map((text, index) => {
           const manual = text.trim() === '' ? null : parseAmountInput(text);
-          const total = (manual ?? 0) + fixed[index] + estimate[index];
-          const added = [
-            fixed[index] > 0 ? `＋固定費 ${formatYen(fixed[index])}` : '',
-            estimate[index] > 0 ? `＋見積費 ${formatYen(estimate[index])}` : '',
-          ].join('');
+          const total = (manual ?? 0) + fixed[index];
+          const added = fixed[index] > 0 ? `＋固定費 ${formatYen(fixed[index])}` : '';
           return (
             <div key={index} className="flex items-center gap-2">
               <span className="w-9 shrink-0 text-[13px] font-bold text-gray-700">{index + 1}月</span>

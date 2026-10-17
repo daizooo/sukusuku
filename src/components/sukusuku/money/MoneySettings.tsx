@@ -8,6 +8,7 @@ import type {
   MoneyFeedData,
   MoneyRecord,
   MoneyRecurring,
+  MoneyReserve,
   MoneyStore,
   MoneyWallet,
 } from '@/types/app';
@@ -40,6 +41,9 @@ interface MoneySettingsProps {
   onBudgets: (update: (prev: MoneyBudget[]) => MoneyBudget[]) => void;
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
+  /** 予備費の年の額（docs/kakei.md §3.7）。 */
+  reserves: MoneyReserve[];
+  onReserves: (update: (prev: MoneyReserve[]) => MoneyReserve[]) => void;
   /** Zaim 取り込み（docs/kakei.md §9.5.6）。null は読み込み中。 */
   feed: MoneyFeedData | null;
   /** 取り込みの設定を直したあとに読み直す。 */
@@ -62,6 +66,8 @@ export default function MoneySettings({
   onBudgets,
   onStores,
   onRecurring,
+  reserves,
+  onReserves,
   feed,
   onFeedChanged,
   onClose,
@@ -82,7 +88,7 @@ export default function MoneySettings({
   const rows: { id: Exclude<Page, 'menu'>; label: string; summary: string; icon: LucideIcon }[] = [
     { id: 'categories', label: 'カテゴリ', summary: `支出の大分類 ${tops.length}個・小分類 ${childCount}個`, icon: Tag },
     { id: 'budget', label: '予算', summary: `${formatYear(year)}の支出の予算 年${formatYen(yearBudget)}（年ごとに決める）`, icon: PiggyBank },
-    { id: 'recurring', label: '固定支出', summary: `自動で記録 ${recurringCount}件・見積費 ${estimateCount}件`, icon: CalendarClock },
+    { id: 'recurring', label: '固定支出', summary: `自動で記録 ${recurringCount}件・記録しない ${estimateCount}件`, icon: CalendarClock },
     { id: 'income', label: '固定収入', summary: `給与・賞与 ${incomeCount}件（自動で記録）`, icon: Banknote },
     { id: 'stores', label: 'よく行くお店', summary: `登録したお店 ${storeCount}件`, icon: Store },
     {
@@ -169,6 +175,9 @@ export default function MoneySettings({
           records={records}
           onBudgets={onBudgets}
           onRecurring={onRecurring}
+          reserves={reserves}
+          onReserves={onReserves}
+          onCategories={onCategories}
           onClose={back}
         />
       )}

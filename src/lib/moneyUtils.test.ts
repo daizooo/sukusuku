@@ -3,6 +3,11 @@
 import assert from 'node:assert/strict';
 
 import {
+  RESERVE_ROW,
+  reserveAmountFor,
+  reserveBudgetFor,
+  reserveBudgetRows,
+  reserveUsage,
   estimateBudgetFor,
   estimateBudgetRows,
   estimateCostBasis,
@@ -1310,4 +1315,49 @@ assert.deepEqual(
     estimateCostsInYear([{ ...ins, skippedMonths: ['2027-09'] }], rs, 2027, today)[0].status,
     'skipped',
   );
+}
+
+// ---- 予備費（docs/kakei.md §3.7） ----
+{
+  const cats = [
+    { id: 'food', kind: 'living', parentId: null, archived: false, position: 0, name: '食費', reserve: false },
+    { id: 'ev', kind: 'living', parentId: null, archived: false, position: 1, name: '交際費', reserve: false },
+    { id: 'kankon', kind: 'living', parentId: 'ev', archived: false, position: 0, name: '冠婚葬祭', reserve: true },
+  ] as unknown as MoneyCategory[];
+  const spent = (id: string, occurredOn: string, categoryId: string, amount: number) =>
+    ({
+      id, kind: 'expense', occurredOn, walletId: 'card', toWalletId: null, store: '', isEstimate: false, recurringId: null, month: null,
+      items: [{ id: `i-${id}`, amount, categoryId, name: '' }],
+    }) as unknown as MoneyRecord;
+  const rs = [
+    spent('a', '2027-03-10', 'kankon', 30000),
+    spent('b', '2027-06-10', 'kankon', 50000),
+    spent('c', '2027-08-10', 'kankon', 40000),
+    spent('d', '2027-04-10', 'food', 5000),
+  ];
+  const reserves = [{ year: 2027, amount: 100000 }];
+  const today = '2027-10-20';
+
+  assert.equal(reserveAmountFor(reserves, 2027), 100000);
+  assert.equal(reserveAmountFor(reserves, 2028), 100000, '決めていない年は前の年の額を引き継ぐ');
+  assert.equal(reserveAmountFor(reserves, 2026), 0);
+
+  const usage = reserveUsage(reserves, cats, rs, 2027);
+  assert.equal(usage.used, 100000, '予備費の額まで');
+  assert.deepEqual(usage.byTopMonth.get('ev')?.slice(2, 8), [30000, 0, 0, 50000, 0, 20000], '紐づけた小分類の記録を、その大分類・月に（残りを超えた分は数えない）');
+  assert.equal(usage.byTopMonth.has('food'), false, '紐づけていない小分類は数えない');
+
+  const rows = reserveBudgetRows(reserves, cats, rs, today);
+  assert.equal(reserveBudgetFor(rows, 'ev', '2027-08'), 20000);
+  assert.equal(budgetFor(rows, 'ev', '2027-06'), 50000, '予備費で数えた分は、その月の大分類の予算になる');
+  assert.equal(reserveBudgetFor(rows, RESERVE_ROW, '2027-12'), 0, '使い切った年は、残りを置かない');
+  assert.equal(reserveBudgetFor(rows, RESERVE_ROW, '2028-01'), 8333, '先の年は12か月へ均等に');
+  assert.equal(reserveBudgetFor(rows, RESERVE_ROW, '2028-12'), 100000 - 8333 * 11, '端数は12月へ');
+  assert.equal(fixedBudgetFor(rows, 'ev', '2027-06'), 0, '予備費は固定費に数えない');
+
+  const more = reserveBudgetRows([{ year: 2027, amount: 200000 }], cats, rs, today);
+  assert.equal(reserveBudgetFor(more, RESERVE_ROW, '2027-09'), 0, '今年の残りは今月から');
+  assert.equal(reserveBudgetFor(more, RESERVE_ROW, '2027-10'), 26666, '残り 80,000 を10〜12月へ');
+  assert.equal(reserveBudgetFor(more, RESERVE_ROW, '2027-12'), 80000 - 26666 * 2);
+  assert.equal(monthForecastBalance([], cats, more, rs, '2027-10'), -26666, '着地見込みの月の見込みから、まだ使っていない予備費を引く');
 }

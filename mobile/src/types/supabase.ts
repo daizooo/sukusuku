@@ -903,6 +903,7 @@ export type Database = {
           name: string
           parent_id: string | null
           position: number
+          reserve: boolean
           updated_at: string
         }
         Insert: {
@@ -916,6 +917,7 @@ export type Database = {
           name: string
           parent_id?: string | null
           position?: number
+          reserve?: boolean
           updated_at?: string
         }
         Update: {
@@ -929,6 +931,7 @@ export type Database = {
           name?: string
           parent_id?: string | null
           position?: number
+          reserve?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -1714,6 +1717,38 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "money_wallets"
             referencedColumns: ["id", "family_id"]
+          },
+        ]
+      }
+      money_reserves: {
+        Row: {
+          amount: number
+          created_at: string
+          family_id: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          family_id: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          family_id?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_reserves_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
           },
         ]
       }

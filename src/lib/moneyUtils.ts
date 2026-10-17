@@ -22,6 +22,7 @@ import type {
   MoneyRecord,
   MoneyRecordKind,
   MoneyRecurring,
+  MoneyReserve,
   MoneySecuritiesData,
   MoneySecurity,
   MoneySecurityKind,
@@ -877,6 +878,97 @@ export function estimateBudgetRows(
   });
 }
 
+// ---- 予備費（docs/kakei.md §3.7。2026-10-18） ----
+// 起きるかどうかも、いつかも分からない出費（冠婚葬祭・家電の故障など）のための年の額。予算の一部で、紐づけた小分類の予算になる。
+// 紐づけた小分類（MoneyCategory.reserve）の記録は、予備費の残りがあるうちは、その記録の大分類・月の予算に予備費から同じ額を足す
+// （その月の大分類が予算を超えたように見えない）。まだ使っていない分は、年末の着地見込みで引く（今年は今月から12月へ均等に置く）。
+
+/** まだ使っていない予備費を置く行の categoryId（カテゴリではない。着地見込みだけが読む）。 */
+export const RESERVE_ROW = '__reserve__';
+
+/** その年の予備費の額。その年の行が無ければ、前の年のいちばん近い行の額（毎年入れ直さなくてよい）。どこにも無ければ 0。 */
+export function reserveAmountFor(reserves: readonly MoneyReserve[], year: number): number {
+  let found: MoneyReserve | null = null;
+  for (const reserve of reserves) {
+    if (reserve.year > year) continue;
+    if (found === null || reserve.year > found.year) found = reserve;
+  }
+  return found?.amount ?? 0;
+}
+
+/** その年の予備費の使い方。used は紐づけた小分類の記録のうち予備費で数えた額（予備費の額まで）。byTopMonth は大分類ごとの1月〜12月。 */
+export function reserveUsage(
+  reserves: readonly MoneyReserve[],
+  categories: readonly MoneyCategory[],
+  records: readonly MoneyRecord[],
+  year: number,
+): { amount: number; used: number; byTopMonth: Map<string, number[]> } {
+  const amount = reserveAmountFor(reserves, year);
+  const byTopMonth = new Map<string, number[]>();
+  const linked = new Set(categories.filter((category) => category.reserve).map((category) => category.id));
+  if (amount <= 0 || linked.size === 0) return { amount, used: 0, byTopMonth };
+  const byId = new Map(categories.map((category) => [category.id, category]));
+  let remaining = amount;
+  const inYear = records
+    .filter((record) => record.kind === 'expense' && yearOfMonth(monthKeyOf(record.occurredOn)) === year)
+    .sort((a, b) => (a.occurredOn < b.occurredOn ? -1 : a.occurredOn > b.occurredOn ? 1 : 0));
+  for (const record of inYear) {
+    for (const item of record.items) {
+      if (remaining <= 0) break;
+      if (item.categoryId === null || !linked.has(item.categoryId) || item.amount <= 0) continue;
+      const category = byId.get(item.categoryId);
+      const top = category && category.parentId !== null ? byId.get(category.parentId) : category;
+      if (!top || top.kind !== 'living') continue;
+      const covered = Math.min(item.amount, remaining);
+      remaining -= covered;
+      const months = byTopMonth.get(top.id) ?? Array.from({ length: 12 }, () => 0);
+      months[Number(record.occurredOn.slice(5, 7)) - 1] += covered;
+      byTopMonth.set(top.id, months);
+    }
+  }
+  return { amount, used: amount - remaining, byTopMonth };
+}
+
+/**
+ * 予備費から、予算に足す行（fixed: true・reserve: true）。使った分は、その記録の大分類・月の行に。
+ * まだ使っていない分は RESERVE_ROW の行に、今年は今月から12月へ、先の年（今年の翌年まで）は1月から12月へ均等に置く。過ぎた年の残りは置かない。
+ */
+export function reserveBudgetRows(
+  reserves: readonly MoneyReserve[],
+  categories: readonly MoneyCategory[],
+  records: readonly MoneyRecord[],
+  today: string,
+): MoneyBudget[] {
+  if (reserves.length === 0) return [];
+  const thisYear = yearOfMonth(today);
+  const thisMonth = Number(today.slice(5, 7));
+  const rows: MoneyBudget[] = [];
+  for (let year = Math.min(...reserves.map((reserve) => reserve.year)); year <= thisYear + 1; year += 1) {
+    const usage = reserveUsage(reserves, categories, records, year);
+    for (const [categoryId, monthAmounts] of usage.byTopMonth) {
+      rows.push({ id: `reserve:${categoryId}|${year}`, categoryId, year, monthAmounts, fixed: true, reserve: true });
+    }
+    const left = usage.amount - usage.used;
+    if (left <= 0 || year < thisYear) continue;
+    const from = year === thisYear ? thisMonth : 1;
+    const count = 13 - from;
+    const monthAmounts = Array.from({ length: 12 }, (_, index) => {
+      if (index + 1 < from) return 0;
+      const base = Math.floor(left / count);
+      return index === 11 ? left - base * (count - 1) : base;
+    });
+    rows.push({ id: `reserve:${RESERVE_ROW}|${year}`, categoryId: RESERVE_ROW, year, monthAmounts, fixed: true, reserve: true });
+  }
+  return rows;
+}
+
+/** その月（YYYY-MM）に、予備費から足される額（その年の行だけ。無ければ 0）。categoryId に RESERVE_ROW を渡すと、まだ使っていない分。 */
+export function reserveBudgetFor(budgets: readonly MoneyBudget[], categoryId: string, monthKey: string): number {
+  const year = yearOfMonth(monthKey);
+  const row = budgets.find((budget) => budget.reserve && budget.categoryId === categoryId && budget.year === year);
+  return row?.monthAmounts[Number(monthKey.slice(5, 7)) - 1] ?? 0;
+}
+
 /**
  * その月（YYYY-MM）の大分類の、手入力の月の予算（固定費は含まない）。予算は年ごとに12か月ぶんを持つので、
  * 年の途中で直しても、直した月より前の月は変わらない。
@@ -902,7 +994,7 @@ export function fixedBudgetFor(budgets: readonly MoneyBudget[], categoryId: stri
   const year = yearOfMonth(monthKey);
   let found: MoneyBudget | null = null;
   for (const budget of budgets) {
-    if (budget.categoryId !== categoryId || !budget.fixed || budget.estimate || budget.year > year) continue;
+    if (budget.categoryId !== categoryId || !budget.fixed || budget.estimate || budget.reserve || budget.year > year) continue;
     if (found === null || budget.year > found.year) found = budget;
   }
   return found?.monthAmounts[Number(monthKey.slice(5, 7)) - 1] ?? 0;
@@ -922,12 +1014,15 @@ export function estimateBudgetFor(budgets: readonly MoneyBudget[], categoryId: s
 }
 
 /**
- * その月（YYYY-MM）の大分類の月の予算＝手入力の額（変動費）＋その月の固定費＋その月の見積費（2026-10-11。見積費は2026-10-17）。
+ * その月（YYYY-MM）の大分類の月の予算＝手入力の額（変動費）＋その月の固定費＋その月の見積費＋予備費で数えた分（2026-10-11。見積費は2026-10-17、予備費は2026-10-18）。
  * どれも無い月は null（予算なし）。
  */
 export function budgetFor(budgets: readonly MoneyBudget[], categoryId: string, monthKey: string): number | null {
   const manual = manualBudgetFor(budgets, categoryId, monthKey);
-  const fixed = fixedBudgetFor(budgets, categoryId, monthKey) + estimateBudgetFor(budgets, categoryId, monthKey);
+  const fixed =
+    fixedBudgetFor(budgets, categoryId, monthKey) +
+    estimateBudgetFor(budgets, categoryId, monthKey) +
+    reserveBudgetFor(budgets, categoryId, monthKey);
   return manual === null && fixed === 0 ? null : (manual ?? 0) + fixed;
 }
 
@@ -1415,6 +1510,7 @@ export function yearToDateBalance(
 /**
  * その月（YYYY-MM）の収支の見込み＝固定収入の見込み − 固定費の見込み − 見積費 − 変動費の予算（docs/kakei.md §4.6）。
  * 見積費は budgets の見積費の行（estimateBudgetRows。置く月に見積額）から引く（2026-10-17）。
+ * 予備費は、予備費で数えた分（その月の大分類）と、まだ使っていない分（RESERVE_ROW の行）を引く（2026-10-18。reserveBudgetRows）。
  * 固定収入・固定費は記録を作る条件と同じルール（使っていて、出金元とカテゴリが決まっていて、記録する月・期間の中。振替は除く）で、
  * 額は予算に足す額と同じ（recurringMonthAmount）。変動費の予算は生活費の大分類の手入力の予算（固定費は含まない）。
  * 今月の実績は使わない。
@@ -1441,8 +1537,13 @@ export function monthForecastBalance(
     balance += rule.kind === 'income' ? amount : -amount;
   }
   for (const category of topCategories(categories, 'living')) {
-    balance -= (manualBudgetFor(budgets, category.id, monthKey) ?? 0) + estimateBudgetFor(budgets, category.id, monthKey);
+    balance -=
+      (manualBudgetFor(budgets, category.id, monthKey) ?? 0) +
+      estimateBudgetFor(budgets, category.id, monthKey) +
+      reserveBudgetFor(budgets, category.id, monthKey);
   }
+  // まだ使っていない予備費（docs/kakei.md §3.7）。
+  balance -= reserveBudgetFor(budgets, RESERVE_ROW, monthKey);
   return balance;
 }
 

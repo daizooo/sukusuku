@@ -8,6 +8,7 @@ import type {
   MoneyFeedData,
   MoneyFeedItem,
   MoneyMonth,
+  MoneyReserve,
   MoneyRecord,
   MoneyRecordDraft,
   MoneyRecurring,
@@ -63,6 +64,7 @@ import {
   dateKeyOfDate,
   estimateBudgetRows,
   fixedBudgetRows,
+  reserveBudgetRows,
   formatYen,
   isMonthClosed,
   monthKeyOf,
@@ -126,6 +128,7 @@ const MONEY_TABLES = [
   'money_months',
   'money_records',
   'money_recurring',
+  'money_reserves',
   'money_securities',
   'money_stores',
   'money_wallet_balances',
@@ -143,6 +146,8 @@ export default function MoneyScreen() {
   const [stores, setStores] = useState<MoneyStore[]>([]);
   const [records, setRecords] = useState<MoneyRecord[]>([]);
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
+  // 予備費の年の額（docs/kakei.md §3.7）。
+  const [reserves, setReserves] = useState<MoneyReserve[]>([]);
   // 手入力の予算（budgets）に、固定費から出した月ごとの額（記録と同じ額）を足した予算。画面にはこちらを渡す（docs/kakei.md §3.1）。
   const allBudgets = useMemo(
     () => {
@@ -152,9 +157,11 @@ export default function MoneyScreen() {
         ...fixedBudgetRows(recurring, categories, records, today),
         // 見積費（車検・ふるさと納税など。記録を作らず、予算と着地見込みにだけ入る。docs/kakei.md §3.6）。
         ...estimateBudgetRows(recurring, categories, records, today),
+        // 予備費（使った分はその大分類・月、まだ使っていない分は着地見込みだけが読む行。docs/kakei.md §3.7）。
+        ...reserveBudgetRows(reserves, categories, records, today),
       ];
     },
-    [budgets, recurring, categories, records],
+    [budgets, recurring, categories, records, reserves],
   );
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   // 月の締め（docs/kakei.md §4.5）。
@@ -206,6 +213,7 @@ export default function MoneyScreen() {
     setRecurring(money.recurring);
     setBalances(money.balances);
     setClosings(money.months);
+    setReserves(money.reserves);
     setSecurities(loadedSecurities);
   }, []);
 
@@ -778,6 +786,8 @@ export default function MoneyScreen() {
           onBudgets={setBudgets}
           onStores={setStores}
           onRecurring={setRecurring}
+          reserves={reserves}
+          onReserves={setReserves}
           feed={feed}
           onFeedChanged={reloadFeed}
           onClose={() => setSettingsOpen(false)}
@@ -819,6 +829,9 @@ export default function MoneyScreen() {
           records={records}
           onBudgets={setBudgets}
           onRecurring={setRecurring}
+          reserves={reserves}
+          onReserves={setReserves}
+          onCategories={setCategories}
           onClose={() => setBudgetYear(null)}
         />
       )}
