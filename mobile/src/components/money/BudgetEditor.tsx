@@ -629,7 +629,6 @@ const styles = StyleSheet.create({
   nameLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   shrink: { flexShrink: 1 },
   message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
-  note: { fontSize: 11, fontWeight: '500', color: colors.textFaint, lineHeight: 17, paddingTop: 8 },
   field: { gap: 6 },
   hint: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
   input: {
