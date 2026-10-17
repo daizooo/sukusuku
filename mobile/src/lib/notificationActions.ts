@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { supabase } from '@/lib/supabase';
 import { updateTaskDone, updateTaskDoneDates } from '@/lib/api/tasks';
@@ -89,6 +90,35 @@ export async function presentActionableNotification(
   });
 }
 
+/**
+ * 押したが、まだ書き込めていない完了。通知は押した時点で消すので、裏で書き込む前にアプリの処理が
+ * 止まっても（電波が無い・端末が眠る・処理が打ち切られる）、完了が失われないよう端末に控える。
+ * 書き込めたら外し、書き込めなかった分は次にアプリを開いたときに書き込み直す（flushPendingCompletions）。
+ */
+const PENDING_KEY = 'sukusuku.notificationActions.pendingCompletions';
+
+type PendingCompletion = { taskId: string; date: string | null };
+
+const samePending = (a: PendingCompletion, b: PendingCompletion) =>
+  a.taskId === b.taskId && a.date === b.date;
+
+async function readPending(): Promise<PendingCompletion[]> {
+  try {
+    const raw = await AsyncStorage.getItem(PENDING_KEY);
+    return raw ? (JSON.parse(raw) as PendingCompletion[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function updatePending(change: (list: PendingCompletion[]) => PendingCompletion[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PENDING_KEY, JSON.stringify(change(await readPending())));
+  } catch (err) {
+    console.error('Failed to save pending completions:', err);
+  }
+}
+
 /** いま処理している押下。同じ押下が2つの入口から同時に届いても、行うのは一度だけにする。 */
 const inFlight = new Set<string>();
 
@@ -136,8 +166,12 @@ export async function handleNotificationAction(
 
   try {
     if (!taskId) throw new Error(`お知らせにタスクのidがありません: ${JSON.stringify(Object.keys(data))}`);
-    await completeTask(taskId, stringOf(data.date));
-    console.log('[notification-action] completed', taskId, stringOf(data.date));
+    const pending: PendingCompletion = { taskId, date: stringOf(data.date) };
+    // 書き込む前に控える。書き込めたら外す（書き込めなかった分は次に開いたときに書き込み直す）。
+    await updatePending((list) => (list.some((p) => samePending(p, pending)) ? list : [...list, pending]));
+    await completeTask(pending.taskId, pending.date);
+    await updatePending((list) => list.filter((p) => !samePending(p, pending)));
+    console.log('[notification-action] completed', taskId, pending.date);
   } catch (err) {
     // 黙って終えない。できなかったことを本文にして出し直し、もう一度押せるようにする。
     // （押下の控えは持たない。以前は端末に控えていて、一度でも控えが残ると以後の押下が黙って捨てられた）
@@ -170,5 +204,20 @@ async function dismissTaskNotifications(identifier: string, taskId: string | nul
     );
   } catch (err) {
     console.error('Failed to dismiss presented notifications:', err);
+  }
+}
+
+/**
+ * 通知から押した完了のうち、書き込めていないものを書き込み直す。アプリを開いたとき・前面に戻ったときに呼ぶ。
+ * 書き込めなかったものは控えに残し、次の機会にまた試す。
+ */
+export async function flushPendingCompletions(): Promise<void> {
+  for (const pending of await readPending()) {
+    try {
+      await completeTask(pending.taskId, pending.date);
+      await updatePending((list) => list.filter((p) => !samePending(p, pending)));
+    } catch (err) {
+      console.error('Failed to flush pending completion:', err);
+    }
   }
 }
