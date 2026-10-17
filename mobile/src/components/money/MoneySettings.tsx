@@ -46,6 +46,8 @@ interface MoneySettingsProps {
   /** 予備費の年の額（docs/kakei.md §3.7）。 */
   reserves: MoneyReserve[];
   onReserves: (update: (prev: MoneyReserve[]) => MoneyReserve[]) => void;
+  /** 開いたときに編集を開く固定支出（予算の画面の固定費から来たとき）。 */
+  initialRecurringId?: string | null;
   /** Zaim 取り込み（docs/kakei.md §9.5.6）。null は読み込み中。 */
   feed: MoneyFeedData | null;
   /** 取り込みの設定を直したあとに読み直す。 */
@@ -70,12 +72,24 @@ export default function MoneySettings({
   onRecurring,
   reserves,
   onReserves,
+  initialRecurringId = null,
   feed,
   onFeedChanged,
   onClose,
 }: MoneySettingsProps) {
   const insets = useSafeAreaInsets();
-  const [page, setPage] = useState<Page>('menu');
+  const [page, setPage] = useState<Page>(() => {
+    const rule = recurring.find((entry) => entry.id === initialRecurringId);
+    return rule ? (rule.kind === 'income' ? 'income' : 'recurring') : 'menu';
+  });
+  // 固定支出の編集を開くルール（予算の画面の固定費の行から）。
+  const [recurringTarget, setRecurringTarget] = useState<string | null>(initialRecurringId);
+  const openRecurring = (id: string) => {
+    const rule = recurring.find((entry) => entry.id === id);
+    if (!rule) return;
+    setRecurringTarget(id);
+    setPage(rule.kind === 'income' ? 'income' : 'recurring');
+  };
   // 設定の面の中で、さらに奥の画面を開いているときの戻り方（毎月の記録の編集など）。
   const innerBack = useRef<(() => void) | null>(null);
 
@@ -104,7 +118,10 @@ export default function MoneySettings({
     },
   ];
 
-  const back = () => setPage('menu');
+  const back = () => {
+    setRecurringTarget(null);
+    setPage('menu');
+  };
   const onRequestClose = () => {
     if (page === 'menu') return onClose();
     if (innerBack.current) return innerBack.current();
@@ -160,6 +177,7 @@ export default function MoneySettings({
         )}
         {(page === 'recurring' || page === 'income') && (
           <RecurringSettings
+            key={recurringTarget ?? 'list'}
             mode={page === 'income' ? 'income' : 'expense'}
             familyId={familyId}
             recurring={recurring}
@@ -169,6 +187,7 @@ export default function MoneySettings({
             stores={stores}
             records={records}
             onRecurring={onRecurring}
+            initialEditId={recurringTarget}
             onStores={onStores}
             onBack={back}
             backRef={innerBack}
@@ -191,6 +210,7 @@ export default function MoneySettings({
           reserves={reserves}
           onReserves={onReserves}
           onCategories={onCategories}
+          onOpenRecurring={openRecurring}
           onClose={back}
         />
       )}

@@ -84,6 +84,8 @@ interface RecurringSettingsProps {
   stores: MoneyStore[];
   records: MoneyRecord[];
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
+  /** 開いたときに編集を開くルール（予算の画面の固定費から来たとき）。 */
+  initialEditId?: string | null;
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
   onBack: () => void;
   /**
@@ -109,12 +111,15 @@ export default function RecurringSettings({
   stores,
   records,
   onRecurring,
+  initialEditId,
   onStores,
   onBack,
   backRef,
 }: RecurringSettingsProps) {
   const isIncome = mode === 'income';
-  const [editing, setEditing] = useState<MoneyRecurring | 'new' | null>(null);
+  const [editing, setEditing] = useState<MoneyRecurring | 'new' | null>(
+    () => recurring.find((rule) => rule.id === initialEditId) ?? null,
+  );
   // 「複製して足す」の元。日・月・額など全部を写し、品名に「のコピー」を付けて新規の編集を開く。
   const [template, setTemplate] = useState<MoneyRecurring | null>(null);
   // 編集を閉じたら、戻る操作を家計の設定へ返す（開いているあいだは RecurringEditor が入れる）。

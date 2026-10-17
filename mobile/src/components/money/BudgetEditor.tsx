@@ -17,6 +17,7 @@ import {
   iconKeyOf,
   manualBudgetFor,
   monthKeyOfDate,
+  monthsLabel,
   parseAmountInput,
   recurringInYear,
   recurringPeriodLabel,
@@ -63,16 +64,18 @@ interface BudgetEditorProps {
   onReserves: (update: (prev: MoneyReserve[]) => MoneyReserve[]) => void;
   /** 予備費に小分類を紐づけた・外したあと。 */
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
+  /** 固定費の行から、そのルールの「固定支出」の編集を開く。 */
+  onOpenRecurring?: (id: string) => void;
   onClose: () => void;
 }
 
 /** 「3月」。 */
 const monthLabel = (monthKey: string) => `${Number(monthKey.slice(5, 7))}月`;
 
-/** 記録する月と1回の額（「毎月 ¥98,000」「1・7月 ¥80,000」）と期間。額が回ごとに違うものは平均（「約¥14,000」）。 */
+/** 記録する月と1回の額（「毎月 ¥98,000」「奇数月 ¥10,000」）と期間。額が回ごとに違うものは平均（「約¥14,000」）。 */
 function scheduleText(row: RecurringYearRow): string {
   const { rule } = row;
-  const months = rule.months === null ? '毎月' : `${[...rule.months].sort((a, b) => a - b).join('・')}月`;
+  const months = rule.months === null ? '毎月' : monthsLabel(rule.months);
   const values = row.amounts.filter((value) => value > 0);
   const each =
     values.length === 0
@@ -102,6 +105,7 @@ export default function BudgetEditor({
   onRecurring,
   onReserves,
   onCategories,
+  onOpenRecurring,
   onClose,
 }: BudgetEditorProps) {
   const insets = useSafeAreaInsets();
@@ -126,6 +130,10 @@ export default function BudgetEditor({
         return {
           top,
           total,
+          // 月の額。月ごとに違えば平均（「約」）。
+          monthly: monthly.every((value) => value === monthly[0])
+            ? `毎月 ${formatYen(monthly[0])}`
+            : `毎月 約${formatYen(Math.round(total / 12))}`,
           even: monthly.every((value) => value === monthly[0]),
           average: Math.round(total / 12),
           // その年の手入力の予算を決めていない（前の年の12月の額を引き継いでいる）。
@@ -167,14 +175,20 @@ export default function BudgetEditor({
     }
   };
 
+  // 記録しない回: 「今年はなし」（戻す）か、固定支出の編集へ。
   const openOccurrence = (entry: EstimateCostOccurrence) => {
     const title = `${ruleTitle(entry.rule, categories)}（${monthLabel(entry.plannedMonth)}）`;
+    const open = onOpenRecurring ? [{ text: '固定支出を開く', onPress: () => onOpenRecurring(entry.rule.id) }] : [];
     if (entry.status === 'done') {
-      return Alert.alert(title, `予定 ${formatYen(entry.amount)}・実績 ${formatYen(entry.actual)}`);
+      return Alert.alert(title, `予定 ${formatYen(entry.amount)}・実績 ${formatYen(entry.actual)}`, [
+        { text: '閉じる', style: 'cancel' },
+        ...open,
+      ]);
     }
-    Alert.alert(title, entry.status === 'skipped' ? '今年の予算に戻しますか？' : '今年はなしにしますか？', [
+    Alert.alert(title, undefined, [
       { text: 'やめる', style: 'cancel' },
-      { text: entry.status === 'skipped' ? '戻す' : '今年はなし', onPress: () => void toggleSkip(entry) },
+      { text: entry.status === 'skipped' ? '今年の予算に戻す' : '今年はなし', onPress: () => void toggleSkip(entry) },
+      ...open,
     ]);
   };
 
@@ -229,27 +243,67 @@ export default function BudgetEditor({
       {open[key] ? <ChevronDown size={16} color={colors.textFaint} /> : <ChevronRight size={16} color={colors.textFaint} />}
       <Text style={styles.groupTitle}>{title}</Text>
       <View style={styles.flex} />
-      {total !== null && <Text style={styles.groupTotal}>年 {formatYen(total)}</Text>}
+      {total !== null && <Text style={styles.groupTotal}>{formatYen(total)}</Text>}
     </Pressable>
   );
 
+  // 固定費の行の、カテゴリのアイコン（大分類）と、名前の下に出すカテゴリ（「住居費 › 家賃・ローン」）。
+  const categoryOf = (rule: MoneyRecurring) => {
+    const category = categories.find((entry) => entry.id === rule.categoryId);
+    const top = category && category.parentId !== null ? categories.find((entry) => entry.id === category.parentId) : category;
+    return { top: top ?? null, path: categoryPath(categories, rule.categoryId) };
+  };
+  const ruleIcon = (rule: MoneyRecurring) => {
+    const { top } = categoryOf(rule);
+    return top ? <CategoryIcon iconKey={iconKeyOf(top)} size={28} /> : <View style={styles.iconSpace} />;
+  };
+  const ruleName = (rule: MoneyRecurring, badge?: boolean, skipped?: boolean) => {
+    const { path } = categoryOf(rule);
+    const title = ruleTitle(rule, categories);
+    return (
+      <View style={styles.flex}>
+        <View style={styles.nameLine}>
+          <Text style={[styles.rowName, styles.shrink, skipped && styles.skipped]} numberOfLines={1}>
+            {title}
+          </Text>
+          {badge && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>済</Text>
+            </View>
+          )}
+        </View>
+        {path !== '' && path !== title && (
+          <Text style={styles.categoryText} numberOfLines={1}>
+            {path}
+          </Text>
+        )}
+      </View>
+    );
+  };
+
   const fixedRow = (row: RecurringYearRow) => (
-    <View key={row.rule.id} style={[styles.row, styles.divided]}>
-      <Text style={[styles.rowName, styles.flex]} numberOfLines={1}>
-        {ruleTitle(row.rule, categories)}
-      </Text>
+    <Pressable
+      key={row.rule.id}
+      accessibilityRole="button"
+      disabled={!onOpenRecurring}
+      onPress={() => onOpenRecurring?.(row.rule.id)}
+      style={({ pressed }) => [styles.row, styles.divided, pressed && styles.pressed]}
+    >
+      {ruleIcon(row.rule)}
+      {ruleName(row.rule)}
       <View style={styles.right}>
-        <Text style={styles.rowAmount}>年 {formatYen(row.total)}</Text>
+        <Text style={styles.rowAmount}>{formatYen(row.total)}</Text>
         <Text style={styles.note}>{scheduleText(row)}</Text>
       </View>
-    </View>
+      {onOpenRecurring && <ChevronRight size={16} color={colors.textFaint} />}
+    </Pressable>
   );
 
   const sectionHeader = (title: string, total: number, onPress?: () => void) => (
     <Pressable accessibilityRole={onPress ? 'button' : undefined} disabled={!onPress} onPress={onPress} style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
       <View style={styles.flex} />
-      <Text style={styles.sectionTotal}>年 {formatYen(total)}</Text>
+      <Text style={styles.sectionTotal}>{formatYen(total)}</Text>
       {onPress && <ChevronRight size={16} color={colors.textFaint} />}
     </Pressable>
   );
@@ -346,7 +400,10 @@ export default function BudgetEditor({
                   <Text style={[styles.rowName, styles.flex]} numberOfLines={1}>
                     {row.top.name}
                   </Text>
-                  <Text style={styles.rowAmount}>{row.total === 0 ? '−' : `年 ${formatYen(row.total)}`}</Text>
+                  <View style={styles.right}>
+                    <Text style={styles.rowAmount}>{row.total === 0 ? '−' : formatYen(row.total)}</Text>
+                    {row.total > 0 && <Text style={styles.note}>{row.monthly}</Text>}
+                  </View>
                   <ChevronRight size={16} color={colors.textFaint} />
                 </Pressable>
               ))}
@@ -367,16 +424,8 @@ export default function BudgetEditor({
                   onPress={() => openOccurrence(entry)}
                   style={({ pressed }) => [styles.row, styles.divided, pressed && styles.pressed]}
                 >
-                  <View style={[styles.flex, styles.nameLine]}>
-                    <Text style={[styles.rowName, styles.shrink, entry.status === 'skipped' && styles.skipped]} numberOfLines={1}>
-                      {ruleTitle(entry.rule, categories)}
-                    </Text>
-                    {entry.status === 'done' && (
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>済</Text>
-                      </View>
-                    )}
-                  </View>
+                  {ruleIcon(entry.rule)}
+                  {ruleName(entry.rule, entry.status === 'done', entry.status === 'skipped')}
                   <View style={styles.right}>
                     <Text style={[styles.rowAmount, entry.status === 'skipped' && styles.skipped]}>{formatYen(entry.amount)}</Text>
                     <Text style={styles.note}>{monthLabel(entry.actualMonth ?? entry.plannedMonth)}</Text>
@@ -628,6 +677,8 @@ const styles = StyleSheet.create({
   note: { fontSize: 13, fontWeight: '500', color: colors.textMuted, marginTop: 2, fontVariant: ['tabular-nums'] },
   nameLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   shrink: { flexShrink: 1 },
+  categoryText: { fontSize: 13, fontWeight: '500', color: colors.textMuted, marginTop: 2 },
+  iconSpace: { width: 28 },
   message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
   field: { gap: 6 },
   hint: { fontSize: 11, fontWeight: '500', color: colors.textFaint },

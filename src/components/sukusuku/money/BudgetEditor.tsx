@@ -15,6 +15,7 @@ import {
   iconKeyOf,
   manualBudgetFor,
   monthKeyOfDate,
+  monthsLabel,
   parseAmountInput,
   recurringInYear,
   recurringPeriodLabel,
@@ -60,6 +61,8 @@ interface BudgetEditorProps {
   onReserves: (update: (prev: MoneyReserve[]) => MoneyReserve[]) => void;
   /** 予備費に小分類を紐づけた・外したあと。 */
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
+  /** 固定費の行から、そのルールの「固定支出」の編集を開く。 */
+  onOpenRecurring?: (id: string) => void;
   onClose: () => void;
 }
 
@@ -72,10 +75,10 @@ const rowClass = 'flex w-full items-center gap-3 border-t border-gray-200 px-3.5
 /** 「3月」。 */
 const monthLabel = (monthKey: string) => `${Number(monthKey.slice(5, 7))}月`;
 
-/** 記録する月と1回の額（「毎月 ¥98,000」「1・7月 ¥80,000」）と期間。額が回ごとに違うものは平均（「約¥14,000」）。 */
+/** 記録する月と1回の額（「毎月 ¥98,000」「奇数月 ¥10,000」）と期間。額が回ごとに違うものは平均（「約¥14,000」）。 */
 function scheduleText(row: RecurringYearRow): string {
   const { rule } = row;
-  const months = rule.months === null ? '毎月' : `${[...rule.months].sort((a, b) => a - b).join('・')}月`;
+  const months = rule.months === null ? '毎月' : monthsLabel(rule.months);
   const values = row.amounts.filter((value) => value > 0);
   const each =
     values.length === 0
@@ -105,6 +108,7 @@ export default function BudgetEditor({
   onRecurring,
   onReserves,
   onCategories,
+  onOpenRecurring,
   onClose,
 }: BudgetEditorProps) {
   const supabase = useMemo(() => createClient(), []);
@@ -112,6 +116,8 @@ export default function BudgetEditor({
   const [editing, setEditing] = useState<MoneyCategory | null>(null);
   const [editingReserve, setEditingReserve] = useState(false);
   const [pickingReserve, setPickingReserve] = useState(false);
+  // 押した記録しない回（「今年はなし」か、固定支出の編集へ）。
+  const [acting, setActing] = useState<EstimateCostOccurrence | null>(null);
   // 固定費の「確定」「予定」と、予備費の小分類の開閉。
   const [open, setOpen] = useState({ confirmed: false, planned: true, reserve: true });
   const toggle = (key: keyof typeof open) => setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -126,6 +132,10 @@ export default function BudgetEditor({
         return {
           top,
           total,
+          // 月の額。月ごとに違えば平均（「約」）。
+          monthly: monthly.every((value) => value === monthly[0])
+            ? `毎月 ${formatYen(monthly[0])}`
+            : `毎月 約${formatYen(Math.round(total / 12))}`,
           even: monthly.every((value) => value === monthly[0]),
           average: Math.round(total / 12),
           // その年の手入力の予算を決めていない（前の年の12月の額を引き継いでいる）。
@@ -154,15 +164,10 @@ export default function BudgetEditor({
   const failed = () => window.alert('保存できませんでした。もう一度お試しください。');
 
   // 記録を作らない回を「今年はなし」にする・戻す（その回の予定の月を skippedMonths に出し入れする）。
-  const openOccurrence = async (entry: EstimateCostOccurrence) => {
-    const title = `${ruleTitle(entry.rule, categories)}（${monthLabel(entry.plannedMonth)}）`;
-    if (entry.status === 'done') {
-      window.alert(`${title}\n予定 ${formatYen(entry.amount)}・実績 ${formatYen(entry.actual)}`);
-      return;
-    }
+  const toggleSkip = async (entry: EstimateCostOccurrence) => {
+    setActing(null);
     const skipped = entry.rule.skippedMonths ?? [];
     const isSkipped = skipped.includes(entry.plannedMonth);
-    if (!window.confirm(`${title}\n${isSkipped ? '今年の予算に戻しますか？' : '今年はなしにしますか？'}`)) return;
     const next = isSkipped ? skipped.filter((monthKey) => monthKey !== entry.plannedMonth) : [...skipped, entry.plannedMonth].sort();
     try {
       const saved = await updateMoneyRecurringSkipped(supabase, entry.rule.id, next);
@@ -220,25 +225,57 @@ export default function BudgetEditor({
     >
       {open[key] ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
       <span className="flex-1 text-base font-bold text-gray-700">{title}</span>
-      {total !== null && <span className="text-[15px] font-bold tabular-nums text-gray-500">年 {formatYen(total)}</span>}
+      {total !== null && <span className="text-[15px] font-bold tabular-nums text-gray-500">{formatYen(total)}</span>}
     </button>
   );
 
+  // 固定費の行の、カテゴリのアイコン（大分類）と、名前の下に出すカテゴリ（「住居費 › 家賃・ローン」）。
+  const categoryOf = (rule: MoneyRecurring) => {
+    const category = categories.find((entry) => entry.id === rule.categoryId);
+    const top = category && category.parentId !== null ? categories.find((entry) => entry.id === category.parentId) : category;
+    return { top: top ?? null, path: categoryPath(categories, rule.categoryId) };
+  };
+  const ruleIcon = (rule: MoneyRecurring) => {
+    const { top } = categoryOf(rule);
+    return top ? <CategoryIcon iconKey={iconKeyOf(top)} size={28} /> : <span className="w-7 shrink-0" />;
+  };
+  const ruleName = (rule: MoneyRecurring, badge?: boolean, skipped?: boolean) => {
+    const { path } = categoryOf(rule);
+    const title = ruleTitle(rule, categories);
+    return (
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className={`min-w-0 truncate text-base font-semibold ${skipped ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{title}</span>
+          {badge && <span className="shrink-0 rounded-full bg-gray-100 px-2 py-px text-xs font-bold text-gray-500">済</span>}
+        </span>
+        {path !== '' && path !== title && <span className="block truncate text-[13px] font-medium text-gray-500">{path}</span>}
+      </span>
+    );
+  };
+
   const fixedRow = (row: RecurringYearRow) => (
-    <div key={row.rule.id} className={rowClass}>
-      <span className="min-w-0 flex-1 truncate text-base font-semibold text-gray-900">{ruleTitle(row.rule, categories)}</span>
+    <button
+      key={row.rule.id}
+      type="button"
+      disabled={!onOpenRecurring}
+      onClick={() => onOpenRecurring?.(row.rule.id)}
+      className={`${rowClass} enabled:hover:bg-gray-50`}
+    >
+      {ruleIcon(row.rule)}
+      {ruleName(row.rule)}
       <span className="shrink-0 text-right">
-        <span className="block text-base font-extrabold tabular-nums text-gray-900">年 {formatYen(row.total)}</span>
+        <span className="block text-base font-extrabold tabular-nums text-gray-900">{formatYen(row.total)}</span>
         <span className="block text-[13px] font-medium tabular-nums text-gray-500">{scheduleText(row)}</span>
       </span>
-    </div>
+      {onOpenRecurring && <ChevronRight size={16} className="text-gray-400" />}
+    </button>
   );
 
   const sectionHeader = (title: string, total: number, onClick?: () => void) => {
     const inner = (
       <>
         <span className="flex-1 text-lg font-extrabold text-gray-900">{title}</span>
-        <span className="text-[15px] font-bold tabular-nums text-gray-500">年 {formatYen(total)}</span>
+        <span className="text-[15px] font-bold tabular-nums text-gray-500">{formatYen(total)}</span>
         {onClick && <ChevronRight size={16} className="text-gray-400" />}
       </>
     );
@@ -328,7 +365,10 @@ export default function BudgetEditor({
                   >
                     <CategoryIcon iconKey={iconKeyOf(row.top)} size={28} />
                     <span className="min-w-0 flex-1 truncate text-base font-semibold text-gray-900">{row.top.name}</span>
-                    <span className="text-base font-extrabold tabular-nums text-gray-900">{row.total === 0 ? '−' : `年 ${formatYen(row.total)}`}</span>
+                    <span className="shrink-0 text-right">
+                      <span className="block text-base font-extrabold tabular-nums text-gray-900">{row.total === 0 ? '−' : formatYen(row.total)}</span>
+                      {row.total > 0 && <span className="block text-[13px] font-medium tabular-nums text-gray-500">{row.monthly}</span>}
+                    </span>
                     <ChevronRight size={16} className="text-gray-400" />
                   </button>
                 ))}
@@ -346,19 +386,11 @@ export default function BudgetEditor({
                   <button
                     key={`${entry.rule.id}-${entry.plannedMonth}`}
                     type="button"
-                    onClick={() => void openOccurrence(entry)}
+                    onClick={() => setActing(entry)}
                     className={`${rowClass} hover:bg-gray-50`}
                   >
-                    <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                      <span
-                        className={`min-w-0 truncate text-base font-semibold ${entry.status === 'skipped' ? 'text-gray-400 line-through' : 'text-gray-900'}`}
-                      >
-                        {ruleTitle(entry.rule, categories)}
-                      </span>
-                      {entry.status === 'done' && (
-                        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-px text-xs font-bold text-gray-500">済</span>
-                      )}
-                    </span>
+                    {ruleIcon(entry.rule)}
+                    {ruleName(entry.rule, entry.status === 'done', entry.status === 'skipped')}
                     <span className="shrink-0 text-right">
                       <span
                         className={`block text-base font-extrabold tabular-nums ${entry.status === 'skipped' ? 'text-gray-400 line-through' : 'text-gray-900'}`}
@@ -403,6 +435,34 @@ export default function BudgetEditor({
           onClose={() => setEditing(null)}
           onSubmit={(amounts) => void save(editing, amounts)}
         />
+      )}
+      {acting !== null && (
+        <ModalShell title={`${ruleTitle(acting.rule, categories)}（${monthLabel(acting.plannedMonth)}）`} onClose={() => setActing(null)} footer={null}>
+          <div className="space-y-2">
+            {acting.status === 'done' ? (
+              <p className="text-[15px] tabular-nums text-gray-700">
+                予定 {formatYen(acting.amount)}・実績 {formatYen(acting.actual)}
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void toggleSkip(acting)}
+                className="w-full rounded-lg border border-gray-200 py-2.5 text-[15px] font-bold text-gray-800 hover:bg-gray-50"
+              >
+                {acting.status === 'skipped' ? '今年の予算に戻す' : '今年はなし'}
+              </button>
+            )}
+            {onOpenRecurring && (
+              <button
+                type="button"
+                onClick={() => onOpenRecurring(acting.rule.id)}
+                className="w-full rounded-lg border border-gray-200 py-2.5 text-[15px] font-bold text-blue-600 hover:bg-gray-50"
+              >
+                固定支出を開く
+              </button>
+            )}
+          </div>
+        </ModalShell>
       )}
       {editingReserve && (
         <ReserveModal year={year} amount={reserveAmount} onClose={() => setEditingReserve(false)} onSubmit={(amount) => void saveReserve(amount)} />

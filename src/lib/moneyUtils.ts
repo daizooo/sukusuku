@@ -160,6 +160,23 @@ export function recurringDayLabel(rule: Pick<MoneyRecurring, 'day'> & Partial<Pi
   return formatDayOfMonth(rule.day);
 }
 
+/**
+ * 記録する月の言い方。12か月は「毎月」、1・3・5…月は「奇数月」、2・4・6…月は「偶数月」、同じ間隔で1年を回るものは「3か月ごと」、
+ * それ以外は「6・12月」（2026-10-18。月をすべて並べると読みにくいため）。
+ */
+export function monthsLabel(months: readonly number[]): string {
+  const sorted = [...new Set(months)].sort((a, b) => a - b);
+  if (sorted.length === 12) return '毎月';
+  if (sorted.length === 6 && sorted.every((month) => month % 2 === 1)) return '奇数月';
+  if (sorted.length === 6 && sorted.every((month) => month % 2 === 0)) return '偶数月';
+  if (sorted.length >= 3) {
+    const step = 12 / sorted.length;
+    const even = Number.isInteger(step) && sorted.every((month, index) => index === 0 || month - sorted[index - 1] === step);
+    if (even) return `${step}か月ごと`;
+  }
+  return `${sorted.join('・')}月`;
+}
+
 /** 「毎月27日（休日は翌営業日）」「6・12月の10日（休日は前営業日）」「12月の第2金曜日（休日は前営業日）」。 */
 export function recurringScheduleLabel(
   rule: Pick<MoneyRecurring, 'day' | 'months' | 'holiday'> & Partial<Pick<MoneyRecurring, 'weekOfMonth' | 'weekday'>>,
@@ -167,7 +184,7 @@ export function recurringScheduleLabel(
   const when =
     rule.months === null
       ? `毎月${recurringDayLabel(rule)}`
-      : `${[...rule.months].sort((a, b) => a - b).join('・')}月の${recurringDayLabel(rule)}`;
+      : `${monthsLabel(rule.months)}の${recurringDayLabel(rule)}`;
   return `${when}（${rule.holiday === 'none' ? '休日もそのまま' : `休日は${HOLIDAY_RULE_LABEL[rule.holiday]}`}）`;
 }
 

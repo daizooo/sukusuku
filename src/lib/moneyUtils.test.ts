@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  monthsLabel,
   RESERVE_ROW,
   reserveAmountFor,
   reserveBudgetFor,
@@ -1362,3 +1363,12 @@ assert.deepEqual(
   assert.equal(reserveBudgetFor(more, RESERVE_ROW, '2027-12'), 80000 - 26666 * 2);
   assert.equal(monthForecastBalance([], cats, more, rs, '2027-10'), -26666, '着地見込みの月の見込みから、まだ使っていない予備費を引く');
 }
+
+// ---- 記録する月の言い方 ----
+assert.equal(monthsLabel([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), '毎月');
+assert.equal(monthsLabel([11, 1, 3, 5, 7, 9]), '奇数月');
+assert.equal(monthsLabel([2, 4, 6, 8, 10, 12]), '偶数月');
+assert.equal(monthsLabel([1, 4, 7, 10]), '3か月ごと');
+assert.equal(monthsLabel([6, 12]), '6・12月');
+assert.equal(monthsLabel([4, 7, 12, 2]), '2・4・7・12月');
+assert.equal(monthsLabel([3]), '3月');

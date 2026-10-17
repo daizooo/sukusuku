@@ -189,6 +189,8 @@ export default function MoneyScreen() {
   // 予算（年ごと）を開いている年。null は閉じている（docs/kakei.md §3.1）。
   const [budgetYear, setBudgetYear] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // 家計の設定を、この固定支出の編集から開く（予算の画面の固定費の行から）。
+  const [recurringTarget, setRecurringTarget] = useState<string | null>(null);
   // Gmail から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
   const [feed, setFeed] = useState<MoneyFeedData | null>(null);
   const [feedOpen, setFeedOpen] = useState(false);
@@ -788,9 +790,13 @@ export default function MoneyScreen() {
           onRecurring={setRecurring}
           reserves={reserves}
           onReserves={setReserves}
+          initialRecurringId={recurringTarget}
           feed={feed}
           onFeedChanged={reloadFeed}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => {
+            setSettingsOpen(false);
+            setRecurringTarget(null);
+          }}
         />
       )}
 
@@ -832,6 +838,11 @@ export default function MoneyScreen() {
           reserves={reserves}
           onReserves={setReserves}
           onCategories={setCategories}
+          onOpenRecurring={(id) => {
+            setBudgetYear(null);
+            setRecurringTarget(id);
+            setSettingsOpen(true);
+          }}
           onClose={() => setBudgetYear(null)}
         />
       )}
