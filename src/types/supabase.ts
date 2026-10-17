@@ -1621,9 +1621,11 @@ export type Database = {
           id: string
           kind: string
           made_through: string | null
+          makes_record: boolean
           months: number[] | null
           name: string
           position: number
+          skipped_months: string[]
           start_month: string | null
           store: string
           to_wallet_id: string | null
@@ -1645,9 +1647,11 @@ export type Database = {
           id?: string
           kind?: string
           made_through?: string | null
+          makes_record?: boolean
           months?: number[] | null
           name?: string
           position?: number
+          skipped_months?: string[]
           start_month?: string | null
           store?: string
           to_wallet_id?: string | null
@@ -1669,9 +1673,11 @@ export type Database = {
           id?: string
           kind?: string
           made_through?: string | null
+          makes_record?: boolean
           months?: number[] | null
           name?: string
           position?: number
+          skipped_months?: string[]
           start_month?: string | null
           store?: string
           to_wallet_id?: string | null
