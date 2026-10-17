@@ -31,6 +31,14 @@ export interface CareWidgetData {
  * 時刻だけを渡す（docs/widgets.md §3.2）。
  */
 export async function loadCareWidgetData(): Promise<WidgetData<CareWidgetData>> {
+  const first = await loadCareWidgetDataOnce();
+  if (first.ok || first.error !== 'offline') return first;
+  // 裏で動き出した直後は通信がまだつながっていないことがあるので、少し待って1回だけ読み直す。
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  return loadCareWidgetDataOnce();
+}
+
+async function loadCareWidgetDataOnce(): Promise<WidgetData<CareWidgetData>> {
   try {
     const { data } = await supabase.auth.getSession();
     const userId = data.session?.user.id;
@@ -47,7 +55,8 @@ export async function loadCareWidgetData(): Promise<WidgetData<CareWidgetData>> 
     const last = resolveLastFeeding(milkLogs[0]?.time ?? null, activePendingNursing(nursingStates, now));
     const schedule = nextFeedingSchedule(last.lastFedAt, feeding.intervalMinutes, now);
     return { ok: true, value: { isNursing: last.isNursing, dueAt: schedule?.dueAt ?? null } };
-  } catch {
+  } catch (error) {
+    console.warn('ウィジェットの次の目安を読めませんでした', error);
     return { ok: false, error: 'offline' };
   }
 }

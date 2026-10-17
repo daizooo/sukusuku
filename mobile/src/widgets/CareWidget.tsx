@@ -3,13 +3,14 @@ import { appLink, OPEN_LOG_PARAM } from '@/lib/appLinks';
 import { formatTimeString } from '@/lib/dateUtils';
 import { colors } from '@/lib/theme';
 import type { LogType } from '@/types/app';
-import { ActionButton, ButtonRow, GroupBox, hex, WidgetFrame, type WidgetDensity } from './parts';
+import { ActionButton, ButtonRow, GroupBox, hex, REFRESH_WIDGET_ACTION, WidgetFrame, type WidgetDensity } from './parts';
 import type { CareWidgetData, WidgetData, WidgetDataError } from './widgetData';
 import type { WidgetIconName } from './icons';
 
 // B. 育児（docs/widgets.md §2.2）。4×1 の1段に、次の授乳の目安と3つのボタンを並べる。琥珀の地に白いボタン。
 // 見出しは出さない。搾乳は授乳の入力画面にまとめてある（頻度も少ない）ので、ボタンを置かない。
 // ボタンはお知らせのタップと同じ飛び先（`/care?open=milk`。src/lib/appLinks.ts）。
+// 目安の欄を押すと、その場で読み直して描き直す（更新。読めなかったときもここから取り直せる）。
 // ウィジェットから直接は保存しない（押し間違いで記録が増えないように）。
 
 // アイコンは記録の種類の色（育児タブと同じ）、名前は灰色でそろえる（地の琥珀と競わないように）。
@@ -19,20 +20,18 @@ const BUTTONS: { type: LogType; icon: WidgetIconName; label: string; color: stri
   { type: 'temperature', icon: 'temperature', label: '体温', color: colors.temperature },
 ];
 
-const careUri = appLink('care');
-
 const ERROR_LABEL: Record<WidgetDataError, string> = {
   'signed-out': '要ログイン',
   'no-family': '家族を設定',
   offline: '読めません',
 };
 
-/** 目安の欄に出す2行（小さい見出しと、大きい値）。 */
+/** 目安の欄に出す2行（小さい見出しと、大きい値）。押すと更新するので、見出しに ↻ を添える。 */
 const dueLines = (data: WidgetData<CareWidgetData>): { label: string; value: string; isTime: boolean } => {
-  if (!data.ok) return { label: '次の目安', value: ERROR_LABEL[data.error], isTime: false };
-  if (data.value.isNursing) return { label: '次の目安', value: '授乳中', isTime: false };
-  if (!data.value.dueAt) return { label: '次の目安', value: '—', isTime: false };
-  return { label: '次の目安', value: formatTimeString(data.value.dueAt), isTime: true };
+  if (!data.ok) return { label: '押して更新 ↻', value: ERROR_LABEL[data.error], isTime: false };
+  if (data.value.isNursing) return { label: '次の目安 ↻', value: '授乳中', isTime: false };
+  if (!data.value.dueAt) return { label: '次の目安 ↻', value: '—', isTime: false };
+  return { label: '次の目安 ↻', value: formatTimeString(data.value.dueAt), isTime: true };
 };
 
 /** 目安の欄の中身。普通と tight は見出しの下に値、inline は横1行（時刻のときだけ「目安 12:30」）。 */
@@ -63,8 +62,7 @@ function careCells(data: WidgetData<CareWidgetData>, density: WidgetDensity = 'n
   return [
     <FlexWidget
       key="due"
-      clickAction="OPEN_URI"
-      clickActionData={{ uri: careUri }}
+      clickAction={REFRESH_WIDGET_ACTION}
       accessibilityLabel={`${label} ${value}`}
       style={{ flex: 1, height: 'match_parent', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
     >

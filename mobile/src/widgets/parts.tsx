@@ -179,3 +179,6 @@ export function ButtonRow({ children, gap = 4 }: { children: React.ReactNode; ga
 }
 
 export { hex };
+
+/** 押すとその場で読み直して描き直す欄の動き（taskHandler.tsx の WIDGET_CLICK が受ける。リンクではないので放送を経る）。 */
+export const REFRESH_WIDGET_ACTION = 'REFRESH_WIDGET';
