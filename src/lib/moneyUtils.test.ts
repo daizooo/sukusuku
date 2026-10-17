@@ -118,6 +118,7 @@ const cat = (id: string, name: string, parentId: string | null, extra: Partial<M
   iconColor: null,
   position: 0,
   archived: false,
+  reserve: false,
   ...extra,
 });
 const categories: MoneyCategory[] = [
