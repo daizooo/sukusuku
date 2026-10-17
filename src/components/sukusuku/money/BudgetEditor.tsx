@@ -5,20 +5,24 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { MoneyBudget, MoneyCategory, MoneyRecord, MoneyRecurring } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import {
-  budgetFor,
   budgetMonths,
   categoryPath,
+  estimateBudgetFor,
+  estimateCostsInYear,
   fixedBudgetFor,
   formatYear,
   formatYen,
   iconKeyOf,
+  manualBudgetFor,
   parseAmountInput,
   recurringInYear,
   recurringPeriodLabel,
   topCategories,
   yearMonthKeys,
+  type EstimateCostOccurrence,
 } from '@/lib/moneyUtils';
-import { saveMoneyBudget } from '@/lib/api/money';
+import { toDateString } from '@/lib/dateUtils';
+import { saveMoneyBudget, updateMoneyRecurringSkipped } from '@/lib/api/money';
 import { ModalShell } from '../modals/TaskForm';
 import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader, SectionHeader, cardClass, incomeAmountClass, type } from './moneyVisual';
 
@@ -29,6 +33,12 @@ import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader, SectionHeader, c
 // 決めていない年は、前の年の12月の額を引き継ぐ（「前年から引き継ぎ」）。固定費（毎月自動で記録するルール）は、その月の予算に自動で足される。
 // 固定支出・固定収入は年をまたぐものもあるので、期間（開始月・終了月）と記録する月から、**その年に効くものだけ**を年の額で下に並べる。
 // 上の「年の見込み」は、固定収入の年の合計と、支出の予算（固定費を含む）の年の合計、その差。
+//
+// 2026-10-17（docs/kakei.md §3.6）: 支出の予算を性質で3段に分けて並べる。
+// - 変動費: 大分類ごとの手入力の月額（日々のやりくりで守る額）。押すと月ごとの予算を決める
+// - 固定費: 自動で記録する固定支出（読むだけ。直すのは「固定支出」）
+// - 見積費: 記録を作らない固定支出（車検・ふるさと納税など）の回を月の順に。実績の結びつき（済・これから・記録なし・今年はなし）を出し、
+//   押すと「今年はなし」にできる（足す・直すのは「固定支出」）
 
 interface BudgetEditorProps {
   familyId: string;
@@ -40,7 +50,35 @@ interface BudgetEditorProps {
   recurring: MoneyRecurring[];
   records: MoneyRecord[];
   onBudgets: (update: (prev: MoneyBudget[]) => MoneyBudget[]) => void;
+  /** 見積費の「今年はなし」を直したあと。 */
+  onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
   onClose: () => void;
+}
+
+/** 「3月」。 */
+const monthLabel = (monthKey: string) => `${Number(monthKey.slice(5, 7))}月`;
+
+/** 見積費の回の状態の言い方（docs/kakei.md §3.6）。 */
+function occurrenceStatus(entry: EstimateCostOccurrence, thisMonth: string): string {
+  switch (entry.status) {
+    case 'done':
+      return entry.actualMonth !== null && entry.actualMonth !== entry.plannedMonth
+        ? `実績 ${formatYen(entry.actual)}（${monthLabel(entry.plannedMonth)}の予定 → ${monthLabel(entry.actualMonth)}に移しました）`
+        : `実績 ${formatYen(entry.actual)}`;
+    case 'overdue':
+      return entry.placedMonth === thisMonth
+        ? `${monthLabel(entry.plannedMonth)}の予定に記録がありません・今月へ送っています`
+        : `${monthLabel(entry.plannedMonth)}の予定に記録がありませんでした`;
+    case 'skipped':
+      return '今年はなし';
+    default:
+      return entry.basisMonth !== null ? `これから・前回の実績から見込み` : 'これから';
+  }
+}
+
+/** 見積費の見出し。品名、無ければカテゴリ。 */
+function occurrenceTitle(rule: MoneyRecurring, categories: MoneyCategory[]): string {
+  return rule.name.trim() || categoryPath(categories, rule.categoryId) || '見積費';
 }
 
 const yearButtonClass =
@@ -62,6 +100,7 @@ export default function BudgetEditor({
   recurring,
   records,
   onBudgets,
+  onRecurring,
   onClose,
 }: BudgetEditorProps) {
   const supabase = useMemo(() => createClient(), []);
@@ -73,13 +112,16 @@ export default function BudgetEditor({
   const rows = useMemo(
     () =>
       tops.map((top) => {
-        const monthly = monthKeys.map((key) => budgetFor(budgets, top.id, key) ?? 0);
+        // 変動費＝手入力の額だけ（固定費・見積費は下の段に分けて出す）。
+        const monthly = monthKeys.map((key) => manualBudgetFor(budgets, top.id, key) ?? 0);
         const fixed = monthKeys.reduce((sum, key) => sum + fixedBudgetFor(budgets, top.id, key), 0);
+        const estimate = monthKeys.reduce((sum, key) => sum + estimateBudgetFor(budgets, top.id, key), 0);
         const total = monthly.reduce((sum, value) => sum + value, 0);
         return {
           top,
           total,
           fixed,
+          estimate,
           even: monthly.every((value) => value === monthly[0]),
           average: Math.round(total / 12),
           // その年の手入力の予算を決めていない（前の年の12月の額を引き継いでいる）。
@@ -88,12 +130,60 @@ export default function BudgetEditor({
       }),
     [tops, monthKeys, budgets, year],
   );
-  const expenseTotal = rows.reduce((sum, row) => sum + row.total, 0);
+  const variableTotal = rows.reduce((sum, row) => sum + row.total, 0);
+  const fixedTotal = rows.reduce((sum, row) => sum + row.fixed, 0);
+  const estimateTotal = rows.reduce((sum, row) => sum + row.estimate, 0);
+  const expenseTotal = variableTotal + fixedTotal + estimateTotal;
+  const today = toDateString(new Date());
+  const thisMonth = today.slice(0, 7);
+  const occurrences = useMemo(() => estimateCostsInYear(recurring, records, year, today), [recurring, records, year, today]);
   const fixedRows = useMemo(() => recurringInYear(recurring, records, year), [recurring, records, year]);
   const incomeRows = fixedRows.filter((row) => row.rule.kind === 'income');
   const outgoRows = fixedRows.filter((row) => row.rule.kind !== 'income');
   const incomeTotal = incomeRows.reduce((sum, row) => sum + row.total, 0);
   const plan = incomeTotal - expenseTotal;
+
+  // 見積費の回を「今年はなし」にする・戻す（その回の予定の月を skippedMonths に出し入れする）。
+  const openOccurrence = async (entry: EstimateCostOccurrence) => {
+    const title = `${occurrenceTitle(entry.rule, categories)}（${monthLabel(entry.plannedMonth)}の予定）`;
+    if (entry.status === 'done') {
+      window.alert(`${title}\n見積 ${formatYen(entry.amount)}・実績 ${formatYen(entry.actual)}。見積額・月を直すのは「固定支出」から。`);
+      return;
+    }
+    const skipped = entry.rule.skippedMonths ?? [];
+    const isSkipped = skipped.includes(entry.plannedMonth);
+    const ok = window.confirm(
+      isSkipped
+        ? `${title}\nこの回を今年の予算と着地見込みに戻しますか？`
+        : `${title}\nこの回を今年はなしにしますか？ 今年の予算と着地見込みから外します（来年からは元どおり）。`,
+    );
+    if (!ok) return;
+    const next = isSkipped ? skipped.filter((monthKey) => monthKey !== entry.plannedMonth) : [...skipped, entry.plannedMonth].sort();
+    try {
+      const saved = await updateMoneyRecurringSkipped(supabase, entry.rule.id, next);
+      onRecurring((prev) => prev.map((rule) => (rule.id === saved.id ? saved : rule)));
+    } catch {
+      window.alert('保存できませんでした。もう一度お試しください。');
+    }
+  };
+
+  const fixedRow = (row: (typeof fixedRows)[number]) => {
+    const period = recurringPeriodLabel(row.rule);
+    const active = row.amounts.filter((value) => value > 0).length;
+    return (
+      <div key={row.rule.id} className="flex items-center gap-2.5 px-3.5 py-2.5">
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-gray-900">{ruleTitle(row.rule, categories)}</span>
+          <span className={`block truncate ${type.faint}`}>
+            {row.rule.kind === 'income' ? '収入' : '支出'}・{active}か月{period !== '' ? `・${period}` : ''}
+          </span>
+        </span>
+        <span className={`text-sm font-extrabold tabular-nums ${row.rule.kind === 'income' ? incomeAmountClass : 'text-gray-900'}`}>
+          年 {formatYen(row.total)}
+        </span>
+      </div>
+    );
+  };
 
   const save = async (category: MoneyCategory, amounts: (number | null)[]) => {
     setEditing(null);
@@ -133,6 +223,18 @@ export default function BudgetEditor({
             <span className="flex-1 text-[13px] font-semibold text-gray-500">支出の予算</span>
             <span className="text-base font-extrabold tabular-nums text-gray-900">{formatYen(expenseTotal)}</span>
           </div>
+          <div className="px-3.5 py-1.5">
+            {[
+              { label: '変動費', value: variableTotal },
+              { label: '固定費', value: fixedTotal },
+              { label: '見積費', value: estimateTotal },
+            ].map((part) => (
+              <div key={part.label} className="flex items-center justify-between gap-2 py-0.5 pl-3.5">
+                <span className="flex-1 text-xs font-medium text-gray-400">{part.label}</span>
+                <span className="text-xs font-bold tabular-nums text-gray-500">{formatYen(part.value)}</span>
+              </div>
+            ))}
+          </div>
           <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
             <span className="flex-1 text-[13px] font-semibold text-gray-500">収支</span>
             <span className={`text-base font-extrabold tabular-nums ${plan > 0 ? incomeAmountClass : 'text-gray-900'}`}>
@@ -142,7 +244,7 @@ export default function BudgetEditor({
           </div>
         </div>
 
-        <SectionHeader compact title="大分類ごとの予算" />
+        <SectionHeader compact title="変動費（大分類ごとの月の予算）" />
         {rows.length === 0 ? (
           <p className="py-4 text-center text-[13px] font-medium text-gray-400">生活費の大分類がありません。先に「カテゴリ」で作ってください</p>
         ) : (
@@ -160,7 +262,7 @@ export default function BudgetEditor({
                   <span className="block truncate text-sm font-semibold text-gray-900">{row.top.name}</span>
                   <span className={`block truncate ${type.faint}`}>
                     {row.total === 0 ? '予算なし' : `${row.even ? '毎月' : '月平均'} ${formatYen(row.average)}`}
-                    {row.fixed > 0 ? `・うち固定費 年${formatYen(row.fixed)}` : ''}
+                    {row.fixed + row.estimate > 0 ? `・ほかに固定費・見積費 年${formatYen(row.fixed + row.estimate)}` : ''}
                     {row.inherited && row.total > 0 ? '・前年から引き継ぎ' : ''}
                   </span>
                 </span>
@@ -171,30 +273,55 @@ export default function BudgetEditor({
           </div>
         )}
 
-        <SectionHeader compact title={`${formatYear(year)}に効く固定の収支`} />
-        {fixedRows.length === 0 ? (
-          <p className="py-4 text-center text-[13px] font-medium text-gray-400">この年に効く固定収入・固定支出はありません</p>
+        <SectionHeader compact title="固定費（自動で記録）" />
+        {outgoRows.length === 0 ? (
+          <p className="py-4 text-center text-[13px] font-medium text-gray-400">この年に効く固定支出はありません</p>
+        ) : (
+          <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>{outgoRows.map(fixedRow)}</div>
+        )}
+
+        <SectionHeader compact title="見積費（記録は作らない）" />
+        {occurrences.length === 0 ? (
+          <p className="py-4 text-center text-[13px] font-medium text-gray-400">
+            この年の見積費はありません。車検・ふるさと納税などは「固定支出」で見積費として足します
+          </p>
         ) : (
           <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
-            {[...incomeRows, ...outgoRows].map((row) => {
-              const period = recurringPeriodLabel(row.rule);
-              const active = row.amounts.filter((value) => value > 0).length;
-              return (
-                <div key={row.rule.id} className="flex items-center gap-2.5 px-3.5 py-2.5">
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-gray-900">{ruleTitle(row.rule, categories)}</span>
-                    <span className={`block truncate ${type.faint}`}>
-                      {row.rule.kind === 'income' ? '収入' : '支出'}・{active}か月{period !== '' ? `・${period}` : ''}
-                    </span>
+            {occurrences.map((entry) => (
+              <button
+                key={`${entry.rule.id}-${entry.plannedMonth}`}
+                type="button"
+                onClick={() => void openOccurrence(entry)}
+                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-gray-50"
+              >
+                <span className={`w-9 shrink-0 text-[13px] font-bold tabular-nums ${entry.status === 'overdue' ? 'text-amber-800' : 'text-blue-800'}`}>
+                  {monthLabel(entry.actualMonth ?? entry.plannedMonth)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className={`block truncate text-sm font-semibold ${entry.status === 'skipped' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                    {occurrenceTitle(entry.rule, categories)}
                   </span>
-                  <span className={`text-sm font-extrabold tabular-nums ${row.rule.kind === 'income' ? incomeAmountClass : 'text-gray-900'}`}>
-                    年 {formatYen(row.total)}
+                  <span className={`block ${entry.status === 'overdue' ? 'text-[11px] font-medium text-amber-800' : type.faint}`}>
+                    {occurrenceStatus(entry, thisMonth)}
                   </span>
-                </div>
-              );
-            })}
+                </span>
+                <span className={`text-sm font-extrabold tabular-nums ${entry.status === 'skipped' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                  {formatYen(entry.amount)}
+                </span>
+              </button>
+            ))}
           </div>
         )}
+
+        {incomeRows.length > 0 && (
+          <>
+            <SectionHeader compact title="固定収入" />
+            <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>{incomeRows.map(fixedRow)}</div>
+          </>
+        )}
+        <p className="pt-2 text-[11px] font-medium leading-relaxed text-gray-400">
+          固定費・見積費・固定収入を足す・直すのは、家計の設定の「固定支出」「固定収入」から
+        </p>
       </div>
 
       {editing !== null && (
@@ -205,6 +332,7 @@ export default function BudgetEditor({
           monthAmounts={budgetMonths(budgets, editing.id, year)}
           previousAmounts={budgetMonths(budgets, editing.id, year - 1)}
           fixed={monthKeys.map((key) => fixedBudgetFor(budgets, editing.id, key))}
+          estimate={monthKeys.map((key) => estimateBudgetFor(budgets, editing.id, key))}
           onClose={() => setEditing(null)}
           onSubmit={(amounts) => void save(editing, amounts)}
         />
@@ -219,6 +347,7 @@ function BudgetModal({
   monthAmounts,
   previousAmounts,
   fixed,
+  estimate,
   onClose,
   onSubmit,
 }: {
@@ -227,6 +356,8 @@ function BudgetModal({
   monthAmounts: (number | null)[];
   previousAmounts: (number | null)[];
   fixed: number[];
+  /** その月に足される見積費（docs/kakei.md §3.6）。 */
+  estimate: number[];
   onClose: () => void;
   onSubmit: (amounts: (number | null)[]) => void;
 }) {
@@ -278,7 +409,11 @@ function BudgetModal({
         </button>
         {amounts.map((text, index) => {
           const manual = text.trim() === '' ? null : parseAmountInput(text);
-          const total = (manual ?? 0) + fixed[index];
+          const total = (manual ?? 0) + fixed[index] + estimate[index];
+          const added = [
+            fixed[index] > 0 ? `＋固定費 ${formatYen(fixed[index])}` : '',
+            estimate[index] > 0 ? `＋見積費 ${formatYen(estimate[index])}` : '',
+          ].join('');
           return (
             <div key={index} className="flex items-center gap-2">
               <span className="w-9 shrink-0 text-[13px] font-bold text-gray-700">{index + 1}月</span>
@@ -292,9 +427,9 @@ function BudgetModal({
                   aria-label={`${index + 1}月の予算`}
                 />
               </div>
-              {fixed[index] > 0 && (
+              {added !== '' && (
                 <span className="text-[11px] font-semibold text-gray-400 tabular-nums">
-                  ＋固定費 {formatYen(fixed[index])}＝{formatYen(total)}
+                  {added}＝{formatYen(total)}
                 </span>
               )}
             </div>

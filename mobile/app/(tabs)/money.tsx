@@ -61,6 +61,7 @@ import {
 import { feedDayLabel, feedDuplicates } from '@/lib/moneyFeedUtils';
 import {
   dateKeyOfDate,
+  estimateBudgetRows,
   fixedBudgetRows,
   formatYen,
   isMonthClosed,
@@ -144,7 +145,15 @@ export default function MoneyScreen() {
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
   // 手入力の予算（budgets）に、固定費から出した月ごとの額（記録と同じ額）を足した予算。画面にはこちらを渡す（docs/kakei.md §3.1）。
   const allBudgets = useMemo(
-    () => [...budgets, ...fixedBudgetRows(recurring, categories, records, dateKeyOfDate(new Date()))],
+    () => {
+      const today = dateKeyOfDate(new Date());
+      return [
+        ...budgets,
+        ...fixedBudgetRows(recurring, categories, records, today),
+        // 見積費（車検・ふるさと納税など。記録を作らず、予算と着地見込みにだけ入る。docs/kakei.md §3.6）。
+        ...estimateBudgetRows(recurring, categories, records, today),
+      ];
+    },
     [budgets, recurring, categories, records],
   );
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
@@ -809,6 +818,7 @@ export default function MoneyScreen() {
           recurring={recurring}
           records={records}
           onBudgets={setBudgets}
+          onRecurring={setRecurring}
           onClose={() => setBudgetYear(null)}
         />
       )}

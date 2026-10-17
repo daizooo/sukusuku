@@ -528,6 +528,8 @@ export interface MoneyBudget {
   monthAmounts: (number | null)[];
   /** 固定費から出した行（手入力ではない。保存しない）。fixedBudgetRows。 */
   fixed?: boolean;
+  /** 見積費から出した行（fixed も true。estimateBudgetRows。docs/kakei.md §3.6）。 */
+  estimate?: boolean;
 }
 
 /** 出金元の種類。 */
@@ -753,6 +755,13 @@ export interface MoneyRecurring {
   archived: boolean;
   /** ルールを作った日（YYYY-MM-DD）。固定費を予算に足すのはこの年から（年の中は全部の月）。 */
   createdAt: string;
+  /**
+   * 記録を自動で作るか。false は見積費（車検・ふるさと納税など。記録は作らず、予算と着地見込みにだけ入る。出金元は持たない）。
+   * docs/kakei.md §3.6
+   */
+  makesRecord: boolean;
+  /** 見積費で「今年はなし」にした回（予定の月 YYYY-MM）。 */
+  skippedMonths: string[];
 }
 
 export type MoneyRecurringDraft = Omit<MoneyRecurring, 'id' | 'position' | 'archived' | 'createdAt'>;
