@@ -157,29 +157,33 @@ export async function handleNotificationAction(
   if (inFlight.has(key)) return true;
   inFlight.add(key);
 
-  const data = (request.content.data ?? {}) as NotificationData;
-  const taskId = stringOf(data.taskId);
-
-  // Googleカレンダーのタスクと同じく、押したらすぐお知らせを消す（完了の書き込みを待たない）。
-  // できなかったときは下で本文を差し替えて出し直す。
-  await dismissTaskNotifications(request.identifier, taskId);
-
   try {
-    if (!taskId) throw new Error(`お知らせにタスクのidがありません: ${JSON.stringify(Object.keys(data))}`);
-    const pending: PendingCompletion = { taskId, date: stringOf(data.date) };
-    // 書き込む前に控える。書き込めたら外す（書き込めなかった分は次に開いたときに書き込み直す）。
-    await updatePending((list) => (list.some((p) => samePending(p, pending)) ? list : [...list, pending]));
-    await completeTask(pending.taskId, pending.date);
-    await updatePending((list) => list.filter((p) => !samePending(p, pending)));
-    console.log('[notification-action] completed', taskId, pending.date);
-  } catch (err) {
-    // 黙って終えない。できなかったことを本文にして出し直し、もう一度押せるようにする。
-    // （押下の控えは持たない。以前は端末に控えていて、一度でも控えが残ると以後の押下が黙って捨てられた）
-    console.error('Failed to complete task from notification:', err);
-    await presentAgain(request, '完了にできませんでした。アプリを開いて完了にしてください。').catch(
-      (presentErr: unknown) => console.error('Failed to present notification again:', presentErr),
-    );
-    return true;
+    const data = (request.content.data ?? {}) as NotificationData;
+    const taskId = stringOf(data.taskId);
+    const pending: PendingCompletion | null = taskId ? { taskId, date: stringOf(data.date) } : null;
+
+    // 先に控える。お知らせを消したあとで処理が止まっても、完了が失われないようにする。
+    // 書き込めたら外し、書き込めなかった分は次にアプリを開いたときに書き込み直す。
+    if (pending) {
+      await updatePending((list) => (list.some((p) => samePending(p, pending)) ? list : [...list, pending]));
+    }
+
+    // Googleカレンダーのタスクと同じく、押したらすぐお知らせを消す（完了の書き込みを待たない）。
+    // できなかったときは下で本文を差し替えて出し直す。
+    await dismissTaskNotifications(request.identifier, taskId);
+
+    try {
+      if (!pending) throw new Error(`お知らせにタスクのidがありません: ${JSON.stringify(Object.keys(data))}`);
+      await completeTask(pending.taskId, pending.date);
+      await updatePending((list) => list.filter((p) => !samePending(p, pending)));
+      console.log('[notification-action] completed', pending.taskId, pending.date);
+    } catch (err) {
+      // 黙って終えない。できなかったことを本文にして出し直し、もう一度押せるようにする。
+      console.error('Failed to complete task from notification:', err);
+      await presentAgain(request, '完了にできませんでした。アプリを開いて完了にしてください。').catch(
+        (presentErr: unknown) => console.error('Failed to present notification again:', presentErr),
+      );
+    }
   } finally {
     inFlight.delete(key);
   }
