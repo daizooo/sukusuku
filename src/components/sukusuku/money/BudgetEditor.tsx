@@ -72,11 +72,19 @@ const rowClass = 'flex w-full items-center gap-2.5 border-t border-gray-200 px-3
 /** 「3月」。 */
 const monthLabel = (monthKey: string) => `${Number(monthKey.slice(5, 7))}月`;
 
-/** 記録する月の言い方（「毎月」「3・9月」）と期間。 */
-function scheduleText(rule: MoneyRecurring): string {
+/** 記録する月と1回の額（「毎月 ¥98,000」「1・7月 ¥80,000」）と期間。額が回ごとに違うものは平均（「約¥14,000」）。 */
+function scheduleText(row: RecurringYearRow): string {
+  const { rule } = row;
   const months = rule.months === null ? '毎月' : `${[...rule.months].sort((a, b) => a - b).join('・')}月`;
+  const values = row.amounts.filter((value) => value > 0);
+  const each =
+    values.length === 0
+      ? ''
+      : values.every((value) => value === values[0])
+        ? ` ${formatYen(values[0])}`
+        : ` 約${formatYen(Math.round(row.total / values.length))}`;
   const period = recurringPeriodLabel(rule);
-  return period === '' ? months : `${months}・${period}`;
+  return period === '' ? `${months}${each}` : `${months}${each}・${period}`;
 }
 
 /** 固定のルールの見出し。品名、無ければお店、無ければカテゴリ。 */
@@ -220,7 +228,7 @@ export default function BudgetEditor({
     <div key={row.rule.id} className={rowClass}>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-gray-900">{ruleTitle(row.rule, categories)}</span>
-        <span className={`block truncate ${type.faint}`}>{scheduleText(row.rule)}</span>
+        <span className={`block truncate ${type.faint}`}>{scheduleText(row)}</span>
       </span>
       <span className="text-sm font-extrabold tabular-nums text-gray-900">年 {formatYen(row.total)}</span>
     </div>
@@ -382,7 +390,7 @@ export default function BudgetEditor({
               {open.reserve && (
                 <button type="button" onClick={() => setPickingReserve(true)} className={`${rowClass} text-sm font-bold text-blue-600 hover:bg-gray-50`}>
                   <Plus size={16} />
-                  小分類を紐づける
+                  追加する
                 </button>
               )}
             </div>

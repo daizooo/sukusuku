@@ -69,11 +69,19 @@ interface BudgetEditorProps {
 /** 「3月」。 */
 const monthLabel = (monthKey: string) => `${Number(monthKey.slice(5, 7))}月`;
 
-/** 記録する月の言い方（「毎月」「3・9月」）と期間。 */
-function scheduleText(rule: MoneyRecurring): string {
+/** 記録する月と1回の額（「毎月 ¥98,000」「1・7月 ¥80,000」）と期間。額が回ごとに違うものは平均（「約¥14,000」）。 */
+function scheduleText(row: RecurringYearRow): string {
+  const { rule } = row;
   const months = rule.months === null ? '毎月' : `${[...rule.months].sort((a, b) => a - b).join('・')}月`;
+  const values = row.amounts.filter((value) => value > 0);
+  const each =
+    values.length === 0
+      ? ''
+      : values.every((value) => value === values[0])
+        ? ` ${formatYen(values[0])}`
+        : ` 約${formatYen(Math.round(row.total / values.length))}`;
   const period = recurringPeriodLabel(rule);
-  return period === '' ? months : `${months}・${period}`;
+  return period === '' ? `${months}${each}` : `${months}${each}・${period}`;
 }
 
 /** 固定のルールの見出し。品名、無ければお店、無ければカテゴリ。 */
@@ -232,7 +240,7 @@ export default function BudgetEditor({
           {ruleTitle(row.rule, categories)}
         </Text>
         <Text style={styles.faint} numberOfLines={1}>
-          {scheduleText(row.rule)}
+          {scheduleText(row)}
         </Text>
       </View>
       <Text style={styles.rowAmount}>年 {formatYen(row.total)}</Text>
@@ -405,7 +413,7 @@ export default function BudgetEditor({
                 style={({ pressed }) => [styles.row, styles.divided, pressed && styles.pressed]}
               >
                 <Plus size={16} color={colors.money} />
-                <Text style={styles.addText}>小分類を紐づける</Text>
+                <Text style={styles.addText}>追加する</Text>
               </Pressable>
             )}
           </View>
