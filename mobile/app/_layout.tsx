@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { SessionProvider, useSession } from '@/lib/session';
@@ -14,6 +14,7 @@ import { configureNotificationChannels } from '@/lib/push';
 import { notificationTarget, OPEN_LOG_PARAM } from '@/lib/appLinks';
 import {
   configureNotificationCategories,
+  flushPendingCompletions,
   handleNotificationAction,
   presentActionableNotification,
 } from '@/lib/notificationActions';
@@ -92,12 +93,26 @@ function AppEffects() {
   useNotificationTapHandler();
   // 用が済んだお知らせを端末から消す。
   useSettledNotificationCleanup(session?.user.id ?? null);
+  // 通知から押した完了で、書き込めていないものを書き込み直す。
+  usePendingCompletionFlush(session?.user.id ?? null);
   // 夜間の起床アラームの予約を、いまの授乳の目安に合わせて組み直す（Androidのネイティブ版だけ）。
   useWakeAlarmSync(session?.user.id ?? null);
   // ホーム画面のウィジェットを、アプリを閉じるたびに描き直す（docs/widgets.md §3.3）。
   useWidgetRefresh();
 
   return null;
+}
+
+/** ログインしているあいだ、開いたとき・前面に戻ったときに、書き込めていない完了を書き込み直す。 */
+function usePendingCompletionFlush(userId: string | null): void {
+  useEffect(() => {
+    if (!userId) return;
+    void flushPendingCompletions();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void flushPendingCompletions();
+    });
+    return () => subscription.remove();
+  }, [userId]);
 }
 
 /**
