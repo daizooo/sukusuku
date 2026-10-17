@@ -781,6 +781,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           recurring={recurring}
           records={records}
           onBudgets={setBudgets}
+          onRecurring={setRecurring}
           onClose={() => setBudgetYear(null)}
         />
       )}

@@ -818,6 +818,7 @@ export default function MoneyScreen() {
           recurring={recurring}
           records={records}
           onBudgets={setBudgets}
+          onRecurring={setRecurring}
           onClose={() => setBudgetYear(null)}
         />
       )}
