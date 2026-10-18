@@ -229,12 +229,7 @@ export default function MoneyFeedSettings({
     <StackedScreen onBack={onBack}>
       <ScreenHeader title="Gmail 取り込み" icon="back" onClose={onBack} />
       <div className="flex-1 min-h-0 overflow-y-auto space-y-2 p-4 pb-10">
-        <p className="text-[13px] leading-relaxed text-gray-500">
-          Gmail に届く通知メール（カードの利用通知・Zaim の入出金通知）を Apps Script が送り、明細として取り込みます。振替・自動の記録・手入力と突き合わせ、
-          当たらないものは「口座」の面の「未確認」に残ります。
-        </p>
-
-        <p className={sectionTitleClass}>取り込みの状態</p>
+        <p className={sectionTitleClass}>状態</p>
         <div className={cardClass}>
           <InfoRow label="最後に届いた" value={feedTimeLabel(feed.lastReceivedAt)} />
           <InfoRow label="この30日" value={`${feed.recentCount}件`} />
@@ -247,7 +242,6 @@ export default function MoneyFeedSettings({
         </div>
 
         <p className={sectionTitleClass}>口座の対応</p>
-        <p className={subClass}>メールの口座名（カード名・銀行名）を、かぞく手帳の出金元に結びます。所持者で、同じ銀行の口座を分けます。</p>
         <div className={cardClass}>
           {accountRows.length === 0 && <p className="p-3.5 text-[13px] text-gray-400">まだ明細が届いていません</p>}
           {accountRows.map((row, index) => (
@@ -269,16 +263,17 @@ export default function MoneyFeedSettings({
           ))}
         </div>
 
-        <p className={sectionTitleClass}>取り込みのルール</p>
-        <p className={subClass}>上から見て、最初に当たったルールで扱います。「次から同じ内容は自動で」で覚えたものも並びます。</p>
+        <p className={sectionTitleClass}>ルール</p>
         <div className={cardClass}>
           {feed.rules.length === 0 && <p className="p-3.5 text-[13px] text-gray-400">ルールはまだありません</p>}
           {feed.rules.map((entry, index) => (
             <div key={entry.id} className={`${rowClass} ${index > 0 ? dividedClass : ''}`}>
               <button type="button" onClick={() => setRule({ target: entry, draft: { ...entry } })} className="min-w-0 flex-1 text-left">
-                <span className="block truncate text-sm font-bold text-gray-900">
-                  {entry.name || FEED_ACTION_LABELS[entry.action]}
-                  {entry.learned ? '（覚えたルール）' : ''}
+                <span className="flex items-center gap-1.5">
+                  <span className="truncate text-sm font-bold text-gray-900">{entry.name || FEED_ACTION_LABELS[entry.action]}</span>
+                  {entry.learned && (
+                    <span className="shrink-0 rounded-md bg-blue-100 px-1.5 text-[11px] font-bold text-blue-800">覚えた</span>
+                  )}
                 </span>
                 <span className="mt-0.5 block text-xs text-gray-500">{feedRuleCondition(entry, walletName)}</span>
                 <span className="mt-0.5 block text-xs font-semibold text-blue-800">→ {feedRuleAction(entry, names)}</span>
@@ -307,18 +302,17 @@ export default function MoneyFeedSettings({
           <Plus size={18} />
           ルールを足す
         </button>
-        <div className="space-y-1.5">
+        <p className={sectionTitleClass}>ひな形から足す</p>
+        <ChipRow>
           {TEMPLATES.map((template) => (
-            <button
+            <Chip
               key={template.label}
-              type="button"
+              label={template.label}
+              selected={false}
               onClick={() => setRule({ target: null, draft: { ...EMPTY_RULE, ...template.draft } })}
-              className="block w-full rounded-lg bg-blue-50 px-3 py-2 text-left text-[13px] font-semibold text-blue-800"
-            >
-              ひな形: {template.label}
-            </button>
+            />
           ))}
-        </div>
+        </ChipRow>
 
         <p className={sectionTitleClass}>突き合わせの幅</p>
         <div className={cardClass}>
@@ -397,9 +391,7 @@ function TokenModal({ token, onClose }: { token: string; onClose: () => void }) 
     >
       <div className="space-y-3">
         <p className="break-all select-all text-[15px] font-bold tracking-wide text-gray-900">{token}</p>
-        <p className={subClass}>
-          この鍵はいまだけ表示します。Apps Script の「スクリプト プロパティ」の FEED_TOKEN に貼ってください。人には見せないでください。
-        </p>
+        <p className={subClass}>Apps Script の FEED_TOKEN に貼ってください。いまだけ表示します。</p>
       </div>
     </ModalShell>
   );
@@ -465,10 +457,10 @@ function AccountModal({
         {current?.feedName && current.feedName !== row.accountName && (
           <p className={subClass}>この出金元には「{current.feedName}」が結ばれています。保存すると「{row.accountName}」に変わります。</p>
         )}
-        <Field label="所持者（例: 本人・妻・子）">
+        <Field label="所持者">
           <input className={feedInputClass} value={holderName} onChange={(event) => setHolderName(event.target.value)} placeholder="本人" />
         </Field>
-        <Field label="所持者の通知の宛先（メールアドレス）" hint="同じ銀行の口座が2つあるとき、宛先で分けます。">
+        <Field label="通知の宛先">
           <input
             className={feedInputClass}
             type="email"
@@ -478,7 +470,7 @@ function AccountModal({
             placeholder="example@gmail.com"
           />
         </Field>
-        <Field label="名義（カナ）" hint="自分の口座から振り込んだ出金は、依頼人名が名義になります。宛先で分けられないときに使います。">
+        <Field label="名義カナ">
           <input className={feedInputClass} value={kana} onChange={(event) => setKana(event.target.value)} placeholder="ヤマダ タロウ" />
         </Field>
       </div>
@@ -548,10 +540,10 @@ function RuleModal({
         }
       >
         <div className="space-y-4">
-          <Field label="名前（任意）">
+          <Field label="名前">
             <input className={feedInputClass} value={draft.name} onChange={(event) => set({ name: event.target.value })} placeholder="例: ATM の出金" />
           </Field>
-          <p className={sectionTitleClass}>条件（全部に当たったとき）</p>
+          <p className={sectionTitleClass}>条件</p>
           <Field label="口座">
             <ChipRow>
               <Chip label="どの口座でも" selected={draft.walletId === null} onClick={() => set({ walletId: null })} />
@@ -568,15 +560,15 @@ function RuleModal({
             </ChipRow>
           </Field>
           {draft.match === 'key' ? (
-            <Field label="内容（覚えたもの）" hint="この内容と同じ明細に当たります（数字・日付・依頼人名は除いて比べます）。">
+            <Field label="内容">
               <p className="text-sm font-semibold text-gray-900">{draft.pattern}</p>
             </Field>
           ) : (
-            <Field label="内容に含む文字（空なら何でも）" hint="全角・半角は区別しません。">
+            <Field label="内容に含む文字">
               <input className={feedInputClass} value={draft.pattern} onChange={(event) => set({ pattern: event.target.value })} placeholder="例: ATM" />
             </Field>
           )}
-          <Field label="金額（任意）">
+          <Field label="金額">
             <div className="flex items-center gap-2">
               <input
                 className={feedInputClass}
@@ -620,18 +612,18 @@ function RuleModal({
                   <ChevronRight size={18} className="text-gray-400" />
                 </button>
               </Field>
-              <Field label="お店（任意）">
+              <Field label="お店">
                 <input className={feedInputClass} value={draft.store} onChange={(event) => set({ store: event.target.value })} placeholder="例: 水道局" />
               </Field>
             </>
           )}
           {draft.action === 'transfer' && (
-            <Field label="相手の出金元" hint="出金なら 口座 → 相手、入金なら 相手 → 口座 の振替を作ります。">
+            <Field label="相手の出金元">
               <WalletChoices wallets={wallets} selectedId={draft.toWalletId} onPick={(toWalletId) => set({ toWalletId })} />
             </Field>
           )}
           {draft.action === 'link_recurring' && (
-            <Field label="結ぶ固定の記録" hint="そのルールで作った記録（前後の日数は突き合わせの幅）と結び、額を明細の額にして確定します。">
+            <Field label="結ぶ固定費">
               <ChipRow>
                 {usableRecurring.map((entry) => (
                   <Chip
@@ -645,9 +637,7 @@ function RuleModal({
             </Field>
           )}
           {draft.action === 'adjust_only' && (
-            <p className={subClass}>
-              新しい記録は作りません。この口座から引き落とすカードの、カード代金の見込みの振替があれば額を明細の額にして確定し、無ければ記録しません。
-            </p>
+            <p className={subClass}>カード代金の見込みの額を確定します。新しい記録は作りません。</p>
           )}
           {draft.action === 'ignore' && <p className={subClass}>記録を作りません。</p>}
         </div>

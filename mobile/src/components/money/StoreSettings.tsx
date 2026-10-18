@@ -109,8 +109,7 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
           style={styles.search}
           value={query}
           onChangeText={setQuery}
-          placeholder="お店を探す"
-          placeholderTextColor={colors.textFaint}
+          accessibilityLabel="お店を探す"
           returnKeyType="search"
         />
       </View>
@@ -128,7 +127,6 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
         {stores.length > 0 && usable.length === 0 && archived.length === 0 && (
           <Text style={styles.empty}>見つかりませんでした</Text>
         )}
-        {canReorder && <Text style={styles.reorderHint}>並べ替え: 左の持ち手をつかんでそのまま動かす</Text>}
         <View {...drag.panHandlers}>
           {usable.map((store) => (
             <Pressable
@@ -243,9 +241,6 @@ function StoreSheet({
             onSubmitEditing={submit}
           />
         </View>
-        {store && (
-          <Text style={styles.hint}>名前を直しても、これまでの記録のお店の名前は変わりません（設定だけ直します）。</Text>
-        )}
         {error && <Text style={styles.error}>{error}</Text>}
       </LogModalShell>
     </SheetModal>
@@ -281,7 +276,6 @@ const styles = StyleSheet.create({
   archivedRow: { opacity: 0.7 },
   grip: { width: 28, alignSelf: 'stretch', marginLeft: -8, marginVertical: -4, alignItems: 'center', justifyContent: 'center' },
   lifted: { opacity: 0.9, elevation: 8, backgroundColor: colors.surface },
-  reorderHint: { fontSize: 11, fontWeight: '500', color: colors.textFaint, paddingBottom: 4 },
   archivedHeader: { marginTop: 16, marginBottom: 4 },
   sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   name: { fontSize: 15, fontWeight: '500', color: colors.text },
@@ -299,7 +293,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.text,
   },
-  hint: { fontSize: 12, fontWeight: '500', lineHeight: 18, color: colors.textMuted, marginTop: 8 },
   error: { fontSize: 12, fontWeight: '500', color: colors.danger, marginTop: 8 },
   secondary: { paddingVertical: 10, alignItems: 'center' },
   deleteText: { fontSize: 13, fontWeight: '500', color: colors.danger },

@@ -232,12 +232,7 @@ export default function MoneyFeedSettings({
     <View style={styles.screen}>
       <ScreenHeader title="Gmail 取り込み" icon="back" onClose={onBack} />
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.note}>
-          Gmail に届く通知メール（カードの利用通知・Zaim の入出金通知）を Apps Script が送り、明細として取り込みます。振替・自動の記録・手入力と突き合わせ、
-          当たらないものは「口座」の面の「未確認」に残ります。
-        </Text>
-
-        <Text style={styles.sectionTitle}>取り込みの状態</Text>
+        <Text style={styles.sectionTitle}>状態</Text>
         <View style={styles.card}>
           <InfoRow label="最後に届いた" value={feedTimeLabel(feed.lastReceivedAt)} />
           <InfoRow label="この30日" value={`${feed.recentCount}件`} />
@@ -250,7 +245,6 @@ export default function MoneyFeedSettings({
         </View>
 
         <Text style={styles.sectionTitle}>口座の対応</Text>
-        <Text style={styles.sub}>メールの口座名（カード名・銀行名）を、かぞく手帳の出金元に結びます。所持者で、同じ銀行の口座を分けます。</Text>
         <View style={styles.card}>
           {accountRows.length === 0 && <Text style={styles.cardEmpty}>まだ明細が届いていません</Text>}
           {accountRows.map((row, index) => (
@@ -272,8 +266,7 @@ export default function MoneyFeedSettings({
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>取り込みのルール</Text>
-        <Text style={styles.sub}>上から見て、最初に当たったルールで扱います。「次から同じ内容は自動で」で覚えたものも並びます。</Text>
+        <Text style={styles.sectionTitle}>ルール</Text>
         <View style={styles.card}>
           {feed.rules.length === 0 && <Text style={styles.cardEmpty}>ルールはまだありません</Text>}
           {feed.rules.map((entry, index) => (
@@ -283,10 +276,12 @@ export default function MoneyFeedSettings({
                 onPress={() => setRule({ target: entry, draft: { ...entry } })}
                 style={styles.flex}
               >
-                <Text style={styles.rowTitle} numberOfLines={1}>
-                  {entry.name || FEED_ACTION_LABELS[entry.action]}
-                  {entry.learned ? '（覚えたルール）' : ''}
-                </Text>
+                <View style={styles.titleRow}>
+                  <Text style={[styles.rowTitle, styles.shrink]} numberOfLines={1}>
+                    {entry.name || FEED_ACTION_LABELS[entry.action]}
+                  </Text>
+                  {entry.learned && <Text style={styles.badge}>覚えた</Text>}
+                </View>
                 <Text style={styles.rowSub}>{feedRuleCondition(entry, walletName)}</Text>
                 <Text style={styles.rowAction}>→ {feedRuleAction(entry, names)}</Text>
               </Pressable>
@@ -305,18 +300,17 @@ export default function MoneyFeedSettings({
           <Plus size={18} color={colors.money} />
           <Text style={styles.addText}>ルールを足す</Text>
         </Pressable>
-        <View style={styles.templates}>
+        <Text style={styles.sectionTitle}>ひな形から足す</Text>
+        <ChipRow>
           {TEMPLATES.map((template) => (
-            <Pressable
+            <Chip
               key={template.label}
-              accessibilityRole="button"
+              label={template.label}
+              selected={false}
               onPress={() => setRule({ target: null, draft: { ...EMPTY_RULE, ...template.draft } })}
-              style={styles.template}
-            >
-              <Text style={styles.templateText}>ひな形: {template.label}</Text>
-            </Pressable>
+            />
           ))}
-        </View>
+        </ChipRow>
 
         <Text style={styles.sectionTitle}>突き合わせの幅</Text>
         <View style={styles.card}>
@@ -397,9 +391,7 @@ function TokenSheet({ token, onClose }: { token: string; onClose: () => void }) 
         <Text selectable style={styles.token}>
           {token}
         </Text>
-        <Text style={styles.sub}>
-          この鍵はいまだけ表示します。Apps Script の「スクリプト プロパティ」の FEED_TOKEN に貼ってください。人には見せないでください。
-        </Text>
+        <Text style={styles.sub}>Apps Script の FEED_TOKEN に貼ってください。いまだけ表示します。</Text>
       </LogModalShell>
     </SheetModal>
   );
@@ -465,10 +457,10 @@ function AccountSheet({
         {current?.feedName && current.feedName !== row.accountName && (
           <Text style={styles.sub}>この出金元には「{current.feedName}」が結ばれています。保存すると「{row.accountName}」に変わります。</Text>
         )}
-        <Field label="所持者（例: 本人・妻・子）">
+        <Field label="所持者">
           <TextInput style={styles.input} value={holderName} onChangeText={setHolderName} placeholder="本人" placeholderTextColor={colors.textFaint} />
         </Field>
-        <Field label="所持者の通知の宛先（メールアドレス）" hint="同じ銀行の口座が2つあるとき、宛先で分けます。">
+        <Field label="通知の宛先">
           <TextInput
             style={styles.input}
             value={email}
@@ -479,7 +471,7 @@ function AccountSheet({
             keyboardType="email-address"
           />
         </Field>
-        <Field label="名義（カナ）" hint="自分の口座から振り込んだ出金は、依頼人名が名義になります。宛先で分けられないときに使います。">
+        <Field label="名義カナ">
           <TextInput style={styles.input} value={kana} onChangeText={setKana} placeholder="ヤマダ タロウ" placeholderTextColor={colors.textFaint} />
         </Field>
       </LogModalShell>
@@ -545,10 +537,10 @@ function RuleSheet({
           </>
         }
       >
-        <Field label="名前（任意）">
+        <Field label="名前">
           <TextInput style={styles.input} value={draft.name} onChangeText={(name) => set({ name })} placeholder="例: ATM の出金" placeholderTextColor={colors.textFaint} />
         </Field>
-        <Text style={styles.sectionTitle}>条件（全部に当たったとき）</Text>
+        <Text style={styles.sectionTitle}>条件</Text>
         <Field label="口座">
           <ChipRow>
             <Chip label="どの口座でも" selected={draft.walletId === null} onPress={() => set({ walletId: null })} />
@@ -565,15 +557,15 @@ function RuleSheet({
           </ChipRow>
         </Field>
         {draft.match === 'key' ? (
-          <Field label="内容（覚えたもの）" hint="この内容と同じ明細に当たります（数字・日付・依頼人名は除いて比べます）。">
+          <Field label="内容">
             <Text style={styles.pattern}>{draft.pattern}</Text>
           </Field>
         ) : (
-          <Field label="内容に含む文字（空なら何でも）" hint="全角・半角は区別しません。">
+          <Field label="内容に含む文字">
             <TextInput style={styles.input} value={draft.pattern} onChangeText={(pattern) => set({ pattern })} placeholder="例: ATM" placeholderTextColor={colors.textFaint} />
           </Field>
         )}
-        <Field label="金額（任意）">
+        <Field label="金額">
           <View style={styles.amountRow}>
             <TextInput
               style={[styles.input, styles.flex]}
@@ -613,18 +605,18 @@ function RuleSheet({
                 <ChevronRight size={18} color={colors.textFaint} />
               </Pressable>
             </Field>
-            <Field label="お店（任意）">
+            <Field label="お店">
               <TextInput style={styles.input} value={draft.store} onChangeText={(store) => set({ store })} placeholder="例: 水道局" placeholderTextColor={colors.textFaint} />
             </Field>
           </>
         )}
         {draft.action === 'transfer' && (
-          <Field label="相手の出金元" hint="出金なら 口座 → 相手、入金なら 相手 → 口座 の振替を作ります。">
+          <Field label="相手の出金元">
             <WalletChoices wallets={wallets} selectedId={draft.toWalletId} onPick={(toWalletId) => set({ toWalletId })} />
           </Field>
         )}
         {draft.action === 'link_recurring' && (
-          <Field label="結ぶ固定の記録" hint="そのルールで作った記録（前後の日数は突き合わせの幅）と結び、額を明細の額にして確定します。">
+          <Field label="結ぶ固定費">
             <ChipRow>
               {usableRecurring.map((entry) => (
                 <Chip key={entry.id} label={entry.name || entry.store || '（名前なし）'} selected={draft.recurringId === entry.id} onPress={() => set({ recurringId: entry.id })} />
@@ -633,9 +625,7 @@ function RuleSheet({
           </Field>
         )}
         {draft.action === 'adjust_only' && (
-          <Text style={styles.sub}>
-            新しい記録は作りません。この口座から引き落とすカードの、カード代金の見込みの振替があれば額を明細の額にして確定し、無ければ記録しません。
-          </Text>
+          <Text style={styles.sub}>カード代金の見込みの額を確定します。新しい記録は作りません。</Text>
         )}
         {draft.action === 'ignore' && <Text style={styles.sub}>記録を作りません。</Text>}
       </LogModalShell>
@@ -667,7 +657,6 @@ const styles = StyleSheet.create({
   picker: { flex: 1, backgroundColor: colors.surface },
   content: { padding: 16, gap: 8, paddingBottom: 40 },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
-  note: { fontSize: 13, fontWeight: '500', lineHeight: 19, color: colors.textMuted },
   sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textSubtle, marginTop: 12 },
   sub: { fontSize: 12, fontWeight: '500', lineHeight: 18, color: colors.textMuted },
   card: { borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: 'hidden' },
@@ -687,9 +676,18 @@ const styles = StyleSheet.create({
   link: { fontSize: 14, fontWeight: '700', color: colors.money },
   add: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
   addText: { fontSize: 15, fontWeight: '700', color: colors.money },
-  templates: { gap: 6 },
-  template: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, backgroundColor: colors.moneySurface },
-  templateText: { fontSize: 13, fontWeight: '600', color: colors.moneyText },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  shrink: { flexShrink: 1 },
+  badge: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.moneyText,
+    backgroundColor: colors.moneySoft,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
   days: { minWidth: 64, textAlign: 'center', fontSize: 14, fontWeight: '700', color: colors.text },
   token: { fontSize: 15, fontWeight: '700', color: colors.text, letterSpacing: 0.5 },
   input: {
