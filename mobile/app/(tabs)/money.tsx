@@ -78,7 +78,6 @@ import MoneyRecordsView from '@/components/money/MoneyRecordsView';
 import MoneyReviewView from '@/components/money/MoneyReviewView';
 import RecordEditor from '@/components/money/RecordEditor';
 import CategoryEditor from '@/components/money/CategoryEditor';
-import BudgetEditor from '@/components/money/BudgetEditor';
 import MoneySettings from '@/components/money/MoneySettings';
 import MoneyFab from '@/components/money/MoneyFab';
 import MoneyFeedInbox from '@/components/money/MoneyFeedInbox';
@@ -187,7 +186,6 @@ export default function MoneyScreen() {
   const [scanning, setScanning] = useState(false);
   const [editingCategories, setEditingCategories] = useState(false);
   // 予算（年ごと）を開いている年。null は閉じている（docs/kakei.md §3.1）。
-  const [budgetYear, setBudgetYear] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 家計の設定を、この固定支出の編集から開く（予算の画面の固定費の行から）。
   const [recurringTarget, setRecurringTarget] = useState<string | null>(null);
@@ -688,8 +686,6 @@ export default function MoneyScreen() {
                 setMonthKey(next);
                 setPeriod('month');
               }}
-              onEditCategories={() => setEditingCategories(true)}
-              onEditBudgets={() => setBudgetYear(period === 'year' ? year : yearOfMonth(monthKey))}
               onOpenRecord={setEditing}
               months={closings}
               recurring={recurring}
@@ -825,27 +821,6 @@ export default function MoneyScreen() {
         />
       )}
 
-      {budgetYear !== null && familyId && (
-        <BudgetEditor
-          familyId={familyId}
-          year={budgetYear}
-          categories={categories}
-          budgets={allBudgets}
-          recurring={recurring}
-          records={records}
-          onBudgets={setBudgets}
-          onRecurring={setRecurring}
-          reserves={reserves}
-          onReserves={setReserves}
-          onCategories={setCategories}
-          onOpenRecurring={(id) => {
-            setBudgetYear(null);
-            setRecurringTarget(id);
-            setSettingsOpen(true);
-          }}
-          onClose={() => setBudgetYear(null)}
-        />
-      )}
     </SafeAreaView>
   );
 }

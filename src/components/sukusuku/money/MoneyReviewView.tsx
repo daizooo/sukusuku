@@ -87,9 +87,6 @@ interface MoneyReviewViewProps {
   balances: MoneyWalletBalance[];
   /** 年の「月ごと」の行を押したとき。その月の月の振り返りへ。 */
   onSelectMonth: (monthKey: string) => void;
-  onEditCategories: () => void;
-  /** 予算（年ごと。カテゴリとは別の設定）を開く。 */
-  onEditBudgets: () => void;
   /** 内訳の詳細の中で記録を押したとき。詳細を閉じて、記録の詳細を開く。 */
   onOpenRecord: (record: MoneyRecord) => void;
   /** 月の締め（docs/kakei.md §4.5）。 */
@@ -118,8 +115,6 @@ export default function MoneyReviewView({
   wallets,
   balances,
   onSelectMonth,
-  onEditCategories,
-  onEditBudgets,
   onOpenRecord,
   months: closings,
   recurring,
@@ -296,7 +291,6 @@ export default function MoneyReviewView({
             <SectionHeader
               compact
               title="内訳"
-              right={<SettingLinks onEditCategories={onEditCategories} onEditBudgets={onEditBudgets} />}
             />
             {tiles.length === 0 && (
               <p className="py-6 text-center text-[13px] text-gray-400">「カテゴリ」と「予算」を決めると、ここに予算との差が出ます</p>
@@ -448,20 +442,6 @@ function TrendLegend() {
         年の累計
       </span>
     </div>
-  );
-}
-
-/** 内訳の見出しの右の、設定への入口（カテゴリと予算は別の設定。2026-10-15）。 */
-function SettingLinks({ onEditCategories, onEditBudgets }: { onEditCategories: () => void; onEditBudgets: () => void }) {
-  return (
-    <span className="flex gap-3.5">
-      <button type="button" onClick={onEditCategories} className={type.link}>
-        カテゴリ
-      </button>
-      <button type="button" onClick={onEditBudgets} className={type.link}>
-        予算
-      </button>
-    </span>
   );
 }
 

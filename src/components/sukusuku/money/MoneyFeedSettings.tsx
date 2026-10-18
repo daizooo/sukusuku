@@ -449,7 +449,7 @@ function AccountModal({
       <div className="space-y-4">
         <Field label="かぞく手帳の出金元">
           <WalletChoices
-            wallets={wallets.filter((wallet) => wallet.type === 'bank' || wallet.type === 'securities' || wallet.id === walletId)}
+            wallets={wallets.filter((wallet) => !wallet.archived || wallet.id === walletId)}
             selectedId={walletId}
             onPick={pick}
           />
@@ -506,7 +506,7 @@ function RuleModal({
   const [draft, setDraft] = useState<MoneyFeedRuleDraft>(initial);
   const [pickingCategory, setPickingCategory] = useState(false);
   const set = (patch: Partial<MoneyFeedRuleDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
-  const accounts = wallets.filter((wallet) => !wallet.archived && (wallet.type === 'bank' || wallet.type === 'securities'));
+  const accounts = wallets.filter((wallet) => !wallet.archived);
   const usableRecurring = recurring.filter((entry) => !entry.archived);
   const categoryName = categories.find((category) => category.id === draft.categoryId)?.name ?? null;
   const amount = (text: string): number | null => {
