@@ -108,7 +108,7 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
           className="flex-1 bg-transparent py-2.5 text-[15px] focus:outline-none"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="お店を探す"
+          aria-label="お店を探す"
         />
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-8">
@@ -125,7 +125,6 @@ export default function StoreSettings({ familyId, stores, onStores, onBack }: St
         {stores.length > 0 && usable.length === 0 && archived.length === 0 && (
           <p className="py-4 text-center text-sm text-gray-400">見つかりませんでした</p>
         )}
-        {canReorder && <p className="pb-1 text-[11px] text-gray-400">並べ替え: 左の持ち手をつかんでそのまま動かす</p>}
         {drag.arrange('stores', usable).map((store) => (
           <div
             key={store.id}
@@ -252,7 +251,6 @@ function StoreModal({
             autoFocus
           />
         </label>
-        {store && <p className="text-xs leading-relaxed text-gray-500">名前を直しても、これまでの記録のお店の名前は変わりません（設定だけ直します）。</p>}
         {error && <p className="text-xs text-red-500">{error}</p>}
       </form>
     </ModalShell>

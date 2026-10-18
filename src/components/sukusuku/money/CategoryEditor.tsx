@@ -177,9 +177,6 @@ export default function CategoryEditor({
           </button>
         ))}
       </div>
-      {tops.length > 0 && (
-        <p className="shrink-0 px-4 pb-1.5 text-[11px] text-gray-400">並べ替え: 大分類は左の持ち手、小分類は長押ししてそのまま動かす</p>
-      )}
 
       <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pt-2 pb-8 space-y-2.5">
         {categories.length === 0 && (

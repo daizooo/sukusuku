@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { colors } from '@/lib/theme';
-import { formatAxisYen, formatSignedYen } from '@/lib/moneyUtils';
-import { pickBubble, yearTrendAxes, type TrendBox, type YearTrendAxes, type YearTrendPoint } from '@/lib/yearTrend';
+import { formatSignedYen } from '@/lib/moneyUtils';
+import { formatTrendAxis, pickBubble, yearTrendAxes, type TrendBox, type YearTrendAxes, type YearTrendPoint } from '@/lib/yearTrend';
 
 // 年の振り返りの「推移」（docs/kakei.md §4.8）。PWA版の `src/components/sukusuku/money/YearTrendChart.tsx` と同じ並び・文言。
 // 棒＝月ごとの収支（左の軸）、折れ線＝年初からの累計（右の軸）。0 の高さは左右でそろえる。
+// 横は使い始めた月にかかわらず、いつも1〜12月の幅（2026-10-18。数えない月は棒・点を出さず、月の名前だけ薄く出す）。
 // 締めた月は実線・濃い棒、締めていない月と先の月は見込みなので点線・薄い棒で年末まで伸ばす（年末の着地見込みと同じ数え方。§4.6）。
 // 月を押すと、その月の収支と累計を吹き出しで出す。吹き出しを押すとその月の振り返りへ移る。
 // 吹き出しは、折れ線や棒をいちばん隠さない側（上・下・左・右）に置く。上に余白は取らない。
@@ -14,7 +15,7 @@ import { pickBubble, yearTrendAxes, type TrendBox, type YearTrendAxes, type Year
 
 const HEIGHT = 188;
 const PAD = { left: 40, right: 40, top: 12, bottom: 26 };
-const BAR_WIDTH = 16;
+const BAR_WIDTH = 12;
 const BUBBLE = { width: 124, height: 50 };
 const RADIUS = 8;
 const TIP = 6;
@@ -37,10 +38,12 @@ export default function YearTrendChart({ points, initialMonthKey, onSelectMonth 
     const axes = yearTrendAxes(points);
     const plotWidth = width - PAD.left - PAD.right;
     const plotHeight = HEIGHT - PAD.top - PAD.bottom;
-    const slot = plotWidth / points.length;
+    const slot = plotWidth / 12;
     const yOf = (axis: { min: number; max: number }, value: number) =>
       PAD.top + ((axis.max - value) / (axis.max - axis.min)) * plotHeight;
-    const centerX = (index: number) => PAD.left + slot * (index + 0.5);
+    // index は points の並び。横の位置は月で決める（1月が左端）。
+    const centerX = (index: number) => PAD.left + slot * (points[index].month - 1 + 0.5);
+    const monthX = (month: number) => PAD.left + slot * (month - 0.5);
     const zeroY = yOf(axes.balance, 0);
     const bars: TrendBox[] = points.map((point, index) => {
       const y = yOf(axes.balance, point.balance);
@@ -56,7 +59,7 @@ export default function YearTrendChart({ points, initialMonthKey, onSelectMonth 
       for (let step = 0; step <= steps; step += 1) line.push([x1 + ((x2 - x1) * step) / steps, y1 + ((y2 - y1) * step) / steps]);
     }
     if (dots.length === 1) line.push([dots[0][0], dots[0][1]]);
-    return { axes, plotHeight, slot, yOf, centerX, bars, dots, line };
+    return { axes, plotHeight, slot, yOf, centerX, monthX, bars, dots, line };
   }, [width, points]);
 
   const lastClosed = points.reduce((last, point, index) => (point.closed ? index : last), -1);
@@ -86,14 +89,16 @@ export default function YearTrendChart({ points, initialMonthKey, onSelectMonth 
             const cumulativeValue = layout.axes.cumulative.min + layout.axes.cumulative.step * tick;
             const y = layout.yOf(layout.axes.balance, balanceValue);
             const zero = Math.abs(balanceValue) < 1e-6;
+            const main = zero || tick === 0 || tick === layout.axes.intervals;
             return (
               <G key={tick}>
                 <Line x1={PAD.left} x2={width - PAD.right} y1={y} y2={y} stroke={zero ? colors.textFaint : colors.border} strokeWidth={zero ? 1 : 0.8} />
-                <SvgText x={PAD.left - 5} y={y + 3.5} fontSize={9.5} fontWeight="600" fill={colors.textMuted} textAnchor="end">
-                  {formatAxisYen(balanceValue)}
+                {/* 目盛りの数字。上端・0・下端は大きく、あいだの10万円ごとは小さく */}
+                <SvgText x={PAD.left - 5} y={y + 3} fontSize={main ? 9.5 : 7.5} fontWeight={main ? '700' : '500'} fill={colors.textMuted} textAnchor="end">
+                  {formatTrendAxis(balanceValue)}
                 </SvgText>
-                <SvgText x={width - PAD.right + 5} y={y + 3.5} fontSize={9.5} fontWeight="600" fill={colors.money} textAnchor="start">
-                  {formatAxisYen(cumulativeValue)}
+                <SvgText x={width - PAD.right + 5} y={y + 3} fontSize={main ? 9.5 : 7.5} fontWeight={main ? '700' : '500'} fill={colors.money} textAnchor="start">
+                  {formatTrendAxis(cumulativeValue)}
                 </SvgText>
               </G>
             );
@@ -118,7 +123,7 @@ export default function YearTrendChart({ points, initialMonthKey, onSelectMonth 
                 <SvgText
                   x={layout.centerX(index)}
                   y={HEIGHT - 8}
-                  fontSize={10.5}
+                  fontSize={9.5}
                   fontWeight="700"
                   fill={index === selectedIndex ? colors.text : colors.textSubtle}
                   textAnchor="middle"
@@ -128,6 +133,13 @@ export default function YearTrendChart({ points, initialMonthKey, onSelectMonth 
               </G>
             );
           })}
+          {Array.from({ length: 12 }, (_, offset) => offset + 1)
+            .filter((month) => !points.some((point) => point.month === month))
+            .map((month) => (
+              <SvgText key={`empty-${month}`} x={layout.monthX(month)} y={HEIGHT - 8} fontSize={9.5} fontWeight="700" fill={colors.textFaint} textAnchor="middle">
+                {`${month}月`}
+              </SvgText>
+            ))}
           {lastClosed >= 1 && <Path d={linePath(layout.dots.slice(0, lastClosed + 1))} fill="none" stroke={colors.money} strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />}
           {lastClosed < points.length - 1 && (
             <Path
@@ -184,6 +196,7 @@ interface Layout {
   slot: number;
   yOf: (axis: { min: number; max: number }, value: number) => number;
   centerX: (index: number) => number;
+  monthX: (month: number) => number;
   bars: TrendBox[];
   dots: (readonly [number, number])[];
   line: (readonly [number, number])[];

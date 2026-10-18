@@ -87,9 +87,6 @@ interface MoneyReviewViewProps {
   balances: MoneyWalletBalance[];
   /** 年の「月ごと」の行を押したとき。その月の月の振り返りへ。 */
   onSelectMonth: (monthKey: string) => void;
-  onEditCategories: () => void;
-  /** 予算（年ごと。カテゴリとは別の設定）を開く。 */
-  onEditBudgets: () => void;
   /** 内訳の詳細の中で記録を押したとき。詳細を閉じて、記録の詳細を開く。 */
   onOpenRecord: (record: MoneyRecord) => void;
   /** 月の締め（docs/kakei.md §4.5）。 */
@@ -119,8 +116,6 @@ export default function MoneyReviewView({
   wallets,
   balances,
   onSelectMonth,
-  onEditCategories,
-  onEditBudgets,
   onOpenRecord,
   months: closings,
   recurring,
@@ -306,7 +301,6 @@ export default function MoneyReviewView({
             <SectionHeader
               compact
               title="内訳"
-              right={<SettingLinks onEditCategories={onEditCategories} onEditBudgets={onEditBudgets} />}
             />
             {tiles.length === 0 && (
               <Text style={styles.message}>「カテゴリ」と「予算」を決めると、ここに予算との差が出ます</Text>
@@ -457,20 +451,6 @@ function TrendLegend() {
         <View style={styles.legendLine} />
         <Text style={type.faint}>年の累計</Text>
       </View>
-    </View>
-  );
-}
-
-/** 内訳の見出しの右の、設定への入口（カテゴリと予算は別の設定。2026-10-15）。 */
-function SettingLinks({ onEditCategories, onEditBudgets }: { onEditCategories: () => void; onEditBudgets: () => void }) {
-  return (
-    <View style={styles.links}>
-      <Pressable accessibilityRole="button" onPress={onEditCategories} hitSlop={8}>
-        <Text style={type.link}>カテゴリ</Text>
-      </Pressable>
-      <Pressable accessibilityRole="button" onPress={onEditBudgets} hitSlop={8}>
-        <Text style={type.link}>予算</Text>
-      </Pressable>
     </View>
   );
 }

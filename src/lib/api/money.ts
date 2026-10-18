@@ -498,6 +498,12 @@ export async function deleteMoneyWallet(supabase: SupabaseDb, id: string): Promi
   if (error) throw error;
 }
 
+/** 出金元の並び順を直す（口座の面の並べ替え）。 */
+export async function updateMoneyWalletPosition(supabase: SupabaseDb, id: string, position: number): Promise<void> {
+  const { error } = await supabase.from('money_wallets').update({ position }).eq('id', id);
+  if (error) throw error;
+}
+
 /** 使わなくした出金元をまた使う。 */
 export async function restoreMoneyWallet(supabase: SupabaseDb, id: string): Promise<MoneyWallet> {
   const { data, error } = await supabase.from('money_wallets').update({ archived_at: null }).eq('id', id).select('*').single();

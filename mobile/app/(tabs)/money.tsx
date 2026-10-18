@@ -37,6 +37,7 @@ import {
   insertMoneyWallet,
   loadMoneyStores,
   restoreMoneyWallet,
+  updateMoneyWalletPosition,
   saveMoneyRecord,
   saveMoneyWalletBalance,
   setMoneyMonthClosed,
@@ -78,7 +79,6 @@ import MoneyRecordsView from '@/components/money/MoneyRecordsView';
 import MoneyReviewView from '@/components/money/MoneyReviewView';
 import RecordEditor from '@/components/money/RecordEditor';
 import CategoryEditor from '@/components/money/CategoryEditor';
-import BudgetEditor from '@/components/money/BudgetEditor';
 import MoneySettings from '@/components/money/MoneySettings';
 import MoneyFab from '@/components/money/MoneyFab';
 import MoneyFeedInbox from '@/components/money/MoneyFeedInbox';
@@ -187,7 +187,6 @@ export default function MoneyScreen() {
   const [scanning, setScanning] = useState(false);
   const [editingCategories, setEditingCategories] = useState(false);
   // 予算（年ごと）を開いている年。null は閉じている（docs/kakei.md §3.1）。
-  const [budgetYear, setBudgetYear] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 家計の設定を、この固定支出の編集から開く（予算の画面の固定費の行から）。
   const [recurringTarget, setRecurringTarget] = useState<string | null>(null);
@@ -534,6 +533,21 @@ export default function MoneyScreen() {
     }
   };
 
+  /** 口座の面で、種類の中の並びを指で動かしたあと。変わった position だけ保存する。 */
+  const reorderWallets = (changes: { id: string; position: number }[]) => {
+    setWallets((prev) =>
+      prev
+        .map((entry) => {
+          const hit = changes.find((change) => change.id === entry.id);
+          return hit ? { ...entry, position: hit.position } : entry;
+        })
+        .sort((a, b) => a.position - b.position),
+    );
+    void Promise.all(changes.map((change) => updateMoneyWalletPosition(supabase, change.id, change.position))).catch(() =>
+      failed('並べ替え'),
+    );
+  };
+
   /**
    * 銘柄を保存する（docs/kakei.md §9.2）。足したとき・コードを変えたときは、サーバーに過去1年の価格と
    * 評価額を作らせてから読み直す（数秒かかる。先に保存した分を出しておく）。
@@ -688,8 +702,6 @@ export default function MoneyScreen() {
                 setMonthKey(next);
                 setPeriod('month');
               }}
-              onEditCategories={() => setEditingCategories(true)}
-              onEditBudgets={() => setBudgetYear(period === 'year' ? year : yearOfMonth(monthKey))}
               onOpenRecord={setEditing}
               months={closings}
               recurring={recurring}
@@ -717,6 +729,7 @@ export default function MoneyScreen() {
               onSaveWallet={saveWallet}
               onDeleteWallet={(wallet) => void deleteWallet(wallet)}
               onRestoreWallet={(wallet) => void restoreWallet(wallet)}
+              onReorderWallets={reorderWallets}
               onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
               onNeedSecurityHistory={needSecurityHistory}
               onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
@@ -825,27 +838,6 @@ export default function MoneyScreen() {
         />
       )}
 
-      {budgetYear !== null && familyId && (
-        <BudgetEditor
-          familyId={familyId}
-          year={budgetYear}
-          categories={categories}
-          budgets={allBudgets}
-          recurring={recurring}
-          records={records}
-          onBudgets={setBudgets}
-          onRecurring={setRecurring}
-          reserves={reserves}
-          onReserves={setReserves}
-          onCategories={setCategories}
-          onOpenRecurring={(id) => {
-            setBudgetYear(null);
-            setRecurringTarget(id);
-            setSettingsOpen(true);
-          }}
-          onClose={() => setBudgetYear(null)}
-        />
-      )}
     </SafeAreaView>
   );
 }

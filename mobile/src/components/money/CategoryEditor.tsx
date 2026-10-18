@@ -189,7 +189,6 @@ export default function CategoryEditor({
             </Pressable>
           ))}
         </View>
-        {tops.length > 0 && <Text style={styles.reorderHint}>並べ替え: 大分類は左の持ち手、小分類は長押ししてそのまま動かす</Text>}
 
         <ScrollView style={styles.flex} contentContainerStyle={styles.content} scrollEnabled={!drag.isActive}>
           {categories.length === 0 && (
@@ -413,7 +412,6 @@ const styles = StyleSheet.create({
   kindSelected: { backgroundColor: colors.moneySoft },
   kindText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
   kindTextSelected: { color: colors.moneyText, fontWeight: '700' },
-  reorderHint: { fontSize: 11, fontWeight: '500', color: colors.textFaint, paddingHorizontal: 16, paddingBottom: 6 },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 10 },
   seed: { gap: 12, paddingVertical: 16 },
   seedText: { fontSize: 14, fontWeight: '500', color: colors.textMuted, lineHeight: 21 },
