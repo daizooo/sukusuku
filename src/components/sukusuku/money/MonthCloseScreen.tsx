@@ -182,7 +182,7 @@ export default function MonthCloseScreen({
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-3">
         <Hero compact label={`収支（${label}）`} value={formatBalance(month.balance)} plus={month.balance > 0}>
           <StatRow compact label="収入" value={formatYen(month.income)} plus={month.income > 0} />
-          <StatRow compact label="支出" value={`−${formatYen(month.living)}`} />
+          <StatRow compact label="支出" value={formatBalance(-month.living)} />
           {estimates.length > 0 && (
             <div className="flex items-center gap-2 pt-2">
               <EstimateBadge />

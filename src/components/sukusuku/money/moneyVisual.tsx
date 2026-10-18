@@ -397,7 +397,7 @@ export function StackedScreen({ onBack, children }: { onBack: () => void; childr
 
 /**
  * 評価損益（証券。docs/kakei.md §9.2.4）。矢印と色で上げ下げを見せる（上げ＝緑、下げ＝赤）。
- * 「+¥12,345（+3.21%）」。rate が無ければ金額だけ。mobile の `Gain` と同じ。
+ * 「¥12,345（+3.21%）」。rate が無ければ金額だけ。mobile の `Gain` と同じ。
  */
 export function Gain({ gain, rate, size = 'row' }: { gain: number; rate: number | null; size?: 'row' | 'sub' }) {
   const up = gain >= 0;

@@ -133,7 +133,7 @@ function SummaryHero({ analysis, landing }: { analysis: CategoryAnalysis; landin
       plus={hasBudget && analysis.diff > 0}
     >
       <StatRow compact label="予算" value={hasBudget ? formatYen(analysis.budget ?? 0) : '−'} />
-      <StatRow compact label="支出" value={`−${formatYen(analysis.actual)}`} />
+      <StatRow compact label="支出" value={formatBalance(-analysis.actual)} />
       {landing !== null && <StatRow compact label="年末の着地見込み" value={formatYen(landing)} />}
       {hasBudget && (
         <div className="pt-2">

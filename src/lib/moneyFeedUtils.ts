@@ -1,5 +1,5 @@
 import type { MoneyCardFeed, MoneyFeedItem, MoneyFeedRule, MoneyRecord, MoneyRecordDraft } from '@/types/app';
-import { formatYen, recordTotal } from './moneyUtils.ts';
+import { formatBalance, formatYen, recordTotal } from './moneyUtils.ts';
 
 // Zaim 取り込みの画面で使う、数え方・言葉（docs/kakei.md §9.5）。mobile版の `mobile/src/lib/moneyFeedUtils.ts` と同じ中身。
 
@@ -22,9 +22,9 @@ export const feedTimeLabel = (iso: string | null): string => {
   return `${jst.getUTCMonth() + 1}/${jst.getUTCDate()} ${hh}:${mm}`;
 };
 
-/** 入金は「+¥1,000」、出金は「−¥1,000」。 */
+/** 入金は「¥1,000」（色は緑）、出金は「¥−1,000」。 */
 export const feedAmountLabel = (item: Pick<MoneyFeedItem, 'direction' | 'amount'>): string =>
-  item.amount === null ? '' : `${item.direction === 'in' ? '+' : '−'}${formatYen(item.amount)}`;
+  item.amount === null ? '' : item.direction === 'in' ? formatYen(item.amount) : formatBalance(-item.amount);
 
 /** 一覧の並び: 手入力との確認 → 口座が決まっていない → 未確認 → 読めない。同じ中は日付の新しい順。 */
 const STATUS_ORDER = (item: MoneyFeedItem): number =>

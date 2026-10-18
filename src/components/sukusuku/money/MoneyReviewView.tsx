@@ -240,7 +240,7 @@ export default function MoneyReviewView({
           plus={balance > 0}
         >
           <StatRow compact label="収入" value={formatYen(income)} plus={income > 0} />
-          <StatRow compact label="支出" value={`−${formatYen(living)}`} />
+          <StatRow compact label="支出" value={formatBalance(-living)} />
           {estimates.count > 0 && (
             <div className="flex items-center gap-2 pt-2">
               <EstimateBadge />
