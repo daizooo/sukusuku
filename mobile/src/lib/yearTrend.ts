@@ -49,25 +49,16 @@ function niceStep(target: number): number {
 }
 
 /**
- * 棒（左軸）と折れ線（右軸）の軸。0 の高さを左右でそろえるため、0 より上・下の目盛りの数を共通にする。
- * 累計が下がっても（マイナスになっても）、0 の線を境に下へ伸びる。
+ * 棒（左軸）と折れ線（右軸）の軸。0 をいつも真ん中に置き、上下の幅をそろえる（2026-10-18。プラス・マイナスの大きさで 0 の高さが動かない）。
+ * 目盛りは上端・0・下端の3本。上端は、絶対値のいちばん大きい値を見やすい数に切り上げたもの（下端はそのマイナス）。
  */
 export function yearTrendAxes(points: readonly YearTrendPoint[]): YearTrendAxes {
-  const balances = points.map((point) => point.balance);
-  const cumulatives = points.map((point) => point.cumulative);
-  const bMax = Math.max(0, ...balances);
-  const bMin = Math.min(0, ...balances);
-  const cMax = Math.max(0, ...cumulatives);
-  const cMin = Math.min(0, ...cumulatives);
-  const bStep = niceStep(Math.max((bMax - bMin) / 5, 1));
-  const cStep = niceStep(Math.max((cMax - cMin) / 5, 1));
-  let up = Math.max(Math.ceil(bMax / bStep), Math.ceil(cMax / cStep));
-  const down = Math.max(Math.ceil(-bMin / bStep), Math.ceil(-cMin / cStep));
-  if (up + down < 2) up = 2 - down;
+  const bTop = niceStep(Math.max(1, ...points.map((point) => Math.abs(point.balance))));
+  const cTop = niceStep(Math.max(1, ...points.map((point) => Math.abs(point.cumulative))));
   return {
-    balance: { min: -down * bStep, max: up * bStep, step: bStep },
-    cumulative: { min: -down * cStep, max: up * cStep, step: cStep },
-    intervals: up + down,
+    balance: { min: -bTop, max: bTop, step: bTop },
+    cumulative: { min: -cTop, max: cTop, step: cTop },
+    intervals: 2,
   };
 }
 

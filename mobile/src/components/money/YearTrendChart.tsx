@@ -92,12 +92,17 @@ export default function YearTrendChart({ points, initialMonthKey, onSelectMonth 
             return (
               <G key={tick}>
                 <Line x1={PAD.left} x2={width - PAD.right} y1={y} y2={y} stroke={zero ? colors.textFaint : colors.border} strokeWidth={zero ? 1 : 0.8} />
-                <SvgText x={PAD.left - 5} y={y + 3.5} fontSize={9.5} fontWeight="600" fill={colors.textMuted} textAnchor="end">
-                  {formatAxisYen(balanceValue)}
-                </SvgText>
-                <SvgText x={width - PAD.right + 5} y={y + 3.5} fontSize={9.5} fontWeight="600" fill={colors.money} textAnchor="start">
-                  {formatAxisYen(cumulativeValue)}
-                </SvgText>
+                {/* 目盛りの数字は上端と下端だけ（0 は線だけ） */}
+                {!zero && (
+                  <>
+                    <SvgText x={PAD.left - 5} y={y + 3.5} fontSize={9.5} fontWeight="600" fill={colors.textMuted} textAnchor="end">
+                      {formatAxisYen(balanceValue)}
+                    </SvgText>
+                    <SvgText x={width - PAD.right + 5} y={y + 3.5} fontSize={9.5} fontWeight="600" fill={colors.money} textAnchor="start">
+                      {formatAxisYen(cumulativeValue)}
+                    </SvgText>
+                  </>
+                )}
               </G>
             );
           })}

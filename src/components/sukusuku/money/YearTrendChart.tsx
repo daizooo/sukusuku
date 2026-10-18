@@ -144,12 +144,17 @@ export default function YearTrendChart({
         return (
           <g key={tick}>
             <line x1={PAD.left} x2={WIDTH - PAD.right} y1={tickY} y2={tickY} stroke={zero ? C.textFaint : C.border} strokeWidth={zero ? 1 : 0.8} />
-            <text x={PAD.left - 5} y={tickY + 3.5} fontSize={9.5} fontWeight={600} fill={C.textMuted} textAnchor="end">
-              {formatAxisYen(balanceValue)}
-            </text>
-            <text x={WIDTH - PAD.right + 5} y={tickY + 3.5} fontSize={9.5} fontWeight={600} fill={C.money} textAnchor="start">
-              {formatAxisYen(cumulativeValue)}
-            </text>
+            {/* 目盛りの数字は上端と下端だけ（0 は線だけ） */}
+            {!zero && (
+              <>
+                <text x={PAD.left - 5} y={tickY + 3.5} fontSize={9.5} fontWeight={600} fill={C.textMuted} textAnchor="end">
+                  {formatAxisYen(balanceValue)}
+                </text>
+                <text x={WIDTH - PAD.right + 5} y={tickY + 3.5} fontSize={9.5} fontWeight={600} fill={C.money} textAnchor="start">
+                  {formatAxisYen(cumulativeValue)}
+                </text>
+              </>
+            )}
           </g>
         );
       })}
