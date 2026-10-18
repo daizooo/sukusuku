@@ -105,7 +105,7 @@ import type { MoneyBudget, MoneyCategory, MoneyHolding, MoneyHoldingValue, Money
 assert.equal(shiftMonth('2026-12', 1), '2027-01');
 assert.equal(shiftMonth('2026-01', -1), '2025-12');
 assert.equal(shiftMonth('2026-09', -12), '2025-09');
-assert.equal(formatSignedYen(1200), '¥+1,200');
+assert.equal(formatSignedYen(1200), '¥1,200');
 assert.equal(formatSignedYen(-3800), '¥−3,800');
 assert.equal(formatSignedYen(0), '¥0');
 
