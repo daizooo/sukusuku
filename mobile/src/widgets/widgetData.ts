@@ -11,10 +11,17 @@ import { activePendingNursing, nextFeedingSchedule, resolveLastFeeding } from '@
 // 端末の保存（AsyncStorage）から読むので、アプリでログインしていれば同じ人として読める。
 // 数え方はアプリの画面と同じ関数を使う（feedingSchedule）。ウィジェット独自の数え方は作らない。
 
-/** 読めなかった理由。ウィジェットにはボタンだけ出し、目安の代わりに一言添える。 */
-export type WidgetDataError = 'signed-out' | 'no-family' | 'offline';
+/**
+ * 読めなかった理由。ウィジェットにはボタンだけ出し、目安の代わりに一言添える。
+ * loading は読めなかったのではなく、押して更新したときに読み終えるまで出す仮の絵。
+ */
+export type WidgetDataError = 'signed-out' | 'no-family' | 'offline' | 'loading';
 
-export type WidgetData<T> = { ok: true; value: T } | { ok: false; error: WidgetDataError };
+/** detail は offline のときの中身（時間切れ・エラーの文言）。原因を実機の画面で見分けるために出す。 */
+export type WidgetData<T> = { ok: true; value: T } | { ok: false; error: WidgetDataError; detail?: string };
+
+/** 1回の読み込みを待つ長さ。裏の処理は長く待つと止められるので、それより前に諦めて理由を出す。 */
+const LOAD_TIMEOUT_MS = 8000;
 
 export interface CareWidgetData {
   /** 家族のだれかが、いま授乳している（計測中）。 */
@@ -31,11 +38,29 @@ export interface CareWidgetData {
  * 時刻だけを渡す（docs/widgets.md §3.2）。
  */
 export async function loadCareWidgetData(): Promise<WidgetData<CareWidgetData>> {
-  const first = await loadCareWidgetDataOnce();
-  if (first.ok || first.error !== 'offline') return first;
+  const first = await withTimeout(loadCareWidgetDataOnce());
+  if (first.ok || first.error !== 'offline' || first.detail === '時間切れ') return first;
   // 裏で動き出した直後は通信がまだつながっていないことがあるので、少し待って1回だけ読み直す。
   await new Promise((resolve) => setTimeout(resolve, 1500));
-  return loadCareWidgetDataOnce();
+  return withTimeout(loadCareWidgetDataOnce());
+}
+
+function withTimeout(load: Promise<WidgetData<CareWidgetData>>): Promise<WidgetData<CareWidgetData>> {
+  return Promise.race([
+    load,
+    new Promise<WidgetData<CareWidgetData>>((resolve) =>
+      setTimeout(() => resolve({ ok: false, error: 'offline', detail: '時間切れ' }), LOAD_TIMEOUT_MS),
+    ),
+  ]);
+}
+
+/** エラーを短い一言にする（ウィジェットの小さい見出しに入る長さ）。 */
+function errorDetail(error: unknown): string {
+  // Supabase のエラー（PostgrestError）は Error ではないが message を持つ。
+  const message =
+    typeof error === 'object' && error !== null && 'message' in error ? String(error.message) : String(error);
+  if (/network request failed/i.test(message)) return '通信できません';
+  return message.slice(0, 40);
 }
 
 async function loadCareWidgetDataOnce(): Promise<WidgetData<CareWidgetData>> {
@@ -57,6 +82,6 @@ async function loadCareWidgetDataOnce(): Promise<WidgetData<CareWidgetData>> {
     return { ok: true, value: { isNursing: last.isNursing, dueAt: schedule?.dueAt ?? null } };
   } catch (error) {
     console.warn('ウィジェットの次の目安を読めませんでした', error);
-    return { ok: false, error: 'offline' };
+    return { ok: false, error: 'offline', detail: errorDetail(error) };
   }
 }

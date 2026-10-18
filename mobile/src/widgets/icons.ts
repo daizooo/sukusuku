@@ -15,7 +15,8 @@ export type WidgetIconName =
   | 'expense'
   | 'income'
   | 'transfer'
-  | 'receipt';
+  | 'receipt'
+  | 'refresh';
 
 const SHAPES: Record<WidgetIconName, string> = {
   // lucide: CalendarDays（予定タブ）
@@ -46,6 +47,8 @@ const SHAPES: Record<WidgetIconName, string> = {
   receipt:
     '<path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"/>' +
     '<circle cx="12" cy="13" r="3"/>',
+  // lucide: RotateCw（育児の次の目安の更新）
+  refresh: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
 };
 
 /** そのアイコンの SVG。色は線の色。 */
