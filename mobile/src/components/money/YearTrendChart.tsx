@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { colors } from '@/lib/theme';
-import { formatAxisYen, formatSignedYen } from '@/lib/moneyUtils';
-import { pickBubble, yearTrendAxes, type TrendBox, type YearTrendAxes, type YearTrendPoint } from '@/lib/yearTrend';
+import { formatSignedYen } from '@/lib/moneyUtils';
+import { formatTrendAxis, pickBubble, yearTrendAxes, type TrendBox, type YearTrendAxes, type YearTrendPoint } from '@/lib/yearTrend';
 
 // 年の振り返りの「推移」（docs/kakei.md §4.8）。PWA版の `src/components/sukusuku/money/YearTrendChart.tsx` と同じ並び・文言。
 // 棒＝月ごとの収支（左の軸）、折れ線＝年初からの累計（右の軸）。0 の高さは左右でそろえる。
@@ -95,10 +95,10 @@ export default function YearTrendChart({ points, initialMonthKey, onSelectMonth 
                 <Line x1={PAD.left} x2={width - PAD.right} y1={y} y2={y} stroke={zero ? colors.textFaint : colors.border} strokeWidth={zero ? 1 : 0.8} />
                 {/* 目盛りの数字。上端・0・下端は大きく、あいだの10万円ごとは小さく */}
                 <SvgText x={PAD.left - 5} y={y + 3} fontSize={main ? 9.5 : 7.5} fontWeight={main ? '700' : '500'} fill={colors.textMuted} textAnchor="end">
-                  {formatAxisYen(balanceValue)}
+                  {formatTrendAxis(balanceValue)}
                 </SvgText>
                 <SvgText x={width - PAD.right + 5} y={y + 3} fontSize={main ? 9.5 : 7.5} fontWeight={main ? '700' : '500'} fill={colors.money} textAnchor="start">
-                  {formatAxisYen(cumulativeValue)}
+                  {formatTrendAxis(cumulativeValue)}
                 </SvgText>
               </G>
             );

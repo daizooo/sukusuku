@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, useState, type KeyboardEvent } from 'react';
-import { formatAxisYen, formatSignedYen } from '@/lib/moneyUtils';
-import { pickBubble, yearTrendAxes, type TrendBox, type YearTrendPoint } from '@/lib/yearTrend';
+import { formatSignedYen } from '@/lib/moneyUtils';
+import { formatTrendAxis, pickBubble, yearTrendAxes, type TrendBox, type YearTrendPoint } from '@/lib/yearTrend';
 
 // 年の振り返りの「推移」（docs/kakei.md §4.8）。mobile版の `mobile/src/components/money/YearTrendChart.tsx` と同じ並び・文言。
 // 棒＝月ごとの収支（左の軸）、折れ線＝年初からの累計（右の軸）。0 の高さは左右でそろえる。
@@ -147,10 +147,10 @@ export default function YearTrendChart({
             <line x1={PAD.left} x2={WIDTH - PAD.right} y1={tickY} y2={tickY} stroke={zero ? C.textFaint : C.border} strokeWidth={zero ? 1 : 0.8} />
             {/* 目盛りの数字。上端・0・下端は大きく、あいだの10万円ごとは小さく */}
             <text x={PAD.left - 5} y={tickY + 3} fontSize={main ? 9.5 : 7.5} fontWeight={main ? 700 : 500} fill={C.textMuted} textAnchor="end">
-              {formatAxisYen(balanceValue)}
+              {formatTrendAxis(balanceValue)}
             </text>
             <text x={WIDTH - PAD.right + 5} y={tickY + 3} fontSize={main ? 9.5 : 7.5} fontWeight={main ? 700 : 500} fill={C.money} textAnchor="start">
-              {formatAxisYen(cumulativeValue)}
+              {formatTrendAxis(cumulativeValue)}
             </text>
           </g>
         );

@@ -48,6 +48,12 @@ function niceStep(target: number): number {
   return [1, 2, 2.5, 5, 10].map((unit) => unit * base).find((step) => step >= target) ?? base * 10;
 }
 
+/** 目盛りの数字（万円の数だけ。「万」は付けない。2026-10-18）。例: 300000 → 「30」、−200000 → 「−20」。 */
+export function formatTrendAxis(value: number): string {
+  if (value === 0) return '0';
+  return `${value < 0 ? '−' : ''}${(Math.abs(value) / 10_000).toLocaleString('ja-JP')}`;
+}
+
 /** 目盛りの間隔のはじめ（10万円）。0 より上・下の目盛りがこれより多くなるときは、間隔を広げる。 */
 const TICK_YEN = 100_000;
 const MAX_HALF_TICKS = 6;
