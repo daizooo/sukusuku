@@ -21,7 +21,7 @@ import { FullScreen, ScreenHeader } from './moneyVisual';
 
 // 家計の設定（docs/kakei.md §3.5）。mobile版の `mobile/src/components/money/MoneySettings.tsx` と同じ並び・文言。
 //
-// カテゴリ・予算（年ごと。2026-10-15にカテゴリと分けた）・固定支出・収入（固定収入は給与・賞与）・よく行くお店を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
+// カテゴリ・予算（年ごと。2026-10-15にカテゴリと分けた）・固定費（支出・収入〔給与・賞与〕・振替）・よく行くお店を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
 // （お店の名前を直しても、過去の記録のお店の名前はそのまま）。
 // 戻る操作（ブラウザの戻る）は、開いている設定の面から入口へ、入口から家計タブへ。
 
@@ -90,7 +90,7 @@ export default function MoneySettings({
   const rows: { id: Exclude<Page, 'menu'>; label: string; icon: LucideIcon }[] = [
     { id: 'categories', label: 'カテゴリ', icon: Tag },
     { id: 'budget', label: '予算', icon: PiggyBank },
-    { id: 'recurring', label: '固定支出・収入', icon: CalendarClock },
+    { id: 'recurring', label: '固定費', icon: CalendarClock },
     { id: 'stores', label: 'よく行くお店', icon: Store },
     { id: 'feed', label: 'Gmail 取り込み', icon: Mail },
   ];
