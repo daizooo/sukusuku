@@ -42,7 +42,8 @@ import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader, StackedScreen, c
 //   車検・ふるさと納税のように記録を作らないもの）に分け、それぞれ折りたためる。記録を作らない回は月の順に並べ、実績があれば「済」。
 //   押すと「今年はなし」にできる。足す・直すのは「固定支出」
 // - 予備費: 年の額と、紐づけた小分類（この小分類の記録は予備費の予算で数える）。見出しを押すと額を決め、枠の中で小分類を紐づける・外す
-// 上の枠は、固定収入・支出の予算（内訳つき）・収支の見込み。
+// 上の枠は、収入・支出（内訳つき）・収支見込み。その下に、収入（固定収入）の一覧。固定費と収入の行は、カテゴリを大きく、品名を下に（お店は出さない）。
+// 押すと、そのルールの「固定支出」「固定収入」の編集が開く。
 
 interface BudgetEditorProps {
   familyId: string;
@@ -134,8 +135,8 @@ export default function BudgetEditor({
           total,
           // 月の額。月ごとに違えば平均（「約」）。
           monthly: monthly.every((value) => value === monthly[0])
-            ? `毎月 ${formatYen(monthly[0])}`
-            : `毎月 約${formatYen(Math.round(total / 12))}`,
+            ? `月 ${formatYen(monthly[0])}`
+            : `月 約${formatYen(Math.round(total / 12))}`,
           even: monthly.every((value) => value === monthly[0]),
           average: Math.round(total / 12),
           // その年の手入力の予算を決めていない（前の年の12月の額を引き継いでいる）。
@@ -147,7 +148,8 @@ export default function BudgetEditor({
   const today = toDateString(new Date());
   const occurrences = useMemo(() => estimateCostsInYear(recurring, records, year, today), [recurring, records, year, today]);
   const fixedRows = useMemo(() => recurringInYear(recurring, records, year), [recurring, records, year]);
-  const incomeTotal = fixedRows.filter((row) => row.rule.kind === 'income').reduce((sum, row) => sum + row.total, 0);
+  const incomeRows = fixedRows.filter((row) => row.rule.kind === 'income');
+  const incomeTotal = incomeRows.reduce((sum, row) => sum + row.total, 0);
   const outgoRows = fixedRows.filter((row) => row.rule.kind === 'expense');
   const confirmedRows = outgoRows.filter((row) => row.rule.amountMode === 'fixed');
   const plannedRows = outgoRows.filter((row) => row.rule.amountMode !== 'fixed');
@@ -239,9 +241,12 @@ export default function BudgetEditor({
     const { top } = categoryOf(rule);
     return top ? <CategoryIcon iconKey={iconKeyOf(top)} size={28} /> : <span className="w-7 shrink-0" />;
   };
+  // カテゴリを大きく、品名を下に（お店は出さない）。カテゴリが無ければ品名を大きく。
   const ruleName = (rule: MoneyRecurring, badge?: boolean, skipped?: boolean) => {
-    const { path } = categoryOf(rule);
-    const title = ruleTitle(rule, categories);
+    const name = rule.name.trim();
+    const { path: category } = categoryOf(rule);
+    const title = category || name || (rule.kind === 'income' ? '収入' : '支出');
+    const path = category !== '' ? name : '';
     return (
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
@@ -318,11 +323,11 @@ export default function BudgetEditor({
           <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pb-8">
             <div className={`${cardClass} overflow-hidden`}>
               <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
-                <span className="flex-1 text-[15px] font-semibold text-gray-500">固定収入</span>
+                <span className="flex-1 text-[15px] font-semibold text-gray-500">収入</span>
                 <span className={`text-[17px] font-extrabold tabular-nums ${incomeAmountClass}`}>{formatYen(incomeTotal)}</span>
               </div>
               <div className="flex items-center justify-between gap-2 border-t border-gray-200 px-3.5 py-2.5">
-                <span className="flex-1 text-[15px] font-semibold text-gray-500">支出の予算</span>
+                <span className="flex-1 text-[15px] font-semibold text-gray-500">支出</span>
                 <span className="text-[17px] font-extrabold tabular-nums text-gray-900">{formatYen(expenseTotal)}</span>
               </div>
               <div className="pb-1.5">
@@ -342,13 +347,20 @@ export default function BudgetEditor({
                 ))}
               </div>
               <div className="flex items-center justify-between gap-2 border-t border-gray-200 px-3.5 py-2.5">
-                <span className="flex-1 text-[15px] font-bold text-gray-900">収支の見込み</span>
+                <span className="flex-1 text-[15px] font-bold text-gray-900">収支見込み</span>
                 <span className={`text-[22px] font-extrabold tabular-nums ${plan > 0 ? incomeAmountClass : 'text-gray-900'}`}>
                   {plan < 0 ? '−' : plan > 0 ? '＋' : ''}
                   {formatYen(plan)}
                 </span>
               </div>
             </div>
+
+            {sectionHeader('収入', incomeTotal)}
+            {incomeRows.length === 0 ? (
+              <p className="py-4 text-center text-[13px] font-medium text-gray-400">この年の固定収入はありません</p>
+            ) : (
+              <div className={`${cardClass} overflow-hidden [&>*:first-child]:border-t-0`}>{incomeRows.map(fixedRow)}</div>
+            )}
 
             {sectionHeader('変動費', variableTotal)}
             {rows.length === 0 ? (
