@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Banknote, CalendarClock, ChevronRight, Mail, PiggyBank, Store, Tag, type LucideIcon } from 'lucide-react';
+import { CalendarClock, ChevronRight, Mail, PiggyBank, Store, Tag, type LucideIcon } from 'lucide-react';
 import type {
   MoneyBudget,
   MoneyCategory,
@@ -12,7 +12,7 @@ import type {
   MoneyStore,
   MoneyWallet,
 } from '@/types/app';
-import { budgetFor, formatYear, formatYen, isEstimateCost, topCategories, yearMonthKeys } from '@/lib/moneyUtils';
+import { budgetFor, formatYear, formatYen, topCategories, yearMonthKeys } from '@/lib/moneyUtils';
 import CategoryEditor from './CategoryEditor';
 import BudgetEditor from './BudgetEditor';
 import RecurringSettings from './RecurringSettings';
@@ -22,7 +22,7 @@ import { FullScreen, ScreenHeader } from './moneyVisual';
 
 // 家計の設定（docs/kakei.md §3.5）。mobile版の `mobile/src/components/money/MoneySettings.tsx` と同じ並び・文言。
 //
-// カテゴリ・予算（年ごと。2026-10-15にカテゴリと分けた）・固定支出・固定収入（給与・賞与）・よく行くお店を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
+// カテゴリ・予算（年ごと。2026-10-15にカテゴリと分けた）・固定支出・収入（固定収入は給与・賞与）・よく行くお店を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
 // （お店の名前を直しても、過去の記録のお店の名前はそのまま）。
 // 戻る操作（ブラウザの戻る）は、開いている設定の面から入口へ、入口から家計タブへ。
 
@@ -53,7 +53,7 @@ interface MoneySettingsProps {
   onClose: () => void;
 }
 
-type Page = 'menu' | 'categories' | 'budget' | 'stores' | 'recurring' | 'income' | 'feed';
+type Page = 'menu' | 'categories' | 'budget' | 'stores' | 'recurring' | 'feed';
 
 export default function MoneySettings({
   familyId,
@@ -77,7 +77,7 @@ export default function MoneySettings({
 }: MoneySettingsProps) {
   const [page, setPage] = useState<Page>(() => {
     const rule = recurring.find((entry) => entry.id === initialRecurringId);
-    return rule ? (rule.kind === 'income' ? 'income' : 'recurring') : 'menu';
+    return rule ? 'recurring' : 'menu';
   });
   // 固定支出の編集を開くルール（予算の画面の固定費の行から）。
   const [recurringTarget, setRecurringTarget] = useState<string | null>(initialRecurringId);
@@ -85,7 +85,7 @@ export default function MoneySettings({
     const rule = recurring.find((entry) => entry.id === id);
     if (!rule) return;
     setRecurringTarget(id);
-    setPage(rule.kind === 'income' ? 'income' : 'recurring');
+    setPage('recurring');
   };
 
   const tops = topCategories(categories, 'living', true).filter((top) => !top.archived);
@@ -95,15 +95,13 @@ export default function MoneySettings({
   );
   const childCount = categories.filter((category) => category.parentId !== null).length;
   const storeCount = stores.filter((store) => !store.archived).length;
-  const recurringCount = recurring.filter((rule) => !rule.archived && rule.kind !== 'income' && !isEstimateCost(rule)).length;
-  const estimateCount = recurring.filter((rule) => !rule.archived && isEstimateCost(rule)).length;
+  const expenseCount = recurring.filter((rule) => !rule.archived && rule.kind !== 'income').length;
   const incomeCount = recurring.filter((rule) => !rule.archived && rule.kind === 'income').length;
 
   const rows: { id: Exclude<Page, 'menu'>; label: string; summary: string; icon: LucideIcon }[] = [
     { id: 'categories', label: 'カテゴリ', summary: `支出の大分類 ${tops.length}個・小分類 ${childCount}個`, icon: Tag },
     { id: 'budget', label: '予算', summary: `${formatYear(year)}の支出の予算 年${formatYen(yearBudget)}（年ごとに決める）`, icon: PiggyBank },
-    { id: 'recurring', label: '固定支出', summary: `自動で記録 ${recurringCount}件・記録しない ${estimateCount}件`, icon: CalendarClock },
-    { id: 'income', label: '固定収入', summary: `給与・賞与 ${incomeCount}件（自動で記録）`, icon: Banknote },
+    { id: 'recurring', label: '固定支出・収入', summary: `支出 ${expenseCount}件・収入 ${incomeCount}件`, icon: CalendarClock },
     { id: 'stores', label: 'よく行くお店', summary: `登録したお店 ${storeCount}件`, icon: Store },
     {
       id: 'feed',
@@ -124,9 +122,6 @@ export default function MoneySettings({
         <>
           <ScreenHeader title="家計の設定" onClose={onClose} />
           <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 p-4">
-            <p className="pb-1 text-[13px] leading-relaxed text-gray-500">
-              カテゴリ・予算・固定支出・固定収入・よく行くお店・Gmail 取り込みを、いつでも編集・追加できます。直すのは設定だけで、記録は変わりません。
-            </p>
             {rows.map((row) => {
               const Icon = row.icon;
               return (
@@ -164,10 +159,9 @@ export default function MoneySettings({
           onBack={back}
         />
       )}
-      {(page === 'recurring' || page === 'income') && (
+      {page === 'recurring' && (
         <RecurringSettings
           key={recurringTarget ?? 'list'}
-          mode={page === 'income' ? 'income' : 'expense'}
           familyId={familyId}
           recurring={recurring}
           wallets={wallets}
