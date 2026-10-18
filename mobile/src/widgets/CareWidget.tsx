@@ -10,7 +10,7 @@ import { widgetIcon, type WidgetIconName } from './icons';
 // B. 育児（docs/widgets.md §2.2）。4×1 の1段に、次の授乳の目安と3つのボタンを並べる。琥珀の地に白いボタン。
 // 見出しは出さない。搾乳は授乳の入力画面にまとめてある（頻度も少ない）ので、ボタンを置かない。
 // ボタンはお知らせのタップと同じ飛び先（`/care?open=milk`。src/lib/appLinks.ts）。
-// 目安の欄の右に更新のボタン（↻）を置き、押すとその場で次の目安を読み直して描き直す。目安の欄そのものを押すと育児タブを開く。
+// 目安のすぐ右に更新のボタン（↻。四角は付けない）を置き、押すとその場で次の目安を読み直して描き直す。目安の欄そのものを押すと育児タブを開く。
 // ウィジェットから直接は保存しない（押し間違いで記録が増えないように）。
 
 // アイコンは記録の種類の色（育児タブと同じ）、名前は灰色でそろえる（地の琥珀と競わないように）。
@@ -67,32 +67,25 @@ function careCells(data: WidgetData<CareWidgetData>, density: WidgetDensity = 'n
   const { label, value } = dueLines(data);
   const d = DENSITY[density];
   return [
-    <FlexWidget
-      key="due"
-      style={{ flex: 1, height: 'match_parent', flexDirection: 'row', alignItems: 'center', flexGap: d.buttonGap }}
-    >
+    // 目安と ↻ をくっつけて真ん中に置く。両脇の余白も押すと育児タブを開く（入れ子にせず、横に並べて分ける）。
+    <FlexWidget key="due" style={{ flex: 1, height: 'match_parent', flexDirection: 'row', alignItems: 'center' }}>
+      <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: careUri }} style={{ flex: 1, height: 'match_parent' }} />
       <FlexWidget
         clickAction="OPEN_URI"
         clickActionData={{ uri: careUri }}
         accessibilityLabel={`${label} ${value}`}
-        style={{ flex: 1, height: 'match_parent', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+        style={{ height: 'match_parent', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
       >
         {dueText(data, density)}
       </FlexWidget>
       <FlexWidget
         clickAction={REFRESH_WIDGET_ACTION}
         accessibilityLabel="次の目安を更新"
-        style={{
-          width: d.icon + 16,
-          height: 'match_parent',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: hex(colors.surface),
-          borderRadius: d.buttonRadius,
-        }}
+        style={{ height: 'match_parent', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}
       >
         <SvgWidget svg={widgetIcon('refresh', colors.milkText)} style={{ width: d.icon + 2, height: d.icon + 2 }} />
       </FlexWidget>
+      <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: careUri }} style={{ flex: 1, height: 'match_parent' }} />
     </FlexWidget>,
     ...BUTTONS.map(({ type, icon, label: buttonLabel, color }) => (
       <ActionButton
