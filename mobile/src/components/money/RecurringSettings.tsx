@@ -16,7 +16,6 @@ import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
 import { toDateString, WEEKDAY_LABELS } from '@/lib/dateUtils';
 import {
-  cardScheduleLabel,
   categoryPath,
   estimateCostBasis,
   formatShortDate,
@@ -52,27 +51,34 @@ import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 //
 // 口座から落ちる固定支出・口座に入る給料などを、項目ごとのルールにする。サーバーが毎朝、その日に当たる記録を作る
 // （DBの make_money_recurring_records）。額を見込むものは、過去1年の記録（カテゴリ・出金元・お店が同じもの）から出す。
-// カード代金はここではなく、出金元のカードに締め日・引き落とし日・引き落とし口座を入れると作られる（一覧だけ出す）。
+// カード代金はここではなく、出金元のカードに締め日・引き落とし日・引き落とし口座を入れると作られる（ここには出さない。2026-10-18）。
 // 直すのはルールだけで、もう作った記録は変わらない。
 //
-// 固定収入（給与・賞与。2026-10-11。docs/kakei.md §0.3）も同じルールで、同じ画面「固定支出・収入」の上の切り替え（支出／収入。タップだけ）で出す
+// 固定収入（給与・賞与。2026-10-11。docs/kakei.md §0.3）・振替も同じルールで、同じ画面「固定支出・収入」の上の切り替え（支出／収入／振替。タップだけ）で出す
 // （2026-10-18に統合）。収入のルールの編集は、入金先・振込日・見込み額の言葉にする。賞与は1回ごとに1件のルール（月・日・額）で、「複製して足す」で回を増やす。
 //
-// 並べ替え（左の持ち手をつかんで動かす。リストと同じ操作）は、種類（支出・振替）ごとの中で動かせる。
+// 並べ替え（左の持ち手をつかんで動かす。リストと同じ操作）は、見出し（固定・予定）ごとの中で動かせる。
 // 複製は、編集の画面の「複製して足す」から。日・月・額など全部を写し、品名に「のコピー」を付けた新規の編集を開き、直して保存すると足される。
 //
 // 期間（開始月・終了月。2026-10-15）: 育休給付金 〜2027/8、時短後の給与 2027/9〜 のように、期間の外の月は記録も予算も作らない。
 // 期間が終わったルールは、一覧の下に畳んで出す（押すと開く）。
 //
 // 記録しない予定（2026-10-17。docs/kakei.md §3.6）: 車検・ふるさと納税・行事のように、出ることは決まっているが額が少しぶれ、カードや現金で
-// 払うもの。編集の「記録の作り方」で「記録しない（予定）」を選ぶ。出金元・お店・日は持たず、カテゴリ（小分類）・予定の月・額だけ。
+// 払うもの。編集の「種類」で「予定」を選ぶ（自動で記録するものは「固定」）。出金元・お店・日は持たず、カテゴリ（小分類）・予定の月・額だけ。
 // 記録は作らず、その月の予算と年末の着地見込みにだけ入る。実績は、その年に同じ小分類で入った記録が自動で結びつく（予算の画面に出す）。
-// 額は「入れた額」か「前回の実績から見込む」（その小分類で前回入った実績）。一覧では「記録しない予定」の見出しの下にまとめる。
+// 額は「入れた額」か「前回の実績から見込む」（その小分類で前回入った実績）。一覧では支出の「固定」のあと、「予定」の見出しの下にまとめる。
 
-type RecurringMode = 'expense' | 'income';
+type RecurringMode = 'expense' | 'income' | 'transfer';
 
-/** 'expense'＝固定支出（支出・振替）、'income'＝固定収入（給与・賞与）。 */
-const modeOf = (rule: MoneyRecurring): RecurringMode => (rule.kind === 'income' ? 'income' : 'expense');
+/** 一覧の切り替え。'expense'＝固定支出（固定・予定）、'income'＝固定収入（給与・賞与）、'transfer'＝振替。 */
+const modeOf = (rule: MoneyRecurring): RecurringMode => rule.kind;
+
+const MODE_TABS: { id: RecurringMode; label: string }[] = [
+  { id: 'expense', label: '支出' },
+  { id: 'income', label: '収入' },
+  { id: 'transfer', label: '振替' },
+];
+const MODE_NAME: Record<RecurringMode, string> = { expense: '固定支出', income: '固定収入', transfer: '振替' };
 
 interface RecurringSettingsProps {
   familyId: string;
@@ -94,7 +100,6 @@ interface RecurringSettingsProps {
   backRef: MutableRefObject<(() => void) | null>;
 }
 
-const KINDS: MoneyRecordKind[] = ['expense', 'transfer'];
 const HOLIDAYS: MoneyHolidayRule[] = ['next', 'prev', 'none'];
 const MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
 
@@ -117,12 +122,11 @@ export default function RecurringSettings({
   const [editing, setEditing] = useState<MoneyRecurring | 'new' | null>(
     () => recurring.find((rule) => rule.id === initialEditId) ?? null,
   );
-  // 一覧に出す種類（支出／収入）。予算の画面から開いたルールの種類で始める。新しく足すのもこの種類。
+  // 一覧に出す種類（支出／収入／振替）。予算の画面から開いたルールの種類で始める。新しく足すのもこの種類。
   const [tab, setTab] = useState<RecurringMode>(() => {
     const rule = recurring.find((entry) => entry.id === initialEditId);
     return rule ? modeOf(rule) : 'expense';
   });
-  const isIncome = tab === 'income';
   // 「複製して足す」の元。日・月・額など全部を写し、品名に「のコピー」を付けて新規の編集を開く。
   const [template, setTemplate] = useState<MoneyRecurring | null>(null);
   // 編集を閉じたら、戻る操作を家計の設定へ返す（開いているあいだは RecurringEditor が入れる）。
@@ -135,15 +139,14 @@ export default function RecurringSettings({
   const ended = inTab.filter((rule) => !rule.archived && recurringEnded(rule, thisMonth));
   const archived = inTab.filter((rule) => rule.archived);
   const [showEnded, setShowEnded] = useState(false);
-  // 一覧の見出しごとのルール。支出は、自動で記録する支出・振替・記録しない（予定）に分ける。
-  const sections: { key: string; title: string | null; rules: MoneyRecurring[] }[] = isIncome
-    ? [{ key: 'income', title: null, rules: usable }]
-    : [
-        { key: 'expense', title: '支出（自動で記録）', rules: usable.filter((rule) => rule.kind === 'expense' && !isEstimateCost(rule)) },
-        { key: 'transfer', title: RECORD_KIND_LABEL.transfer, rules: usable.filter((rule) => rule.kind === 'transfer') },
-        { key: 'estimate', title: '記録しない（予定）', rules: usable.filter(isEstimateCost) },
-      ];
-  const cards = isIncome ? [] : wallets.filter((wallet) => wallet.type === 'card' && !wallet.archived);
+  // 一覧の見出しごとのルール。支出は、固定（自動で記録する）・予定（記録しない）の順に分ける。
+  const sections: { key: string; title: string | null; rules: MoneyRecurring[] }[] =
+    tab === 'expense'
+      ? [
+          { key: 'fixed', title: '固定', rules: usable.filter((rule) => !isEstimateCost(rule)) },
+          { key: 'estimate', title: '予定', rules: usable.filter(isEstimateCost) },
+        ]
+      : [{ key: tab, title: null, rules: usable }];
 
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '';
   const failed = () => Alert.alert('保存できませんでした', 'もう一度お試しください。');
@@ -212,7 +215,7 @@ export default function RecurringSettings({
   };
 
   const confirmRemove = (rule: MoneyRecurring) =>
-    Alert.alert(`この${rule.kind === 'income' ? '固定収入' : '固定支出'}を削除しますか？`, 'これから先は作らなくなります。作った記録は残ります。', [
+    Alert.alert(`この${MODE_NAME[modeOf(rule)]}を削除しますか？`, 'これから先は作らなくなります。作った記録は残ります。', [
       { text: 'やめる', style: 'cancel' },
       { text: '削除', style: 'destructive', onPress: () => void remove(rule) },
     ]);
@@ -252,7 +255,7 @@ export default function RecurringSettings({
     <View style={styles.screen}>
       <ScreenHeader title="固定支出・収入" icon="back" onClose={onBack} />
       <View accessibilityRole="tablist" style={styles.tabs}>
-        {(['expense', 'income'] as const).map((entry) => {
+        {MODE_TABS.map(({ id: entry, label }) => {
           const selected = entry === tab;
           return (
             <Pressable
@@ -265,7 +268,7 @@ export default function RecurringSettings({
               }}
               style={styles.tab}
             >
-              <Text style={[styles.tabText, selected && styles.tabTextSelected]}>{entry === 'income' ? '収入' : '支出'}</Text>
+              <Text style={[styles.tabText, selected && styles.tabTextSelected]}>{label}</Text>
               <View style={[styles.underline, selected && styles.underlineSelected]} />
             </Pressable>
           );
@@ -319,36 +322,14 @@ export default function RecurringSettings({
         })}
         <Pressable accessibilityRole="button" onPress={() => setEditing('new')} style={styles.add}>
           <Plus size={18} color={colors.money} />
-          <Text style={styles.addText}>{isIncome ? '固定収入を足す' : '固定支出を足す'}</Text>
+          <Text style={styles.addText}>{`${MODE_NAME[tab]}を足す`}</Text>
         </Pressable>
-
-        {cards.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>カード代金（出金元のカードで設定）</Text>
-            {cards.map((card) => {
-              const schedule = cardScheduleLabel(card);
-              const ready = schedule !== '' && card.payWalletId !== null;
-              return (
-                <View key={card.id} style={styles.row}>
-                  <View style={styles.flex}>
-                    <Text style={styles.name}>{card.name}</Text>
-                    <Text style={styles.sub}>
-                      {ready
-                        ? `${schedule}・${walletName(card.payWalletId)}から（休日は翌営業日）`
-                        : '締め日・引き落とし日・引き落とし口座がそろっていません'}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
 
         {ended.length > 0 && (
           <View style={styles.section}>
             <Pressable accessibilityRole="button" onPress={() => setShowEnded((value) => !value)} hitSlop={8}>
               <Text style={styles.sectionTitle}>
-                {`期間が終わったもの ${ended.length}件（${showEnded ? '閉じる' : '押すと開く'}）`}
+                {`期間が終わったもの ${ended.length}件`}
               </Text>
             </Pressable>
             {showEnded &&
@@ -373,7 +354,7 @@ export default function RecurringSettings({
 
         {archived.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>使わないもの（作った記録は残っています）</Text>
+            <Text style={styles.sectionTitle}>使わないもの</Text>
             {archived.map((rule) => (
               <View key={rule.id} style={[styles.row, styles.archivedRow]}>
                 <Text style={[styles.name, styles.flex]}>
@@ -454,7 +435,7 @@ function RecurringEditor({
   onDuplicate,
   backRef,
 }: {
-  mode: 'expense' | 'income';
+  mode: RecurringMode;
   rule: MoneyRecurring | null;
   /** 「複製して足す」の元（全部を写す）。 */
   template: MoneyRecurring | null;
@@ -476,7 +457,8 @@ function RecurringEditor({
   useEffect(() => {
     backRef.current = () => (screen === 'form' ? onClose() : setScreen('form'));
   });
-  const [kind, setKind] = useState<MoneyRecordKind>(base?.kind ?? (isIncome ? 'income' : 'expense'));
+  // 種類（支出・収入・振替）は、一覧の切り替えで決まる（編集では変えない）。
+  const kind: MoneyRecordKind = base?.kind ?? mode;
   const [categoryId, setCategoryId] = useState<string | null>(base?.categoryId ?? null);
   const [walletId, setWalletId] = useState<string | null>(base?.walletId ?? null);
   const [toWalletId, setToWalletId] = useState<string | null>(base?.toWalletId ?? null);
@@ -528,12 +510,6 @@ function RecurringEditor({
     [estimate, categoryId, records, plannedMonth],
   );
   const basisMonth = basis === null ? null : Number(basis.monthKey.slice(5, 7));
-
-  const changeKind = (next: MoneyRecordKind) => {
-    if (next === kind) return;
-    setKind(next);
-    setCategoryId(null);
-  };
 
   const toggleMonth = (month: number) => {
     const current = months ?? [];
@@ -634,25 +610,18 @@ function RecurringEditor({
   return (
     <View style={styles.screen}>
       <ScreenHeader
-        title={`${isIncome ? '固定収入' : '固定支出'}を${rule ? '編集' : template ? '複製して足す' : '足す'}`}
+        title={`${MODE_NAME[mode]}を${rule ? '編集' : template ? '複製して足す' : '足す'}`}
         icon="back"
         onClose={onClose}
       />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {!isIncome && (
-          <View style={styles.chips}>
-            {KINDS.map((entry) => (
-              <Chip key={entry} label={RECORD_KIND_LABEL[entry]} selected={kind === entry} onPress={() => changeKind(entry)} />
-            ))}
-          </View>
-        )}
         {!isIncome && kind === 'expense' && (
           <View style={styles.field}>
-            <Text style={styles.label}>記録の作り方</Text>
+            <Text style={styles.label}>種類</Text>
             <View style={styles.chips}>
-              <Chip label="自動で記録する" selected={makesRecord} onPress={() => setMakesRecord(true)} />
+              <Chip label="固定" selected={makesRecord} onPress={() => setMakesRecord(true)} />
               <Chip
-                label="記録しない（予定）"
+                label="予定"
                 selected={!makesRecord}
                 onPress={() => {
                   setMakesRecord(false);
