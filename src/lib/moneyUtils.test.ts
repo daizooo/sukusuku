@@ -105,9 +105,9 @@ import type { MoneyBudget, MoneyCategory, MoneyHolding, MoneyHoldingValue, Money
 assert.equal(shiftMonth('2026-12', 1), '2027-01');
 assert.equal(shiftMonth('2026-01', -1), '2025-12');
 assert.equal(shiftMonth('2026-09', -12), '2025-09');
-assert.equal(formatSignedYen(1200), '¥1,200');
-assert.equal(formatSignedYen(-3800), '¥−3,800');
-assert.equal(formatSignedYen(0), '¥0');
+assert.equal(formatSignedYen(1200), '¥\u20091,200');
+assert.equal(formatSignedYen(-3800), '¥\u2009−3,800');
+assert.equal(formatSignedYen(0), '¥\u20090');
 
 // ---- カテゴリ ----
 const cat = (id: string, name: string, parentId: string | null, extra: Partial<MoneyCategory> = {}): MoneyCategory => ({
@@ -830,8 +830,8 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
   assert.equal(walletDelta(rs[1], 'card'), 0, '関係ない出金元は変わらない');
   assert.equal(walletDelta(rs[2], 'bank'), -50000, '振替は出金元から減る');
   assert.equal(walletDelta(rs[2], 'save'), 50000, '振替は入金先に増える');
-  assert.equal(formatBalance(-12000), '¥−12,000');
-  assert.equal(formatBalance(300), '¥300');
+  assert.equal(formatBalance(-12000), '¥\u2009−12,000');
+  assert.equal(formatBalance(300), '¥\u2009300');
 
   // 確定が無ければ、記録だけから出す（今日までの記録。先の日付は入れない）。
   const none = walletBalanceOn('bank', '2026-10-10', rs, []);
@@ -1220,12 +1220,12 @@ assert.deepEqual(
   // カードの利用通知から作った記録（品名の無い品目1つ）で合計が同じなら、確かめずに入れ替える
   const fromMail = record('rm', { items: [item({ amount: 4415 })] });
   assert.deepEqual(receiptReplaceNotices(fromMail, 4415), []);
-  assert.deepEqual(receiptReplaceNotices(fromMail, 4400), ['記録の ¥4,415 とレシートの ¥4,400 で合計が違います']);
+  assert.deepEqual(receiptReplaceNotices(fromMail, 4400), ['記録の ¥\u20094,415 とレシートの ¥\u20094,400 で合計が違います']);
   // 手で入れた品目（2つ以上・品名あり）は確かめる
   const manual = record('rh', { items: [item({ amount: 4000 }), item({ amount: 415 })] });
   assert.deepEqual(receiptReplaceNotices(manual, 4415), ['手で入れた品目があります']);
   const named = record('rn', { items: [item({ amount: 4415, name: '牛乳' })] });
-  assert.deepEqual(receiptReplaceNotices(named, 4000), ['記録の ¥4,415 とレシートの ¥4,000 で合計が違います', '手で入れた品目があります']);
+  assert.deepEqual(receiptReplaceNotices(named, 4000), ['記録の ¥\u20094,415 とレシートの ¥\u20094,000 で合計が違います', '手で入れた品目があります']);
 }
 
 // ---- 見積費（記録を作らない固定支出。docs/kakei.md §3.6） ----

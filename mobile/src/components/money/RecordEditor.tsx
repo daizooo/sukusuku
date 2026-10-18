@@ -575,7 +575,7 @@ export default function RecordEditor({
             <Text style={styles.currencyMark}>¥</Text>
             <Text style={styles.currencyCode}>JPY</Text>
           </View>
-          <Text style={styles.total}>{formatBalance(total).replace('¥', '')}</Text>
+          <Text style={styles.total}>{formatBalance(total).replace(/^¥\s*/, '')}</Text>
         </Pressable>
         {receiptNotices.length > 0 && (
           <View style={styles.receiptNotice}>

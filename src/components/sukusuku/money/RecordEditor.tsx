@@ -555,7 +555,7 @@ export default function RecordEditor({
             <span className="text-[26px] font-extrabold text-gray-900">¥</span>
             <span className="mt-0.5 text-[11px] font-bold text-gray-700">JPY</span>
           </span>
-          <span className="text-[40px] font-extrabold text-gray-900 tabular-nums">{formatBalance(total).replace('¥', '')}</span>
+          <span className="text-[40px] font-extrabold text-gray-900 tabular-nums">{formatBalance(total).replace(/^¥\s*/, '')}</span>
         </button>
         {receiptNotices.length > 0 && (
           <div className="mx-4 mt-2 space-y-1 rounded-xl bg-red-50 p-3">

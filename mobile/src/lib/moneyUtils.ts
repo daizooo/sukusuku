@@ -65,12 +65,15 @@ export function formatShortDate(dateKey: string): string {
 // ---- 金額の表示 ----
 
 /** ¥1,234。 */
-export const formatYen = (value: number) => `¥${Math.abs(value).toLocaleString('ja-JP')}`;
+/** ¥と数字のあいだの細いすき間（U+2009。詰まって見えないように）。 */
+const YEN_MARK = '¥\u2009';
+
+export const formatYen = (value: number) => `${YEN_MARK}${Math.abs(value).toLocaleString('ja-JP')}`;
 
 /** マイナスだけ符号つき（¥1,234 / ¥−1,234 / ¥0）。プラスに符号は付けない（色で見せる）。¥は先頭。 */
 export function formatSignedYen(value: number): string {
   if (value === 0) return formatYen(0);
-  return `¥${value < 0 ? '−' : ''}${Math.abs(value).toLocaleString('ja-JP')}`;
+  return `${YEN_MARK}${value < 0 ? '−' : ''}${Math.abs(value).toLocaleString('ja-JP')}`;
 }
 
 // ---- カテゴリ・出金元の決まりごと ----
@@ -1947,7 +1950,7 @@ export function pressCalcKey(expression: string, key: string): string {
 export const dateKeyOfDate = (date: Date): string => `${monthKeyOfDate(date)}-${pad2(date.getDate())}`;
 
 /** マイナスは「¥−1,234」（¥が先頭）。残高の表示に使う（formatYen は符号を付けない）。 */
-export const formatBalance = (value: number): string => `¥${value < 0 ? '−' : ''}${Math.abs(value).toLocaleString('ja-JP')}`;
+export const formatBalance = (value: number): string => `${YEN_MARK}${value < 0 ? '−' : ''}${Math.abs(value).toLocaleString('ja-JP')}`;
 
 /**
  * 1件の記録が、出金元 walletId の残高に与える増減（円）。
