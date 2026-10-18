@@ -121,8 +121,8 @@ export default function BudgetEditor({
   const [pickingReserve, setPickingReserve] = useState(false);
   // 押した記録しない回（「今年はなし」か、固定支出の編集へ）。
   const [acting, setActing] = useState<EstimateCostOccurrence | null>(null);
-  // 固定費の「確定」「予定」と、予備費の小分類の開閉。
-  const [open, setOpen] = useState({ confirmed: false, planned: true, reserve: true });
+  // 変動費、固定費の「確定」「予定」、予備費の小分類の開閉。
+  const [open, setOpen] = useState({ variable: true, confirmed: false, planned: true, reserve: true });
   const toggle = (key: keyof typeof open) => setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const monthKeys = useMemo(() => yearMonthKeys(year), [year]);
@@ -297,6 +297,20 @@ export default function BudgetEditor({
     );
   };
 
+  // 押すと折りたたむ見出し（変動費）。
+  const foldHeader = (key: keyof typeof open, title: string, total: number) => (
+    <button
+      type="button"
+      aria-expanded={open[key]}
+      onClick={() => toggle(key)}
+      className="flex w-full items-center gap-1.5 px-0.5 pt-4 pb-1.5 text-left"
+    >
+      {open[key] ? <ChevronDown size={18} className="text-gray-400" /> : <ChevronRight size={18} className="text-gray-400" />}
+      <span className="flex-1 text-lg font-extrabold text-gray-900">{title}</span>
+      <span className="text-[15px] font-bold tabular-nums text-gray-500">{formatYen(total)}</span>
+    </button>
+  );
+
   return (
     <FullScreen onBack={onClose}>
       {pickingReserve ? (
@@ -366,8 +380,8 @@ export default function BudgetEditor({
               <div className={`${cardClass} overflow-hidden [&>*:first-child]:border-t-0`}>{incomeRows.map(fixedRow)}</div>
             )}
 
-            {sectionHeader('変動費', variableTotal)}
-            {rows.length === 0 ? (
+            {foldHeader('variable', '変動費', variableTotal)}
+            {!open.variable ? null : rows.length === 0 ? (
               <p className="py-4 text-center text-[13px] font-medium text-gray-400">生活費の大分類がありません。先に「カテゴリ」で作ってください</p>
             ) : (
               <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>

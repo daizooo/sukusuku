@@ -116,8 +116,8 @@ export default function BudgetEditor({
   const [editing, setEditing] = useState<MoneyCategory | null>(null);
   const [editingReserve, setEditingReserve] = useState(false);
   const [pickingReserve, setPickingReserve] = useState(false);
-  // 固定費の「確定」「予定」と、予備費の小分類の開閉。
-  const [open, setOpen] = useState({ confirmed: false, planned: true, reserve: true });
+  // 変動費、固定費の「確定」「予定」、予備費の小分類の開閉。
+  const [open, setOpen] = useState({ variable: true, confirmed: false, planned: true, reserve: true });
   const toggle = (key: keyof typeof open) => setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const monthKeys = useMemo(() => yearMonthKeys(year), [year]);
@@ -315,6 +315,16 @@ export default function BudgetEditor({
     </Pressable>
   );
 
+  // 押すと折りたたむ見出し（変動費）。
+  const foldHeader = (key: keyof typeof open, title: string, total: number) => (
+    <Pressable accessibilityRole="button" accessibilityState={{ expanded: open[key] }} onPress={() => toggle(key)} style={styles.section}>
+      {open[key] ? <ChevronDown size={18} color={colors.textFaint} /> : <ChevronRight size={18} color={colors.textFaint} />}
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.flex} />
+      <Text style={styles.sectionTotal}>{formatYen(total)}</Text>
+    </Pressable>
+  );
+
   if (pickingReserve) {
     return (
       <Modal visible animationType="slide" onRequestClose={() => setPickingReserve(false)}>
@@ -397,8 +407,8 @@ export default function BudgetEditor({
             <View style={styles.card}>{incomeRows.map((row, index) => fixedRow(row, index === 0))}</View>
           )}
 
-          {sectionHeader('変動費', variableTotal)}
-          {rows.length === 0 ? (
+          {foldHeader('variable', '変動費', variableTotal)}
+          {!open.variable ? null : rows.length === 0 ? (
             <Text style={styles.message}>生活費の大分類がありません。先に「カテゴリ」で作ってください</Text>
           ) : (
             <View style={styles.card}>
