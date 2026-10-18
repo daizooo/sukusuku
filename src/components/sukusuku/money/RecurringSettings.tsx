@@ -247,7 +247,7 @@ export default function RecurringSettings({
         />
       ) : (
         <>
-          <ScreenHeader title="固定費" icon="back" onClose={onBack} />
+          <ScreenHeader title="固定費（支出、収入、振替）" icon="back" onClose={onBack} />
           <div role="tablist" className="shrink-0 flex border-b border-gray-200 px-2">
             {MODE_TABS.map(({ id: entry, label }) => {
               const selected = entry === tab;

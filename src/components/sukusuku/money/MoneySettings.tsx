@@ -90,7 +90,7 @@ export default function MoneySettings({
   const rows: { id: Exclude<Page, 'menu'>; label: string; icon: LucideIcon }[] = [
     { id: 'categories', label: 'カテゴリ', icon: Tag },
     { id: 'budget', label: '予算', icon: PiggyBank },
-    { id: 'recurring', label: '固定費', icon: CalendarClock },
+    { id: 'recurring', label: '固定費（支出、収入、振替）', icon: CalendarClock },
     { id: 'stores', label: 'よく行くお店', icon: Store },
     { id: 'feed', label: 'Gmail 取り込み', icon: Mail },
   ];
