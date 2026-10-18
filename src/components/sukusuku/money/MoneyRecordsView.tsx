@@ -45,7 +45,17 @@ const bubbleLabel = (dateKey: string) => {
   return `${year}年${pad(month)}月${pad(day)}日(${WEEKDAY_LABELS[new Date(year, month - 1, day).getDay()]})`;
 };
 
-export default function MoneyRecordsView({ active, records, categories, wallets, isLoading, onOpen, onAddOnDate }: MoneyRecordsViewProps) {
+export default function MoneyRecordsView({
+  active,
+  records,
+  categories,
+  wallets,
+  isLoading,
+  onOpen,
+  onAddOnDate,
+  feedOpenCount,
+  onOpenFeed,
+}: MoneyRecordsViewProps) {
   const days = useMemo<RecordDay[]>(
     () => groupRecordsByDay(records).map((day) => ({ ...day, corrections: NO_CORRECTIONS })),
     [records],
