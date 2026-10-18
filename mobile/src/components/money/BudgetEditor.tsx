@@ -73,10 +73,12 @@ interface BudgetEditorProps {
 /** 「3月」。 */
 const monthLabel = (monthKey: string) => `${Number(monthKey.slice(5, 7))}月`;
 
-/** 記録する月と1回の額（「毎月 ¥98,000」「奇数月 ¥10,000」）と期間。額が回ごとに違うものは平均（「約¥14,000」）。 */
+/** 記録する月と1回の額（「月 ¥98,000」「奇数月 ¥10,000」）と期間。額が回ごとに違うものは平均（「約¥14,000」）。 */
 function scheduleText(row: RecurringYearRow): string {
   const { rule } = row;
-  const months = rule.months === null ? '毎月' : monthsLabel(rule.months);
+  // 毎月のものは「月」（予算の画面。2026-10-18）。
+  const label = rule.months === null ? '毎月' : monthsLabel(rule.months);
+  const months = label === '毎月' ? '月' : label;
   const values = row.amounts.filter((value) => value > 0);
   const each =
     values.length === 0
@@ -297,7 +299,7 @@ export default function BudgetEditor({
       {ruleIcon(row.rule)}
       {ruleName(row.rule)}
       <View style={styles.right}>
-        <Text style={styles.rowAmount}>{formatYen(row.total)}</Text>
+        <Text style={[styles.rowAmount, row.rule.kind === 'income' && styles.income]}>{formatYen(row.total)}</Text>
         <Text style={styles.note}>{scheduleText(row)}</Text>
       </View>
       {onOpenRecurring && <ChevronRight size={16} color={colors.textFaint} />}

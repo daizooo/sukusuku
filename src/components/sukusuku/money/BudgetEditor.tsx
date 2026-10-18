@@ -76,10 +76,12 @@ const rowClass = 'flex w-full items-center gap-3 border-t border-gray-200 px-3.5
 /** 「3月」。 */
 const monthLabel = (monthKey: string) => `${Number(monthKey.slice(5, 7))}月`;
 
-/** 記録する月と1回の額（「毎月 ¥98,000」「奇数月 ¥10,000」）と期間。額が回ごとに違うものは平均（「約¥14,000」）。 */
+/** 記録する月と1回の額（「月 ¥98,000」「奇数月 ¥10,000」）と期間。額が回ごとに違うものは平均（「約¥14,000」）。 */
 function scheduleText(row: RecurringYearRow): string {
   const { rule } = row;
-  const months = rule.months === null ? '毎月' : monthsLabel(rule.months);
+  // 毎月のものは「月」（予算の画面。2026-10-18）。
+  const label = rule.months === null ? '毎月' : monthsLabel(rule.months);
+  const months = label === '毎月' ? '月' : label;
   const values = row.amounts.filter((value) => value > 0);
   const each =
     values.length === 0
@@ -269,7 +271,9 @@ export default function BudgetEditor({
       {ruleIcon(row.rule)}
       {ruleName(row.rule)}
       <span className="shrink-0 text-right">
-        <span className="block text-base font-extrabold tabular-nums text-gray-900">{formatYen(row.total)}</span>
+        <span className={`block text-base font-extrabold tabular-nums ${row.rule.kind === 'income' ? incomeAmountClass : 'text-gray-900'}`}>
+          {formatYen(row.total)}
+        </span>
         <span className="block text-[13px] font-medium tabular-nums text-gray-500">{scheduleText(row)}</span>
       </span>
       {onOpenRecurring && <ChevronRight size={16} className="text-gray-400" />}
