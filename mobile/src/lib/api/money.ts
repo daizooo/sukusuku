@@ -10,6 +10,7 @@ import type {
   MoneyRecordDraft,
   MoneyRecurring,
   MoneyRecurringDraft,
+  MoneyReserve,
   MoneyStore,
   MoneyWallet,
   MoneyWalletBalance,
@@ -39,7 +40,10 @@ export const rowToCategory = (row: CategoryRow): MoneyCategory => ({
   iconColor: row.icon_color ?? null,
   position: row.position,
   archived: row.archived_at !== null,
+  reserve: row.reserve ?? false,
 });
+
+export const rowToReserve = (row: Tables<'money_reserves'>): MoneyReserve => ({ year: row.year, amount: row.amount });
 
 export const rowToBudget = (row: BudgetRow): MoneyBudget => ({
   id: row.id,
@@ -133,6 +137,8 @@ export const rowToRecurring = (row: RecurringRow): MoneyRecurring => ({
   archived: row.archived_at !== null,
   // 日本の日付（UTC+9）で。
   createdAt: new Date(Date.parse(row.created_at) + 9 * 60 * 60 * 1000).toISOString().slice(0, 10),
+  makesRecord: row.makes_record,
+  skippedMonths: row.skipped_months,
 });
 
 /** 一度に読む行数（Supabase の Data API は1回に1000行まで）。 */
@@ -178,10 +184,12 @@ export interface MoneyData {
   balances: MoneyWalletBalance[];
   /** 月の締め（docs/kakei.md §4.5）。 */
   months: MoneyMonth[];
+  /** 予備費の年の額（docs/kakei.md §3.7）。 */
+  reserves: MoneyReserve[];
 }
 
 export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise<MoneyData> {
-  const [categoryResult, budgetResult, walletResult, storeResult, recurringResult, balanceResult, monthResult, records] =
+  const [categoryResult, budgetResult, walletResult, storeResult, recurringResult, balanceResult, monthResult, reserveResult, records] =
     await Promise.all([
       supabase.from('money_categories').select('*').eq('family_id', familyId),
       supabase.from('money_budgets').select('*').eq('family_id', familyId),
@@ -190,6 +198,7 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
       supabase.from('money_recurring').select('*').eq('family_id', familyId).order('position', { ascending: true }),
       supabase.from('money_wallet_balances').select('*').eq('family_id', familyId),
       supabase.from('money_months').select('*').eq('family_id', familyId),
+      supabase.from('money_reserves').select('*').eq('family_id', familyId),
       loadRecords(supabase, familyId),
     ]);
   if (categoryResult.error) throw categoryResult.error;
@@ -199,6 +208,7 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
   if (recurringResult.error) throw recurringResult.error;
   if (balanceResult.error) throw balanceResult.error;
   if (monthResult.error) throw monthResult.error;
+  if (reserveResult.error) throw reserveResult.error;
   return {
     categories: (categoryResult.data ?? []).map(rowToCategory),
     budgets: (budgetResult.data ?? []).map(rowToBudget),
@@ -208,6 +218,7 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
     recurring: (recurringResult.data ?? []).map(rowToRecurring),
     balances: (balanceResult.data ?? []).map(rowToBalance),
     months: (monthResult.data ?? []).map(rowToMonth),
+    reserves: (reserveResult.data ?? []).map(rowToReserve),
   };
 }
 
@@ -420,6 +431,26 @@ export async function saveMoneyBudget(
   return rowToBudget(data);
 }
 
+// ---- 予備費（docs/kakei.md §3.7） ----
+
+/** その年の予備費の額を決める（家族・年で1行）。 */
+export async function saveMoneyReserve(supabase: SupabaseDb, familyId: string, year: number, amount: number): Promise<MoneyReserve> {
+  const { data, error } = await supabase
+    .from('money_reserves')
+    .upsert({ family_id: familyId, year, amount }, { onConflict: 'family_id,year' })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return rowToReserve(data);
+}
+
+/** 小分類を予備費に紐づける・外す。 */
+export async function setMoneyCategoryReserve(supabase: SupabaseDb, id: string, reserve: boolean): Promise<MoneyCategory> {
+  const { data, error } = await supabase.from('money_categories').update({ reserve }).eq('id', id).select('*').single();
+  if (error) throw error;
+  return rowToCategory(data);
+}
+
 // ---- 出金元 ----
 
 const walletFields = (draft: MoneyWalletDraft) => ({
@@ -575,11 +606,14 @@ const recurringFields = (draft: MoneyRecurringDraft) => ({
   holiday: draft.holiday,
   amount_mode: draft.amountMode,
   amount: draft.amount,
-  wallet_id: draft.walletId,
+  wallet_id: draft.kind === 'expense' && !draft.makesRecord ? null : draft.walletId,
   to_wallet_id: draft.kind === 'transfer' ? draft.toWalletId : null,
   store: draft.kind === 'transfer' ? '' : draft.store.trim(),
   category_id: draft.kind === 'transfer' ? null : draft.categoryId,
   name: draft.name.trim(),
+  // 見積費（docs/kakei.md §3.6）は支出だけ。出金元を持たない（DBの check でも止める）。
+  makes_record: draft.kind !== 'expense' || draft.makesRecord,
+  skipped_months: draft.skippedMonths,
 });
 
 export async function insertMoneyRecurring(
@@ -616,6 +650,22 @@ export async function updateMoneyRecurring(
 export async function updateMoneyRecurringPosition(supabase: SupabaseDb, id: string, position: number): Promise<void> {
   const { error } = await supabase.from('money_recurring').update({ position }).eq('id', id);
   if (error) throw error;
+}
+
+/** 見積費の「今年はなし」にした回（予定の月 YYYY-MM）を入れ直す（docs/kakei.md §3.6）。 */
+export async function updateMoneyRecurringSkipped(
+  supabase: SupabaseDb,
+  id: string,
+  skippedMonths: string[],
+): Promise<MoneyRecurring> {
+  const { data, error } = await supabase
+    .from('money_recurring')
+    .update({ skipped_months: skippedMonths })
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return rowToRecurring(data);
 }
 
 /** ルールを削除する。作った記録は残る（記録の recurring_id が外れるだけ）。 */

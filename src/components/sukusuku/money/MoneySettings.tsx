@@ -8,10 +8,11 @@ import type {
   MoneyFeedData,
   MoneyRecord,
   MoneyRecurring,
+  MoneyReserve,
   MoneyStore,
   MoneyWallet,
 } from '@/types/app';
-import { budgetFor, formatYear, formatYen, topCategories, yearMonthKeys } from '@/lib/moneyUtils';
+import { budgetFor, formatYear, formatYen, isEstimateCost, topCategories, yearMonthKeys } from '@/lib/moneyUtils';
 import CategoryEditor from './CategoryEditor';
 import BudgetEditor from './BudgetEditor';
 import RecurringSettings from './RecurringSettings';
@@ -40,6 +41,11 @@ interface MoneySettingsProps {
   onBudgets: (update: (prev: MoneyBudget[]) => MoneyBudget[]) => void;
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
+  /** 予備費の年の額（docs/kakei.md §3.7）。 */
+  reserves: MoneyReserve[];
+  onReserves: (update: (prev: MoneyReserve[]) => MoneyReserve[]) => void;
+  /** 開いたときに編集を開く固定支出（予算の画面の固定費から来たとき）。 */
+  initialRecurringId?: string | null;
   /** Zaim 取り込み（docs/kakei.md §9.5.6）。null は読み込み中。 */
   feed: MoneyFeedData | null;
   /** 取り込みの設定を直したあとに読み直す。 */
@@ -62,11 +68,25 @@ export default function MoneySettings({
   onBudgets,
   onStores,
   onRecurring,
+  reserves,
+  onReserves,
+  initialRecurringId = null,
   feed,
   onFeedChanged,
   onClose,
 }: MoneySettingsProps) {
-  const [page, setPage] = useState<Page>('menu');
+  const [page, setPage] = useState<Page>(() => {
+    const rule = recurring.find((entry) => entry.id === initialRecurringId);
+    return rule ? (rule.kind === 'income' ? 'income' : 'recurring') : 'menu';
+  });
+  // 固定支出の編集を開くルール（予算の画面の固定費の行から）。
+  const [recurringTarget, setRecurringTarget] = useState<string | null>(initialRecurringId);
+  const openRecurring = (id: string) => {
+    const rule = recurring.find((entry) => entry.id === id);
+    if (!rule) return;
+    setRecurringTarget(id);
+    setPage(rule.kind === 'income' ? 'income' : 'recurring');
+  };
 
   const tops = topCategories(categories, 'living', true).filter((top) => !top.archived);
   const yearBudget = tops.reduce(
@@ -75,13 +95,14 @@ export default function MoneySettings({
   );
   const childCount = categories.filter((category) => category.parentId !== null).length;
   const storeCount = stores.filter((store) => !store.archived).length;
-  const recurringCount = recurring.filter((rule) => !rule.archived && rule.kind !== 'income').length;
+  const recurringCount = recurring.filter((rule) => !rule.archived && rule.kind !== 'income' && !isEstimateCost(rule)).length;
+  const estimateCount = recurring.filter((rule) => !rule.archived && isEstimateCost(rule)).length;
   const incomeCount = recurring.filter((rule) => !rule.archived && rule.kind === 'income').length;
 
   const rows: { id: Exclude<Page, 'menu'>; label: string; summary: string; icon: LucideIcon }[] = [
     { id: 'categories', label: 'カテゴリ', summary: `支出の大分類 ${tops.length}個・小分類 ${childCount}個`, icon: Tag },
     { id: 'budget', label: '予算', summary: `${formatYear(year)}の支出の予算 年${formatYen(yearBudget)}（年ごとに決める）`, icon: PiggyBank },
-    { id: 'recurring', label: '固定支出', summary: `${recurringCount}件（自動で記録）`, icon: CalendarClock },
+    { id: 'recurring', label: '固定支出', summary: `自動で記録 ${recurringCount}件・記録しない ${estimateCount}件`, icon: CalendarClock },
     { id: 'income', label: '固定収入', summary: `給与・賞与 ${incomeCount}件（自動で記録）`, icon: Banknote },
     { id: 'stores', label: 'よく行くお店', summary: `登録したお店 ${storeCount}件`, icon: Store },
     {
@@ -92,7 +113,10 @@ export default function MoneySettings({
     },
   ];
 
-  const back = () => setPage('menu');
+  const back = () => {
+    setRecurringTarget(null);
+    setPage('menu');
+  };
 
   return (
     <FullScreen onBack={onClose}>
@@ -142,6 +166,7 @@ export default function MoneySettings({
       )}
       {(page === 'recurring' || page === 'income') && (
         <RecurringSettings
+          key={recurringTarget ?? 'list'}
           mode={page === 'income' ? 'income' : 'expense'}
           familyId={familyId}
           recurring={recurring}
@@ -151,6 +176,7 @@ export default function MoneySettings({
           stores={stores}
           records={records}
           onRecurring={onRecurring}
+          initialEditId={recurringTarget}
           onStores={onStores}
           onBack={back}
         />
@@ -167,6 +193,11 @@ export default function MoneySettings({
           recurring={recurring}
           records={records}
           onBudgets={onBudgets}
+          onRecurring={onRecurring}
+          reserves={reserves}
+          onReserves={onReserves}
+          onCategories={onCategories}
+          onOpenRecurring={openRecurring}
           onClose={back}
         />
       )}

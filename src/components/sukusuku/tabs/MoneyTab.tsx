@@ -7,6 +7,7 @@ import type {
   MoneyFeedData,
   MoneyFeedItem,
   MoneyMonth,
+  MoneyReserve,
   MoneyRecord,
   MoneyRecordDraft,
   MoneyRecurring,
@@ -56,7 +57,9 @@ import {
 import { feedDayLabel, feedDuplicates } from '@/lib/moneyFeedUtils';
 import {
   dateKeyOfDate,
+  estimateBudgetRows,
   fixedBudgetRows,
+  reserveBudgetRows,
   formatYen,
   isMonthClosed,
   monthKeyOf,
@@ -121,6 +124,7 @@ const MONEY_TABLES = [
   'money_months',
   'money_records',
   'money_recurring',
+  'money_reserves',
   'money_securities',
   'money_stores',
   'money_wallet_balances',
@@ -135,10 +139,22 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [stores, setStores] = useState<MoneyStore[]>([]);
   const [records, setRecords] = useState<MoneyRecord[]>([]);
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
+  // 予備費の年の額（docs/kakei.md §3.7）。
+  const [reserves, setReserves] = useState<MoneyReserve[]>([]);
   // 手入力の予算（budgets）に、固定費から出した月ごとの額（記録と同じ額）を足した予算。画面にはこちらを渡す（docs/kakei.md §3.1）。
   const allBudgets = useMemo(
-    () => [...budgets, ...fixedBudgetRows(recurring, categories, records, dateKeyOfDate(new Date()))],
-    [budgets, recurring, categories, records],
+    () => {
+      const today = dateKeyOfDate(new Date());
+      return [
+        ...budgets,
+        ...fixedBudgetRows(recurring, categories, records, today),
+        // 見積費（車検・ふるさと納税など。記録を作らず、予算と着地見込みにだけ入る。docs/kakei.md §3.6）。
+        ...estimateBudgetRows(recurring, categories, records, today),
+        // 予備費（使った分はその大分類・月、まだ使っていない分は着地見込みだけが読む行。docs/kakei.md §3.7）。
+        ...reserveBudgetRows(reserves, categories, records, today),
+      ];
+    },
+    [budgets, recurring, categories, records, reserves],
   );
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   // 月の締め（docs/kakei.md §4.5）。
@@ -168,6 +184,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   // 予算（年ごと）を開いている年。null は閉じている（docs/kakei.md §3.1）。
   const [budgetYear, setBudgetYear] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // 家計の設定を、この固定支出の編集から開く（予算の画面の固定費の行から）。
+  const [recurringTarget, setRecurringTarget] = useState<string | null>(null);
   // Gmail から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
   const [feed, setFeed] = useState<MoneyFeedData | null>(null);
   const [feedOpen, setFeedOpen] = useState(false);
@@ -187,6 +205,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       setRecurring(money.recurring);
       setBalances(money.balances);
       setClosings(money.months);
+      setReserves(money.reserves);
       setSecurities(loadedSecurities);
     },
     [],
@@ -732,9 +751,15 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           onBudgets={setBudgets}
           onStores={setStores}
           onRecurring={setRecurring}
+          reserves={reserves}
+          onReserves={setReserves}
+          initialRecurringId={recurringTarget}
           feed={feed}
           onFeedChanged={reloadFeed}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => {
+            setSettingsOpen(false);
+            setRecurringTarget(null);
+          }}
         />
       )}
 
@@ -772,6 +797,15 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           recurring={recurring}
           records={records}
           onBudgets={setBudgets}
+          onRecurring={setRecurring}
+          reserves={reserves}
+          onReserves={setReserves}
+          onCategories={setCategories}
+          onOpenRecurring={(id) => {
+            setBudgetYear(null);
+            setRecurringTarget(id);
+            setSettingsOpen(true);
+          }}
           onClose={() => setBudgetYear(null)}
         />
       )}
