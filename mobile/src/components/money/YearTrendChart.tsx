@@ -89,20 +89,17 @@ export default function YearTrendChart({ points, initialMonthKey, onSelectMonth 
             const cumulativeValue = layout.axes.cumulative.min + layout.axes.cumulative.step * tick;
             const y = layout.yOf(layout.axes.balance, balanceValue);
             const zero = Math.abs(balanceValue) < 1e-6;
+            const main = zero || tick === 0 || tick === layout.axes.intervals;
             return (
               <G key={tick}>
                 <Line x1={PAD.left} x2={width - PAD.right} y1={y} y2={y} stroke={zero ? colors.textFaint : colors.border} strokeWidth={zero ? 1 : 0.8} />
-                {/* 目盛りの数字は上端と下端だけ（0 は線だけ） */}
-                {!zero && (
-                  <>
-                    <SvgText x={PAD.left - 5} y={y + 3.5} fontSize={9.5} fontWeight="600" fill={colors.textMuted} textAnchor="end">
-                      {formatAxisYen(balanceValue)}
-                    </SvgText>
-                    <SvgText x={width - PAD.right + 5} y={y + 3.5} fontSize={9.5} fontWeight="600" fill={colors.money} textAnchor="start">
-                      {formatAxisYen(cumulativeValue)}
-                    </SvgText>
-                  </>
-                )}
+                {/* 目盛りの数字。上端・0・下端は大きく、あいだの10万円ごとは小さく */}
+                <SvgText x={PAD.left - 5} y={y + 3} fontSize={main ? 9.5 : 7.5} fontWeight={main ? '700' : '500'} fill={colors.textMuted} textAnchor="end">
+                  {formatAxisYen(balanceValue)}
+                </SvgText>
+                <SvgText x={width - PAD.right + 5} y={y + 3} fontSize={main ? 9.5 : 7.5} fontWeight={main ? '700' : '500'} fill={colors.money} textAnchor="start">
+                  {formatAxisYen(cumulativeValue)}
+                </SvgText>
               </G>
             );
           })}

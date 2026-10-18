@@ -48,18 +48,21 @@ function niceStep(target: number): number {
   return [1, 2, 2.5, 5, 10].map((unit) => unit * base).find((step) => step >= target) ?? base * 10;
 }
 
+/** 目盛りの間隔のはじめ（10万円）。0 より上・下の目盛りがこれより多くなるときは、間隔を広げる。 */
+const TICK_YEN = 100_000;
+const MAX_HALF_TICKS = 6;
+
 /**
  * 棒（左軸）と折れ線（右軸）の軸。0 をいつも真ん中に置き、上下の幅をそろえる（2026-10-18。プラス・マイナスの大きさで 0 の高さが動かない）。
- * 目盛りは上端・0・下端の3本。上端は、絶対値のいちばん大きい値を見やすい数に切り上げたもの（下端はそのマイナス）。
+ * 目盛りは10万円ごと（0 より上・下に6本を超えるときは、間隔を広げる）。左右とも同じ目盛りにする。
+ * 上端は、棒と累計の絶対値のいちばん大きい値を目盛りの間隔で切り上げたもの（下端はそのマイナス）。
  */
 export function yearTrendAxes(points: readonly YearTrendPoint[]): YearTrendAxes {
-  const bTop = niceStep(Math.max(1, ...points.map((point) => Math.abs(point.balance))));
-  const cTop = niceStep(Math.max(1, ...points.map((point) => Math.abs(point.cumulative))));
-  return {
-    balance: { min: -bTop, max: bTop, step: bTop },
-    cumulative: { min: -cTop, max: cTop, step: cTop },
-    intervals: 2,
-  };
+  const largest = Math.max(1, ...points.flatMap((point) => [Math.abs(point.balance), Math.abs(point.cumulative)]));
+  const step = largest / TICK_YEN <= MAX_HALF_TICKS ? TICK_YEN : niceStep(largest / MAX_HALF_TICKS);
+  const half = Math.max(1, Math.ceil(largest / step));
+  const axis = { min: -half * step, max: half * step, step };
+  return { balance: axis, cumulative: { ...axis }, intervals: half * 2 };
 }
 
 export interface TrendBox {

@@ -141,20 +141,17 @@ export default function YearTrendChart({
         const cumulativeValue = layout.axes.cumulative.min + layout.axes.cumulative.step * tick;
         const tickY = layout.yOf(layout.axes.balance, balanceValue);
         const zero = Math.abs(balanceValue) < 1e-6;
+        const main = zero || tick === 0 || tick === layout.axes.intervals;
         return (
           <g key={tick}>
             <line x1={PAD.left} x2={WIDTH - PAD.right} y1={tickY} y2={tickY} stroke={zero ? C.textFaint : C.border} strokeWidth={zero ? 1 : 0.8} />
-            {/* 目盛りの数字は上端と下端だけ（0 は線だけ） */}
-            {!zero && (
-              <>
-                <text x={PAD.left - 5} y={tickY + 3.5} fontSize={9.5} fontWeight={600} fill={C.textMuted} textAnchor="end">
-                  {formatAxisYen(balanceValue)}
-                </text>
-                <text x={WIDTH - PAD.right + 5} y={tickY + 3.5} fontSize={9.5} fontWeight={600} fill={C.money} textAnchor="start">
-                  {formatAxisYen(cumulativeValue)}
-                </text>
-              </>
-            )}
+            {/* 目盛りの数字。上端・0・下端は大きく、あいだの10万円ごとは小さく */}
+            <text x={PAD.left - 5} y={tickY + 3} fontSize={main ? 9.5 : 7.5} fontWeight={main ? 700 : 500} fill={C.textMuted} textAnchor="end">
+              {formatAxisYen(balanceValue)}
+            </text>
+            <text x={WIDTH - PAD.right + 5} y={tickY + 3} fontSize={main ? 9.5 : 7.5} fontWeight={main ? 700 : 500} fill={C.money} textAnchor="start">
+              {formatAxisYen(cumulativeValue)}
+            </text>
           </g>
         );
       })}
