@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Undo2 } from 'lucide-react';
+import { ChevronRight, Inbox, Undo2 } from 'lucide-react';
 import type { MoneyCategory, MoneyRecord, MoneyWallet } from '@/types/app';
 import { WEEKDAY_LABELS } from '@/lib/dateUtils';
 import { groupRecordsByDay, type BalanceCheck } from '@/lib/moneyUtils';
@@ -16,6 +16,7 @@ import FastScrollBar from './FastScrollBar';
 // 右端の早送りバーは最初から出ていて、帯のどこを触っても、つかんで動かしても、その位置へ飛べる（触っているあいだだけ位置の日付が出る）。
 // いちばん上から15件さかのぼると、上に「今日に戻る」を出す（押すと、いちばん上へ戻る）。
 // その月に使った額は「振り返り」で見るので、ここには出さない（2026-10-08）。押すと記録の詳細。
+// Gmail から取り込んだ明細の「未確認 n件」は、一覧の上に固定して出す（2026-10-18。以前は口座の面。docs/kakei.md §9.5.6.1）。
 
 interface MoneyRecordsViewProps {
   /** この面を開いているか。false から true になったとき、いちばん上へ戻す。 */
@@ -27,6 +28,9 @@ interface MoneyRecordsViewProps {
   onOpen: (record: MoneyRecord) => void;
   /** 日の見出しの「＋」。その日（YYYY-MM-DD）で記録を足す。 */
   onAddOnDate: (date: string) => void;
+  /** Gmail から取り込んだ明細のうち、片づいていないものの数（docs/kakei.md §9.5.6.1）。0 なら出さない。 */
+  feedOpenCount: number;
+  onOpenFeed: () => void;
 }
 
 /** 補正は口座の履歴にだけ混ぜるので、ここでは持たない。 */
@@ -95,39 +99,53 @@ export default function MoneyRecordsView({ active, records, categories, wallets,
   const label = days[firstIndex] ? bubbleLabel(days[firstIndex].date) : '';
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
-      {/* 右端のバーと、右下の「＋」に一覧の最後が隠れないよう、右と下を空ける。 */}
-      <div
-        ref={scrollRef}
-        onScroll={onScroll}
-        className="min-h-0 flex-1 overflow-y-auto pb-24 pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {isLoading ? (
-          <p className="py-8 text-center text-sm text-gray-400">読み込み中...</p>
-        ) : days.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-400">まだ記録がありません。右下の「＋」で記録します</p>
-        ) : (
-          <div ref={listRef} className="relative">
-            {days.map((day) => (
-              <RecordDayBlock key={day.date} day={day} categories={categories} wallets={wallets} onOpen={onOpen} onAddOnDate={onAddOnDate} />
-            ))}
+    <div className="flex min-h-0 flex-1 flex-col">
+      {feedOpenCount > 0 && (
+        <button
+          type="button"
+          onClick={onOpenFeed}
+          className="mb-1 mt-2 flex w-full shrink-0 items-center gap-2 rounded-2xl bg-blue-100 px-3.5 py-2.5 text-left text-blue-800 hover:bg-blue-200"
+        >
+          <Inbox size={18} />
+          <span className="text-[15px] font-extrabold">未確認 {feedOpenCount}件</span>
+          <span className="flex-1 text-xs">Gmail から取り込んだ明細</span>
+          <ChevronRight size={16} />
+        </button>
+      )}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {/* 右端のバーと、右下の「＋」に一覧の最後が隠れないよう、右と下を空ける。 */}
+        <div
+          ref={scrollRef}
+          onScroll={onScroll}
+          className="min-h-0 flex-1 overflow-y-auto pb-24 pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {isLoading ? (
+            <p className="py-8 text-center text-sm text-gray-400">読み込み中...</p>
+          ) : days.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-400">まだ記録がありません。右下の「＋」で記録します</p>
+          ) : (
+            <div ref={listRef} className="relative">
+              {days.map((day) => (
+                <RecordDayBlock key={day.date} day={day} categories={categories} wallets={wallets} onOpen={onOpen} onAddOnDate={onAddOnDate} />
+              ))}
+            </div>
+          )}
+        </div>
+        {farFromTop && (
+          <div className="pointer-events-none absolute inset-x-0 top-2.5 flex justify-center">
+            <button
+              type="button"
+              aria-label="今日の記録へ戻る"
+              onClick={() => scrollToTop((recordsBefore[firstIndex] ?? 0) < 200)}
+              className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-blue-600 px-[18px] py-2.5 text-[15px] font-bold text-white shadow-md transition active:opacity-85"
+            >
+              <Undo2 size={16} />
+              今日に戻る
+            </button>
           </div>
         )}
+        <FastScrollBar scrollRef={scrollRef} label={label} />
       </div>
-      {farFromTop && (
-        <div className="pointer-events-none absolute inset-x-0 top-2.5 flex justify-center">
-          <button
-            type="button"
-            aria-label="今日の記録へ戻る"
-            onClick={() => scrollToTop((recordsBefore[firstIndex] ?? 0) < 200)}
-            className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-blue-600 px-[18px] py-2.5 text-[15px] font-bold text-white shadow-md transition active:opacity-85"
-          >
-            <Undo2 size={16} />
-            今日に戻る
-          </button>
-        </div>
-      )}
-      <FastScrollBar scrollRef={scrollRef} label={label} />
     </div>
   );
 }

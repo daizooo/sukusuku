@@ -662,7 +662,11 @@ export default function MoneyScreen() {
                 onPress={() => showView(entry.id)}
                 style={styles.viewTab}
               >
-                <Text style={[styles.viewText, selected && styles.viewTextSelected]}>{entry.label}</Text>
+                <View>
+                  <Text style={[styles.viewText, selected && styles.viewTextSelected]}>{entry.label}</Text>
+                  {/* 未確認の明細があるあいだ、「記録」の右上に赤い点（無くなったら消す。2026-10-18）。 */}
+                  {entry.id === 'records' && (feed?.open.length ?? 0) > 0 && <View style={styles.badge} />}
+                </View>
                 <View style={[styles.underline, selected && styles.underlineSelected]} />
               </Pressable>
             );
@@ -680,6 +684,8 @@ export default function MoneyScreen() {
               isLoading={isLoading}
               onOpen={setEditing}
               onAddOnDate={addOnDate}
+              feedOpenCount={feed?.open.length ?? 0}
+              onOpenFeed={() => setFeedOpen(true)}
             />
             </View>
           )}
@@ -733,8 +739,6 @@ export default function MoneyScreen() {
               onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
               onNeedSecurityHistory={needSecurityHistory}
               onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
-              feedOpenCount={feed?.open.length ?? 0}
-              onOpenFeed={() => setFeedOpen(true)}
             />
             </View>
           )}
@@ -870,4 +874,5 @@ const styles = StyleSheet.create({
   viewTextSelected: { color: colors.text, fontWeight: '700' },
   underline: { marginTop: 8, height: 3, width: 32, borderRadius: 2, backgroundColor: 'transparent' },
   underlineSelected: { backgroundColor: colors.money },
+  badge: { position: 'absolute', top: -1, right: -9, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger },
 });
