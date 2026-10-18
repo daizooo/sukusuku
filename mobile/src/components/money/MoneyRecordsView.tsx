@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View, type ViewToken } from 'react-native';
-import { Undo2 } from 'lucide-react-native';
+import { ChevronRight, Inbox, Undo2 } from 'lucide-react-native';
 import type { MoneyCategory, MoneyRecord, MoneyWallet } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { WEEKDAY_LABELS } from '@/lib/dateUtils';
@@ -16,6 +16,7 @@ import FastScrollBar, { useFastScroll } from '@/components/money/FastScrollBar';
 // 右端の早送りバーは最初から出ていて、帯のどこを触っても、つかんで動かしても、その位置へ飛べる（触っているあいだだけ位置の日付が出る）。
 // いちばん上から15件さかのぼると、上に「今日に戻る」を出す（押すと、いちばん上へ戻る）。
 // その月に使った額は「振り返り」で見るので、ここには出さない（2026-10-08）。押すと記録の詳細。
+// Gmail から取り込んだ明細の「未確認 n件」は、一覧の上に固定して出す（2026-10-18。以前は口座の面。docs/kakei.md §9.5.6.1）。
 
 interface MoneyRecordsViewProps {
   /** この面を開いているか。false から true になったとき、いちばん上へ戻す。 */
@@ -27,6 +28,9 @@ interface MoneyRecordsViewProps {
   onOpen: (record: MoneyRecord) => void;
   /** 日の見出しの「＋」。その日（YYYY-MM-DD）で記録を足す。 */
   onAddOnDate: (date: string) => void;
+  /** Gmail から取り込んだ明細のうち、片づいていないものの数（docs/kakei.md §9.5.6.1）。0 なら出さない。 */
+  feedOpenCount: number;
+  onOpenFeed: () => void;
 }
 
 /** 補正は口座の履歴にだけ混ぜるので、ここでは持たない。 */
@@ -51,6 +55,8 @@ export default function MoneyRecordsView({
   isLoading,
   onOpen,
   onAddOnDate,
+  feedOpenCount,
+  onOpenFeed,
 }: MoneyRecordsViewProps) {
   const days = useMemo<RecordDay[]>(
     () => groupRecordsByDay(records).map((day) => ({ ...day, corrections: NO_CORRECTIONS })),
@@ -105,42 +111,56 @@ export default function MoneyRecordsView({
   );
 
   return (
-    <View style={styles.flex} onLayout={fastScroll.onLayout}>
-      <FlatList
-        ref={listRef}
-        data={days}
-        keyExtractor={(day) => day.date}
-        renderItem={renderItem}
-        style={styles.flex}
-        contentContainerStyle={styles.content}
-        initialNumToRender={10}
-        maxToRenderPerBatch={10}
-        windowSize={9}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-        onScroll={fastScroll.onScroll}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={VIEWABILITY}
-        ListEmptyComponent={
-          <Text style={styles.message}>
-            {isLoading ? '読み込み中...' : 'まだ記録がありません。右下の「＋」で記録します'}
-          </Text>
-        }
-      />
-      {farFromTop && (
-        <View pointerEvents="box-none" style={styles.todayWrap}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="今日の記録へ戻る"
-            onPress={() => scrollToTop(recordsBefore[firstIndex] < 200)}
-            style={({ pressed }) => [styles.today, pressed && styles.todayPressed]}
-          >
-            <Undo2 size={16} color="#ffffff" />
-            <Text style={styles.todayText}>今日に戻る</Text>
-          </Pressable>
-        </View>
+    <View style={styles.flex}>
+      {feedOpenCount > 0 && (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onOpenFeed}
+          style={({ pressed }) => [styles.feed, pressed && styles.feedPressed]}
+        >
+          <Inbox size={18} color={colors.moneyText} />
+          <Text style={styles.feedText}>未確認 {feedOpenCount}件</Text>
+          <Text style={styles.feedSub}>Gmail から取り込んだ明細</Text>
+          <ChevronRight size={16} color={colors.moneyText} />
+        </Pressable>
       )}
-      <FastScrollBar controller={fastScroll} label={label} />
+      <View style={styles.flex} onLayout={fastScroll.onLayout}>
+        <FlatList
+          ref={listRef}
+          data={days}
+          keyExtractor={(day) => day.date}
+          renderItem={renderItem}
+          style={styles.flex}
+          contentContainerStyle={styles.content}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={9}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+          onScroll={fastScroll.onScroll}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={VIEWABILITY}
+          ListEmptyComponent={
+            <Text style={styles.message}>
+              {isLoading ? '読み込み中...' : 'まだ記録がありません。右下の「＋」で記録します'}
+            </Text>
+          }
+        />
+        {farFromTop && (
+          <View pointerEvents="box-none" style={styles.todayWrap}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="今日の記録へ戻る"
+              onPress={() => scrollToTop(recordsBefore[firstIndex] < 200)}
+              style={({ pressed }) => [styles.today, pressed && styles.todayPressed]}
+            >
+              <Undo2 size={16} color="#ffffff" />
+              <Text style={styles.todayText}>今日に戻る</Text>
+            </Pressable>
+          </View>
+        )}
+        <FastScrollBar controller={fastScroll} label={label} />
+      </View>
     </View>
   );
 }
@@ -167,4 +187,19 @@ const styles = StyleSheet.create({
   },
   todayPressed: { opacity: 0.85 },
   todayText: { fontSize: 15, fontWeight: '700', color: '#ffffff' },
+  feed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 4,
+    marginHorizontal: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 14,
+    backgroundColor: colors.moneySoft,
+  },
+  feedPressed: { opacity: 0.7 },
+  feedText: { fontSize: 15, fontWeight: '800', color: colors.moneyText },
+  feedSub: { flex: 1, fontSize: 12, fontWeight: '500', color: colors.moneyText },
 });

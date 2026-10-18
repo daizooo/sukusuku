@@ -613,8 +613,12 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
                 onClick={() => showView(entry.id)}
                 className="flex flex-1 flex-col items-center pt-2"
               >
-                <span className={`text-[15px] ${selected ? 'font-bold text-gray-900' : 'font-semibold text-gray-400'}`}>
+                <span className={`relative text-[15px] ${selected ? 'font-bold text-gray-900' : 'font-semibold text-gray-400'}`}>
                   {entry.label}
+                  {/* 未確認の明細があるあいだ、「記録」の右上に赤い点（無くなったら消す。2026-10-18）。 */}
+                  {entry.id === 'records' && (feed?.open.length ?? 0) > 0 && (
+                    <span className="absolute -right-[9px] -top-px h-2 w-2 rounded-full bg-red-500" />
+                  )}
                 </span>
                 <span className={`mt-2 h-[3px] w-8 rounded-full ${selected ? 'bg-blue-600' : 'bg-transparent'}`} />
               </button>
@@ -633,6 +637,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               isLoading={isLoading}
               onOpen={setEditing}
               onAddOnDate={addOnDate}
+              feedOpenCount={feed?.open.length ?? 0}
+              onOpenFeed={() => setFeedOpen(true)}
             />
             </div>
           )}
@@ -684,8 +690,6 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
               onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
               onNeedSecurityHistory={needSecurityHistory}
-              feedOpenCount={feed?.open.length ?? 0}
-              onOpenFeed={() => setFeedOpen(true)}
             />
             </div>
           )}
