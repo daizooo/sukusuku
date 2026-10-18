@@ -190,7 +190,7 @@ export default function MonthCloseScreen({
         <ScrollView contentContainerStyle={styles.content}>
           <Hero compact label={`収支（${label}）`} value={formatBalance(month.balance)} plus={month.balance > 0}>
             <StatRow compact label="収入" value={formatYen(month.income)} plus={month.income > 0} />
-            <StatRow compact label="支出" value={`−${formatYen(month.living)}`} />
+            <StatRow compact label="支出" value={formatBalance(-month.living)} />
             {estimates.length > 0 && (
               <View style={styles.estimate}>
                 <EstimateBadge />

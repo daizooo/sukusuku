@@ -22,9 +22,9 @@ export const feedTimeLabel = (iso: string | null): string => {
   return `${jst.getUTCMonth() + 1}/${jst.getUTCDate()} ${hh}:${mm}`;
 };
 
-/** 入金は「+¥1,000」、出金は「−¥1,000」。 */
+/** 入金は「¥+1,000」、出金は「¥−1,000」。 */
 export const feedAmountLabel = (item: Pick<MoneyFeedItem, 'direction' | 'amount'>): string =>
-  item.amount === null ? '' : `${item.direction === 'in' ? '+' : '−'}${formatYen(item.amount)}`;
+  item.amount === null ? '' : `¥${item.direction === 'in' ? '+' : '−'}${item.amount.toLocaleString('ja-JP')}`;
 
 /** 一覧の並び: 手入力との確認 → 口座が決まっていない → 未確認 → 読めない。同じ中は日付の新しい順。 */
 const STATUS_ORDER = (item: MoneyFeedItem): number =>

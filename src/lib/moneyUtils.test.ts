@@ -105,8 +105,8 @@ import type { MoneyBudget, MoneyCategory, MoneyHolding, MoneyHoldingValue, Money
 assert.equal(shiftMonth('2026-12', 1), '2027-01');
 assert.equal(shiftMonth('2026-01', -1), '2025-12');
 assert.equal(shiftMonth('2026-09', -12), '2025-09');
-assert.equal(formatSignedYen(1200), '+¥1,200');
-assert.equal(formatSignedYen(-3800), '−¥3,800');
+assert.equal(formatSignedYen(1200), '¥+1,200');
+assert.equal(formatSignedYen(-3800), '¥−3,800');
 assert.equal(formatSignedYen(0), '¥0');
 
 // ---- カテゴリ ----
@@ -830,7 +830,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
   assert.equal(walletDelta(rs[1], 'card'), 0, '関係ない出金元は変わらない');
   assert.equal(walletDelta(rs[2], 'bank'), -50000, '振替は出金元から減る');
   assert.equal(walletDelta(rs[2], 'save'), 50000, '振替は入金先に増える');
-  assert.equal(formatBalance(-12000), '−¥12,000');
+  assert.equal(formatBalance(-12000), '¥−12,000');
   assert.equal(formatBalance(300), '¥300');
 
   // 確定が無ければ、記録だけから出す（今日までの記録。先の日付は入れない）。
