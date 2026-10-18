@@ -14,7 +14,6 @@ import type {
 } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
-import { budgetFor, formatYear, formatYen, topCategories, yearMonthKeys } from '@/lib/moneyUtils';
 import CategoryEditor from '@/components/money/CategoryEditor';
 import BudgetEditor from '@/components/money/BudgetEditor';
 import RecurringSettings from '@/components/money/RecurringSettings';
@@ -93,27 +92,12 @@ export default function MoneySettings({
   // 設定の面の中で、さらに奥の画面を開いているときの戻り方（毎月の記録の編集など）。
   const innerBack = useRef<(() => void) | null>(null);
 
-  const tops = topCategories(categories, 'living', true).filter((top) => !top.archived);
-  const yearBudget = tops.reduce(
-    (sum, top) => sum + yearMonthKeys(year).reduce((inner, key) => inner + (budgetFor(budgets, top.id, key) ?? 0), 0),
-    0,
-  );
-  const childCount = categories.filter((category) => category.parentId !== null).length;
-  const storeCount = stores.filter((store) => !store.archived).length;
-  const expenseCount = recurring.filter((rule) => !rule.archived && rule.kind !== 'income').length;
-  const incomeCount = recurring.filter((rule) => !rule.archived && rule.kind === 'income').length;
-
-  const rows: { id: Exclude<Page, 'menu'>; label: string; summary: string; icon: typeof Tag }[] = [
-    { id: 'categories', label: 'カテゴリ', summary: `支出の大分類 ${tops.length}個・小分類 ${childCount}個`, icon: Tag },
-    { id: 'budget', label: '予算', summary: `${formatYear(year)}の支出の予算 年${formatYen(yearBudget)}（年ごとに決める）`, icon: PiggyBank },
-    { id: 'recurring', label: '固定支出・収入', summary: `支出 ${expenseCount}件・収入 ${incomeCount}件`, icon: CalendarClock },
-    { id: 'stores', label: 'よく行くお店', summary: `登録したお店 ${storeCount}件`, icon: Store },
-    {
-      id: 'feed',
-      label: 'Gmail 取り込み',
-      summary: feed ? `口座の対応・取り込みのルール ${feed.rules.length}件` : '口座の対応・取り込みのルール',
-      icon: Mail,
-    },
+  const rows: { id: Exclude<Page, 'menu'>; label: string; icon: typeof Tag }[] = [
+    { id: 'categories', label: 'カテゴリ', icon: Tag },
+    { id: 'budget', label: '予算', icon: PiggyBank },
+    { id: 'recurring', label: '固定支出・収入', icon: CalendarClock },
+    { id: 'stores', label: 'よく行くお店', icon: Store },
+    { id: 'feed', label: 'Gmail 取り込み', icon: Mail },
   ];
 
   const back = () => {
@@ -145,10 +129,7 @@ export default function MoneySettings({
                     <View style={styles.iconBox}>
                       <Icon size={20} color={colors.moneyText} />
                     </View>
-                    <View style={styles.flex}>
-                      <Text style={styles.label}>{row.label}</Text>
-                      <Text style={styles.summary}>{row.summary}</Text>
-                    </View>
+                    <Text style={[styles.label, styles.flex]}>{row.label}</Text>
                     <ChevronRight size={18} color={colors.textFaint} />
                   </Pressable>
                 );
@@ -236,5 +217,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.moneySoft,
   },
   label: { fontSize: 16, fontWeight: '700', color: colors.text },
-  summary: { fontSize: 12, fontWeight: '500', color: colors.textMuted, marginTop: 2 },
 });

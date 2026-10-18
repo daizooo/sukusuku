@@ -12,7 +12,6 @@ import type {
   MoneyStore,
   MoneyWallet,
 } from '@/types/app';
-import { budgetFor, formatYear, formatYen, topCategories, yearMonthKeys } from '@/lib/moneyUtils';
 import CategoryEditor from './CategoryEditor';
 import BudgetEditor from './BudgetEditor';
 import RecurringSettings from './RecurringSettings';
@@ -88,27 +87,12 @@ export default function MoneySettings({
     setPage('recurring');
   };
 
-  const tops = topCategories(categories, 'living', true).filter((top) => !top.archived);
-  const yearBudget = tops.reduce(
-    (sum, top) => sum + yearMonthKeys(year).reduce((inner, key) => inner + (budgetFor(budgets, top.id, key) ?? 0), 0),
-    0,
-  );
-  const childCount = categories.filter((category) => category.parentId !== null).length;
-  const storeCount = stores.filter((store) => !store.archived).length;
-  const expenseCount = recurring.filter((rule) => !rule.archived && rule.kind !== 'income').length;
-  const incomeCount = recurring.filter((rule) => !rule.archived && rule.kind === 'income').length;
-
-  const rows: { id: Exclude<Page, 'menu'>; label: string; summary: string; icon: LucideIcon }[] = [
-    { id: 'categories', label: 'カテゴリ', summary: `支出の大分類 ${tops.length}個・小分類 ${childCount}個`, icon: Tag },
-    { id: 'budget', label: '予算', summary: `${formatYear(year)}の支出の予算 年${formatYen(yearBudget)}（年ごとに決める）`, icon: PiggyBank },
-    { id: 'recurring', label: '固定支出・収入', summary: `支出 ${expenseCount}件・収入 ${incomeCount}件`, icon: CalendarClock },
-    { id: 'stores', label: 'よく行くお店', summary: `登録したお店 ${storeCount}件`, icon: Store },
-    {
-      id: 'feed',
-      label: 'Gmail 取り込み',
-      summary: feed ? `口座の対応・取り込みのルール ${feed.rules.length}件` : '口座の対応・取り込みのルール',
-      icon: Mail,
-    },
+  const rows: { id: Exclude<Page, 'menu'>; label: string; icon: LucideIcon }[] = [
+    { id: 'categories', label: 'カテゴリ', icon: Tag },
+    { id: 'budget', label: '予算', icon: PiggyBank },
+    { id: 'recurring', label: '固定支出・収入', icon: CalendarClock },
+    { id: 'stores', label: 'よく行くお店', icon: Store },
+    { id: 'feed', label: 'Gmail 取り込み', icon: Mail },
   ];
 
   const back = () => {
@@ -134,10 +118,7 @@ export default function MoneySettings({
                   <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-800">
                     <Icon size={20} />
                   </span>
-                  <span className="flex-1">
-                    <span className="block text-base font-bold text-gray-900">{row.label}</span>
-                    <span className="mt-0.5 block text-xs text-gray-500 tabular-nums">{row.summary}</span>
-                  </span>
+                  <span className="flex-1 text-base font-bold text-gray-900">{row.label}</span>
                   <ChevronRight size={18} className="text-gray-400" />
                 </button>
               );

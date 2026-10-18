@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, GripVertical, Pencil, Plus } from 'lucide-react';
+import { ChevronRight, GripVertical, Pencil, Plus } from 'lucide-react';
 import type {
   MoneyBudget,
   MoneyCategory,
@@ -20,16 +20,13 @@ import {
   categoryPath,
   estimateCostBasis,
   formatShortDate,
-  formatYear,
   formatYen,
   HOLIDAY_RULE_LABEL,
-  incomeRecordsInYear,
   isEstimateCost,
   monthKeyOfDate,
   parsePeriodMonth,
   periodMonthInput,
   RECORD_KIND_LABEL,
-  recordTotal,
   recurringEnded,
   recurringHistory,
   recurringPeriodLabel,
@@ -49,7 +46,7 @@ import {
 import { useDragReorder } from '../ui/useDragReorder';
 import CategoryPicker from './CategoryPicker';
 import StorePicker from './StorePicker';
-import { EstimateBadge, PrimaryButton, ScreenHeader, StackedScreen, incomeAmountClass } from './moneyVisual';
+import { PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
 
 // 毎月の記録の設定（docs/kakei.md §3.3・§3.4・§3.5）。mobile版の `mobile/src/components/money/RecurringSettings.tsx` と同じ並び・文言。
 //
@@ -58,9 +55,8 @@ import { EstimateBadge, PrimaryButton, ScreenHeader, StackedScreen, incomeAmount
 // カード代金はここではなく、出金元のカードに締め日・引き落とし日・引き落とし口座を入れると作られる（一覧だけ出す）。
 // 直すのはルールだけで、もう作った記録は変わらない。
 //
-// 固定収入（給与・賞与。2026-10-11。docs/kakei.md §0.3）も同じルールで、同じ画面「固定支出・収入」に出す（2026-10-18に統合）。
-// 収入のルールの編集は、入金先・振込日・見込み額の言葉にする。賞与は1回ごとに1件のルール（月・日・額）で、「複製して足す」で回を増やす。
-// 履歴は、その年の収入の記録を見込み／確定つきで年ごとに出す（見込み額の変更の版は持たない）。
+// 固定収入（給与・賞与。2026-10-11。docs/kakei.md §0.3）も同じルールで、同じ画面「固定支出・収入」の上の切り替え（支出／収入。タップだけ）で出す
+// （2026-10-18に統合）。収入のルールの編集は、入金先・振込日・見込み額の言葉にする。賞与は1回ごとに1件のルール（月・日・額）で、「複製して足す」で回を増やす。
 //
 // 並べ替え（左の持ち手をつかんで動かす。リストと同じ操作）は、種類（支出・振替）ごとの中で動かせる。
 // 複製は、編集の画面の「複製して足す」から。日・月・額など全部を写し、品名に「のコピー」を付けた新規の編集を開き、直して保存すると足される。
@@ -121,23 +117,29 @@ export default function RecurringSettings({
   const [editing, setEditing] = useState<MoneyRecurring | 'new' | null>(
     () => recurring.find((rule) => rule.id === initialEditId) ?? null,
   );
-  // 新しく足すのが固定支出か固定収入か。
-  const [newMode, setNewMode] = useState<RecurringMode>('expense');
+  // 一覧に出す種類（支出／収入）。予算の画面から開いたルールの種類で始める。新しく足すのもこの種類。
+  const [tab, setTab] = useState<RecurringMode>(() => {
+    const rule = recurring.find((entry) => entry.id === initialEditId);
+    return rule ? modeOf(rule) : 'expense';
+  });
+  const isIncome = tab === 'income';
   // 「複製して足す」の元。日・月・額など全部を写し、品名に「のコピー」を付けて新規の編集を開く。
   const [template, setTemplate] = useState<MoneyRecurring | null>(null);
   const thisMonth = monthKeyOfDate(new Date());
-  const usable = recurring.filter((rule) => !rule.archived && !recurringEnded(rule, thisMonth));
-  const ended = recurring.filter((rule) => !rule.archived && recurringEnded(rule, thisMonth));
+  const inTab = recurring.filter((rule) => modeOf(rule) === tab);
+  const usable = inTab.filter((rule) => !rule.archived && !recurringEnded(rule, thisMonth));
+  const ended = inTab.filter((rule) => !rule.archived && recurringEnded(rule, thisMonth));
   const [showEnded, setShowEnded] = useState(false);
-  const archived = recurring.filter((rule) => rule.archived);
-  // 一覧の見出しごとのルール。収入（給与・賞与）・自動で記録する支出・振替・記録しない（予定）に分ける。
-  const sections: { key: string; title: string; rules: MoneyRecurring[] }[] = [
-    { key: 'income', title: '収入（給与・賞与）', rules: usable.filter((rule) => rule.kind === 'income') },
-    { key: 'expense', title: '支出（自動で記録）', rules: usable.filter((rule) => rule.kind === 'expense' && !isEstimateCost(rule)) },
-    { key: 'transfer', title: RECORD_KIND_LABEL.transfer, rules: usable.filter((rule) => rule.kind === 'transfer') },
-    { key: 'estimate', title: '記録しない（予定）', rules: usable.filter(isEstimateCost) },
-  ];
-  const cards = wallets.filter((wallet) => wallet.type === 'card' && !wallet.archived);
+  const archived = inTab.filter((rule) => rule.archived);
+  // 一覧の見出しごとのルール。支出は、自動で記録する支出・振替・記録しない（予定）に分ける。
+  const sections: { key: string; title: string | null; rules: MoneyRecurring[] }[] = isIncome
+    ? [{ key: 'income', title: null, rules: usable }]
+    : [
+        { key: 'expense', title: '支出（自動で記録）', rules: usable.filter((rule) => rule.kind === 'expense' && !isEstimateCost(rule)) },
+        { key: 'transfer', title: RECORD_KIND_LABEL.transfer, rules: usable.filter((rule) => rule.kind === 'transfer') },
+        { key: 'estimate', title: '記録しない（予定）', rules: usable.filter(isEstimateCost) },
+      ];
+  const cards = isIncome ? [] : wallets.filter((wallet) => wallet.type === 'card' && !wallet.archived);
 
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '';
   const failed = () => window.alert('保存できませんでした。もう一度お試しください。');
@@ -217,7 +219,7 @@ export default function RecurringSettings({
       {editing !== null ? (
         <RecurringEditor
           key={editing === 'new' ? 'new' : editing.id}
-          mode={editing === 'new' ? (template ? modeOf(template) : newMode) : modeOf(editing)}
+          mode={editing === 'new' ? (template ? modeOf(template) : tab) : modeOf(editing)}
           rule={editing === 'new' ? null : editing}
           template={editing === 'new' ? template : null}
           wallets={wallets}
@@ -243,6 +245,29 @@ export default function RecurringSettings({
       ) : (
         <>
           <ScreenHeader title="固定支出・収入" icon="back" onClose={onBack} />
+          <div role="tablist" className="shrink-0 flex border-b border-gray-200 px-2">
+            {(['expense', 'income'] as const).map((entry) => {
+              const selected = entry === tab;
+              return (
+                <button
+                  key={entry}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => {
+                    setTab(entry);
+                    setShowEnded(false);
+                  }}
+                  className="flex flex-1 flex-col items-center pt-2"
+                >
+                  <span className={`text-[15px] ${selected ? 'font-bold text-gray-900' : 'font-semibold text-gray-400'}`}>
+                    {entry === 'income' ? '収入' : '支出'}
+                  </span>
+                  <span className={`mt-2 h-[3px] w-8 rounded-full ${selected ? 'bg-blue-600' : 'bg-transparent'}`} />
+                </button>
+              );
+            })}
+          </div>
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {usable.length === 0 && <p className="py-4 text-center text-sm text-gray-400">まだありません</p>}
             {sections.map((section) => {
@@ -250,7 +275,7 @@ export default function RecurringSettings({
               if (inKind.length === 0) return null;
               return (
                 <section key={section.key} className="space-y-1.5">
-                  <p className="text-xs font-bold text-gray-500">{section.title}</p>
+                  {section.title !== null && <p className="text-xs font-bold text-gray-500">{section.title}</p>}
                   {drag.arrange(`rules-${section.key}`, inKind).map((rule) => (
                     <div
                       key={rule.id}
@@ -298,22 +323,14 @@ export default function RecurringSettings({
                 </section>
               );
             })}
-            <div className="flex flex-wrap gap-x-5">
-              {(['expense', 'income'] as const).map((entry) => (
-                <button
-                  key={entry}
-                  type="button"
-                  onClick={() => {
-                    setNewMode(entry);
-                    setEditing('new');
-                  }}
-                  className="flex items-center gap-2 py-2.5 text-[15px] font-bold text-blue-600"
-                >
-                  <Plus size={18} />
-                  {entry === 'income' ? '固定収入を足す' : '固定支出を足す'}
-                </button>
-              ))}
-            </div>
+            <button
+              type="button"
+              onClick={() => setEditing('new')}
+              className="flex items-center gap-2 py-2.5 text-[15px] font-bold text-blue-600"
+            >
+              <Plus size={18} />
+              {isIncome ? '固定収入を足す' : '固定支出を足す'}
+            </button>
 
             {cards.length > 0 && (
               <section className="space-y-1.5">
@@ -334,8 +351,6 @@ export default function RecurringSettings({
                 })}
               </section>
             )}
-
-            <IncomeHistory records={records} categories={categories} />
 
             {ended.length > 0 && (
               <section className="space-y-1.5">
@@ -407,47 +422,6 @@ function amountLabel(rule: MoneyRecurring): string {
   if (rule.amountMode === 'fixed') return `固定 ${formatYen(rule.amount)}`;
   if (rule.kind === 'income') return rule.amount > 0 ? `見込み額 ${formatYen(rule.amount)}` : '見込み額は過去の記録から';
   return '過去の記録から見込む';
-}
-
-/** 固定収入の履歴。その年の収入の記録を、新しい日から（見込みの印つき）。年は送れる。 */
-function IncomeHistory({ records, categories }: { records: MoneyRecord[]; categories: MoneyCategory[] }) {
-  const [year, setYear] = useState(() => new Date().getFullYear());
-  const list = useMemo(() => incomeRecordsInYear(records, year), [records, year]);
-  const total = list.reduce((sum, record) => sum + recordTotal(record), 0);
-  const titleOf = (record: MoneyRecord) => {
-    const item = record.items[0];
-    if (item && item.name.trim() !== '') return item.name.trim();
-    if (record.store.trim() !== '') return record.store.trim();
-    return item && item.categoryId !== null ? categoryPath(categories, item.categoryId) : '収入';
-  };
-  return (
-    <section className="space-y-1.5">
-      <div className="flex items-center justify-between py-1">
-        <button type="button" aria-label="前の年" onClick={() => setYear(year - 1)} className="text-gray-700">
-          <ChevronLeft size={22} />
-        </button>
-        <p className="text-[15px] font-bold text-gray-900">{formatYear(year)}の収入</p>
-        <button type="button" aria-label="次の年" onClick={() => setYear(year + 1)} className="text-gray-700">
-          <ChevronRight size={22} />
-        </button>
-      </div>
-      {list.length === 0 ? (
-        <p className="py-4 text-center text-sm text-gray-400">この年の収入の記録はまだありません</p>
-      ) : (
-        <>
-          {list.map((record) => (
-            <div key={record.id} className="flex items-center gap-2 border-b border-gray-200 py-2.5">
-              <span className="w-11 text-[13px] font-semibold text-gray-500 tabular-nums">{formatShortDate(record.occurredOn)}</span>
-              <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-gray-900">{titleOf(record)}</span>
-              {record.isEstimate && <EstimateBadge />}
-              <span className={`text-[15px] font-extrabold tabular-nums ${incomeAmountClass}`}>{formatYen(recordTotal(record))}</span>
-            </div>
-          ))}
-          <span className={`${subClass} tabular-nums`}>合計 {formatYen(total)}</span>
-        </>
-      )}
-    </section>
-  );
 }
 
 /** ルールの見出し。カテゴリに統一する。振替などカテゴリのないものは取引の種別。 */
