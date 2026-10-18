@@ -32,6 +32,7 @@ import {
   insertMoneyWallet,
   loadMoneyStores,
   restoreMoneyWallet,
+  updateMoneyWalletPosition,
   saveMoneyRecord,
   saveMoneyWalletBalance,
   setMoneyMonthClosed,
@@ -523,6 +524,21 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     }
   };
 
+  /** 口座の面で、種類の中の並びを指で動かしたあと。変わった position だけ保存する。 */
+  const reorderWallets = (changes: { id: string; position: number }[]) => {
+    setWallets((prev) =>
+      prev
+        .map((entry) => {
+          const hit = changes.find((change) => change.id === entry.id);
+          return hit ? { ...entry, position: hit.position } : entry;
+        })
+        .sort((a, b) => a.position - b.position),
+    );
+    void Promise.all(changes.map((change) => updateMoneyWalletPosition(supabase, change.id, change.position))).catch(() =>
+      failed('並べ替え'),
+    );
+  };
+
   /** 残高を確定する。同じ出金元・同じ日の確定は上書きされる。 */
   const confirmBalance = async (walletId: string, balanceOn: string, amount: number, showInHistory: boolean) => {
     try {
@@ -664,6 +680,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               onSaveWallet={saveWallet}
               onDeleteWallet={(wallet) => void deleteWallet(wallet)}
               onRestoreWallet={(wallet) => void restoreWallet(wallet)}
+              onReorderWallets={reorderWallets}
               onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
               onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
               onNeedSecurityHistory={needSecurityHistory}

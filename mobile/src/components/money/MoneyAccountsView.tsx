@@ -17,10 +17,12 @@ import {
   dateKeyOfDate,
   formatBalance,
   groupWalletSections,
+  reorderedPositions,
   WALLET_DELETE_NOTE,
   WALLET_TYPES,
   type WalletBalanceRow,
 } from '@/lib/moneyUtils';
+import { useDragReorder } from '@/components/list/useDragReorder';
 import { WalletSheet } from '@/components/money/WalletPicker';
 import TotalTrendScreen from '@/components/money/TotalTrendScreen';
 import WalletBalanceScreen from '@/components/money/WalletBalanceScreen';
@@ -32,7 +34,7 @@ import { Hero, WalletTypeIcon, type } from '@/components/money/moneyVisual';
 // 一番上に総残高（固定。押すと推移）、その下に出金元ごとの残高（Zaim の「残高」と同じ。アイコンは記録の一覧と同じ絵と色）。
 // 残高＝最後に補正した残高 + その後の記録（支出・収入・振替）。補正は、通帳・銀行のアプリと違うときに詳細から入れる
 // （「未確定」などの印は出さない。2026-10-08に、出しっぱなしでうるさいので外した）。
-// 出金元を押すと詳細（履歴 / 推移 / 残高計算）。出金元の追加・編集・使わなくする・また使うもこの面から。
+// 出金元を押すと詳細（履歴 / 推移 / 残高計算）。長押しでつかむと、同じ種類の中で並べ替えられる（2026-10-18。money_wallets.position）。出金元の追加・編集・使わなくする・また使うもこの面から。
 // 総残高に入れるのは使っている出金元だけ。カードは未払いがマイナスで入る（請求済み・未請求の内訳は、押した先の詳細だけに出す）。
 // 証券口座の残高は、記録からではなく保有銘柄の評価額（docs/kakei.md §9.2）。押すと証券口座の詳細（推移と保有銘柄）。
 
@@ -56,6 +58,8 @@ interface MoneyAccountsViewProps {
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onDeleteWallet: (wallet: MoneyWallet) => void;
   onRestoreWallet: (wallet: MoneyWallet) => void;
+  /** 種類の中の並びを動かしたあと。変わった出金元の position。 */
+  onReorderWallets: (changes: { id: string; position: number }[]) => void;
   onSaveSecurity: (walletId: string, target: MoneySecurity | null, draft: MoneySecurityDraft) => void;
   onArchiveSecurity: (walletId: string, security: MoneySecurity) => void;
   /** 推移・証券口座の詳細を開いたときに、評価額の履歴を読ませる（一覧は最新の1行だけで出す）。 */
@@ -79,6 +83,7 @@ export default function MoneyAccountsView({
   onSaveWallet,
   onDeleteWallet,
   onRestoreWallet,
+  onReorderWallets,
   onSaveSecurity,
   onArchiveSecurity,
   onNeedSecurityHistory,
@@ -101,6 +106,10 @@ export default function MoneyAccountsView({
       rows: usable.filter((row) => row.wallet.type === walletType.id),
     })).filter((section) => section.rows.length > 0),
   );
+  const drag = useDragReorder((_sectionKey, orderedIds) => {
+    const changes = reorderedPositions(wallets, orderedIds);
+    if (changes.length > 0) onReorderWallets(changes);
+  });
   const opened = wallets.find((wallet) => wallet.id === openId) ?? null;
   const needsHistory =
     (opened !== null && opened.type === 'securities') ||
@@ -117,13 +126,25 @@ export default function MoneyAccountsView({
         <Text style={styles.sectionTitle}>{walletType.label}</Text>
         <Text style={styles.sectionSum}>{formatBalance(inType.reduce((sum, row) => sum + row.amount, 0))}</Text>
       </View>
-      <View style={styles.grid}>
+      <View style={styles.grid} {...drag.panHandlers}>
         {inType.map((row) => (
           <Pressable
             key={row.wallet.id}
             accessibilityRole="button"
             onPress={() => setOpenId(row.wallet.id)}
-            style={({ pressed }) => [styles.tile, paired && styles.tilePaired, pressed && styles.pressed]}
+            {...drag.holdProps(
+              `wallets-${walletType.id}`,
+              inType.map((entry) => ({ id: entry.wallet.id })),
+              row.wallet.id,
+            )}
+            {...drag.measureProps(row.wallet.id)}
+            style={({ pressed }) => [
+              styles.tile,
+              paired && styles.tilePaired,
+              pressed && styles.pressed,
+              drag.styleFor(row.wallet.id),
+              drag.isDragging(row.wallet.id) && styles.lifted,
+            ]}
           >
             <View style={styles.tileTop}>
               <WalletTypeIcon type={row.wallet.type} size={20} color={row.wallet.iconColor} />
@@ -149,7 +170,7 @@ export default function MoneyAccountsView({
   return (
     <View style={styles.flex}>
       {/* 総残高も一覧と一緒に流れる（固定しない。2026-10-08）。 */}
-      <ScrollView ref={scrollRef} style={styles.flex} contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollRef} style={styles.flex} contentContainerStyle={styles.content} scrollEnabled={!drag.isActive}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="総残高の推移を見る"
@@ -322,6 +343,7 @@ const styles = StyleSheet.create({
   // 金額は名前より大きく太く。プラスは明るい緑、マイナスは「−」をつけて黒（Zaim と同じ）。
   tileAmount: { alignSelf: 'flex-end', fontSize: 21, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   tilePlus: { color: colors.moneyIncome },
+  lifted: { opacity: 0.9, elevation: 8 },
   archivedName: { opacity: 0.7 },
   deleteLink: { color: colors.danger },
   add: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 16 },

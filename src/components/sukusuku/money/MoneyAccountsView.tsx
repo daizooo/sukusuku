@@ -17,10 +17,12 @@ import {
   dateKeyOfDate,
   formatBalance,
   groupWalletSections,
+  reorderedPositions,
   WALLET_DELETE_NOTE,
   WALLET_TYPES,
   type WalletBalanceRow,
 } from '@/lib/moneyUtils';
+import { useDragReorder } from '../ui/useDragReorder';
 import SecuritiesWalletScreen from './SecuritiesWalletScreen';
 import TotalTrendScreen from './TotalTrendScreen';
 import WalletBalanceScreen from './WalletBalanceScreen';
@@ -32,7 +34,7 @@ import { cardClass, Hero, incomeAmountClass, type, WalletTypeIcon } from './mone
 // 一番上に総残高（固定。押すと推移）、その下に出金元ごとの残高（Zaim の「残高」と同じ。アイコンは記録の一覧と同じ絵と色）。
 // 残高＝最後に補正した残高 + その後の記録（支出・収入・振替）。補正は、通帳・銀行のアプリと違うときに詳細から入れる
 // （「未確定」などの印は出さない。2026-10-08に、出しっぱなしでうるさいので外した）。
-// 出金元を押すと詳細（履歴 / 推移 / 残高計算）。出金元の追加・編集・使わなくする・また使うもこの面から。
+// 出金元を押すと詳細（履歴 / 推移 / 残高計算）。長押しでつかむと、同じ種類の中で並べ替えられる（2026-10-18。money_wallets.position）。出金元の追加・編集・使わなくする・また使うもこの面から。
 // 総残高に入れるのは使っている出金元だけ。カードは未払いがマイナスで入る（請求済み・未請求の内訳は、押した先の詳細だけに出す）。
 // 証券口座の残高は、記録からではなく保有銘柄の評価額（docs/kakei.md §9.2）。押すと証券口座の詳細（推移と保有銘柄）。
 
@@ -54,6 +56,8 @@ interface MoneyAccountsViewProps {
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onDeleteWallet: (wallet: MoneyWallet) => void;
   onRestoreWallet: (wallet: MoneyWallet) => void;
+  /** 種類の中の並びを動かしたあと。変わった出金元の position。 */
+  onReorderWallets: (changes: { id: string; position: number }[]) => void;
   onSaveSecurity: (walletId: string, target: MoneySecurity | null, draft: MoneySecurityDraft) => void;
   onArchiveSecurity: (walletId: string, security: MoneySecurity) => void;
   /** 推移・証券口座の詳細を開いたときに、評価額の履歴を読ませる（一覧は最新の1行だけで出す）。 */
@@ -76,6 +80,7 @@ export default function MoneyAccountsView({
   onSaveWallet,
   onDeleteWallet,
   onRestoreWallet,
+  onReorderWallets,
   onSaveSecurity,
   onArchiveSecurity,
   onNeedSecurityHistory,
@@ -98,6 +103,10 @@ export default function MoneyAccountsView({
       rows: usable.filter((row) => row.wallet.type === walletType.id),
     })).filter((section) => section.rows.length > 0),
   );
+  const drag = useDragReorder((_sectionKey, orderedIds) => {
+    const changes = reorderedPositions(wallets, orderedIds);
+    if (changes.length > 0) onReorderWallets(changes);
+  });
   const opened = wallets.find((wallet) => wallet.id === openId) ?? null;
   const needsHistory =
     (opened !== null && opened.type === 'securities') ||
@@ -108,36 +117,47 @@ export default function MoneyAccountsView({
 
   // 出金元の種類ごとの見出し＋タイル。Zaim の「残高」と同じく2列に並べる（2026-10-08）。金額は大きく太く、プラスは緑・マイナスは「−」と黒（2026-10-10）。
   // paired は「1件だけの種類を2つ横に並べた」ときで、タイルは列いっぱいに広げる。
-  const renderSection = ({ type: walletType, rows: inType }: WalletSection, paired: boolean) => (
-    <section className="space-y-[3px]">
-      <h4 className="flex items-baseline justify-between px-1 text-xs font-bold text-gray-700">
-        <span>{walletType.label}</span>
-        <span className="tabular-nums text-gray-500">{formatBalance(inType.reduce((sum, row) => sum + row.amount, 0))}</span>
-      </h4>
-      <div className={`grid gap-1.5 ${paired ? 'grid-cols-1' : 'grid-cols-2'}`}>
-        {inType.map((row) => (
-          <button
-            key={row.wallet.id}
-            type="button"
-            onClick={() => setOpenId(row.wallet.id)}
-            className="flex min-w-0 flex-col justify-between gap-0.5 rounded-xl border border-gray-200 bg-white px-2.5 pb-1.5 pt-[7px] text-left hover:bg-gray-50"
-          >
-            <span className="flex min-w-0 items-start gap-1.5">
-              <span className="shrink-0">
-                <WalletTypeIcon type={row.wallet.type} size={20} color={row.wallet.iconColor} />
-              </span>
-              <span className="line-clamp-2 min-w-0 flex-1 text-[13px] font-bold leading-4 text-gray-500">{row.wallet.name}</span>
-            </span>
-            <span
-              className={`self-end text-[21px] font-extrabold tabular-nums ${row.amount > 0 ? incomeAmountClass : 'text-gray-900'}`}
+  const renderSection = ({ type: walletType, rows }: WalletSection, paired: boolean) => {
+    const sectionKey = `wallets-${walletType.id}`;
+    const inType = drag.arrange(
+      sectionKey,
+      rows.map((row) => ({ ...row, id: row.wallet.id })),
+    );
+    return (
+      <section className="space-y-[3px]">
+        <h4 className="flex items-baseline justify-between px-1 text-xs font-bold text-gray-700">
+          <span>{walletType.label}</span>
+          <span className="tabular-nums text-gray-500">{formatBalance(inType.reduce((sum, row) => sum + row.amount, 0))}</span>
+        </h4>
+        <div className={`grid gap-1.5 ${paired ? 'grid-cols-1' : 'grid-cols-2'}`}>
+          {inType.map((row) => (
+            <button
+              key={row.wallet.id}
+              type="button"
+              ref={drag.dragRef(row.wallet.id)}
+              {...drag.handleProps(sectionKey, inType, row.wallet.id)}
+              onClick={() => setOpenId(row.wallet.id)}
+              className={`flex min-w-0 select-none flex-col justify-between gap-0.5 rounded-xl border border-gray-200 bg-white px-2.5 pb-1.5 pt-[7px] text-left hover:bg-gray-50 ${
+                drag.isDragging(row.wallet.id) ? 'relative z-20 shadow-lg' : ''
+              }`}
             >
-              {formatBalance(row.amount)}
-            </span>
-          </button>
-        ))}
-      </div>
-    </section>
-  );
+              <span className="flex min-w-0 items-start gap-1.5">
+                <span className="shrink-0">
+                  <WalletTypeIcon type={row.wallet.type} size={20} color={row.wallet.iconColor} />
+                </span>
+                <span className="line-clamp-2 min-w-0 flex-1 text-[13px] font-bold leading-4 text-gray-500">{row.wallet.name}</span>
+              </span>
+              <span
+                className={`self-end text-[21px] font-extrabold tabular-nums ${row.amount > 0 ? incomeAmountClass : 'text-gray-900'}`}
+              >
+                {formatBalance(row.amount)}
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+    );
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
