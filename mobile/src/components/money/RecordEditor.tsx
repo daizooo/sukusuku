@@ -652,7 +652,10 @@ export default function RecordEditor({
                 </Pressable>
               )}
             </View>
-            <RecordItemGroups groups={groups} title={groupTitle} iconKey={groupIconKey} size="small" onOpen={openGroup} />
+            {/* 画面の端に文字が寄らないよう、PWA版と同じ左右20の余白で包む（2026-10-19） */}
+            <View style={styles.itemGroups}>
+              <RecordItemGroups groups={groups} title={groupTitle} iconKey={groupIconKey} size="small" onOpen={openGroup} />
+            </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="カテゴリを追加する"
@@ -737,6 +740,7 @@ const styles = StyleSheet.create({
   // 「レシートから追加」は右寄せ（「カテゴリを追加」の文字リンクは、下の＋と重なるので外した。2026-10-16）。
   camera: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, height: 28, borderRadius: 14, backgroundColor: colors.neutralSurface },
   cameraText: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },
+  itemGroups: { paddingHorizontal: 20 },
   addGroup: { paddingHorizontal: 20, paddingVertical: 10 },
   addMark: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.moneySoft },
   // 下いっぱいの保存の帯（青）。

@@ -43,6 +43,20 @@ const CORS_HEADERS = {
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
 
+/**
+ * base64 を整える（前置き・改行・空白・URL形式の文字・足りない「=」）。
+ * 端末のスキャナーが改行つきの base64 を返すことがあり、そのまま渡すと Anthropic が invalid base64 data で断る。
+ */
+const cleanBase64 = (value: string): string => {
+  const body = value
+    .replace(/^data:[^,]*,/, '')
+    .replace(/\s+/g, '')
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .replace(/=+$/, '');
+  return body + '='.repeat((4 - (body.length % 4)) % 4);
+};
+
 /** 日本時間の今月1日 0時（UTC の ISO）。 */
 const monthStartJst = (now: number): string => {
   const jst = new Date(now + 9 * 3600_000);
@@ -73,6 +87,12 @@ Deno.serve(async (request) => {
   if (images.length === 0 || images.length > MAX_IMAGES) return json({ error: `写真は1〜${MAX_IMAGES}枚` }, 400);
   for (const image of images) {
     if (!MEDIA_TYPES.has(image?.media_type) || typeof image?.data !== 'string' || image.data.length > MAX_IMAGE_CHARS) {
+      return json({ error: '写真の形が違う' }, 400);
+    }
+    image.data = cleanBase64(image.data);
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(image.data) || image.data.length % 4 !== 0) {
+      // 何が混ざっているか分かるよう、長さと先頭だけ残す（写真の中身は含まれない）
+      console.error('invalid base64', image.data.length, image.data.slice(0, 16));
       return json({ error: '写真の形が違う' }, 400);
     }
   }
@@ -152,7 +172,8 @@ Deno.serve(async (request) => {
   } catch (error) {
     if (error instanceof Anthropic.RateLimitError) return json({ error: '混み合っています。少し待ってください' }, 429);
     if (error instanceof Anthropic.APIError) {
-      console.error('anthropic', error.status);
+      // 400 の理由（画像の大きさ・残高など）が分かるよう、APIの返したメッセージも残す（写真の中身は含まれない）
+      console.error('anthropic', error.status, error.message);
       return json({ error: '読み取りに失敗しました' }, 502);
     }
     console.error('receipt scan failed');

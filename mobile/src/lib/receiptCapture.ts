@@ -16,6 +16,7 @@ export async function captureReceipt(): Promise<ReceiptImage[] | null> {
   if (result.status === ScanDocumentResponseStatus.Cancel || !result.scannedImages?.length) return null;
   return result.scannedImages.map((image) => ({
     media_type: 'image/jpeg',
-    data: image.replace(/^data:image\/\w+;base64,/, ''),
+    // スキャナーの base64 には改行が入ることがあり、そのまま送ると読み取りが invalid base64 で断られる（2026-10-19）
+    data: image.replace(/^data:[^,]*,/, '').replace(/\s+/g, ''),
   }));
 }

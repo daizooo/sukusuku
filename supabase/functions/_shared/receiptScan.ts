@@ -77,7 +77,8 @@ export const RECEIPT_SYSTEM_PROMPT = `あなたは家計簿アプリのために
 - 値引き・割引・クーポンの行は、マイナスの金額の品目として入れる（品目の値引きは、その品目の直後に置く）
 - 税の内訳の欄（10%対象・08%対象・内税）と合計が2回写っていても、1回として読む。写真が複数枚なら、境目で同じ行を二重に読まない
 - レジ袋も品目として入れる
-- 税: 金額に税が含まれている（内税）なら mode は inclusive。本体の価格と別に税が足されている（外税）なら exclusive で、税率ごとの税額を入れる
+- 税: 金額に税が含まれている（内税）なら mode は inclusive。本体の価格と別に税が足されている（外税）なら exclusive で、税率ごとの税額を入れる。
+  「内税対象」などの文言に惑わされず、品目の金額の合計（小計）にレシートの税額を足すと合計になるなら exclusive（例: 小計1,841 ＋ 税146 ＝ 合計1,987）
 - 品目の tax_rate: 軽減税率の印（* など）があれば 8、無ければ 10。分からなければ 0
 - 種類（category_id）は、渡した小分類の一覧から、この家族の分け方に合うものを選ぶ。当てはまるものが無ければ空にする
 - 読めない文字は推測しすぎない。店名・日付が写っていなければ空にする`;
@@ -116,6 +117,22 @@ export function distributeTax(
     amounts[largest] += group.tax - given;
   }
   return amounts;
+}
+
+/**
+ * 配るときの税。AIが内税（または不明）と答えても、品目の合計よりレシートの合計が大きく、その差が税で説明できる（11%以内）なら外税として扱う
+ * （レシートの「※8%内税対象」の文言に引きずられて、外税のレシートを内税と読むため。§10.5）。
+ * 差が AIの読んだ税額の和と同じならその内訳を使い、違えば差の全部を、品目のある税率（8を優先）へ入れる。
+ */
+export function effectiveTax(reading: ReceiptReading): ReceiptReading['tax'] {
+  const { tax } = reading;
+  if (tax.mode === 'exclusive') return tax;
+  const sum = reading.items.reduce((total, item) => total + item.amount, 0);
+  const gap = reading.total - sum;
+  if (gap <= 0 || gap > sum * 0.11) return tax;
+  if (tax.rate8_tax + tax.rate10_tax === gap) return { ...tax, mode: 'exclusive' };
+  const reduced = reading.items.some((item) => item.tax_rate === 8);
+  return { mode: 'exclusive', rate8_tax: reduced ? gap : 0, rate10_tax: reduced ? 0 : gap };
 }
 
 /** 登録したお店から、レシートの店名に当たるものを探す（同じ名前 → どちらかがもう片方を含む）。 */
@@ -185,7 +202,7 @@ export function buildItems(
   learned: ReadonlyMap<string, LearnedItem>,
   categoryIds: ReadonlySet<string>,
 ): ScannedItem[] {
-  const amounts = distributeTax(reading.items, reading.tax);
+  const amounts = distributeTax(reading.items, effectiveTax(reading));
   return reading.items.map((item, index) => {
     const amount = amounts[index];
     const quantity = Math.min(9999, Math.max(1, Math.round(item.quantity) || 1));
