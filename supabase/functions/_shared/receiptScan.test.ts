@@ -1,6 +1,6 @@
 // 実行: npm run test:receipt-scan
 import assert from 'node:assert/strict';
-import { buildItems, distributeTax, matchStore, matchWallet, normalizeName, type ReceiptReading } from './receiptScan.ts';
+import { buildItems, distributeTax, effectiveTax, matchStore, matchWallet, normalizeName, type ReceiptReading } from './receiptScan.ts';
 
 // ---- 名前のそろえ方 ----
 assert.equal(normalizeName('ﾄﾞﾗｯｸﾞｽﾄｱ　コスモス・下城南中前店'), 'ドラッグストアコスモス下城南中前店');
@@ -82,5 +82,33 @@ const taxed = buildItems(
   new Set(['food']),
 );
 assert.deepEqual([taxed[0].quantity, taxed[0].unitPrice, taxed[0].amount], [1, 689, 689]);
+
+// AIが外税のレシートを内税と読んでも、合計が品目の和より税の分だけ大きければ外税として配る（§10.5）
+const sunlive: ReceiptReading = {
+  store: 'サンリブ',
+  date: '2026-10-19',
+  payment: { method: 'card', card_name: '', last4: '' },
+  items: [
+    { receipt_name: 'レジ袋LL', name: 'レジ袋LL', quantity: 1, unit_price: 6, amount: 6, tax_rate: 10, category_id: '' },
+    { receipt_name: '赤玉子LL', name: '赤玉子LL', quantity: 1, unit_price: 345, amount: 345, tax_rate: 8, category_id: '' },
+    { receipt_name: 'パルテノ', name: 'パルテノ', quantity: 6, unit_price: 178, amount: 1068, tax_rate: 8, category_id: '' },
+    { receipt_name: 'バナナ', name: 'バナナ', quantity: 1, unit_price: 158, amount: 158, tax_rate: 8, category_id: '' },
+    { receipt_name: '納豆ほか', name: '納豆ほか', quantity: 1, unit_price: 264, amount: 264, tax_rate: 8, category_id: '' },
+  ],
+  total: 1987,
+  tax: { mode: 'inclusive', rate8_tax: 0, rate10_tax: 0 },
+};
+assert.equal(sunlive.items.reduce((sum, item) => sum + item.amount, 0), 1841);
+assert.deepEqual(effectiveTax(sunlive), { mode: 'exclusive', rate8_tax: 146, rate10_tax: 0 }, '差146は、8%の品目へ');
+const sunliveItems = buildItems(sunlive, new Map(), new Set());
+assert.equal(sunliveItems.reduce((sum, item) => sum + item.amount, 0), 1987, '品目の和がレシートの合計に合う');
+assert.equal(sunliveItems[0].amount, 6, '10%の品目（税0円）はそのまま');
+assert.deepEqual(
+  effectiveTax({ ...sunlive, tax: { mode: 'unknown', rate8_tax: 146, rate10_tax: 0 } }),
+  { mode: 'exclusive', rate8_tax: 146, rate10_tax: 0 },
+  'AIの読んだ税額の和が差と同じなら、その内訳を使う',
+);
+assert.deepEqual(effectiveTax({ ...sunlive, total: 1841 }), sunlive.tax, '差が無ければそのまま（内税）');
+assert.deepEqual(effectiveTax({ ...sunlive, total: 2500 }), sunlive.tax, '差が大きすぎる（読み違い）ときは触らない');
 
 console.log('receiptScan: ok');
