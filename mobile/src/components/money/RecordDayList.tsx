@@ -134,7 +134,7 @@ export const RecordDayBlock = memo(function RecordDayBlock({
     const firstTitle = first?.categoryId
       ? (categories.find((category) => category.id === first.categoryId)?.name ?? '')
       : (first?.categoryName ?? '');
-    const title = groups.length > 1 ? `${firstTitle} ほか${groups.length - 1}` : firstTitle;
+    const title = groups.length > 1 ? `${firstTitle} ほか` : firstTitle;
     return {
       icon: top ? iconKeyOf(categories.find((category) => category.id === top)) : 'star',
       title: record.store.trim() !== '' ? `${title} @ ${record.store.trim()}` : title,
