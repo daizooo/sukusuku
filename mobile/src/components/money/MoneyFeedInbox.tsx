@@ -3,24 +3,15 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronRight } from 'lucide-react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import type { MoneyBudget, MoneyCategory, MoneyFeedItem, MoneyRecord, MoneyStore, MoneyWallet } from '@/types/app';
+import type { MoneyCategory, MoneyFeedItem, MoneyRecord, MoneyWallet } from '@/types/app';
 import type { MoneyFeedFill, MoneyFeedResolve } from '@/lib/api/moneyFeed';
 import { formatDateWithWeekday, toDateString } from '@/lib/dateUtils';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
-import { formatYen, monthKeyOfDate, recordTotal, storeChoices } from '@/lib/moneyUtils';
-import {
-  feedAmountLabel,
-  feedDayLabel,
-  feedLinkCandidates,
-  feedStatusLabel,
-  sortFeedInbox,
-  storeCategoryGuess,
-} from '@/lib/moneyFeedUtils';
+import { formatYen, recordTotal } from '@/lib/moneyUtils';
+import { feedAmountLabel, feedDayLabel, feedStatusLabel, sortFeedInbox } from '@/lib/moneyFeedUtils';
 import SheetModal from '@/components/ui/SheetModal';
 import LogModalShell from '@/components/log/LogModalShell';
-import CategoryPicker from '@/components/money/CategoryPicker';
-import StorePicker from '@/components/money/StorePicker';
 import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 import { Chip, ChipRow, Field, ToggleRow, WalletChoices } from '@/components/money/feedParts';
 
@@ -28,18 +19,15 @@ import { Chip, ChipRow, Field, ToggleRow, WalletChoices } from '@/components/mon
 //
 // 「口座」の面の上の「未確認 n件」から開く。手入力との確認 → 口座が決まっていない → 未確認 → 読めない の順。
 // 1件を押すと片づけ方を選ぶ枠: 口座を選ぶ／手入力と同じか（同じ取引・振替に置き換える・別の取引）／
-// 記録にする・振替にする・既にある記録と結ぶ・記録しない。「次から同じ内容は自動で」を選ぶと取り込みのルールに覚える。
+// 記録する・記録しない。記録するは、日付・出金元・お店を入れた記録の入力を開く（カテゴリと額は人が入れる。2026-10-19）。
 
 interface MoneyFeedInboxProps {
   items: MoneyFeedItem[];
-  /** 明細から来た記録（結ぶ候補から除く）。 */
-  linkedRecordIds: string[];
   wallets: MoneyWallet[];
   records: MoneyRecord[];
-  /** お店の設定（記録にするときのお店の選択に使う）。 */
-  stores: MoneyStore[];
   categories: MoneyCategory[];
-  budgets: MoneyBudget[];
+  /** 記録する: 日付・出金元・お店を入れた記録の入力を開く。保存したら、その記録とこの明細を結ぶ。 */
+  onRecord: (item: MoneyFeedItem) => void;
   onResolve: (item: MoneyFeedItem, resolve: MoneyFeedResolve) => Promise<boolean>;
   /** 読めないメールに、口座・向き・日付・額を手で入れる。入れたあとは未確認として続けて片づける。 */
   onFill: (item: MoneyFeedItem, fill: MoneyFeedFill) => Promise<boolean>;
@@ -48,12 +36,10 @@ interface MoneyFeedInboxProps {
 
 export default function MoneyFeedInbox({
   items,
-  linkedRecordIds,
   wallets,
   records,
-  stores,
   categories,
-  budgets,
+  onRecord,
   onResolve,
   onFill,
   onClose,
@@ -101,13 +87,14 @@ export default function MoneyFeedInbox({
         <FeedItemSheet
           key={opened.id}
           item={opened}
-          linkedRecordIds={linkedRecordIds}
           wallets={wallets}
           records={records}
-          stores={stores}
           categories={categories}
-          budgets={budgets}
           onClose={() => setOpenId(null)}
+          onRecord={() => {
+            setOpenId(null);
+            onRecord(opened);
+          }}
           onResolve={async (resolve) => {
             if (await onResolve(opened, resolve)) setOpenId(null);
           }}
@@ -121,65 +108,35 @@ export default function MoneyFeedInbox({
   );
 }
 
-type Mode = 'record' | 'transfer' | 'link' | 'ignore';
-
-const MODES: { id: Mode; label: string }[] = [
-  { id: 'record', label: '記録にする' },
-  { id: 'transfer', label: '振替にする' },
-  { id: 'link', label: '既にある記録と結ぶ' },
-  { id: 'ignore', label: '記録しない' },
-];
-
 function FeedItemSheet({
   item,
-  linkedRecordIds,
   wallets,
   records,
-  stores,
   categories,
-  budgets,
   onClose,
+  onRecord,
   onResolve,
   onFill,
 }: {
   item: MoneyFeedItem;
-  linkedRecordIds: string[];
   wallets: MoneyWallet[];
   records: MoneyRecord[];
-  stores: MoneyStore[];
   categories: MoneyCategory[];
-  budgets: MoneyBudget[];
   onClose: () => void;
+  onRecord: () => void;
   onResolve: (resolve: MoneyFeedResolve) => Promise<void>;
   onFill: (fill: MoneyFeedFill) => Promise<void>;
 }) {
-  const [mode, setMode] = useState<Mode>('record');
   // 読めないメールの手入力（口座・向き・日付・額）
   const [fillDirection, setFillDirection] = useState<'in' | 'out'>('out');
   const [fillOn, setFillOn] = useState(() => toDateString(new Date(item.receivedAt)));
   const [fillAmount, setFillAmount] = useState('');
   const [walletId, setWalletId] = useState<string | null>(null);
   const [remember, setRemember] = useState(true);
-  // カードの利用通知は、利用先に当てたお店と、そのお店でいちばん多いカテゴリを初めから入れておく（§9.6）
-  const [categoryId, setCategoryId] = useState<string | null>(() =>
-    item.storeHint ? storeCategoryGuess(records, item.storeHint, item.direction === 'in' ? 'income' : 'expense') : null,
-  );
-  const [store, setStore] = useState(item.storeHint ?? '');
-  // お店の選択で「お店に登録して使う」を選んだか（記録の入力と同じ。docs/kakei.md §3.5）
-  const [registerStore, setRegisterStore] = useState(false);
-  const [pickingStore, setPickingStore] = useState(false);
-  const storeOptions = useMemo(() => storeChoices(stores, records), [stores, records]);
-  const [toWalletId, setToWalletId] = useState<string | null>(null);
-  const [linkId, setLinkId] = useState<string | null>(null);
-  const [learn, setLearn] = useState(true);
-  const [pickingCategory, setPickingCategory] = useState(false);
   const [busy, setBusy] = useState(false);
-  const insets = useSafeAreaInsets();
 
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? '—';
-  const categoryName = categories.find((category) => category.id === categoryId)?.name ?? null;
   const candidates = useMemo(() => records.filter((record) => item.candidateRecordIds.includes(record.id)), [records, item]);
-  const linkChoices = useMemo(() => feedLinkCandidates(item, records, new Set(linkedRecordIds)), [item, records, linkedRecordIds]);
 
   const run = async (resolve: MoneyFeedResolve) => {
     if (busy) return;
@@ -362,117 +319,33 @@ function FeedItemSheet({
     );
   }
 
-  // 未確認: 記録にする・振替にする・結ぶ・記録しない
-  const kind = item.direction === 'in' ? 'income' : 'expense';
-  const canSave =
-    !busy &&
-    (mode === 'record' ? categoryId !== null : mode === 'transfer' ? toWalletId !== null : mode === 'link' ? linkId !== null : true);
-  const save = () => {
-    if (mode === 'record' && categoryId) {
-      void run({ action: 'record', categoryId, store, registerStore: store !== '' && registerStore, learn });
-    }
-    if (mode === 'transfer' && toWalletId) void run({ action: 'transfer', toWalletId, learn });
-    if (mode === 'link' && linkId) void run({ action: 'link', recordId: linkId, learn });
-    if (mode === 'ignore') void run({ action: 'ignore', learn });
-  };
-
+  // 未確認: 記録する（日付・出金元・お店を入れた記録の入力を開く）・記録しない。
+  // 同じお店でも買うものでカテゴリが変わるので、カテゴリはここで決めず、記録の入力で選ぶ（品目を分けてもよい。2026-10-19）
   return (
     <SheetModal visible onClose={onClose}>
       <LogModalShell
         title={walletName(item.walletId)}
         onClose={onClose}
-        subheader={
-          <ChipRow>
-            {MODES.map((entry) => (
-              <Chip key={entry.id} label={entry.label} selected={mode === entry.id} onPress={() => setMode(entry.id)} />
-            ))}
-          </ChipRow>
+        footer={
+          <>
+            <PrimaryButton label="記録する" disabled={busy} onPress={onRecord} />
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() => void run({ action: 'ignore', learn: false })}
+              style={styles.secondary}
+            >
+              <Text style={styles.secondaryText}>記録しない</Text>
+            </Pressable>
+          </>
         }
-        footer={<PrimaryButton label="保存する" disabled={!canSave} onPress={save} />}
       >
         {summary}
-        {mode === 'record' && (
-          <>
-            <Field label={kind === 'income' ? '収入のカテゴリ' : '支出のカテゴリ'}>
-              <Pressable accessibilityRole="button" onPress={() => setPickingCategory(true)} style={styles.select}>
-                <Text style={[styles.selectText, !categoryName && styles.placeholder]}>{categoryName ?? 'カテゴリを選ぶ'}</Text>
-                <ChevronRight size={18} color={colors.textFaint} />
-              </Pressable>
-            </Field>
-            <Field
-              label="お店（任意）"
-              hint={item.storeHint ? `利用先「${item.description}」から当てました。違えば直してください。` : undefined}
-            >
-              <Pressable accessibilityRole="button" onPress={() => setPickingStore(true)} style={styles.select}>
-                <Text style={[styles.selectText, store === '' && styles.placeholder]}>{store || 'お店を選ぶ'}</Text>
-                <ChevronRight size={18} color={colors.textFaint} />
-              </Pressable>
-            </Field>
-          </>
-        )}
-        {mode === 'transfer' && (
-          <Field label={item.direction === 'out' ? '入金先（相手の出金元）' : '出金元（相手の出金元）'}>
-            <WalletChoices wallets={wallets} selectedId={toWalletId} onPick={setToWalletId} exclude={item.walletId} />
-          </Field>
-        )}
-        {mode === 'link' && (
-          <Field label="結ぶ記録（同じ口座・前後7日）" hint="見込みの記録を選ぶと、額を明細の額にして確定します。">
-            {linkChoices.length === 0 && <Text style={styles.hint}>当たる記録がありません</Text>}
-            {linkChoices.map((record) => (
-              <Pressable
-                key={record.id}
-                accessibilityRole="button"
-                accessibilityState={{ selected: linkId === record.id }}
-                onPress={() => setLinkId(record.id)}
-                style={[styles.candidate, linkId === record.id && styles.candidateSelected]}
-              >
-                <RecordLine record={record} walletName={walletName} categories={categories} />
-              </Pressable>
-            ))}
-          </Field>
-        )}
-        {mode === 'ignore' && <Text style={styles.hint}>記録を作りません。残高がずれたら、口座の詳細から補正してください。</Text>}
-        <ToggleRow label="次から同じ内容は自動で" value={learn} onChange={setLearn} />
+        {item.storeHint && <Text style={styles.store}>お店: {item.storeHint}</Text>}
+        <Text style={styles.hint}>
+          記録するを押すと、日付・出金元・お店を入れた記録の入力を開きます。記録しないときは、残高がずれたら口座の詳細から補正してください。
+        </Text>
       </LogModalShell>
-      {pickingStore && (
-        <Modal visible animationType="slide" onRequestClose={() => setPickingStore(false)}>
-          <View style={[styles.picker, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
-            <StorePicker
-              value={store}
-              registered={storeOptions.registered}
-              recent={storeOptions.recent}
-              others={storeOptions.others}
-              canRegister
-              onPick={(value, register) => {
-                setStore(value);
-                setRegisterStore(register);
-                // カテゴリがまだなら、そのお店でいちばん多く使ったカテゴリを入れる
-                if (categoryId === null) setCategoryId(storeCategoryGuess(records, value, kind));
-                setPickingStore(false);
-              }}
-              onClose={() => setPickingStore(false)}
-            />
-          </View>
-        </Modal>
-      )}
-      {pickingCategory && (
-        <Modal visible animationType="slide" onRequestClose={() => setPickingCategory(false)}>
-          <View style={[styles.picker, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
-          <CategoryPicker
-            kind={kind}
-            monthKey={monthKeyOfDate(new Date())}
-            categories={categories}
-            budgets={budgets}
-            records={records}
-            onPick={(choice) => {
-              setCategoryId(choice.categoryId);
-              setPickingCategory(false);
-            }}
-            onClose={() => setPickingCategory(false)}
-          />
-          </View>
-        </Modal>
-      )}
     </SheetModal>
   );
 }
@@ -511,7 +384,6 @@ function RecordLine({
 
 const styles = StyleSheet.create({
   frame: { flex: 1, backgroundColor: colors.background },
-  picker: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
   content: { padding: 16, gap: 8, paddingBottom: 32 },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
@@ -537,10 +409,10 @@ const styles = StyleSheet.create({
   summary: { gap: 2 },
   summaryAmount: { fontSize: 22, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   summaryLine: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
+  store: { fontSize: 14, fontWeight: '700', color: colors.text },
   summaryDescription: { fontSize: 13, fontWeight: '500', lineHeight: 19, color: colors.textMuted },
   hint: { fontSize: 12, fontWeight: '500', lineHeight: 18, color: colors.textMuted },
   candidate: { gap: 8, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
-  candidateSelected: { borderColor: colors.moneyRing, backgroundColor: colors.moneySurface },
   candidateActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   candidateButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: colors.moneySoft },
   candidateButtonText: { fontSize: 13, fontWeight: '700', color: colors.moneyText },
@@ -559,7 +431,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   selectText: { fontSize: 15, fontWeight: '600', color: colors.text },
-  placeholder: { color: colors.textFaint },
   input: {
     borderWidth: 1,
     borderColor: colors.borderStrong,

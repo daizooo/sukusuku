@@ -188,6 +188,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   // Gmail から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
   const [feed, setFeed] = useState<MoneyFeedData | null>(null);
   const [feedOpen, setFeedOpen] = useState(false);
+  // 未確認の明細の「記録する」から開いた記録の入力の、その明細。保存したら記録と結ぶ（docs/kakei.md §9.5.6.1）。
+  const [feedRecordFor, setFeedRecordFor] = useState<MoneyFeedItem | null>(null);
 
   // 評価額の履歴（推移用）は、推移・証券口座の詳細を開くまで読まない。一度読んだら、読み直しでも履歴まで読む。
   const historyWanted = useRef(false);
@@ -350,6 +352,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     setEditing(null);
     setReceipt(null);
     setReceiptFor(null);
+    const feedItem = feedRecordFor;
+    setFeedRecordFor(null);
     try {
       const saved = await saveMoneyRecord(supabase, draft);
       setRecords((prev) => [...prev.filter((record) => record.id !== saved.id), saved]);
@@ -358,6 +362,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       if (draft.registerStore && saved.store !== '' && !stores.some((entry) => entry.name === saved.store && !entry.archived)) {
         setStores(await loadMoneyStores(supabase, familyId));
       }
+      // 未確認の明細から記録したときは、その明細と結ぶ（未確認から消える）
+      if (feedItem) await resolveFeed(feedItem, { action: 'link', recordId: saved.id, learn: false });
     } catch {
       failed('保存');
     }
@@ -726,34 +732,6 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
         </div>
       )}
 
-      {editing !== null && (
-        <RecordEditor
-          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newDate ?? ''}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
-          record={editing === 'new' ? null : editing}
-          receipt={editing === 'new' || receiptFor === editing.id ? receipt : null}
-          initialDate={newDate}
-          onScanReceipt={(target) => {
-            receiptTarget.current = target;
-            receiptInput.current?.click();
-          }}
-          categories={categories}
-          budgets={allBudgets}
-          wallets={wallets}
-          stores={stores}
-          records={records}
-          onClose={() => {
-            setEditing(null);
-            setReceipt(null);
-            setReceiptFor(null);
-          }}
-          onSubmit={(draft) => void saveRecord(draft)}
-          onDelete={(record) => void removeRecord(record)}
-          onSaveWallet={saveWallet}
-          onDeleteWallet={(wallet) => void deleteWallet(wallet)}
-          onEditCategories={() => setEditingCategories(true)}
-        />
-      )}
-
       {settingsOpen && (
         <MoneySettings
           familyId={familyId}
@@ -783,15 +761,52 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       {feedOpen && feed && (
         <MoneyFeedInbox
           items={feed.open}
-          linkedRecordIds={feed.linkedRecordIds}
           wallets={wallets}
           records={records}
-          stores={stores}
           categories={categories}
-          budgets={allBudgets}
+          onRecord={(item) => {
+            setReceipt(null);
+            setReceiptFor(null);
+            setNewDate(item.occurredOn);
+            setFeedRecordFor(item);
+            setEditing('new');
+          }}
           onResolve={resolveFeed}
           onFill={fillFeed}
           onClose={() => setFeedOpen(false)}
+        />
+      )}
+
+      {/* 未確認の明細の「記録する」から開くので、未確認の一覧より上に重ねる（後に置く） */}
+      {editing !== null && (
+        <RecordEditor
+          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newDate ?? ''}-${feedRecordFor?.id ?? ''}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
+          record={editing === 'new' ? null : editing}
+          receipt={editing === 'new' || receiptFor === editing.id ? receipt : null}
+          initialDate={newDate}
+          initialKind={feedRecordFor?.direction === 'in' ? 'income' : 'expense'}
+          initialWallet={feedRecordFor?.walletId ?? null}
+          initialStore={feedRecordFor?.storeHint ?? ''}
+          onScanReceipt={(target) => {
+            receiptTarget.current = target;
+            receiptInput.current?.click();
+          }}
+          categories={categories}
+          budgets={allBudgets}
+          wallets={wallets}
+          stores={stores}
+          records={records}
+          onClose={() => {
+            setEditing(null);
+            setReceipt(null);
+            setReceiptFor(null);
+            setFeedRecordFor(null);
+          }}
+          onSubmit={(draft) => void saveRecord(draft)}
+          onDelete={(record) => void removeRecord(record)}
+          onSaveWallet={saveWallet}
+          onDeleteWallet={(wallet) => void deleteWallet(wallet)}
+          onEditCategories={() => setEditingCategories(true)}
         />
       )}
 

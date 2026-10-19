@@ -104,6 +104,9 @@ export interface RecordEditorProps {
   initialKind?: MoneyRecordKind;
   /** 新しく記録するときに最初に選んでおく日（YYYY-MM-DD。記録の一覧の、日の見出しの「＋」から）。無ければ今日。 */
   initialDate?: string | null;
+  /** 新しく記録するときに最初に選んでおく出金元（口座のID）と、お店（Gmail 取り込みの未確認の「記録する」から。docs/kakei.md §9.5.6.1）。 */
+  initialWallet?: string | null;
+  initialStore?: string;
 }
 
 /**
@@ -132,17 +135,19 @@ export default function RecordEditor({
   onScanReceipt,
   initialKind = 'expense',
   initialDate = null,
+  initialWallet = null,
+  initialStore = '',
 }: RecordEditorProps) {
   const insets = useSafeAreaInsets();
   const [kind, setKind] = useState<MoneyRecordKind>(record?.kind ?? (receipt ? 'expense' : initialKind));
   const [occurredOn, setOccurredOn] = useState(record?.occurredOn ?? receipt?.occurredOn ?? initialDate ?? toDateString(new Date()));
   // レシートから出金元が当たらなかったときは、前回の出金元を入れて「確かめてください」を出す（§10.4）。
   const [initialWalletId] = useState<string | null>(() =>
-    record ? record.walletId : (receipt?.walletId ?? lastWalletId(records, wallets, receipt ? 'expense' : initialKind)),
+    record ? record.walletId : (receipt?.walletId ?? initialWallet ?? lastWalletId(records, wallets, receipt ? 'expense' : initialKind)),
   );
   const [walletId, setWalletId] = useState<string | null>(initialWalletId);
   const [toWalletId, setToWalletId] = useState<string | null>(record?.toWalletId ?? null);
-  const [store, setStore] = useState(record?.store || receipt?.store || '');
+  const [store, setStore] = useState(record?.store || receipt?.store || initialStore);
   // お店の選択で「お店に登録して使う」を選んだか（保存のときにお店の設定に登録する。docs/kakei.md §3.5）。
   const [registerStore, setRegisterStore] = useState(false);
   const [groups, setGroups] = useState<EditorGroup[]>(() =>
