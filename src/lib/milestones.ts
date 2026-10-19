@@ -15,6 +15,10 @@ const MS_PER_DAY = 1000 * 60 * 60 * 24;
 export const getAgeInDaysAt = (birthDate: Date, date: Date): number =>
   Math.round((startOfDay(date).getTime() - startOfDay(birthDate).getTime()) / MS_PER_DAY);
 
+/** 日齢を病院の言い方の「◯週◯日」にする。1週間未満は空文字（「0週◯日」は出さない）。 */
+export const formatWeekAge = (days: number): string =>
+  days < 7 ? '' : `${Math.floor(days / 7)}週${days % 7}日`;
+
 /**
  * その日が節目なら短いラベルを返す。節目でなければ null。
  * 誕生日 > 生後日数 > 月齢 の順に優先する（同じ日に重なったときに細かい方を出さない）。
@@ -43,14 +47,17 @@ export const getMilestoneLabel = (birthDateStr: string, date: Date): string | nu
   return null;
 };
 
-/** 日表示の見出しに出す月齢。'生後30日' / '1歳2ヶ月'。誕生日前は '誕生まであと◯日'。 */
+/** 日表示の見出しに出す月齢。'生後30日（4週2日）' / '1歳2ヶ月'。誕生日前は '誕生まであと◯日'。 */
 export const formatBabyAgeAt = (birthDateStr: string, date: Date): string | null => {
   const birth = parseDateString(birthDateStr);
   if (!birth) return null;
 
   const days = getAgeInDaysAt(birth, date);
   if (days < 0) return `誕生まであと${Math.abs(days)}日`;
-  if (days < 62) return `生後${days}日`;
+  if (days < 62) {
+    const weeks = formatWeekAge(days);
+    return weeks === '' ? `生後${days}日` : `生後${days}日（${weeks}）`;
+  }
 
   let months = (date.getFullYear() - birth.getFullYear()) * 12 + (date.getMonth() - birth.getMonth());
   if (date.getDate() < birth.getDate()) months -= 1;
