@@ -166,7 +166,7 @@ export default function RecurringSettings({
       window.alert('並べ替えを保存できませんでした。もう一度お試しください。'),
     );
   });
-  // 支出／収入／振替は、帯と一覧の上の左右スワイプでも切り替える（並べ替えの最中は止める）。
+  // 支出／収入／振替は、帯と一覧の上の左右スワイプでも切り替える。
   const { handlers: swipeHandlers, attachContent } = useSwipeTabs(
     MODE_TABS.map((entry) => entry.id),
     tab,
@@ -174,7 +174,6 @@ export default function RecurringSettings({
       setTab(next);
       setShowEnded(false);
     },
-    !drag.isActive,
   );
 
   const save = async (target: MoneyRecurring | null, draft: MoneyRecurringDraft, registerStore: boolean) => {
