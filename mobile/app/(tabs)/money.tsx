@@ -193,7 +193,7 @@ export default function MoneyScreen() {
   // Gmail から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
   const [feed, setFeed] = useState<MoneyFeedData | null>(null);
   const [feedOpen, setFeedOpen] = useState(false);
-  // 未確認の明細の「記録する」から開いた記録の入力の、その明細。保存したら記録と結ぶ（docs/kakei.md §9.5.6.1）。
+  // 未確認の明細の「記録を作成する」から開いた記録の入力の、その明細。保存したら記録と結ぶ（docs/kakei.md §9.5.6.1）。
   const [feedRecordFor, setFeedRecordFor] = useState<MoneyFeedItem | null>(null);
 
   // 評価額の履歴（推移用）は、推移・証券口座の詳細を開くまで読まない。一度読んだら、読み直しでも履歴まで読む。
@@ -781,6 +781,7 @@ export default function MoneyScreen() {
           initialDate={newDate}
           initialWallet={feedRecordFor?.walletId ?? null}
           initialStore={feedRecordFor?.storeHint ?? ''}
+          initialAmount={feedRecordFor?.amount ?? null}
           categories={categories}
           budgets={allBudgets}
           wallets={wallets}

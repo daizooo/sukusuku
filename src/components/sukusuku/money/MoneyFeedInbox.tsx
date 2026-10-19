@@ -15,14 +15,14 @@ import { Chip, ChipRow, Field, ToggleRow, WalletChoices, feedInputClass } from '
 //
 // 「口座」の面の上の「未確認 n件」から開く。手入力との確認 → 口座が決まっていない → 未確認 → 読めない の順。
 // 1件を押すと片づけ方を選ぶ枠: 口座を選ぶ／手入力と同じか（同じ取引・振替に置き換える・別の取引）／
-// 記録する・記録しない。記録するは、日付・出金元・お店を入れた記録の入力を開く（カテゴリと額は人が入れる。2026-10-19）。
+// 記録を作成する・記録しない。記録を作成するは、額・日付・出金元・お店を入れた記録の入力を開く（カテゴリは人が選ぶ。2026-10-19）。
 
 interface MoneyFeedInboxProps {
   items: MoneyFeedItem[];
   wallets: MoneyWallet[];
   records: MoneyRecord[];
   categories: MoneyCategory[];
-  /** 記録する: 日付・出金元・お店を入れた記録の入力を開く。保存したら、その記録とこの明細を結ぶ。 */
+  /** 記録を作成する: 額・日付・出金元・お店を入れた記録の入力を開く。保存したら、その記録とこの明細を結ぶ。 */
   onRecord: (item: MoneyFeedItem) => void;
   onResolve: (item: MoneyFeedItem, resolve: MoneyFeedResolve) => Promise<boolean>;
   /** 読めないメールに、口座・向き・日付・額を手で入れる。入れたあとは未確認として続けて片づける。 */
@@ -304,7 +304,7 @@ function FeedItemModal({
     );
   }
 
-  // 未確認: 記録する（日付・出金元・お店を入れた記録の入力を開く）・記録しない。
+  // 未確認: 記録を作成する（額・日付・出金元・お店を入れた記録の入力を開く）・記録しない。
   // 同じお店でも買うものでカテゴリが変わるので、カテゴリはここで決めず、記録の入力で選ぶ（品目を分けてもよい。2026-10-19）
   return (
     <ModalShell
@@ -312,7 +312,7 @@ function FeedItemModal({
       onClose={onClose}
       footer={
         <div className="space-y-1">
-          <PrimaryButton label="記録する" disabled={busy} onClick={onRecord} />
+          <PrimaryButton label="記録を作成する" disabled={busy} onClick={onRecord} />
           <button
             type="button"
             disabled={busy}
@@ -328,7 +328,7 @@ function FeedItemModal({
         {summary}
         {item.storeHint && <p className="text-sm font-bold text-gray-900">お店: {item.storeHint}</p>}
         <p className="text-xs leading-relaxed text-gray-500">
-          記録するを押すと、日付・出金元・お店を入れた記録の入力を開きます。記録しないときは、残高がずれたら口座の詳細から補正してください。
+          記録を作成するを押すと、額・日付・出金元・お店を入れた記録の入力を開きます。カテゴリを選んで保存してください。記録しないときは、残高がずれたら口座の詳細から補正してください。
         </p>
       </div>
     </ModalShell>

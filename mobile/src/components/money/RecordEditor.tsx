@@ -104,9 +104,11 @@ export interface RecordEditorProps {
   initialKind?: MoneyRecordKind;
   /** 新しく記録するときに最初に選んでおく日（YYYY-MM-DD。記録の一覧の、日の見出しの「＋」から）。無ければ今日。 */
   initialDate?: string | null;
-  /** 新しく記録するときに最初に選んでおく出金元（口座のID）と、お店（Gmail 取り込みの未確認の「記録する」から。docs/kakei.md §9.5.6.1）。 */
+  /** 新しく記録するときに最初に選んでおく出金元（口座のID）と、お店（Gmail 取り込みの未確認の「記録を作成する」から。docs/kakei.md §9.5.6.1）。 */
   initialWallet?: string | null;
   initialStore?: string;
+  /** 新しく記録するときに最初に入れておく額（カテゴリの決まっていない1行にする。Gmail 取り込みの未確認の「記録を作成する」から）。 */
+  initialAmount?: number | null;
 }
 
 /**
@@ -137,6 +139,7 @@ export default function RecordEditor({
   initialDate = null,
   initialWallet = null,
   initialStore = '',
+  initialAmount = null,
 }: RecordEditorProps) {
   const insets = useSafeAreaInsets();
   const [kind, setKind] = useState<MoneyRecordKind>(record?.kind ?? (receipt ? 'expense' : initialKind));
@@ -155,7 +158,16 @@ export default function RecordEditor({
       ? groupsFromScan(receipt.items, newGroupKey)
       : record && record.kind !== 'transfer'
         ? groupsFromItems(record.items, newGroupKey)
-        : [],
+        : !record && initialAmount !== null && initialAmount > 0
+          ? [
+              {
+                key: newGroupKey(),
+                categoryId: null,
+                categoryName: '',
+                lines: [{ key: newGroupKey(), name: '', quantity: 1, unitPrice: initialAmount, memo: '' }],
+              },
+            ]
+          : [],
   );
   const [transferAmount, setTransferAmount] = useState(() =>
     record?.kind === 'transfer' ? record.items.reduce((sum, item) => sum + item.amount, 0) : 0,
@@ -189,7 +201,7 @@ export default function RecordEditor({
   const groupTitle = (target: Pick<EditorGroup, 'categoryId' | 'categoryName'>) =>
     target.categoryId !== null
       ? categoryPath(categories, target.categoryId)
-      : target.categoryName || (receipt ? 'カテゴリを選んでください' : '');
+      : target.categoryName || (receipt || initialAmount !== null ? 'カテゴリを選んでください' : '');
 
   // レシートの読み取りで、保存の前に確かめてほしいこと（§10.4・§10.5）。
   const receiptNotices = receipt
@@ -340,6 +352,8 @@ export default function RecordEditor({
           ]
         : itemsFromGroups(groups);
     if (items.length === 0) return Alert.alert('品目を入れてください', '「品目を追加する」からカテゴリを選びます。');
+    // 取り込んだ明細から入れた額は、カテゴリを選ぶまで保存しない（docs/kakei.md §9.5.6.1）
+    if (initialAmount !== null && groups.some((group) => group.categoryId === null && group.categoryName === '')) return Alert.alert('カテゴリを選んでください');
     // 品目はマイナスも入れられるが、記録の合計はマイナスにしない（docs/kakei.md §10.5。DB でも確かめる）。
     if (total < 0) return Alert.alert('合計がマイナスです', '値引きの行の金額を確かめてください。');
     onSubmit({
