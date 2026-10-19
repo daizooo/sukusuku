@@ -9,7 +9,7 @@ import { formatDateWithWeekday, toDateString } from '@/lib/dateUtils';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import { formatYen, recordTotal } from '@/lib/moneyUtils';
-import { feedAmountLabel, feedDayLabel, feedStatusLabel, sortFeedInbox } from '@/lib/moneyFeedUtils';
+import { feedAmountLabel, feedDayLabel, feedStatusLabel, feedStoreName, sortFeedInbox } from '@/lib/moneyFeedUtils';
 import SheetModal from '@/components/ui/SheetModal';
 import LogModalShell from '@/components/log/LogModalShell';
 import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
@@ -341,7 +341,7 @@ function FeedItemSheet({
         }
       >
         {summary}
-        {item.storeHint && <Text style={styles.store}>お店: {item.storeHint}</Text>}
+        {feedStoreName(item) !== '' && <Text style={styles.store}>お店: {feedStoreName(item)}</Text>}
         <Text style={styles.hint}>
           記録を作成するを押すと、額・日付・出金元・お店を入れた記録の入力を開きます。カテゴリを選んで保存してください。記録しないときは、残高がずれたら口座の詳細から補正してください。
         </Text>

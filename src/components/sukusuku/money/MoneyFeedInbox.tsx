@@ -6,7 +6,7 @@ import type { MoneyCategory, MoneyFeedItem, MoneyRecord, MoneyWallet } from '@/t
 import type { MoneyFeedFill, MoneyFeedResolve } from '@/lib/api/moneyFeed';
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
 import { formatYen, recordTotal } from '@/lib/moneyUtils';
-import { feedAmountLabel, feedDayLabel, feedStatusLabel, sortFeedInbox } from '@/lib/moneyFeedUtils';
+import { feedAmountLabel, feedDayLabel, feedStatusLabel, feedStoreName, sortFeedInbox } from '@/lib/moneyFeedUtils';
 import { ModalShell } from '../modals/TaskForm';
 import { FullScreen, PrimaryButton, ScreenHeader, incomeAmountClass } from './moneyVisual';
 import { Chip, ChipRow, Field, ToggleRow, WalletChoices, feedInputClass } from './feedParts';
@@ -326,7 +326,7 @@ function FeedItemModal({
     >
       <div className="space-y-4">
         {summary}
-        {item.storeHint && <p className="text-sm font-bold text-gray-900">お店: {item.storeHint}</p>}
+        {feedStoreName(item) !== '' && <p className="text-sm font-bold text-gray-900">お店: {feedStoreName(item)}</p>}
         <p className="text-xs leading-relaxed text-gray-500">
           記録を作成するを押すと、額・日付・出金元・お店を入れた記録の入力を開きます。カテゴリを選んで保存してください。記録しないときは、残高がずれたら口座の詳細から補正してください。
         </p>

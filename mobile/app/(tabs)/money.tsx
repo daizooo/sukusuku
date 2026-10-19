@@ -60,7 +60,7 @@ import {
   type MoneyFeedFill,
   type MoneyFeedResolve,
 } from '@/lib/api/moneyFeed';
-import { feedDayLabel, feedDuplicates } from '@/lib/moneyFeedUtils';
+import { feedDayLabel, feedDuplicates, feedStoreName } from '@/lib/moneyFeedUtils';
 import {
   dateKeyOfDate,
   estimateBudgetRows,
@@ -780,7 +780,7 @@ export default function MoneyScreen() {
           initialKind={newKind}
           initialDate={newDate}
           initialWallet={feedRecordFor?.walletId ?? null}
-          initialStore={feedRecordFor?.storeHint ?? ''}
+          initialStore={feedRecordFor ? feedStoreName(feedRecordFor) : ''}
           initialAmount={feedRecordFor?.amount ?? null}
           categories={categories}
           budgets={allBudgets}

@@ -55,7 +55,7 @@ import {
   type MoneyFeedFill,
   type MoneyFeedResolve,
 } from '@/lib/api/moneyFeed';
-import { feedDayLabel, feedDuplicates } from '@/lib/moneyFeedUtils';
+import { feedDayLabel, feedDuplicates, feedStoreName } from '@/lib/moneyFeedUtils';
 import {
   dateKeyOfDate,
   estimateBudgetRows,
@@ -786,7 +786,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           initialDate={newDate}
           initialKind={feedRecordFor?.direction === 'in' ? 'income' : 'expense'}
           initialWallet={feedRecordFor?.walletId ?? null}
-          initialStore={feedRecordFor?.storeHint ?? ''}
+          initialStore={feedRecordFor ? feedStoreName(feedRecordFor) : ''}
           initialAmount={feedRecordFor?.amount ?? null}
           onScanReceipt={(target) => {
             receiptTarget.current = target;
