@@ -175,9 +175,6 @@ export default function MoneyReviewView({
     return { count: list.length, amount: list.reduce((sum, record) => sum + recordTotal(record), 0) };
   }, [isMonth, monthKey, year, today, records]);
 
-  // 年の「月」の一覧（1月から。記録のある月だけ。未来の月は出さない）。
-  const months = yearSummary.months.filter((row) => row.monthKey <= today && row.recorded);
-
   // 内訳の行を押したときの分析。見ている期間の予算（年は年の予算）・実績・小分類ごと・記録。年は締めた月ごとの実績も出す（2026-10-16）。
   const analysis = useMemo(
     () => (detail === null ? null : buildCategoryAnalysis(records, categories, budgets, detail.category.id, periodKeys, null)),
@@ -328,31 +325,6 @@ export default function MoneyReviewView({
                 />
               ))}
             </div>
-            <SectionHeader compact title="月" />
-            {months.length === 0 ? (
-              <p className="py-6 text-center text-[13px] text-gray-400">この年はまだ記録がありません</p>
-            ) : (
-              <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
-                {months.map((row) => {
-                  const number = Number(row.monthKey.slice(5, 7));
-                  return (
-                    <button
-                      key={row.monthKey}
-                      type="button"
-                      aria-label={`${number}月の振り返りを見る`}
-                      onClick={() => onSelectMonth(row.monthKey)}
-                      className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-gray-50"
-                    >
-                      <span className="min-w-0 flex-1 text-[15px] font-bold text-gray-900 tabular-nums">{number}月</span>
-                      <span className={`text-[17px] font-extrabold tabular-nums ${row.balance > 0 ? incomeAmountClass : 'text-gray-900'}`}>
-                        {formatBalance(row.balance)}
-                      </span>
-                      <ChevronRight size={16} className="text-gray-400" />
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </>
         )}
       </div>
