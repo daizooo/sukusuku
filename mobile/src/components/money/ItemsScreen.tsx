@@ -219,13 +219,18 @@ export default function ItemsScreen({
                   <Plus size={13} color={colors.textMuted} />
                 </Pressable>
               </View>
-              <Text style={styles.unit}>
-                @{line.unitPrice < 0 ? '−' : ''}
-                {Math.abs(line.unitPrice).toLocaleString('ja-JP')}
-              </Text>
-              <Text style={[styles.amount, line.unitPrice < 0 && styles.minus]}>
-                {formatBalance(editorLineAmount(line))}
-              </Text>
+              {/* 入力した単価を主役に（太く大きく。選んでいる行は下線＝いま入力している数字）。
+                  個数 × 単価 ＝ 金額は小さく添える（金額が目立って、入れた数字と食い違って見えないように）。 */}
+              <View style={styles.price}>
+                <Text style={[styles.unit, selected && styles.unitSelected, line.unitPrice < 0 && styles.minus]}>
+                  {formatBalance(line.unitPrice)}
+                </Text>
+                {line.quantity > 1 && (
+                  <Text style={[styles.amount, line.unitPrice < 0 && styles.minus]}>
+                    × {line.quantity} ＝ {formatBalance(editorLineAmount(line))}
+                  </Text>
+                )}
+              </View>
             </Pressable>
           );
         })}
@@ -286,7 +291,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingLeft: 12,
+    paddingLeft: 16,
     paddingRight: 16,
     paddingVertical: 6,
     borderBottomWidth: 1,
@@ -306,14 +311,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutralSurface,
   },
   quantity: { minWidth: 16, textAlign: 'center', fontSize: 14, fontWeight: '700', color: colors.text },
-  unit: { width: 56, textAlign: 'right', fontSize: 12, fontWeight: '500', color: colors.textFaint },
-  amount: { width: 72, textAlign: 'right', fontSize: 15, fontWeight: '700', color: colors.text },
+  price: { minWidth: 92, alignItems: 'flex-end', gap: 1 },
+  unit: { fontSize: 17, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'], borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  unitSelected: { borderBottomColor: colors.money },
+  amount: { fontSize: 11, fontWeight: '600', color: colors.textFaint, fontVariant: ['tabular-nums'] },
   minus: { color: colors.danger },
   // 一覧のいちばん下の「＋」だけの行（文字は無し）。
   blank: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 12,
+    paddingLeft: 16,
     paddingRight: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
@@ -325,6 +332,6 @@ const styles = StyleSheet.create({
   signText: { fontSize: 12, fontWeight: '600', color: colors.money },
   expr: { fontSize: 13, fontWeight: '500', color: colors.textMuted },
   subtotalLabel: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
-  subtotal: { fontSize: 22, fontWeight: '700', color: colors.text },
+  subtotal: { fontSize: 20, fontWeight: '700', color: colors.textSubtle },
   footer: { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 4 },
 });

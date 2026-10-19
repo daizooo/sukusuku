@@ -173,7 +173,7 @@ export default function ItemsScreen({
             <div
               key={line.key}
               onClick={() => (selected ? undefined : select(line))}
-              className={`flex items-center gap-2 border-b border-gray-200 pl-3 pr-4 py-1.5 ${selected ? 'bg-blue-50' : ''}`}
+              className={`flex items-center gap-2 border-b border-gray-200 px-4 py-1.5 ${selected ? 'bg-blue-50' : ''}`}
             >
               <button
                 type="button"
@@ -218,14 +218,21 @@ export default function ItemsScreen({
                   <Plus size={13} />
                 </button>
               </span>
-              <span className="w-14 text-right text-xs text-gray-400 tabular-nums">
-                @{line.unitPrice < 0 ? '−' : ''}
-                {Math.abs(line.unitPrice).toLocaleString('ja-JP')}
-              </span>
-              <span
-                className={`w-[72px] text-right text-[15px] font-bold tabular-nums ${line.unitPrice < 0 ? 'text-red-500' : 'text-gray-900'}`}
-              >
-                {formatBalance(editorLineAmount(line))}
+              {/* 入力した単価を主役に（太く大きく。選んでいる行は下線＝いま入力している数字）。
+                  個数 × 単価 ＝ 金額は小さく添える（金額が目立って、入れた数字と食い違って見えないように）。 */}
+              <span className="flex min-w-[92px] flex-col items-end gap-px">
+                <span
+                  className={`border-b-2 text-[17px] font-extrabold tabular-nums ${selected ? 'border-blue-600' : 'border-transparent'} ${
+                    line.unitPrice < 0 ? 'text-red-500' : 'text-gray-900'
+                  }`}
+                >
+                  {formatBalance(line.unitPrice)}
+                </span>
+                {line.quantity > 1 && (
+                  <span className={`text-[11px] font-semibold tabular-nums ${line.unitPrice < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                    × {line.quantity} ＝ {formatBalance(editorLineAmount(line))}
+                  </span>
+                )}
               </span>
             </div>
           );
@@ -235,7 +242,7 @@ export default function ItemsScreen({
           type="button"
           onClick={addLine}
           aria-label="品目を追加する"
-          className="flex w-full items-center border-b border-dashed border-gray-300 pl-3 pr-4 py-2.5 text-left hover:bg-gray-50"
+          className="flex w-full items-center border-b border-dashed border-gray-300 px-4 py-2.5 text-left hover:bg-gray-50"
         >
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white">
             <Plus size={14} />
@@ -255,7 +262,7 @@ export default function ItemsScreen({
           <span className="flex-1" />
           {showExpr && <span className="text-[13px] text-gray-500 tabular-nums">{formatCalc(work.expr)} =</span>}
           <span className="text-[13px] font-semibold text-gray-700">小計</span>
-          <span className="text-[22px] font-bold text-gray-900 tabular-nums">{formatBalance(subtotal)}</span>
+          <span className="text-xl font-bold text-gray-700 tabular-nums">{formatBalance(subtotal)}</span>
         </div>
       </div>
 

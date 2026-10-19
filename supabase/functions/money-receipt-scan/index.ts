@@ -152,7 +152,8 @@ Deno.serve(async (request) => {
   } catch (error) {
     if (error instanceof Anthropic.RateLimitError) return json({ error: '混み合っています。少し待ってください' }, 429);
     if (error instanceof Anthropic.APIError) {
-      console.error('anthropic', error.status);
+      // 400 の理由（画像の大きさ・残高など）が分かるよう、APIの返したメッセージも残す（写真の中身は含まれない）
+      console.error('anthropic', error.status, error.message);
       return json({ error: '読み取りに失敗しました' }, 502);
     }
     console.error('receipt scan failed');
