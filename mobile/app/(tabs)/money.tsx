@@ -60,7 +60,7 @@ import {
   type MoneyFeedFill,
   type MoneyFeedResolve,
 } from '@/lib/api/moneyFeed';
-import { feedDayLabel, feedDuplicates } from '@/lib/moneyFeedUtils';
+import { feedDayLabel, feedDuplicates, feedStoreName } from '@/lib/moneyFeedUtils';
 import {
   dateKeyOfDate,
   estimateBudgetRows,
@@ -193,6 +193,8 @@ export default function MoneyScreen() {
   // Gmail から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
   const [feed, setFeed] = useState<MoneyFeedData | null>(null);
   const [feedOpen, setFeedOpen] = useState(false);
+  // 未確認の明細の「記録を作成する」から開いた記録の入力の、その明細。保存したら記録と結ぶ（docs/kakei.md §9.5.6.1）。
+  const [feedRecordFor, setFeedRecordFor] = useState<MoneyFeedItem | null>(null);
 
   // 評価額の履歴（推移用）は、推移・証券口座の詳細を開くまで読まない。一度読んだら、読み直しでも履歴まで読む。
   const historyWanted = useRef(false);
@@ -363,6 +365,8 @@ export default function MoneyScreen() {
     setEditing(null);
     setReceipt(null);
     setReceiptFor(null);
+    const feedItem = feedRecordFor;
+    setFeedRecordFor(null);
     try {
       const saved = await saveMoneyRecord(supabase, draft);
       setRecords((prev) => [...prev.filter((record) => record.id !== saved.id), saved]);
@@ -371,6 +375,8 @@ export default function MoneyScreen() {
       if (familyId && draft.registerStore && saved.store !== '' && !stores.some((entry) => entry.name === saved.store && !entry.archived)) {
         setStores(await loadMoneyStores(supabase, familyId));
       }
+      // 未確認の明細から記録したときは、その明細と結ぶ（未確認から消える）
+      if (feedItem) await resolveFeed(feedItem, { action: 'link', recordId: saved.id, learn: false });
     } catch {
       failed('保存');
     }
@@ -767,12 +773,15 @@ export default function MoneyScreen() {
 
       {editing !== null && (
         <RecordEditor
-          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newKind}-${newDate ?? ''}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
+          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newKind}-${newDate ?? ''}-${feedRecordFor?.id ?? ''}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
           record={editing === 'new' ? null : editing}
           receipt={editing === 'new' || receiptFor === editing.id ? receipt : null}
           onScanReceipt={(target) => void startReceiptScan(target)}
           initialKind={newKind}
           initialDate={newDate}
+          initialWallet={feedRecordFor?.walletId ?? null}
+          initialStore={feedRecordFor ? feedStoreName(feedRecordFor) : ''}
+          initialAmount={feedRecordFor?.amount ?? null}
           categories={categories}
           budgets={allBudgets}
           wallets={wallets}
@@ -782,6 +791,7 @@ export default function MoneyScreen() {
             setEditing(null);
             setReceipt(null);
             setReceiptFor(null);
+            setFeedRecordFor(null);
           }}
           onSubmit={(draft) => void saveRecord(draft)}
           onDelete={(record) => void removeRecord(record)}
@@ -820,12 +830,17 @@ export default function MoneyScreen() {
       {feedOpen && feed && (
         <MoneyFeedInbox
           items={feed.open}
-          linkedRecordIds={feed.linkedRecordIds}
           wallets={wallets}
           records={records}
-          stores={stores}
           categories={categories}
-          budgets={allBudgets}
+          onRecord={(item) => {
+            setReceipt(null);
+            setReceiptFor(null);
+            setNewKind(item.direction === 'in' ? 'income' : 'expense');
+            setNewDate(item.occurredOn);
+            setFeedRecordFor(item);
+            setEditing('new');
+          }}
           onResolve={resolveFeed}
           onFill={fillFeed}
           onClose={() => setFeedOpen(false)}

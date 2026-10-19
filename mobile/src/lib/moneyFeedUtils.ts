@@ -26,6 +26,12 @@ export const feedTimeLabel = (iso: string | null): string => {
 export const feedAmountLabel = (item: Pick<MoneyFeedItem, 'direction' | 'amount'>): string =>
   item.amount === null ? '' : item.direction === 'in' ? formatYen(item.amount) : formatBalance(-item.amount);
 
+/**
+ * 未確認の「記録を作成する」で入れるお店。利用先に当てたお店（store_hint）、当たらなければ利用先そのまま（§9.5.6.1）。
+ */
+export const feedStoreName = (item: Pick<MoneyFeedItem, 'storeHint' | 'description'>): string =>
+  item.storeHint || item.description.trim();
+
 /** 一覧の並び: 手入力との確認 → 口座が決まっていない → 未確認 → 読めない。同じ中は日付の新しい順。 */
 const STATUS_ORDER = (item: MoneyFeedItem): number =>
   item.status === 'confirm' ? 0 : item.status === 'unreadable' ? 3 : item.walletId === null ? 1 : 2;
