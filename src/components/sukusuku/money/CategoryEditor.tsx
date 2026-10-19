@@ -42,7 +42,7 @@ interface CategoryEditorProps {
 type Editing = { category: MoneyCategory } | { category: null; parentId: string | null } | null;
 
 const KIND_OPTIONS: { id: MoneyCategoryKind; label: string }[] = [
-  { id: 'living', label: '生活費' },
+  { id: 'living', label: '支出' },
   { id: 'income', label: '収入' },
 ];
 

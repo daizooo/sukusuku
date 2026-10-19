@@ -43,6 +43,7 @@ import {
   updateMoneyRecurringPosition,
 } from '@/lib/api/money';
 import { useDragReorder } from '../ui/useDragReorder';
+import { useSwipeTabs } from '../ui/useSwipeTabs';
 import CategoryPicker from './CategoryPicker';
 import StorePicker from './StorePicker';
 import { PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
@@ -54,7 +55,7 @@ import { PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
 // カード代金はここではなく、出金元のカードに締め日・引き落とし日・引き落とし口座を入れると作られる（ここには出さない。2026-10-18）。
 // 直すのはルールだけで、もう作った記録は変わらない。
 //
-// 固定収入（給与・賞与。2026-10-11。docs/kakei.md §0.3）・振替も同じルールで、同じ画面「固定費」の上の切り替え（支出／収入／振替。タップだけ）で出す
+// 固定収入（給与・賞与。2026-10-11。docs/kakei.md §0.3）・振替も同じルールで、同じ画面「固定費」の上の切り替え（支出／収入／振替。タップと、帯と一覧の上の左右スワイプ）で出す
 // （2026-10-18に統合）。収入のルールの編集は、入金先・振込日・見込み額の言葉にする。賞与は1回ごとに1件のルール（月・日・額）で、「複製して足す」で回を増やす。
 //
 // 並べ替え（左の持ち手をつかんで動かす。リストと同じ操作）は、見出し（固定・予定）ごとの中で動かせる。
@@ -165,6 +166,15 @@ export default function RecurringSettings({
       window.alert('並べ替えを保存できませんでした。もう一度お試しください。'),
     );
   });
+  // 支出／収入／振替は、帯と一覧の上の左右スワイプでも切り替える。
+  const { handlers: swipeHandlers, attachContent } = useSwipeTabs(
+    MODE_TABS.map((entry) => entry.id),
+    tab,
+    (next) => {
+      setTab(next);
+      setShowEnded(false);
+    },
+  );
 
   const save = async (target: MoneyRecurring | null, draft: MoneyRecurringDraft, registerStore: boolean) => {
     setEditing(null);
@@ -248,6 +258,7 @@ export default function RecurringSettings({
       ) : (
         <>
           <ScreenHeader title="固定費（支出、収入、振替）" icon="back" onClose={onBack} />
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden" {...swipeHandlers}>
           <div role="tablist" className="shrink-0 flex border-b border-gray-200 px-2">
             {MODE_TABS.map(({ id: entry, label }) => {
               const selected = entry === tab;
@@ -271,7 +282,7 @@ export default function RecurringSettings({
               );
             })}
           </div>
-          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+          <div ref={attachContent} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {usable.length === 0 && <p className="py-4 text-center text-sm text-gray-400">まだありません</p>}
             {sections.map((section) => {
               const inKind = section.rules;
@@ -389,6 +400,7 @@ export default function RecurringSettings({
                 ))}
               </section>
             )}
+          </div>
           </div>
         </>
       )}

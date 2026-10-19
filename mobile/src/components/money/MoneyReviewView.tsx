@@ -178,9 +178,6 @@ export default function MoneyReviewView({
     return { count: list.length, amount: list.reduce((sum, record) => sum + recordTotal(record), 0) };
   }, [isMonth, monthKey, year, today, records]);
 
-  // 年の「月」の一覧（1月から。記録のある月だけ。未来の月は出さない）。
-  const months = yearSummary.months.filter((row) => row.monthKey <= today && row.recorded);
-
   // 内訳の行を押したときの分析。見ている期間の予算（年は年の予算）・実績・小分類ごと・記録。年は締めた月ごとの実績も出す（2026-10-16）。
   const analysis = useMemo(
     () => (detail === null ? null : buildCategoryAnalysis(records, categories, budgets, detail.category.id, periodKeys, null)),
@@ -340,29 +337,6 @@ export default function MoneyReviewView({
                 />
               ))}
             </View>
-            <SectionHeader compact title="月" />
-            {months.length === 0 ? (
-              <Text style={styles.message}>この年はまだ記録がありません</Text>
-            ) : (
-              <View style={styles.card}>
-                {months.map((row, index) => {
-                  const number = Number(row.monthKey.slice(5, 7));
-                  return (
-                    <Pressable
-                      key={row.monthKey}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${number}月の振り返りを見る`}
-                      onPress={() => onSelectMonth(row.monthKey)}
-                      style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.pressed]}
-                    >
-                      <Text style={[styles.month, styles.flex]}>{number}月</Text>
-                      <Text style={[styles.monthBalance, row.balance > 0 && styles.plus]}>{formatBalance(row.balance)}</Text>
-                      <ChevronRight size={16} color={colors.textFaint} />
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
           </>
         )}
       </ScrollView>
@@ -518,8 +492,6 @@ const styles = StyleSheet.create({
   categoryRow: { gap: 10, paddingHorizontal: 12, paddingVertical: 7 },
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
   pressed: { backgroundColor: colors.background },
-  month: { width: 40, fontSize: 15, fontWeight: '700', color: colors.text },
-  monthBalance: { fontSize: 17, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   plus: { color: colors.moneyIncome },
   rowBody: { flex: 1, gap: 3 },
   // 帯と「実績 / 予算・割合」を同じ行に（行の高さを抑える）。帯は残りの幅いっぱい。
