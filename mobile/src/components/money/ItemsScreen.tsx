@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ChevronRight, Minus, Plus, Trash2 } from 'lucide-react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ChevronRight, Minus, Plus } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 import {
   editorGroupTotal,
@@ -21,11 +21,11 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 //
 // 記録の品目を、カテゴリごとのまとまりに分けて1つの画面でまとめて入れる（2026-10-20。カテゴリが分かれても、
 // 保存して記録の編集に戻り、また追加して…と行き来しなくて済むように）。行＝品名・個数（−＋）・単価・金額。
-// まとまりの頭にカテゴリを1行で小さく出す（押すと変えられる。ごみ箱でまとまりごと消す）。
-// まとまりのいちばん下の「＋」で新しい行を足し（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）、
-// 一覧の左端の「−」でその行を消す。一覧のいちばん下の「＋ カテゴリを追加」で別のカテゴリのまとまりを足す。
-// 行の金額を押すと、その行を選んで（青）下に電卓を出し、単価を直す（＋−×÷。Zaim と同じ。2026-10-20）。
-// 行を足したときも電卓を出す。品名や行のほかの所を押すと電卓を閉じる。
+// まとまりの頭はカテゴリの見出し（太字・右に小計。押すとカテゴリを変える）。まとまりの間は灰色の帯で区切り、品目は字下げして控えめに。
+// 色は少なく（「−」「＋」は灰色・文字だけ。2026-10-20）。
+// まとまりのいちばん下の「＋ 品目を追加」で新しい行を足し（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）、
+// 行の左の「−」でその行を消す（まとまりの最後の行を消すと、まとまりごと消える）。一覧のいちばん下の「＋ カテゴリを追加」で別のカテゴリのまとまりを足す。
+// 電卓は行の金額を押したときだけ出し、その行の単価を直す（＋−×÷。Zaim と同じ。2026-10-20）。品名や行のほかの所を押すと閉じる。
 // 値引き・割引・返金は「マイナスにする」で、選んだ行の金額をマイナスにする（docs/kakei.md §10.5）。
 
 /** 品目の画面で書きかけのもの（記録の入力が持ち、ほかの画面へ行って戻っても消えない）。 */
@@ -37,7 +37,7 @@ export interface ItemsWork {
   expr: string;
   /** 開いたときに見せるまとまり（一覧をそこまで送る）。 */
   focus: string | null;
-  /** 電卓を出しているか（行の金額を押したとき・行を足したとき）。 */
+  /** 電卓を出しているか（行の金額を押したときだけ）。 */
   calc: boolean;
 }
 
@@ -63,7 +63,7 @@ export function addWorkGroup(work: ItemsWork, target: GroupTarget, groupKey: str
         group.key === existing.key ? { ...group, lines: [...group.lines.filter((entry) => !isBlankLine(entry)), line] } : group,
       )
     : [...work.groups, { key: groupKey, ...target, lines: [line] }];
-  return { ...work, groups, selected: line.key, expr: '', focus: existing?.key ?? groupKey, calc: true };
+  return { ...work, groups, selected: line.key, expr: '', focus: existing?.key ?? groupKey, calc: false };
 }
 
 /** まとまりのカテゴリを変える（変えた先と同じカテゴリのまとまりがあれば、そこへ行をまとめる）。 */
@@ -150,7 +150,7 @@ export default function ItemsScreen({
       ),
       selected: line.key,
       expr: '',
-      calc: true,
+      calc: false,
     });
   };
 
@@ -176,32 +176,14 @@ export default function ItemsScreen({
     updateLine(selectedLine.key, { unitPrice: -selectedLine.unitPrice });
   };
 
-  // 行の左の「−」で、その行をすぐ消す（選んでいる行なら選びも外す）。まとまりは残す（カテゴリを残して打ち直せるように）。
+  // 行の左の「−」で、その行をすぐ消す（選んでいる行なら選びも外す）。行の無くなったまとまりは消す。
   const removeLine = (key: string) =>
     onChange({
       ...work,
-      groups: mapLines((lines) => lines.filter((line) => line.key !== key)),
+      groups: mapLines((lines) => lines.filter((line) => line.key !== key)).filter((group) => group.lines.length > 0),
       selected: work.selected === key ? null : work.selected,
       expr: work.selected === key ? '' : work.expr,
     });
-
-  // まとまりのごみ箱で、そのカテゴリの品目をまとめて消す（金額の入った行があれば確かめる）。
-  const removeGroup = (group: EditorGroup) => {
-    const apply = () => {
-      const lost = group.lines.some((line) => line.key === work.selected);
-      onChange({
-        ...work,
-        groups: work.groups.filter((entry) => entry.key !== group.key),
-        selected: lost ? null : work.selected,
-        expr: lost ? '' : work.expr,
-      });
-    };
-    if (group.lines.every(isBlankLine)) return apply();
-    Alert.alert('このカテゴリの品目を消しますか？', undefined, [
-      { text: 'やめる', style: 'cancel' },
-      { text: '消す', style: 'destructive', onPress: apply },
-    ]);
-  };
 
   const showExpr = /[+\-*/]/.test(work.expr);
 
@@ -233,21 +215,15 @@ export default function ItemsScreen({
                 onPress={() => onChangeCategory(group.key)}
                 style={styles.category}
               >
-                <CategoryIcon iconKey={iconKey(group)} size={20} />
-                <Text style={styles.categoryName} numberOfLines={1}>
-                  {title(group)}
-                </Text>
-                <View style={styles.flex} />
-                {sub !== '' && <Text style={styles.categorySub}>{sub}</Text>}
+                <CategoryIcon iconKey={iconKey(group)} size={24} />
+                <View style={styles.categoryText}>
+                  <Text style={styles.categoryName} numberOfLines={1}>
+                    {title(group)}
+                  </Text>
+                  {sub !== '' && <Text style={styles.categorySub}>{sub}</Text>}
+                </View>
+                <Text style={styles.groupSubtotal}>{formatBalance(editorGroupTotal(group))}</Text>
                 <ChevronRight size={16} color={colors.textFaint} />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="このカテゴリの品目を消す"
-                  onPress={() => removeGroup(group)}
-                  hitSlop={8}
-                >
-                  <Trash2 size={16} color={colors.textMuted} />
-                </Pressable>
               </Pressable>
               {group.lines.map((line) => {
                 const selected = line.key === work.selected;
@@ -266,7 +242,7 @@ export default function ItemsScreen({
                       hitSlop={8}
                       style={styles.removeButton}
                     >
-                      <Minus size={12} color={colors.primaryText} />
+                      <Minus size={12} color={colors.textMuted} />
                     </Pressable>
                     <TextInput
                       style={styles.lineName}
@@ -313,19 +289,15 @@ export default function ItemsScreen({
                   </Pressable>
                 );
               })}
-              {/* まとまりの「＋」の行。カテゴリが2つ以上なら、右にそのカテゴリの小計。 */}
-              <Pressable accessibilityRole="button" accessibilityLabel="品目を追加する" onPress={() => addLine(group.key)} style={styles.blank}>
-                <View style={styles.addButton}>
-                  <Plus size={14} color={colors.primaryText} />
-                </View>
-                <View style={styles.flex} />
-                {multiple && <Text style={styles.groupSubtotal}>{formatBalance(editorGroupTotal(group))}</Text>}
+              <Pressable accessibilityRole="button" onPress={() => addLine(group.key)} style={styles.addLine}>
+                <Plus size={14} color={colors.textMuted} />
+                <Text style={styles.addLineText}>品目を追加</Text>
               </Pressable>
             </View>
           );
         })}
         <Pressable accessibilityRole="button" onPress={onAddCategory} style={styles.addCategory}>
-          <Plus size={14} color={colors.money} />
+          <Plus size={16} color={colors.money} />
           <Text style={styles.addCategoryText}>カテゴリを追加</Text>
         </Pressable>
         <View style={styles.subtotalRow}>
@@ -361,34 +333,37 @@ export default function ItemsScreen({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
-  // カテゴリは1行で小さく（品目と金額が主）。
+  // カテゴリはまとまりの見出し（太字・右に小計）。まとまりの間は灰色の帯（上の余白）で区切る。
   category: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    marginTop: 8,
     paddingHorizontal: 16,
-    paddingVertical: 7,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
   },
-  categoryName: { flexShrink: 1, fontSize: 13, fontWeight: '600', color: colors.textSubtle },
+  categoryText: { flex: 1, gap: 1 },
+  categoryName: { fontSize: 15, fontWeight: '700', color: colors.text },
   categorySub: { fontSize: 11, fontWeight: '500', color: colors.textMuted },
-  list: { paddingBottom: 8 },
+  groupSubtotal: { fontSize: 16, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  list: { paddingBottom: 8, backgroundColor: colors.background },
+  // 品目は字下げして、カテゴリの見出しより控えめに。
   line: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingLeft: 16,
+    paddingLeft: 24,
     paddingRight: 16,
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingVertical: 4,
+    backgroundColor: colors.surface,
   },
-  // 行の左端の「−」（赤い丸）。押すとその行を消す。
-  removeButton: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.danger },
+  // 行の左端の「−」（灰色）。押すとその行を消す。
+  removeButton: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.neutralSurface },
   lineSelected: { backgroundColor: colors.moneySurface },
-  lineName: { flex: 1, paddingVertical: 6, fontSize: 15, fontWeight: '500', color: colors.text },
+  lineName: { flex: 1, paddingVertical: 6, fontSize: 14, fontWeight: '500', color: colors.textSubtle },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stepButton: {
     width: 24,
@@ -400,26 +375,16 @@ const styles = StyleSheet.create({
   },
   quantity: { minWidth: 16, textAlign: 'center', fontSize: 14, fontWeight: '700', color: colors.text },
   price: { minWidth: 92, alignItems: 'flex-end', gap: 1 },
-  unit: { fontSize: 17, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'], borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  unit: { fontSize: 15, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'], borderBottomWidth: 2, borderBottomColor: 'transparent' },
   unitSelected: { borderBottomColor: colors.money },
   amount: { fontSize: 11, fontWeight: '600', color: colors.textFaint, fontVariant: ['tabular-nums'] },
   minus: { color: colors.danger },
-  // 一覧のいちばん下の「＋」だけの行（文字は無し）。
-  blank: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: 16,
-    paddingRight: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderStrong,
-    borderStyle: 'dashed',
-  },
-  addButton: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.money },
-  groupSubtotal: { fontSize: 13, fontWeight: '700', color: colors.textSubtle, fontVariant: ['tabular-nums'] },
+  // まとまりのいちばん下の「＋ 品目を追加」（灰色の文字だけ）。
+  addLine: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 26, paddingVertical: 10, backgroundColor: colors.surface },
+  addLineText: { fontSize: 13, fontWeight: '500', color: colors.textMuted },
   // 一覧のいちばん下の「＋ カテゴリを追加」。
-  addCategory: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 12 },
-  addCategoryText: { fontSize: 13, fontWeight: '600', color: colors.money },
+  addCategory: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface },
+  addCategoryText: { fontSize: 14, fontWeight: '600', color: colors.money },
   subtotalRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, paddingHorizontal: 16, paddingTop: 10 },
   signText: { fontSize: 12, fontWeight: '600', color: colors.money },
   expr: { fontSize: 13, fontWeight: '500', color: colors.textMuted },

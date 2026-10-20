@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { ChevronRight, Minus, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Minus, Plus } from 'lucide-react';
 import {
   editorGroupTotal,
   editorLineAmount,
@@ -21,11 +21,11 @@ import { CategoryIcon, PrimaryButton, ScreenHeader, StackedScreen } from './mone
 //
 // 記録の品目を、カテゴリごとのまとまりに分けて1つの画面でまとめて入れる（2026-10-20。カテゴリが分かれても、
 // 保存して記録の編集に戻り、また追加して…と行き来しなくて済むように）。行＝品名・個数（−＋）・単価・金額。
-// まとまりの頭にカテゴリを1行で小さく出す（押すと変えられる。ごみ箱でまとまりごと消す）。
-// まとまりのいちばん下の「＋」で新しい行を足し（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）、
-// 一覧の左端の「−」でその行を消す。一覧のいちばん下の「＋ カテゴリを追加」で別のカテゴリのまとまりを足す。
-// 行の金額を押すと、その行を選んで（青）下に電卓を出し、単価を直す（＋−×÷。Zaim と同じ。2026-10-20）。
-// 行を足したときも電卓を出す。品名や行のほかの所を押すと電卓を閉じる。
+// まとまりの頭はカテゴリの見出し（太字・右に小計。押すとカテゴリを変える）。まとまりの間は灰色の帯で区切り、品目は字下げして控えめに。
+// 色は少なく（「−」「＋」は灰色・文字だけ。2026-10-20）。
+// まとまりのいちばん下の「＋ 品目を追加」で新しい行を足し（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）、
+// 行の左の「−」でその行を消す（まとまりの最後の行を消すと、まとまりごと消える）。一覧のいちばん下の「＋ カテゴリを追加」で別のカテゴリのまとまりを足す。
+// 電卓は行の金額を押したときだけ出し、その行の単価を直す（＋−×÷。Zaim と同じ。2026-10-20）。品名や行のほかの所を押すと閉じる。
 // 値引き・割引・返金は「マイナスにする」で、選んだ行の金額をマイナスにする（docs/kakei.md §10.5）。
 
 /** 品目の画面で書きかけのもの（記録の入力が持ち、ほかの画面へ行って戻っても消えない）。 */
@@ -37,7 +37,7 @@ export interface ItemsWork {
   expr: string;
   /** 開いたときに見せるまとまり（一覧をそこまで送る）。 */
   focus: string | null;
-  /** 電卓を出しているか（行の金額を押したとき・行を足したとき）。 */
+  /** 電卓を出しているか（行の金額を押したときだけ）。 */
   calc: boolean;
 }
 
@@ -63,7 +63,7 @@ export function addWorkGroup(work: ItemsWork, target: GroupTarget, groupKey: str
         group.key === existing.key ? { ...group, lines: [...group.lines.filter((entry) => !isBlankLine(entry)), line] } : group,
       )
     : [...work.groups, { key: groupKey, ...target, lines: [line] }];
-  return { ...work, groups, selected: line.key, expr: '', focus: existing?.key ?? groupKey, calc: true };
+  return { ...work, groups, selected: line.key, expr: '', focus: existing?.key ?? groupKey, calc: false };
 }
 
 /** まとまりのカテゴリを変える（変えた先と同じカテゴリのまとまりがあれば、そこへ行をまとめる）。 */
@@ -152,7 +152,7 @@ export default function ItemsScreen({
       ),
       selected: line.key,
       expr: '',
-      calc: true,
+      calc: false,
     });
   };
 
@@ -178,29 +178,14 @@ export default function ItemsScreen({
     updateLine(selectedLine.key, { unitPrice: -selectedLine.unitPrice });
   };
 
-  // 行の左の「−」で、その行をすぐ消す（選んでいる行なら選びも外す）。まとまりは残す（カテゴリを残して打ち直せるように）。
+  // 行の左の「−」で、その行をすぐ消す（選んでいる行なら選びも外す）。行の無くなったまとまりは消す。
   const removeLine = (key: string) =>
     onChange({
       ...work,
-      groups: mapLines((lines) => lines.filter((line) => line.key !== key)),
+      groups: mapLines((lines) => lines.filter((line) => line.key !== key)).filter((group) => group.lines.length > 0),
       selected: work.selected === key ? null : work.selected,
       expr: work.selected === key ? '' : work.expr,
     });
-
-  // まとまりのごみ箱で、そのカテゴリの品目をまとめて消す（金額の入った行があれば確かめる）。
-  const removeGroup = (group: EditorGroup) => {
-    const apply = () => {
-      const lost = group.lines.some((line) => line.key === work.selected);
-      onChange({
-        ...work,
-        groups: work.groups.filter((entry) => entry.key !== group.key),
-        selected: lost ? null : work.selected,
-        expr: lost ? '' : work.expr,
-      });
-    };
-    if (group.lines.every(isBlankLine)) return apply();
-    if (window.confirm('このカテゴリの品目を消しますか？')) apply();
-  };
 
   const showExpr = /[+\-*/]/.test(work.expr);
   const stepClass = 'flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-gray-500';
@@ -209,7 +194,7 @@ export default function ItemsScreen({
     <StackedScreen onBack={onClose}>
       <ScreenHeader title="品目" onClose={onClose} closeAtEnd />
 
-      <div className="flex-1 min-h-0 overflow-y-auto pb-2">
+      <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 pb-2">
         {work.groups.map((group) => {
           const sub = subtitle(group);
           return (
@@ -220,29 +205,27 @@ export default function ItemsScreen({
                 else groupRefs.current.delete(group.key);
               }}
             >
-              <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-4">
-                <button
-                  type="button"
-                  aria-label="カテゴリを変える"
-                  onClick={() => onChangeCategory(group.key)}
-                  className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left"
-                >
-                  <CategoryIcon iconKey={iconKey(group)} size={20} />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-gray-700">{title(group)}</span>
+              <button
+                type="button"
+                aria-label="カテゴリを変える"
+                onClick={() => onChangeCategory(group.key)}
+                className="mt-2 flex w-full items-center gap-2.5 border-b border-gray-200 bg-white px-4 py-2.5 text-left hover:bg-gray-50"
+              >
+                <CategoryIcon iconKey={iconKey(group)} size={24} />
+                <span className="flex min-w-0 flex-1 flex-col gap-px">
+                  <span className="truncate text-[15px] font-bold text-gray-900">{title(group)}</span>
                   {sub !== '' && <span className="text-[11px] text-gray-500 tabular-nums">{sub}</span>}
-                  <ChevronRight size={16} className="text-gray-400" />
-                </button>
-                <button type="button" aria-label="このカテゴリの品目を消す" onClick={() => removeGroup(group)} className="text-gray-500">
-                  <Trash2 size={16} />
-                </button>
-              </div>
+                </span>
+                <span className="text-base font-bold text-gray-900 tabular-nums">{formatBalance(editorGroupTotal(group))}</span>
+                <ChevronRight size={16} className="text-gray-400" />
+              </button>
               {group.lines.map((line) => {
                 const selected = line.key === work.selected;
                 return (
                   <div
                     key={line.key}
                     onClick={() => (selected && !work.calc ? undefined : select(line, false))}
-                    className={`flex items-center gap-2 border-b border-gray-200 px-4 py-1.5 ${selected ? 'bg-blue-50' : ''}`}
+                    className={`flex items-center gap-2 py-1 pl-6 pr-4 ${selected ? 'bg-blue-50' : 'bg-white'}`}
                   >
                     <button
                       type="button"
@@ -251,12 +234,12 @@ export default function ItemsScreen({
                         event.stopPropagation();
                         removeLine(line.key);
                       }}
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-500 text-white"
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-500"
                     >
                       <Minus size={12} />
                     </button>
                     <input
-                      className="min-w-0 flex-1 bg-transparent py-1.5 text-[15px] focus:outline-none"
+                      className="min-w-0 flex-1 bg-transparent py-1.5 text-sm text-gray-700 focus:outline-none"
                       value={line.name}
                       onChange={(event) => updateLine(line.key, { name: event.target.value })}
                       onFocus={() => (selected && !work.calc ? undefined : select(line, false))}
@@ -299,7 +282,7 @@ export default function ItemsScreen({
                       className="flex min-w-[92px] flex-col items-end gap-px"
                     >
                       <span
-                        className={`border-b-2 text-[17px] font-extrabold tabular-nums ${selected && work.calc ? 'border-blue-600' : 'border-transparent'} ${
+                        className={`border-b-2 text-[15px] font-bold tabular-nums ${selected && work.calc ? 'border-blue-600' : 'border-transparent'} ${
                           line.unitPrice < 0 ? 'text-red-500' : 'text-gray-900'
                         }`}
                       >
@@ -314,7 +297,6 @@ export default function ItemsScreen({
                   </div>
                 );
               })}
-              {/* まとまりの「＋」の行。カテゴリが2つ以上なら、右にそのカテゴリの小計。 */}
               <button
                 ref={(node) => {
                   if (node) addButtons.current.set(group.key, node);
@@ -322,14 +304,10 @@ export default function ItemsScreen({
                 }}
                 type="button"
                 onClick={() => addLine(group.key)}
-                aria-label="品目を追加する"
-                className="flex w-full items-center border-b border-dashed border-gray-300 px-4 py-2.5 text-left hover:bg-gray-50"
+                className="flex w-full items-center gap-1.5 bg-white py-2.5 pl-[26px] text-left text-[13px] text-gray-500 hover:bg-gray-50"
               >
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white">
-                  <Plus size={14} />
-                </span>
-                <span className="flex-1" />
-                {multiple && <span className="text-[13px] font-bold text-gray-700 tabular-nums">{formatBalance(editorGroupTotal(group))}</span>}
+                <Plus size={14} />
+                品目を追加
               </button>
             </div>
           );
@@ -337,9 +315,9 @@ export default function ItemsScreen({
         <button
           type="button"
           onClick={onAddCategory}
-          className="flex w-full items-center gap-1.5 px-4 py-3 text-left text-[13px] font-semibold text-blue-600 hover:bg-gray-50"
+          className="mt-2 flex w-full items-center gap-1.5 bg-white px-4 py-3 text-left text-sm font-semibold text-blue-600 hover:bg-gray-50"
         >
-          <Plus size={14} />
+          <Plus size={16} />
           カテゴリを追加
         </button>
         <div className="flex items-baseline gap-1.5 px-4 pt-2.5">
