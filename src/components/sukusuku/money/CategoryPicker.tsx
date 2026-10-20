@@ -16,8 +16,9 @@ import { CategoryIcon, ScreenHeader, StackedScreen } from './moneyVisual';
 
 // カテゴリの選択（docs/kakei.md §3.1・§3.2）。mobile版の `mobile/src/components/money/CategoryPicker.tsx` と同じ並び・文言。
 //
-// 上によく使う小分類。その下に大分類ごとの枠（見出しに今月の残り、中に小分類のチップ）。押すと大分類も決まる。
-// 大分類ごとに枠で囲み、見出しに色を付けて、どこからどこまでが同じ大分類かを分かるようにする。
+// 上によく使う小分類（1行。入りきらなければ横に送る）。その下に大分類を1行ずつ: 左に大分類（アイコン・名前・小さく今月の残り）、
+// 右に小分類のボタン（入りきらなければ折り返す）。押すと大分類も決まる。
+// スクロールしなくても1画面に収まるように詰める（2026-10-20。以前は大分類ごとの枠と見出しの帯で、縦に長かった）。小分類を主役に、大分類は小さく。
 
 export interface CategoryChoice {
   categoryId: string;
@@ -35,7 +36,7 @@ interface CategoryPickerProps {
   onEditCategories?: () => void;
 }
 
-const chipClass = 'rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50';
+const chipClass = 'rounded-[7px] bg-gray-100 px-2 py-[5px] text-[13px] font-semibold leading-tight text-gray-900 hover:bg-blue-50 active:bg-blue-50';
 
 export default function CategoryPicker({
   kind,
@@ -71,26 +72,24 @@ export default function CategoryPicker({
           )
         }
       />
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto pb-6">
         {tops.length === 0 && (
           <p className="py-6 text-center text-sm text-gray-400">カテゴリがまだありません。右上の歯車からカテゴリを作れます</p>
         )}
         {frequent.length > 0 && (
-          <section className="space-y-2">
-            <p className="text-xs font-bold text-gray-500">よく使う</p>
-            <div className="flex flex-wrap gap-2">
-              {frequent.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => pickCategory(id)}
-                  className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold text-blue-800 hover:bg-blue-200"
-                >
-                  {nameOf(id)}
-                </button>
-              ))}
-            </div>
-          </section>
+          <div className="flex items-center gap-[5px] overflow-x-auto whitespace-nowrap border-b border-gray-200 px-2.5 py-[7px]">
+            <span className="mr-0.5 text-[11px] font-semibold text-gray-500">よく使う</span>
+            {frequent.map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => pickCategory(id)}
+                className="shrink-0 rounded-full bg-blue-100 px-[9px] py-1 text-[13px] font-semibold text-blue-800 hover:bg-blue-200"
+              >
+                {nameOf(id)}
+              </button>
+            ))}
+          </div>
         )}
 
         {tops.map((top) => {
@@ -98,17 +97,19 @@ export default function CategoryPicker({
           const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, monthKey) : null;
           const remaining = budget === null ? null : budget - (spend.get(top.id) ?? 0);
           return (
-            <section key={top.id} className="overflow-hidden rounded-[14px] border border-gray-200">
-              <div className="flex items-center gap-2 bg-gray-100 px-3 py-2">
-                <CategoryIcon iconKey={iconKeyOf(top)} size={24} />
-                <p className="flex-1 text-[15px] font-bold text-gray-900">{top.name}</p>
-                {remaining !== null && (
-                  <p className={`text-xs font-semibold tabular-nums ${remaining < 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                    今月 {remaining < 0 ? `${formatYen(remaining)} 超過` : `残り ${formatYen(remaining)}`}
-                  </p>
-                )}
+            <div key={top.id} className="flex items-center border-b border-slate-100 px-2.5 py-[5px]">
+              <div className="flex w-[92px] shrink-0 items-center gap-[5px]">
+                <CategoryIcon iconKey={iconKeyOf(top)} size={20} />
+                <div className="min-w-0 flex-1 leading-tight">
+                  <p className="truncate text-[11.5px] font-bold text-gray-700">{top.name}</p>
+                  {remaining !== null && (
+                    <p className={`truncate text-[9px] tabular-nums ${remaining < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                      {remaining < 0 ? `${formatYen(remaining)} 超過` : `残り ${formatYen(remaining)}`}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2 p-3">
+              <div className="flex flex-1 flex-wrap gap-1">
                 {(children.length > 0 ? children : [top]).map((category) => (
                   <button
                     key={category.id}
@@ -121,10 +122,9 @@ export default function CategoryPicker({
                   </button>
                 ))}
               </div>
-            </section>
+            </div>
           );
         })}
-
       </div>
     </StackedScreen>
   );

@@ -16,8 +16,9 @@ import { CategoryIcon, ScreenHeader } from '@/components/money/moneyVisual';
 
 // カテゴリの選択（docs/kakei.md §3.1・§3.2）。PWA版の `src/components/sukusuku/money/CategoryPicker.tsx` と同じ並び・文言。
 //
-// 上によく使う小分類。その下に大分類ごとの枠（見出しに今月の残り、中に小分類のチップ）。押すと大分類も決まる。
-// 大分類ごとに枠で囲み、見出しに色を付けて、どこからどこまでが同じ大分類かを分かるようにする。
+// 上によく使う小分類（1行。入りきらなければ横に送る）。その下に大分類を1行ずつ: 左に大分類（アイコン・名前・小さく今月の残り）、
+// 右に小分類のボタン（入りきらなければ折り返す）。押すと大分類も決まる。
+// スクロールしなくても1画面に収まるように詰める（2026-10-20。以前は大分類ごとの枠と見出しの帯で、縦に長かった）。小分類を主役に、大分類は小さく。
 
 export interface CategoryChoice {
   categoryId: string;
@@ -75,16 +76,14 @@ export default function CategoryPicker({
           <Text style={styles.empty}>カテゴリがまだありません。右上の歯車からカテゴリを作れます</Text>
         )}
         {frequent.length > 0 && (
-          <View style={styles.section}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.frequent} contentContainerStyle={styles.frequentRow}>
             <Text style={styles.sectionTitle}>よく使う</Text>
-            <View style={styles.chips}>
-              {frequent.map((id) => (
-                <Pressable key={id} accessibilityRole="button" onPress={() => pickCategory(id)} style={[styles.chip, styles.chipStrong]}>
-                  <Text style={[styles.chipText, styles.chipTextStrong]}>{nameOf(id)}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
+            {frequent.map((id) => (
+              <Pressable key={id} accessibilityRole="button" onPress={() => pickCategory(id)} style={styles.frequentChip}>
+                <Text style={styles.frequentText}>{nameOf(id)}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
         )}
 
         {tops.map((top) => {
@@ -92,24 +91,28 @@ export default function CategoryPicker({
           const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, monthKey) : null;
           const remaining = budget === null ? null : budget - (spend.get(top.id) ?? 0);
           return (
-            <View key={top.id} style={styles.topCard}>
-              <View style={styles.topRow}>
-                <CategoryIcon iconKey={iconKeyOf(top)} size={24} />
-                <Text style={[styles.topName, styles.flex]}>{top.name}</Text>
-                {remaining !== null && (
-                  <Text style={[styles.remaining, remaining < 0 && styles.over]}>
-                    今月 {remaining < 0 ? `${formatYen(remaining)} 超過` : `残り ${formatYen(remaining)}`}
+            <View key={top.id} style={styles.topRow}>
+              <View style={styles.top}>
+                <CategoryIcon iconKey={iconKeyOf(top)} size={20} />
+                <View style={styles.flex}>
+                  <Text style={styles.topName} numberOfLines={1}>
+                    {top.name}
                   </Text>
-                )}
+                  {remaining !== null && (
+                    <Text style={[styles.remaining, remaining < 0 && styles.over]} numberOfLines={1}>
+                      {remaining < 0 ? `${formatYen(remaining)} 超過` : `残り ${formatYen(remaining)}`}
+                    </Text>
+                  )}
+                </View>
               </View>
-              <View style={[styles.chips, styles.topChips]}>
+              <View style={styles.chips}>
                 {(children.length > 0 ? children : [top]).map((category) => (
                   <Pressable
                     key={category.id}
                     accessibilityRole="button"
                     accessibilityLabel={`${top.name} ${category.name}`}
                     onPress={() => pickCategory(category.id)}
-                    style={styles.chip}
+                    style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
                   >
                     <Text style={styles.chipText}>{category.name}</Text>
                   </Pressable>
@@ -118,7 +121,6 @@ export default function CategoryPicker({
             </View>
           );
         })}
-
       </ScrollView>
     </View>
   );
@@ -127,33 +129,29 @@ export default function CategoryPicker({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
-  content: { padding: 16, gap: 14, paddingBottom: 32 },
+  content: { paddingBottom: 24 },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
-  section: { gap: 8 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  topCard: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  // よく使う（1行）。
+  frequent: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
+  frequentRow: { alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7 },
+  sectionTitle: { fontSize: 11, fontWeight: '600', color: colors.textMuted, marginRight: 2 },
+  frequentChip: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, backgroundColor: colors.moneySoft },
+  frequentText: { fontSize: 13, fontWeight: '600', color: colors.moneyText },
+  // 大分類を1行ずつ（左に大分類、右に小分類）。
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.neutralSurface,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.listSurface,
   },
-  topChips: { padding: 12 },
-  topName: { fontSize: 15, fontWeight: '700', color: colors.text },
-  remaining: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
+  top: { width: 92, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  topName: { fontSize: 11.5, fontWeight: '700', color: colors.textSubtle },
+  remaining: { fontSize: 9, fontWeight: '500', color: colors.textFaint },
   over: { color: colors.moneyOver },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  chipStrong: { borderColor: colors.moneySoft, backgroundColor: colors.moneySoft },
-  chipText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
-  chipTextStrong: { color: colors.moneyText },
+  chips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  chip: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 7, backgroundColor: colors.neutralSurface },
+  chipPressed: { backgroundColor: colors.moneySurface },
+  chipText: { fontSize: 13, fontWeight: '600', color: colors.text },
 });
