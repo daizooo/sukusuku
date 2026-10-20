@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Check, Pencil, Plus } from 'lucide-react';
 import type { MoneyWallet, MoneyWalletDraft, MoneyWalletType } from '@/types/app';
-import { cardScheduleLabel, PAY_MONTH_OPTIONS, WALLET_DELETE_NOTE, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
+import { PAY_MONTH_OPTIONS, WALLET_DELETE_NOTE, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
 import { ModalShell } from '../modals/TaskForm';
 import { PrimaryButton, ScreenHeader, StackedScreen, WalletTypeIcon } from './moneyVisual';
 
@@ -58,12 +58,8 @@ export default function WalletPicker({ title, wallets, selectedId, onPick, onClo
                       onClick={() => onPick(wallet.id)}
                       className="flex flex-1 items-center gap-2 py-3 text-left"
                     >
-                      <span className="flex-1">
-                        <span className="block text-[15px] font-semibold text-gray-900">{wallet.name}</span>
-                        {cardScheduleLabel(wallet) !== '' && (
-                          <span className="block text-xs text-gray-400">{cardScheduleLabel(wallet)}</span>
-                        )}
-                      </span>
+                      <WalletTypeIcon type={wallet.type} size={20} color={wallet.iconColor} />
+                      <span className="flex-1 text-[15px] font-semibold text-gray-900">{wallet.name}</span>
                       {selected && <Check size={18} className="text-blue-600" />}
                     </button>
                     <button

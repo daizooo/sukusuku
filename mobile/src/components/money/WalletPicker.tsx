@@ -3,7 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { Check, Pencil, Plus } from 'lucide-react-native';
 import type { MoneyWallet, MoneyWalletDraft, MoneyWalletType } from '@/types/app';
 import { colors } from '@/lib/theme';
-import { cardScheduleLabel, PAY_MONTH_OPTIONS, WALLET_DELETE_NOTE, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
+import { PAY_MONTH_OPTIONS, WALLET_DELETE_NOTE, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import { PrimaryButton, ScreenHeader, WalletTypeIcon } from '@/components/money/moneyVisual';
@@ -50,10 +50,8 @@ export default function WalletPicker({ title, wallets, selectedId, onPick, onClo
                     onPress={() => onPick(wallet.id)}
                     style={[styles.row, selected && styles.rowSelected]}
                   >
-                    <View style={styles.flex}>
-                      <Text style={styles.name}>{wallet.name}</Text>
-                      {cardScheduleLabel(wallet) !== '' && <Text style={styles.sub}>{cardScheduleLabel(wallet)}</Text>}
-                    </View>
+                    <WalletTypeIcon type={wallet.type} size={20} color={wallet.iconColor} />
+                    <Text style={[styles.name, styles.flex]}>{wallet.name}</Text>
                     {selected && <Check size={18} color={colors.money} />}
                     <Pressable
                       accessibilityRole="button"
