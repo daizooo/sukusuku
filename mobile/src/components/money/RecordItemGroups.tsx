@@ -7,6 +7,7 @@ import { CategoryIcon } from '@/components/money/moneyVisual';
 // 記録の詳細（読むだけ）と編集の両方で同じ書き方にする（2026-10-15）。
 // カテゴリの行（アイコン・カテゴリ名・小計）の下に、品目を1行ずつ（品名・個数 × 単価・金額）。品目が1つでも複数でも同じ。
 // 小計は黒、品目の金額は灰色（合計とのメリハリ）。onOpen があれば、カテゴリのまとまりを押せる（編集で品目の画面を開く）。
+// 品目が1つだけのまとまりは、品目の金額を出さない（小計と同じ数字が2つ並ぶため。2026-10-20）。個数 × 単価は出す。
 
 interface RecordItemGroupsProps {
   groups: EditorGroup[];
@@ -25,6 +26,7 @@ export default function RecordItemGroups({ groups, title, iconKey, size, onOpen 
     <>
       {groups.map((group) => {
         const lines = group.lines.filter((line) => !isBlankLine(line));
+        const single = lines.length === 1;
         const content = (
           <>
             <View style={styles.icon}>
@@ -47,7 +49,7 @@ export default function RecordItemGroups({ groups, title, iconKey, size, onOpen 
                       {formatYen(Math.abs(line.unitPrice))} × {line.quantity}
                     </Text>
                   )}
-                  <Text style={[styles.amount, large && styles.amountLarge]}>{formatBalance(editorLineAmount(line))}</Text>
+                  {!single && <Text style={[styles.amount, large && styles.amountLarge]}>{formatBalance(editorLineAmount(line))}</Text>}
                 </View>
               ))}
             </View>

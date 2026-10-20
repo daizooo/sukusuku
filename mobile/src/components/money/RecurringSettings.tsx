@@ -577,10 +577,7 @@ function RecurringEditor({
     return (
       <CategoryPicker
         kind={kind === 'income' ? 'income' : 'expense'}
-        monthKey={monthKeyOfDate(new Date())}
         categories={categories}
-        budgets={budgets}
-        records={records}
         onPick={(choice) => {
           setCategoryId(choice.categoryId);
           setScreen('form');

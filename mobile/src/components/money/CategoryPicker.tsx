@@ -1,23 +1,21 @@
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Settings2 } from 'lucide-react-native';
-import type { MoneyBudget, MoneyCategory, MoneyRecord } from '@/types/app';
+import type { MoneyCategory } from '@/types/app';
 import { colors } from '@/lib/theme';
 import {
-  budgetFor,
   childCategories,
-  formatYen,
-  frequentCategoryIds,
   iconKeyOf,
-  livingSpendByTop,
   topCategories,
 } from '@/lib/moneyUtils';
 import { CategoryIcon, ScreenHeader } from '@/components/money/moneyVisual';
 
 // カテゴリの選択（docs/kakei.md §3.1・§3.2）。PWA版の `src/components/sukusuku/money/CategoryPicker.tsx` と同じ並び・文言。
 //
-// 上によく使う小分類。その下に大分類ごとの枠（見出しに今月の残り、中に小分類のチップ）。押すと大分類も決まる。
-// 大分類ごとに枠で囲み、見出しに色を付けて、どこからどこまでが同じ大分類かを分かるようにする。
+// 大分類を1行ずつ: 左に大分類（アイコン・名前。予算の残りは出さない）、
+// 右に小分類のボタン（入りきらなければ折り返す）。押すと大分類も決まる。
+// スクロールしなくても1画面に収まるように詰める（2026-10-20。以前は大分類ごとの枠と見出しの帯で、縦に長かった）。小分類を主役に、大分類は小さく。
+// 大分類の行は与えられた高さいっぱいに縦に伸ばす（下に余白を残さない）。入りきらないときだけスクロールする。
 
 export interface CategoryChoice {
   categoryId: string;
@@ -25,11 +23,7 @@ export interface CategoryChoice {
 
 interface CategoryPickerProps {
   kind: 'expense' | 'income';
-  /** 記録の日付の月（今月の残りに使う）。 */
-  monthKey: string;
   categories: MoneyCategory[];
-  budgets: MoneyBudget[];
-  records: MoneyRecord[];
   onPick: (choice: CategoryChoice) => void;
   onClose: () => void;
   /** カテゴリ・予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
@@ -38,23 +32,14 @@ interface CategoryPickerProps {
 
 export default function CategoryPicker({
   kind,
-  monthKey,
   categories,
-  budgets,
-  records,
   onPick,
   onClose,
   onEditCategories,
 }: CategoryPickerProps) {
   const categoryKind = kind === 'income' ? 'income' : 'living';
   const tops = useMemo(() => topCategories(categories, categoryKind), [categories, categoryKind]);
-  const frequent = useMemo(
-    () => frequentCategoryIds(records, categories, categoryKind),
-    [records, categories, categoryKind],
-  );
-  const spend = useMemo(() => livingSpendByTop(records, categories, monthKey), [records, categories, monthKey]);
   const pickCategory = (categoryId: string) => onPick({ categoryId });
-  const nameOf = (id: string) => categories.find((category) => category.id === id)?.name ?? '';
 
   return (
     <View style={styles.screen}>
@@ -74,42 +59,24 @@ export default function CategoryPicker({
         {tops.length === 0 && (
           <Text style={styles.empty}>カテゴリがまだありません。右上の歯車からカテゴリを作れます</Text>
         )}
-        {frequent.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>よく使う</Text>
-            <View style={styles.chips}>
-              {frequent.map((id) => (
-                <Pressable key={id} accessibilityRole="button" onPress={() => pickCategory(id)} style={[styles.chip, styles.chipStrong]}>
-                  <Text style={[styles.chipText, styles.chipTextStrong]}>{nameOf(id)}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
-
         {tops.map((top) => {
           const children = childCategories(categories, top.id);
-          const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, monthKey) : null;
-          const remaining = budget === null ? null : budget - (spend.get(top.id) ?? 0);
           return (
-            <View key={top.id} style={styles.topCard}>
-              <View style={styles.topRow}>
+            <View key={top.id} style={styles.topRow}>
+              <View style={styles.top}>
                 <CategoryIcon iconKey={iconKeyOf(top)} size={24} />
-                <Text style={[styles.topName, styles.flex]}>{top.name}</Text>
-                {remaining !== null && (
-                  <Text style={[styles.remaining, remaining < 0 && styles.over]}>
-                    今月 {remaining < 0 ? `${formatYen(remaining)} 超過` : `残り ${formatYen(remaining)}`}
-                  </Text>
-                )}
+                <Text style={[styles.topName, styles.flex]} numberOfLines={1}>
+                  {top.name}
+                </Text>
               </View>
-              <View style={[styles.chips, styles.topChips]}>
+              <View style={styles.chips}>
                 {(children.length > 0 ? children : [top]).map((category) => (
                   <Pressable
                     key={category.id}
                     accessibilityRole="button"
                     accessibilityLabel={`${top.name} ${category.name}`}
                     onPress={() => pickCategory(category.id)}
-                    style={styles.chip}
+                    style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
                   >
                     <Text style={styles.chipText}>{category.name}</Text>
                   </Pressable>
@@ -118,7 +85,6 @@ export default function CategoryPicker({
             </View>
           );
         })}
-
       </ScrollView>
     </View>
   );
@@ -127,33 +93,23 @@ export default function CategoryPicker({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
-  content: { padding: 16, gap: 14, paddingBottom: 32 },
+  content: { flexGrow: 1, paddingBottom: 8 },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
-  section: { gap: 8 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  topCard: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  // 大分類を1行ずつ（左に大分類、右に小分類）。
+  // flexGrow で高さいっぱいに均等に伸ばす（flexBasis は中身の高さのまま。小さい画面では縮まずスクロールになる）。
   topRow: {
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.neutralSurface,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.listSurface,
   },
-  topChips: { padding: 12 },
-  topName: { fontSize: 15, fontWeight: '700', color: colors.text },
-  remaining: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
-  over: { color: colors.moneyOver },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  chipStrong: { borderColor: colors.moneySoft, backgroundColor: colors.moneySoft },
-  chipText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
-  chipTextStrong: { color: colors.moneyText },
+  top: { width: 104, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  topName: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },
+  chips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  chip: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, backgroundColor: colors.neutralSurface },
+  chipPressed: { backgroundColor: colors.moneySurface },
+  chipText: { fontSize: 15, fontWeight: '600', color: colors.text },
 });

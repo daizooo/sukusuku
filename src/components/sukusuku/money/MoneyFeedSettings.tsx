@@ -15,7 +15,6 @@ import type {
   MoneyWalletFeed,
 } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
-import { monthKeyOfDate } from '@/lib/moneyUtils';
 import { FEED_ACTION_LABELS, feedRuleAction, feedRuleCondition, feedTimeLabel } from '@/lib/moneyFeedUtils';
 import {
   deleteMoneyFeedRule,
@@ -614,10 +613,7 @@ function RuleModal({
           <div className="flex h-full w-full max-w-md flex-col bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
           <CategoryPicker
             kind={draft.recordKind === 'income' ? 'income' : 'expense'}
-            monthKey={monthKeyOfDate(new Date())}
             categories={categories}
-            budgets={budgets}
-            records={records}
             onPick={(choice) => {
               set({ categoryId: choice.categoryId });
               setPickingCategory(false);

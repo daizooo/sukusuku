@@ -14,7 +14,6 @@ import {
   formatYen,
   iconKeyOf,
   manualBudgetFor,
-  monthKeyOfDate,
   monthsLabel,
   parseAmountInput,
   recurringInYear,
@@ -303,10 +302,7 @@ export default function BudgetEditor({
         <StackedScreen onBack={() => setPickingReserve(false)}>
           <CategoryPicker
             kind="expense"
-            monthKey={monthKeyOfDate(new Date())}
             categories={categories}
-            budgets={budgets}
-            records={records}
             onPick={(choice) => void setReserveLink(choice.categoryId, true)}
             onClose={() => setPickingReserve(false)}
           />
