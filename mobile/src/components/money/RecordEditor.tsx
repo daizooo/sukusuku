@@ -19,7 +19,6 @@ import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import { formatDateWithYear, toDateString } from '@/lib/dateUtils';
 import {
-  budgetFor,
   canCardNextPeriod,
   categoryPath,
   editorGroupTotal,
@@ -33,7 +32,6 @@ import {
   iconKeyOf,
   itemsFromGroups,
   lastWalletId,
-  livingSpendByTop,
   monthKeyOf,
   pressCalcKey,
   recordTotal,
@@ -193,7 +191,6 @@ export default function RecordEditor({
   const replaceTop = (next: Screen) => setStack((prev) => [...prev.slice(0, -1), next]);
 
   const monthKey = monthKeyOf(occurredOn);
-  const spend = useMemo(() => livingSpendByTop(records, categories, monthKey), [records, categories, monthKey]);
   const storeOptions = useMemo(() => storeChoices(stores, records), [stores, records]);
   const total = kind === 'transfer' ? transferAmount : groups.reduce((sum, group) => sum + editorGroupTotal(group), 0);
   const categoryKind = kind === 'income' ? 'income' : 'expense';
@@ -224,17 +221,6 @@ export default function RecordEditor({
     if (target.categoryId === null) return 'receipt';
     const topId = topCategoryIdOf(categories, target.categoryId);
     return iconKeyOf(categories.find((category) => category.id === topId));
-  };
-
-  /** まとまりの一言（今月の残り。予算を置いた大分類だけ）。 */
-  const groupSubtitle = (target: Pick<EditorGroup, 'categoryId'>) => {
-    if (target.categoryId === null) return '';
-    const topId = topCategoryIdOf(categories, target.categoryId);
-    if (topId === null || kind !== 'expense') return '';
-    const budget = budgetFor(budgets, topId, monthKey);
-    if (budget === null) return '';
-    const remaining = budget - (spend.get(topId) ?? 0);
-    return remaining < 0 ? `今月 ${formatYen(remaining)} 超過` : `今月 残り ${formatYen(remaining)}`;
   };
 
   const changeKind = (next: MoneyRecordKind) => {
@@ -369,7 +355,6 @@ export default function RecordEditor({
             onChange={setWork}
             title={groupTitle}
             iconKey={groupIconKey}
-            subtitle={groupSubtitle}
             onChangeCategory={(groupKey) => push({ type: 'category', purpose: 'change', groupKey })}
             onAddCategory={() => push({ type: 'category', purpose: 'add' })}
             onSave={saveWork}

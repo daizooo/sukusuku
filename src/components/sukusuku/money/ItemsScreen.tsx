@@ -21,7 +21,7 @@ import { CategoryIcon, PrimaryButton, ScreenHeader, StackedScreen } from './mone
 //
 // 記録の品目を、カテゴリごとのまとまりに分けて1つの画面でまとめて入れる（2026-10-20。カテゴリが分かれても、
 // 保存して記録の編集に戻り、また追加して…と行き来しなくて済むように）。行＝品名・個数（−＋）・単価・金額。
-// まとまりの頭はカテゴリの見出し（太字・右に小計。押すとカテゴリを変える）。まとまりの間は灰色の帯で区切り、品目は字下げして控えめに。
+// まとまりの頭はカテゴリの見出し（太字・右に小計。予算の残りは出さない。押すとカテゴリを変える）。まとまりの間は灰色の帯で区切り、品目は字下げして控えめに。
 // 色は少なく（「−」「＋」は灰色・文字だけ。2026-10-20）。
 // まとまりのいちばん下の「＋ 品目を追加」で新しい行を足し（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）、
 // 行の左の「−」でその行を消す（まとまりの最後の行を消すと、まとまりごと消える）。一覧のいちばん下の「＋ カテゴリを追加」で別のカテゴリのまとまりを足す。
@@ -88,10 +88,9 @@ export const groupsFromWork = (work: ItemsWork): EditorGroup[] =>
 interface ItemsScreenProps {
   work: ItemsWork;
   onChange: (work: ItemsWork) => void;
-  /** まとまりの見出し（「食費 › 食料品」）・アイコン・その下の一言（今月の残り）。 */
+  /** まとまりの見出し（「食費 › 食料品」）とアイコン。 */
   title: (group: EditorGroup) => string;
   iconKey: (group: EditorGroup) => string;
-  subtitle: (group: EditorGroup) => string;
   onChangeCategory: (groupKey: string) => void;
   onAddCategory: () => void;
   onSave: () => void;
@@ -103,7 +102,6 @@ export default function ItemsScreen({
   onChange,
   title,
   iconKey,
-  subtitle,
   onChangeCategory,
   onAddCategory,
   onSave,
@@ -196,7 +194,6 @@ export default function ItemsScreen({
 
       <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 pb-2">
         {work.groups.map((group) => {
-          const sub = subtitle(group);
           return (
             <div
               key={group.key}
@@ -214,7 +211,6 @@ export default function ItemsScreen({
                 <CategoryIcon iconKey={iconKey(group)} size={24} />
                 <span className="flex min-w-0 flex-1 flex-col gap-px">
                   <span className="truncate text-[15px] font-bold text-gray-900">{title(group)}</span>
-                  {sub !== '' && <span className="text-[11px] text-gray-500 tabular-nums">{sub}</span>}
                 </span>
                 <span className="text-base font-bold text-gray-900 tabular-nums">{formatBalance(editorGroupTotal(group))}</span>
                 <ChevronRight size={16} className="text-gray-400" />

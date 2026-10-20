@@ -21,7 +21,7 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 //
 // 記録の品目を、カテゴリごとのまとまりに分けて1つの画面でまとめて入れる（2026-10-20。カテゴリが分かれても、
 // 保存して記録の編集に戻り、また追加して…と行き来しなくて済むように）。行＝品名・個数（−＋）・単価・金額。
-// まとまりの頭はカテゴリの見出し（太字・右に小計。押すとカテゴリを変える）。まとまりの間は灰色の帯で区切り、品目は字下げして控えめに。
+// まとまりの頭はカテゴリの見出し（太字・右に小計。予算の残りは出さない。押すとカテゴリを変える）。まとまりの間は灰色の帯で区切り、品目は字下げして控えめに。
 // 色は少なく（「−」「＋」は灰色・文字だけ。2026-10-20）。
 // まとまりのいちばん下の「＋ 品目を追加」で新しい行を足し（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）、
 // 行の左の「−」でその行を消す（まとまりの最後の行を消すと、まとまりごと消える）。一覧のいちばん下の「＋ カテゴリを追加」で別のカテゴリのまとまりを足す。
@@ -88,10 +88,9 @@ export const groupsFromWork = (work: ItemsWork): EditorGroup[] =>
 interface ItemsScreenProps {
   work: ItemsWork;
   onChange: (work: ItemsWork) => void;
-  /** まとまりの見出し（「食費 › 食料品」）・アイコン・その下の一言（今月の残り）。 */
+  /** まとまりの見出し（「食費 › 食料品」）とアイコン。 */
   title: (group: EditorGroup) => string;
   iconKey: (group: EditorGroup) => string;
-  subtitle: (group: EditorGroup) => string;
   onChangeCategory: (groupKey: string) => void;
   onAddCategory: () => void;
   onSave: () => void;
@@ -103,7 +102,6 @@ export default function ItemsScreen({
   onChange,
   title,
   iconKey,
-  subtitle,
   onChangeCategory,
   onAddCategory,
   onSave,
@@ -203,7 +201,6 @@ export default function ItemsScreen({
         }}
       >
         {work.groups.map((group) => {
-          const sub = subtitle(group);
           return (
             <View key={group.key} onLayout={(event) => {
                 groupY.current.set(group.key, event.nativeEvent.layout.y);
@@ -220,7 +217,6 @@ export default function ItemsScreen({
                   <Text style={styles.categoryName} numberOfLines={1}>
                     {title(group)}
                   </Text>
-                  {sub !== '' && <Text style={styles.categorySub}>{sub}</Text>}
                 </View>
                 <Text style={styles.groupSubtotal}>{formatBalance(editorGroupTotal(group))}</Text>
                 <ChevronRight size={16} color={colors.textFaint} />
@@ -347,7 +343,6 @@ const styles = StyleSheet.create({
   },
   categoryText: { flex: 1, gap: 1 },
   categoryName: { fontSize: 15, fontWeight: '700', color: colors.text },
-  categorySub: { fontSize: 11, fontWeight: '500', color: colors.textMuted },
   groupSubtotal: { fontSize: 16, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   list: { paddingBottom: 8, backgroundColor: colors.background },
   // 品目は字下げして、カテゴリの見出しより控えめに。
