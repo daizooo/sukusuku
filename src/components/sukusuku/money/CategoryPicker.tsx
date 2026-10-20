@@ -15,7 +15,12 @@ import { CategoryIcon, ScreenHeader, StackedScreen } from './moneyVisual';
 // 大分類を1行ずつ: 左に大分類（アイコン・名前。予算の残りは出さない）、
 // 右に小分類のボタン（入りきらなければ折り返す）。押すと大分類も決まる。
 // スクロールしなくても1画面に収まるように詰める（2026-10-20。以前は大分類ごとの枠と見出しの帯で、縦に長かった）。小分類を主役に、大分類は小さく。
-// 大分類の行は与えられた高さいっぱいに縦に伸ばす（下に余白を残さない。grow で中身の高さから伸ばすので、入りきらないときだけスクロールする）。
+// 大分類の行は与えられた高さを行数で割って縦に伸ばす（下に余白を残さない）。ただし1行は ROW_MAX_STRETCH までで、
+// 行数の少ない収入（3行ほど）が画面いっぱいに引き伸ばされないようにする（2026-10-20）。入りきらないときだけスクロールする。
+// 一覧の高さは container query（cqh）で測る。
+
+/** 大分類の1行を、余った高さで伸ばしてよい上限（px）。 */
+const ROW_MAX_STRETCH = 80;
 
 export interface CategoryChoice {
   categoryId: string;
@@ -57,14 +62,18 @@ export default function CategoryPicker({
           )
         }
       />
-      <div className="flex flex-1 min-h-0 flex-col overflow-y-auto pb-2">
+      <div className="flex flex-1 min-h-0 flex-col overflow-y-auto pb-2 [container-type:size]">
         {tops.length === 0 && (
           <p className="py-6 text-center text-sm text-gray-400">カテゴリがまだありません。右上の歯車からカテゴリを作れます</p>
         )}
         {tops.map((top) => {
           const children = childCategories(categories, top.id);
           return (
-            <div key={top.id} className="flex shrink-0 grow items-center border-b border-slate-100 px-2.5 py-2.5">
+            <div
+              key={top.id}
+              className="flex shrink-0 items-center border-b border-slate-100 px-2.5 py-2.5"
+              style={{ minHeight: `min(${ROW_MAX_STRETCH}px, calc(100cqh / ${tops.length}))` }}
+            >
               <div className="flex w-[104px] shrink-0 items-center gap-1.5">
                 <CategoryIcon iconKey={iconKeyOf(top)} size={24} />
                 <p className="min-w-0 flex-1 truncate text-[13px] font-bold leading-tight text-gray-700">{top.name}</p>
