@@ -16,16 +16,21 @@ import {
 } from '@/lib/moneyUtils';
 import Calculator from './Calculator';
 import { CategoryIcon, PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
+import { useBackLayer } from '@/lib/browserHistory';
+import { useBackdropClose } from '../ui/useBackdropClose';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 
 // 品目の画面（docs/kakei.md §3.2）。mobile版の `mobile/src/components/money/ItemsScreen.tsx` と同じ並び・文言。
 //
 // 記録の品目を、カテゴリごとのまとまりに分けて1つの画面でまとめて入れる（2026-10-20。カテゴリが分かれても、
 // 保存して記録の編集に戻り、また追加して…と行き来しなくて済むように）。行＝品名・個数（−＋）・単価・金額。
-// まとまりの頭はカテゴリの見出し（太字・右に小計。予算の残りは出さない。押すとカテゴリを変える）。まとまりの間は灰色の帯で区切り、品目は字下げして控えめに。
+// 見出しの下の中央に、全部の品目の合計を大きく出す（カテゴリごとの小計は出さない。2026-10-20）。
+// まとまりの頭はカテゴリの見出し（太字。予算の残りは出さない。押すとカテゴリを変える）。まとまりの間は灰色の帯で区切り、品目は字下げして控えめに。
 // 色は少なく（「−」「＋」は灰色・文字だけ。2026-10-20）。
 // まとまりのいちばん下の「＋ 品目を追加」で新しい行を足し（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）、
 // 行の左の「−」でその行を消す（まとまりの最後の行を消すと、まとまりごと消える）。一覧のいちばん下の「＋ カテゴリを追加」で別のカテゴリのまとまりを足す。
-// 電卓は行の金額を押したときだけ出し、その行の単価を直す（＋−×÷。Zaim と同じ。2026-10-20）。品名や行のほかの所を押すと閉じる。
+// 電卓は行の金額を押したときだけ、画面の下に別枠で出す（暗い部分を押す・OK・戻る操作で閉じる。Zaim と同じ。2026-10-20）。
+// 枠の上にその行の金額（式を打っているときは式も）、下に「マイナスにする」と OK。
 // 値引き・割引・返金は「マイナスにする」で、選んだ行の金額をマイナスにする（docs/kakei.md §10.5）。
 
 /** 品目の画面で書きかけのもの（記録の入力が持ち、ほかの画面へ行って戻っても消えない）。 */
@@ -110,7 +115,6 @@ export default function ItemsScreen({
   const allLines = work.groups.flatMap((group) => group.lines);
   const filled = allLines.filter((line) => !isBlankLine(line));
   const total = work.groups.reduce((sum, group) => sum + editorGroupTotal(group), 0);
-  const multiple = work.groups.length > 1;
 
   const mapLines = (fn: (lines: EditorLine[], group: EditorGroup) => EditorLine[]) =>
     work.groups.map((group) => ({ ...group, lines: fn(group.lines, group) }));
@@ -186,11 +190,18 @@ export default function ItemsScreen({
     });
 
   const showExpr = /[+\-*/]/.test(work.expr);
+  const closeCalc = () => onChange({ ...work, calc: false });
+  // 電卓の枠は、暗い部分を押す・戻る操作でも閉じる。
+  useBackLayer(closeCalc, work.calc && selectedLine !== null);
+  const backdropClose = useBackdropClose(closeCalc);
   const stepClass = 'flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-gray-500';
 
   return (
     <StackedScreen onBack={onClose}>
       <ScreenHeader title="品目" onClose={onClose} closeAtEnd />
+      <div className="shrink-0 border-b border-gray-200 py-2.5 text-center text-[28px] font-extrabold text-gray-900 tabular-nums">
+        {formatBalance(total)}
+      </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 pb-2">
         {work.groups.map((group) => {
@@ -212,7 +223,6 @@ export default function ItemsScreen({
                 <span className="flex min-w-0 flex-1 flex-col gap-px">
                   <span className="truncate text-[15px] font-bold text-gray-900">{title(group)}</span>
                 </span>
-                <span className="text-base font-bold text-gray-900 tabular-nums">{formatBalance(editorGroupTotal(group))}</span>
                 <ChevronRight size={16} className="text-gray-400" />
               </button>
               {group.lines.map((line) => {
@@ -221,7 +231,7 @@ export default function ItemsScreen({
                   <div
                     key={line.key}
                     onClick={() => (selected && !work.calc ? undefined : select(line, false))}
-                    className={`flex items-center gap-2 py-1 pl-6 pr-4 ${selected ? 'bg-blue-50' : 'bg-white'}`}
+                    className={`flex items-center gap-2 py-1 pl-6 pr-4 ${selected && work.calc ? 'bg-blue-50' : 'bg-white'}`}
                   >
                     <button
                       type="button"
@@ -316,32 +326,45 @@ export default function ItemsScreen({
           <Plus size={16} />
           カテゴリを追加
         </button>
-        <div className="flex items-baseline gap-1.5 px-4 pt-2.5">
-          {selectedLine !== null && (
-            <>
-              {/* 金額を入れてから切り替える（0円の行には出さない）。 */}
-              {selectedLine.unitPrice !== 0 && (
-                <button type="button" onClick={toggleSign} className="text-xs font-semibold text-blue-600">
-                  {selectedLine.unitPrice < 0 ? 'プラスに戻す' : 'マイナスにする'}
-                </button>
-              )}
-            </>
-          )}
-          <span className="flex-1" />
-          {showExpr && <span className="text-[13px] text-gray-500 tabular-nums">{formatCalc(work.expr)} =</span>}
-          <span className="text-[13px] font-semibold text-gray-700">{multiple ? '合計' : '小計'}</span>
-          <span className="text-xl font-bold text-gray-700 tabular-nums">{formatBalance(total)}</span>
-        </div>
       </div>
 
-      {work.calc && selectedLine !== null && <Calculator onKey={pressKey} />}
-      <div className="shrink-0 px-4 pt-1 pb-4">
-        <PrimaryButton
-          label={filled.length === 0 ? '金額を入れてください' : `品目を保存（${filled.length}行 ${formatBalance(total)}）`}
-          disabled={filled.length === 0}
-          onClick={onSave}
-        />
+      <div className="shrink-0 px-4 pt-2 pb-4">
+        <PrimaryButton label="保存" disabled={filled.length === 0} onClick={onSave} />
       </div>
+
+      {work.calc && selectedLine !== null && (
+        <div className="absolute inset-0 z-10 flex flex-col justify-end bg-black/50" {...backdropClose} {...swipeBoundary}>
+          <div className="bg-white pb-4">
+            <div className="flex items-center gap-3 border-b border-gray-200 px-5 py-3">
+              <span className="flex flex-col items-center leading-none">
+                <span className="text-[22px] font-extrabold text-gray-900">¥</span>
+                <span className="text-[11px] font-bold text-gray-900">JPY</span>
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col items-end">
+                {showExpr && <span className="text-[13px] text-gray-500 tabular-nums">{formatCalc(work.expr)} =</span>}
+                <span className={`truncate text-4xl font-extrabold tabular-nums ${selectedLine.unitPrice < 0 ? 'text-red-500' : 'text-gray-900'}`}>
+                  {(selectedLine.unitPrice < 0 ? '−' : '') + Math.abs(selectedLine.unitPrice).toLocaleString('ja-JP')}
+                </span>
+              </span>
+            </div>
+            <Calculator onKey={pressKey} />
+            <div className="flex items-center gap-2 px-4 pt-1">
+              {/* 金額を入れてから切り替える（0円の行には出さない）。 */}
+              <span className="flex w-24 justify-center">
+                {selectedLine.unitPrice !== 0 && (
+                  <button type="button" onClick={toggleSign} className="text-xs font-semibold text-blue-600">
+                    {selectedLine.unitPrice < 0 ? 'プラスに戻す' : 'マイナスにする'}
+                  </button>
+                )}
+              </span>
+              <button type="button" onClick={closeCalc} className="h-[52px] flex-1 rounded-full bg-blue-600 text-lg font-extrabold text-white hover:bg-blue-700">
+                OK
+              </button>
+              <span className="w-24" />
+            </div>
+          </div>
+        </div>
+      )}
     </StackedScreen>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ChevronRight, Minus, Plus } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
+import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import {
   editorGroupTotal,
   editorLineAmount,
@@ -21,11 +22,13 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 //
 // 記録の品目を、カテゴリごとのまとまりに分けて1つの画面でまとめて入れる（2026-10-20。カテゴリが分かれても、
 // 保存して記録の編集に戻り、また追加して…と行き来しなくて済むように）。行＝品名・個数（−＋）・単価・金額。
-// まとまりの頭はカテゴリの見出し（太字・右に小計。予算の残りは出さない。押すとカテゴリを変える）。まとまりの間は灰色の帯で区切り、品目は字下げして控えめに。
+// 見出しの下の中央に、全部の品目の合計を大きく出す（カテゴリごとの小計は出さない。2026-10-20）。
+// まとまりの頭はカテゴリの見出し（太字。予算の残りは出さない。押すとカテゴリを変える）。まとまりの間は灰色の帯で区切り、品目は字下げして控えめに。
 // 色は少なく（「−」「＋」は灰色・文字だけ。2026-10-20）。
 // まとまりのいちばん下の「＋ 品目を追加」で新しい行を足し（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）、
 // 行の左の「−」でその行を消す（まとまりの最後の行を消すと、まとまりごと消える）。一覧のいちばん下の「＋ カテゴリを追加」で別のカテゴリのまとまりを足す。
-// 電卓は行の金額を押したときだけ出し、その行の単価を直す（＋−×÷。Zaim と同じ。2026-10-20）。品名や行のほかの所を押すと閉じる。
+// 電卓は行の金額を押したときだけ、画面の下に別枠で出す（暗い部分を押す・OK・戻る操作で閉じる。Zaim と同じ。2026-10-20）。
+// 枠の上にその行の金額（式を打っているときは式も）、下に「マイナスにする」と OK。
 // 値引き・割引・返金は「マイナスにする」で、選んだ行の金額をマイナスにする（docs/kakei.md §10.5）。
 
 /** 品目の画面で書きかけのもの（記録の入力が持ち、ほかの画面へ行って戻っても消えない）。 */
@@ -110,7 +113,6 @@ export default function ItemsScreen({
   const allLines = work.groups.flatMap((group) => group.lines);
   const filled = allLines.filter((line) => !isBlankLine(line));
   const total = work.groups.reduce((sum, group) => sum + editorGroupTotal(group), 0);
-  const multiple = work.groups.length > 1;
 
   const mapLines = (fn: (lines: EditorLine[], group: EditorGroup) => EditorLine[]) =>
     work.groups.map((group) => ({ ...group, lines: fn(group.lines, group) }));
@@ -184,10 +186,14 @@ export default function ItemsScreen({
     });
 
   const showExpr = /[+\-*/]/.test(work.expr);
+  const closeCalc = () => onChange({ ...work, calc: false });
 
   return (
     <View style={styles.screen}>
       <ScreenHeader title="品目" onClose={onClose} closeAtEnd />
+      <View style={styles.totalBox}>
+        <Text style={styles.total}>{formatBalance(total)}</Text>
+      </View>
 
       <ScrollView
         ref={scrollRef}
@@ -202,10 +208,13 @@ export default function ItemsScreen({
       >
         {work.groups.map((group) => {
           return (
-            <View key={group.key} onLayout={(event) => {
+            <View
+              key={group.key}
+              onLayout={(event) => {
                 groupY.current.set(group.key, event.nativeEvent.layout.y);
                 scrollToFocus();
-              }}>
+              }}
+            >
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="カテゴリを変える"
@@ -218,7 +227,6 @@ export default function ItemsScreen({
                     {title(group)}
                   </Text>
                 </View>
-                <Text style={styles.groupSubtotal}>{formatBalance(editorGroupTotal(group))}</Text>
                 <ChevronRight size={16} color={colors.textFaint} />
               </Pressable>
               {group.lines.map((line) => {
@@ -229,7 +237,7 @@ export default function ItemsScreen({
                     accessibilityRole="button"
                     accessibilityState={{ selected }}
                     onPress={() => select(line, false)}
-                    style={[styles.line, selected && styles.lineSelected]}
+                    style={[styles.line, selected && work.calc && styles.lineSelected]}
                   >
                     <Pressable
                       accessibilityRole="button"
@@ -296,32 +304,46 @@ export default function ItemsScreen({
           <Plus size={16} color={colors.money} />
           <Text style={styles.addCategoryText}>カテゴリを追加</Text>
         </Pressable>
-        <View style={styles.subtotalRow}>
-          {selectedLine !== null && (
-            <>
-              {/* 金額を入れてから切り替える（0円の行には出さない）。 */}
-              {selectedLine.unitPrice !== 0 && (
-                <Pressable accessibilityRole="button" onPress={toggleSign} hitSlop={6}>
-                  <Text style={styles.signText}>{selectedLine.unitPrice < 0 ? 'プラスに戻す' : 'マイナスにする'}</Text>
-                </Pressable>
-              )}
-            </>
-          )}
-          <View style={styles.flex} />
-          {showExpr && <Text style={styles.expr}>{formatCalc(work.expr)} =</Text>}
-          <Text style={styles.subtotalLabel}>{multiple ? '合計' : '小計'}</Text>
-          <Text style={styles.subtotal}>{formatBalance(total)}</Text>
-        </View>
       </ScrollView>
 
-      {work.calc && selectedLine !== null && <Calculator onKey={pressKey} />}
       <View style={styles.footer}>
-        <PrimaryButton
-          label={filled.length === 0 ? '金額を入れてください' : `品目を保存（${filled.length}行 ${formatBalance(total)}）`}
-          disabled={filled.length === 0}
-          onPress={onSave}
-        />
+        <PrimaryButton label="保存" disabled={filled.length === 0} onPress={onSave} />
       </View>
+
+      {work.calc && selectedLine !== null && (
+        <View style={StyleSheet.absoluteFill}>
+          <Pressable accessibilityRole="button" accessibilityLabel="電卓を閉じる" onPress={closeCalc} style={styles.backdrop} />
+          <View style={styles.calcSheet} {...swipeBoundary}>
+            <View style={styles.calcHead}>
+              <View style={styles.currency}>
+                <Text style={styles.yen}>¥</Text>
+                <Text style={styles.jpy}>JPY</Text>
+              </View>
+              <View style={styles.calcValueBox}>
+                {showExpr && <Text style={styles.expr}>{formatCalc(work.expr)} =</Text>}
+                <Text style={[styles.calcValue, selectedLine.unitPrice < 0 && styles.minus]} numberOfLines={1}>
+                  {(selectedLine.unitPrice < 0 ? '−' : '') + Math.abs(selectedLine.unitPrice).toLocaleString('ja-JP')}
+                </Text>
+              </View>
+            </View>
+            <Calculator onKey={pressKey} />
+            <View style={styles.calcFooter}>
+              {/* 金額を入れてから切り替える（0円の行には出さない）。 */}
+              <View style={styles.signBox}>
+                {selectedLine.unitPrice !== 0 && (
+                  <Pressable accessibilityRole="button" onPress={toggleSign} hitSlop={6}>
+                    <Text style={styles.signText}>{selectedLine.unitPrice < 0 ? 'プラスに戻す' : 'マイナスにする'}</Text>
+                  </Pressable>
+                )}
+              </View>
+              <Pressable accessibilityRole="button" onPress={closeCalc} style={styles.okButton}>
+                <Text style={styles.okText}>OK</Text>
+              </Pressable>
+              <View style={styles.signBox} />
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -343,7 +365,9 @@ const styles = StyleSheet.create({
   },
   categoryText: { flex: 1, gap: 1 },
   categoryName: { fontSize: 15, fontWeight: '700', color: colors.text },
-  groupSubtotal: { fontSize: 16, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  // 見出しの下の中央の合計。
+  totalBox: { alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+  total: { fontSize: 28, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   list: { paddingBottom: 8, backgroundColor: colors.background },
   // 品目は字下げして、カテゴリの見出しより控えめに。
   line: {
@@ -380,10 +404,28 @@ const styles = StyleSheet.create({
   // 一覧のいちばん下の「＋ カテゴリを追加」。
   addCategory: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface },
   addCategoryText: { fontSize: 14, fontWeight: '600', color: colors.money },
-  subtotalRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, paddingHorizontal: 16, paddingTop: 10 },
-  signText: { fontSize: 12, fontWeight: '600', color: colors.money },
+  footer:  footer: { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8 },
+  // 電卓の別枠（画面の下。上は暗くして、押すと閉じる）。
+  backdrop: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)' },
+  calcSheet: { backgroundColor: colors.surface, paddingBottom: 16 },
+  calcHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  currency: { alignItems: 'center' },
+  yen: { fontSize: 22, fontWeight: '800', color: colors.text },
+  jpy: { fontSize: 11, fontWeight: '700', color: colors.text },
+  calcValueBox: { flex: 1, alignItems: 'flex-end' },
+  calcValue: { fontSize: 36, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   expr: { fontSize: 13, fontWeight: '500', color: colors.textMuted },
-  subtotalLabel: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
-  subtotal: { fontSize: 20, fontWeight: '700', color: colors.textSubtle },
-  footer: { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 4 },
+  calcFooter: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 4 },
+  signBox: { width: 96, alignItems: 'center' },
+  signText: { fontSize: 12, fontWeight: '600', color: colors.money },
+  okButton: { flex: 1, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.money },
+  okText: { fontSize: 18, fontWeight: '800', color: colors.primaryText },
 });

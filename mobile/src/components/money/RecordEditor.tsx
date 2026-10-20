@@ -337,6 +337,11 @@ export default function RecordEditor({
   };
 
   const back = () => {
+    // 品目の画面で電卓の枠を出していれば、まずそれを閉じる。
+    if (screen.type === 'items' && work?.calc) {
+      setWork({ ...work, calc: false });
+      return;
+    }
     if (stack.length > 1) {
       if (screen.type === 'items') setWork(null);
       pop();
