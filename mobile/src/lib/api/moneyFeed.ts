@@ -9,7 +9,9 @@ import type {
   MoneyFeedRuleDraft,
   MoneyFeedSettings,
   MoneyWalletFeed,
+  ReceiptScanItem,
 } from '@/types/app';
+import { feedOrderItems, type FeedOrderLine } from '@/lib/moneyFeedUtils';
 
 type SupabaseDb = SupabaseClient<Database>;
 type FeedRow = Pick<
@@ -30,6 +32,7 @@ type FeedRow = Pick<
   | 'candidate_record_ids'
   | 'source'
   | 'store_hint'
+  | 'amazon_order_id'
 >;
 type RuleRow = Tables<'money_feed_rules'>;
 
@@ -37,7 +40,7 @@ type RuleRow = Tables<'money_feed_rules'>;
 // 明細を入れるのはサーバー（Edge Function money-feed-ingest）。アプリは読む・片づける（money_feed_resolve）・設定を直す。
 
 const FEED_COLUMNS =
-  'id, received_at, to_email, subject, direction, occurred_on, amount, account_name, description, wallet_id, status, pair_id, record_id, candidate_record_ids, source, store_hint';
+  'id, received_at, to_email, subject, direction, occurred_on, amount, account_name, description, wallet_id, status, pair_id, record_id, candidate_record_ids, source, store_hint, amazon_order_id';
 
 /** 片づいていない明細（未確認・確認・読めない）。 */
 export const OPEN_FEED_STATUSES = ['pending', 'confirm', 'unreadable'] as const;
@@ -59,8 +62,9 @@ const rowToFeed = (row: FeedRow): MoneyFeedItem => ({
   pairId: row.pair_id,
   recordId: row.record_id,
   candidateRecordIds: row.candidate_record_ids ?? [],
-  source: row.source === 'card_mail' ? 'card_mail' : 'zaim_mail',
+  source: row.source === 'card_mail' || row.source === 'amazon_order' ? row.source : 'zaim_mail',
   storeHint: row.store_hint,
+  amazonOrderId: row.amazon_order_id,
 });
 
 const rowToRule = (row: RuleRow): MoneyFeedRule => ({
@@ -82,7 +86,7 @@ const rowToRule = (row: RuleRow): MoneyFeedRule => ({
   learned: row.learned,
 });
 
-/** カードの利用通知の明細から、月の締めの照合に使うもの（docs/kakei.md §9.6.5 の C）。 */
+/** カードの利用通知・Amazon の注文メールの明細から、月の締めの照合に使うもの（docs/kakei.md §9.6.5 の C）。 */
 const cardFeedOf = (
   rows: readonly { source: string; record_id: string | null; amount: number | null; wallet_id: string | null; occurred_on: string | null }[],
 ): MoneyCardFeed => {
@@ -90,7 +94,7 @@ const cardFeedOf = (
   const walletIds = new Set<string>();
   let since: string | null = null;
   for (const row of rows) {
-    if (row.source !== 'card_mail') continue;
+    if (row.source !== 'card_mail' && row.source !== 'amazon_order') continue;
     if (row.record_id && row.amount !== null) linkedAmounts[row.record_id] = row.amount;
     if (row.wallet_id) walletIds.add(row.wallet_id);
     if (row.occurred_on && (since === null || row.occurred_on < since)) since = row.occurred_on;
@@ -99,10 +103,11 @@ const cardFeedOf = (
 };
 
 /**
- * 口座の対応に出さない口座名（docs/kakei.md §9.9）。Amazon のカード・楽天カードの利用通知は読み取りで捨てるようになり、
- * 「三井住友カード」はカード名ごとに分ける前の名前。Zaim（銀行）の明細も出さない（card_mail だけ）。
+ * 口座の対応に出さない口座名（docs/kakei.md §9.9）。楽天カードの利用通知は読み取りで捨てるようになり、
+ * 「三井住友カード」はカード名ごとに分ける前の名前。Zaim（銀行）の明細も出さない（card_mail・amazon_order だけ）。
+ * 「三井住友カード（Amazon）」は Amazon の注文メールの明細の口座名なので出す（§9.10）。
  */
-const RETIRED_FEED_ACCOUNTS = new Set(['三井住友カード（Amazon）', '楽天カード', '三井住友カード']);
+const RETIRED_FEED_ACCOUNTS = new Set(['楽天カード', '三井住友カード']);
 
 /** Apps Script（5分ごと）からこれだけ届かなければ、取り込みが止まっていると知らせる（§9.8）。 */
 const SYNC_STALE_MS = 3600_000;
@@ -148,7 +153,7 @@ export async function loadMoneyFeed(supabase: SupabaseDb, familyId: string): Pro
 
   const accounts = new Map<string, MoneyFeedAccount>();
   for (const row of recent.data ?? []) {
-    if (!row.account_name || row.source !== 'card_mail' || RETIRED_FEED_ACCOUNTS.has(row.account_name)) continue;
+    if (!row.account_name || row.source === 'zaim_mail' || RETIRED_FEED_ACCOUNTS.has(row.account_name)) continue;
     const key = `${row.account_name}\n${(row.to_email ?? '').toLowerCase()}`;
     if (!accounts.has(key)) {
       accounts.set(key, { accountName: row.account_name, toEmail: row.to_email, lastReceivedAt: row.received_at });
@@ -184,6 +189,31 @@ export async function loadMoneyFeed(supabase: SupabaseDb, familyId: string): Pro
     recentCount: recentRows.filter((row) => row.received_at >= since).length,
     cardFeed: cardFeedOf(recentRows),
   };
+}
+
+/**
+ * Amazon の注文メールの明細の品目（「記録を作成する」で入れる。docs/kakei.md §9.10）。DB の money_feed_order_lines が
+ * 注文の合計と品目（品名・カテゴリは同じ品名の前の記録から）を返し、値引き・送料は feedOrderItems で品目に配る。
+ */
+export async function loadFeedOrderLines(supabase: SupabaseDb, feedId: string): Promise<ReceiptScanItem[]> {
+  const { data, error } = await supabase.rpc('money_feed_order_lines', { p_feed: feedId });
+  if (error) throw error;
+  const order = (data ?? {}) as {
+    total?: number;
+    lines?: { receipt_name: string; name: string; quantity: number; unit_price: number; category_id: string | null }[];
+  };
+  return feedOrderItems(
+    (order.lines ?? []).map(
+      (row): FeedOrderLine => ({
+        receiptName: row.receipt_name,
+        name: row.name,
+        quantity: row.quantity,
+        unitPrice: row.unit_price,
+        categoryId: row.category_id,
+      }),
+    ),
+    order.total ?? 0,
+  );
 }
 
 /** 明細の片づけ方（§9.5.5・§9.5.6.1）。DB の money_feed_resolve の動きと同じ。 */

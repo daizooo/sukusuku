@@ -328,7 +328,10 @@ function FeedItemModal({
         {summary}
         {feedStoreName(item) !== '' && <p className="text-sm font-bold text-gray-900">お店: {feedStoreName(item)}</p>}
         <p className="text-xs leading-relaxed text-gray-500">
-          記録を作成するを押すと、額・日付・出金元・お店を入れた記録の入力を開きます。カテゴリを選んで保存してください。記録しないときは、残高がずれたら口座の詳細から補正してください。
+          {item.amazonOrderId
+            ? '記録を作成するを押すと、額・日付（注文日）・出金元・お店と、注文の品目を入れた記録の入力を開きます。値引きは品目に配ってあります。カテゴリの決まっていない品目を選んで保存してください。'
+            : '記録を作成するを押すと、額・日付・出金元・お店を入れた記録の入力を開きます。カテゴリを選んで保存してください。'}
+          記録しないときは、残高がずれたら口座の詳細から補正してください。
         </p>
       </div>
     </ModalShell>

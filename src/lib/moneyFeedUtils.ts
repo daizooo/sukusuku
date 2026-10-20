@@ -1,4 +1,4 @@
-import type { MoneyCardFeed, MoneyFeedItem, MoneyFeedRule, MoneyRecord, MoneyRecordDraft } from '@/types/app';
+import type { MoneyCardFeed, MoneyFeedItem, MoneyFeedRule, MoneyRecord, MoneyRecordDraft, ReceiptScanItem } from '@/types/app';
 import { formatBalance, formatYen, recordTotal } from './moneyUtils.ts';
 
 // Zaim 取り込みの画面で使う、数え方・言葉（docs/kakei.md §9.5）。mobile版の `mobile/src/lib/moneyFeedUtils.ts` と同じ中身。
@@ -212,3 +212,65 @@ export const storeCategoryGuess = (
   }
   return best?.id ?? null;
 };
+
+/** Amazon の注文の品目（DB の money_feed_order_lines。値引き前の単価・個数と、同じ品名の前の記録から入れた品名・カテゴリ）。 */
+export interface FeedOrderLine {
+  receiptName: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  categoryId: string | null;
+}
+
+/**
+ * Amazon の注文の品目を、支払額（注文メールの合計）に合わせて記録の入力の品目にする（docs/kakei.md §9.10）。
+ * - 合計が品目の和より安いぶん（値引き・ポイント）は、品目の価格の比で配る（値引きの行は作らない）。**個数はそのまま**にするため、
+ *   1個あたりの額を決めてから、端数は小数部の大きい品目から「個数ぶんの円」ずつ足す（個数1の品目は1円ずつ）
+ * - それでも端数が残る（どの品目の個数も残りより多い）ときは、小数部のいちばん大きい品目を、1個あたりの額が1円違う2行に分ける
+ *   （例: 2個で 11,499円 → 1個 5,750円 と 1個 5,749円。個数の合計は変わらない）
+ * - 合計が品目の和より高いぶんは「送料など」の1行（カテゴリはいちばん金額の大きい品目と同じ）
+ */
+export function feedOrderItems(lines: readonly FeedOrderLine[], total: number): ReceiptScanItem[] {
+  const base = lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+  if (base <= 0 || total <= 0) return [];
+  const fee = Math.max(total - base, 0);
+  const paid = total - fee;
+
+  // 1個あたりの額（切り捨て）と、切り捨てたぶん（base 倍した円。大きいほど先に足す）
+  const rows = lines.map((line) => {
+    const scaled = line.quantity * line.unitPrice * paid;
+    const unit = Math.floor(scaled / (base * line.quantity));
+    return { line, unit, rest: scaled - unit * line.quantity * base };
+  });
+  let left = paid - rows.reduce((sum, row) => sum + row.unit * row.line.quantity, 0);
+  const byRest = () =>
+    rows.map((row, index) => ({ row, index })).sort((a, b) => b.row.rest - a.row.rest || a.index - b.index);
+  while (left > 0) {
+    const next = byRest().find(({ row }) => row.line.quantity <= left);
+    if (!next) break;
+    next.row.unit += 1;
+    next.row.rest -= next.row.line.quantity * base;
+    left -= next.row.line.quantity;
+  }
+  const split = left > 0 ? byRest()[0].row : null;
+
+  const item = (line: FeedOrderLine, quantity: number, unitPrice: number): ReceiptScanItem => ({
+    receiptName: line.receiptName,
+    name: line.name,
+    quantity,
+    unitPrice,
+    amount: quantity * unitPrice,
+    categoryId: line.categoryId,
+    categorySource: line.categoryId ? 'history' : 'none',
+  });
+  const items = rows.flatMap((row) =>
+    row === split
+      ? [item(row.line, left, row.unit + 1), item(row.line, row.line.quantity - left, row.unit)]
+      : [item(row.line, row.line.quantity, row.unit)],
+  );
+  if (fee > 0) {
+    const top = [...lines].sort((a, b) => b.quantity * b.unitPrice - a.quantity * a.unitPrice)[0];
+    items.push(item({ ...top, receiptName: '', name: '送料など' }, 1, fee));
+  }
+  return items;
+}

@@ -3,8 +3,8 @@
 // 呼ぶのは Gmail の Apps Script（tools/gas/gmail-feed.gs）。5分ごとに、まだ送っていない通知メールをまとめて送る。
 //   POST { messages: [{ id: GmailのメッセージID, received_at: ISO, from: 差出人, to: 宛先, subject: 件名, body: 本文（プレーンテキスト） }] }
 //   差出人がカード会社なら利用通知（source = 'card_mail'。1通に何件もあれば source_id を「ID#2」…と分ける）。それ以外は Zaim。
-//   差出人が Amazon（auto-confirm@amazon.co.jp）なら注文メール。品目を覚えておき（money_amazon_*）、Amazon のカードの利用通知が
-//   届いたら、請求額に合う品目を割り振って品目つきの記録にする（_shared/amazonOrder.ts。docs/kakei.md §9.7）。
+//   差出人が Amazon（auto-confirm@amazon.co.jp）なら注文メール。注文と品目を覚え（money_amazon_*）、注文ごとに未確認の明細を作る
+//   （DB の money_amazon_order_receive。出金元は「三井住友カード（Amazon）」の口座の対応、日付は注文日。docs/kakei.md §9.10）。
 //   Authorization: Bearer {取り込みの鍵}
 // 返り値 { results: [{ id, status }] }。error 以外のメールは、受け取ったことを money_feed_mails に書く（§9.8）。
 //
@@ -24,13 +24,10 @@ import { parseZaimMail } from '../_shared/zaimMail.ts';
 import {
   CATEGORY_PICK_SCHEMA,
   CATEGORY_PICK_SYSTEM_PROMPT,
-  isAmazonCharge,
   isAmazonOrderSender,
-  matchAmazonCharge,
   parseAmazonOrderMail,
   readCategoryPicks,
   type AmazonOrder,
-  type OpenAmazonOrder,
 } from '../_shared/amazonOrder.ts';
 import {
   cardIssuerOf,
@@ -181,7 +178,10 @@ async function categoriesForOrderLines(admin: Admin, familyId: string, receiptNa
   return result;
 }
 
-/** 注文メールの注文を覚える。返り値はメールの状態（error 以外は Apps Script が送り済みの印を付ける）。 */
+/**
+ * 注文メールの注文を覚え、注文ごとに未確認の明細を作る（DB の money_amazon_order_receive。§9.10）。
+ * 返り値はメールの状態（error 以外は受け取ったメールとして money_feed_mails に書く）。
+ */
 async function receiveAmazonOrders(
   admin: Admin,
   familyId: string,
@@ -210,6 +210,8 @@ async function receiveAmazonOrders(
         order_no: order.orderNo,
         source_id: mail.id,
         received_at: mail.receivedAt,
+        // 注文ごとの明細の件名
+        subject: mail.subject.slice(0, 500),
         ordered_on: orderedOn,
         total: order.total,
         adjust: order.total - sum,
@@ -232,40 +234,6 @@ async function receiveAmazonOrders(
   }
   if (statuses.includes('error')) return 'error';
   return statuses.every((status) => status === 'before_start') ? 'before_start' : 'saved';
-}
-
-/** 覚えている注文の、まだ割り振っていない品目から、カードの請求額に合う組み合わせを探す。 */
-async function amazonAllocationFor(admin: Admin, familyId: string, amount: number) {
-  const since = new Date(Date.now() - 90 * 86400_000).toISOString().slice(0, 10);
-  const { data: orders } = await admin
-    .from('money_amazon_orders')
-    .select('id, ordered_on, total, adjust, adjust_feed_id, discount_used')
-    .eq('family_id', familyId)
-    .gte('ordered_on', since)
-    .order('ordered_on', { ascending: false })
-    .limit(100)
-    .returns<
-      { id: string; ordered_on: string; total: number; adjust: number; adjust_feed_id: string | null; discount_used: number }[]
-    >();
-  if (!orders || orders.length === 0) return null;
-  const { data: lines } = await admin
-    .from('money_amazon_lines')
-    .select('id, order_id, amount, position')
-    .eq('family_id', familyId)
-    .is('feed_id', null)
-    .in('order_id', orders.map((order) => order.id))
-    .returns<{ id: string; order_id: string; amount: number; position: number }[]>();
-  // 注文メールの合計が品目の和より安いぶんが値引きの予算（クーポン・定期おトク便など。どの商品かは分からない）。高ければ送料などの上乗せ（§9.7.3）
-  const open: OpenAmazonOrder[] = orders.map((order) => ({
-    orderId: order.id,
-    orderedOn: order.ordered_on,
-    discountLeft: Math.max(0, (order.adjust < 0 ? -order.adjust : 0) - order.discount_used),
-    fee: order.adjust > 0 ? order.adjust : 0,
-    feeOpen: order.adjust_feed_id === null,
-    lines: (lines ?? []).filter((line) => line.order_id === order.id),
-  }));
-  const match = matchAmazonCharge(amount, open);
-  return match && { amazon_order_id: match.orderId, amazon_line_ids: match.lineIds, amazon_with_adjust: match.withFee };
 }
 
 Deno.serve(async (request) => {
@@ -354,7 +322,7 @@ Deno.serve(async (request) => {
       subject: subject.slice(0, 500),
     };
 
-    // Amazon の注文メール（§9.7）。品目を覚えておく
+    // Amazon の注文メール（§9.10）。注文ごとに未確認の明細を作る
     if (isAmazonOrderSender(text(message.from))) {
       const status = await receiveAmazonOrders(supabase, familyId, { id, receivedAt, subject, body });
       results.push({ id, status });
@@ -377,10 +345,6 @@ Deno.serve(async (request) => {
         statuses.push(await receive({ ...base, source: 'card_mail', source_id: id, raw_line: '' }));
       } else {
         for (const [index, entry] of entries.entries()) {
-          // Amazon の利用なら、注文メールで覚えた品目から請求額に合うものを割り振る（§9.7）
-          const amazon = isAmazonCharge(entry.merchant, entry.accountName)
-            ? await amazonAllocationFor(supabase, familyId, entry.amount)
-            : null;
           statuses.push(
             await receive({
               ...base,
@@ -393,7 +357,6 @@ Deno.serve(async (request) => {
               account_name: entry.accountName,
               description: entry.merchant,
               store_hint: await storeHintFor(supabase, familyId, entry.merchant, await loadStores()),
-              ...amazon,
             }),
           );
         }

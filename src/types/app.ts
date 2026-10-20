@@ -779,10 +779,12 @@ export interface MoneyFeedItem {
   recordId: string | null;
   /** 確認・候補に出す記録。 */
   candidateRecordIds: string[];
-  /** zaim_mail は Zaim の入出金、card_mail はカード会社の利用通知（docs/kakei.md §9.6）。 */
-  source: 'zaim_mail' | 'card_mail';
+  /** zaim_mail は Zaim の入出金、card_mail はカード会社の利用通知（docs/kakei.md §9.6）、amazon_order は Amazon の注文メール（§9.10）。 */
+  source: 'zaim_mail' | 'card_mail' | 'amazon_order';
   /** 利用先に当たるお店の候補（カードの利用通知だけ。覚えた利用先 → ローマ字 → AI で当てたもの）。 */
   storeHint: string | null;
+  /** Amazon の注文メールの明細なら、その注文（「記録を作成する」で品目まで入れて開く。docs/kakei.md §9.10）。 */
+  amazonOrderId: string | null;
 }
 
 /** 取り込みのルールの動き（§9.5.6）。 */

@@ -2,7 +2,14 @@
 import assert from 'node:assert/strict';
 
 import type { MoneyFeedItem, MoneyRecord } from '../types/app.ts';
-import { cardMonthChecks, feedDuplicates, feedLinkCandidates, sortFeedInbox, storeCategoryGuess } from './moneyFeedUtils.ts';
+import {
+  cardMonthChecks,
+  feedDuplicates,
+  feedLinkCandidates,
+  feedOrderItems,
+  sortFeedInbox,
+  storeCategoryGuess,
+} from './moneyFeedUtils.ts';
 
 const record = (id: string, patch: Partial<MoneyRecord>, amount: number): MoneyRecord =>
   ({
@@ -71,6 +78,7 @@ const item = (patch: Partial<MoneyFeedItem>): MoneyFeedItem => ({
   candidateRecordIds: [],
   source: 'zaim_mail',
   storeHint: null,
+  amazonOrderId: null,
   ...patch,
 });
 
@@ -127,6 +135,35 @@ assert.deepEqual(
   assert.equal(storeCategoryGuess(rs, 'よかもんね', 'income'), 'refund', '収入は収入の記録から');
   assert.equal(storeCategoryGuess(rs, 'ゆめタウン', 'expense'), null, '記録の無いお店');
   assert.equal(storeCategoryGuess(rs, '', 'expense'), null);
+}
+
+// ---- Amazon の注文の品目（値引きを配る。個数はそのまま。docs/kakei.md §9.10）----
+{
+  const line = (name: string, quantity: number, unitPrice: number, categoryId: string | null = 'c') => ({
+    receiptName: name,
+    name,
+    quantity,
+    unitPrice,
+    categoryId,
+  });
+  const brief = (items: ReturnType<typeof feedOrderItems>) => items.map((i) => [i.name, i.quantity, i.unitPrice]);
+  // 実物（2026-10-16）: 品目の和 4,859円・合計 4,607円
+  const coupon = feedOrderItems([line('アタック', 1, 1100), line('防臭袋', 2, 1170), line('ディアナチュラ', 1, 1419, null)], 4607);
+  assert.deepEqual(brief(coupon), [['アタック', 1, 1043], ['防臭袋', 2, 1109], ['ディアナチュラ', 1, 1346]]);
+  assert.equal(coupon.reduce((sum, i) => sum + i.amount, 0), 4607);
+  assert.equal(coupon[2].categorySource, 'none');
+  // 値引きなし
+  assert.deepEqual(brief(feedOrderItems([line('A', 3, 100)], 300)), [['A', 3, 100]]);
+  // 個数で割り切れない端数しか残らない（2個で 11,499円）→ 1個あたり1円違う2行に分ける
+  assert.deepEqual(brief(feedOrderItems([line('パンパース', 2, 5824)], 11499)), [['パンパース', 1, 5750], ['パンパース', 1, 5749]]);
+  // 3個で 1,000円 → 1個 334円 と 2個 333円
+  assert.deepEqual(brief(feedOrderItems([line('B', 3, 400)], 1000)), [['B', 1, 334], ['B', 2, 333]]);
+  // 送料など（合計が品目の和より高い）は1行。カテゴリはいちばん金額の大きい品目と同じ
+  const shipping = feedOrderItems([line('C', 1, 500, 'small'), line('D', 2, 800, 'big')], 2450);
+  assert.deepEqual(brief(shipping), [['C', 1, 500], ['D', 2, 800], ['送料など', 1, 350]]);
+  assert.equal(shipping[2].categoryId, 'big');
+  assert.equal(shipping[2].receiptName, '');
+  assert.deepEqual(feedOrderItems([], 100), []);
 }
 
 console.log('moneyFeedUtils: ok');

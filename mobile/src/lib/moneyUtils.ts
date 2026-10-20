@@ -1874,7 +1874,7 @@ export function groupsFromScan(items: readonly ReceiptScanItem[], nextKey: () =>
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       memo: '',
-      receiptName: item.receiptName,
+      receiptName: item.receiptName || null,
     });
   }
   return groups;
