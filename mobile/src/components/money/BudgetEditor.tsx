@@ -388,7 +388,7 @@ export default function BudgetEditor({
 
           {sectionHeader('収入', incomeTotal)}
           {incomeRows.length === 0 ? (
-            <Text style={styles.message}>この年の固定収入はありません</Text>
+            <Text style={styles.message}>この年の収入の見込みはありません</Text>
           ) : (
             <View style={styles.card}>{incomeRows.map((row, index) => fixedRow(row, index === 0))}</View>
           )}

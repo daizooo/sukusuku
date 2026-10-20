@@ -177,8 +177,8 @@ export default function MoneyRecordsView({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  // 右端のバーと、右下の「＋」に一覧の最後が隠れないよう、右と下を空ける。
-  content: { paddingLeft: 16, paddingRight: 24, paddingBottom: 96 },
+  // 右端のバーと、右下の「＋」と設定に一覧の最後が隠れないよう、右と下を空ける。
+  content: { paddingLeft: 16, paddingRight: 24, paddingBottom: 136 },
   message: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 32 },
   todayWrap: { position: 'absolute', top: 10, left: 0, right: 0, alignItems: 'center' },
   today: {
