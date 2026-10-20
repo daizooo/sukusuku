@@ -6,7 +6,11 @@
 //   差出人が Amazon（auto-confirm@amazon.co.jp）なら注文メール。品目を覚えておき（money_amazon_*）、Amazon のカードの利用通知が
 //   届いたら、請求額に合う品目を割り振って品目つきの記録にする（_shared/amazonOrder.ts。docs/kakei.md §9.7）。
 //   Authorization: Bearer {取り込みの鍵}
-// 返り値 { results: [{ id, status }] }。status が error 以外のメールは、Apps Script が送り済みの印を付ける。
+// 返り値 { results: [{ id, status }] }。error 以外のメールは、受け取ったことを money_feed_mails に書く（§9.8）。
+//
+// Apps Script は、送る前と送ったあとに同期する（§9.8）。
+//   POST { action: 'sync', ids: [Gmail で見つけたメールのID], applied: [{ id, label, trashed }] }
+//   返り値 { missing: [まだ受け取っていないID], changes: [{ id, label, trash }] }（付け替えるラベル・ゴミ箱へ移すメール）
 //
 // 鍵は家計の設定で発行し（money_feed_issue_token）、DB には SHA-256 だけを持つ。鍵から家族を決める。
 // メールを読むのは _shared/zaimMail.ts（試せるよう外に出してある）。突き合わせは DB の money_feed_receive。
@@ -47,6 +51,16 @@ interface IncomingMessage {
 
 // 1回に受けるメールの数（Apps Script もこれ以下で送る）
 const MAX_MESSAGES = 50;
+// 同期で受ける ID・付けたラベルの数
+const MAX_SYNC_IDS = 2000;
+
+// 注文メールの状態 → 受け取ったメールの扱い（error は書かず、次の同期でまた送られる）
+const AMAZON_OUTCOMES: Record<string, string> = {
+  saved: 'order',
+  skipped: 'skipped',
+  ignored: 'unreadable',
+  before_start: 'before_start',
+};
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -215,7 +229,8 @@ async function receiveAmazonOrders(
       statuses.push(String((data as { status?: string })?.status ?? 'error'));
     }
   }
-  return statuses.includes('error') ? 'error' : 'saved';
+  if (statuses.includes('error')) return 'error';
+  return statuses.every((status) => status === 'before_start') ? 'before_start' : 'saved';
 }
 
 /** 覚えている注文の、まだ割り振っていない品目から、カードの請求額に合う組み合わせを探す。 */
@@ -274,6 +289,23 @@ Deno.serve(async (request) => {
   const familyId = tokenRow.family_id;
 
   const payload = await request.json().catch(() => null);
+
+  // Apps Script との同期（§9.8）
+  if (payload?.action === 'sync') {
+    const ids = (Array.isArray(payload.ids) ? payload.ids : []).filter((id: unknown) => typeof id === 'string' && id !== '');
+    const applied = Array.isArray(payload.applied) ? payload.applied : [];
+    const { data, error } = await supabase.rpc('money_feed_mail_sync', {
+      p_family: familyId,
+      p_ids: ids.slice(0, MAX_SYNC_IDS),
+      p_applied: applied.slice(0, MAX_SYNC_IDS),
+    });
+    if (error) {
+      console.error('money_feed_mail_sync failed', error.code);
+      return json({ error: 'sync failed' }, 500);
+    }
+    return json(data);
+  }
+
   const messages: IncomingMessage[] = Array.isArray(payload?.messages) ? payload.messages.slice(0, MAX_MESSAGES) : [];
 
   const results: { id: string; status: string }[] = [];
@@ -299,6 +331,11 @@ Deno.serve(async (request) => {
     return String((data as { status?: string })?.status ?? 'error');
   };
 
+  // 受け取ったメールの扱い（money_feed_mails。§9.8）
+  const mails: { message_id: string; received_at: string; outcome: string }[] = [];
+  const remember = (id: string, receivedAt: string, outcome: string) =>
+    mails.push({ message_id: id, received_at: new Date(receivedAt).toISOString(), outcome });
+
   // 届いた順に入れる（振替は先に届いた片方に後の片方を組み合わせる）
   const sorted = [...messages].sort((a, b) => text(a.received_at).localeCompare(text(b.received_at)));
   for (const message of sorted) {
@@ -318,7 +355,10 @@ Deno.serve(async (request) => {
 
     // Amazon の注文メール（§9.7）。品目を覚えておく
     if (isAmazonOrderSender(text(message.from))) {
-      results.push({ id, status: await receiveAmazonOrders(supabase, familyId, { id, receivedAt, subject, body }) });
+      const status = await receiveAmazonOrders(supabase, familyId, { id, receivedAt, subject, body });
+      results.push({ id, status });
+      const outcome = AMAZON_OUTCOMES[status];
+      if (outcome) remember(id, receivedAt, outcome);
       continue;
     }
 
@@ -352,6 +392,7 @@ Deno.serve(async (request) => {
         }
       }
       results.push({ id, status: statuses.includes('error') ? 'error' : statuses[0] });
+      if (!statuses.includes('error')) remember(id, receivedAt, statuses[0] === 'before_start' ? 'before_start' : 'feed');
       continue;
     }
 
@@ -368,7 +409,15 @@ Deno.serve(async (request) => {
         description: parsed.description,
       }),
     };
-    results.push({ id, status: await receive(feed) });
+    const status = await receive(feed);
+    results.push({ id, status });
+    if (status !== 'error') remember(id, receivedAt, status === 'before_start' ? 'before_start' : 'feed');
+  }
+
+  if (mails.length > 0) {
+    const { error } = await supabase.rpc('money_feed_mail_record', { p_family: familyId, p_mails: mails });
+    // 書けなくても明細は入っている。次の同期で「まだ」として返り、また送られる（同じメールは1回だけ取り込む）
+    if (error) console.error('money_feed_mail_record failed', error.code);
   }
 
   await supabase.from('money_feed_tokens').update({ last_used_at: new Date().toISOString() }).eq('family_id', familyId);

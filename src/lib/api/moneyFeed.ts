@@ -98,10 +98,13 @@ const cardFeedOf = (
   return { linkedAmounts, walletIds: [...walletIds], since };
 };
 
+/** Apps Script（5分ごと）からこれだけ届かなければ、取り込みが止まっていると知らせる（§9.8）。 */
+const SYNC_STALE_MS = 3600_000;
+
 /** 取り込みの画面に要るもの（明細・ルール・設定・口座の対応）を並べて読む。 */
 export async function loadMoneyFeed(supabase: SupabaseDb, familyId: string): Promise<MoneyFeedData> {
   const since = new Date(Date.now() - 30 * 86400_000).toISOString();
-  const [open, recent, rules, settings, wallets] = await Promise.all([
+  const [open, recent, rules, settings, wallets, lastSync] = await Promise.all([
     supabase
       .from('money_feed')
       .select(FEED_COLUMNS)
@@ -132,8 +135,10 @@ export async function loadMoneyFeed(supabase: SupabaseDb, familyId: string): Pro
       .from('money_wallets')
       .select('id, feed_name, holder_name, holder_zaim_email, holder_kana')
       .eq('family_id', familyId),
+    // Apps Script が最後に動いた日時（§9.8）
+    supabase.rpc('money_feed_last_sync'),
   ]);
-  for (const result of [open, recent, rules, settings, wallets]) if (result.error) throw result.error;
+  for (const result of [open, recent, rules, settings, wallets, lastSync]) if (result.error) throw result.error;
 
   const accounts = new Map<string, MoneyFeedAccount>();
   for (const row of recent.data ?? []) {
@@ -168,6 +173,8 @@ export async function loadMoneyFeed(supabase: SupabaseDb, familyId: string): Pro
     accounts: [...accounts.values()],
     linkedRecordIds: [...new Set(recentRows.flatMap((row) => (row.record_id ? [row.record_id] : [])))],
     lastReceivedAt: recentRows[0]?.received_at ?? null,
+    lastSyncAt: lastSync.data ?? null,
+    syncStalled: lastSync.data != null && Date.now() - Date.parse(lastSync.data) > SYNC_STALE_MS,
     recentCount: recentRows.filter((row) => row.received_at >= since).length,
     cardFeed: cardFeedOf(recentRows),
   };

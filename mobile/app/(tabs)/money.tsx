@@ -692,6 +692,7 @@ export default function MoneyScreen() {
               onAddOnDate={addOnDate}
               feedOpenCount={feed?.open.length ?? 0}
               onOpenFeed={() => setFeedOpen(true)}
+              feedStalled={feed?.syncStalled ?? false}
             />
             </View>
           )}

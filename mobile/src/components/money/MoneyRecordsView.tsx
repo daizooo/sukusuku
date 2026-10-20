@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View, type ViewToken } from 'react-native';
-import { ChevronRight, Inbox, Undo2 } from 'lucide-react-native';
+import { ChevronRight, Inbox, TriangleAlert, Undo2 } from 'lucide-react-native';
 import type { MoneyCategory, MoneyRecord, MoneyWallet } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { WEEKDAY_LABELS } from '@/lib/dateUtils';
@@ -17,6 +17,7 @@ import FastScrollBar, { useFastScroll } from '@/components/money/FastScrollBar';
 // いちばん上から15件さかのぼると、上に「今日に戻る」を出す（押すと、いちばん上へ戻る）。
 // その月に使った額は「振り返り」で見るので、ここには出さない（2026-10-08）。押すと記録の詳細。
 // Gmail から取り込んだ明細の「未確認 n件」は、一覧の上に固定して出す（2026-10-18。以前は口座の面。docs/kakei.md §9.5.6.1）。
+// Apps Script から1時間以上届いていなければ、その上に「Gmail の取り込みが止まっています」を出す（2026-10-20。§9.8）。
 
 interface MoneyRecordsViewProps {
   /** この面を開いているか。false から true になったとき、いちばん上へ戻す。 */
@@ -31,6 +32,8 @@ interface MoneyRecordsViewProps {
   /** Gmail から取り込んだ明細のうち、片づいていないものの数（docs/kakei.md §9.5.6.1）。0 なら出さない。 */
   feedOpenCount: number;
   onOpenFeed: () => void;
+  /** Apps Script から1時間以上届いていない（docs/kakei.md §9.8）。 */
+  feedStalled: boolean;
 }
 
 /** 補正は口座の履歴にだけ混ぜるので、ここでは持たない。 */
@@ -57,6 +60,7 @@ export default function MoneyRecordsView({
   onAddOnDate,
   feedOpenCount,
   onOpenFeed,
+  feedStalled,
 }: MoneyRecordsViewProps) {
   const days = useMemo<RecordDay[]>(
     () => groupRecordsByDay(records).map((day) => ({ ...day, corrections: NO_CORRECTIONS })),
@@ -112,6 +116,12 @@ export default function MoneyRecordsView({
 
   return (
     <View style={styles.flex}>
+      {feedStalled && (
+        <View style={styles.stalled}>
+          <TriangleAlert size={18} color={colors.milkBadgeText} />
+          <Text style={styles.stalledText}>Gmail の取り込みが止まっています（1時間以上届いていません）</Text>
+        </View>
+      )}
       {feedOpenCount > 0 && (
         <Pressable
           accessibilityRole="button"
@@ -202,4 +212,16 @@ const styles = StyleSheet.create({
   feedPressed: { opacity: 0.7 },
   feedText: { fontSize: 15, fontWeight: '800', color: colors.moneyText },
   feedSub: { flex: 1, fontSize: 12, fontWeight: '500', color: colors.moneyText },
+  stalled: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    marginHorizontal: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 14,
+    backgroundColor: colors.milkBadge,
+  },
+  stalledText: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.milkBadgeText },
 });
