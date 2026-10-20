@@ -1,0 +1,26 @@
+# public に新しく作る表の GRANT の付け忘れを見つける（Supabase の 2026-10-30 の仕様変更への対応）。
+# 依存を入れず Node だけで数秒で終わる。
+name: table grants check
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/check-table-grants.mjs'
+      - '.github/workflows/table-grants-check.yml'
+
+concurrency:
+  group: table-grants-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - run: node scripts/check-table-grants.mjs

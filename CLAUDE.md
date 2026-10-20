@@ -66,6 +66,12 @@
 - 1回の `apply_migration` は小さく分ける（関数・表・cron ごとなど）
 - 適用したら確かめる: 物ができたか（表・列・関数・cron）、`generate_typescript_types` の結果と
   `src/types/supabase.ts`・`mobile/src/types/supabase.ts` の該当部分が同じか、計算の結果
+- **public に新しい表を作る migration は、同じファイルで GRANT を明示する**（2026-10-20。Supabase が
+  2026-10-30 から、public の新しい表へ Data API 権限を自動付与しなくなるため。付け忘れると、その表だけ
+  supabase-js が permission denied になる）。アプリから触る表は
+  `grant select, insert, update, delete on public.表 to authenticated;` と
+  `grant all on public.表 to service_role;`、関数からだけ触る表は service_role だけ。
+  0122 が既存の表をまとめて明示済み。付け忘れは `npm run check:table-grants`（CI の「table grants check」）が落ちる
 
 ## コンフリクトを減らすための設計・実装方針
 
