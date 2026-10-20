@@ -182,6 +182,8 @@ export default function MoneyScreen() {
   const [newKind, setNewKind] = useState<MoneyRecordKind>('expense');
   // 記録の一覧の、日の見出しの「＋」から足すときの日。それ以外は null（今日）。
   const [newDate, setNewDate] = useState<string | null>(null);
+  // 「記録して続ける」の続き（2026-10-20）。次の入力に引き継ぐ日付。続けていないときは null。
+  const [chain, setChain] = useState<{ seq: number; occurredOn: string } | null>(null);
   // レシートの読み取りの結果（記録の入力に入れて開く）と、読み取り中か（docs/kakei.md §10）。
   const [receipt, setReceipt] = useState<ReceiptScan | null>(null);
   // レシートを当てている既にある記録（§10.8）。null は新しい記録の読み取り。
@@ -363,17 +365,26 @@ export default function MoneyScreen() {
     }
   };
 
-  const saveRecord = async (draft: MoneyRecordDraft) => {
+  /** next: 「記録して続ける」。保存したら、日付だけを引き継いだ次の入力を開く（レシートからなら、次のレシートを撮る）。 */
+  const saveRecord = async (draft: MoneyRecordDraft, next = false) => {
     if (!(await confirmReopen(monthsOfDraft(draft)))) return;
     if (!(await confirmNotDuplicate(draft))) return;
+    const fromReceipt = editing === 'new' && receipt !== null;
     setEditing(null);
     setReceipt(null);
     setReceiptFor(null);
     const feedItem = feedRecordFor;
     setFeedRecordFor(null);
+    if (next) {
+      setChain((prev) => ({ seq: (prev?.seq ?? 0) + 1, occurredOn: draft.occurredOn }));
+      if (!fromReceipt) setEditing('new');
+    } else {
+      setChain(null);
+    }
     try {
       const saved = await saveMoneyRecord(supabase, draft);
       setRecords((prev) => [...prev.filter((record) => record.id !== saved.id), saved]);
+      if (next && fromReceipt) void startReceiptScan();
       setMonthKey(monthKeyOf(saved.occurredOn));
       // 「お店に登録して使う」を選んだお店は、DBの save_money_record がお店の設定に登録する（docs/kakei.md §3.5）。
       if (familyId && draft.registerStore && saved.store !== '' && !stores.some((entry) => entry.name === saved.store && !entry.archived)) {
@@ -437,7 +448,7 @@ export default function MoneyScreen() {
     }
     if (!images) return;
     // 読み取っている間は記録の入力を閉じる（読み取り中の表示が見えるように）
-    if (target) setEditing(null);
+    setEditing(null);
     setScanning(true);
     try {
       const scan = await scanReceipt(supabase, images);
@@ -463,7 +474,8 @@ export default function MoneyScreen() {
         { text: '置き換える', onPress: apply },
       ]);
     } catch (error) {
-      if (target) setEditing(target);
+      // 読み取れなかったら、閉じた入力に戻す（新しい記録は空の入力）
+      setEditing(target ?? 'new');
       Alert.alert('レシートを読み取れませんでした', error instanceof Error ? error.message : undefined);
     } finally {
       setScanning(false);
@@ -479,10 +491,12 @@ export default function MoneyScreen() {
     if (!open || isLoading || !familyId) return;
     router.setParams({ [OPEN_MONEY_PARAM]: '' });
     if (open === 'receipt') {
+      setChain(null);
       void startReceiptScan();
       return;
     }
     setReceipt(null);
+    setChain(null);
     setNewKind(open);
     setNewDate(null);
     setEditing('new');
@@ -622,6 +636,7 @@ export default function MoneyScreen() {
   // 記録の一覧の、日の見出しの「＋」。一覧の行を作り直さないよう、関数は固定しておく。
   const addOnDate = useCallback((date: string) => {
     setReceipt(null);
+    setChain(null);
     setNewKind('expense');
     setNewDate(date);
     setEditing('new');
@@ -756,16 +771,17 @@ export default function MoneyScreen() {
         </Animated.View>
       </View>
 
-      {/* 右下の1つの大きなボタン。押すと「記録を追加」「レシートを読む」「家計の設定」が開く（2026-10-10）。 */}
+      {/* 右下の＋（記録を追加）と、その上の設定。どちらも1回で開く（2026-10-20）。 */}
       <MoneyFab
         addDisabled={!familyId}
         settingsDisabled={!familyId}
         onAdd={() => {
+          // レシートから続けて記録したあとにカメラを閉じたときの続きは、ここで終える。
+          setChain(null);
           setNewKind('expense');
           setNewDate(null);
           setEditing('new');
         }}
-        onScan={() => void startReceiptScan()}
         onSettings={() => setSettingsOpen(true)}
       />
 
@@ -778,12 +794,12 @@ export default function MoneyScreen() {
 
       {editing !== null && (
         <RecordEditor
-          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newKind}-${newDate ?? ''}-${feedRecordFor?.id ?? ''}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
+          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newKind}-${newDate ?? ''}-${feedRecordFor?.id ?? ''}-${chain?.seq ?? 0}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
           record={editing === 'new' ? null : editing}
           receipt={editing === 'new' || receiptFor === editing.id ? receipt : null}
-          onScanReceipt={(target) => void startReceiptScan(target)}
+          onScanReceipt={(target) => void startReceiptScan(target ?? undefined)}
           initialKind={newKind}
-          initialDate={newDate}
+          initialDate={chain?.occurredOn ?? newDate}
           initialWallet={feedRecordFor?.walletId ?? null}
           initialStore={feedRecordFor ? feedStoreName(feedRecordFor) : ''}
           initialAmount={feedRecordFor?.amount ?? null}
@@ -798,8 +814,10 @@ export default function MoneyScreen() {
             setReceipt(null);
             setReceiptFor(null);
             setFeedRecordFor(null);
+            setChain(null);
           }}
           onSubmit={(draft) => void saveRecord(draft)}
+          onSubmitNext={(draft) => void saveRecord(draft, true)}
           onDelete={(record) => void removeRecord(record)}
           onEditCategories={() => setEditingCategories(true)}
         />
@@ -851,6 +869,7 @@ export default function MoneyScreen() {
               }
               setReceipt(null);
               setReceiptFor(null);
+              setChain(null);
               setNewKind(item.direction === 'in' ? 'income' : 'expense');
               setNewDate(item.occurredOn);
               setFeedOrderItems(items);

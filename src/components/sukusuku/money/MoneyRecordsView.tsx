@@ -137,7 +137,7 @@ export default function MoneyRecordsView({
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="min-h-0 flex-1 overflow-y-auto pb-24 pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="min-h-0 flex-1 overflow-y-auto pb-36 pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {isLoading ? (
             <p className="py-8 text-center text-sm text-gray-400">読み込み中...</p>

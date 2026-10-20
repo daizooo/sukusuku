@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   hero: { paddingTop: 6 },
   // 右下の「＋」に一覧の最後が隠れないよう、下を空ける。
-  content: { paddingHorizontal: 16, paddingBottom: 96 },
+  content: { paddingHorizontal: 16, paddingBottom: 136 },
   message: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
   section: { marginTop: 8, gap: 3 },
   sectionHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: 4 },

@@ -157,7 +157,7 @@ export default function MoneyAccountsView({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* 総残高も一覧と一緒に流れる（固定しない。2026-10-08）。右下の「＋」に一覧の最後が隠れないよう、下を空ける。 */}
-      <div className="flex-1 min-h-0 overflow-y-auto pb-24">
+      <div className="flex-1 min-h-0 overflow-y-auto pb-36">
         <button
           type="button"
           aria-label="総残高の推移を見る"
