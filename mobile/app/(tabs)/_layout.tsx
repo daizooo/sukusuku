@@ -21,6 +21,8 @@ export default function TabsLayout() {
       backBehavior="history"
       screenOptions={{
         headerShown: false,
+        // キーボードが出ているあいだは、下のタブバーを隠して入力欄に高さを譲る。
+        tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: colors.navActive,
         tabBarInactiveTintColor: colors.navInactive,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },

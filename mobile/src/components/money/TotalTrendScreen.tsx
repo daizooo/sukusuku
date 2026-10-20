@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import Modal from '@/components/ui/Modal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MoneyRecord, MoneySecuritiesData, MoneyWallet, MoneyWalletBalance } from '@/types/app';
 import { colors } from '@/lib/theme';
