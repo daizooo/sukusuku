@@ -141,6 +141,45 @@ async function completeTask(taskId: string, date: string | null): Promise<void> 
   await updateTaskDone(supabase, taskId, true);
 }
 
+/** 1回の書き込みを待つ上限。裏の処理は通信が途中で止まって返らないことがあり、待ち続けると失敗の知らせも出せない。 */
+const WRITE_TIMEOUT_MS = 10_000;
+/** 書き込みをやり直す間隔。完了は何度書いても同じ結果なので、読み取りからまとめてやり直してよい。 */
+const WRITE_RETRY_DELAYS_MS = [1_000, 3_000];
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${ms}ms 以内に終わりませんでした`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
+/**
+ * 完了を書き込む。通信が一瞬つながらない・途中で止まるだけで失敗にしないよう、待ち時間に上限を付けてやり直す
+ * （2026-10-20: 通知から押した完了で、読み取りは届いたのに書き込みが届かず「完了にできませんでした」になった）。
+ */
+async function completeTaskWithRetry(taskId: string, date: string | null): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await withTimeout(completeTask(taskId, date), WRITE_TIMEOUT_MS);
+      return;
+    } catch (err) {
+      const delay = WRITE_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined) throw err;
+      console.warn('Retrying completion from notification:', err);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
 /**
  * お知らせのボタンが押されたときの処理。ボタンの押下でなければ何もせず false。
  * 済ませたらお知らせを消す。できなければ、そのことを本文にして出し直す（もう一度押せる）。
@@ -174,13 +213,13 @@ export async function handleNotificationAction(
 
     try {
       if (!pending) throw new Error(`お知らせにタスクのidがありません: ${JSON.stringify(Object.keys(data))}`);
-      await completeTask(pending.taskId, pending.date);
+      await completeTaskWithRetry(pending.taskId, pending.date);
       await updatePending((list) => list.filter((p) => !samePending(p, pending)));
       console.log('[notification-action] completed', pending.taskId, pending.date);
     } catch (err) {
       // 黙って終えない。できなかったことを本文にして出し直し、もう一度押せるようにする。
       console.error('Failed to complete task from notification:', err);
-      await presentAgain(request, '完了にできませんでした。アプリを開いて完了にしてください。').catch(
+      await presentAgain(request, '完了を書き込めませんでした。アプリを開くと完了になります。').catch(
         (presentErr: unknown) => console.error('Failed to present notification again:', presentErr),
       );
     }
@@ -194,16 +233,26 @@ export async function handleNotificationAction(
  * このタスクのお知らせを端末から消す。押されたお知らせのidで消し、idが合わなかった場合に備えて、
  * 出ているお知らせのうち同じタスクのものも消す（同じ用件が積み上がっていても残さない）。
  */
-async function dismissTaskNotifications(identifier: string, taskId: string | null): Promise<void> {
-  await Notifications.dismissNotificationAsync(identifier).catch((err: unknown) =>
-    console.error('Failed to dismiss notification:', err),
-  );
+async function dismissTaskNotifications(
+  identifier: string | null,
+  taskId: string | null,
+  date?: string | null,
+): Promise<void> {
+  if (identifier) {
+    await Notifications.dismissNotificationAsync(identifier).catch((err: unknown) =>
+      console.error('Failed to dismiss notification:', err),
+    );
+  }
   if (!taskId) return;
   try {
     const presented = await Notifications.getPresentedNotificationsAsync();
     await Promise.all(
       presented
-        .filter((n) => stringOf((n.request.content.data as NotificationData | undefined)?.taskId) === taskId)
+        .filter((n) => {
+          const data = n.request.content.data as NotificationData | undefined;
+          // 日付を指定したときは、その回のお知らせだけ（繰り返すタスクの別の回のお知らせは残す）。
+          return stringOf(data?.taskId) === taskId && (date === undefined || stringOf(data?.date) === date);
+        })
         .map((n) => Notifications.dismissNotificationAsync(n.request.identifier)),
     );
   } catch (err) {
@@ -220,6 +269,8 @@ export async function flushPendingCompletions(): Promise<void> {
     try {
       await completeTask(pending.taskId, pending.date);
       await updatePending((list) => list.filter((p) => !samePending(p, pending)));
+      // 書き込めなかったと伝えたお知らせが残っていると、完了済みなのに「完了にできませんでした」と見えてしまう。
+      await dismissTaskNotifications(null, pending.taskId, pending.date);
     } catch (err) {
       console.error('Failed to flush pending completion:', err);
     }
