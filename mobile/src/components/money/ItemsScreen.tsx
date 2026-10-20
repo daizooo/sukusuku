@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
   // 一覧のいちばん下の「＋ カテゴリを追加」。
   addCategory: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface },
   addCategoryText: { fontSize: 14, fontWeight: '600', color: colors.money },
-  footer:  footer: { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8 },
+  footer: { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8 },
   // 電卓の別枠（画面の下。上は暗くして、押すと閉じる）。
   backdrop: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)' },
   calcSheet: { backgroundColor: colors.surface, paddingBottom: 16 },
