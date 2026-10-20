@@ -1,10 +1,11 @@
-// かぞく手帳: Zaim の入出金通知メールと、カード会社の利用通知メールを受け取り、明細として取り込む（家計タブ。docs/kakei.md §9.5・§9.6）
+// かぞく手帳: カード会社の利用通知メールと Amazon の注文メールを受け取り、明細として取り込む（家計タブ。docs/kakei.md §9.6・§9.10）
 //
 // 呼ぶのは Gmail の Apps Script（tools/gas/gmail-feed.gs）。5分ごとに、まだ送っていない通知メールをまとめて送る。
 //   POST { messages: [{ id: GmailのメッセージID, received_at: ISO, from: 差出人, to: 宛先, subject: 件名, body: 本文（プレーンテキスト） }] }
-//   差出人がカード会社なら利用通知（source = 'card_mail'。1通に何件もあれば source_id を「ID#2」…と分ける）。それ以外は Zaim。
+//   差出人がカード会社なら利用通知（source = 'card_mail'。1通に何件もあれば source_id を「ID#2」…と分ける）。
 //   差出人が Amazon（auto-confirm@amazon.co.jp）なら注文メール。注文と品目を覚え（money_amazon_*）、注文ごとに未確認の明細を作る
 //   （DB の money_amazon_order_receive。出金元は「三井住友カード（Amazon）」の口座の対応、日付は注文日。docs/kakei.md §9.10）。
+//   それ以外の差出人（Zaim など。Apps Script はもう送らない）は取り込まず「対象外」にする（§9.11）。
 //   Authorization: Bearer {取り込みの鍵}
 // 返り値 { results: [{ id, status }] }。error 以外のメールは、受け取ったことを money_feed_mails に書く（§9.8）。
 //
@@ -13,14 +14,13 @@
 //   返り値 { missing: [まだ受け取っていないID], changes: [{ id, label, trash }] }（付け替えるラベル・ゴミ箱へ移すメール）
 //
 // 鍵は家計の設定で発行し（money_feed_issue_token）、DB には SHA-256 だけを持つ。鍵から家族を決める。
-// メールを読むのは _shared/zaimMail.ts（試せるよう外に出してある）。突き合わせは DB の money_feed_receive。
-// 本文には振込の相手の名前が入るので、ログには出さない。
+// メールを読むのは _shared/cardMail.ts・amazonOrder.ts（試せるよう外に出してある）。突き合わせは DB の money_feed_receive。
+// 本文には個人の情報が入るので、ログには出さない。
 //
 // 認証は鍵で自前で確かめるので、supabase/config.toml で verify_jwt = false にしている。
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.2';
 import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
-import { parseZaimMail } from '../_shared/zaimMail.ts';
 import {
   CATEGORY_PICK_SCHEMA,
   CATEGORY_PICK_SYSTEM_PROMPT,
@@ -66,12 +66,6 @@ const json = (body: unknown, status = 200): Response =>
 const sha256Hex = async (text: string): Promise<string> => {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
-};
-
-// 本文から、明細の1行（「新着の入金／出金 …」）だけを残す
-const pickLine = (body: string): string => {
-  const line = body.split(/\r?\n/).find((l) => l.includes('新着の入金') || l.includes('新着の出金')) ?? '';
-  return line.replace(/^[\s|]+|[\s|]+$/g, '').slice(0, 500);
 };
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -305,7 +299,7 @@ Deno.serve(async (request) => {
   const remember = (id: string, receivedAt: string, outcome: string) =>
     mails.push({ message_id: id, received_at: new Date(receivedAt).toISOString(), outcome });
 
-  // 届いた順に入れる（振替は先に届いた片方に後の片方を組み合わせる）
+  // 届いた順に入れる
   const sorted = [...messages].sort((a, b) => text(a.received_at).localeCompare(text(b.received_at)));
   for (const message of sorted) {
     const id = text(message.id);
@@ -366,22 +360,9 @@ Deno.serve(async (request) => {
       continue;
     }
 
-    const parsed = parseZaimMail(subject, body, receivedAt);
-    const feed = {
-      source_id: id,
-      ...base,
-      raw_line: pickLine(body),
-      ...(parsed && {
-        direction: parsed.direction,
-        occurred_on: parsed.occurredOn,
-        amount: parsed.amount,
-        account_name: parsed.accountName,
-        description: parsed.description,
-      }),
-    };
-    const status = await receive(feed);
-    results.push({ id, status });
-    if (status !== 'error') remember(id, receivedAt, status === 'before_start' ? 'before_start' : 'feed');
+    // カード会社・Amazon 以外（Zaim の入出金通知など）は取り込まない（§9.11）。Apps Script が「対象外」にしてゴミ箱へ移す
+    results.push({ id, status: 'skipped' });
+    remember(id, receivedAt, 'skipped');
   }
 
   if (mails.length > 0) {

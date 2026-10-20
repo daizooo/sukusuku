@@ -32,9 +32,9 @@ import CategoryPicker from './CategoryPicker';
 import { PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
 import { Chip, ChipRow, Field, WalletChoices, feedInputClass } from './feedParts';
 
-// 家計の設定の「Zaim 取り込み」（docs/kakei.md §9.5.6）。mobile版の `mobile/src/components/money/MoneyFeedSettings.tsx` と同じ並び・文言。
+// 家計の設定の「Gmail 取り込み」（docs/kakei.md §9.5.6・§9.11）。mobile版の `mobile/src/components/money/MoneyFeedSettings.tsx` と同じ並び・文言。
 //
-// 取り込みに関わる設定をここ1か所で決める: 取り込みの状態と鍵／口座の対応（Zaim の口座名 → 出金元と所持者）／
+// 取り込みに関わる設定をここ1か所で決める: 取り込みの状態と鍵／口座の対応（利用通知のカード名 → 出金元と所持者）／
 // 取り込みのルール（条件と動き。上から見て最初に当たったもの）／突き合わせの幅（日数）。
 // 口座の対応・ルールを直したら、未確認の明細を突き合わせ直す（money_feed_reprocess）。
 
@@ -60,12 +60,6 @@ interface AccountRow {
 }
 
 const failed = () => window.alert('保存できませんでした。もう一度お試しください。');
-
-/** ひな形（§9.5.6）。ATM・カード会社の文字は、実物のメールが届いたら合わせる。 */
-const TEMPLATES: { label: string; draft: Partial<MoneyFeedRuleDraft> }[] = [
-  { label: 'ATM の出金 → 財布へ振替', draft: { name: 'ATM の出金', direction: 'out', pattern: 'ATM', action: 'transfer' } },
-  { label: 'カードの引き落とし → 補正のみ', draft: { name: 'カードの引き落とし', direction: 'out', pattern: 'カード', action: 'adjust_only' } },
-];
 
 const EMPTY_RULE: MoneyFeedRuleDraft = {
   name: '',
@@ -302,22 +296,10 @@ export default function MoneyFeedSettings({
           <Plus size={18} />
           ルールを足す
         </button>
-        <p className={sectionTitleClass}>ひな形から足す</p>
-        <ChipRow>
-          {TEMPLATES.map((template) => (
-            <Chip
-              key={template.label}
-              label={template.label}
-              selected={false}
-              onClick={() => setRule({ target: null, draft: { ...EMPTY_RULE, ...template.draft } })}
-            />
-          ))}
-        </ChipRow>
 
         <p className={sectionTitleClass}>突き合わせの幅</p>
         <div className={cardClass}>
-          <DaysRow label="振替の組み合わせ" value={feed.settings.pairDays} onChange={(value) => void saveDays('pairDays', value)} />
-          <DaysRow label="自動の記録との照合" value={feed.settings.estimateDays} onChange={(value) => void saveDays('estimateDays', value)} divided />
+          <DaysRow label="自動の記録との照合" value={feed.settings.estimateDays} onChange={(value) => void saveDays('estimateDays', value)} />
           <DaysRow label="手入力との確認" value={feed.settings.manualDays} onChange={(value) => void saveDays('manualDays', value)} divided />
         </div>
       </div>
@@ -478,7 +460,7 @@ function AccountModal({
   );
 }
 
-const ACTIONS: MoneyFeedAction[] = ['record', 'transfer', 'link_recurring', 'adjust_only', 'ignore'];
+const ACTIONS: MoneyFeedAction[] = ['record', 'link_recurring', 'ignore'];
 
 function RuleModal({
   target,
@@ -516,7 +498,6 @@ function RuleModal({
 
   const valid =
     (draft.action !== 'record' || draft.categoryId !== null) &&
-    (draft.action !== 'transfer' || draft.toWalletId !== null) &&
     (draft.action !== 'link_recurring' || draft.recurringId !== null);
 
   return (
@@ -541,7 +522,7 @@ function RuleModal({
       >
         <div className="space-y-4">
           <Field label="名前">
-            <input className={feedInputClass} value={draft.name} onChange={(event) => set({ name: event.target.value })} placeholder="例: ATM の出金" />
+            <input className={feedInputClass} value={draft.name} onChange={(event) => set({ name: event.target.value })} placeholder="例: ユニクロ" />
           </Field>
           <p className={sectionTitleClass}>条件</p>
           <Field label="口座">
@@ -552,20 +533,13 @@ function RuleModal({
               ))}
             </ChipRow>
           </Field>
-          <Field label="向き">
-            <ChipRow>
-              <Chip label="どちらでも" selected={draft.direction === null} onClick={() => set({ direction: null })} />
-              <Chip label="出金" selected={draft.direction === 'out'} onClick={() => set({ direction: 'out' })} />
-              <Chip label="入金" selected={draft.direction === 'in'} onClick={() => set({ direction: 'in' })} />
-            </ChipRow>
-          </Field>
           {draft.match === 'key' ? (
             <Field label="内容">
               <p className="text-sm font-semibold text-gray-900">{draft.pattern}</p>
             </Field>
           ) : (
             <Field label="内容に含む文字">
-              <input className={feedInputClass} value={draft.pattern} onChange={(event) => set({ pattern: event.target.value })} placeholder="例: ATM" />
+              <input className={feedInputClass} value={draft.pattern} onChange={(event) => set({ pattern: event.target.value })} placeholder="例: ユニクロ" />
             </Field>
           )}
           <Field label="金額">
@@ -613,14 +587,9 @@ function RuleModal({
                 </button>
               </Field>
               <Field label="お店">
-                <input className={feedInputClass} value={draft.store} onChange={(event) => set({ store: event.target.value })} placeholder="例: 水道局" />
+                <input className={feedInputClass} value={draft.store} onChange={(event) => set({ store: event.target.value })} placeholder="例: ユニクロ" />
               </Field>
             </>
-          )}
-          {draft.action === 'transfer' && (
-            <Field label="相手の出金元">
-              <WalletChoices wallets={wallets} selectedId={draft.toWalletId} onPick={(toWalletId) => set({ toWalletId })} />
-            </Field>
           )}
           {draft.action === 'link_recurring' && (
             <Field label="結ぶ固定費">
@@ -635,9 +604,6 @@ function RuleModal({
                 ))}
               </ChipRow>
             </Field>
-          )}
-          {draft.action === 'adjust_only' && (
-            <p className={subClass}>カード代金の見込みの額を確定します。新しい記録は作りません。</p>
           )}
           {draft.action === 'ignore' && <p className={subClass}>記録を作りません。</p>}
         </div>
