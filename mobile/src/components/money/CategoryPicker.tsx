@@ -7,7 +7,6 @@ import {
   budgetFor,
   childCategories,
   formatYen,
-  frequentCategoryIds,
   iconKeyOf,
   livingSpendByTop,
   topCategories,
@@ -16,7 +15,7 @@ import { CategoryIcon, ScreenHeader } from '@/components/money/moneyVisual';
 
 // カテゴリの選択（docs/kakei.md §3.1・§3.2）。PWA版の `src/components/sukusuku/money/CategoryPicker.tsx` と同じ並び・文言。
 //
-// 上によく使う小分類（1行。入りきらなければ横に送る）。その下に大分類を1行ずつ: 左に大分類（アイコン・名前・小さく今月の残り）、
+// 大分類を1行ずつ: 左に大分類（アイコン・名前・小さく今月の残り）、
 // 右に小分類のボタン（入りきらなければ折り返す）。押すと大分類も決まる。
 // スクロールしなくても1画面に収まるように詰める（2026-10-20。以前は大分類ごとの枠と見出しの帯で、縦に長かった）。小分類を主役に、大分類は小さく。
 // 大分類の行は与えられた高さいっぱいに縦に伸ばす（下に余白を残さない）。入りきらないときだけスクロールする。
@@ -50,13 +49,8 @@ export default function CategoryPicker({
 }: CategoryPickerProps) {
   const categoryKind = kind === 'income' ? 'income' : 'living';
   const tops = useMemo(() => topCategories(categories, categoryKind), [categories, categoryKind]);
-  const frequent = useMemo(
-    () => frequentCategoryIds(records, categories, categoryKind),
-    [records, categories, categoryKind],
-  );
   const spend = useMemo(() => livingSpendByTop(records, categories, monthKey), [records, categories, monthKey]);
   const pickCategory = (categoryId: string) => onPick({ categoryId });
-  const nameOf = (id: string) => categories.find((category) => category.id === id)?.name ?? '';
 
   return (
     <View style={styles.screen}>
@@ -76,17 +70,6 @@ export default function CategoryPicker({
         {tops.length === 0 && (
           <Text style={styles.empty}>カテゴリがまだありません。右上の歯車からカテゴリを作れます</Text>
         )}
-        {frequent.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.frequent} contentContainerStyle={styles.frequentRow}>
-            <Text style={styles.sectionTitle}>よく使う</Text>
-            {frequent.map((id) => (
-              <Pressable key={id} accessibilityRole="button" onPress={() => pickCategory(id)} style={styles.frequentChip}>
-                <Text style={styles.frequentText}>{nameOf(id)}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
-
         {tops.map((top) => {
           const children = childCategories(categories, top.id);
           const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, monthKey) : null;
@@ -132,12 +115,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { flexGrow: 1, paddingBottom: 8 },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
-  // よく使う（1行）。
-  frequent: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
-  frequentRow: { alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8 },
-  sectionTitle: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginRight: 2 },
-  frequentChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: colors.moneySoft },
-  frequentText: { fontSize: 14, fontWeight: '600', color: colors.moneyText },
   // 大分類を1行ずつ（左に大分類、右に小分類）。
   // flexGrow で高さいっぱいに均等に伸ばす（flexBasis は中身の高さのまま。小さい画面では縮まずスクロールになる）。
   topRow: {
@@ -145,7 +122,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: colors.listSurface,
   },

@@ -7,7 +7,6 @@ import {
   budgetFor,
   childCategories,
   formatYen,
-  frequentCategoryIds,
   iconKeyOf,
   livingSpendByTop,
   topCategories,
@@ -16,7 +15,7 @@ import { CategoryIcon, ScreenHeader, StackedScreen } from './moneyVisual';
 
 // カテゴリの選択（docs/kakei.md §3.1・§3.2）。mobile版の `mobile/src/components/money/CategoryPicker.tsx` と同じ並び・文言。
 //
-// 上によく使う小分類（1行。入りきらなければ横に送る）。その下に大分類を1行ずつ: 左に大分類（アイコン・名前・小さく今月の残り）、
+// 大分類を1行ずつ: 左に大分類（アイコン・名前・小さく今月の残り）、
 // 右に小分類のボタン（入りきらなければ折り返す）。押すと大分類も決まる。
 // スクロールしなくても1画面に収まるように詰める（2026-10-20。以前は大分類ごとの枠と見出しの帯で、縦に長かった）。小分類を主役に、大分類は小さく。
 // 大分類の行は与えられた高さいっぱいに縦に伸ばす（下に余白を残さない。grow で中身の高さから伸ばすので、入りきらないときだけスクロールする）。
@@ -51,13 +50,8 @@ export default function CategoryPicker({
 }: CategoryPickerProps) {
   const categoryKind = kind === 'income' ? 'income' : 'living';
   const tops = useMemo(() => topCategories(categories, categoryKind), [categories, categoryKind]);
-  const frequent = useMemo(
-    () => frequentCategoryIds(records, categories, categoryKind),
-    [records, categories, categoryKind],
-  );
   const spend = useMemo(() => livingSpendByTop(records, categories, monthKey), [records, categories, monthKey]);
   const pickCategory = (categoryId: string) => onPick({ categoryId });
-  const nameOf = (id: string) => categories.find((category) => category.id === id)?.name ?? '';
 
   return (
     <StackedScreen onBack={onClose}>
@@ -77,28 +71,12 @@ export default function CategoryPicker({
         {tops.length === 0 && (
           <p className="py-6 text-center text-sm text-gray-400">カテゴリがまだありません。右上の歯車からカテゴリを作れます</p>
         )}
-        {frequent.length > 0 && (
-          <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap border-b border-gray-200 px-2.5 py-2">
-            <span className="mr-0.5 text-xs font-semibold text-gray-500">よく使う</span>
-            {frequent.map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => pickCategory(id)}
-                className="shrink-0 rounded-full bg-blue-100 px-2.5 py-[5px] text-sm font-semibold text-blue-800 hover:bg-blue-200"
-              >
-                {nameOf(id)}
-              </button>
-            ))}
-          </div>
-        )}
-
         {tops.map((top) => {
           const children = childCategories(categories, top.id);
           const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, monthKey) : null;
           const remaining = budget === null ? null : budget - (spend.get(top.id) ?? 0);
           return (
-            <div key={top.id} className="flex shrink-0 grow items-center border-b border-slate-100 px-2.5 py-1.5">
+            <div key={top.id} className="flex shrink-0 grow items-center border-b border-slate-100 px-2.5 py-2.5">
               <div className="flex w-[104px] shrink-0 items-center gap-1.5">
                 <CategoryIcon iconKey={iconKeyOf(top)} size={24} />
                 <div className="min-w-0 flex-1 leading-tight">
