@@ -1245,34 +1245,33 @@ export function matchesStore(name: string, query: string): boolean {
 }
 
 /**
- * お店の選択肢（docs/kakei.md §3.5）。まず最近使ったお店（新しい順。登録の有無は問わない）、
- * 続けて登録したお店のうち残りを使った回数の多い順に（同じ回数なら名前順）。
- * 登録していない前に使ったお店（others。名前順）は、名前で探したときだけ出す。
+ * お店の選択肢（docs/kakei.md §3.5）。登録したお店を、直近1年に使った回数の多い順に（同じ回数なら名前順）。
+ * 登録していない前に使ったお店（others。名前順。「この記録だけに使う」で入れたものなど）は、名前で探したときだけ出す。
  * 使わなくしたお店は、記録で使っていても候補に出さない。
+ * 以前は先頭に「最近使ったお店」を出していたが、その記録だけのお店がふだんの候補に混ざって邪魔なのでやめた（2026-10-20）。
  */
 export function storeChoices(
   stores: readonly MoneyStore[],
   records: readonly StoreUse[],
-  recentLimit = 12,
-): { registered: string[]; recent: string[]; others: string[] } {
+  today: string,
+): { registered: string[]; others: string[] } {
   const archived = new Set(stores.filter((store) => store.archived).map((store) => store.name));
-  const used = recentStores(records, Number.MAX_SAFE_INTEGER).filter((name) => !archived.has(name));
-  const recent = used.slice(0, recentLimit);
-  const shown = new Set(recent);
+  // 直近1年（1年前の同じ日より後）に使った回数。
+  const since = `${Number(today.slice(0, 4)) - 1}${today.slice(4)}`;
   const uses = new Map<string, number>();
   for (const record of records) {
     const store = record.store.trim();
-    if (store !== '') uses.set(store, (uses.get(store) ?? 0) + 1);
+    if (store !== '' && record.occurredOn > since) uses.set(store, (uses.get(store) ?? 0) + 1);
   }
   const registered = stores
-    .filter((store) => !store.archived && !shown.has(store.name))
+    .filter((store) => !store.archived)
     .map((store) => store.name)
     .sort((a, b) => (uses.get(b) ?? 0) - (uses.get(a) ?? 0) || a.localeCompare(b, 'ja'));
   const registeredNames = new Set(stores.map((store) => store.name));
-  const others = used
-    .filter((name) => !shown.has(name) && !registeredNames.has(name))
+  const others = recentStores(records, Number.MAX_SAFE_INTEGER)
+    .filter((name) => !archived.has(name) && !registeredNames.has(name))
     .sort((a, b) => a.localeCompare(b, 'ja'));
-  return { registered, recent, others };
+  return { registered, others };
 }
 
 /**

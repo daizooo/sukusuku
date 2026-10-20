@@ -517,7 +517,7 @@ function RecurringEditor({
       (!wallet.archived || wallet.id === walletId || wallet.id === toWalletId) &&
       (!isIncome || wallet.type === 'bank' || wallet.id === walletId),
   );
-  const storeOptions = useMemo(() => storeChoices(stores, records), [stores, records]);
+  const storeOptions = useMemo(() => storeChoices(stores, records, toDateString(new Date())), [stores, records]);
   const today = toDateString(new Date());
   const startForHistory = parsePeriodMonth(startInput) ?? null;
   const history = useMemo(
@@ -616,7 +616,6 @@ function RecurringEditor({
         <StorePicker
           value={store}
           registered={storeOptions.registered}
-          recent={storeOptions.recent}
           others={storeOptions.others}
           canRegister
           onPick={(value, register) => {

@@ -194,7 +194,7 @@ export default function RecordEditor({
   const replaceTop = (next: Screen) => setStack((prev) => [...prev.slice(0, -1), next]);
 
   const monthKey = monthKeyOf(occurredOn);
-  const storeOptions = useMemo(() => storeChoices(stores, records), [stores, records]);
+  const storeOptions = useMemo(() => storeChoices(stores, records, toDateString(new Date())), [stores, records]);
   const total = kind === 'transfer' ? transferAmount : groups.reduce((sum, group) => sum + editorGroupTotal(group), 0);
   const categoryKind = kind === 'income' ? 'income' : 'expense';
   // 見込みのままか。額を直すか「この額で確定する」で確定になる。
@@ -400,7 +400,6 @@ export default function RecordEditor({
           <StorePicker
             value={store}
             registered={storeOptions.registered}
-            recent={storeOptions.recent}
             others={storeOptions.others}
             canRegister
             onPick={(value, register) => {

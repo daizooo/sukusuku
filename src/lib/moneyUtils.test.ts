@@ -522,21 +522,37 @@ assert.equal(itemSummary([{ name: '' }]), '');
 assert.deepEqual(frequentCategoryIds(records, categories, 'living', 2), ['grocery', 'eatout'], '多い順、同じ回数なら最近使った順');
 assert.deepEqual(recentStores(records), ['レストラン', 'スーパー']);
 
-// お店の選択肢: 最近使ったお店を先に、続けて登録したお店の残りを使った回数の多い順に。使わなくしたお店は出さない。
+// お店の選択肢: 登録したお店だけを、直近1年に使った回数の多い順に。登録していないお店は others（探したときだけ出す）。使わなくしたお店は出さない。
 const storeList: MoneyStore[] = [
   { id: 's1', name: 'ドラッグ', position: 0, archived: false },
   { id: 's2', name: 'スーパー', position: 1, archived: false },
   { id: 's3', name: '閉店した店', position: 2, archived: true },
 ];
-assert.deepEqual(storeChoices(storeList, records), { recent: ['レストラン', 'スーパー'], registered: ['ドラッグ'], others: [] }, '最近使ったお店と重なる登録は、登録のほうに出さない');
-assert.deepEqual(storeChoices(storeList, records, 1), { recent: ['レストラン'], registered: ['スーパー', 'ドラッグ'], others: [] }, '最近の件数を絞ると、残りは登録のほうへ（使った回数の多い順）');
 assert.deepEqual(
-  storeChoices([{ id: 's4', name: 'レストラン', position: 0, archived: true }], records),
-  { recent: ['スーパー'], registered: [], others: [] },
+  storeChoices(storeList, records, '2026-10-20'),
+  { registered: ['スーパー', 'ドラッグ'], others: ['レストラン'] },
+  '登録したお店は使った回数の多い順、登録していないお店（この記録だけ）は others に',
+);
+const drugUses = [
+  { store: 'ドラッグ', occurredOn: '2026-10-01' },
+  { store: 'ドラッグ', occurredOn: '2026-10-02' },
+];
+assert.deepEqual(
+  storeChoices(storeList, [...records, ...drugUses], '2026-10-20').registered,
+  ['スーパー', 'ドラッグ'],
+  '同じ回数（2回ずつ）なら名前順',
+);
+assert.deepEqual(
+  storeChoices(storeList, [...records, ...drugUses], '2027-09-03').registered,
+  ['ドラッグ', 'スーパー'],
+  '1年前の同じ日より後の記録だけ数える（スーパーの8/31は外れて1回）',
+);
+assert.deepEqual(
+  storeChoices([{ id: 's4', name: 'レストラン', position: 0, archived: true }], records, '2026-10-20'),
+  { registered: [], others: ['スーパー'] },
   '使わなくしたお店は、記録で使っていても候補に出さない',
 );
-assert.deepEqual(storeChoices([], records), { recent: ['レストラン', 'スーパー'], registered: [], others: [] }, '登録が無ければ最近使ったお店だけ');
-assert.deepEqual(storeChoices([], records, 1), { recent: ['レストラン'], registered: [], others: ['スーパー'] }, '登録していない前のお店は others に');
+assert.deepEqual(storeChoices([], records, '2026-10-20'), { registered: [], others: ['スーパー', 'レストラン'] }, '登録が無ければ others だけ');
 
 // 似たお店: 全角半角・かなの違い・空白と記号をそろえ、どちらかがもう片方を含めば当たり。
 assert.equal(storeKey('よかもんね!城南店'), storeKey('よかもんね 城南店'));
