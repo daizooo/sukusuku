@@ -150,7 +150,7 @@ function applyChanges(changes) {
       applied.push({ id: c.id, label: c.label, trashed: !!c.trash });
     } catch (e) {
       // 見つからない（人が完全に消した）ものは、片づいたことにする。それ以外は次の回にまた返る
-      if (String(e).indexOf('Not Found') >= 0) applied.push({ id: c.id, label: c.label, trashed: true });
+      if (/not found/i.test(String(e))) applied.push({ id: c.id, label: c.label, trashed: true });
       else console.warn('ラベルを付けられませんでした: ' + e);
     }
   });
