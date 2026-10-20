@@ -105,8 +105,11 @@ export interface RecordEditorProps {
   initialAmount?: number | null;
   /** 新しく記録するときに最初に入れておく品目（Amazon の注文メールの明細の「記録を作成する」から。docs/kakei.md §9.10）。 */
   initialItems?: ReceiptScanItem[] | null;
-  /** 既にある記録にレシートを撮って品目を入れる（支出・収入の記録だけ。§10.8）。 */
-  onScanReceipt?: (record: MoneyRecord) => void;
+  /**
+   * レシートを撮って品目を入れる（支出・収入の記録だけ）。既にある記録は品目を入れ替え（§10.8）、新しい記録（null）は
+   * レシートの内容で開き直す（§10.4。家計タブの＋の上から外したので、ここから読む。2026-10-20）。
+   */
+  onScanReceipt?: (record: MoneyRecord | null) => void;
 }
 
 /**
@@ -609,7 +612,7 @@ export default function RecordEditor({
           <>
             <div className="mt-3 flex items-center justify-between border-b border-gray-200 px-5 py-1.5">
               <span className="text-sm font-bold text-gray-500">品目一覧</span>
-              {record && !receipt && onScanReceipt && (
+              {!receipt && onScanReceipt && (
                 <button
                   type="button"
                   aria-label="レシートから追加"

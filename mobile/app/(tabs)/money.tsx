@@ -437,7 +437,7 @@ export default function MoneyScreen() {
     }
     if (!images) return;
     // 読み取っている間は記録の入力を閉じる（読み取り中の表示が見えるように）
-    if (target) setEditing(null);
+    setEditing(null);
     setScanning(true);
     try {
       const scan = await scanReceipt(supabase, images);
@@ -463,7 +463,8 @@ export default function MoneyScreen() {
         { text: '置き換える', onPress: apply },
       ]);
     } catch (error) {
-      if (target) setEditing(target);
+      // 読み取れなかったら、閉じた入力に戻す（新しい記録は空の入力）
+      setEditing(target ?? 'new');
       Alert.alert('レシートを読み取れませんでした', error instanceof Error ? error.message : undefined);
     } finally {
       setScanning(false);
@@ -756,7 +757,7 @@ export default function MoneyScreen() {
         </Animated.View>
       </View>
 
-      {/* 右下の1つの大きなボタン。押すと「記録を追加」「レシートを読む」「家計の設定」が開く（2026-10-10）。 */}
+      {/* 右下の＋（記録を追加）と、その上の設定。どちらも1回で開く（2026-10-20）。 */}
       <MoneyFab
         addDisabled={!familyId}
         settingsDisabled={!familyId}
@@ -765,7 +766,6 @@ export default function MoneyScreen() {
           setNewDate(null);
           setEditing('new');
         }}
-        onScan={() => void startReceiptScan()}
         onSettings={() => setSettingsOpen(true)}
       />
 
@@ -781,7 +781,7 @@ export default function MoneyScreen() {
           key={editing === 'new' ? (receipt ? 'receipt' : `new-${newKind}-${newDate ?? ''}-${feedRecordFor?.id ?? ''}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
           record={editing === 'new' ? null : editing}
           receipt={editing === 'new' || receiptFor === editing.id ? receipt : null}
-          onScanReceipt={(target) => void startReceiptScan(target)}
+          onScanReceipt={(target) => void startReceiptScan(target ?? undefined)}
           initialKind={newKind}
           initialDate={newDate}
           initialWallet={feedRecordFor?.walletId ?? null}

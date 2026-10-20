@@ -217,7 +217,7 @@ export default function MoneyReviewView({
         onYear={onYear}
       />
       {/* 右下の「＋」に一覧の最後が隠れないよう、下を空ける。 */}
-      <div className="flex-1 min-h-0 overflow-y-auto pb-24">
+      <div className="flex-1 min-h-0 overflow-y-auto pb-36">
         {unclosed.length > 0 && (
           <button
             type="button"

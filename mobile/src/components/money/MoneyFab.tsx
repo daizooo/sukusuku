@@ -1,116 +1,53 @@
-import { useCallback, useState } from 'react';
-import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { Camera, Plus, Settings } from 'lucide-react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Plus, Settings } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 
 /**
- * 家計タブ右下の、1つの大きな丸いボタン（docs/kakei.md §2）。
- * 押すと「記録を追加」「レシートを読む」「家計の設定」が上に開く（レシートは docs/kakei.md §10）。
- * 以前は＋と、その左の小さなピル（福引｜設定）に分かれていて押しづらかったので、1つにまとめて大きくした（2026-10-10）。大きすぎたので64→56に小さくした（2026-10-13）。
+ * 家計タブ右下の、大きな丸い＋と、その上の小さな丸い設定のボタン（docs/kakei.md §2）。
+ * ＋は押すとすぐ記録の入力を開く。設定も1回で開く（2026-10-20。以前は＋でメニューを開いてから選ぶ2回の操作だった）。
+ * レシートは記録の入力の「レシートから追加」から読む（docs/kakei.md §10）。
  * 福引チャンスは家計と連動していないので、2026-10-13にその他タブへ移した。
- * 開いている間は戻る操作で閉じる。暗い部分を押しても閉じる。
  */
 export default function MoneyFab({
   addDisabled,
   settingsDisabled,
   onAdd,
-  onScan,
   onSettings,
 }: {
   addDisabled?: boolean;
   settingsDisabled?: boolean;
   onAdd: () => void;
-  onScan: () => void;
   onSettings: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-
-  // 開いている間だけ、戻る操作で閉じる。タブを離れたら閉じておく。
-  useFocusEffect(
-    useCallback(() => {
-      if (!open) return undefined;
-      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-        setOpen(false);
-        return true;
-      });
-      return () => {
-        subscription.remove();
-        setOpen(false);
-      };
-    }, [open]),
-  );
-
-  // 選んだら閉じてから動かす。
-  const choose = (action: () => void) => () => {
-    setOpen(false);
-    action();
-  };
-
   return (
     <View style={styles.layer} pointerEvents="box-none">
-      {open && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="メニューを閉じる"
-          onPress={() => setOpen(false)}
-          style={styles.backdrop}
-        />
-      )}
-
-      {open && (
-        <View style={styles.menu} pointerEvents="box-none">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="家計の設定"
-            onPress={choose(onSettings)}
-            disabled={settingsDisabled}
-            style={[styles.item, settingsDisabled && styles.itemDisabled]}
-          >
-            <Settings size={22} color={colors.textMuted} />
-            <Text style={[styles.itemText, { color: colors.text }]}>家計の設定</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="レシートを読む"
-            onPress={choose(onScan)}
-            disabled={addDisabled}
-            style={[styles.item, addDisabled && styles.itemDisabled]}
-          >
-            <Camera size={22} color={colors.money} />
-            <Text style={[styles.itemText, { color: colors.text }]}>レシートを読む</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="記録を追加"
-            onPress={choose(onAdd)}
-            disabled={addDisabled}
-            style={[styles.item, styles.itemAdd, addDisabled && styles.itemDisabled]}
-          >
-            <Plus size={22} color={colors.primaryText} />
-            <Text style={[styles.itemText, { color: colors.primaryText }]}>記録を追加</Text>
-          </Pressable>
-        </View>
-      )}
-
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={open ? 'メニューを閉じる' : 'メニューを開く'}
-        onPress={() => setOpen((value) => !value)}
-        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+        accessibilityLabel="家計の設定"
+        onPress={onSettings}
+        disabled={settingsDisabled}
+        style={({ pressed }) => [styles.mini, pressed && styles.pressed, settingsDisabled && styles.disabled]}
       >
-        {/* 開いている間は45度回して「×」にする。 */}
-        <Plus size={28} color={colors.primaryText} style={open ? styles.rotated : undefined} />
+        <Settings size={20} color={colors.textMuted} />
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="記録を追加"
+        onPress={onAdd}
+        disabled={addDisabled}
+        style={({ pressed }) => [styles.fab, pressed && styles.pressed, addDisabled && styles.disabled]}
+      >
+        <Plus size={28} color={colors.primaryText} />
       </Pressable>
     </View>
   );
 }
 
 const FAB = 56;
+const MINI = 40;
 
 const styles = StyleSheet.create({
   layer: { ...StyleSheet.absoluteFillObject },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0, 0, 0, 0.4)' },
   fab: {
     position: 'absolute',
     right: 16,
@@ -123,29 +60,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.money,
     elevation: 8,
   },
-  fabPressed: { opacity: 0.85 },
-  rotated: { transform: [{ rotate: '45deg' }] },
-  // ボタンの上（下の余白16 + ボタン56 + すき間12）から、右にそろえて積む。
-  menu: {
+  // ＋の上（下の余白16 + ボタン56 + すき間12）に、＋の中心にそろえて置く。
+  mini: {
     position: 'absolute',
-    right: 16,
+    right: 16 + (FAB - MINI) / 2,
     bottom: 16 + FAB + 12,
-    alignItems: 'flex-end',
-    gap: 12,
-  },
-  item: {
-    height: 48,
-    flexDirection: 'row',
+    width: MINI,
+    height: MINI,
+    borderRadius: MINI / 2,
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 18,
-    borderRadius: 24,
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     elevation: 6,
   },
-  itemAdd: { backgroundColor: colors.money, borderColor: colors.money },
-  itemDisabled: { opacity: 0.4 },
-  itemText: { fontSize: 15, fontWeight: '700' },
+  pressed: { opacity: 0.85 },
+  disabled: { opacity: 0.4 },
 });

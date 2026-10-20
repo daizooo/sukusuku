@@ -470,7 +470,7 @@ function CategoryRow({ tile, divided, onPress }: { tile: BudgetTile; divided: bo
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   // 右下の「＋」に一覧の最後が隠れないよう、下を空ける。
-  content: { paddingHorizontal: 16, paddingBottom: 96 },
+  content: { paddingHorizontal: 16, paddingBottom: 136 },
   gap: { height: 12 },
   links: { flexDirection: 'row', gap: 14 },
   trendCard: { paddingVertical: 4, paddingHorizontal: 4 },

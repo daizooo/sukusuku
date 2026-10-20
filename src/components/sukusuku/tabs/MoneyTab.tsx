@@ -416,12 +416,12 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     receiptTarget.current = null;
     if (!files || files.length === 0) return;
     // 読み取っている間は記録の入力を閉じる（読み取り中の表示が見えるように）
-    if (target) setEditing(null);
+    setEditing(null);
     setScanning(true);
     try {
       const images = await receiptImagesFromFiles(files);
       if (images.length === 0) {
-        if (target) setEditing(target);
+        setEditing(target ?? 'new');
         return;
       }
       const scan = await scanReceipt(supabase, images);
@@ -441,7 +441,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       setReceiptFor(target.id);
       setEditing(target);
     } catch (error) {
-      if (target) setEditing(target);
+      // 読み取れなかったら、閉じた入力に戻す（新しい記録は空の入力）
+      setEditing(target ?? 'new');
       window.alert(`レシートを読み取れませんでした。${error instanceof Error ? error.message : ''}`);
     } finally {
       setScanning(false);
@@ -707,15 +708,11 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
         </div>
       </div>
 
-      {/* 右下の1つの大きなボタン。押すと「記録を追加」「レシートを読む」「家計の設定」が開く（2026-10-10）。 */}
+      {/* 右下の＋（記録を追加）と、その上の設定。どちらも1回で開く（2026-10-20）。 */}
       <MoneyFab
         onAdd={() => {
           setNewDate(null);
           setEditing('new');
-        }}
-        onScan={() => {
-          receiptTarget.current = null;
-          receiptInput.current?.click();
         }}
         onSettings={() => setSettingsOpen(true)}
       />

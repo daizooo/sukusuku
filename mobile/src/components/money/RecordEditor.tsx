@@ -97,8 +97,11 @@ export interface RecordEditorProps {
    * 既にある記録（record）と一緒に渡すと、出金元・日付はそのままで、品目をレシートの品目に入れ替えて開く（§10.8）。
    */
   receipt?: ReceiptScan | null;
-  /** 既にある記録にレシートを撮って品目を入れる（支出・収入の記録だけ。§10.8）。 */
-  onScanReceipt?: (record: MoneyRecord) => void;
+  /**
+   * レシートを撮って品目を入れる（支出・収入の記録だけ）。既にある記録は品目を入れ替え（§10.8）、新しい記録（null）は
+   * レシートの内容で開き直す（§10.4。家計タブの＋の上から外したので、ここから読む。2026-10-20）。
+   */
+  onScanReceipt?: (record: MoneyRecord | null) => void;
   /** 新しく記録するときに最初に選んでおく種類（ホーム画面のウィジェットの「収入」「振替」から。docs/widgets.md §2.3）。 */
   initialKind?: MoneyRecordKind;
   /** 新しく記録するときに最初に選んでおく日（YYYY-MM-DD。記録の一覧の、日の見出しの「＋」から）。無ければ今日。 */
@@ -616,7 +619,7 @@ export default function RecordEditor({
           <>
             <View style={styles.itemsHead}>
               <Text style={styles.itemsTitle}>品目一覧</Text>
-              {record && !receipt && onScanReceipt && (
+              {!receipt && onScanReceipt && (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="レシートから追加"
