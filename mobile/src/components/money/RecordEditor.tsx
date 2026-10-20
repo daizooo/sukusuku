@@ -370,10 +370,7 @@ export default function RecordEditor({
         return (
           <CategoryPicker
             kind={categoryKind}
-            monthKey={monthKey}
             categories={categories}
-            budgets={budgets}
-            records={records}
             onPick={(choice) => pickCategory(choice, screen)}
             onClose={back}
             onEditCategories={onEditCategories}

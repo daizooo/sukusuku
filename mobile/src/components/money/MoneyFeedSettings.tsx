@@ -18,7 +18,6 @@ import type {
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
-import { monthKeyOfDate } from '@/lib/moneyUtils';
 import { FEED_ACTION_LABELS, feedRuleAction, feedRuleCondition, feedTimeLabel } from '@/lib/moneyFeedUtils';
 import {
   deleteMoneyFeedRule,
@@ -600,10 +599,7 @@ function RuleSheet({
           <View style={[styles.picker, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
             <CategoryPicker
               kind={draft.recordKind === 'income' ? 'income' : 'expense'}
-              monthKey={monthKeyOfDate(new Date())}
               categories={categories}
-              budgets={budgets}
-              records={records}
               onPick={(choice) => {
                 set({ categoryId: choice.categoryId });
                 setPickingCategory(false);
