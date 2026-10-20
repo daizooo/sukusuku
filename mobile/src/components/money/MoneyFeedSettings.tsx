@@ -36,9 +36,9 @@ import CategoryPicker from '@/components/money/CategoryPicker';
 import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 import { Chip, ChipRow, Field, WalletChoices } from '@/components/money/feedParts';
 
-// 家計の設定の「Zaim 取り込み」（docs/kakei.md §9.5.6）。PWA版の `src/components/sukusuku/money/MoneyFeedSettings.tsx` と同じ並び・文言。
+// 家計の設定の「Gmail 取り込み」（docs/kakei.md §9.5.6・§9.11）。PWA版の `src/components/sukusuku/money/MoneyFeedSettings.tsx` と同じ並び・文言。
 //
-// 取り込みに関わる設定をここ1か所で決める: 取り込みの状態と鍵／口座の対応（Zaim の口座名 → 出金元と所持者）／
+// 取り込みに関わる設定をここ1か所で決める: 取り込みの状態と鍵／口座の対応（利用通知のカード名 → 出金元と所持者）／
 // 取り込みのルール（条件と動き。上から見て最初に当たったもの）／突き合わせの幅（日数）。
 // 口座の対応・ルールを直したら、未確認の明細を突き合わせ直す（money_feed_reprocess）。
 
@@ -64,12 +64,6 @@ interface AccountRow {
 }
 
 const failed = () => Alert.alert('保存できませんでした', 'もう一度お試しください。');
-
-/** ひな形（§9.5.6）。ATM・カード会社の文字は、実物のメールが届いたら合わせる。 */
-const TEMPLATES: { label: string; draft: Partial<MoneyFeedRuleDraft> }[] = [
-  { label: 'ATM の出金 → 財布へ振替', draft: { name: 'ATM の出金', direction: 'out', pattern: 'ATM', action: 'transfer' } },
-  { label: 'カードの引き落とし → 補正のみ', draft: { name: 'カードの引き落とし', direction: 'out', pattern: 'カード', action: 'adjust_only' } },
-];
 
 const EMPTY_RULE: MoneyFeedRuleDraft = {
   name: '',
@@ -300,22 +294,10 @@ export default function MoneyFeedSettings({
           <Plus size={18} color={colors.money} />
           <Text style={styles.addText}>ルールを足す</Text>
         </Pressable>
-        <Text style={styles.sectionTitle}>ひな形から足す</Text>
-        <ChipRow>
-          {TEMPLATES.map((template) => (
-            <Chip
-              key={template.label}
-              label={template.label}
-              selected={false}
-              onPress={() => setRule({ target: null, draft: { ...EMPTY_RULE, ...template.draft } })}
-            />
-          ))}
-        </ChipRow>
 
         <Text style={styles.sectionTitle}>突き合わせの幅</Text>
         <View style={styles.card}>
-          <DaysRow label="振替の組み合わせ" value={feed.settings.pairDays} onChange={(value) => void saveDays('pairDays', value)} />
-          <DaysRow label="自動の記録との照合" value={feed.settings.estimateDays} onChange={(value) => void saveDays('estimateDays', value)} divided />
+          <DaysRow label="自動の記録との照合" value={feed.settings.estimateDays} onChange={(value) => void saveDays('estimateDays', value)} />
           <DaysRow label="手入力との確認" value={feed.settings.manualDays} onChange={(value) => void saveDays('manualDays', value)} divided />
         </View>
       </ScrollView>
@@ -479,7 +461,7 @@ function AccountSheet({
   );
 }
 
-const ACTIONS: MoneyFeedAction[] = ['record', 'transfer', 'link_recurring', 'adjust_only', 'ignore'];
+const ACTIONS: MoneyFeedAction[] = ['record', 'link_recurring', 'ignore'];
 
 function RuleSheet({
   target,
@@ -518,7 +500,6 @@ function RuleSheet({
 
   const valid =
     (draft.action !== 'record' || draft.categoryId !== null) &&
-    (draft.action !== 'transfer' || draft.toWalletId !== null) &&
     (draft.action !== 'link_recurring' || draft.recurringId !== null);
 
   return (
@@ -538,7 +519,7 @@ function RuleSheet({
         }
       >
         <Field label="名前">
-          <TextInput style={styles.input} value={draft.name} onChangeText={(name) => set({ name })} placeholder="例: ATM の出金" placeholderTextColor={colors.textFaint} />
+          <TextInput style={styles.input} value={draft.name} onChangeText={(name) => set({ name })} placeholder="例: ユニクロ" placeholderTextColor={colors.textFaint} />
         </Field>
         <Text style={styles.sectionTitle}>条件</Text>
         <Field label="口座">
@@ -549,20 +530,13 @@ function RuleSheet({
             ))}
           </ChipRow>
         </Field>
-        <Field label="向き">
-          <ChipRow>
-            <Chip label="どちらでも" selected={draft.direction === null} onPress={() => set({ direction: null })} />
-            <Chip label="出金" selected={draft.direction === 'out'} onPress={() => set({ direction: 'out' })} />
-            <Chip label="入金" selected={draft.direction === 'in'} onPress={() => set({ direction: 'in' })} />
-          </ChipRow>
-        </Field>
         {draft.match === 'key' ? (
           <Field label="内容">
             <Text style={styles.pattern}>{draft.pattern}</Text>
           </Field>
         ) : (
           <Field label="内容に含む文字">
-            <TextInput style={styles.input} value={draft.pattern} onChangeText={(pattern) => set({ pattern })} placeholder="例: ATM" placeholderTextColor={colors.textFaint} />
+            <TextInput style={styles.input} value={draft.pattern} onChangeText={(pattern) => set({ pattern })} placeholder="例: ユニクロ" placeholderTextColor={colors.textFaint} />
           </Field>
         )}
         <Field label="金額">
@@ -606,14 +580,9 @@ function RuleSheet({
               </Pressable>
             </Field>
             <Field label="お店">
-              <TextInput style={styles.input} value={draft.store} onChangeText={(store) => set({ store })} placeholder="例: 水道局" placeholderTextColor={colors.textFaint} />
+              <TextInput style={styles.input} value={draft.store} onChangeText={(store) => set({ store })} placeholder="例: ユニクロ" placeholderTextColor={colors.textFaint} />
             </Field>
           </>
-        )}
-        {draft.action === 'transfer' && (
-          <Field label="相手の出金元">
-            <WalletChoices wallets={wallets} selectedId={draft.toWalletId} onPick={(toWalletId) => set({ toWalletId })} />
-          </Field>
         )}
         {draft.action === 'link_recurring' && (
           <Field label="結ぶ固定費">
@@ -623,9 +592,6 @@ function RuleSheet({
               ))}
             </ChipRow>
           </Field>
-        )}
-        {draft.action === 'adjust_only' && (
-          <Text style={styles.sub}>カード代金の見込みの額を確定します。新しい記録は作りません。</Text>
         )}
         {draft.action === 'ignore' && <Text style={styles.sub}>記録を作りません。</Text>}
       </LogModalShell>
