@@ -1,14 +1,17 @@
-import { useRef } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ChevronRight, Minus, Plus, Trash2 } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 import {
+  editorGroupTotal,
   editorLineAmount,
   evaluateCalc,
   formatBalance,
   formatCalc,
   isBlankLine,
   pressCalcKey,
+  sameGroupTarget,
+  type EditorGroup,
   type EditorLine,
 } from '@/lib/moneyUtils';
 import Calculator from '@/components/money/Calculator';
@@ -16,24 +19,29 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 
 // 品目の画面（docs/kakei.md §3.2）。PWA版の `src/components/sukusuku/money/ItemsScreen.tsx` と同じ並び・文言。
 //
-// 1つのカテゴリの品目を何行でもまとめて記録する。行＝品名・個数（−＋）・単価・金額。
-// 一覧のいちばん下に空の行を置き、一覧の左端の「−」でその行を消し、いちばん下の「＋」で新しい行を足す（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）。
-// 選んだ行（青）の単価を下の電卓で直す（＋−×÷）。電卓はこの画面で初めて出る。
+// 記録の品目を、カテゴリごとのまとまりに分けて1つの画面でまとめて入れる（2026-10-20。カテゴリが分かれても、
+// 保存して記録の編集に戻り、また追加して…と行き来しなくて済むように）。行＝品名・個数（−＋）・単価・金額。
+// まとまりの頭にカテゴリを1行で小さく出す（押すと変えられる。ごみ箱でまとまりごと消す）。
+// まとまりのいちばん下の「＋」で新しい行を足し（品名の欄は開かない。キーボードが立ち上がらないように。2026-10-15）、
+// 一覧の左端の「−」でその行を消す。一覧のいちばん下の「＋ カテゴリを追加」で別のカテゴリのまとまりを足す。
+// 行の金額を押すと、その行を選んで（青）下に電卓を出し、単価を直す（＋−×÷。Zaim と同じ。2026-10-20）。
+// 行を足したときも電卓を出す。品名や行のほかの所を押すと電卓を閉じる。
 // 値引き・割引・返金は「マイナスにする」で、選んだ行の金額をマイナスにする（docs/kakei.md §10.5）。
-// カテゴリは見出しの下に1行で小さく出す（押すと変えられる）。
 
 /** 品目の画面で書きかけのもの（記録の入力が持ち、ほかの画面へ行って戻っても消えない）。 */
 export interface ItemsWork {
-  /** 直しているカテゴリのまとまり。新しいカテゴリなら null。 */
-  groupKey: string | null;
-  categoryId: string | null;
-  /** 削除したカテゴリの名前（categoryId が null のとき）。 */
-  categoryName: string;
-  lines: EditorLine[];
+  /** 記録の品目のまとまり全部（保存すると記録の入力のまとまりと入れ替える）。 */
+  groups: EditorGroup[];
   selected: string | null;
   /** 選んだ行の電卓の式。 */
   expr: string;
+  /** 開いたときに見せるまとまり（一覧をそこまで送る）。 */
+  focus: string | null;
+  /** 電卓を出しているか（行の金額を押したとき・行を足したとき）。 */
+  calc: boolean;
 }
+
+type GroupTarget = Pick<EditorGroup, 'categoryId' | 'categoryName'>;
 
 let lineSeq = 0;
 export const newLineKey = () => `line-${(lineSeq += 1)}`;
@@ -46,17 +54,47 @@ export const blankLine = (): EditorLine => ({
   memo: '',
 });
 
+/** カテゴリのまとまりを足す（同じカテゴリがあれば、そこに空の行を足す）。足した行を選ぶ。 */
+export function addWorkGroup(work: ItemsWork, target: GroupTarget, groupKey: string): ItemsWork {
+  const line = blankLine();
+  const existing = work.groups.find((group) => sameGroupTarget(group, target));
+  const groups = existing
+    ? work.groups.map((group) =>
+        group.key === existing.key ? { ...group, lines: [...group.lines.filter((entry) => !isBlankLine(entry)), line] } : group,
+      )
+    : [...work.groups, { key: groupKey, ...target, lines: [line] }];
+  return { ...work, groups, selected: line.key, expr: '', focus: existing?.key ?? groupKey, calc: true };
+}
+
+/** まとまりのカテゴリを変える（変えた先と同じカテゴリのまとまりがあれば、そこへ行をまとめる）。 */
+export function changeWorkGroup(work: ItemsWork, groupKey: string, target: GroupTarget): ItemsWork {
+  const moving = work.groups.find((group) => group.key === groupKey);
+  if (!moving) return work;
+  const same = work.groups.find((group) => group.key !== groupKey && sameGroupTarget(group, target));
+  const groups = same
+    ? work.groups
+        .filter((group) => group.key !== groupKey)
+        .map((group) => (group.key === same.key ? { ...group, lines: [...group.lines, ...moving.lines] } : group))
+    : work.groups.map((group) => (group.key === groupKey ? { ...group, ...target } : group));
+  return { ...work, groups };
+}
+
+/** 保存する形にする（空の行と、行の無いまとまりは残さない）。 */
+export const groupsFromWork = (work: ItemsWork): EditorGroup[] =>
+  work.groups
+    .map((group) => ({ ...group, lines: group.lines.filter((line) => !isBlankLine(line)) }))
+    .filter((group) => group.lines.length > 0);
+
 interface ItemsScreenProps {
   work: ItemsWork;
   onChange: (work: ItemsWork) => void;
-  /** カテゴリの見出し（「食費 › 食料品」）と、その下の一言（今月の残り）。 */
-  title: string;
-  /** カテゴリのアイコン。 */
-  iconKey: string;
-  subtitle: string;
-  onChangeCategory: () => void;
+  /** まとまりの見出し（「食費 › 食料品」）・アイコン・その下の一言（今月の残り）。 */
+  title: (group: EditorGroup) => string;
+  iconKey: (group: EditorGroup) => string;
+  subtitle: (group: EditorGroup) => string;
+  onChangeCategory: (groupKey: string) => void;
+  onAddCategory: () => void;
   onSave: () => void;
-  onDelete?: () => void;
   onClose: () => void;
 }
 
@@ -67,97 +105,109 @@ export default function ItemsScreen({
   iconKey,
   subtitle,
   onChangeCategory,
+  onAddCategory,
   onSave,
-  onDelete,
   onClose,
 }: ItemsScreenProps) {
-  const filled = work.lines.filter((line) => !isBlankLine(line));
-  const subtotal = work.lines.reduce((sum, line) => sum + editorLineAmount(line), 0);
+  const allLines = work.groups.flatMap((group) => group.lines);
+  const filled = allLines.filter((line) => !isBlankLine(line));
+  const total = work.groups.reduce((sum, group) => sum + editorGroupTotal(group), 0);
+  const multiple = work.groups.length > 1;
+
+  const mapLines = (fn: (lines: EditorLine[], group: EditorGroup) => EditorLine[]) =>
+    work.groups.map((group) => ({ ...group, lines: fn(group.lines, group) }));
 
   const updateLine = (key: string, patch: Partial<EditorLine>) =>
-    onChange({ ...work, lines: work.lines.map((line) => (line.key === key ? { ...line, ...patch } : line)) });
+    onChange({ ...work, groups: mapLines((lines) => lines.map((line) => (line.key === key ? { ...line, ...patch } : line))) });
 
-  const select = (line: EditorLine) =>
-    onChange({ ...work, selected: line.key, expr: line.unitPrice !== 0 ? String(Math.abs(line.unitPrice)) : '' });
+  // 行を選ぶ。金額を押したときだけ電卓を出す（品名・行のほかの所なら閉じる）。
+  const select = (line: EditorLine, calc: boolean) =>
+    onChange({ ...work, selected: line.key, expr: line.unitPrice !== 0 ? String(Math.abs(line.unitPrice)) : '', calc });
 
-  // 行を足したとき、新しい行が見える所まで一覧を送る（品名の欄は開かない）。
+  // 開いたまとまり・足したまとまりが見える所まで一覧を送る。行を足したときは、いちばん下のまとまりなら下まで送る。
   const scrollRef = useRef<ScrollView>(null);
   const scrollToNew = useRef(false);
+  const groupY = useRef(new Map<string, number>());
+  const focused = useRef<string | null>(null);
+  const scrollToFocus = () => {
+    if (work.focus === null || work.focus === focused.current) return;
+    const y = groupY.current.get(work.focus);
+    if (y === undefined) return;
+    focused.current = work.focus;
+    scrollRef.current?.scrollTo({ y, animated: true });
+  };
+  useEffect(scrollToFocus);
 
-  const addLine = () => {
+  const addLine = (groupKey: string) => {
     // 書きかけの空の行は残さない（空の行は保存もしない）。
     // 品名の欄は開かない（キーボードが立ち上がって電卓と一覧が隠れるため。品名は欄を押して入れる）。
     const line = blankLine();
-    scrollToNew.current = !work.lines.some(isBlankLine);
+    scrollToNew.current = work.groups[work.groups.length - 1]?.key === groupKey;
     onChange({
       ...work,
-      lines: [...work.lines.filter((entry) => !isBlankLine(entry)), line],
+      groups: mapLines((lines, group) =>
+        group.key === groupKey ? [...lines.filter((entry) => !isBlankLine(entry)), line] : lines.filter((entry) => !isBlankLine(entry)),
+      ),
       selected: line.key,
       expr: '',
+      calc: true,
     });
   };
 
+  // 電卓は行を選んでいるときだけ出す。
   const pressKey = (key: string) => {
-    let current = work;
-    if (current.selected === null || !current.lines.some((line) => line.key === current.selected)) {
-      const line = blankLine();
-      current = { ...current, lines: [...current.lines, line], selected: line.key, expr: '' };
-    }
-    const expr = pressCalcKey(current.expr, key);
+    if (work.selected === null) return;
+    const expr = pressCalcKey(work.expr, key);
     const value = evaluateCalc(expr) ?? 0;
     onChange({
-      ...current,
+      ...work,
       expr,
       // 電卓は金額の大きさだけを扱い、マイナスの行はマイナスのまま。
-      lines: current.lines.map((line) =>
-        line.key === current.selected ? { ...line, unitPrice: line.unitPrice < 0 ? -value : value } : line,
+      groups: mapLines((lines) =>
+        lines.map((line) => (line.key === work.selected ? { ...line, unitPrice: line.unitPrice < 0 ? -value : value } : line)),
       ),
     });
   };
 
-  const selectedLine = work.lines.find((line) => line.key === work.selected) ?? null;
+  const selectedLine = allLines.find((line) => line.key === work.selected) ?? null;
 
   const toggleSign = () => {
     if (!selectedLine) return;
     updateLine(selectedLine.key, { unitPrice: -selectedLine.unitPrice });
   };
 
-  // 行の左の「−」で、その行をすぐ消す（選んでいる行なら選びも外す）。
+  // 行の左の「−」で、その行をすぐ消す（選んでいる行なら選びも外す）。まとまりは残す（カテゴリを残して打ち直せるように）。
   const removeLine = (key: string) =>
     onChange({
       ...work,
-      lines: work.lines.filter((line) => line.key !== key),
+      groups: mapLines((lines) => lines.filter((line) => line.key !== key)),
       selected: work.selected === key ? null : work.selected,
       expr: work.selected === key ? '' : work.expr,
     });
+
+  // まとまりのごみ箱で、そのカテゴリの品目をまとめて消す（金額の入った行があれば確かめる）。
+  const removeGroup = (group: EditorGroup) => {
+    const apply = () => {
+      const lost = group.lines.some((line) => line.key === work.selected);
+      onChange({
+        ...work,
+        groups: work.groups.filter((entry) => entry.key !== group.key),
+        selected: lost ? null : work.selected,
+        expr: lost ? '' : work.expr,
+      });
+    };
+    if (group.lines.every(isBlankLine)) return apply();
+    Alert.alert('このカテゴリの品目を消しますか？', undefined, [
+      { text: 'やめる', style: 'cancel' },
+      { text: '消す', style: 'destructive', onPress: apply },
+    ]);
+  };
 
   const showExpr = /[+\-*/]/.test(work.expr);
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader
-        title="品目"
-        onClose={onClose}
-        closeAtEnd
-        right={
-          <View style={styles.headerRight}>
-            {onDelete && (
-              <Pressable accessibilityRole="button" accessibilityLabel="このカテゴリの品目を消す" onPress={onDelete} hitSlop={8}>
-                <Trash2 size={20} color={colors.textMuted} />
-              </Pressable>
-            )}
-          </View>
-        }
-      />
-      <Pressable accessibilityRole="button" accessibilityLabel="カテゴリを変える" onPress={onChangeCategory} style={styles.category}>
-        <CategoryIcon iconKey={iconKey} size={20} />
-        <Text style={styles.categoryName} numberOfLines={1}>
-          {title}
-        </Text>
-        <View style={styles.flex} />
-        {subtitle !== '' && <Text style={styles.categorySub}>{subtitle}</Text>}
-        <ChevronRight size={16} color={colors.textFaint} />
-      </Pressable>
+      <ScreenHeader title="品目" onClose={onClose} closeAtEnd />
 
       <ScrollView
         ref={scrollRef}
@@ -170,74 +220,113 @@ export default function ItemsScreen({
           scrollRef.current?.scrollToEnd({ animated: true });
         }}
       >
-        {work.lines.map((line) => {
-          const selected = line.key === work.selected;
+        {work.groups.map((group) => {
+          const sub = subtitle(group);
           return (
-            <Pressable
-              key={line.key}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              onPress={() => select(line)}
-              style={[styles.line, selected && styles.lineSelected]}
-            >
+            <View key={group.key} onLayout={(event) => {
+                groupY.current.set(group.key, event.nativeEvent.layout.y);
+                scrollToFocus();
+              }}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="この行を消す"
-                onPress={() => removeLine(line.key)}
-                hitSlop={8}
-                style={styles.removeButton}
+                accessibilityLabel="カテゴリを変える"
+                onPress={() => onChangeCategory(group.key)}
+                style={styles.category}
               >
-                <Minus size={12} color={colors.primaryText} />
-              </Pressable>
-              <TextInput
-                style={styles.lineName}
-                value={line.name}
-                onChangeText={(name) => updateLine(line.key, { name })}
-                onFocus={() => (selected ? undefined : select(line))}
-                placeholder="品名"
-                placeholderTextColor={colors.textFaint}
-                returnKeyType="done"
-              />
-              <View style={styles.stepper}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="1つ減らす"
-                  onPress={() => updateLine(line.key, { quantity: Math.max(1, line.quantity - 1) })}
-                  hitSlop={4}
-                  style={styles.stepButton}
-                >
-                  <Minus size={13} color={colors.textMuted} />
-                </Pressable>
-                <Text style={styles.quantity}>{line.quantity}</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="1つ増やす"
-                  onPress={() => updateLine(line.key, { quantity: Math.min(9999, line.quantity + 1) })}
-                  hitSlop={4}
-                  style={styles.stepButton}
-                >
-                  <Plus size={13} color={colors.textMuted} />
-                </Pressable>
-              </View>
-              {/* 入力した単価を主役に（太く大きく。選んでいる行は下線＝いま入力している数字）。
-                  個数 × 単価 ＝ 金額は小さく添える（金額が目立って、入れた数字と食い違って見えないように）。 */}
-              <View style={styles.price}>
-                <Text style={[styles.unit, selected && styles.unitSelected, line.unitPrice < 0 && styles.minus]}>
-                  {formatBalance(line.unitPrice)}
+                <CategoryIcon iconKey={iconKey(group)} size={20} />
+                <Text style={styles.categoryName} numberOfLines={1}>
+                  {title(group)}
                 </Text>
-                {line.quantity > 1 && (
-                  <Text style={[styles.amount, line.unitPrice < 0 && styles.minus]}>
-                    × {line.quantity} ＝ {formatBalance(editorLineAmount(line))}
-                  </Text>
-                )}
-              </View>
-            </Pressable>
+                <View style={styles.flex} />
+                {sub !== '' && <Text style={styles.categorySub}>{sub}</Text>}
+                <ChevronRight size={16} color={colors.textFaint} />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="このカテゴリの品目を消す"
+                  onPress={() => removeGroup(group)}
+                  hitSlop={8}
+                >
+                  <Trash2 size={16} color={colors.textMuted} />
+                </Pressable>
+              </Pressable>
+              {group.lines.map((line) => {
+                const selected = line.key === work.selected;
+                return (
+                  <Pressable
+                    key={line.key}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => select(line, false)}
+                    style={[styles.line, selected && styles.lineSelected]}
+                  >
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="この行を消す"
+                      onPress={() => removeLine(line.key)}
+                      hitSlop={8}
+                      style={styles.removeButton}
+                    >
+                      <Minus size={12} color={colors.primaryText} />
+                    </Pressable>
+                    <TextInput
+                      style={styles.lineName}
+                      value={line.name}
+                      onChangeText={(name) => updateLine(line.key, { name })}
+                      onFocus={() => (selected && !work.calc ? undefined : select(line, false))}
+                      placeholder="品名"
+                      placeholderTextColor={colors.textFaint}
+                      returnKeyType="done"
+                    />
+                    <View style={styles.stepper}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="1つ減らす"
+                        onPress={() => updateLine(line.key, { quantity: Math.max(1, line.quantity - 1) })}
+                        hitSlop={4}
+                        style={styles.stepButton}
+                      >
+                        <Minus size={13} color={colors.textMuted} />
+                      </Pressable>
+                      <Text style={styles.quantity}>{line.quantity}</Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="1つ増やす"
+                        onPress={() => updateLine(line.key, { quantity: Math.min(9999, line.quantity + 1) })}
+                        hitSlop={4}
+                        style={styles.stepButton}
+                      >
+                        <Plus size={13} color={colors.textMuted} />
+                      </Pressable>
+                    </View>
+                    {/* 入力した単価を主役に（太く大きく。選んでいる行は下線＝いま入力している数字）。
+                        個数 × 単価 ＝ 金額は小さく添える（金額が目立って、入れた数字と食い違って見えないように）。 */}
+                    <Pressable accessibilityRole="button" accessibilityLabel="金額を入れる" onPress={() => select(line, true)} hitSlop={6} style={styles.price}>
+                      <Text style={[styles.unit, selected && work.calc && styles.unitSelected, line.unitPrice < 0 && styles.minus]}>
+                        {formatBalance(line.unitPrice)}
+                      </Text>
+                      {line.quantity > 1 && (
+                        <Text style={[styles.amount, line.unitPrice < 0 && styles.minus]}>
+                          × {line.quantity} ＝ {formatBalance(editorLineAmount(line))}
+                        </Text>
+                      )}
+                    </Pressable>
+                  </Pressable>
+                );
+              })}
+              {/* まとまりの「＋」の行。カテゴリが2つ以上なら、右にそのカテゴリの小計。 */}
+              <Pressable accessibilityRole="button" accessibilityLabel="品目を追加する" onPress={() => addLine(group.key)} style={styles.blank}>
+                <View style={styles.addButton}>
+                  <Plus size={14} color={colors.primaryText} />
+                </View>
+                <View style={styles.flex} />
+                {multiple && <Text style={styles.groupSubtotal}>{formatBalance(editorGroupTotal(group))}</Text>}
+              </Pressable>
+            </View>
           );
         })}
-        <Pressable accessibilityRole="button" accessibilityLabel="品目を追加する" onPress={addLine} style={styles.blank}>
-          <View style={styles.addButton}>
-            <Plus size={14} color={colors.primaryText} />
-          </View>
+        <Pressable accessibilityRole="button" onPress={onAddCategory} style={styles.addCategory}>
+          <Plus size={14} color={colors.money} />
+          <Text style={styles.addCategoryText}>カテゴリを追加</Text>
         </Pressable>
         <View style={styles.subtotalRow}>
           {selectedLine !== null && (
@@ -252,15 +341,15 @@ export default function ItemsScreen({
           )}
           <View style={styles.flex} />
           {showExpr && <Text style={styles.expr}>{formatCalc(work.expr)} =</Text>}
-          <Text style={styles.subtotalLabel}>小計</Text>
-          <Text style={styles.subtotal}>{formatBalance(subtotal)}</Text>
+          <Text style={styles.subtotalLabel}>{multiple ? '合計' : '小計'}</Text>
+          <Text style={styles.subtotal}>{formatBalance(total)}</Text>
         </View>
       </ScrollView>
 
-      <Calculator onKey={pressKey} />
+      {work.calc && selectedLine !== null && <Calculator onKey={pressKey} />}
       <View style={styles.footer}>
         <PrimaryButton
-          label={filled.length === 0 ? '金額を入れてください' : `このカテゴリを保存（${filled.length}行 ${formatBalance(subtotal)}）`}
+          label={filled.length === 0 ? '金額を入れてください' : `品目を保存（${filled.length}行 ${formatBalance(total)}）`}
           disabled={filled.length === 0}
           onPress={onSave}
         />
@@ -286,7 +375,6 @@ const styles = StyleSheet.create({
   categoryName: { flexShrink: 1, fontSize: 13, fontWeight: '600', color: colors.textSubtle },
   categorySub: { fontSize: 11, fontWeight: '500', color: colors.textMuted },
   list: { paddingBottom: 8 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   line: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -328,6 +416,10 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   addButton: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.money },
+  groupSubtotal: { fontSize: 13, fontWeight: '700', color: colors.textSubtle, fontVariant: ['tabular-nums'] },
+  // 一覧のいちばん下の「＋ カテゴリを追加」。
+  addCategory: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 12 },
+  addCategoryText: { fontSize: 13, fontWeight: '600', color: colors.money },
   subtotalRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, paddingHorizontal: 16, paddingTop: 10 },
   signText: { fontSize: 12, fontWeight: '600', color: colors.money },
   expr: { fontSize: 13, fontWeight: '500', color: colors.textMuted },

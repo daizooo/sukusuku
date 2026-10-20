@@ -28,7 +28,6 @@ import {
   groupsFromItems,
   groupsFromScan,
   iconKeyOf,
-  isBlankLine,
   itemsFromGroups,
   lastWalletId,
   livingSpendByTop,
@@ -37,13 +36,12 @@ import {
   recordTotal,
   storeChoices,
   RECORD_KIND_LABEL,
-  sameGroupTarget,
   topCategoryIdOf,
   type EditorGroup,
 } from '@/lib/moneyUtils';
 import Calculator from './Calculator';
 import CategoryPicker, { type CategoryChoice } from './CategoryPicker';
-import ItemsScreen, { blankLine, type ItemsWork } from './ItemsScreen';
+import ItemsScreen, { addWorkGroup, blankLine, changeWorkGroup, groupsFromWork, type ItemsWork } from './ItemsScreen';
 import StorePicker from './StorePicker';
 import WalletPicker from './WalletPicker';
 import RecordDetailView from './RecordDetailView';
@@ -54,7 +52,8 @@ import { EstimateBadge, FullScreen, PrimaryButton, ScreenHeader, StackedScreen, 
 //
 // 既にある記録は、まず記録の詳細（読むだけ。RecordDetailView）を見せ、「編集する」でこの入力画面へ（2026-10-15）。
 // 「＋」→ 記録の編集（支出／収入／振替・日付・出金元・お店・翌月に回す・品目）→ 品目を押す／「＋」→ カテゴリの選択 → 品目
-// （電卓はここで初めて出る）。出金元・お店はそれぞれ選ぶ画面へ。品目はカテゴリごとにまとめて1行で見せ、合計は品目から自動。
+// （電卓は品目の金額を押すと出る）。出金元・お店はそれぞれ選ぶ画面へ。品目はカテゴリごとにまとめて1行で見せ、合計は品目から自動。
+// 品目の画面は記録の品目を全部カテゴリごとに並べ、別のカテゴリもそこで足して一度に保存する（2026-10-20）。
 // 振替は 出金元 → 入金先 と金額だけ。置かないもの: 電話番号・時刻・タグ・写真。
 //
 // 画面は全部この1つの全画面の中で重ねる。重ねた画面はそれぞれ戻る操作の層を積み（StackedScreen）、
@@ -66,7 +65,8 @@ import { EstimateBadge, FullScreen, PrimaryButton, ScreenHeader, StackedScreen, 
 type Screen =
   | { type: 'edit' }
   | { type: 'items' }
-  | { type: 'category'; purpose: 'add' | 'change' }
+  | { type: 'category'; purpose: 'add' }
+  | { type: 'category'; purpose: 'change'; groupKey: string }
   | { type: 'wallet'; field: 'walletId' | 'toWalletId' }
   | { type: 'store' }
   | { type: 'amount' };
@@ -250,67 +250,40 @@ export default function RecordEditor({
     }
   };
 
-  /** まとまりを品目の画面で開く。 */
+  /** 品目の画面を開く（記録のまとまりを全部持って行き、押したまとまりを見せる）。 */
   const openGroup = (group: EditorGroup) => {
-    const lines = group.lines.length > 0 ? group.lines : [blankLine()];
     setWork({
-      groupKey: group.key,
-      categoryId: group.categoryId,
-      categoryName: group.categoryName,
-      lines,
+      groups: groups.map((entry) => (entry.key === group.key && entry.lines.length === 0 ? { ...entry, lines: [blankLine()] } : entry)),
       selected: null,
       expr: '',
+      focus: group.key,
+      calc: false,
     });
     push({ type: 'items' });
   };
 
-  /** カテゴリを選んだ（品目の追加、または品目の画面でカテゴリを変えた）。 */
-  const pickCategory = (choice: CategoryChoice, purpose: 'add' | 'change') => {
-    const target = { categoryId: choice.categoryId, categoryName: '' };
-    if (purpose === 'change' && work) {
-      setWork({ ...work, ...target });
+  /** カテゴリを選んだ（カテゴリの追加、または品目の画面でまとまりのカテゴリを変えた）。 */
+  const pickCategory = (choice: CategoryChoice, target: Screen) => {
+    const picked = { categoryId: choice.categoryId, categoryName: '' };
+    if (target.type === 'category' && target.purpose === 'change') {
+      if (work) setWork(changeWorkGroup(work, target.groupKey, picked));
       pop();
       return;
     }
-    const existing = groups.find((group) => sameGroupTarget(group, target));
-    const line = blankLine();
-    setWork({
-      groupKey: existing?.key ?? null,
-      ...target,
-      lines: [...(existing?.lines ?? []), line],
-      selected: line.key,
-      expr: '',
-    });
+    if (work) {
+      // 品目の画面の「カテゴリを追加」から。品目の画面へ戻る。
+      setWork(addWorkGroup(work, picked, newGroupKey()));
+      pop();
+      return;
+    }
+    // 記録の編集の「＋」から。品目の画面を開く。
+    setWork(addWorkGroup({ groups, selected: null, expr: '', focus: null, calc: false }, picked, newGroupKey()));
     replaceTop({ type: 'items' });
   };
 
   const saveWork = () => {
     if (!work) return;
-    const lines = work.lines.filter((line) => !isBlankLine(line));
-    setGroups((prev) => {
-      let next = prev.filter((group) => group.key !== work.groupKey);
-      const target = { categoryId: work.categoryId, categoryName: work.categoryName };
-      const same = next.find((group) => sameGroupTarget(group, target));
-      if (same) {
-        // 同じカテゴリのまとまりがほかにあれば、そこへ足す（カテゴリを変えた結果、同じになったとき）。
-        next = next.map((group) => (group.key === same.key ? { ...group, lines: [...group.lines, ...lines] } : group));
-        return next;
-      }
-      const index = prev.findIndex((group) => group.key === work.groupKey);
-      const group: EditorGroup = { key: work.groupKey ?? newGroupKey(), ...target, lines };
-      if (index < 0) return [...next, group];
-      next.splice(index, 0, group);
-      return next;
-    });
-    setWork(null);
-    pop();
-  };
-
-  const deleteWork = () => {
-    if (!work) return;
-    const key = work.groupKey;
-    if (!window.confirm('このカテゴリの品目を消しますか？')) return;
-    setGroups((prev) => prev.filter((group) => group.key !== key));
+    setGroups(groupsFromWork(work));
     setWork(null);
     pop();
   };
@@ -377,12 +350,12 @@ export default function RecordEditor({
           <ItemsScreen
             work={work}
             onChange={setWork}
-            title={groupTitle(work)}
-            iconKey={groupIconKey(work)}
-            subtitle={groupSubtitle(work)}
-            onChangeCategory={() => push({ type: 'category', purpose: 'change' })}
+            title={groupTitle}
+            iconKey={groupIconKey}
+            subtitle={groupSubtitle}
+            onChangeCategory={(groupKey) => push({ type: 'category', purpose: 'change', groupKey })}
+            onAddCategory={() => push({ type: 'category', purpose: 'add' })}
             onSave={saveWork}
-            onDelete={work.groupKey !== null ? deleteWork : undefined}
             onClose={back}
           />
         );
@@ -394,7 +367,7 @@ export default function RecordEditor({
             categories={categories}
             budgets={budgets}
             records={records}
-            onPick={(choice) => pickCategory(choice, screen.purpose)}
+            onPick={(choice) => pickCategory(choice, screen)}
             onClose={back}
             onEditCategories={onEditCategories}
           />
