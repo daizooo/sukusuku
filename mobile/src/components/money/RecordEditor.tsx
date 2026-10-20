@@ -88,10 +88,8 @@ export interface RecordEditorProps {
   records: MoneyRecord[];
   onClose: () => void;
   onSubmit: (draft: MoneyRecordDraft) => void;
-  /** 記録して、続けて次の記録を入れる（新しく足すときだけ。日付・出金元・種類は引き継ぐ。docs/kakei.md §3.2。2026-10-20）。 */
+  /** 記録して、続けて次の記録を入れる（新しく足すときだけ。日付を引き継ぐ。docs/kakei.md §3.2。2026-10-20）。 */
   onSubmitNext?: (draft: MoneyRecordDraft) => void;
-  /** 「記録して続ける」で、この入力の前に続けて記録した件数（0 なら知らせを出さない）。 */
-  savedInRow?: number;
   onDelete: (record: MoneyRecord) => void;
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onDeleteWallet: (wallet: MoneyWallet) => void;
@@ -138,7 +136,6 @@ export default function RecordEditor({
   onClose,
   onSubmit,
   onSubmitNext,
-  savedInRow = 0,
   onDelete,
   onSaveWallet,
   onDeleteWallet,
@@ -532,7 +529,6 @@ export default function RecordEditor({
         }
       />
       <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
-        {savedInRow > 0 && <Text style={styles.savedInRow}>✓ {savedInRow}件記録しました。続けて入れてください</Text>}
         <View style={styles.kinds}>
           {KINDS.map((entry) => (
             <Pressable
@@ -748,7 +744,6 @@ const styles = StyleSheet.create({
   saveRow: { flexDirection: 'row' },
   saveNext: { flex: 1, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.money },
   saveNextText: { color: colors.money },
-  savedInRow: { fontSize: 13, fontWeight: '700', color: colors.moneyText, marginHorizontal: 16, marginBottom: 8 },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1, borderTopColor: colors.border },
   amountBox: { alignItems: 'flex-end', paddingHorizontal: 20, paddingVertical: 24, flex: 1, justifyContent: 'flex-end' },
   amountExpr: { fontSize: 14, fontWeight: '500', color: colors.textMuted },
