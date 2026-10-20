@@ -19,6 +19,7 @@ import type {
   MoneyWalletBalance,
   MoneyWalletDraft,
   ReceiptScan,
+  ReceiptScanItem,
 } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import { useSwipeTabs } from '../ui/useSwipeTabs';
@@ -50,6 +51,7 @@ import { scanReceipt } from '@/lib/api/moneyReceipt';
 import { receiptImagesFromFiles } from '@/lib/receiptCapture';
 import {
   fillMoneyFeed,
+  loadFeedOrderLines,
   loadMoneyFeed,
   resolveMoneyFeed,
   type MoneyFeedFill,
@@ -190,6 +192,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [feedOpen, setFeedOpen] = useState(false);
   // 未確認の明細の「記録を作成する」から開いた記録の入力の、その明細。保存したら記録と結ぶ（docs/kakei.md §9.5.6.1）。
   const [feedRecordFor, setFeedRecordFor] = useState<MoneyFeedItem | null>(null);
+  // Amazon の注文メールの明細から記録するときの品目（docs/kakei.md §9.10）
+  const [feedOrderItems, setFeedOrderItems] = useState<ReceiptScanItem[] | null>(null);
 
   // 評価額の履歴（推移用）は、推移・証券口座の詳細を開くまで読まない。一度読んだら、読み直しでも履歴まで読む。
   const historyWanted = useRef(false);
@@ -766,11 +770,24 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           records={records}
           categories={categories}
           onRecord={(item) => {
-            setReceipt(null);
-            setReceiptFor(null);
-            setNewDate(item.occurredOn);
-            setFeedRecordFor(item);
-            setEditing('new');
+            void (async () => {
+              // Amazon の注文メールの明細は、品目まで入れて開く（docs/kakei.md §9.10）
+              let items: ReceiptScanItem[] | null = null;
+              if (item.amazonOrderId) {
+                try {
+                  items = await loadFeedOrderLines(supabase, item.id);
+                } catch {
+                  failed('品目の読み込み');
+                  return;
+                }
+              }
+              setReceipt(null);
+              setReceiptFor(null);
+              setNewDate(item.occurredOn);
+              setFeedOrderItems(items);
+              setFeedRecordFor(item);
+              setEditing('new');
+            })();
           }}
           onResolve={resolveFeed}
           onFill={fillFeed}
@@ -789,6 +806,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           initialWallet={feedRecordFor?.walletId ?? null}
           initialStore={feedRecordFor ? feedStoreName(feedRecordFor) : ''}
           initialAmount={feedRecordFor?.amount ?? null}
+          initialItems={feedRecordFor ? feedOrderItems : null}
           onScanReceipt={(target) => {
             receiptTarget.current = target;
             receiptInput.current?.click();

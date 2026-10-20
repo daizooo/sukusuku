@@ -71,6 +71,7 @@ const item = (patch: Partial<MoneyFeedItem>): MoneyFeedItem => ({
   candidateRecordIds: [],
   source: 'zaim_mail',
   storeHint: null,
+  amazonOrderId: null,
   ...patch,
 });
 

@@ -12,6 +12,7 @@ import type {
   MoneyWallet,
   MoneyWalletDraft,
   ReceiptScan,
+  ReceiptScanItem,
 } from '@/types/app';
 import { formatDateWithYear, toDateStringInTimeZone } from '@/lib/dateUtils';
 import {
@@ -104,6 +105,8 @@ export interface RecordEditorProps {
   initialStore?: string;
   /** 新しく記録するときに最初に入れておく額（カテゴリの決まっていない1行にする。Gmail 取り込みの未確認の「記録を作成する」から）。 */
   initialAmount?: number | null;
+  /** 新しく記録するときに最初に入れておく品目（Amazon の注文メールの明細の「記録を作成する」から。docs/kakei.md §9.10）。 */
+  initialItems?: ReceiptScanItem[] | null;
   /** 既にある記録にレシートを撮って品目を入れる（支出・収入の記録だけ。§10.8）。 */
   onScanReceipt?: (record: MoneyRecord) => void;
 }
@@ -136,6 +139,7 @@ export default function RecordEditor({
   initialWallet = null,
   initialStore = '',
   initialAmount = null,
+  initialItems = null,
   onScanReceipt,
 }: RecordEditorProps) {
   const [kind, setKind] = useState<MoneyRecordKind>(record?.kind ?? (receipt ? 'expense' : initialKind));
@@ -156,7 +160,9 @@ export default function RecordEditor({
       ? groupsFromScan(receipt.items, newGroupKey)
       : record && record.kind !== 'transfer'
         ? groupsFromItems(record.items, newGroupKey)
-        : !record && initialAmount !== null && initialAmount > 0
+        : !record && initialItems !== null && initialItems.length > 0
+          ? groupsFromScan(initialItems, newGroupKey)
+          : !record && initialAmount !== null && initialAmount > 0
           ? [
               {
                 key: newGroupKey(),

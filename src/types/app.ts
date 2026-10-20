@@ -783,6 +783,8 @@ export interface MoneyFeedItem {
   source: 'zaim_mail' | 'card_mail';
   /** 利用先に当たるお店の候補（カードの利用通知だけ。覚えた利用先 → ローマ字 → AI で当てたもの）。 */
   storeHint: string | null;
+  /** Amazon の注文メールの明細なら、その注文（「記録を作成する」で品目まで入れて開く。docs/kakei.md §9.10）。 */
+  amazonOrderId: string | null;
 }
 
 /** 取り込みのルールの動き（§9.5.6）。 */

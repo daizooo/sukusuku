@@ -954,6 +954,9 @@ export type Database = {
       money_feed: {
         Row: {
           account_name: string | null
+          amazon_line_ids: string[]
+          amazon_order_id: string | null
+          amazon_with_adjust: boolean
           amount: number | null
           candidate_record_ids: string[]
           created_at: string
@@ -981,6 +984,9 @@ export type Database = {
         }
         Insert: {
           account_name?: string | null
+          amazon_line_ids?: string[]
+          amazon_order_id?: string | null
+          amazon_with_adjust?: boolean
           amount?: number | null
           candidate_record_ids?: string[]
           created_at?: string
@@ -1008,6 +1014,9 @@ export type Database = {
         }
         Update: {
           account_name?: string | null
+          amazon_line_ids?: string[]
+          amazon_order_id?: string | null
+          amazon_with_adjust?: boolean
           amount?: number | null
           candidate_record_ids?: string[]
           created_at?: string
@@ -2932,6 +2941,7 @@ export type Database = {
         Args: { p_applied: Json; p_family: string; p_ids: string[] }
         Returns: Json
       }
+      money_feed_order_lines: { Args: { p_feed: string }; Returns: Json }
       money_feed_process: { Args: { p_feed: string }; Returns: string }
       money_feed_receive: {
         Args: { p_family: string; p_feed: Json }
