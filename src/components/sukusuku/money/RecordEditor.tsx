@@ -85,6 +85,10 @@ export interface RecordEditorProps {
   records: MoneyRecord[];
   onClose: () => void;
   onSubmit: (draft: MoneyRecordDraft) => void;
+  /** 記録して、続けて次の記録を入れる（新しく足すときだけ。日付・出金元・種類は引き継ぐ。docs/kakei.md §3.2。2026-10-20）。 */
+  onSubmitNext?: (draft: MoneyRecordDraft) => void;
+  /** 「記録して続ける」で、この入力の前に続けて記録した件数（0 なら知らせを出さない）。 */
+  savedInRow?: number;
   onDelete: (record: MoneyRecord) => void;
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onDeleteWallet: (wallet: MoneyWallet) => void;
@@ -130,6 +134,8 @@ export default function RecordEditor({
   records,
   onClose,
   onSubmit,
+  onSubmitNext,
+  savedInRow = 0,
   onDelete,
   onSaveWallet,
   onDeleteWallet,
@@ -277,7 +283,7 @@ export default function RecordEditor({
     pop();
   };
 
-  const submit = () => {
+  const submit = (next = false) => {
     if (kind === 'transfer') {
       if (walletId === null || toWalletId === null) return window.alert('出金元と入金先を選んでください');
       if (walletId === toWalletId) return window.alert('出金元と入金先が同じです');
@@ -302,7 +308,7 @@ export default function RecordEditor({
     if (initialAmount !== null && groups.some((group) => group.categoryId === null && group.categoryName === '')) return window.alert('カテゴリを選んでください。');
     // 品目はマイナスも入れられるが、記録の合計はマイナスにしない（docs/kakei.md §10.5。DB でも確かめる）。
     if (total < 0) return window.alert('合計がマイナスです。値引きの行の金額を確かめてください。');
-    onSubmit({
+    (next && onSubmitNext ? onSubmitNext : onSubmit)({
       id: record?.id ?? null,
       kind,
       occurredOn,
@@ -510,6 +516,7 @@ export default function RecordEditor({
         }
       />
       <div className="flex-1 min-h-0 overflow-y-auto pt-1 pb-4">
+        {savedInRow > 0 && <p className="mx-4 mb-2 text-[13px] font-bold text-blue-800">✓ {savedInRow}件記録しました。続けて入れてください</p>}
         <div className="flex gap-2 px-4">
           {KINDS.map((entry) => (
             <button
@@ -639,10 +646,21 @@ export default function RecordEditor({
           </>
         )}
       </div>
-      {/* 下いっぱいの保存の帯（青）。 */}
-      <button type="button" onClick={submit} className="shrink-0 bg-blue-600 py-4 text-base font-extrabold text-white hover:bg-blue-700">
-        {record ? '保存する' : '記録する'}
-      </button>
+      {/* 下いっぱいの保存の帯（青）。新しく足すときは「記録して続ける」も出す（取り込んだ明細からの記録は除く）。 */}
+      {!record && onSubmitNext && initialAmount === null ? (
+        <div className="flex shrink-0">
+          <button type="button" onClick={() => submit(true)} className="flex-1 border-t border-blue-600 bg-white py-4 text-base font-extrabold text-blue-600 hover:bg-blue-50">
+            記録して続ける
+          </button>
+          <button type="button" onClick={() => submit()} className="flex-1 bg-blue-600 py-4 text-base font-extrabold text-white hover:bg-blue-700">
+            記録する
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => submit()} className="shrink-0 bg-blue-600 py-4 text-base font-extrabold text-white hover:bg-blue-700">
+          {record ? '保存する' : '記録する'}
+        </button>
+      )}
     </>
   );
 

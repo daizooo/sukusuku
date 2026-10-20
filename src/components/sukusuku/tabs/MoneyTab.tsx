@@ -10,6 +10,7 @@ import type {
   MoneyReserve,
   MoneyRecord,
   MoneyRecordDraft,
+  MoneyRecordKind,
   MoneyRecurring,
   MoneySecuritiesData,
   MoneySecurity,
@@ -174,6 +175,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [editing, setEditing] = useState<Editing>(null);
   // 記録の一覧の、日の見出しの「＋」から足すときの日。それ以外は null（今日）。
   const [newDate, setNewDate] = useState<string | null>(null);
+  // 「記録して続ける」の続き（2026-10-20）。次の入力に引き継ぐ種類・日付・出金元と、続けて記録した件数。続けていないときは null。
+  const [chain, setChain] = useState<{ seq: number; kind: MoneyRecordKind; occurredOn: string; walletId: string | null; count: number } | null>(null);
   // レシートの読み取りの結果（記録の入力に入れて開く）と、読み取り中か（docs/kakei.md §10）。
   const [receipt, setReceipt] = useState<ReceiptScan | null>(null);
   // レシートを当てている既にある記録（§10.8）。null は新しい記録の読み取り。
@@ -350,7 +353,11 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     }
   };
 
-  const saveRecord = async (draft: MoneyRecordDraft) => {
+  /**
+   * next: 「記録して続ける」。保存したら、日付・出金元・種類を引き継いだ次の入力を開く。
+   * mobile版はレシートからならそのまま次のレシートを撮るが、Webは写真の選択を押した操作の中でしか開けないので、次の入力の「レシートから追加」から。
+   */
+  const saveRecord = async (draft: MoneyRecordDraft, next = false) => {
     if (!(await confirmReopen(monthsOfDraft(draft)))) return;
     if (!confirmNotDuplicate(draft)) return;
     setEditing(null);
@@ -358,9 +365,22 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     setReceiptFor(null);
     const feedItem = feedRecordFor;
     setFeedRecordFor(null);
+    if (next) {
+      setChain((prev) => ({
+        seq: (prev?.seq ?? 0) + 1,
+        kind: draft.kind,
+        occurredOn: draft.occurredOn,
+        walletId: draft.walletId,
+        count: prev?.count ?? 0,
+      }));
+      setEditing('new');
+    } else {
+      setChain(null);
+    }
     try {
       const saved = await saveMoneyRecord(supabase, draft);
       setRecords((prev) => [...prev.filter((record) => record.id !== saved.id), saved]);
+      if (next) setChain((prev) => (prev ? { ...prev, count: prev.count + 1 } : prev));
       setMonthKey(monthKeyOf(saved.occurredOn));
       // 「お店に登録して使う」を選んだお店は、DBの save_money_record がお店の設定に登録する（docs/kakei.md §3.5）。
       if (draft.registerStore && saved.store !== '' && !stores.some((entry) => entry.name === saved.store && !entry.archived)) {
@@ -795,12 +815,13 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       {/* 未確認の明細の「記録を作成する」から開くので、未確認の一覧より上に重ねる（後に置く） */}
       {editing !== null && (
         <RecordEditor
-          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newDate ?? ''}-${feedRecordFor?.id ?? ''}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
+          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newDate ?? ''}-${feedRecordFor?.id ?? ''}-${chain?.seq ?? 0}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
           record={editing === 'new' ? null : editing}
           receipt={editing === 'new' || receiptFor === editing.id ? receipt : null}
-          initialDate={newDate}
-          initialKind={feedRecordFor?.direction === 'in' ? 'income' : 'expense'}
-          initialWallet={feedRecordFor?.walletId ?? null}
+          initialDate={chain?.occurredOn ?? newDate}
+          initialKind={chain?.kind ?? (feedRecordFor?.direction === 'in' ? 'income' : 'expense')}
+          initialWallet={feedRecordFor?.walletId ?? chain?.walletId ?? null}
+          savedInRow={chain?.count ?? 0}
           initialStore={feedRecordFor ? feedStoreName(feedRecordFor) : ''}
           initialAmount={feedRecordFor?.amount ?? null}
           initialItems={feedRecordFor ? feedOrderItems : null}
@@ -818,8 +839,10 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
             setReceipt(null);
             setReceiptFor(null);
             setFeedRecordFor(null);
+            setChain(null);
           }}
           onSubmit={(draft) => void saveRecord(draft)}
+          onSubmitNext={(draft) => void saveRecord(draft, true)}
           onDelete={(record) => void removeRecord(record)}
           onSaveWallet={saveWallet}
           onDeleteWallet={(wallet) => void deleteWallet(wallet)}

@@ -88,6 +88,10 @@ export interface RecordEditorProps {
   records: MoneyRecord[];
   onClose: () => void;
   onSubmit: (draft: MoneyRecordDraft) => void;
+  /** 記録して、続けて次の記録を入れる（新しく足すときだけ。日付・出金元・種類は引き継ぐ。docs/kakei.md §3.2。2026-10-20）。 */
+  onSubmitNext?: (draft: MoneyRecordDraft) => void;
+  /** 「記録して続ける」で、この入力の前に続けて記録した件数（0 なら知らせを出さない）。 */
+  savedInRow?: number;
   onDelete: (record: MoneyRecord) => void;
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onDeleteWallet: (wallet: MoneyWallet) => void;
@@ -133,6 +137,8 @@ export default function RecordEditor({
   records,
   onClose,
   onSubmit,
+  onSubmitNext,
+  savedInRow = 0,
   onDelete,
   onSaveWallet,
   onDeleteWallet,
@@ -291,7 +297,7 @@ export default function RecordEditor({
     pop();
   };
 
-  const submit = () => {
+  const submit = (next = false) => {
     if (kind === 'transfer') {
       if (walletId === null || toWalletId === null) return Alert.alert('出金元と入金先を選んでください');
       if (walletId === toWalletId) return Alert.alert('出金元と入金先が同じです');
@@ -316,7 +322,7 @@ export default function RecordEditor({
     if (initialAmount !== null && groups.some((group) => group.categoryId === null && group.categoryName === '')) return Alert.alert('カテゴリを選んでください');
     // 品目はマイナスも入れられるが、記録の合計はマイナスにしない（docs/kakei.md §10.5。DB でも確かめる）。
     if (total < 0) return Alert.alert('合計がマイナスです', '値引きの行の金額を確かめてください。');
-    onSubmit({
+    (next && onSubmitNext ? onSubmitNext : onSubmit)({
       id: record?.id ?? null,
       kind,
       occurredOn,
@@ -526,6 +532,7 @@ export default function RecordEditor({
         }
       />
       <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+        {savedInRow > 0 && <Text style={styles.savedInRow}>✓ {savedInRow}件記録しました。続けて入れてください</Text>}
         <View style={styles.kinds}>
           {KINDS.map((entry) => (
             <Pressable
@@ -648,9 +655,21 @@ export default function RecordEditor({
           </>
         )}
       </ScrollView>
-      <Pressable accessibilityRole="button" onPress={submit} style={styles.saveBar}>
-        <Text style={styles.saveText}>{record ? '保存する' : '記録する'}</Text>
-      </Pressable>
+      {/* 新しく足すときは「記録して続ける」も出す（1日に何枚もレシートを入れるとき。取り込んだ明細からの記録は除く）。 */}
+      {!record && onSubmitNext && initialAmount === null ? (
+        <View style={styles.saveRow}>
+          <Pressable accessibilityRole="button" onPress={() => submit(true)} style={[styles.saveBar, styles.saveNext]}>
+            <Text style={[styles.saveText, styles.saveNextText]}>記録して続ける</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => submit()} style={[styles.saveBar, styles.flex]}>
+            <Text style={styles.saveText}>記録する</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable accessibilityRole="button" onPress={() => submit()} style={styles.saveBar}>
+          <Text style={styles.saveText}>{record ? '保存する' : '記録する'}</Text>
+        </Pressable>
+      )}
     </View>
   );
 
@@ -725,6 +744,11 @@ const styles = StyleSheet.create({
   // 下いっぱいの保存の帯（青）。
   saveBar: { alignItems: 'center', paddingVertical: 16, backgroundColor: colors.money },
   saveText: { fontSize: 16, fontWeight: '800', color: colors.primaryText },
+  // 「記録して続ける」は白地に青の枠で、「記録する」と横に並べる。
+  saveRow: { flexDirection: 'row' },
+  saveNext: { flex: 1, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.money },
+  saveNextText: { color: colors.money },
+  savedInRow: { fontSize: 13, fontWeight: '700', color: colors.moneyText, marginHorizontal: 16, marginBottom: 8 },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1, borderTopColor: colors.border },
   amountBox: { alignItems: 'flex-end', paddingHorizontal: 20, paddingVertical: 24, flex: 1, justifyContent: 'flex-end' },
   amountExpr: { fontSize: 14, fontWeight: '500', color: colors.textMuted },
