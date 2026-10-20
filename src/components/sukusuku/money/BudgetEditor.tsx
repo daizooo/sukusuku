@@ -357,7 +357,7 @@ export default function BudgetEditor({
 
             {sectionHeader('収入', incomeTotal)}
             {incomeRows.length === 0 ? (
-              <p className="py-4 text-center text-[13px] font-medium text-gray-400">この年の固定収入はありません</p>
+              <p className="py-4 text-center text-[13px] font-medium text-gray-400">この年の収入の見込みはありません</p>
             ) : (
               <div className={`${cardClass} overflow-hidden [&>*:first-child]:border-t-0`}>{incomeRows.map(fixedRow)}</div>
             )}
