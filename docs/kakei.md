@@ -873,7 +873,7 @@ money_holding_values   保有ごとの日々の評価額。 holding_id / value_o
    - 合言葉: Apps Script のスクリプト プロパティに置いた鍵を `Authorization` で送る。サーバーは鍵のハッシュで家族を決める（`money_feed_tokens`）
 3. 受け付けた（同じIDが既にある場合も）ら、スレッドにラベル `かぞく手帳済` を付ける。送れなかったものは次の回にまた送る
 4. サーバーは**解析 → 口座を決める → 突き合わせ（§9.5.4）**を1回で行う。解析できなかったメールも捨てず、「読めない」として残す
-- Apps Script のコードはリポジトリに置く（`tools/gas/zaim-feed.gs`）。貼り付けと時間トリガーの設定は手で1回だけ
+- Apps Script のコードはリポジトリに置く（`tools/gas/gmail-feed.gs`）。貼り付けと時間トリガーの設定は手で1回だけ
 - **取り込むのは開始日時より後に届いたメールだけ**（スクリプト プロパティ `START_AT`。動かし始めた日時にする）。
   2026-10-12に届いた2通（楽天銀行 → 肥後銀行の20,000円）は通知を確かめるための試しの振込。**取り込みを試すのに使い、そのまま本番に残した**
   （実際に動いたお金なので、振替の記録として正しい。§9.5.11）
@@ -1029,7 +1029,7 @@ money_records に   feed_id（どの明細から来たか。振替は出金側�
 
 #### 9.5.10 進め方（PRを分ける。mobile を先に、`src/` は同じPRで追従する）
 1. **（2026-10-12に済）** DB（`money_feed_tokens`・`money_feed`・`money_feed_rules`・列の追加・`money_feed_process`）と Edge Function `money-feed-ingest`、
-   Apps Script（`tools/gas/zaim-feed.gs`）。試しの2通で振替が1件できることを確かめた（§9.5.11）
+   Apps Script（`tools/gas/gmail-feed.gs`）。試しの2通で振替が1件できることを確かめた（§9.5.11）
 2. **（2026-10-12に済）** 画面: 家計の設定の「Zaim 取り込み」（状態・鍵・口座の対応・取り込みのルール・ひな形・突き合わせの幅。§9.5.6）。
    mobile `MoneyFeedSettings`、PWA `MoneyFeedSettings`。DB は 0092（`money_feed_resolve`・`money_feed_reprocess`・`skip_manual`）
 3. **（2026-10-12に済）** 画面: 「口座」の面の上の「未確認 n件」と、その一覧・片づけ（§9.5.5・§9.5.6.1）。mobile・PWA の `MoneyFeedInbox`
@@ -1037,7 +1037,7 @@ money_records に   feed_id（どの明細から来たか。振替は出金側�
 
 #### 9.5.11 試した結果（2026-10-12。本番DB・Edge Function で）
 - 作ったもの: migration `0091_money_feed.sql`（本番に適用済み）、Edge Function `money-feed-ingest`（デプロイ済み）、
-  メールの読み取り `supabase/functions/_shared/zaimMail.ts`（`npm run test:zaim-mail`）、Apps Script `tools/gas/zaim-feed.gs`
+  メールの読み取り `supabase/functions/_shared/zaimMail.ts`（`npm run test:zaim-mail`）、Apps Script `tools/gas/gmail-feed.gs`
 - 口座の対応は、届いた2つだけ入れた（`feed_name`: 肥後銀行 → 【生活費】肥後銀行、楽天銀行 → 【貯金】楽天銀行）。
   ほかの口座（三井住友銀行・九州ろうきん）は、Zaim での口座名が届いてから入れる
 - **試しの2通を Edge Function に送った**: 楽天銀行の出金（02:27着）は相手がまだ無く「未確認」、肥後銀行の入金（02:42着）で組になり、
@@ -1095,7 +1095,7 @@ Zaim を解約するので、銀行の入出金は取り込まない（メール
 
 #### 9.6.4 取り込みの経路
 - 画面の言葉は「Zaim 取り込み」から **「Gmail 取り込み」** に変えた（家計の設定・口座の面の「Gmail から取り込んだ明細」・重複の確認。2026-10-15）
-- §9.5.2 の Apps Script（`tools/gas/zaim-feed.gs`）が、Zaim に加えて三井住友カード・楽天カードの差出人も探し、差出人（`from`）を付けて送る。
+- §9.5.2 の Apps Script（`tools/gas/gmail-feed.gs`）が、Zaim に加えて三井住友カード・楽天カードの差出人も探し、差出人（`from`）を付けて送る。
   **前の版を貼ってある場合は、新しい中身で貼り直す**（スクリプト プロパティ・トリガーはそのまま）
 - Edge Function `money-feed-ingest` が差出人で読み分ける（カードは `_shared/cardMail.ts`）
 - 取り込むのは開始日時（`START_AT`）より後に届いたメールだけ（§9.5.2 と同じ）
@@ -1128,7 +1128,7 @@ Amazon は注文した日ではなく**発送した日**にカードへ請求が
   Amazon の利用かどうかは、**利用先に Amazon・アマゾンが入っているか、カード名に Amazon が入っている**（`isAmazonCharge`）
 
 #### 9.7.2 覚える（注文メールが届いたとき）
-- Apps Script（`tools/gas/zaim-feed.gs`）が差出人 `auto-confirm@amazon.co.jp`・件名「注文済み」のメールも送る。**前の版を貼ってある場合は貼り直す**
+- Apps Script（`tools/gas/gmail-feed.gs`）が差出人 `auto-confirm@amazon.co.jp`・件名「注文済み」のメールも送る。**前の版を貼ってある場合は貼り直す**
 - Edge Function `money-feed-ingest` が読み（`_shared/amazonOrder.ts`・`npm run test:amazon-order`）、注文と品目を `money_amazon_orders`・`money_amazon_lines` に入れる。
   同じ注文番号は1回だけ。開始日時（`START_AT`）より前のメールは入れない
 - 品目の種類（カテゴリ）はこのとき決めておく: **同じ品名（`money_items.receipt_name`）の過去の品目の種類 → 無ければ Claude Haiku 5.5 に小分類の一覧から選ばせる**
@@ -1203,7 +1203,7 @@ Amazon は注文した日ではなく**発送した日**にカードへ請求が
 | かぞく手帳/対象外 | 読んだが取り込まない（0円の注文など）。取り込みの開始より前のメール | 取り込まないものは移す。開始より前は移さない |
 | かぞく手帳/読めない | 書式が読めない（家計タブの「読めない」で手で入れると「済」に変わる） | 移さない |
 
-- Apps Script（`tools/gas/zaim-feed.gs`）は5分ごとに: 差出人（三井住友カードの利用通知・Amazon の注文メール）でメール1通ずつ探す
+- Apps Script（`tools/gas/gmail-feed.gs`）は5分ごとに: 差出人（三井住友カードの利用通知・Amazon の注文メール）でメール1通ずつ探す
   （最後にうまく動いた時刻の1日前から。全フォルダ・迷惑メールも。ゴミ箱は除く）→ 見つけたIDを同期で送り、まだのIDを返してもらう →
   まだのメールを50通ずつ送る → サーバーが返すとおりにラベルを付け替え、片づいたメールをゴミ箱へ移し、付けたことを同期で伝える
 - Zaim・楽天カードは探さない（Zaim は使わなくなった。楽天カードの利用通知は PR1 で読み取りの段階で捨てる）。送ったスレッドのアーカイブもやめた
@@ -1214,6 +1214,21 @@ Amazon は注文した日ではなく**発送した日**にカードへ請求が
 - 貼り直し: Apps Script に「Gmail API」のサービスを足し、中身を貼り直して、関数 `removeOldLabels` を1回手で実行する（前の版のラベルを外して消す）。
   スクリプト プロパティ・時間トリガー・関数名はそのまま
 - migration `0117_money_feed_mails.sql`（今までの明細・注文から台帳を作る）。適用の順序: migration → Edge Function → Apps Script の貼り直し
+
+### 9.9 カード名の読み分けと、取り込まない利用通知（2026-10-20に決定。PR1）
+
+取り込む元をお店とカードで1つに決めた: **Amazon・楽天市場の買い物は注文メールから、Olive フレキシブルペイの利用（クレジット・デビット）は利用通知から**。
+同じ買い物を2か所から取り込まないので、注文メールと利用通知を照らし合わせる仕組みは作らない。
+
+- 三井住友カードの利用通知の口座名は、本文の「ご利用カード：」の名前そのまま（全角のまま。「Ｏｌｉｖｅ／クレジット」「三井住友カードＶＩＳＡ（ＮＬ）」など）。
+  以前は「三井住友カード（Amazon）」と「三井住友カード」の2つだった。出金元は口座の対応で結ぶ（Olive／クレジット → Oliveフレキシブルペイ、Olive／デビット → 三井住友銀行）
+- **Amazon のカード・楽天カードの利用通知と、「一定金額に到達」の知らせは、読み取りで捨てる**（`_shared/cardMail.ts` の `isDiscardedCardMail`。サーバーの決まりで、設定は置かない）。
+  明細を作らず、メールは「対象外」としてゴミ箱へ（§9.8）
+- 口座の対応には、カードの利用通知の口座名だけを出す。Zaim（銀行）の口座名と、使わなくなった口座名（Amazon のカード・楽天カード・「三井住友カード」）は出さない
+- migration `0118_money_feed_card_names.sql`: 「三井住友カード」に結んでいた出金元を NL のカード名に結び直し、Amazon のカード・楽天カード・銀行の口座名を出金元から外す（行は消さない）
+- Apps Script の関数名を `sendFeedMails`、ファイル名を `tools/gas/gmail-feed.gs` に変えた（Zaim を扱わなくなったため）。貼り直して関数 `setup` を1回実行する（古い名前のトリガーを消して作り直す）
+- PR2（Amazon の注文メールから明細を作る）が入るまで、Amazon の買い物は明細にならない。PR2 で、取り込みの開始日時以降のまだ記録していない注文を明細にする（案の §6）
+- Zaim の取り込み（振替の組み合わせ・銀行向けのルール）の片づけは別の PR
 
 ## 10. レシートの読み取り（2026-10-12に検討）
 

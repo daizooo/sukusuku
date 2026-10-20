@@ -98,6 +98,12 @@ const cardFeedOf = (
   return { linkedAmounts, walletIds: [...walletIds], since };
 };
 
+/**
+ * 口座の対応に出さない口座名（docs/kakei.md §9.9）。Amazon のカード・楽天カードの利用通知は読み取りで捨てるようになり、
+ * 「三井住友カード」はカード名ごとに分ける前の名前。Zaim（銀行）の明細も出さない（card_mail だけ）。
+ */
+const RETIRED_FEED_ACCOUNTS = new Set(['三井住友カード（Amazon）', '楽天カード', '三井住友カード']);
+
 /** Apps Script（5分ごと）からこれだけ届かなければ、取り込みが止まっていると知らせる（§9.8）。 */
 const SYNC_STALE_MS = 3600_000;
 
@@ -142,7 +148,7 @@ export async function loadMoneyFeed(supabase: SupabaseDb, familyId: string): Pro
 
   const accounts = new Map<string, MoneyFeedAccount>();
   for (const row of recent.data ?? []) {
-    if (!row.account_name) continue;
+    if (!row.account_name || row.source !== 'card_mail' || RETIRED_FEED_ACCOUNTS.has(row.account_name)) continue;
     const key = `${row.account_name}\n${(row.to_email ?? '').toLowerCase()}`;
     if (!accounts.has(key)) {
       accounts.set(key, { accountName: row.account_name, toEmail: row.to_email, lastReceivedAt: row.received_at });
