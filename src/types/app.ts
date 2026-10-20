@@ -848,6 +848,10 @@ export interface MoneyFeedData {
   linkedRecordIds: string[];
   /** 最後に明細が届いた日時。 */
   lastReceivedAt: string | null;
+  /** Apps Script が最後に動いた日時（5分ごと。前の版の Apps Script のままなら null。§9.8）。 */
+  lastSyncAt: string | null;
+  /** Apps Script から1時間以上届いていない（読み込んだ時点で）。家計タブで知らせる。 */
+  syncStalled: boolean;
   /** この30日に届いた明細の数。 */
   recentCount: number;
   /** カードの利用通知の取り込み（月の締めの照合に使う。docs/kakei.md §9.6.5 の C）。 */

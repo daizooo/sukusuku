@@ -1,111 +1,183 @@
-// かぞく手帳: Zaim の入出金通知メールと、カード会社の利用通知メール、Amazon の注文メールを、かぞく手帳へ送る（docs/kakei.md §9.5.2・§9.6・§9.7）
+// かぞく手帳: カード会社の利用通知メールと、Amazon の注文メールを、かぞく手帳へ送る（docs/kakei.md §9.6・§9.7・§9.8）
 //
-// Amazon の注文メール（auto-confirm@amazon.co.jp、件名「注文済み: …」）は、品目を覚えておくために送る。
-// 2026-10-16 に足した。前の版を貼ってある場合は、このファイルの中身で貼り直す（スクリプト プロパティ・トリガーはそのまま）。
-//
-// カードは三井住友カード（statement@vpass.ne.jp）と楽天カード（…@mail.rakuten-card.co.jp）の利用通知。
-// 2026-10-15 にカードを足した。前の版を貼ってある場合は、このファイルの中身で貼り直す（スクリプト プロパティ・トリガーはそのまま）。
+// 2026-10-20 に、送ったかどうかをメール1通ごとにサーバーが覚える作りにした（§9.8）。前の版を貼ってある場合は、
+// このファイルの中身で貼り直し、次の「貼り直しのとき」を1回だけ行う（スクリプト プロパティ・時間トリガーはそのまま）。
 //
 // 使い方（通知が届く Gmail のアカウントで、1回だけ）
 //   1. https://script.google.com で新しいプロジェクトを作り、このファイルの中身を貼る
-//   2. プロジェクトの設定 › スクリプト プロパティに次の3つを入れる
+//   2. エディタの左の「サービス」の ＋ から「Gmail API」を足す（ラベルをメール1通ごとに付けるため）
+//   3. プロジェクトの設定 › スクリプト プロパティに次の3つを入れる
 //        FEED_URL    https://{プロジェクト}.supabase.co/functions/v1/money-feed-ingest
 //        FEED_TOKEN  取り込みの鍵（家計の設定 › Zaim 取り込みで発行）
-//        START_AT    取り込みを始める日時（例: 2026-10-12T00:00:00+09:00）。これより前に届いたメールは送らない
-//   3. 関数 setup を1回実行する（Gmail と外部への送信を許可する）。以後5分ごとに sendZaimMails が動く
+//        START_AT    取り込みを始める日時（例: 2026-10-12T00:00:00+09:00）。これより前に届いたメールは取り込まない
+//   4. 関数 setup を1回実行する（Gmail と外部への送信を許可する）。以後5分ごとに sendZaimMails が動く
 //
-// 送ったメールのスレッドにはラベル「かぞく手帳済」を付け、次からは探さない。
-// 送れなかったもの（かぞく手帳が止まっていた等）はラベルを付けず、次の回にまた送る。
-// かぞく手帳が「覚えるものが無い」と答えたもの（Amazon の合計0円の注文）には、「かぞく手帳済」ではなくラベル「かぞく手帳対象外」を付ける
-// （2026-10-17 に足した。前の版を貼ってある場合は貼り直す。前の版のままでも、0円の注文には「かぞく手帳済」が付くだけで困らない）。
-// ラベルを付けたスレッドは、受信トレイからアーカイブする（ラベルの中には残る。2026-10-17）。
-// すでにラベルが付いて受信トレイに残っているものは、関数 archiveLabeledThreads を手で実行すると片づく（100件ずつ。残りがあれば繰り返す）。
+// 貼り直しのとき（前の版から）
+//   1. 上の 2.（Gmail API を足す）を行う
+//   2. 関数 removeOldLabels を手で実行する。前の版がスレッドに付けたラベル「かぞく手帳済」「かぞく手帳対象外」を外して消す
+//      （メールは消えない）。新しいラベルは、次の回から sendZaimMails がメールごとに付け直す（1回に100通ずつ）
+//
+// 5分ごとにすること
+//   1. 探す: 差出人（三井住友カード・Amazon の注文）で、最後にうまく動いた時刻の1日前（初めは START_AT の1日前）から。
+//      全フォルダと迷惑メールも探す（ゴミ箱は探さない）
+//   2. まだのものを聞く: 見つけたメールのIDをかぞく手帳に送り、まだ受け取っていないIDを返してもらう
+//   3. 送る: まだのメールを50通ずつ送る。残り・送れなかったものは次の回にまた「まだ」として返る
+//   4. ラベルとゴミ箱: かぞく手帳が返すとおりに、メール1通ごとにラベルを付け替え、片づいたメールをゴミ箱へ移す（30日で削除）
+//        かぞく手帳/未確認  取り込んだが、明細をまだ記録していない（受信トレイに残す）
+//        かぞく手帳/済      記録した・記録しないを選んだ。Amazon の注文メールもここ（注文メールはゴミ箱へ移さない）
+//        かぞく手帳/対象外  読んだが取り込まない（0円の注文など）
+//        かぞく手帳/読めない 書式が読めない（家計タブの「読めない」で手で入れる）
+//   5. 動いたことを伝える: 同期のたびに、かぞく手帳が時刻を残す。1時間以上届かなければ、家計タブに「Gmail の取り込みが止まっています」
+//
+// Gmail の画面が「スレッド表示」だと、同じ件名の利用通知が1行にまとまり、ラベルもまとめて出る。
+// メール1通ずつ見るには、Gmail の設定でスレッド表示をオフにする。
 
-var LABEL = 'かぞく手帳済';
-var LABEL_SKIPPED = 'かぞく手帳対象外';
 var BATCH = 50; // Edge Function が1回に受ける数
-// 送るメールの差出人（Zaim・カード会社・Amazon の注文）
-var SENDERS = ['info@zaim.net', 'statement@vpass.ne.jp', 'rakuten-card.co.jp', 'auto-confirm@amazon.co.jp'];
+var MAX_IDS = 2000; // 1回に探すメールの数
+var LABELS = {
+  open: 'かぞく手帳/未確認',
+  done: 'かぞく手帳/済',
+  skipped: 'かぞく手帳/対象外',
+  unreadable: 'かぞく手帳/読めない',
+};
+var OLD_LABELS = ['かぞく手帳済', 'かぞく手帳対象外'];
+// 探すメール（三井住友カードの利用通知・Amazon の注文メール）
+var QUERY = '{from:statement@vpass.ne.jp from:auto-confirm@amazon.co.jp} {subject:利用 subject:注文済み} in:anywhere -in:trash';
 
 function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'sendZaimMails') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('sendZaimMails').timeBased().everyMinutes(5).create();
-  GmailApp.getUserLabelByName(LABEL) || GmailApp.createLabel(LABEL);
+  labelIds();
   sendZaimMails();
 }
 
 function sendZaimMails() {
   var props = PropertiesService.getScriptProperties();
-  var url = props.getProperty('FEED_URL');
-  var token = props.getProperty('FEED_TOKEN');
   var startAt = new Date(props.getProperty('START_AT') || 0);
-  var label = GmailApp.getUserLabelByName(LABEL) || GmailApp.createLabel(LABEL);
-  var skippedLabel = GmailApp.getUserLabelByName(LABEL_SKIPPED) || GmailApp.createLabel(LABEL_SKIPPED);
+  var lastOk = Number(props.getProperty('LAST_OK') || 0);
+  var from = Math.max(startAt.getTime(), lastOk) - 86400000;
+  var startedAt = Date.now();
 
-  var query = '{from:info@zaim.net from:statement@vpass.ne.jp from:rakuten-card.co.jp from:auto-confirm@amazon.co.jp}' +
-    ' {subject:入金がありました subject:出金がありました subject:利用 subject:注文済み} -label:' + LABEL + ' -label:' + LABEL_SKIPPED +
-    ' after:' + Utilities.formatDate(new Date(startAt.getTime() - 86400000), 'Asia/Tokyo', 'yyyy/MM/dd');
-  var threads = GmailApp.search(query, 0, BATCH);
-  if (threads.length === 0) return;
+  // 1. 探す（メール1通ごと）
+  var ids = [];
+  var pageToken;
+  do {
+    var page = Gmail.Users.Messages.list('me', {
+      q: QUERY + ' after:' + Math.floor(Math.max(from, 0) / 1000),
+      maxResults: 500,
+      pageToken: pageToken,
+      includeSpamTrash: true,
+    });
+    (page.messages || []).forEach(function (m) { ids.push(m.id); });
+    pageToken = page.nextPageToken;
+  } while (pageToken && ids.length < MAX_IDS);
 
-  var messages = [];
-  var byThread = {};
-  threads.forEach(function (thread) {
-    byThread[thread.getId()] = { thread: thread, ids: [] };
-    thread.getMessages().forEach(function (m) {
-      if (m.getDate() < startAt) return;
-      var from = m.getFrom();
-      if (!SENDERS.some(function (s) { return from.indexOf(s) >= 0; })) return;
-      byThread[thread.getId()].ids.push(m.getId());
-      messages.push({
-        id: m.getId(),
+  // 2. まだのものを聞く
+  var first = sync(ids.slice(0, MAX_IDS), []);
+  if (!first) return;
+
+  // 3. 送る（50通ずつ。開始より前のものも送り、かぞく手帳が「開始より前」として覚える）
+  var changes = first.changes;
+  if (first.missing.length > 0) {
+    var messages = first.missing.slice(0, BATCH).map(function (id) {
+      var m = GmailApp.getMessageById(id);
+      return {
+        id: id,
         received_at: m.getDate().toISOString(),
-        from: from,
+        from: m.getFrom(),
         to: m.getTo(),
         subject: m.getSubject(),
         body: m.getPlainBody(),
-      });
+      };
     });
-  });
-
-  var results = {};
-  if (messages.length > 0) {
-    var res = UrlFetchApp.fetch(url, {
-      method: 'post',
-      contentType: 'application/json',
-      headers: { Authorization: 'Bearer ' + token },
-      payload: JSON.stringify({ messages: messages.slice(0, BATCH) }),
-      muteHttpExceptions: true,
-    });
-    if (res.getResponseCode() !== 200) {
-      console.warn('かぞく手帳に送れませんでした: ' + res.getResponseCode());
-      return;
-    }
-    JSON.parse(res.getContentText()).results.forEach(function (r) { results[r.id] = r.status; });
+    if (!post({ messages: messages })) return;
+    var second = sync([], []);
+    if (!second) return;
+    changes = second.changes;
   }
 
-  // スレッドの中のメールが全部受け付けられたら、ラベルを付ける（開始より前だけのスレッドも付ける）。
-  // 全部が「覚えるものが無い」（skipped）なら「対象外」、そうでなければ「済」
-  Object.keys(byThread).forEach(function (key) {
-    var entry = byThread[key];
-    var done = entry.ids.every(function (id) { return results[id] && results[id] !== 'error'; });
-    if (!done) return;
-    var allSkipped = entry.ids.length > 0 && entry.ids.every(function (id) { return results[id] === 'skipped'; });
-    entry.thread.addLabel(allSkipped ? skippedLabel : label);
-    // 受信トレイからはアーカイブする（ラベルの中には残る。未読のまま）
-    entry.thread.moveToArchive();
-  });
+  // 4. ラベルとゴミ箱
+  var applied = applyChanges(changes);
+  if (applied.length > 0 && !sync([], applied)) return;
+
+  // 送り残しが無く、全部うまくいったら、次はこの時刻の1日前から探す
+  if (first.missing.length <= BATCH) props.setProperty('LAST_OK', String(startedAt));
 }
 
-// すでにラベルが付いて受信トレイに残っているスレッドを、アーカイブする（手で実行する。100件ずつ）
-function archiveLabeledThreads() {
-  var count = 0;
-  [LABEL, LABEL_SKIPPED].forEach(function (name) {
-    var threads = GmailApp.search('in:inbox label:' + name, 0, 100);
-    threads.forEach(function (thread) { thread.moveToArchive(); });
-    count += threads.length;
+// かぞく手帳と同期する。返り値 { missing, changes }（送れなければ null）
+function sync(ids, applied) {
+  var res = post({ action: 'sync', ids: ids, applied: applied });
+  return res && { missing: res.missing || [], changes: res.changes || [] };
+}
+
+function post(body) {
+  var props = PropertiesService.getScriptProperties();
+  var res = UrlFetchApp.fetch(props.getProperty('FEED_URL'), {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + props.getProperty('FEED_TOKEN') },
+    payload: JSON.stringify(body),
+    muteHttpExceptions: true,
   });
-  console.log('アーカイブした数: ' + count);
+  if (res.getResponseCode() !== 200) {
+    console.warn('かぞく手帳に送れませんでした: ' + res.getResponseCode());
+    return null;
+  }
+  return JSON.parse(res.getContentText());
+}
+
+// ラベルを付け替え、片づいたメールをゴミ箱へ移す。返り値はかぞく手帳に伝える [{ id, label, trashed }]
+function applyChanges(changes) {
+  if (changes.length === 0) return [];
+  var byKey = labelIds();
+  var all = Object.keys(byKey).map(function (key) { return byKey[key]; });
+  var applied = [];
+  changes.forEach(function (c) {
+    var labelId = byKey[c.label];
+    if (!labelId) return;
+    try {
+      Gmail.Users.Messages.modify({
+        addLabelIds: c.label === 'open' ? [labelId, 'INBOX'] : [labelId],
+        removeLabelIds: all.filter(function (id) { return id !== labelId; }),
+      }, 'me', c.id);
+      if (c.trash) Gmail.Users.Messages.trash('me', c.id);
+      applied.push({ id: c.id, label: c.label, trashed: !!c.trash });
+    } catch (e) {
+      // 見つからない（人が完全に消した）ものは、片づいたことにする。それ以外は次の回にまた返る
+      if (String(e).indexOf('Not Found') >= 0) applied.push({ id: c.id, label: c.label, trashed: true });
+      else console.warn('ラベルを付けられませんでした: ' + e);
+    }
+  });
+  return applied;
+}
+
+// ラベルのID（無ければ作る）。{ open: ID, done: ID, skipped: ID, unreadable: ID }
+function labelIds() {
+  var existing = {};
+  (Gmail.Users.Labels.list('me').labels || []).forEach(function (l) { existing[l.name] = l.id; });
+  // 「かぞく手帳」の下にまとめて出す
+  if (!existing['かぞく手帳']) Gmail.Users.Labels.create({ name: 'かぞく手帳' }, 'me');
+  var ids = {};
+  Object.keys(LABELS).forEach(function (key) {
+    var name = LABELS[key];
+    ids[key] = existing[name] || Gmail.Users.Labels.create({ name: name }, 'me').id;
+  });
+  return ids;
+}
+
+// 前の版がスレッドに付けたラベルを外して消す（貼り直しのときに手で1回実行する。メールは消えない）
+function removeOldLabels() {
+  OLD_LABELS.forEach(function (name) {
+    var label = GmailApp.getUserLabelByName(name);
+    if (!label) return;
+    var threads;
+    do {
+      threads = label.getThreads(0, 100);
+      if (threads.length > 0) label.removeFromThreads(threads);
+    } while (threads.length === 100);
+    label.deleteLabel();
+    console.log('消したラベル: ' + name);
+  });
 }

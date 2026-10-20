@@ -1071,6 +1071,47 @@ export type Database = {
           },
         ]
       }
+      money_feed_mails: {
+        Row: {
+          created_at: string
+          family_id: string
+          label: string | null
+          message_id: string
+          outcome: string
+          received_at: string
+          trashed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          family_id: string
+          label?: string | null
+          message_id: string
+          outcome: string
+          received_at: string
+          trashed_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          family_id?: string
+          label?: string | null
+          message_id?: string
+          outcome?: string
+          received_at?: string
+          trashed_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_feed_mails_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_feed_rules: {
         Row: {
           action: string
@@ -1212,18 +1253,21 @@ export type Database = {
         Row: {
           created_at: string
           family_id: string
+          last_sync_at: string | null
           last_used_at: string | null
           token_hash: string
         }
         Insert: {
           created_at?: string
           family_id: string
+          last_sync_at?: string | null
           last_used_at?: string | null
           token_hash: string
         }
         Update: {
           created_at?: string
           family_id?: string
+          last_sync_at?: string | null
           last_used_at?: string | null
           token_hash?: string
         }
@@ -2863,6 +2907,7 @@ export type Database = {
       }
       money_feed_issue_token: { Args: never; Returns: string }
       money_feed_key: { Args: { p_description: string }; Returns: string }
+      money_feed_last_sync: { Args: never; Returns: string }
       money_feed_learn: {
         Args: {
           p_action: string
@@ -2878,6 +2923,14 @@ export type Database = {
       money_feed_link: {
         Args: { p_feed: string; p_record: string }
         Returns: undefined
+      }
+      money_feed_mail_record: {
+        Args: { p_family: string; p_mails: Json }
+        Returns: undefined
+      }
+      money_feed_mail_sync: {
+        Args: { p_applied: Json; p_family: string; p_ids: string[] }
+        Returns: Json
       }
       money_feed_process: { Args: { p_feed: string }; Returns: string }
       money_feed_receive: {

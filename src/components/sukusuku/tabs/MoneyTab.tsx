@@ -645,6 +645,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               onAddOnDate={addOnDate}
               feedOpenCount={feed?.open.length ?? 0}
               onOpenFeed={() => setFeedOpen(true)}
+              feedStalled={feed?.syncStalled ?? false}
             />
             </div>
           )}
