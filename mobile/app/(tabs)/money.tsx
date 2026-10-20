@@ -500,10 +500,12 @@ export default function MoneyScreen() {
     if (!open || isLoading || !familyId) return;
     router.setParams({ [OPEN_MONEY_PARAM]: '' });
     if (open === 'receipt') {
+      setChain(null);
       void startReceiptScan();
       return;
     }
     setReceipt(null);
+    setChain(null);
     setNewKind(open);
     setNewDate(null);
     setEditing('new');
@@ -643,6 +645,7 @@ export default function MoneyScreen() {
   // 記録の一覧の、日の見出しの「＋」。一覧の行を作り直さないよう、関数は固定しておく。
   const addOnDate = useCallback((date: string) => {
     setReceipt(null);
+    setChain(null);
     setNewKind('expense');
     setNewDate(date);
     setEditing('new');
@@ -782,6 +785,8 @@ export default function MoneyScreen() {
         addDisabled={!familyId}
         settingsDisabled={!familyId}
         onAdd={() => {
+          // レシートから続けて記録したあとにカメラを閉じたときの続きは、ここで終える。
+          setChain(null);
           setNewKind('expense');
           setNewDate(null);
           setEditing('new');
@@ -876,6 +881,7 @@ export default function MoneyScreen() {
               }
               setReceipt(null);
               setReceiptFor(null);
+              setChain(null);
               setNewKind(item.direction === 'in' ? 'income' : 'expense');
               setNewDate(item.occurredOn);
               setFeedOrderItems(items);
