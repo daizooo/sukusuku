@@ -4,8 +4,12 @@
 // 楽天カード（…@mail.rakuten-card.co.jp）: 本文に「■利用日: 2026/10/15」「■利用先: …」「■利用金額: 1,234 円」。1通に何件も入ることがある
 // どちらも「承認照会」の通知で、確定した請求ではない（額が変わる・届かない利用がある）。
 //
-// 口座名（account_name）は、取り込みの「口座の対応」で出金元に結ぶ名前。三井住友カードは、ご利用カードに Amazon が入っていれば
-// Amazon のカード、それ以外はすべて同じ「三井住友カード」にまとめる（家族カードも同じ出金元。2026-10-15に決定）。
+// 口座名（account_name）は、取り込みの「口座の対応」で出金元に結ぶ名前。三井住友カードは、ご利用カードの名前をそのまま使う
+// （「Ｏｌｉｖｅ／クレジット」「三井住友カードＶＩＳＡ（ＮＬ）」など。2026-10-20に決定。以前は Amazon とそれ以外の2つだった）。
+//
+// 取り込まない利用通知（isDiscardedCardMail。2026-10-20に決定。docs/kakei.md §9.9）:
+//   Amazon のカード・楽天カードの利用通知。Amazon・楽天市場の買い物は注文メールから取り込むので、二重になる。
+//   「一定金額に到達」の知らせ（利用の明細ではない）。
 
 export interface CardMailEntry {
   accountName: string;
@@ -16,7 +20,6 @@ export interface CardMailEntry {
 }
 
 export const SMBC_ACCOUNT = '三井住友カード';
-export const SMBC_AMAZON_ACCOUNT = '三井住友カード（Amazon）';
 export const RAKUTEN_ACCOUNT = '楽天カード';
 
 /** 差出人から、カードの利用通知か（どのカード会社か）。 */
@@ -25,6 +28,21 @@ export function cardIssuerOf(from: string): 'smbc' | 'rakuten' | null {
   if (address.includes('vpass.ne.jp')) return 'smbc';
   if (address.includes('rakuten-card.co.jp')) return 'rakuten';
   return null;
+}
+
+/** 三井住友カードの「ご利用カード：」の名前（全角のまま）。無ければ「三井住友カード」。 */
+export function smbcCardName(body: string): string {
+  return /ご利用カード\s*[:：]\s*([^\r\n]*)/.exec(body)?.[1].trim() || SMBC_ACCOUNT;
+}
+
+/** 取り込まない利用通知か（Amazon のカード・楽天カード・「一定金額に到達」）。読んだうえで「対象外」にする。 */
+export function isDiscardedCardMail(from: string, subject: string, body: string): boolean {
+  const issuer = cardIssuerOf(from);
+  if (issuer === 'rakuten') return true;
+  if (issuer !== 'smbc') return false;
+  const title = subject.normalize('NFKC');
+  if (/一定(の)?金額/.test(title)) return true;
+  return /amazon/i.test(`${smbcCardName(body).normalize('NFKC')} ${title}`);
 }
 
 const ENTRY_RE =
@@ -41,11 +59,7 @@ export function parseCardMail(from: string, subject: string, body: string): Card
   const text = body.normalize('NFKC');
   if (subject.normalize('NFKC').includes('取消')) return null;
 
-  let accountName = RAKUTEN_ACCOUNT;
-  if (issuer === 'smbc') {
-    const card = /ご利用カード\s*:\s*([^\r\n]*)/.exec(text)?.[1] ?? '';
-    accountName = /amazon/i.test(`${card} ${subject.normalize('NFKC')}`) ? SMBC_AMAZON_ACCOUNT : SMBC_ACCOUNT;
-  }
+  const accountName = issuer === 'smbc' ? smbcCardName(body) : RAKUTEN_ACCOUNT;
 
   const entries: CardMailEntry[] = [];
   for (const match of text.matchAll(ENTRY_RE)) {

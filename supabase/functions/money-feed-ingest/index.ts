@@ -1,6 +1,6 @@
 // かぞく手帳: Zaim の入出金通知メールと、カード会社の利用通知メールを受け取り、明細として取り込む（家計タブ。docs/kakei.md §9.5・§9.6）
 //
-// 呼ぶのは Gmail の Apps Script（tools/gas/zaim-feed.gs）。5分ごとに、まだ送っていない通知メールをまとめて送る。
+// 呼ぶのは Gmail の Apps Script（tools/gas/gmail-feed.gs）。5分ごとに、まだ送っていない通知メールをまとめて送る。
 //   POST { messages: [{ id: GmailのメッセージID, received_at: ISO, from: 差出人, to: 宛先, subject: 件名, body: 本文（プレーンテキスト） }] }
 //   差出人がカード会社なら利用通知（source = 'card_mail'。1通に何件もあれば source_id を「ID#2」…と分ける）。それ以外は Zaim。
 //   差出人が Amazon（auto-confirm@amazon.co.jp）なら注文メール。品目を覚えておき（money_amazon_*）、Amazon のカードの利用通知が
@@ -34,6 +34,7 @@ import {
 } from '../_shared/amazonOrder.ts';
 import {
   cardIssuerOf,
+  isDiscardedCardMail,
   matchStoreByRomaji,
   parseCardMail,
   STORE_PICK_SCHEMA,
@@ -364,6 +365,12 @@ Deno.serve(async (request) => {
 
     // カード会社の利用通知（§9.6）。1通に何件もあれば、件ごとに明細にする。読めなければ「読めない」で1件
     if (cardIssuerOf(text(message.from)) !== null) {
+      // 取り込まない利用通知（Amazon のカード・楽天カード・「一定金額に到達」。§9.9）。Apps Script が「対象外」にしてゴミ箱へ移す
+      if (isDiscardedCardMail(text(message.from), subject, body)) {
+        results.push({ id, status: 'skipped' });
+        remember(id, receivedAt, 'skipped');
+        continue;
+      }
       const entries = parseCardMail(text(message.from), subject, body);
       const statuses: string[] = [];
       if (entries === null) {

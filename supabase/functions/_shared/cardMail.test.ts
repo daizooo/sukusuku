@@ -4,12 +4,13 @@ import assert from 'node:assert/strict';
 import {
   canonicalRomaji,
   cardIssuerOf,
+  isDiscardedCardMail,
   matchStoreByRomaji,
   parseCardMail,
   RAKUTEN_ACCOUNT,
   romajiOf,
   SMBC_ACCOUNT,
-  SMBC_AMAZON_ACCOUNT,
+  smbcCardName,
 } from './cardMail.ts';
 
 // 2026-10-15に届いた三井住友カード（家族カード）の通知の形（宛名は伏せた）
@@ -33,14 +34,22 @@ assert.equal(cardIssuerOf('info@mail.rakuten-card.co.jp'), 'rakuten');
 assert.equal(cardIssuerOf('info@zaim.net'), null);
 
 assert.deepEqual(parseCardMail('statement@vpass.ne.jp', smbcSubject, smbcBody), [
-  { accountName: SMBC_ACCOUNT, occurredOn: '2026-10-15', amount: 4415, merchant: 'YOKAMONNE JIYONANTEN' },
+  { accountName: '三井住友カードＶＩＳＡ（ＮＬ）', occurredOn: '2026-10-15', amount: 4415, merchant: 'YOKAMONNE JIYONANTEN' },
 ]);
-// ご利用カードに Amazon が入っていれば Amazon のカード
-assert.equal(
-  parseCardMail('statement@vpass.ne.jp', 'ご利用のお知らせ【三井住友カード】', smbcBody.replace('三井住友カードＶＩＳＡ（ＮＬ）', 'Ａｍａｚｏｎ　Ｍａｓｔｅｒｃａｒｄ'))?.[0]
-    .accountName,
-  SMBC_AMAZON_ACCOUNT,
-);
+// 口座名はご利用カードの名前そのまま（全角のまま）。無ければ「三井住友カード」
+const oliveBody = smbcBody.replace('三井住友カードＶＩＳＡ（ＮＬ）', 'Ｏｌｉｖｅ／クレジット');
+assert.equal(parseCardMail('statement@vpass.ne.jp', 'ご利用のお知らせ【三井住友カード】', oliveBody)?.[0].accountName, 'Ｏｌｉｖｅ／クレジット');
+assert.equal(smbcCardName('ご利用カード:Ｏｌｉｖｅ／デビット\n'), 'Ｏｌｉｖｅ／デビット');
+assert.equal(smbcCardName(smbcBody.replace(/ご利用カード：.*\n/, '')), SMBC_ACCOUNT);
+
+// 取り込まない利用通知: Amazon のカード・楽天カード・「一定金額に到達」
+const amazonBody = smbcBody.replace('三井住友カードＶＩＳＡ（ＮＬ）', 'Ａｍａｚｏｎ　Ｍａｓｔｅｒｃａｒｄ');
+assert.equal(isDiscardedCardMail('statement@vpass.ne.jp', 'ご利用のお知らせ【三井住友カード】', amazonBody), true);
+assert.equal(isDiscardedCardMail('info@mail.rakuten-card.co.jp', 'カード利用のお知らせ(本人ご利用分)', ''), true);
+assert.equal(isDiscardedCardMail('statement@vpass.ne.jp', 'ご利用金額が一定金額に到達しました【三井住友カード】', ''), true);
+assert.equal(isDiscardedCardMail('statement@vpass.ne.jp', smbcSubject, smbcBody), false);
+assert.equal(isDiscardedCardMail('statement@vpass.ne.jp', 'ご利用のお知らせ【三井住友カード】', oliveBody), false);
+assert.equal(isDiscardedCardMail('info@zaim.net', smbcSubject, amazonBody), false);
 // 取消・利用の行が無いメールは読めない
 assert.equal(parseCardMail('statement@vpass.ne.jp', 'ご利用取消のお知らせ【三井住友カード】', smbcBody), null);
 assert.equal(parseCardMail('statement@vpass.ne.jp', 'ETCカード追加お申し込み受付のお知らせ', 'お申し込みを受付いたしました'), null);

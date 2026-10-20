@@ -1,7 +1,9 @@
 // かぞく手帳: カード会社の利用通知メールと、Amazon の注文メールを、かぞく手帳へ送る（docs/kakei.md §9.6・§9.7・§9.8）
 //
-// 2026-10-20 に、送ったかどうかをメール1通ごとにサーバーが覚える作りにした（§9.8）。前の版を貼ってある場合は、
-// このファイルの中身で貼り直し、次の「貼り直しのとき」を1回だけ行う（スクリプト プロパティ・時間トリガーはそのまま）。
+// 2026-10-20 に、送ったかどうかをメール1通ごとにサーバーが覚える作りにした（§9.8）。
+// 同じ日に、Zaim を扱わなくなったので関数名を sendZaimMails → sendFeedMails に変えた（ファイル名も zaim-feed.gs → gmail-feed.gs）。
+// 前の版を貼ってある場合は、このファイルの中身で貼り直し、関数 setup を1回実行する（古い名前の時間トリガーを消し、新しい名前で作り直す）。
+// スクリプト プロパティはそのまま。
 //
 // 使い方（通知が届く Gmail のアカウントで、1回だけ）
 //   1. https://script.google.com で新しいプロジェクトを作り、このファイルの中身を貼る
@@ -10,12 +12,13 @@
 //        FEED_URL    https://{プロジェクト}.supabase.co/functions/v1/money-feed-ingest
 //        FEED_TOKEN  取り込みの鍵（家計の設定 › Zaim 取り込みで発行）
 //        START_AT    取り込みを始める日時（例: 2026-10-12T00:00:00+09:00）。これより前に届いたメールは取り込まない
-//   4. 関数 setup を1回実行する（Gmail と外部への送信を許可する）。以後5分ごとに sendZaimMails が動く
+//   4. 関数 setup を1回実行する（Gmail と外部への送信を許可する）。以後5分ごとに sendFeedMails が動く
 //
-// 貼り直しのとき（前の版から）
+// 貼り直しのとき（2026-10-20 より前の版から）
 //   1. 上の 2.（Gmail API を足す）を行う
 //   2. 関数 removeOldLabels を手で実行する。前の版がスレッドに付けたラベル「かぞく手帳済」「かぞく手帳対象外」を外して消す
-//      （メールは消えない）。新しいラベルは、次の回から sendZaimMails がメールごとに付け直す（1回に100通ずつ）
+//      （メールは消えない）。新しいラベルは、次の回から sendFeedMails がメールごとに付け直す（1回に100通ずつ）
+//   3. 関数 setup を1回実行する
 //
 // 5分ごとにすること
 //   1. 探す: 差出人（三井住友カード・Amazon の注文）で、最後にうまく動いた時刻の1日前（初めは START_AT の1日前）から。
@@ -46,14 +49,15 @@ var QUERY = '{from:statement@vpass.ne.jp from:auto-confirm@amazon.co.jp} {subjec
 
 function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'sendZaimMails') ScriptApp.deleteTrigger(t);
+    // 前の名前（sendZaimMails）のトリガーも消す
+    if (['sendFeedMails', 'sendZaimMails'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('sendZaimMails').timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger('sendFeedMails').timeBased().everyMinutes(5).create();
   labelIds();
-  sendZaimMails();
+  sendFeedMails();
 }
 
-function sendZaimMails() {
+function sendFeedMails() {
   var props = PropertiesService.getScriptProperties();
   var startAt = new Date(props.getProperty('START_AT') || 0);
   var lastOk = Number(props.getProperty('LAST_OK') || 0);
