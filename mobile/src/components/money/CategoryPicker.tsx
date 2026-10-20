@@ -19,6 +19,7 @@ import { CategoryIcon, ScreenHeader } from '@/components/money/moneyVisual';
 // 上によく使う小分類（1行。入りきらなければ横に送る）。その下に大分類を1行ずつ: 左に大分類（アイコン・名前・小さく今月の残り）、
 // 右に小分類のボタン（入りきらなければ折り返す）。押すと大分類も決まる。
 // スクロールしなくても1画面に収まるように詰める（2026-10-20。以前は大分類ごとの枠と見出しの帯で、縦に長かった）。小分類を主役に、大分類は小さく。
+// 大分類の行は与えられた高さいっぱいに縦に伸ばす（下に余白を残さない）。入りきらないときだけスクロールする。
 
 export interface CategoryChoice {
   categoryId: string;
@@ -93,7 +94,7 @@ export default function CategoryPicker({
           return (
             <View key={top.id} style={styles.topRow}>
               <View style={styles.top}>
-                <CategoryIcon iconKey={iconKeyOf(top)} size={20} />
+                <CategoryIcon iconKey={iconKeyOf(top)} size={24} />
                 <View style={styles.flex}>
                   <Text style={styles.topName} numberOfLines={1}>
                     {top.name}
@@ -129,29 +130,31 @@ export default function CategoryPicker({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
-  content: { paddingBottom: 24 },
+  content: { flexGrow: 1, paddingBottom: 8 },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
   // よく使う（1行）。
   frequent: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
-  frequentRow: { alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7 },
-  sectionTitle: { fontSize: 11, fontWeight: '600', color: colors.textMuted, marginRight: 2 },
-  frequentChip: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, backgroundColor: colors.moneySoft },
-  frequentText: { fontSize: 13, fontWeight: '600', color: colors.moneyText },
+  frequentRow: { alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8 },
+  sectionTitle: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginRight: 2 },
+  frequentChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: colors.moneySoft },
+  frequentText: { fontSize: 14, fontWeight: '600', color: colors.moneyText },
   // 大分類を1行ずつ（左に大分類、右に小分類）。
+  // flexGrow で高さいっぱいに均等に伸ばす（flexBasis は中身の高さのまま。小さい画面では縮まずスクロールになる）。
   topRow: {
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: colors.listSurface,
   },
-  top: { width: 92, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  topName: { fontSize: 11.5, fontWeight: '700', color: colors.textSubtle },
-  remaining: { fontSize: 9, fontWeight: '500', color: colors.textFaint },
+  top: { width: 104, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  topName: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },
+  remaining: { fontSize: 10, fontWeight: '500', color: colors.textFaint },
   over: { color: colors.moneyOver },
-  chips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
-  chip: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 7, backgroundColor: colors.neutralSurface },
+  chips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  chip: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, backgroundColor: colors.neutralSurface },
   chipPressed: { backgroundColor: colors.moneySurface },
-  chipText: { fontSize: 13, fontWeight: '600', color: colors.text },
+  chipText: { fontSize: 15, fontWeight: '600', color: colors.text },
 });

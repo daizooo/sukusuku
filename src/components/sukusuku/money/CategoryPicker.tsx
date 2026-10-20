@@ -19,6 +19,7 @@ import { CategoryIcon, ScreenHeader, StackedScreen } from './moneyVisual';
 // 上によく使う小分類（1行。入りきらなければ横に送る）。その下に大分類を1行ずつ: 左に大分類（アイコン・名前・小さく今月の残り）、
 // 右に小分類のボタン（入りきらなければ折り返す）。押すと大分類も決まる。
 // スクロールしなくても1画面に収まるように詰める（2026-10-20。以前は大分類ごとの枠と見出しの帯で、縦に長かった）。小分類を主役に、大分類は小さく。
+// 大分類の行は与えられた高さいっぱいに縦に伸ばす（下に余白を残さない。grow で中身の高さから伸ばすので、入りきらないときだけスクロールする）。
 
 export interface CategoryChoice {
   categoryId: string;
@@ -36,7 +37,7 @@ interface CategoryPickerProps {
   onEditCategories?: () => void;
 }
 
-const chipClass = 'rounded-[7px] bg-gray-100 px-2 py-[5px] text-[13px] font-semibold leading-tight text-gray-900 hover:bg-blue-50 active:bg-blue-50';
+const chipClass = 'rounded-lg bg-gray-100 px-2.5 py-[7px] text-[15px] font-semibold leading-tight text-gray-900 hover:bg-blue-50 active:bg-blue-50';
 
 export default function CategoryPicker({
   kind,
@@ -72,19 +73,19 @@ export default function CategoryPicker({
           )
         }
       />
-      <div className="flex-1 min-h-0 overflow-y-auto pb-6">
+      <div className="flex flex-1 min-h-0 flex-col overflow-y-auto pb-2">
         {tops.length === 0 && (
           <p className="py-6 text-center text-sm text-gray-400">カテゴリがまだありません。右上の歯車からカテゴリを作れます</p>
         )}
         {frequent.length > 0 && (
-          <div className="flex items-center gap-[5px] overflow-x-auto whitespace-nowrap border-b border-gray-200 px-2.5 py-[7px]">
-            <span className="mr-0.5 text-[11px] font-semibold text-gray-500">よく使う</span>
+          <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap border-b border-gray-200 px-2.5 py-2">
+            <span className="mr-0.5 text-xs font-semibold text-gray-500">よく使う</span>
             {frequent.map((id) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => pickCategory(id)}
-                className="shrink-0 rounded-full bg-blue-100 px-[9px] py-1 text-[13px] font-semibold text-blue-800 hover:bg-blue-200"
+                className="shrink-0 rounded-full bg-blue-100 px-2.5 py-[5px] text-sm font-semibold text-blue-800 hover:bg-blue-200"
               >
                 {nameOf(id)}
               </button>
@@ -97,19 +98,19 @@ export default function CategoryPicker({
           const budget = categoryKind === 'living' ? budgetFor(budgets, top.id, monthKey) : null;
           const remaining = budget === null ? null : budget - (spend.get(top.id) ?? 0);
           return (
-            <div key={top.id} className="flex items-center border-b border-slate-100 px-2.5 py-[5px]">
-              <div className="flex w-[92px] shrink-0 items-center gap-[5px]">
-                <CategoryIcon iconKey={iconKeyOf(top)} size={20} />
+            <div key={top.id} className="flex shrink-0 grow items-center border-b border-slate-100 px-2.5 py-1.5">
+              <div className="flex w-[104px] shrink-0 items-center gap-1.5">
+                <CategoryIcon iconKey={iconKeyOf(top)} size={24} />
                 <div className="min-w-0 flex-1 leading-tight">
-                  <p className="truncate text-[11.5px] font-bold text-gray-700">{top.name}</p>
+                  <p className="truncate text-[13px] font-bold text-gray-700">{top.name}</p>
                   {remaining !== null && (
-                    <p className={`truncate text-[9px] tabular-nums ${remaining < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                    <p className={`truncate text-[10px] tabular-nums ${remaining < 0 ? 'text-red-600' : 'text-gray-400'}`}>
                       {remaining < 0 ? `${formatYen(remaining)} 超過` : `残り ${formatYen(remaining)}`}
                     </p>
                   )}
                 </div>
               </div>
-              <div className="flex flex-1 flex-wrap gap-1">
+              <div className="flex flex-1 flex-wrap gap-[5px]">
                 {(children.length > 0 ? children : [top]).map((category) => (
                   <button
                     key={category.id}
