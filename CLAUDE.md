@@ -71,6 +71,7 @@
   supabase-js が permission denied になる）。アプリから触る表は
   `grant select, insert, update, delete on public.表 to authenticated;` と
   `grant all on public.表 to service_role;`、関数からだけ触る表は service_role だけ。
+  anon（ログイン前）には付けない（0123 で外し、今後作る表にも自動では付かない）。
   0122 が既存の表をまとめて明示済み。付け忘れは `npm run check:table-grants`（CI の「table grants check」）が落ちる
 
 ## コンフリクトを減らすための設計・実装方針
