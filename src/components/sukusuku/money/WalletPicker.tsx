@@ -1,16 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Pencil, Plus } from 'lucide-react';
+import { Check } from 'lucide-react';
 import type { MoneyWallet, MoneyWalletDraft, MoneyWalletType } from '@/types/app';
-import { PAY_MONTH_OPTIONS, WALLET_DELETE_NOTE, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
+import { groupWalletSections, PAY_MONTH_OPTIONS, WALLET_DELETE_NOTE, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
 import { ModalShell } from '../modals/TaskForm';
 import { PrimaryButton, ScreenHeader, StackedScreen, WalletTypeIcon } from './moneyVisual';
 
 // 出金元の選択（docs/kakei.md §3.2）。mobile版の `mobile/src/components/money/WalletPicker.tsx` と同じ並び・文言。
-// 種類（財布・カード・口座…）ごとに並べる。ここで出金元を足す・直す・削除する。
-// カードは締め日・引き落とし日・引き落とし口座を持てる。そろうと、引き落とし日にカード代金の振替（見込み）が
-// 自動で作られる（docs/kakei.md §3.4）。
+// 口座の画面（MoneyAccountsView）と同じく、種類（財布・カード・口座…）ごとの見出し＋2列のタイルで、
+// 1画面に収める。ここでは選ぶだけ（足す・直す・削除は口座の画面で行う）。
 
 interface WalletPickerProps {
   title: string;
@@ -18,98 +17,66 @@ interface WalletPickerProps {
   selectedId: string | null;
   onPick: (walletId: string) => void;
   onClose: () => void;
-  onSave: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
-  onDelete: (wallet: MoneyWallet) => void;
 }
 
 const inputClass =
   'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
 const labelClass = 'block text-xs font-bold text-gray-700 mb-1.5';
 
-export default function WalletPicker({ title, wallets, selectedId, onPick, onClose, onSave, onDelete }: WalletPickerProps) {
-  const [editing, setEditing] = useState<MoneyWallet | 'new' | null>(null);
+export default function WalletPicker({ title, wallets, selectedId, onPick, onClose }: WalletPickerProps) {
   const usable = wallets.filter((wallet) => !wallet.archived);
+  const blocks = groupWalletSections(
+    WALLET_TYPES.map((type) => ({ type, rows: usable.filter((wallet) => wallet.type === type.id) })).filter(
+      (section) => section.rows.length > 0,
+    ),
+  );
+
+  // paired は「1件だけの種類を2つ横に並べた」ときで、タイルは区画の幅いっぱいに広げる。
+  const renderSection = ({ type, rows }: (typeof blocks)[number][number], paired: boolean) => (
+    <section key={type.id} className={`space-y-[3px] ${paired ? 'min-w-0 flex-1' : ''}`}>
+      <h4 className="px-1 text-xs font-bold text-gray-700">{type.label}</h4>
+      <div className={`grid gap-1.5 ${paired ? 'grid-cols-1' : 'grid-cols-2'}`}>
+        {rows.map((wallet) => {
+          const selected = wallet.id === selectedId;
+          return (
+            <button
+              key={wallet.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onPick(wallet.id)}
+              className={`flex min-w-0 items-center gap-1.5 rounded-xl border px-2.5 py-2.5 text-left ${
+                selected ? 'border-blue-100 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'
+              }`}
+            >
+              <span className="shrink-0">
+                <WalletTypeIcon type={wallet.type} size={20} color={wallet.iconColor} />
+              </span>
+              <span className="line-clamp-2 min-w-0 flex-1 text-[13px] font-bold leading-4 text-gray-900">{wallet.name}</span>
+              {selected && <Check size={16} className="shrink-0 text-blue-600" />}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
 
   return (
     <StackedScreen onBack={onClose}>
       <ScreenHeader title={title} icon="back" onClose={onClose} />
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-2 p-3">
         {usable.length === 0 && (
-          <p className="py-4 text-center text-sm text-gray-400">出金元がまだありません。カード・財布・口座などを足してください</p>
+          <p className="py-4 text-center text-sm text-gray-400">出金元がまだありません。口座の画面から足してください</p>
         )}
-        {WALLET_TYPES.map((type) => {
-          const inType = usable.filter((wallet) => wallet.type === type.id);
-          if (inType.length === 0) return null;
-          return (
-            <section key={type.id} className="space-y-1">
-              <p className="text-xs font-bold text-gray-500">{type.label}</p>
-              {inType.map((wallet) => {
-                const selected = wallet.id === selectedId;
-                return (
-                  <div
-                    key={wallet.id}
-                    className={`flex items-center gap-2.5 rounded-lg border px-3 ${
-                      selected ? 'border-blue-100 bg-blue-50' : 'border-gray-200'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => onPick(wallet.id)}
-                      className="flex flex-1 items-center gap-2 py-3 text-left"
-                    >
-                      <WalletTypeIcon type={wallet.type} size={20} color={wallet.iconColor} />
-                      <span className="flex-1 text-[15px] font-semibold text-gray-900">{wallet.name}</span>
-                      {selected && <Check size={18} className="text-blue-600" />}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`${wallet.name}を編集`}
-                      onClick={() => setEditing(wallet)}
-                      className="p-1 text-gray-400 hover:text-gray-600"
-                    >
-                      <Pencil size={16} />
-                    </button>
-                  </div>
-                );
-              })}
-            </section>
-          );
-        })}
-        <button
-          type="button"
-          onClick={() => setEditing('new')}
-          className="flex items-center gap-2 py-2.5 text-[15px] font-bold text-blue-600"
-        >
-          <Plus size={18} />
-          出金元を足す
-        </button>
+        {blocks.map((block) =>
+          block.length === 1 ? (
+            renderSection(block[0], false)
+          ) : (
+            <div key={block.map((section) => section.type.id).join('+')} className="flex gap-1.5">
+              {block.map((section) => renderSection(section, true))}
+            </div>
+          ),
+        )}
       </div>
-
-      {editing !== null && (
-        <WalletModal
-          key={editing === 'new' ? 'new' : editing.id}
-          wallet={editing === 'new' ? null : editing}
-          wallets={wallets}
-          onClose={() => setEditing(null)}
-          onSubmit={async (draft) => {
-            const target = editing === 'new' ? null : editing;
-            setEditing(null);
-            const saved = await onSave(target, draft);
-            // 足したばかりの出金元は、そのまま選ぶ。
-            if (saved && target === null) onPick(saved.id);
-          }}
-          onDelete={
-            editing === 'new'
-              ? undefined
-              : () => {
-                  const target = editing;
-                  setEditing(null);
-                  onDelete(target);
-                }
-          }
-        />
-      )}
     </StackedScreen>
   );
 }

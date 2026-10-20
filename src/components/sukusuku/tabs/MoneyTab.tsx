@@ -824,8 +824,6 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           }}
           onSubmit={(draft) => void saveRecord(draft)}
           onDelete={(record) => void removeRecord(record)}
-          onSaveWallet={saveWallet}
-          onDeleteWallet={(wallet) => void deleteWallet(wallet)}
           onEditCategories={() => setEditingCategories(true)}
         />
       )}

@@ -1,17 +1,16 @@
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Check, Pencil, Plus } from 'lucide-react-native';
+import { Check } from 'lucide-react-native';
 import type { MoneyWallet, MoneyWalletDraft, MoneyWalletType } from '@/types/app';
 import { colors } from '@/lib/theme';
-import { PAY_MONTH_OPTIONS, WALLET_DELETE_NOTE, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
+import { groupWalletSections, PAY_MONTH_OPTIONS, WALLET_DELETE_NOTE, WALLET_ICON_COLORS, WALLET_TYPES } from '@/lib/moneyUtils';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import { PrimaryButton, ScreenHeader, WalletTypeIcon } from '@/components/money/moneyVisual';
 
 // 出金元の選択（docs/kakei.md §3.2）。PWA版の `src/components/sukusuku/money/WalletPicker.tsx` と同じ並び・文言。
-// 種類（財布・カード・口座…）ごとに並べる。ここで出金元を足す・直す・削除する。
-// カードは締め日・引き落とし日・引き落とし口座を持てる。そろうと、引き落とし日にカード代金の振替（見込み）が
-// 自動で作られる（docs/kakei.md §3.4）。
+// 口座の画面（MoneyAccountsView）と同じく、種類（財布・カード・口座…）ごとの見出し＋2列のタイルで、
+// 1画面に収める。ここでは選ぶだけ（足す・直す・削除は口座の画面で行う）。
 
 interface WalletPickerProps {
   title: string;
@@ -19,85 +18,60 @@ interface WalletPickerProps {
   selectedId: string | null;
   onPick: (walletId: string) => void;
   onClose: () => void;
-  onSave: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
-  onDelete: (wallet: MoneyWallet) => void;
 }
 
-export default function WalletPicker({ title, wallets, selectedId, onPick, onClose, onSave, onDelete }: WalletPickerProps) {
-  const [editing, setEditing] = useState<MoneyWallet | 'new' | null>(null);
+export default function WalletPicker({ title, wallets, selectedId, onPick, onClose }: WalletPickerProps) {
   const usable = wallets.filter((wallet) => !wallet.archived);
+  const blocks = groupWalletSections(
+    WALLET_TYPES.map((type) => ({ type, rows: usable.filter((wallet) => wallet.type === type.id) })).filter(
+      (section) => section.rows.length > 0,
+    ),
+  );
+
+  // paired は「1件だけの種類を2つ横に並べた」ときで、タイルは区画の幅いっぱいに広げる。
+  const renderSection = ({ type, rows }: (typeof blocks)[number][number], paired: boolean) => (
+    <View key={type.id} style={[styles.section, paired && styles.sectionPaired]}>
+      <Text style={styles.sectionTitle}>{type.label}</Text>
+      <View style={styles.grid}>
+        {rows.map((wallet) => {
+          const selected = wallet.id === selectedId;
+          return (
+            <Pressable
+              key={wallet.id}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={() => onPick(wallet.id)}
+              style={[styles.tile, paired && styles.tilePaired, selected && styles.tileSelected]}
+            >
+              <WalletTypeIcon type={wallet.type} size={20} color={wallet.iconColor} />
+              <Text style={styles.tileName} numberOfLines={2}>
+                {wallet.name}
+              </Text>
+              {selected && <Check size={16} color={colors.money} />}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
 
   return (
     <View style={styles.screen}>
       <ScreenHeader title={title} icon="back" onClose={onClose} />
       <ScrollView contentContainerStyle={styles.content}>
         {usable.length === 0 && (
-          <Text style={styles.empty}>出金元がまだありません。カード・財布・口座などを足してください</Text>
+          <Text style={styles.empty}>出金元がまだありません。口座の画面から足してください</Text>
         )}
-        {WALLET_TYPES.map((type) => {
-          const inType = usable.filter((wallet) => wallet.type === type.id);
-          if (inType.length === 0) return null;
-          return (
-            <View key={type.id} style={styles.section}>
-              <Text style={styles.sectionTitle}>{type.label}</Text>
-              {inType.map((wallet) => {
-                const selected = wallet.id === selectedId;
-                return (
-                  <Pressable
-                    key={wallet.id}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    onPress={() => onPick(wallet.id)}
-                    style={[styles.row, selected && styles.rowSelected]}
-                  >
-                    <WalletTypeIcon type={wallet.type} size={20} color={wallet.iconColor} />
-                    <Text style={[styles.name, styles.flex]}>{wallet.name}</Text>
-                    {selected && <Check size={18} color={colors.money} />}
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`${wallet.name}を編集`}
-                      onPress={() => setEditing(wallet)}
-                      hitSlop={8}
-                      style={styles.edit}
-                    >
-                      <Pencil size={16} color={colors.textFaint} />
-                    </Pressable>
-                  </Pressable>
-                );
-              })}
+        {blocks.map((block) =>
+          block.length === 1 ? (
+            renderSection(block[0], false)
+          ) : (
+            <View key={block.map((section) => section.type.id).join('+')} style={styles.pairRow}>
+              {block.map((section) => renderSection(section, true))}
             </View>
-          );
-        })}
-        <Pressable accessibilityRole="button" onPress={() => setEditing('new')} style={styles.add}>
-          <Plus size={18} color={colors.money} />
-          <Text style={styles.addText}>出金元を足す</Text>
-        </Pressable>
+          ),
+        )}
       </ScrollView>
-
-      {editing !== null && (
-        <WalletSheet
-          key={editing === 'new' ? 'new' : editing.id}
-          wallet={editing === 'new' ? null : editing}
-          wallets={wallets}
-          onClose={() => setEditing(null)}
-          onSubmit={async (draft) => {
-            const target = editing === 'new' ? null : editing;
-            setEditing(null);
-            const saved = await onSave(target, draft);
-            // 足したばかりの出金元は、そのまま選ぶ。
-            if (saved && target === null) onPick(saved.id);
-          }}
-          onDelete={
-            editing === 'new'
-              ? undefined
-              : () => {
-                  const target = editing;
-                  setEditing(null);
-                  onDelete(target);
-                }
-          }
-        />
-      )}
     </View>
   );
 }
@@ -305,26 +279,29 @@ export function WalletSheet({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
-  content: { padding: 16, gap: 16, paddingBottom: 32 },
+  content: { padding: 12, gap: 8, paddingBottom: 24 },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
-  section: { gap: 4 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 2 },
-  row: {
+  section: { gap: 3 },
+  sectionPaired: { flex: 1, minWidth: 0 },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textSubtle, paddingHorizontal: 4 },
+  pairRow: { flexDirection: 'row', gap: 6 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  tile: {
+    width: '48.5%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 10,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
-  rowSelected: { borderColor: colors.moneySoft, backgroundColor: colors.moneySurface },
-  name: { fontSize: 15, fontWeight: '600', color: colors.text },
+  tilePaired: { width: '100%' },
+  tileSelected: { borderColor: colors.moneySoft, backgroundColor: colors.moneySurface },
+  tileName: { flex: 1, fontSize: 13, fontWeight: '700', lineHeight: 16, color: colors.text },
   sub: { fontSize: 12, fontWeight: '500', color: colors.textFaint, marginTop: 2 },
-  edit: { padding: 4 },
-  add: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
-  addText: { fontSize: 15, fontWeight: '700', color: colors.money },
   field: { gap: 6 },
   label: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
   input: {
