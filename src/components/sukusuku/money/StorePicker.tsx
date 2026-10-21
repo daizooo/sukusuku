@@ -60,7 +60,6 @@ export default function StorePicker({ value, registered, others, canRegister, on
           className="flex-1 bg-transparent py-2.5 text-[15px] focus:outline-none"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="お店の名前"
         />
       </form>
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-8">
