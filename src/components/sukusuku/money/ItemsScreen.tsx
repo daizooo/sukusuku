@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { ChevronRight, Minus, Plus } from 'lucide-react';
+import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
+import { ChevronRight, GripVertical, Minus, Plus } from 'lucide-react';
 import {
   editorGroupTotal,
   editorLineAmount,
@@ -32,6 +32,8 @@ import { swipeBoundary } from '../ui/useSwipeNavigation';
 // 電卓は行の金額を押したときだけ、画面の下に別枠で出す（暗い部分を押す・OK・戻る操作で閉じる。Zaim と同じ。2026-10-20）。
 // 枠の上にその行の金額（式を打っているときは式も）、下に「マイナスにする」と OK。
 // 値引き・割引・返金は「マイナスにする」で、選んだ行の金額をマイナスにする（docs/kakei.md §10.5）。
+// 行の左端の持ち手をつかんで別のまとまりへ落とすと、その行をそのカテゴリへ移す（2026-10-21。自動で取り込んだ記録の品目を
+// 打ち直さずに分けられるように）。「＋ カテゴリを追加」へ落とすとカテゴリの選択へ行き、選んだカテゴリへ移す。
 
 /** 品目の画面で書きかけのもの（記録の入力が持ち、ほかの画面へ行って戻っても消えない）。 */
 export interface ItemsWork {
@@ -47,6 +49,10 @@ export interface ItemsWork {
 }
 
 type GroupTarget = Pick<EditorGroup, 'categoryId' | 'categoryName'>;
+
+/** 行のドラッグ。over は落とし先（まとまりの key か ADD_CATEGORY。つかんだまとまりの上なら null）。 */
+type Drag = { groupKey: string; lineKey: string; dy: number; over: string | null };
+const ADD_CATEGORY = 'add-category';
 
 let lineSeq = 0;
 export const newLineKey = () => `line-${(lineSeq += 1)}`;
@@ -84,6 +90,26 @@ export function changeWorkGroup(work: ItemsWork, groupKey: string, target: Group
   return { ...work, groups };
 }
 
+/** 行を別のまとまりへ移す（左の持ち手でドラッグして落としたとき。2026-10-21）。移した先のいちばん下に足し、行の無くなったまとまりは消す。 */
+export function moveWorkLine(work: ItemsWork, lineKey: string, toGroupKey: string): ItemsWork {
+  const line = work.groups.flatMap((group) => group.lines).find((entry) => entry.key === lineKey);
+  if (!line || !work.groups.some((group) => group.key === toGroupKey)) return work;
+  const groups = work.groups
+    .map((group) => {
+      const lines = group.lines.filter((entry) => entry.key !== lineKey);
+      return { ...group, lines: group.key === toGroupKey ? [...lines, line] : lines };
+    })
+    .filter((group) => group.lines.length > 0);
+  return { ...work, groups };
+}
+
+/** 行を選んだカテゴリへ移す（「＋ カテゴリを追加」へ落としたとき）。同じカテゴリのまとまりがあればそこへ、無ければ新しいまとまりを足す。 */
+export function moveWorkLineToCategory(work: ItemsWork, lineKey: string, target: GroupTarget, groupKey: string): ItemsWork {
+  const existing = work.groups.find((group) => sameGroupTarget(group, target));
+  if (existing) return moveWorkLine(work, lineKey, existing.key);
+  return { ...moveWorkLine({ ...work, groups: [...work.groups, { key: groupKey, ...target, lines: [] }] }, lineKey, groupKey), focus: groupKey };
+}
+
 /** 保存する形にする（空の行と、行の無いまとまりは残さない）。 */
 export const groupsFromWork = (work: ItemsWork): EditorGroup[] =>
   work.groups
@@ -97,7 +123,8 @@ interface ItemsScreenProps {
   title: (group: EditorGroup) => string;
   iconKey: (group: EditorGroup) => string;
   onChangeCategory: (groupKey: string) => void;
-  onAddCategory: () => void;
+  /** 「＋ カテゴリを追加」。行を落としたときはその行の key を渡す（選んだカテゴリへ移す）。 */
+  onAddCategory: (moveLineKey?: string) => void;
   onSave: () => void;
   onClose: () => void;
 }
@@ -143,6 +170,51 @@ export default function ItemsScreen({
     if (scrollToNew.current === null) return;
     addButtons.current.get(scrollToNew.current)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     scrollToNew.current = null;
+  });
+
+  // 行のドラッグ（左端の持ち手を押すと持ち上がり、指に付いて上下に動く。落とした先のまとまりへ移す）。
+  const addCategoryRef = useRef<HTMLButtonElement>(null);
+  const [drag, setDragState] = useState<Drag | null>(null);
+  const dragRef = useRef<Drag | null>(null);
+  const setDrag = (next: Drag | null) => {
+    dragRef.current = next;
+    setDragState(next);
+  };
+  const dragOrigin = useRef(0);
+  const dropTarget = (current: Drag, clientY: number): string | null => {
+    const inside = (node: HTMLElement | null | undefined) => {
+      const rect = node?.getBoundingClientRect();
+      return rect !== undefined && clientY >= rect.top && clientY <= rect.bottom;
+    };
+    if (inside(addCategoryRef.current)) return ADD_CATEGORY;
+    const over = work.groups.find((group) => inside(groupRefs.current.get(group.key)));
+    return over && over.key !== current.groupKey ? over.key : null;
+  };
+  const gripHandlers = (groupKey: string, lineKey: string) => ({
+    onPointerDown: (event: PointerEvent<HTMLSpanElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      dragOrigin.current = event.clientY;
+      navigator.vibrate?.(10);
+      setDrag({ groupKey, lineKey, dy: 0, over: null });
+    },
+    onPointerMove: (event: PointerEvent<HTMLSpanElement>) => {
+      const current = dragRef.current;
+      if (!current) return;
+      setDrag({ ...current, dy: event.clientY - dragOrigin.current, over: dropTarget(current, event.clientY) });
+    },
+    onPointerUp: () => {
+      const current = dragRef.current;
+      setDrag(null);
+      if (!current || current.over === null) return;
+      if (current.over === ADD_CATEGORY) onAddCategory(current.lineKey);
+      else onChange(moveWorkLine(work, current.lineKey, current.over));
+    },
+    onPointerCancel: () => setDrag(null),
+    // 持ち手を押しただけでは行を選ばない。
+    onClick: (event: MouseEvent<HTMLSpanElement>) => event.stopPropagation(),
   });
 
   const addLine = (groupKey: string) => {
@@ -215,12 +287,15 @@ export default function ItemsScreen({
                 if (node) groupRefs.current.set(group.key, node);
                 else groupRefs.current.delete(group.key);
               }}
+              className={drag?.groupKey === group.key ? 'relative z-20' : undefined}
             >
               <button
                 type="button"
                 aria-label="カテゴリを変える"
                 onClick={() => onChangeCategory(group.key)}
-                className="mt-2 flex w-full items-center gap-2.5 border-b border-gray-200 bg-white px-4 py-2.5 text-left hover:bg-gray-50"
+                className={`mt-2 flex w-full items-center gap-2.5 border-b border-gray-200 px-4 py-2.5 text-left hover:bg-gray-50 ${
+                  drag?.over === group.key ? 'bg-blue-50' : 'bg-white'
+                }`}
               >
                 <CategoryIcon iconKey={iconKey(group)} size={24} />
                 <span className="flex min-w-0 flex-1 flex-col gap-px">
@@ -230,12 +305,23 @@ export default function ItemsScreen({
               </button>
               {group.lines.map((line) => {
                 const selected = line.key === work.selected;
+                const dragging = drag?.lineKey === line.key;
                 return (
                   <div
                     key={line.key}
                     onClick={() => (selected && !work.calc ? undefined : select(line, false))}
-                    className={`flex items-center gap-2 py-1 pl-6 pr-4 ${selected && work.calc ? 'bg-blue-50' : 'bg-white'}`}
+                    style={dragging ? { transform: `translateY(${drag?.dy ?? 0}px)` } : undefined}
+                    className={`flex items-center gap-2 py-1 pl-1 pr-4 ${selected && work.calc ? 'bg-blue-50' : 'bg-white'} ${
+                      dragging ? 'relative z-20 shadow-lg' : ''
+                    }`}
                   >
+                    <span
+                      aria-label="ドラッグして別のカテゴリへ移す"
+                      className="flex w-3.5 shrink-0 cursor-grab touch-none items-center justify-center self-stretch text-gray-400"
+                      {...gripHandlers(group.key, line.key)}
+                    >
+                      <GripVertical size={14} />
+                    </span>
                     <button
                       type="button"
                       aria-label="この行を消す"
@@ -322,9 +408,12 @@ export default function ItemsScreen({
           );
         })}
         <button
+          ref={addCategoryRef}
           type="button"
-          onClick={onAddCategory}
-          className="mt-2 flex w-full items-center gap-1.5 bg-white px-4 py-3 text-left text-sm font-semibold text-blue-600 hover:bg-gray-50"
+          onClick={() => onAddCategory()}
+          className={`mt-2 flex w-full items-center gap-1.5 px-4 py-3 text-left text-sm font-semibold text-blue-600 hover:bg-gray-50 ${
+            drag?.over === ADD_CATEGORY ? 'bg-blue-50' : 'bg-white'
+          }`}
         >
           <Plus size={16} />
           カテゴリを追加
