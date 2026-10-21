@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
-import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ChevronRight, Minus, Plus } from 'lucide-react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, Vibration, View, type GestureResponderEvent } from 'react-native';
+import { ChevronRight, GripVertical, Minus, Plus } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import {
@@ -30,6 +30,8 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 // 電卓は行の金額を押したときだけ、画面の下に別枠で出す（暗い部分を押す・OK・戻る操作で閉じる。Zaim と同じ。2026-10-20）。
 // 枠の上にその行の金額（式を打っているときは式も）、下に「マイナスにする」と OK。
 // 値引き・割引・返金は「マイナスにする」で、選んだ行の金額をマイナスにする（docs/kakei.md §10.5）。
+// 行の左端の持ち手をつかんで別のまとまりへ落とすと、その行をそのカテゴリへ移す（2026-10-21。自動で取り込んだ記録の品目を
+// 打ち直さずに分けられるように）。「＋ カテゴリを追加」へ落とすとカテゴリの選択へ行き、選んだカテゴリへ移す。
 
 /** 品目の画面で書きかけのもの（記録の入力が持ち、ほかの画面へ行って戻っても消えない）。 */
 export interface ItemsWork {
@@ -45,6 +47,12 @@ export interface ItemsWork {
 }
 
 type GroupTarget = Pick<EditorGroup, 'categoryId' | 'categoryName'>;
+
+/** 一覧の中の縦の位置と高さ。 */
+type Span = { y: number; height: number };
+/** 行のドラッグ。over は落とし先（まとまりの key か ADD_CATEGORY。つかんだまとまりの上なら null）。 */
+type Drag = { groupKey: string; lineKey: string; dy: number; over: string | null };
+const ADD_CATEGORY = 'add-category';
 
 let lineSeq = 0;
 export const newLineKey = () => `line-${(lineSeq += 1)}`;
@@ -82,6 +90,26 @@ export function changeWorkGroup(work: ItemsWork, groupKey: string, target: Group
   return { ...work, groups };
 }
 
+/** 行を別のまとまりへ移す（左の持ち手でドラッグして落としたとき。2026-10-21）。移した先のいちばん下に足し、行の無くなったまとまりは消す。 */
+export function moveWorkLine(work: ItemsWork, lineKey: string, toGroupKey: string): ItemsWork {
+  const line = work.groups.flatMap((group) => group.lines).find((entry) => entry.key === lineKey);
+  if (!line || !work.groups.some((group) => group.key === toGroupKey)) return work;
+  const groups = work.groups
+    .map((group) => {
+      const lines = group.lines.filter((entry) => entry.key !== lineKey);
+      return { ...group, lines: group.key === toGroupKey ? [...lines, line] : lines };
+    })
+    .filter((group) => group.lines.length > 0);
+  return { ...work, groups };
+}
+
+/** 行を選んだカテゴリへ移す（「＋ カテゴリを追加」へ落としたとき）。同じカテゴリのまとまりがあればそこへ、無ければ新しいまとまりを足す。 */
+export function moveWorkLineToCategory(work: ItemsWork, lineKey: string, target: GroupTarget, groupKey: string): ItemsWork {
+  const existing = work.groups.find((group) => sameGroupTarget(group, target));
+  if (existing) return moveWorkLine(work, lineKey, existing.key);
+  return { ...moveWorkLine({ ...work, groups: [...work.groups, { key: groupKey, ...target, lines: [] }] }, lineKey, groupKey), focus: groupKey };
+}
+
 /** 保存する形にする（空の行と、行の無いまとまりは残さない）。 */
 export const groupsFromWork = (work: ItemsWork): EditorGroup[] =>
   work.groups
@@ -95,7 +123,8 @@ interface ItemsScreenProps {
   title: (group: EditorGroup) => string;
   iconKey: (group: EditorGroup) => string;
   onChangeCategory: (groupKey: string) => void;
-  onAddCategory: () => void;
+  /** 「＋ カテゴリを追加」。行を落としたときはその行の key を渡す（選んだカテゴリへ移す）。 */
+  onAddCategory: (moveLineKey?: string) => void;
   onSave: () => void;
   onClose: () => void;
 }
@@ -130,15 +159,63 @@ export default function ItemsScreen({
   // 開いたまとまり・足したまとまりが見える所まで一覧を送る。行を足したときは、いちばん下のまとまりなら下まで送る。
   const scrollRef = useRef<ScrollView>(null);
   const scrollToNew = useRef(false);
-  const groupY = useRef(new Map<string, number>());
+  const groupY = useRef(new Map<string, Span>());
   const focused = useRef<string | null>(null);
   const scrollToFocus = () => {
     if (work.focus === null || work.focus === focused.current) return;
-    const y = groupY.current.get(work.focus);
-    if (y === undefined) return;
+    const span = groupY.current.get(work.focus);
+    if (span === undefined) return;
     focused.current = work.focus;
-    scrollRef.current?.scrollTo({ y, animated: true });
+    scrollRef.current?.scrollTo({ y: span.y, animated: true });
   };
+
+  // 行のドラッグ（左端の持ち手に触れると持ち上がり、指に付いて上下に動く。落とした先のまとまりへ移す）。
+  // 指の居場所は「つかんだ行の真ん中 + 動かした量」（一覧の中の座標。持っているあいだはスクロールを止める）。
+  const lineY = useRef(new Map<string, Span>());
+  const addCategoryY = useRef<Span | null>(null);
+  const [drag, setDragState] = useState<Drag | null>(null);
+  const dragRef = useRef<Drag | null>(null);
+  const setDrag = (next: Drag | null) => {
+    dragRef.current = next;
+    setDragState(next);
+  };
+  const dragOrigin = useRef(0);
+  const dropTarget = (current: Drag, dy: number): string | null => {
+    const from = groupY.current.get(current.groupKey);
+    const line = lineY.current.get(current.lineKey);
+    if (!from || !line) return null;
+    const y = from.y + line.y + line.height / 2 + dy;
+    const inside = (span: Span | null | undefined) => span != null && y >= span.y && y <= span.y + span.height;
+    if (inside(addCategoryY.current)) return ADD_CATEGORY;
+    const over = work.groups.find((group) => inside(groupY.current.get(group.key)));
+    return over && over.key !== current.groupKey ? over.key : null;
+  };
+  const gripProps = (groupKey: string, lineKey: string) => ({
+    onStartShouldSetResponder: () => dragRef.current === null,
+    onResponderGrant: (event: GestureResponderEvent) => {
+      Keyboard.dismiss();
+      dragOrigin.current = event.nativeEvent.pageY;
+      Vibration.vibrate(10);
+      setDrag({ groupKey, lineKey, dy: 0, over: null });
+      return true;
+    },
+    onResponderMove: (event: GestureResponderEvent) => {
+      const current = dragRef.current;
+      if (!current) return;
+      const dy = event.nativeEvent.pageY - dragOrigin.current;
+      setDrag({ ...current, dy, over: dropTarget(current, dy) });
+    },
+    onResponderRelease: () => {
+      const current = dragRef.current;
+      setDrag(null);
+      if (!current || current.over === null) return;
+      if (current.over === ADD_CATEGORY) onAddCategory(current.lineKey);
+      else onChange(moveWorkLine(work, current.lineKey, current.over));
+    },
+    onResponderTerminate: () => setDrag(null),
+    // 持ち上げたあとは、一覧のスクロールなどに持ち主を渡さない。
+    onResponderTerminationRequest: () => false,
+  });
   useEffect(scrollToFocus);
 
   const addLine = (groupKey: string) => {
@@ -203,6 +280,7 @@ export default function ItemsScreen({
         style={styles.flex}
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"
+        scrollEnabled={drag === null}
         onContentSizeChange={() => {
           if (!scrollToNew.current) return;
           scrollToNew.current = false;
@@ -214,15 +292,16 @@ export default function ItemsScreen({
             <View
               key={group.key}
               onLayout={(event) => {
-                groupY.current.set(group.key, event.nativeEvent.layout.y);
+                groupY.current.set(group.key, event.nativeEvent.layout);
                 scrollToFocus();
               }}
+              style={drag?.groupKey === group.key && styles.dragGroup}
             >
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="カテゴリを変える"
                 onPress={() => onChangeCategory(group.key)}
-                style={styles.category}
+                style={[styles.category, drag?.over === group.key && styles.dropTarget]}
               >
                 <CategoryIcon iconKey={iconKey(group)} size={24} />
                 <View style={styles.categoryText}>
@@ -234,14 +313,23 @@ export default function ItemsScreen({
               </Pressable>
               {group.lines.map((line) => {
                 const selected = line.key === work.selected;
+                const dragging = drag?.lineKey === line.key;
                 return (
                   <Pressable
                     key={line.key}
                     accessibilityRole="button"
                     accessibilityState={{ selected }}
                     onPress={() => select(line, false)}
-                    style={[styles.line, selected && work.calc && styles.lineSelected]}
+                    onLayout={(event) => lineY.current.set(line.key, event.nativeEvent.layout)}
+                    style={[
+                      styles.line,
+                      selected && work.calc && styles.lineSelected,
+                      dragging && [styles.lineDragging, { transform: [{ translateY: drag?.dy ?? 0 }] }],
+                    ]}
                   >
+                    <View accessibilityLabel="ドラッグして別のカテゴリへ移す" hitSlop={8} style={styles.grip} {...gripProps(group.key, line.key)}>
+                      <GripVertical size={14} color={colors.textFaint} />
+                    </View>
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel="この行を消す"
@@ -303,7 +391,14 @@ export default function ItemsScreen({
             </View>
           );
         })}
-        <Pressable accessibilityRole="button" onPress={onAddCategory} style={styles.addCategory}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => onAddCategory()}
+          onLayout={(event) => {
+            addCategoryY.current = event.nativeEvent.layout;
+          }}
+          style={[styles.addCategory, drag?.over === ADD_CATEGORY && styles.dropTarget]}
+        >
           <Plus size={16} color={colors.money} />
           <Text style={styles.addCategoryText}>カテゴリを追加</Text>
         </Pressable>
@@ -377,7 +472,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingLeft: 24,
+    paddingLeft: 4,
     paddingRight: 16,
     paddingVertical: 4,
     backgroundColor: colors.surface,
@@ -385,6 +480,13 @@ const styles = StyleSheet.create({
   // 行の左端の「−」（灰色）。押すとその行を消す。
   removeButton: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.neutralSurface },
   lineSelected: { backgroundColor: colors.moneySurface },
+  // 行の左端の持ち手（つかんで別のまとまりへ移す）。
+  grip: { width: 14, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
+  // つかんでいる行は浮かせて、ほかのまとまりより手前に描く。
+  dragGroup: { zIndex: 20, elevation: 8 },
+  lineDragging: { zIndex: 20, elevation: 8, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  // 指の下にある落とし先。
+  dropTarget: { backgroundColor: colors.moneySurface },
   lineName: { flex: 1, paddingVertical: 6, fontSize: 14, fontWeight: '500', color: colors.textSubtle },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stepButton: {
