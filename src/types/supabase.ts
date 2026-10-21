@@ -1671,10 +1671,12 @@ export type Database = {
           category_id: string | null
           created_at: string
           day: number
+          day_known: boolean
           end_month: string | null
           family_id: string
           holiday: string
           id: string
+          interval_years: number | null
           kind: string
           made_through: string | null
           makes_record: boolean
@@ -1697,10 +1699,12 @@ export type Database = {
           category_id?: string | null
           created_at?: string
           day: number
+          day_known?: boolean
           end_month?: string | null
           family_id: string
           holiday?: string
           id?: string
+          interval_years?: number | null
           kind?: string
           made_through?: string | null
           makes_record?: boolean
@@ -1723,10 +1727,12 @@ export type Database = {
           category_id?: string | null
           created_at?: string
           day?: number
+          day_known?: boolean
           end_month?: string | null
           family_id?: string
           holiday?: string
           id?: string
+          interval_years?: number | null
           kind?: string
           made_through?: string | null
           makes_record?: boolean

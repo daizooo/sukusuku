@@ -28,6 +28,7 @@ import {
   RECORD_KIND_LABEL,
   recurringEnded,
   recurringHistory,
+  recurringMonthsLabel,
   recurringPeriodLabel,
   recurringScheduleLabel,
   reorderedPositions,
@@ -57,18 +58,21 @@ import { PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
 //
 // 固定収入（給与・賞与。2026-10-11。docs/kakei.md §0.3）・振替も同じルールで、同じ画面「固定費」の上の切り替え（支出／収入／振替。タップと、帯と一覧の上の左右スワイプ）で出す
 // （2026-10-18に統合）。収入のルールの編集は、入金先・振込日・見込み額の言葉にする。賞与は1回ごとに1件のルール（月・日・額）で、「複製して足す」で回を増やす。
-// 収入・振替は毎月額が変わるので、2026-10-20から「固定」と呼ばず、額を入れたルールでもいつも見込みの記録を作る（DB は migration 0124）。
+// 種類は「確定」（額が決まっている。確定の記録を作る）と「見込み」（額が変わる。過去の記録から見込み、実額に直すと確定）の2つ（2026-10-21）。
+// 収入も同じ（児童手当は確定、給与・賞与は見込み）。振替はほぼ毎月額を変えるので、いつも見込みの記録を作る（DB は migration 0125）。
 //
-// 並べ替え（左の持ち手をつかんで動かす。リストと同じ操作）は、見出し（固定・予定）ごとの中で動かせる。
+// 並べ替え（左の持ち手をつかんで動かす。リストと同じ操作）は、見出し（自動で記録・帯に出す）ごとの中で動かせる。
 // 複製は、編集の画面の「複製して足す」から。日・月・額など全部を写し、品名に「のコピー」を付けた新規の編集を開き、直して保存すると足される。
 //
 // 期間（開始月・終了月。2026-10-15）: 育休給付金 〜2027/8、時短後の給与 2027/9〜 のように、期間の外の月は記録も予算も作らない。
 // 期間が終わったルールは、一覧の下に畳んで出す（押すと開く）。
 //
-// 記録しない予定（2026-10-17。docs/kakei.md §3.6）: 車検・ふるさと納税・行事のように、出ることは決まっているが額が少しぶれ、カードや現金で
-// 払うもの。編集の「種類」で「予定」を選ぶ（自動で記録するものは「固定」）。出金元・お店・日は持たず、カテゴリ（小分類）・予定の月・額だけ。
-// 記録は作らず、その月の予算と年末の着地見込みにだけ入る。実績は、その年に同じ小分類で入った記録が自動で結びつく（予算の画面に出す）。
-// 額は「入れた額」か「前回の実績から見込む」（その小分類で前回入った実績）。一覧では支出の「固定」のあと、「予定」の見出しの下にまとめる。
+// 帯に出す（2026-10-17、2026-10-21に見直し。docs/kakei.md §3.6）: 車検・JAF・自治会費のように、出ることは決まっているが、カードや現金で
+// 払うもの・日が決まらないもの。編集の「記録の作り方」で「帯に出す」を選ぶ。記録は作らず、その日になったら記録の上の帯に出し、確かめて記録する。
+// 日が決まらないものは「日付未定」にし、帯には出さない。どちらも、同じ小分類の記録が入ると済になる（自動で結びつく）。
+// 見込みの額は、その小分類で前回入った実績（無ければ入れた額）。一覧では支出の「自動で記録」のあと、「帯に出す」の見出しの下にまとめる。
+//
+// ◯年ごと（2026-10-21）: 車検・2年ごとの火災保険は、記録する月で「◯年ごと」を選び、間隔と期間の始まり（最初の回）を入れる。
 
 type RecurringMode = 'expense' | 'income' | 'transfer';
 
@@ -80,8 +84,8 @@ const MODE_TABS: { id: RecurringMode; label: string }[] = [
   { id: 'income', label: '収入' },
   { id: 'transfer', label: '振替' },
 ];
-// 収入・振替は毎月額が変わるので「固定」と呼ばず、いつも見込みとして記録を作る（2026-10-20。docs/kakei.md §3.3）。
-const MODE_NAME: Record<RecurringMode, string> = { expense: '固定支出', income: '収入の見込み', transfer: '振替の見込み' };
+// 振替はほぼ毎月額が変わるので、いつも見込みとして記録を作る（docs/kakei.md §3.3）。
+const MODE_NAME: Record<RecurringMode, string> = { expense: '固定支出', income: '固定収入', transfer: '振替の見込み' };
 
 interface RecurringSettingsProps {
   familyId: string;
@@ -138,12 +142,12 @@ export default function RecurringSettings({
   const ended = inTab.filter((rule) => !rule.archived && recurringEnded(rule, thisMonth));
   const [showEnded, setShowEnded] = useState(false);
   const archived = inTab.filter((rule) => rule.archived);
-  // 一覧の見出しごとのルール。支出は、固定（自動で記録する）・予定（記録しない）の順に分ける。
+  // 一覧の見出しごとのルール。支出は、自動で記録・帯に出す（記録しない）の順に分ける。
   const sections: { key: string; title: string | null; rules: MoneyRecurring[] }[] =
     tab === 'expense'
       ? [
-          { key: 'fixed', title: '固定', rules: usable.filter((rule) => !isEstimateCost(rule)) },
-          { key: 'estimate', title: '予定', rules: usable.filter(isEstimateCost) },
+          { key: 'fixed', title: '自動で記録', rules: usable.filter((rule) => !isEstimateCost(rule)) },
+          { key: 'estimate', title: '帯に出す', rules: usable.filter(isEstimateCost) },
         ]
       : [{ key: tab, title: null, rules: usable }];
 
@@ -323,7 +327,7 @@ export default function RecurringSettings({
                           {ruleDetail(rule) !== '' && <span className={subClass}>{ruleDetail(rule)}</span>}
                           <span className={subClass}>{scheduleWithPeriod(rule)}</span>
                           <span className={`${subClass} tabular-nums`}>
-                            {isEstimateCost(rule)
+                            {isEstimateCost(rule) && rule.walletId === null
                               ? amountLabel(rule)
                               : `${
                                   rule.kind === 'transfer'
@@ -410,19 +414,11 @@ export default function RecurringSettings({
   );
 }
 
-/** 額の言い方。収入は「見込み額」、支出は「過去の記録から見込む」。 */
+/** 額の言い方。「確定 ¥55,000」「見込み 過去の記録から（無ければ ¥23,000）」。振替は入れた額でも見込み。 */
 function amountLabel(rule: MoneyRecurring): string {
-  if (isEstimateCost(rule)) {
-    if (rule.amountMode === 'fixed') return `予定 ${formatYen(rule.amount)}`;
-    return rule.amount > 0 ? `前回の実績から見込む（無ければ ${formatYen(rule.amount)}）` : '前回の実績から見込む';
-  }
-  // 収入・振替は、入れた額でも見込み（記録は見込みで作り、実額に直すと確定になる）。
-  if (rule.kind !== 'expense') {
-    if (rule.amountMode === 'fixed') return `見込み ${formatYen(rule.amount)}`;
-    return rule.amount > 0 ? `見込み 過去の記録から（無ければ ${formatYen(rule.amount)}）` : '見込み 過去の記録から';
-  }
-  if (rule.amountMode === 'fixed') return `固定 ${formatYen(rule.amount)}`;
-  return '過去の記録から見込む';
+  if (rule.amountMode === 'fixed') return `${rule.kind === 'transfer' ? '見込み' : '確定'} ${formatYen(rule.amount)}`;
+  const source = isEstimateCost(rule) ? '前回の実績から' : '過去の記録から';
+  return rule.amount > 0 ? `見込み ${source}（無ければ ${formatYen(rule.amount)}）` : `見込み ${source}`;
 }
 
 /** ルールの見出し。カテゴリに統一する。振替などカテゴリのないものは取引の種別。 */
@@ -431,14 +427,10 @@ function ruleTitle(rule: MoneyRecurring, categories: MoneyCategory[]): string {
   return path !== '' ? path : RECORD_KIND_LABEL[rule.kind];
 }
 
-/** 日取りと期間。「毎月25日（休日は前営業日）・2027/9〜」。記録しない予定は日を持たないので月だけ（「3・9月・2027/3〜2027/3」）。 */
+/** 日取りと期間。「毎月25日（休日は前営業日）・2027/9〜」。日付未定のものは月だけ（「11月・日付未定」）。 */
 function scheduleWithPeriod(rule: MoneyRecurring): string {
   const period = recurringPeriodLabel(rule);
-  const schedule = isEstimateCost(rule)
-    ? rule.months === null
-      ? '毎月'
-      : `${[...rule.months].sort((a, b) => a - b).join('・')}月`
-    : recurringScheduleLabel(rule);
+  const schedule = isEstimateCost(rule) && !rule.dayKnown ? `${recurringMonthsLabel(rule)}・日付未定` : recurringScheduleLabel(rule);
   return period === '' ? schedule : `${schedule}・${period}`;
 }
 
@@ -507,13 +499,21 @@ function RecurringEditor({
   // 給与は休日の前の営業日に振り込まれることが多い。
   const [holiday, setHoliday] = useState<MoneyHolidayRule>(base?.holiday ?? (isIncome ? 'prev' : 'next'));
   const [months, setMonths] = useState<number[] | null>((rule ?? template)?.months ?? null);
+  // ◯年ごと（車検など。間隔は2〜10年。期間の始まりの年から数える）。空は毎年。
+  const [intervalInput, setIntervalInput] = useState(base?.intervalYears != null ? String(base.intervalYears) : '');
+  const [byInterval, setByInterval] = useState(base?.intervalYears != null);
+
   // 期間（2027/9 の形で入れる。空は無期限）。
   const [startInput, setStartInput] = useState(periodMonthInput(base?.startMonth ?? null));
   const [endInput, setEndInput] = useState(periodMonthInput(base?.endMonth ?? null));
+  // 種類。確定（fixed）は確定の記録、見込み（estimate）は過去の記録から見込んだ見込みの記録（振替はいつも見込み）。
   const [amountMode, setAmountMode] = useState<MoneyRecurring['amountMode']>(base?.amountMode ?? 'estimate');
-  // 記録を作るか（false は記録しない予定。固定支出の支出だけ）。
+  // 記録の作り方。false は帯に出す（自動で記録しない。固定支出の支出だけ）。
   const [makesRecord, setMakesRecord] = useState(base ? !isEstimateCost(base) : true);
   const estimate = !isIncome && kind === 'expense' && !makesRecord;
+  // 日が決まっているか（帯に出すものだけ「日付未定」にできる。帯には出さない）。
+  const [dayKnown, setDayKnown] = useState(base?.dayKnown ?? true);
+  const noDay = estimate && !dayKnown;
   const [amount, setAmount] = useState(base && base.amount > 0 ? String(base.amount) : '');
   const [error, setError] = useState<string | null>(null);
 
@@ -551,16 +551,17 @@ function RecurringEditor({
   };
 
   const submit = () => {
-    // 「第◯◯曜日」のときは day を使わない（1 を入れておく）。記録しない予定は日を持たない（1）。
+    // 「第◯◯曜日」のときは day を使わない（1 を入れておく）。日付未定も 1。
     let dayValue = 1;
-    if (estimate) {
-      // 日・出金元は決めない。
+    if (noDay) {
+      // 日は決めない。
     } else if (byWeekday) {
       if (weekOfMonth === null || weekday === null) return setError('第何週の何曜日かを選んでください');
     } else {
       dayValue = Number(day.trim());
       if (!Number.isInteger(dayValue) || dayValue < 1 || dayValue > 31) return setError(`${isIncome ? '振込日' : '引き落とし日'}を 1〜31 で入れてください（末日は31）`);
     }
+    // 帯に出すものは、出金元を決めなくてよい（記録するときに選ぶ）。
     if (!estimate && walletId === null) return setError(kind === 'income' ? '入金先を選んでください' : '出金元を選んでください');
     if (kind === 'transfer' && (toWalletId === null || toWalletId === walletId)) return setError('入金先を選んでください（出金元と別の口座）');
     if (kind !== 'transfer' && categoryId === null) return setError('カテゴリを選んでください');
@@ -569,28 +570,36 @@ function RecurringEditor({
     const endMonth = parsePeriodMonth(endInput);
     if (startMonth === undefined || endMonth === undefined) return setError('期間は「2027/9」の形で入れてください（無期限は空）');
     if (startMonth !== null && endMonth !== null && startMonth > endMonth) return setError('期間の終わりを始まりより後にしてください');
+    const intervalYears = byInterval ? Number(intervalInput.trim()) : null;
+    if (intervalYears !== null) {
+      if (!Number.isInteger(intervalYears) || intervalYears < 2 || intervalYears > 10) return setError('何年ごとかを 2〜10 で入れてください');
+      if (months === null) return setError('◯年ごとは、記録する月を選んでください');
+      if (startMonth === null) return setError('◯年ごとは、期間の始まり（最初の回の月）を入れてください');
+    }
     const amountValue = amount.trim() === '' ? 0 : Number(amount.trim());
     if (!Number.isInteger(amountValue) || amountValue < 0) return setError('額は0以上の整数で入れてください');
-    if (amountMode === 'fixed' && amountValue === 0) return setError(estimate ? '予定の額を入れてください' : kind === 'expense' ? '固定額を入れてください' : '見込みの額を入れてください');
+    if (amountMode === 'fixed' && amountValue === 0) return setError(kind === 'transfer' ? '見込みの額を入れてください' : '確定の額を入れてください');
     onSubmit({
       kind,
       day: dayValue,
-      weekOfMonth: !estimate && byWeekday ? weekOfMonth : null,
-      weekday: !estimate && byWeekday ? weekday : null,
+      weekOfMonth: !noDay && byWeekday ? weekOfMonth : null,
+      weekday: !noDay && byWeekday ? weekday : null,
       months,
       startMonth,
       endMonth,
-      holiday: estimate ? 'next' : holiday,
+      holiday: noDay ? 'next' : holiday,
       amountMode,
       amount: amountValue,
-      walletId: estimate ? null : walletId,
+      walletId,
       toWalletId: kind === 'transfer' ? toWalletId : null,
-      store: kind === 'transfer' || estimate ? '' : store,
+      store: kind === 'transfer' ? '' : store,
       categoryId: kind === 'transfer' ? null : categoryId,
       name,
       makesRecord: !estimate,
       skippedMonths: rule?.skippedMonths ?? [],
-    }, kind !== 'transfer' && !estimate && store !== '' && registerStore);
+      intervalYears,
+      dayKnown: !noDay,
+    }, kind !== 'transfer' && store !== '' && registerStore);
   };
 
   const walletChips = (selected: string | null, onPick: (id: string) => void, exclude: string | null) => (
@@ -635,21 +644,23 @@ function RecurringEditor({
         <>
           <ScreenHeader title={`${MODE_NAME[mode]}を${rule ? '編集' : template ? '複製して足す' : '足す'}`} icon="back" onClose={onClose} />
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
-            {!isIncome && kind === 'expense' && (
+            {kind !== 'transfer' && (
               <div className="space-y-2">
                 <span className={labelClass}>種類</span>
                 <div className="flex flex-wrap gap-2">
-                  <Chip label="固定" selected={makesRecord} onClick={() => setMakesRecord(true)} />
-                  <Chip
-                    label="予定"
-                    selected={!makesRecord}
-                    onClick={() => {
-                      setMakesRecord(false);
-                      // 新しく足すときは、まず入れた額で（前回の実績が無いと予定の額が 0 になるため）。
-                      if (rule === null && template === null) setAmountMode('fixed');
-                    }}
-                  />
+                  <Chip label="確定" selected={amountMode === 'fixed'} onClick={() => setAmountMode('fixed')} />
+                  <Chip label="見込み" selected={amountMode === 'estimate'} onClick={() => setAmountMode('estimate')} />
                 </div>
+              </div>
+            )}
+            {kind === 'expense' && (
+              <div className="space-y-2">
+                <span className={labelClass}>記録の作り方</span>
+                <div className="flex flex-wrap gap-2">
+                  <Chip label="自動で記録する" selected={makesRecord} onClick={() => setMakesRecord(true)} />
+                  <Chip label="帯に出す" selected={!makesRecord} onClick={() => setMakesRecord(false)} />
+                </div>
+                {!makesRecord && <span className={subClass}>記録は作らず、その日に記録の上の帯に出します。同じ小分類の記録が入ると済になります</span>}
               </div>
             )}
 
@@ -667,13 +678,11 @@ function RecurringEditor({
               </button>
             )}
 
-            {!estimate && (
-              <div>
-                <span className={labelClass}>{kind === 'income' ? '入金先' : '出金元'}</span>
-                {walletChips(walletId, setWalletId, null)}
-              </div>
-            )}
-            {estimate ? null : kind === 'transfer' ? (
+            <div>
+              <span className={labelClass}>{kind === 'income' ? '入金先' : estimate ? '出金元（任意）' : '出金元'}</span>
+              {walletChips(walletId, (id) => setWalletId(estimate && id === walletId ? null : id), null)}
+            </div>
+            {kind === 'transfer' ? (
               <div>
                 <span className={labelClass}>入金先</span>
                 {walletChips(toWalletId, setToWalletId, walletId)}
@@ -706,7 +715,17 @@ function RecurringEditor({
                 </div>
               </div>
             )}
-            {estimate ? null : byWeekday ? (
+            {estimate && (
+              <div className="space-y-2">
+                <span className={labelClass}>日</span>
+                <div className="flex flex-wrap gap-2">
+                  <Chip label="日を決める" selected={dayKnown} onClick={() => setDayKnown(true)} />
+                  <Chip label="日付未定" selected={!dayKnown} onClick={() => setDayKnown(false)} />
+                </div>
+                {!dayKnown && <span className={subClass}>帯には出しません。同じ小分類の記録が入るのを待ちます</span>}
+              </div>
+            )}
+            {noDay ? null : byWeekday ? (
               <div className="space-y-2">
                 <span className={labelClass}>振込日</span>
                 <div className="flex flex-wrap gap-2">
@@ -722,7 +741,7 @@ function RecurringEditor({
               </div>
             ) : (
               <label className="block">
-                <span className={labelClass}>{isIncome ? '振込日' : '引き落とし日（入る日）'}</span>
+                <span className={labelClass}>{isIncome ? '振込日' : estimate ? '帯に出す日（払う日の目安）' : '引き落とし日（入る日）'}</span>
                 <input
                   className={inputClass}
                   value={day}
@@ -732,7 +751,7 @@ function RecurringEditor({
                 />
               </label>
             )}
-            {!estimate && (
+            {!noDay && (
             <div>
               <span className={labelClass}>休日のとき</span>
               <div className="flex flex-wrap gap-2">
@@ -743,11 +762,45 @@ function RecurringEditor({
             </div>
             )}
             <div className="space-y-2">
-              <span className={labelClass}>{estimate ? '予定の月' : '記録する月'}</span>
+              <span className={labelClass}>記録する月</span>
               <div className="flex flex-wrap gap-2">
-                <Chip label="毎月" selected={months === null} onClick={() => setMonths(null)} />
-                <Chip label="月を選ぶ" selected={months !== null} onClick={() => setMonths(months ?? [])} />
+                <Chip
+                  label="毎月"
+                  selected={months === null}
+                  onClick={() => {
+                    setMonths(null);
+                    setByInterval(false);
+                  }}
+                />
+                <Chip
+                  label="毎年（月を選ぶ）"
+                  selected={months !== null && !byInterval}
+                  onClick={() => {
+                    setMonths(months ?? []);
+                    setByInterval(false);
+                  }}
+                />
+                <Chip
+                  label="◯年ごと"
+                  selected={byInterval}
+                  onClick={() => {
+                    setMonths(months ?? []);
+                    setByInterval(true);
+                  }}
+                />
               </div>
+              {byInterval && (
+                <div className="flex items-center gap-2">
+                  <input
+                    className={`${inputClass} w-16 text-right`}
+                    value={intervalInput}
+                    onChange={(event) => setIntervalInput(event.target.value)}
+                    inputMode="numeric"
+                    placeholder="2"
+                  />
+                  <span className="text-[15px] font-semibold text-gray-500">年ごと（期間の始まりの年から数える）</span>
+                </div>
+              )}
               {months !== null && (
                 <div className="flex flex-wrap gap-2">
                   {MONTHS.map((month) => (
@@ -763,7 +816,7 @@ function RecurringEditor({
               )}
             </div>
             <div className="space-y-2">
-              <span className={labelClass}>期間（任意）</span>
+              <span className={labelClass}>{byInterval ? '期間（始まり＝最初の回）' : '期間（任意）'}</span>
               <div className="flex items-center gap-2">
                 <input
                   className={inputClass}
@@ -783,11 +836,7 @@ function RecurringEditor({
 
             {estimate ? (
               <div className="space-y-2">
-                <span className={labelClass}>額の決め方</span>
-                <div className="flex flex-wrap gap-2">
-                  <Chip label="入れた額" selected={amountMode === 'fixed'} onClick={() => setAmountMode('fixed')} />
-                  <Chip label="前回の実績から見込む" selected={amountMode === 'estimate'} onClick={() => setAmountMode('estimate')} />
-                </div>
+                <span className={labelClass}>{amountMode === 'fixed' ? '額' : '見込みの額'}</span>
                 <input
                   className={inputClass}
                   value={amount}
@@ -795,7 +844,7 @@ function RecurringEditor({
                   inputMode="numeric"
                   placeholder={amountMode === 'fixed' ? '額（円）' : '前回の実績が無いときの額（円・任意）'}
                 />
-                {categoryId !== null && (
+                {amountMode === 'estimate' && categoryId !== null && (
                   <span className={`${subClass} tabular-nums`}>
                     {basis === null
                       ? 'この小分類の前回の実績はまだありません'
@@ -805,11 +854,13 @@ function RecurringEditor({
               </div>
             ) : (
             <div className="space-y-2">
-              <span className={labelClass}>{kind === 'expense' ? '額の決め方' : '見込みの額'}</span>
-              <div className="flex flex-wrap gap-2">
-                <Chip label={kind === 'expense' ? '過去の記録から見込む' : '過去の記録から'} selected={amountMode === 'estimate'} onClick={() => setAmountMode('estimate')} />
-                <Chip label={kind === 'expense' ? '固定額' : '入れた額'} selected={amountMode === 'fixed'} onClick={() => setAmountMode('fixed')} />
-              </div>
+              <span className={labelClass}>{kind === 'transfer' ? '額の決め方' : amountMode === 'fixed' ? '額' : '見込みの額'}</span>
+              {kind === 'transfer' && (
+                <div className="flex flex-wrap gap-2">
+                  <Chip label="過去の記録から" selected={amountMode === 'estimate'} onClick={() => setAmountMode('estimate')} />
+                  <Chip label="入れた額" selected={amountMode === 'fixed'} onClick={() => setAmountMode('fixed')} />
+                </div>
+              )}
               <input
                 className={inputClass}
                 value={amount}
@@ -824,8 +875,8 @@ function RecurringEditor({
                     : `過去1年の記録 ${history.length}件（直近 ${formatShortDate(history[0].occurredOn)} ${formatYen(history[0].amount)}）`}
                 </span>
               )}
-              {kind !== 'expense' && (
-                <span className={subClass}>{kind === 'income' ? '振込日' : '振替の日'}に見込みの記録を作ります。実額に直すと確定します</span>
+              {(kind === 'transfer' || amountMode === 'estimate') && (
+                <span className={subClass}>{kind === 'income' ? '振込日' : kind === 'transfer' ? '振替の日' : '引き落とし日'}に見込みの記録を作ります。実額に直すと確定します</span>
               )}
             </div>
             )}
