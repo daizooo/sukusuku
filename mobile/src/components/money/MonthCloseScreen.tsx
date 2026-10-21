@@ -32,7 +32,8 @@ import { EstimateBadge, Hero, PrimaryButton, ScreenHeader, SectionHeader, StatRo
 // カードの利用通知と額が違う記録には、その旨を添える（通知が来ていない記録は、継続払いなど通知されないものもあるので出さない）。
 // 記録の一覧は、**口座（出金元）ごとに絞り込める**（財布・カードごとに見て、実際の明細と合わせるため。2026-10-16）。
 // 絞ると、その口座のその月の合計（入金・出金・差し引き。振替も入れる）を一覧の上に添える（2026-10-21。月末の残高は出さない）。
-// 一覧のあとに、これから自動で作られる記録・未確認の明細を出す。
+// 未確認の明細はいちばん上に出す（締める前に片づけるもの。2026-10-21）。記録は月の初め（1日）から並べる（月の初めからさかのぼって見るため。2026-10-21）。
+// 一覧のあとに、これから自動で作られる記録を出す。
 // 片づいていないものが残っていても「この月を締める」で締められる。年初からの累計は出さない（その月の締めなので）。
 // その月に、固定収入・固定費でこれから自動で作られる記録がある（自動の記録より前に締める）ときは、一覧で知らせ、
 // 締めるときにも確かめる（締めたあとに作られた記録は、締めた収支に入っていないため）。
@@ -187,6 +188,13 @@ export default function MonthCloseScreen({
       <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
         <ScreenHeader title={`${label}の締め`} icon="back" onClose={onClose} />
         <ScrollView contentContainerStyle={styles.content}>
+          {/* 未確認の明細は、締める前に片づけるものなので一番上に出す（2026-10-21）。 */}
+          {feedCount > 0 && (
+            <Pressable accessibilityRole="button" onPress={onOpenFeed} style={({ pressed }) => [styles.notice, pressed && styles.pressed]}>
+              <Text style={[styles.noticeText, styles.flex]}>未確認の明細 {feedCount}件</Text>
+              <ChevronRight size={16} color={colors.textMuted} />
+            </Pressable>
+          )}
           <Hero compact label={`収支（${label}）`} value={formatBalance(month.balance)} plus={month.balance > 0}>
             <StatRow compact label="収入" value={formatYen(month.income)} plus={month.income > 0} />
             <StatRow compact label="支出" value={formatBalance(-month.living)} />
@@ -245,7 +253,7 @@ export default function MonthCloseScreen({
           {shown.length === 0 ? (
             <Text style={styles.message}>{inMonth.length === 0 ? 'この月の記録はありません' : 'この口座の記録はありません'}</Text>
           ) : (
-            <RecordDayList records={shown} categories={categories} wallets={wallets} onOpen={onOpenRecord} closing={closing} />
+            <RecordDayList records={shown} categories={categories} wallets={wallets} onOpen={onOpenRecord} closing={closing} oldestFirst />
           )}
 
           {pending.length > 0 && (
@@ -263,13 +271,6 @@ export default function MonthCloseScreen({
                 ))}
               </View>
             </>
-          )}
-
-          {feedCount > 0 && (
-            <Pressable accessibilityRole="button" onPress={onOpenFeed} style={({ pressed }) => [styles.notice, pressed && styles.pressed]}>
-              <Text style={[styles.noticeText, styles.flex]}>未確認の明細 {feedCount}件</Text>
-              <ChevronRight size={16} color={colors.textMuted} />
-            </Pressable>
           )}
         </ScrollView>
         <View style={styles.footer}>
@@ -332,7 +333,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 8,
+    marginBottom: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
