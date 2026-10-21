@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Settings2 } from 'lucide-react-native';
 import type { MoneyCategory } from '@/types/app';
@@ -15,7 +15,11 @@ import { CategoryIcon, ScreenHeader } from '@/components/money/moneyVisual';
 // 大分類を1行ずつ: 左に大分類（アイコン・名前。予算の残りは出さない）、
 // 右に小分類のボタン（入りきらなければ折り返す）。押すと大分類も決まる。
 // スクロールしなくても1画面に収まるように詰める（2026-10-20。以前は大分類ごとの枠と見出しの帯で、縦に長かった）。小分類を主役に、大分類は小さく。
-// 大分類の行は与えられた高さいっぱいに縦に伸ばす（下に余白を残さない）。入りきらないときだけスクロールする。
+// 大分類の行は与えられた高さを行数で割って縦に伸ばす（下に余白を残さない）。ただし1行は ROW_MAX_STRETCH までで、
+// 行数の少ない収入（3行ほど）が画面いっぱいに引き伸ばされないようにする（2026-10-20）。入りきらないときだけスクロールする。
+
+/** 大分類の1行を、余った高さで伸ばしてよい上限（dp）。 */
+const ROW_MAX_STRETCH = 80;
 
 export interface CategoryChoice {
   categoryId: string;
@@ -40,6 +44,8 @@ export default function CategoryPicker({
   const categoryKind = kind === 'income' ? 'income' : 'living';
   const tops = useMemo(() => topCategories(categories, categoryKind), [categories, categoryKind]);
   const pickCategory = (categoryId: string) => onPick({ categoryId });
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const rowMinHeight = tops.length > 0 ? Math.min(ROW_MAX_STRETCH, Math.floor(viewportHeight / tops.length)) : 0;
 
   return (
     <View style={styles.screen}>
@@ -55,14 +61,14 @@ export default function CategoryPicker({
           )
         }
       />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} onLayout={(e) => setViewportHeight(e.nativeEvent.layout.height)}>
         {tops.length === 0 && (
           <Text style={styles.empty}>カテゴリがまだありません。右上の歯車からカテゴリを作れます</Text>
         )}
         {tops.map((top) => {
           const children = childCategories(categories, top.id);
           return (
-            <View key={top.id} style={styles.topRow}>
+            <View key={top.id} style={[styles.topRow, { minHeight: rowMinHeight }]}>
               <View style={styles.top}>
                 <CategoryIcon iconKey={iconKeyOf(top)} size={24} />
                 <Text style={[styles.topName, styles.flex]} numberOfLines={1}>
@@ -96,9 +102,8 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1, paddingBottom: 8 },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
   // 大分類を1行ずつ（左に大分類、右に小分類）。
-  // flexGrow で高さいっぱいに均等に伸ばす（flexBasis は中身の高さのまま。小さい画面では縮まずスクロールになる）。
+  // minHeight（画面の高さ ÷ 行数。上限あり）で伸ばす。中身が高い行はそのまま伸び、入りきらない小さい画面ではスクロールになる。
   topRow: {
-    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
