@@ -41,6 +41,8 @@ interface RecordDayListProps {
   onAddOnDate?: (date: string) => void;
   /** 月の締めの画面で、各カードにチェックボックスを出す（docs/kakei.md §4.5）。 */
   closing?: RecordClosing;
+  /** 古い日から（月の初めから）並べる。月の締めで使う。無ければ新しい日から。 */
+  oldestFirst?: boolean;
 }
 
 const dayLabel = (dateKey: string) => {
@@ -282,17 +284,21 @@ export default function RecordDayList({
   onOpenCorrection,
   onAddOnDate,
   closing,
+  oldestFirst = false,
 }: RecordDayListProps) {
-  // 記録のある日と補正のある日を合わせて、新しい日から。
+  // 記録のある日と補正のある日を合わせて、新しい日から（oldestFirst なら古い日から。日の中の並びも逆にする）。
   const recordDays = groupRecordsByDay(records);
   const dates = [...new Set([...recordDays.map((day) => day.date), ...corrections.map((check) => check.balance.balanceOn)])].sort(
-    (a, b) => b.localeCompare(a),
+    (a, b) => (oldestFirst ? a.localeCompare(b) : b.localeCompare(a)),
   );
-  const days = dates.map((date) => ({
-    date,
-    records: recordDays.find((day) => day.date === date)?.records ?? [],
-    corrections: corrections.filter((check) => check.balance.balanceOn === date),
-  }));
+  const days = dates.map((date) => {
+    const dayRecords = recordDays.find((day) => day.date === date)?.records ?? [];
+    return {
+      date,
+      records: oldestFirst ? [...dayRecords].reverse() : dayRecords,
+      corrections: corrections.filter((check) => check.balance.balanceOn === date),
+    };
+  });
 
   return (
     <>

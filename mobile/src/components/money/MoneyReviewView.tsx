@@ -356,14 +356,9 @@ export default function MoneyReviewView({
           closed={isMonthClosed(closings, closing)}
           closedAt={closings.find((entry) => entry.month === closing)?.closedAt ?? null}
           onConfirmEstimate={onConfirmEstimate}
-          onOpenRecord={(record) => {
-            setClosing(null);
-            onOpenRecord(record);
-          }}
-          onOpenFeed={() => {
-            setClosing(null);
-            onOpenFeed();
-          }}
+          // 記録・未確認の明細は締めの画面の上に重ねて開く（閉じる・戻るで締めの画面へ戻る。2026-10-21）
+          onOpenRecord={onOpenRecord}
+          onOpenFeed={onOpenFeed}
           onCloseMonth={() => {
             onSetMonthClosed(closing, true);
             setClosing(null);
