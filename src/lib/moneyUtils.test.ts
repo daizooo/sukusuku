@@ -44,6 +44,7 @@ import {
   fixedBudgetFor,
   fixedBudgetRows,
   inRecurringPeriod,
+  recurringMonthsLabel,
   isMonthClosed,
   unclosedMonths,
   buildYearLanding,
@@ -292,6 +293,20 @@ assert.equal(fixedBudgetFor(withFixed, 'house', '2025-12'), 0, 'ルールを作�
   assert.equal(fixedBudgetFor(periodRows, 'house', '2026-08'), 1000, '期間の終わりの月まで');
   assert.equal(fixedBudgetFor(periodRows, 'house', '2026-09'), 0, '期間のあとの月は足さない');
   assert.equal(inRecurringPeriod({ startMonth: null, endMonth: null }, '2030-01'), true, '無期限');
+  // ◯年ごと（開始月の年から数える。docs/kakei.md §3.3）
+  const everyTwo = { startMonth: '2027-09', endMonth: null, intervalYears: 2 };
+  assert.equal(inRecurringPeriod(everyTwo, '2027-09'), true, '最初の回');
+  assert.equal(inRecurringPeriod(everyTwo, '2028-09'), false, '間の年は無い');
+  assert.equal(inRecurringPeriod(everyTwo, '2029-09'), true, '2年後');
+  assert.equal(inRecurringPeriod(everyTwo, '2025-09'), false, '始まりより前は無い');
+  const fire = rule({ id: 'r10', categoryId: 'rent', amount: 21200, months: [9], startMonth: '2027-09', intervalYears: 2 });
+  const fireRows = fixedBudgetRows([fire], cats, [], '2027-10-01');
+  assert.equal(fixedBudgetFor(fireRows, 'house', '2027-09'), 21200, '◯年ごとの回の年に足す');
+  assert.equal(fixedBudgetFor(fireRows, 'house', '2028-09'), 0, '間の年は足さない');
+  // 帯に出すもの（記録を作らない）は、出金元があっても自動の記録・固定費の予算に数えない
+  const band = rule({ id: 'r11', categoryId: 'rent', amount: 3500, makesRecord: false });
+  assert.deepEqual(fixedBudgetRows([band], cats, [], today), [], '帯に出すものは固定費に入れない');
+  assert.deepEqual(pendingRecurringInMonth([band], [], '2026-10', '2026-10-01'), [], '帯に出すものは自動で作られない');
   assert.equal(recurringEnded(rule({ endMonth: '2026-09' }), '2026-10'), true);
   assert.equal(recurringEnded(rule({ endMonth: '2026-10' }), '2026-10'), false, '終わりの月はまだ期間の中');
   assert.equal(recurringPeriodLabel(rule({ startMonth: '2027-09', endMonth: null })), '2027/9〜');
@@ -788,6 +803,9 @@ assert.equal(recurringDayLabel({ day: 1, weekOfMonth: 5, weekday: 5 }), '最終�
 assert.equal(recurringDayLabel({ day: 27, weekOfMonth: null, weekday: null }), '27日');
 assert.equal(recurringScheduleLabel({ day: 1, weekOfMonth: 2, weekday: 5, months: [12, 6], holiday: 'prev' }), '6・12月の第2金曜日（休日は前営業日）');
 assert.equal(recurringScheduleLabel({ day: 1, weekOfMonth: 1, weekday: 1, months: null, holiday: 'next' }), '毎月第1月曜日（休日は翌営業日）');
+assert.equal(recurringScheduleLabel({ day: 18, months: [9], intervalYears: 2, holiday: 'none' }), '2年ごとの9月の18日（休日もそのまま）');
+assert.equal(recurringMonthsLabel({ months: [2], intervalYears: 2 }), '2年ごとの2月');
+assert.equal(recurringMonthsLabel({ months: null }), '毎月');
 assert.equal(cardScheduleLabel({ closeDay: 15, payDay: 10, payMonthOffset: null }), '15日締め・翌10日払い');
 assert.equal(cardScheduleLabel({ closeDay: 31, payDay: 27, payMonthOffset: null }), '末日締め・翌27日払い');
 assert.equal(cardScheduleLabel({ closeDay: 5, payDay: 27, payMonthOffset: null }), '5日締め・27日払い', '締め日より後の引き落とし日は同じ月');

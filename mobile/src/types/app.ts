@@ -766,12 +766,16 @@ export interface MoneyRecurring {
   /** ルールを作った日（YYYY-MM-DD）。固定費を予算に足すのはこの年から（年の中は全部の月）。 */
   createdAt: string;
   /**
-   * 記録を自動で作るか。false は見積費（車検・ふるさと納税など。記録は作らず、予算と着地見込みにだけ入る。出金元は持たない）。
-   * docs/kakei.md §3.6
+   * 記録を自動で作るか。false は「帯に出す」もの（車検・JAF など。記録は作らず、記録の上の帯から確かめて記録する。
+   * 同じ小分類の記録が入ると済になる）。docs/kakei.md §3.6
    */
   makesRecord: boolean;
-  /** 見積費で「今年はなし」にした回（予定の月 YYYY-MM）。 */
+  /** 帯に出すもので「今年はなし」にした回（予定の月 YYYY-MM）。 */
   skippedMonths: string[];
+  /** ◯年ごと（2〜10。車検・2年ごとの火災保険など）。開始月の年から数える。null は毎年。 */
+  intervalYears: number | null;
+  /** 日が決まっているか。false（日付未定）は帯に出すものだけ。帯には出さず、同じ小分類の記録が入るのを待つ。 */
+  dayKnown: boolean;
 }
 
 export type MoneyRecurringDraft = Omit<MoneyRecurring, 'id' | 'position' | 'archived' | 'createdAt'>;

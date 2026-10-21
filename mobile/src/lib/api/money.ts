@@ -139,6 +139,8 @@ export const rowToRecurring = (row: RecurringRow): MoneyRecurring => ({
   createdAt: new Date(Date.parse(row.created_at) + 9 * 60 * 60 * 1000).toISOString().slice(0, 10),
   makesRecord: row.makes_record,
   skippedMonths: row.skipped_months,
+  intervalYears: row.interval_years,
+  dayKnown: row.day_known,
 });
 
 /** 一度に読む行数（Supabase の Data API は1回に1000行まで）。 */
@@ -612,14 +614,16 @@ const recurringFields = (draft: MoneyRecurringDraft) => ({
   holiday: draft.holiday,
   amount_mode: draft.amountMode,
   amount: draft.amount,
-  wallet_id: draft.kind === 'expense' && !draft.makesRecord ? null : draft.walletId,
+  wallet_id: draft.walletId,
   to_wallet_id: draft.kind === 'transfer' ? draft.toWalletId : null,
   store: draft.kind === 'transfer' ? '' : draft.store.trim(),
   category_id: draft.kind === 'transfer' ? null : draft.categoryId,
   name: draft.name.trim(),
-  // 見積費（docs/kakei.md §3.6）は支出だけ。出金元を持たない（DBの check でも止める）。
+  // 帯に出すもの（記録を作らない。docs/kakei.md §3.6）は支出だけ。日付未定にできるのも帯に出すものだけ（DBの check でも止める）。
   makes_record: draft.kind !== 'expense' || draft.makesRecord,
   skipped_months: draft.skippedMonths,
+  interval_years: draft.intervalYears,
+  day_known: draft.kind !== 'expense' || draft.makesRecord || draft.dayKnown,
 });
 
 export async function insertMoneyRecurring(

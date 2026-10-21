@@ -180,14 +180,20 @@ export function monthsLabel(months: readonly number[]): string {
   return `${sorted.join('・')}月`;
 }
 
+/** 記録する月の言い方に、◯年ごとを付ける。「毎月」「6・12月」「2年ごとの9月」。 */
+export function recurringMonthsLabel(rule: Pick<MoneyRecurring, 'months'> & Partial<Pick<MoneyRecurring, 'intervalYears'>>): string {
+  const months = rule.months === null ? '毎月' : monthsLabel(rule.months);
+  return rule.intervalYears != null ? `${rule.intervalYears}年ごとの${months}` : months;
+}
+
 /** 「毎月27日（休日は翌営業日）」「6・12月の10日（休日は前営業日）」「12月の第2金曜日（休日は前営業日）」。 */
 export function recurringScheduleLabel(
-  rule: Pick<MoneyRecurring, 'day' | 'months' | 'holiday'> & Partial<Pick<MoneyRecurring, 'weekOfMonth' | 'weekday'>>,
+  rule: Pick<MoneyRecurring, 'day' | 'months' | 'holiday'> & Partial<Pick<MoneyRecurring, 'weekOfMonth' | 'weekday' | 'intervalYears'>>,
 ): string {
   const when =
-    rule.months === null
+    rule.months === null && rule.intervalYears == null
       ? `毎月${recurringDayLabel(rule)}`
-      : `${monthsLabel(rule.months)}の${recurringDayLabel(rule)}`;
+      : `${recurringMonthsLabel(rule)}の${recurringDayLabel(rule)}`;
   return `${when}（${rule.holiday === 'none' ? '休日もそのまま' : `休日は${HOLIDAY_RULE_LABEL[rule.holiday]}`}）`;
 }
 
@@ -195,9 +201,16 @@ export function recurringScheduleLabel(
  * ルールの期間（docs/kakei.md §3.3）。monthKey（YYYY-MM。どの月の分か＝入金・引き落としのある月）が期間の中か。
  * 開始月・終了月の null は無期限。
  */
-export function inRecurringPeriod(rule: Partial<Pick<MoneyRecurring, 'startMonth' | 'endMonth'>>, monthKey: string): boolean {
+export function inRecurringPeriod(
+  rule: Partial<Pick<MoneyRecurring, 'startMonth' | 'endMonth' | 'intervalYears'>>,
+  monthKey: string,
+): boolean {
   if (rule.startMonth != null && monthKey < rule.startMonth) return false;
   if (rule.endMonth != null && monthKey > rule.endMonth) return false;
+  // ◯年ごと（車検など）は、開始月の年から数えて間隔の年だけ（DBの make_money_recurring_records と同じ。2026-10-21）。
+  if (rule.intervalYears != null && rule.startMonth != null) {
+    if ((yearOfMonth(monthKey) - yearOfMonth(rule.startMonth)) % rule.intervalYears !== 0) return false;
+  }
   return true;
 }
 
@@ -594,7 +607,7 @@ export function pendingRecurringInMonth(
   );
   const pending: PendingRecurring[] = [];
   for (const rule of recurring) {
-    if (rule.archived || rule.kind === 'transfer' || rule.walletId === null || rule.categoryId === null) continue;
+    if (rule.archived || rule.kind === 'transfer' || rule.walletId === null || rule.makesRecord === false || rule.categoryId === null) continue;
     if (rule.months !== null && !rule.months.includes(month)) continue;
     if (!inRecurringPeriod(rule, monthKey) || made.has(rule.id)) continue;
     const date = recurringDateOf(year, month, rule);
@@ -645,7 +658,7 @@ export function fixedBudgetRows(
   const lastYear = yearOfMonth(today) + 1;
   const sums = new Map<string, number[]>();
   for (const rule of recurring) {
-    if (rule.archived || rule.kind !== 'expense' || rule.walletId === null || rule.categoryId === null) continue;
+    if (rule.archived || rule.kind !== 'expense' || rule.walletId === null || rule.makesRecord === false || rule.categoryId === null) continue;
     const category = byId.get(rule.categoryId);
     const top = category && category.parentId !== null ? byId.get(category.parentId) : category;
     if (!top || top.kind !== 'living') continue;
@@ -695,7 +708,7 @@ export function recurringInYear(
   }
   const rows: RecurringYearRow[] = [];
   for (const rule of recurring) {
-    if (rule.archived || rule.kind === 'transfer' || rule.walletId === null || rule.categoryId === null) continue;
+    if (rule.archived || rule.kind === 'transfer' || rule.walletId === null || rule.makesRecord === false || rule.categoryId === null) continue;
     if (year < yearOfMonth(rule.createdAt.slice(0, 7))) continue;
     const amounts = Array.from({ length: 12 }, (_, index) => {
       const month = index + 1;
@@ -710,9 +723,9 @@ export function recurringInYear(
   return rows.sort((a, b) => a.rule.position - b.rule.position);
 }
 
-// ---- 見積費（記録を作らない固定支出。docs/kakei.md §3.6。2026-10-17） ----
-// 車検・自動車保険・ふるさと納税・行事のように、出ることは決まっているが、額が少しぶれ、カードや現金で払うもの。
-// ルールは記録を作らず（makesRecord: false。出金元は持たない）、その月の大分類の予算と、年末の着地見込みにだけ入る。
+// ---- 帯に出す固定支出（記録を作らない。docs/kakei.md §3.6。2026-10-17、2026-10-21に見直し） ----
+// 車検・自動車保険・JAF のように、出ることは決まっているが、額や日が決まらず、カードや現金で払うもの。
+// ルールは記録を作らず（makesRecord: false。出金元・日は帯から記録するときの下書きに使う）、その月の大分類の予算と、年末の着地見込みにだけ入る。
 // 実績は、その年に同じ小分類（ルールのカテゴリ）で入った記録を自動で結びつける（手で紐づけない）。
 
 /** 見積費のルールか（記録を作らない支出のルール）。 */
@@ -1549,7 +1562,7 @@ export function monthForecastBalance(
   const month = Number(monthKey.slice(5, 7));
   let balance = 0;
   for (const rule of recurring) {
-    if (rule.archived || rule.kind === 'transfer' || rule.walletId === null || rule.categoryId === null) continue;
+    if (rule.archived || rule.kind === 'transfer' || rule.walletId === null || rule.makesRecord === false || rule.categoryId === null) continue;
     if (rule.months !== null && !rule.months.includes(month)) continue;
     if (!inRecurringPeriod(rule, monthKey) || year < yearOfMonth(rule.createdAt.slice(0, 7))) continue;
     const amount = recurringMonthAmount(rule, monthKey, records, made);
