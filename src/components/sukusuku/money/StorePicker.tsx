@@ -61,7 +61,6 @@ export default function StorePicker({ value, registered, others, canRegister, on
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="お店の名前"
-          autoFocus={value === ''}
         />
       </form>
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-8">
