@@ -518,8 +518,9 @@ export interface MoneyCategory {
   reserve: boolean;
 }
 
-/** その年の予備費の額（docs/kakei.md §3.7）。money_reserves に対応。 */
+/** 予備費の小分類の、その年の額（docs/kakei.md §0.7・§3.7）。money_reserve_budgets に対応。行のある小分類が予備費の小分類。 */
 export interface MoneyReserve {
+  categoryId: string;
   year: number;
   amount: number;
 }
@@ -534,12 +535,6 @@ export interface MoneyBudget {
   year: number;
   /** 1月〜12月の月額（長さ12。null の月は予算なし）。 */
   monthAmounts: (number | null)[];
-  /** 固定費から出した行（手入力ではない。保存しない）。fixedBudgetRows。 */
-  fixed?: boolean;
-  /** 見積費から出した行（fixed も true。estimateBudgetRows。docs/kakei.md §3.6）。 */
-  estimate?: boolean;
-  /** 予備費から出した行（fixed も true。reserveBudgetRows。docs/kakei.md §3.7）。categoryId が RESERVE_ROW の行は、まだ使っていない予備費。 */
-  reserve?: boolean;
 }
 
 /** 出金元の種類。 */

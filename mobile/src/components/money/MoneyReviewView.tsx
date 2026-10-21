@@ -9,6 +9,7 @@ import type {
   MoneyMonth,
   MoneyRecord,
   MoneyRecurring,
+  MoneyReserve,
   MoneyWallet,
   MoneyWalletBalance,
 } from '@/types/app';
@@ -93,6 +94,8 @@ interface MoneyReviewViewProps {
   months: MoneyMonth[];
   /** 固定収入・固定費のルール（締めの画面に、これから自動で作られる記録を出す）。 */
   recurring: MoneyRecurring[];
+  /** 予備費（小分類ごとの年の額。年末の着地見込みで引く。docs/kakei.md §0.7）。 */
+  reserves: MoneyReserve[];
   /** 未確認の明細（締めの画面に、その月の件数を出す）。 */
   feedItems: MoneyFeedItem[];
   /** カードの利用通知の取り込み（締めの画面で、カードの記録を明細と見比べる）。読み込み前は null。 */
@@ -119,6 +122,7 @@ export default function MoneyReviewView({
   onOpenRecord,
   months: closings,
   recurring,
+  reserves,
   feedItems,
   cardFeed,
   onConfirmEstimate,
@@ -151,9 +155,9 @@ export default function MoneyReviewView({
   // 年の「推移」グラフ（§4.8）。締めた月は実額、ほかは年末まで見込み（年末の着地見込みと同じ数え方。§4.6）。
   const trend = useMemo(() => {
     if (isMonth) return [];
-    const result = buildYearLanding(records, categories, budgets, recurring, closings, year);
+    const result = buildYearLanding(records, categories, budgets, recurring, reserves, closings, year, dateKeyOfDate(new Date()));
     return result === null ? [] : yearTrendPoints(result.months);
-  }, [isMonth, records, categories, budgets, recurring, closings, year]);
+  }, [isMonth, records, categories, budgets, recurring, reserves, closings, year]);
   // 年: 前の年の同じ期間との比べ。
   const comparison = useMemo(
     () => (isMonth ? null : compareWithPreviousYear(records, categories, budgets, year, today)),

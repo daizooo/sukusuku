@@ -168,10 +168,8 @@ export default function MoneySettings({
           recurring={recurring}
           records={records}
           onBudgets={onBudgets}
-          onRecurring={onRecurring}
           reserves={reserves}
           onReserves={onReserves}
-          onCategories={onCategories}
           onOpenRecurring={openRecurring}
           onClose={back}
         />
