@@ -44,8 +44,8 @@ var LABELS = {
   unreadable: 'かぞく手帳/読めない',
 };
 var OLD_LABELS = ['かぞく手帳済', 'かぞく手帳対象外'];
-// 探すメール（三井住友カードの利用通知・Amazon の注文メール）
-var QUERY = '{from:statement@vpass.ne.jp from:auto-confirm@amazon.co.jp} {subject:利用 subject:注文済み} in:anywhere -in:trash';
+// 探すメール（三井住友カードの利用通知・Olive のデビットの利用通知・Amazon の注文メール）
+var QUERY = '{from:statement@vpass.ne.jp from:smbc-debit@smbc-card.com from:auto-confirm@amazon.co.jp} {subject:利用 subject:注文済み} in:anywhere -in:trash';
 
 function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) {

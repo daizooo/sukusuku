@@ -1,11 +1,13 @@
 // かぞく手帳: カード会社の利用通知メールを読む（家計タブ。docs/kakei.md §9.6）
 //
 // 三井住友カード（statement@vpass.ne.jp）: 本文に「ご利用カード：」「◇利用日：2026/10/15 13:51」「◇利用先：…」「◇利用金額：4,415円」
+// Olive のデビット（smbc-debit@smbc-card.com）: 「ご利用カード：」の行は無く「（デビットモード）」。利用日・利用先・利用金額は同じ形（2026-10-21に実物で確かめた）
 // 楽天カード（…@mail.rakuten-card.co.jp）: 本文に「■利用日: 2026/10/15」「■利用先: …」「■利用金額: 1,234 円」。1通に何件も入ることがある
 // どちらも「承認照会」の通知で、確定した請求ではない（額が変わる・届かない利用がある）。
 //
 // 口座名（account_name）は、取り込みの「口座の対応」で出金元に結ぶ名前。三井住友カードは、ご利用カードの名前をそのまま使う
 // （「Ｏｌｉｖｅ／クレジット」「三井住友カードＶＩＳＡ（ＮＬ）」など。2026-10-20に決定。以前は Amazon とそれ以外の2つだった）。
+// デビットの通知はカード名が載らないので「Ｏｌｉｖｅ／デビット」とする（クレジットに合わせた全角。口座の対応で三井住友銀行に結ぶ）。
 //
 // 取り込まない利用通知（isDiscardedCardMail。2026-10-20に決定。docs/kakei.md §9.9）:
 //   Amazon のカード・楽天カードの利用通知。Amazon・楽天市場の買い物は注文メールから取り込むので、二重になる。
@@ -21,18 +23,21 @@ export interface CardMailEntry {
 
 export const SMBC_ACCOUNT = '三井住友カード';
 export const RAKUTEN_ACCOUNT = '楽天カード';
+export const OLIVE_DEBIT_ACCOUNT = 'Ｏｌｉｖｅ／デビット';
 
 /** 差出人から、カードの利用通知か（どのカード会社か）。 */
 export function cardIssuerOf(from: string): 'smbc' | 'rakuten' | null {
   const address = from.toLowerCase();
-  if (address.includes('vpass.ne.jp')) return 'smbc';
+  if (address.includes('vpass.ne.jp') || address.includes('smbc-card.com')) return 'smbc';
   if (address.includes('rakuten-card.co.jp')) return 'rakuten';
   return null;
 }
 
-/** 三井住友カードの「ご利用カード：」の名前（全角のまま）。無ければ「三井住友カード」。 */
+/** 三井住友カードの「ご利用カード：」の名前（全角のまま）。無ければ、デビットモードの通知は「Ｏｌｉｖｅ／デビット」、ほかは「三井住友カード」。 */
 export function smbcCardName(body: string): string {
-  return /ご利用カード\s*[:：]\s*([^\r\n]*)/.exec(body)?.[1].trim() || SMBC_ACCOUNT;
+  const named = /ご利用カード\s*[:：]\s*([^\r\n]*)/.exec(body)?.[1].trim();
+  if (named) return named;
+  return body.normalize('NFKC').includes('デビットモード') ? OLIVE_DEBIT_ACCOUNT : SMBC_ACCOUNT;
 }
 
 /** 取り込まない利用通知か（Amazon のカード・楽天カード・「一定金額に到達」）。読んだうえで「対象外」にする。 */
