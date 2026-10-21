@@ -1,11 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, ChevronUp } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { MoneyBudget, MoneyCategory, MoneyRecord, MoneyRecurring, MoneyWallet, MoneyWalletBalance } from '@/types/app';
 import type { CardMonthChecks } from '@/lib/moneyFeedUtils';
 import {
-  addDays,
   buildMonthSummary,
   categoryPath,
   estimatesInMonth,
@@ -15,8 +14,7 @@ import {
   pendingRecurringInMonth,
   recordsInMonth,
   recordTotal,
-  shiftMonth,
-  walletBalanceOn,
+  walletDelta,
 } from '@/lib/moneyUtils';
 import RecordDayList, { type RecordClosing } from './RecordDayList';
 import { EstimateBadge, FullScreen, Hero, PrimaryButton, ScreenHeader, SectionHeader, StatRow, cardClass, incomeAmountClass, type } from './moneyVisual';
@@ -28,8 +26,9 @@ import { EstimateBadge, FullScreen, Hero, PrimaryButton, ScreenHeader, SectionHe
 // 「見込み」は、固定収入・固定費の見込みの額で自動で作ったまま、まだ確定していない記録だけ（財布・デビット・Gmail から取り込んだカードの記録に見込みは無い）。
 // 見込みの記録には「見込み」の印と「確定」（今の額のまま確定）を付ける。額が違うものは、押して記録の詳細で直す。
 // カードの利用通知と額が違う記録には、その旨を添える（通知が来ていない記録は、継続払いなど通知されないものもあるので出さない）。
-// 記録の一覧は、**口座（出金元）ごとに絞り込める**（財布・カードごとに見て、月末の残高と合わせるため。2026-10-16）。
-// 一覧のあとに、これから自動で作られる記録・未確認の明細・月末の残高（実際の残高と見比べる）を出す。
+// 記録の一覧は、**口座（出金元）ごとに絞り込める**（財布・カードごとに見て、実際の明細と合わせるため。2026-10-16）。
+// 絞ると、その口座のその月の合計（入金・出金・差し引き。振替も入れる）を一覧の上に添える（2026-10-21。月末の残高は出さない）。
+// 一覧のあとに、これから自動で作られる記録・未確認の明細を出す。
 // 片づいていないものが残っていても「この月を締める」で締められる。年初からの累計は出さない（その月の締めなので）。
 // その月に、固定収入・固定費でこれから自動で作られる記録がある（自動の記録より前に締める）ときは、一覧で知らせ、
 // 締めるときにも確かめる（締めたあとに作られた記録は、締めた収支に入っていないため）。
@@ -48,7 +47,7 @@ interface MonthCloseScreenProps {
   /** カードの記録を利用通知と見比べるための一覧（利用通知を取り込んでいるときだけ。docs/kakei.md §9.6.5 の C）。 */
   cardChecks: CardMonthChecks | null;
   wallets: MoneyWallet[];
-  /** 確定した残高（月末の残高を出す）。 */
+  /** 確定した残高（今は使わない。月末の残高は出さない。2026-10-21）。 */
   balances: MoneyWalletBalance[];
   closed: boolean;
   /** 締めた日時（締めた月だけ）。 */
@@ -83,7 +82,6 @@ export default function MonthCloseScreen({
   feedCount,
   cardChecks,
   wallets,
-  balances,
   closed,
   closedAt,
   onConfirmEstimate,
@@ -103,7 +101,6 @@ export default function MonthCloseScreen({
   );
   // 一覧の絞り込み。'all' はすべて、それ以外は出金元の id。
   const [filter, setFilter] = useState<string>('all');
-  const [showBalances, setShowBalances] = useState(false);
   // 確定を押した記録（読み直しが届くまで、二度押せないように）。
   const [confirming, setConfirming] = useState<string | null>(null);
   const label = `${Number(monthKey.slice(5, 7))}月`;
@@ -116,20 +113,6 @@ export default function MonthCloseScreen({
     }
     return map;
   }, [cardChecks]);
-
-  // 月末（その月の最終日）の出金元ごとの残高。証券は記録から出せないので入れない。
-  const lastDay = addDays(`${shiftMonth(monthKey, 1)}-01`, -1);
-  const balanceRows = useMemo(() => {
-    const used = new Set<string>();
-    for (const record of inMonth) {
-      if (record.walletId) used.add(record.walletId);
-      if (record.toWalletId) used.add(record.toWalletId);
-    }
-    return wallets
-      .filter((wallet) => !wallet.archived && wallet.type !== 'securities')
-      .map((wallet) => ({ wallet, amount: walletBalanceOn(wallet.id, lastDay, records, balances).amount }))
-      .filter((row) => row.amount !== 0 || used.has(row.wallet.id));
-  }, [wallets, records, balances, lastDay, inMonth]);
 
   // 絞り込みに使う出金元（その月に使われているもの）と、絞り込んだ記録。
   const usedWallets = useMemo(() => {
@@ -145,7 +128,22 @@ export default function MonthCloseScreen({
     [inMonth, filter],
   );
   const filterWallet = wallets.find((wallet) => wallet.id === filter) ?? null;
-  const filterBalance = filterWallet ? balanceRows.find((row) => row.wallet.id === filterWallet.id) : undefined;
+  // 絞り込んだ口座の、その月の合計（入金・出金は件数も。振替も入れる）。
+  const filterTotal = useMemo(() => {
+    if (filter === 'all') return null;
+    const total = { inAmount: 0, inCount: 0, outAmount: 0, outCount: 0 };
+    for (const record of shown) {
+      const delta = walletDelta(record, filter);
+      if (delta > 0) {
+        total.inAmount += delta;
+        total.inCount += 1;
+      } else if (delta < 0) {
+        total.outAmount -= delta;
+        total.outCount += 1;
+      }
+    }
+    return total;
+  }, [shown, filter]);
 
   const confirm = async (record: MoneyRecord) => {
     setConfirming(record.id);
@@ -215,120 +213,69 @@ export default function MonthCloseScreen({
             ) : undefined
           }
         />
-        {filterWallet !== null && filterBalance !== undefined && (
-          <p className={`${type.faint} pb-1.5`}>
-            {filterWallet.name} の月末の{filterWallet.type === 'card' ? '利用残高' : '残高'} {formatBalance(filterBalance.amount)}
-          </p>
-        )}
-        {shown.length === 0 ? (
-          <p className="py-4 text-center text-[13px] text-gray-400">
-            {inMonth.length === 0 ? 'この月の記録はありません' : 'この口座の記録はありません'}
-          </p>
-        ) : (
-          <RecordDayList records={shown} categories={categories} wallets={wallets} onOpen={onOpenRecord} closing={closing} />
-        )}
-
-        {pending.length > 0 && (
-          <>
-            <SectionHeader compact title="これから自動で記録されるもの" hint={`${pending.length}件`} />
-            <div className="overflow-hidden rounded-2xl border border-amber-100 bg-white">
-              {pending.map((entry, index) => (
-                <div key={entry.rule.id} className={`flex items-center gap-2.5 px-3.5 py-2.5 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
-                  <span className="w-11 shrink-0 text-[13px] font-semibold text-gray-500 tabular-nums">{formatShortDate(entry.date)}</span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{ruleTitle(entry.rule, categories)}</span>
-                  <span className={`text-[15px] font-extrabold tabular-nums ${entry.rule.kind === 'income' ? incomeAmountClass : 'text-gray-900'}`}>
-                    {formatYen(entry.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {feedCount > 0 && (
-          <button
-            type="button"
-            onClick={onOpenFeed}
-            className="mt-2 flex w-full items-center gap-2 rounded-xl bg-amber-100 px-3 py-2.5 text-left hover:bg-amber-200"
-          >
-            <span className="flex-1 text-[13px] font-semibold text-amber-800">未確認の明細 {feedCount}件</span>
-            <ChevronRight size={16} className="text-gray-500" />
-          </button>
-        )}
-
-        <button type="button" onClick={() => setShowBalances((open) => !open)} className="mt-2 flex w-full items-center gap-1.5 py-2 text-left">
-          <span className={`flex-1 ${type.title}`}>月末の残高</span>
-          {showBalances ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-        </button>
-        {showBalances && (
-          <div className={`${cardClass} overflow-hidden`}>
-            {balanceRows.map((row, index) => (
-              <div key={row.wallet.id} className={`flex items-center gap-2 px-3.5 py-2.5 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{row.wallet.name}</span>
-                <span className={type.faint}>{row.wallet.type === 'card' ? '利用残高' : '残高'}</span>
-                <span className="text-[15px] font-extrabold tabular-nums text-gray-900">{formatBalance(row.amount)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        {filterWallet !== null && filterBalance !== undefined && (
-          <p className={`${type.faint} pb-1.5`}>
-            {filterWallet.name} の月末の{filterWallet.type === 'card' ? '利用残高' : '残高'} {formatBalance(filterBalance.amount)}
-          </p>
-        )}
-        {shown.length === 0 ? (
-          <p className="py-4 text-center text-[13px] text-gray-400">
-            {inMonth.length === 0 ? 'この月の記録はありません' : 'この口座の記録はありません'}
-          </p>
-        ) : (
-          <RecordDayList records={shown} categories={categories} wallets={wallets} onOpen={onOpenRecord} closing={closing} />
-        )}
-
-        {pending.length > 0 && (
-          <>
-            <SectionHeader compact title="これから自動で記録されるもの" hint={`${pending.length}件`} />
-            <div className="overflow-hidden rounded-2xl border border-amber-100 bg-white">
-              {pending.map((entry, index) => (
-                <div key={entry.rule.id} className={`flex items-center gap-2.5 px-3.5 py-2.5 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
-                  <span className="w-11 shrink-0 text-[13px] font-semibold text-gray-500 tabular-nums">{formatShortDate(entry.date)}</span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{ruleTitle(entry.rule, categories)}</span>
-                  <span className={`text-[15px] font-extrabold tabular-nums ${entry.rule.kind === 'income' ? incomeAmountClass : 'text-gray-900'}`}>
-                    {formatYen(entry.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {feedCount > 0 && (
-          <button
-            type="button"
-            onClick={onOpenFeed}
-            className="mt-2 flex w-full items-center gap-2 rounded-xl bg-amber-100 px-3 py-2.5 text-left hover:bg-amber-200"
-          >
-            <span className="flex-1 text-[13px] font-semibold text-amber-800">未確認の明細 {feedCount}件</span>
-            <ChevronRight size={16} className="text-gray-500" />
-          </button>
-        )}
-
-        <button type="button" onClick={() => setShowBalances((open) => !open)} className="mt-2 flex w-full items-center gap-1.5 py-2 text-left">
-          <span className={`flex-1 ${type.title}`}>月末の残高</span>
-          {showBalances ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-        </button>
-        {showBalances && (
-          <div className={`${cardClass} overflow-hidden`}>
-            {balanceRows.map((row, index) => (
-              <div key={row.wallet.id} className={`flex items-center gap-2 px-3.5 py-2.5 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{row.wallet.name}</span>
-                <span className={type.faint}>{row.wallet.type === 'card' ? '利用残高' : '残高'}</span>
-                <span className="text-[15px] font-extrabold tabular-nums text-gray-900">{formatBalance(row.amount)}</span>
-              </div>
-            ))}
-            <p className={`${type.faint} px-3.5 pb-2`}>
-              {lastDay.slice(5).replace('-', '/')}の終わりの、記録から出した額です。違えば、口座の面で残高を補正します
+        {filterWallet !== null && filterTotal !== null && shown.length > 0 && (
+          <div className={`${cardClass} mb-1.5 px-3.5 py-2.5`}>
+            <p className="truncate pb-0.5 text-sm font-bold text-gray-900">
+              {filterWallet.name} の{label}の合計
             </p>
+            {filterTotal.inCount > 0 && (
+              <div className="flex items-center gap-2 py-0.5">
+                <span className="flex-1 text-[13px] font-semibold text-gray-500">入金 {filterTotal.inCount}件</span>
+                <span className={`text-[15px] font-extrabold tabular-nums ${incomeAmountClass}`}>{formatYen(filterTotal.inAmount)}</span>
+              </div>
+            )}
+            {filterTotal.outCount > 0 && (
+              <div className="flex items-center gap-2 py-0.5">
+                <span className="flex-1 text-[13px] font-semibold text-gray-500">出金 {filterTotal.outCount}件</span>
+                <span className="text-[15px] font-extrabold tabular-nums text-gray-900">{formatYen(filterTotal.outAmount)}</span>
+              </div>
+            )}
+            <div className="mt-1 flex items-center gap-2 border-t border-gray-200 pt-1.5">
+              <span className="flex-1 text-[13px] font-semibold text-gray-500">
+                {filterTotal.inCount > 0 && filterTotal.outCount > 0 ? '差し引き' : '合計'}
+              </span>
+              <span
+                className={`text-xl font-extrabold tabular-nums ${filterTotal.inAmount > filterTotal.outAmount ? incomeAmountClass : 'text-gray-900'}`}
+              >
+                {formatBalance(filterTotal.inAmount - filterTotal.outAmount)}
+              </span>
+            </div>
           </div>
+        )}
+        {shown.length === 0 ? (
+          <p className="py-4 text-center text-[13px] text-gray-400">
+            {inMonth.length === 0 ? 'この月の記録はありません' : 'この口座の記録はありません'}
+          </p>
+        ) : (
+          <RecordDayList records={shown} categories={categories} wallets={wallets} onOpen={onOpenRecord} closing={closing} />
+        )}
+
+        {pending.length > 0 && (
+          <>
+            <SectionHeader compact title="これから自動で記録されるもの" hint={`${pending.length}件`} />
+            <div className="overflow-hidden rounded-2xl border border-amber-100 bg-white">
+              {pending.map((entry, index) => (
+                <div key={entry.rule.id} className={`flex items-center gap-2.5 px-3.5 py-2.5 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
+                  <span className="w-11 shrink-0 text-[13px] font-semibold text-gray-500 tabular-nums">{formatShortDate(entry.date)}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{ruleTitle(entry.rule, categories)}</span>
+                  <span className={`text-[15px] font-extrabold tabular-nums ${entry.rule.kind === 'income' ? incomeAmountClass : 'text-gray-900'}`}>
+                    {formatYen(entry.amount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {feedCount > 0 && (
+          <button
+            type="button"
+            onClick={onOpenFeed}
+            className="mt-2 flex w-full items-center gap-2 rounded-xl bg-amber-100 px-3 py-2.5 text-left hover:bg-amber-200"
+          >
+            <span className="flex-1 text-[13px] font-semibold text-amber-800">未確認の明細 {feedCount}件</span>
+            <ChevronRight size={16} className="text-gray-500" />
+          </button>
         )}
       </div>
       <div className="shrink-0 space-y-1.5 border-t border-gray-200 px-4 pb-4 pt-2.5">

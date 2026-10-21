@@ -2,13 +2,12 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Modal from '@/components/ui/Modal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronDown, ChevronRight, ChevronUp } from 'lucide-react-native';
+import { ChevronRight } from 'lucide-react-native';
 import type { MoneyBudget, MoneyCategory, MoneyRecord, MoneyRecurring, MoneyWallet, MoneyWalletBalance } from '@/types/app';
 import type { CardMonthChecks } from '@/lib/moneyFeedUtils';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import {
-  addDays,
   buildMonthSummary,
   categoryPath,
   estimatesInMonth,
@@ -18,8 +17,7 @@ import {
   pendingRecurringInMonth,
   recordsInMonth,
   recordTotal,
-  shiftMonth,
-  walletBalanceOn,
+  walletDelta,
 } from '@/lib/moneyUtils';
 import RecordDayList, { type RecordClosing } from '@/components/money/RecordDayList';
 import SelectField from '@/components/ui/SelectField';
@@ -32,8 +30,9 @@ import { EstimateBadge, Hero, PrimaryButton, ScreenHeader, SectionHeader, StatRo
 // 「見込み」は、固定収入・固定費の見込みの額で自動で作ったまま、まだ確定していない記録だけ（財布・デビット・Gmail から取り込んだカードの記録に見込みは無い）。
 // 見込みの記録には「見込み」の印と「確定」（今の額のまま確定）を付ける。額が違うものは、押して記録の詳細で直す。
 // カードの利用通知と額が違う記録には、その旨を添える（通知が来ていない記録は、継続払いなど通知されないものもあるので出さない）。
-// 記録の一覧は、**口座（出金元）ごとに絞り込める**（財布・カードごとに見て、月末の残高と合わせるため。2026-10-16）。
-// 一覧のあとに、これから自動で作られる記録・未確認の明細・月末の残高（実際の残高と見比べる）を出す。
+// 記録の一覧は、**口座（出金元）ごとに絞り込める**（財布・カードごとに見て、実際の明細と合わせるため。2026-10-16）。
+// 絞ると、その口座のその月の合計（入金・出金・差し引き。振替も入れる）を一覧の上に添える（2026-10-21。月末の残高は出さない）。
+// 一覧のあとに、これから自動で作られる記録・未確認の明細を出す。
 // 片づいていないものが残っていても「この月を締める」で締められる。年初からの累計は出さない（その月の締めなので）。
 // その月に、固定収入・固定費でこれから自動で作られる記録がある（自動の記録より前に締める）ときは、一覧で知らせ、
 // 締めるときにも確かめる（締めたあとに作られた記録は、締めた収支に入っていないため）。
@@ -52,7 +51,7 @@ interface MonthCloseScreenProps {
   /** カードの記録を利用通知と見比べるための一覧（利用通知を取り込んでいるときだけ。docs/kakei.md §9.6.5 の C）。 */
   cardChecks: CardMonthChecks | null;
   wallets: MoneyWallet[];
-  /** 確定した残高（月末の残高を出す）。 */
+  /** 確定した残高（今は使わない。月末の残高は出さない。2026-10-21）。 */
   balances: MoneyWalletBalance[];
   closed: boolean;
   /** 締めた日時（締めた月だけ）。 */
@@ -87,7 +86,6 @@ export default function MonthCloseScreen({
   feedCount,
   cardChecks,
   wallets,
-  balances,
   closed,
   closedAt,
   onConfirmEstimate,
@@ -108,7 +106,6 @@ export default function MonthCloseScreen({
   );
   // 一覧の絞り込み。'all' はすべて、それ以外は出金元の id。
   const [filter, setFilter] = useState<string>('all');
-  const [showBalances, setShowBalances] = useState(false);
   // 確定を押した記録（読み直しが届くまで、二度押せないように）。
   const [confirming, setConfirming] = useState<string | null>(null);
   const label = `${Number(monthKey.slice(5, 7))}月`;
@@ -121,20 +118,6 @@ export default function MonthCloseScreen({
     }
     return map;
   }, [cardChecks]);
-
-  // 月末（その月の最終日）の出金元ごとの残高。証券は記録から出せないので入れない。
-  const lastDay = addDays(`${shiftMonth(monthKey, 1)}-01`, -1);
-  const balanceRows = useMemo(() => {
-    const used = new Set<string>();
-    for (const record of inMonth) {
-      if (record.walletId) used.add(record.walletId);
-      if (record.toWalletId) used.add(record.toWalletId);
-    }
-    return wallets
-      .filter((wallet) => !wallet.archived && wallet.type !== 'securities')
-      .map((wallet) => ({ wallet, amount: walletBalanceOn(wallet.id, lastDay, records, balances).amount }))
-      .filter((row) => row.amount !== 0 || used.has(row.wallet.id));
-  }, [wallets, records, balances, lastDay, inMonth]);
 
   // 絞り込みに使う出金元（その月に使われているもの）と、絞り込んだ記録。
   const usedWallets = useMemo(() => {
@@ -150,7 +133,22 @@ export default function MonthCloseScreen({
     [inMonth, filter],
   );
   const filterWallet = wallets.find((wallet) => wallet.id === filter) ?? null;
-  const filterBalance = filterWallet ? balanceRows.find((row) => row.wallet.id === filterWallet.id) : undefined;
+  // 絞り込んだ口座の、その月の合計（入金・出金は件数も。振替も入れる）。
+  const filterTotal = useMemo(() => {
+    if (filter === 'all') return null;
+    const total = { inAmount: 0, inCount: 0, outAmount: 0, outCount: 0 };
+    for (const record of shown) {
+      const delta = walletDelta(record, filter);
+      if (delta > 0) {
+        total.inAmount += delta;
+        total.inCount += 1;
+      } else if (delta < 0) {
+        total.outAmount -= delta;
+        total.outCount += 1;
+      }
+    }
+    return total;
+  }, [shown, filter]);
 
   const confirm = async (record: MoneyRecord) => {
     setConfirming(record.id);
@@ -219,10 +217,30 @@ export default function MonthCloseScreen({
               ) : undefined
             }
           />
-          {filterWallet !== null && filterBalance !== undefined && (
-            <Text style={[type.faint, styles.filterBalance]}>
-              {filterWallet.name} の月末の{filterWallet.type === 'card' ? '利用残高' : '残高'} {formatBalance(filterBalance.amount)}
-            </Text>
+          {filterWallet !== null && filterTotal !== null && shown.length > 0 && (
+            <View style={styles.totalCard}>
+              <Text style={styles.totalTitle} numberOfLines={1}>
+                {filterWallet.name} の{label}の合計
+              </Text>
+              {filterTotal.inCount > 0 && (
+                <View style={styles.totalRow}>
+                  <Text style={[styles.totalLabel, styles.flex]}>入金 {filterTotal.inCount}件</Text>
+                  <Text style={[styles.amount, styles.plus]}>{formatYen(filterTotal.inAmount)}</Text>
+                </View>
+              )}
+              {filterTotal.outCount > 0 && (
+                <View style={styles.totalRow}>
+                  <Text style={[styles.totalLabel, styles.flex]}>出金 {filterTotal.outCount}件</Text>
+                  <Text style={styles.amount}>{formatYen(filterTotal.outAmount)}</Text>
+                </View>
+              )}
+              <View style={[styles.totalRow, styles.divided, styles.totalSum]}>
+                <Text style={[styles.totalLabel, styles.flex]}>{filterTotal.inCount > 0 && filterTotal.outCount > 0 ? '差し引き' : '合計'}</Text>
+                <Text style={[styles.totalAmount, filterTotal.inAmount > filterTotal.outAmount && styles.plus]}>
+                  {formatBalance(filterTotal.inAmount - filterTotal.outAmount)}
+                </Text>
+              </View>
+            </View>
           )}
           {shown.length === 0 ? (
             <Text style={styles.message}>{inMonth.length === 0 ? 'この月の記録はありません' : 'この口座の記録はありません'}</Text>
@@ -253,24 +271,6 @@ export default function MonthCloseScreen({
               <ChevronRight size={16} color={colors.textMuted} />
             </Pressable>
           )}
-
-          <Pressable accessibilityRole="button" onPress={() => setShowBalances((open) => !open)} style={styles.balanceToggle}>
-            <Text style={[type.title, styles.flex]}>月末の残高</Text>
-            {showBalances ? <ChevronUp size={16} color={colors.textFaint} /> : <ChevronDown size={16} color={colors.textFaint} />}
-          </Pressable>
-          {showBalances && (
-            <View style={styles.card}>
-              {balanceRows.map((row, index) => (
-                <View key={row.wallet.id} style={[styles.row, index > 0 && styles.divided]}>
-                  <Text style={[styles.rowName, styles.flex]} numberOfLines={1}>
-                    {row.wallet.name}
-                  </Text>
-                  <Text style={type.faint}>{row.wallet.type === 'card' ? '利用残高' : '残高'}</Text>
-                  <Text style={styles.amount}>{formatBalance(row.amount)}</Text>
-                </View>
-              ))}
-            </View>
-          )}
         </ScrollView>
         <View style={styles.footer}>
           {closed ? (
@@ -298,7 +298,20 @@ const styles = StyleSheet.create({
   estimate: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8 },
   filterField: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, backgroundColor: colors.neutralSurface },
   filterText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
-  filterBalance: { paddingBottom: 6 },
+  totalCard: {
+    marginBottom: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  totalTitle: { fontSize: 14, fontWeight: '700', color: colors.text, paddingBottom: 2 },
+  totalRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
+  totalSum: { marginTop: 4, paddingTop: 7 },
+  totalLabel: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  totalAmount: { fontSize: 20, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
   card: {
     borderRadius: 16,
@@ -326,7 +339,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.moneyEstimateSurface,
   },
   noticeText: { fontSize: 13, fontWeight: '600', color: colors.moneyEstimate },
-  balanceToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, marginTop: 8 },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1, borderTopColor: colors.border, gap: 6 },
   closedNote: { fontSize: 13, fontWeight: '600', color: colors.textMuted, textAlign: 'center', fontVariant: ['tabular-nums'] },
   secondary: { paddingVertical: 10, alignItems: 'center' },
