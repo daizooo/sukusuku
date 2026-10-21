@@ -191,19 +191,17 @@ export default function MonthCloseScreen({
           </button>
         )}
         {pending.length > 0 && (
-          <div className="mb-3">
-            <SectionHeader compact title="これから自動で記録されるもの" hint={`${pending.length}件`} />
-            <div className="overflow-hidden rounded-2xl border border-amber-100 bg-white">
-              {pending.map((entry, index) => (
-                <div key={entry.rule.id} className={`flex items-center gap-2.5 px-3.5 py-2.5 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
-                  <span className="w-11 shrink-0 text-[13px] font-semibold text-gray-500 tabular-nums">{formatShortDate(entry.date)}</span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{ruleTitle(entry.rule, categories)}</span>
-                  <span className={`text-[15px] font-extrabold tabular-nums ${entry.rule.kind === 'income' ? incomeAmountClass : 'text-gray-900'}`}>
-                    {formatYen(entry.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
+          <div className="mb-2 overflow-hidden rounded-xl bg-amber-100">
+            <p className="px-3 py-2.5 text-[13px] font-semibold text-amber-800">これから自動で記録されるもの {pending.length}件</p>
+            {pending.map((entry) => (
+              <div key={entry.rule.id} className="flex items-center gap-2.5 border-t border-white px-3 py-2">
+                <span className="w-11 shrink-0 text-[13px] font-semibold text-gray-500 tabular-nums">{formatShortDate(entry.date)}</span>
+                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-gray-900">{ruleTitle(entry.rule, categories)}</span>
+                <span className={`text-[13px] font-bold tabular-nums ${entry.rule.kind === 'income' ? incomeAmountClass : 'text-gray-900'}`}>
+                  {formatYen(entry.amount)}
+                </span>
+              </div>
+            ))}
           </div>
         )}
         <Hero compact label={`収支（${label}）`} value={formatBalance(month.balance)} plus={month.balance > 0}>

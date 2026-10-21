@@ -196,19 +196,17 @@ export default function MonthCloseScreen({
             </Pressable>
           )}
           {pending.length > 0 && (
-            <View style={styles.pendingBlock}>
-              <SectionHeader compact title="これから自動で記録されるもの" hint={`${pending.length}件`} />
-              <View style={[styles.card, styles.pendingCard]}>
-                {pending.map((entry, index) => (
-                  <View key={entry.rule.id} style={[styles.row, index > 0 && styles.divided]}>
-                    <Text style={styles.date}>{formatShortDate(entry.date)}</Text>
-                    <Text style={[styles.rowName, styles.flex]} numberOfLines={1}>
-                      {ruleTitle(entry.rule, categories)}
-                    </Text>
-                    <Text style={[styles.amount, entry.rule.kind === 'income' && styles.plus]}>{formatYen(entry.amount)}</Text>
-                  </View>
-                ))}
-              </View>
+            <View style={styles.noticeBox}>
+              <Text style={[styles.noticeText, styles.noticeHead]}>これから自動で記録されるもの {pending.length}件</Text>
+              {pending.map((entry) => (
+                <View key={entry.rule.id} style={styles.noticeRow}>
+                  <Text style={styles.date}>{formatShortDate(entry.date)}</Text>
+                  <Text style={[styles.noticeRowName, styles.flex]} numberOfLines={1}>
+                    {ruleTitle(entry.rule, categories)}
+                  </Text>
+                  <Text style={[styles.noticeAmount, entry.rule.kind === 'income' && styles.plus]}>{formatYen(entry.amount)}</Text>
+                </View>
+              ))}
             </View>
           )}
           <Hero compact label={`収支（${label}）`} value={formatBalance(month.balance)} plus={month.balance > 0}>
@@ -313,22 +311,11 @@ const styles = StyleSheet.create({
   totalLabel: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   totalAmount: { fontSize: 20, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
-  card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-  },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10 },
   divided: { borderTopWidth: 1, borderTopColor: colors.border },
   pressed: { backgroundColor: colors.background },
   date: { width: 44, fontSize: 13, fontWeight: '600', color: colors.textMuted },
-  rowName: { fontSize: 14, fontWeight: '600', color: colors.text },
   amount: { fontSize: 15, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   plus: { color: colors.moneyIncome },
-  pendingBlock: { marginBottom: 8 },
-  pendingCard: { borderColor: colors.moneyEstimateSurface, backgroundColor: colors.surface },
   notice: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -340,6 +327,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.moneyEstimateSurface,
   },
   noticeText: { fontSize: 13, fontWeight: '600', color: colors.moneyEstimate },
+  // これから自動で記録されるもの。未確認の明細と同じ見た目の箱に、行を並べる。
+  noticeBox: { marginBottom: 8, borderRadius: 12, backgroundColor: colors.moneyEstimateSurface, overflow: 'hidden' },
+  noticeHead: { paddingHorizontal: 12, paddingVertical: 10 },
+  noticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.surface,
+  },
+  noticeRowName: { fontSize: 13, fontWeight: '600', color: colors.text },
+  noticeAmount: { fontSize: 13, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1, borderTopColor: colors.border, gap: 6 },
   closedNote: { fontSize: 13, fontWeight: '600', color: colors.textMuted, textAlign: 'center', fontVariant: ['tabular-nums'] },
   secondary: { paddingVertical: 10, alignItems: 'center' },
