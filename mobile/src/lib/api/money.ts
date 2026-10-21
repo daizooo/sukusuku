@@ -141,6 +141,7 @@ export const rowToRecurring = (row: RecurringRow): MoneyRecurring => ({
   skippedMonths: row.skipped_months,
   intervalYears: row.interval_years,
   dayKnown: row.day_known,
+  deferredUntil: row.deferred_until,
 });
 
 /** 一度に読む行数（Supabase の Data API は1回に1000行まで）。 */
@@ -671,6 +672,22 @@ export async function updateMoneyRecurringSkipped(
   const { data, error } = await supabase
     .from('money_recurring')
     .update({ skipped_months: skippedMonths })
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return rowToRecurring(data);
+}
+
+/** 帯に出すものを「翌月へ送る」（docs/kakei.md §0.7）。until（YYYY-MM-DD）まで帯に出さない。null で戻す。 */
+export async function updateMoneyRecurringDeferred(
+  supabase: SupabaseDb,
+  id: string,
+  until: string | null,
+): Promise<MoneyRecurring> {
+  const { data, error } = await supabase
+    .from('money_recurring')
+    .update({ deferred_until: until })
     .eq('id', id)
     .select('*')
     .single();

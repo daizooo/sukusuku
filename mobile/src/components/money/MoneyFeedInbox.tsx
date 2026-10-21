@@ -9,7 +9,7 @@ import type { MoneyFeedFill, MoneyFeedResolve } from '@/lib/api/moneyFeed';
 import { formatDateWithWeekday, toDateString } from '@/lib/dateUtils';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
-import { formatYen, recordTotal } from '@/lib/moneyUtils';
+import { formatYen, recordTotal, type PendingEstimate } from '@/lib/moneyUtils';
 import { feedAmountLabel, feedDayLabel, feedStatusLabel, feedStoreName, sortFeedInbox } from '@/lib/moneyFeedUtils';
 import SheetModal from '@/components/ui/SheetModal';
 import LogModalShell from '@/components/log/LogModalShell';
@@ -18,9 +18,12 @@ import { Chip, ChipRow, Field, ToggleRow, WalletChoices } from '@/components/mon
 
 // 取り込んだ明細の「未確認」（docs/kakei.md §9.5.5・§9.5.6.1）。PWA版の `src/components/sukusuku/money/MoneyFeedInbox.tsx` と同じ並び・文言。
 //
-// 「口座」の面の上の「未確認 n件」から開く。手入力との確認 → 口座が決まっていない → 未確認 → 読めない の順。
+// 記録の面の上の帯「未確定明細 n件」から開く（2026-10-21。docs/kakei.md §0.7）。見出しは「Gmail から取り込んだ明細」と「見込み」の2つ。
+// 一覧にボタンは置かない。行を押すと中（下から開く画面）で片づける。
+// Gmail の明細は、手入力との確認 → 口座が決まっていない → 未確認 → 読めない の順。
 // 1件を押すと片づけ方を選ぶ枠: 口座を選ぶ／手入力と同じか（同じ取引・振替に置き換える・別の取引）／
 // 記録を作成する・記録しない。記録を作成するは、額・日付・出金元・お店を入れた記録の入力を開く（カテゴリは人が選ぶ。2026-10-19）。
+// 見込み（帯に出すルールの、日が来て記録が無い回。pendingEstimates）は、中で額を直して「この額で記録する」「翌月へ送る」「今月はなし」。
 
 interface MoneyFeedInboxProps {
   items: MoneyFeedItem[];
@@ -32,8 +35,22 @@ interface MoneyFeedInboxProps {
   onResolve: (item: MoneyFeedItem, resolve: MoneyFeedResolve) => Promise<boolean>;
   /** 読めないメールに、口座・向き・日付・額を手で入れる。入れたあとは未確認として続けて片づける。 */
   onFill: (item: MoneyFeedItem, fill: MoneyFeedFill) => Promise<boolean>;
+  /** 帯に出す見込みのうち、日が来て記録が無い回。 */
+  estimates: PendingEstimate[];
+  /** この額で記録する（出金元があればその場で記録、無ければ記録の入力を開く）。 */
+  onRecordEstimate: (entry: PendingEstimate, amount: number) => void;
+  /** 翌月へ送る（翌月1日まで帯に出さない）。 */
+  onDeferEstimate: (entry: PendingEstimate) => Promise<boolean>;
+  /** 今月はなし（その回を skippedMonths に足す）。 */
+  onSkipEstimate: (entry: PendingEstimate) => Promise<boolean>;
   onClose: () => void;
 }
+
+const estimateKey = (entry: PendingEstimate) => `${entry.rule.id}|${entry.plannedMonth}`;
+
+/** 見込みの名前（品名、無ければカテゴリの名前）。 */
+const estimateName = (entry: PendingEstimate, categories: MoneyCategory[]) =>
+  entry.rule.name.trim() || categories.find((category) => category.id === entry.rule.categoryId)?.name || '見込み';
 
 export default function MoneyFeedInbox({
   items,
@@ -43,6 +60,10 @@ export default function MoneyFeedInbox({
   onRecord,
   onResolve,
   onFill,
+  estimates,
+  onRecordEstimate,
+  onDeferEstimate,
+  onSkipEstimate,
   onClose,
 }: MoneyFeedInboxProps) {
   const insets = useSafeAreaInsets();
@@ -50,13 +71,16 @@ export default function MoneyFeedInbox({
   const sorted = useMemo(() => sortFeedInbox(items), [items]);
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? null;
   const opened = items.find((item) => item.id === openId) ?? null;
+  const [estimateOpen, setEstimateOpen] = useState<string | null>(null);
+  const openedEstimate = estimates.find((entry) => estimateKey(entry) === estimateOpen) ?? null;
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>
-        <ScreenHeader title={`未確認 ${items.length}件`} icon="back" onClose={onClose} />
+        <ScreenHeader title={`未確定明細 ${items.length + estimates.length}件`} icon="back" onClose={onClose} />
         <ScrollView contentContainerStyle={styles.content}>
-          {sorted.length === 0 && <Text style={styles.empty}>未確認の明細はありません</Text>}
+          {sorted.length === 0 && estimates.length === 0 && <Text style={styles.empty}>未確定の明細はありません</Text>}
+          {sorted.length > 0 && <Text style={styles.section}>Gmail から取り込んだ明細</Text>}
           {sorted.map((item) => (
             <Pressable
               key={item.id}
@@ -82,8 +106,50 @@ export default function MoneyFeedInbox({
               <ChevronRight size={18} color={colors.textFaint} />
             </Pressable>
           ))}
+          {estimates.length > 0 && <Text style={[styles.section, sorted.length > 0 && styles.sectionGap]}>見込み</Text>}
+          {estimates.map((entry) => (
+            <Pressable
+              key={estimateKey(entry)}
+              accessibilityRole="button"
+              onPress={() => setEstimateOpen(estimateKey(entry))}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+            >
+              <View style={styles.flex}>
+                <Text style={styles.account} numberOfLines={1}>
+                  {estimateName(entry, categories)}
+                </Text>
+                <Text style={styles.description} numberOfLines={1}>
+                  {feedDayLabel(entry.date)}
+                  {walletName(entry.rule.walletId) ? `・${walletName(entry.rule.walletId)}` : ''}
+                </Text>
+              </View>
+              <Text style={styles.badge}>{entry.rule.amountMode === 'estimate' ? '見込み' : '確定'}</Text>
+              <Text style={styles.amount}>{formatYen(entry.amount)}</Text>
+              <ChevronRight size={18} color={colors.textFaint} />
+            </Pressable>
+          ))}
         </ScrollView>
       </View>
+      {openedEstimate && (
+        <EstimateSheet
+          key={estimateKey(openedEstimate)}
+          entry={openedEstimate}
+          name={estimateName(openedEstimate, categories)}
+          wallets={wallets}
+          categories={categories}
+          onClose={() => setEstimateOpen(null)}
+          onRecord={(amount) => {
+            setEstimateOpen(null);
+            onRecordEstimate(openedEstimate, amount);
+          }}
+          onDefer={async () => {
+            if (await onDeferEstimate(openedEstimate)) setEstimateOpen(null);
+          }}
+          onSkip={async () => {
+            if (await onSkipEstimate(openedEstimate)) setEstimateOpen(null);
+          }}
+        />
+      )}
       {opened && (
         <FeedItemSheet
           key={opened.id}
@@ -354,6 +420,93 @@ function FeedItemSheet({
   );
 }
 
+/** 見込みの中: カテゴリ・日・出金元と額（直せる）。この額で記録する／翌月へ送る／今月はなし。 */
+function EstimateSheet({
+  entry,
+  name,
+  wallets,
+  categories,
+  onClose,
+  onRecord,
+  onDefer,
+  onSkip,
+}: {
+  entry: PendingEstimate;
+  name: string;
+  wallets: MoneyWallet[];
+  categories: MoneyCategory[];
+  onClose: () => void;
+  onRecord: (amount: number) => void;
+  onDefer: () => Promise<void>;
+  onSkip: () => Promise<void>;
+}) {
+  const [amountText, setAmountText] = useState(String(entry.amount));
+  const [busy, setBusy] = useState(false);
+  const amount = Number(amountText.replace(/[^0-9]/g, ''));
+  const category = categories.find((item) => item.id === entry.rule.categoryId);
+  const parent = category?.parentId ? categories.find((item) => item.id === category.parentId) : undefined;
+  const wallet = wallets.find((item) => item.id === entry.rule.walletId);
+  const run = async (action: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await action();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <SheetModal visible onClose={onClose}>
+      <LogModalShell
+        title={name}
+        onClose={onClose}
+        footer={
+          <>
+            <PrimaryButton label="この額で記録する" disabled={busy || amount <= 0} onPress={() => onRecord(amount)} />
+            <View style={styles.estimateActions}>
+              <Pressable accessibilityRole="button" disabled={busy} onPress={() => void run(onDefer)} style={styles.estimateButton}>
+                <Text style={styles.secondaryText}>翌月へ送る</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" disabled={busy} onPress={() => void run(onSkip)} style={styles.estimateButton}>
+                <Text style={styles.secondaryText}>今月はなし</Text>
+              </Pressable>
+            </View>
+          </>
+        }
+      >
+        <View style={styles.detail}>
+          <DetailRow label="カテゴリ" value={category ? (parent ? `${parent.name} › ${category.name}` : category.name) : '—'} />
+          <DetailRow label="日" value={feedDayLabel(entry.date)} />
+          <DetailRow label="出金元" value={wallet?.name ?? '記録の入力で選ぶ'} />
+        </View>
+        <Field label="金額（円）">
+          <TextInput
+            style={styles.input}
+            value={amountText}
+            onChangeText={setAmountText}
+            keyboardType="number-pad"
+            selectTextOnFocus
+          />
+        </Field>
+        {entry.plannedMonth !== entry.date.slice(0, 7) && (
+          <Text style={styles.hint}>{Number(entry.plannedMonth.slice(5, 7))}月の分で、まだ記録がありません。</Text>
+        )}
+      </LogModalShell>
+    </SheetModal>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 /** 記録を1行で（日付・カテゴリ・出金元・額）。 */
 function RecordLine({
   record,
@@ -446,5 +599,30 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   secondary: { paddingVertical: 12, alignItems: 'center' },
+  section: { fontSize: 13, fontWeight: '800', color: colors.textSubtle },
+  sectionGap: { marginTop: 8 },
+  badge: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.milkBadgeText,
+    backgroundColor: colors.milkBadge,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    overflow: 'hidden',
+  },
+  detail: { borderRadius: 12, backgroundColor: colors.neutralSurface, paddingHorizontal: 12 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
+  detailLabel: { fontSize: 14, fontWeight: '600', color: colors.textSubtle },
+  detailValue: { flex: 1, textAlign: 'right', fontSize: 14, fontWeight: '700', color: colors.text },
+  estimateActions: { flexDirection: 'row', gap: 8 },
+  estimateButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+  },
   secondaryText: { fontSize: 14, fontWeight: '700', color: colors.textSubtle },
 });

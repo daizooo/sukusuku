@@ -37,6 +37,8 @@ import {
   saveMoneyRecord,
   saveMoneyWalletBalance,
   setMoneyMonthClosed,
+  updateMoneyRecurringDeferred,
+  updateMoneyRecurringSkipped,
   updateMoneyWallet,
 } from '@/lib/api/money';
 import {
@@ -67,9 +69,12 @@ import {
   isMonthClosed,
   monthKeyOf,
   monthKeyOfDate,
+  pendingEstimates,
   receiptReplaceNotices,
   recordTotal,
+  shiftMonth,
   yearOfMonth,
+  type PendingEstimate,
 } from '@/lib/moneyUtils';
 import MoneyAccountsView from '../money/MoneyAccountsView';
 import MoneyRecordsView from '../money/MoneyRecordsView';
@@ -143,6 +148,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
   // 予備費の年の額（docs/kakei.md §3.7）。
   const [reserves, setReserves] = useState<MoneyReserve[]>([]);
+  // 記録の上の帯に出す見込み（帯に出すルールの、日が来て記録が無い回。docs/kakei.md §0.7）。
+  const estimates = useMemo(() => pendingEstimates(recurring, records, dateKeyOfDate(new Date())), [recurring, records]);
   // 手入力の予算（budgets）に、固定費から出した月ごとの額（記録と同じ額）を足した予算。画面にはこちらを渡す（docs/kakei.md §3.1）。
   const allBudgets = useMemo(
     () => {
@@ -196,6 +203,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [feedRecordFor, setFeedRecordFor] = useState<MoneyFeedItem | null>(null);
   // Amazon の注文メールの明細から記録するときの品目（docs/kakei.md §9.10）
   const [feedOrderItems, setFeedOrderItems] = useState<ReceiptScanItem[] | null>(null);
+  // 未確定明細の見込みの「この額で記録する」で、出金元の無いものは記録の入力を開く（docs/kakei.md §0.7）。そのときの下書き。
+  const [estimateDraft, setEstimateDraft] = useState<{ key: string; store: string; amount: number; items: ReceiptScanItem[] } | null>(null);
 
   // 評価額の履歴（推移用）は、推移・証券口座の詳細を開くまで読まない。一度読んだら、読み直しでも履歴まで読む。
   const historyWanted = useRef(false);
@@ -364,6 +373,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     setReceiptFor(null);
     const feedItem = feedRecordFor;
     setFeedRecordFor(null);
+    setEstimateDraft(null);
     if (next) {
       setChain((prev) => ({ seq: (prev?.seq ?? 0) + 1, occurredOn: draft.occurredOn }));
       setEditing('new');
@@ -403,6 +413,58 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     try {
       await fillMoneyFeed(supabase, item.id, fill);
       await reload();
+      return true;
+    } catch {
+      failed('保存');
+      return false;
+    }
+  };
+
+  /**
+   * 未確定明細の見込みを「この額で記録する」（docs/kakei.md §0.7）。額・出金元・日・カテゴリ・お店で記録する。
+   * 出金元があればその場で記録し、無ければそれを入れた記録の入力を開く（出金元を選んで保存する）。同じ小分類の記録が入ると済になる。
+   */
+  const recordEstimate = (entry: PendingEstimate, amount: number) => {
+    const { rule } = entry;
+    const name = rule.name.trim();
+    if (rule.walletId === null) {
+      setReceipt(null);
+      setReceiptFor(null);
+      setChain(null);
+      setNewDate(entry.date);
+      setEstimateDraft({
+        key: `${rule.id}|${entry.plannedMonth}`,
+        store: rule.store,
+        amount,
+        items: [
+          { receiptName: '', name, quantity: 1, unitPrice: amount, amount, categoryId: rule.categoryId, categorySource: 'history' },
+        ],
+      });
+      setEditing('new');
+      return;
+    }
+    void saveRecord({
+      id: null,
+      kind: 'expense',
+      occurredOn: entry.date,
+      walletId: rule.walletId,
+      toWalletId: null,
+      store: rule.store,
+      isEstimate: false,
+      cardNextPeriod: false,
+      items: [{ amount, categoryId: rule.categoryId, categoryName: '', quantity: 1, unitPrice: amount, name, memo: '' }],
+    });
+  };
+
+  /** 見込みを「翌月へ送る」（翌月1日まで帯に出さない）／「今月はなし」（その回を skippedMonths に足す）。 */
+  const putOffEstimate = async (entry: PendingEstimate, how: 'defer' | 'skip'): Promise<boolean> => {
+    const { rule } = entry;
+    try {
+      const saved =
+        how === 'defer'
+          ? await updateMoneyRecurringDeferred(supabase, rule.id, `${shiftMonth(monthKeyOf(dateKeyOfDate(new Date())), 1)}-01`)
+          : await updateMoneyRecurringSkipped(supabase, rule.id, [...new Set([...rule.skippedMonths, entry.plannedMonth])]);
+      setRecurring((prev) => prev.map((item) => (item.id === saved.id ? saved : item)));
       return true;
     } catch {
       failed('保存');
@@ -638,8 +700,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               >
                 <span className={`relative text-[15px] ${selected ? 'font-bold text-gray-900' : 'font-semibold text-gray-400'}`}>
                   {entry.label}
-                  {/* 未確認の明細があるあいだ、「記録」の右上に赤い点（無くなったら消す。2026-10-18）。 */}
-                  {entry.id === 'records' && (feed?.open.length ?? 0) > 0 && (
+                  {/* 未確定明細があるあいだ、「記録」の右上に赤い点（無くなったら消す。2026-10-18。見込みも数える 2026-10-21）。 */}
+                  {entry.id === 'records' && (feed?.open.length ?? 0) + estimates.length > 0 && (
                     <span className="absolute -right-[9px] -top-px h-2 w-2 rounded-full bg-red-500" />
                   )}
                 </span>
@@ -661,6 +723,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               onOpen={setEditing}
               onAddOnDate={addOnDate}
               feedOpenCount={feed?.open.length ?? 0}
+              estimateCount={estimates.length}
               onOpenFeed={() => setFeedOpen(true)}
               feedStalled={feed?.syncStalled ?? false}
             />
@@ -772,9 +835,9 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
         />
       )}
 
-      {feedOpen && feed && (
+      {feedOpen && (
         <MoneyFeedInbox
-          items={feed.open}
+          items={feed?.open ?? []}
           wallets={wallets}
           records={records}
           categories={categories}
@@ -800,6 +863,10 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           }}
           onResolve={resolveFeed}
           onFill={fillFeed}
+          estimates={estimates}
+          onRecordEstimate={recordEstimate}
+          onDeferEstimate={(entry) => putOffEstimate(entry, 'defer')}
+          onSkipEstimate={(entry) => putOffEstimate(entry, 'skip')}
           onClose={() => setFeedOpen(false)}
         />
       )}
@@ -807,15 +874,15 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       {/* 未確認の明細の「記録を作成する」から開くので、未確認の一覧より上に重ねる（後に置く） */}
       {editing !== null && (
         <RecordEditor
-          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newDate ?? ''}-${feedRecordFor?.id ?? ''}-${chain?.seq ?? 0}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
+          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newDate ?? ''}-${feedRecordFor?.id ?? ''}-${estimateDraft?.key ?? ''}-${chain?.seq ?? 0}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
           record={editing === 'new' ? null : editing}
           receipt={editing === 'new' || receiptFor === editing.id ? receipt : null}
           initialDate={chain?.occurredOn ?? newDate}
           initialKind={feedRecordFor?.direction === 'in' ? 'income' : 'expense'}
           initialWallet={feedRecordFor?.walletId ?? null}
-          initialStore={feedRecordFor ? feedStoreName(feedRecordFor) : ''}
-          initialAmount={feedRecordFor?.amount ?? null}
-          initialItems={feedRecordFor ? feedOrderItems : null}
+          initialStore={feedRecordFor ? feedStoreName(feedRecordFor) : (estimateDraft?.store ?? '')}
+          initialAmount={feedRecordFor?.amount ?? estimateDraft?.amount ?? null}
+          initialItems={feedRecordFor ? feedOrderItems : (estimateDraft?.items ?? null)}
           onScanReceipt={(target) => {
             receiptTarget.current = target;
             receiptInput.current?.click();
@@ -830,6 +897,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
             setReceipt(null);
             setReceiptFor(null);
             setFeedRecordFor(null);
+            setEstimateDraft(null);
             setChain(null);
           }}
           onSubmit={(draft) => void saveRecord(draft)}

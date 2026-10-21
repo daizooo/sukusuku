@@ -16,7 +16,8 @@ import FastScrollBar, { useFastScroll } from '@/components/money/FastScrollBar';
 // 右端の早送りバーは最初から出ていて、帯のどこを触っても、つかんで動かしても、その位置へ飛べる（触っているあいだだけ位置の日付が出る）。
 // いちばん上から15件さかのぼると、上に「今日に戻る」を出す（押すと、いちばん上へ戻る）。
 // その月に使った額は「振り返り」で見るので、ここには出さない（2026-10-08）。押すと記録の詳細。
-// Gmail から取り込んだ明細の「未確認 n件」は、一覧の上に固定して出す（2026-10-18。以前は口座の面。docs/kakei.md §9.5.6.1）。
+// 一覧の上に固定して「未確定明細 n件」の帯を出す（Gmail から取り込んだ明細の未確認と、日が来た帯に出す見込み。
+// 2026-10-21。以前は Gmail の「未確認 n件」だけ。docs/kakei.md §0.7・§9.5.6.1）。押すと一覧（MoneyFeedInbox）。
 // Apps Script から1時間以上届いていなければ、その上に「Gmail の取り込みが止まっています」を出す（2026-10-20。§9.8）。
 
 interface MoneyRecordsViewProps {
@@ -31,6 +32,8 @@ interface MoneyRecordsViewProps {
   onAddOnDate: (date: string) => void;
   /** Gmail から取り込んだ明細のうち、片づいていないものの数（docs/kakei.md §9.5.6.1）。0 なら出さない。 */
   feedOpenCount: number;
+  /** 帯に出す見込みのうち、日が来て記録が無い回の数（pendingEstimates。日付未定は数えない）。 */
+  estimateCount: number;
   onOpenFeed: () => void;
   /** Apps Script から1時間以上届いていない（docs/kakei.md §9.8）。 */
   feedStalled: boolean;
@@ -59,6 +62,7 @@ export default function MoneyRecordsView({
   onOpen,
   onAddOnDate,
   feedOpenCount,
+  estimateCount,
   onOpenFeed,
   feedStalled,
 }: MoneyRecordsViewProps) {
@@ -122,15 +126,19 @@ export default function MoneyRecordsView({
           <Text style={styles.stalledText}>Gmail の取り込みが止まっています（1時間以上届いていません）</Text>
         </View>
       )}
-      {feedOpenCount > 0 && (
+      {feedOpenCount + estimateCount > 0 && (
         <Pressable
           accessibilityRole="button"
           onPress={onOpenFeed}
           style={({ pressed }) => [styles.feed, pressed && styles.feedPressed]}
         >
           <Inbox size={18} color={colors.moneyText} />
-          <Text style={styles.feedText}>未確認 {feedOpenCount}件</Text>
-          <Text style={styles.feedSub}>Gmail から取り込んだ明細</Text>
+          <Text style={styles.feedText}>未確定明細 {feedOpenCount + estimateCount}件</Text>
+          <Text style={styles.feedSub} numberOfLines={1}>
+            {[feedOpenCount > 0 ? `Gmail ${feedOpenCount}件` : '', estimateCount > 0 ? `見込み ${estimateCount}件` : '']
+              .filter(Boolean)
+              .join('・')}
+          </Text>
           <ChevronRight size={16} color={colors.moneyText} />
         </Pressable>
       )}

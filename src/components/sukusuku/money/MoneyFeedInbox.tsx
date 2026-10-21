@@ -5,7 +5,7 @@ import { ChevronRight } from 'lucide-react';
 import type { MoneyCategory, MoneyFeedItem, MoneyRecord, MoneyWallet } from '@/types/app';
 import type { MoneyFeedFill, MoneyFeedResolve } from '@/lib/api/moneyFeed';
 import { toDateStringInTimeZone } from '@/lib/dateUtils';
-import { formatYen, recordTotal } from '@/lib/moneyUtils';
+import { formatYen, recordTotal, type PendingEstimate } from '@/lib/moneyUtils';
 import { feedAmountLabel, feedDayLabel, feedStatusLabel, feedStoreName, sortFeedInbox } from '@/lib/moneyFeedUtils';
 import { ModalShell } from '../modals/TaskForm';
 import { FullScreen, PrimaryButton, ScreenHeader, incomeAmountClass } from './moneyVisual';
@@ -13,9 +13,12 @@ import { Chip, ChipRow, Field, ToggleRow, WalletChoices, feedInputClass } from '
 
 // 取り込んだ明細の「未確認」（docs/kakei.md §9.5.5・§9.5.6.1）。mobile版の `mobile/src/components/money/MoneyFeedInbox.tsx` と同じ並び・文言。
 //
-// 「口座」の面の上の「未確認 n件」から開く。手入力との確認 → 口座が決まっていない → 未確認 → 読めない の順。
+// 記録の面の上の帯「未確定明細 n件」から開く（2026-10-21。docs/kakei.md §0.7）。見出しは「Gmail から取り込んだ明細」と「見込み」の2つ。
+// 一覧にボタンは置かない。行を押すと中（下から開く画面）で片づける。
+// Gmail の明細は、手入力との確認 → 口座が決まっていない → 未確認 → 読めない の順。
 // 1件を押すと片づけ方を選ぶ枠: 口座を選ぶ／手入力と同じか（同じ取引・振替に置き換える・別の取引）／
 // 記録を作成する・記録しない。記録を作成するは、額・日付・出金元・お店を入れた記録の入力を開く（カテゴリは人が選ぶ。2026-10-19）。
+// 見込み（帯に出すルールの、日が来て記録が無い回。pendingEstimates）は、中で額を直して「この額で記録する」「翌月へ送る」「今月はなし」。
 
 interface MoneyFeedInboxProps {
   items: MoneyFeedItem[];
@@ -27,8 +30,22 @@ interface MoneyFeedInboxProps {
   onResolve: (item: MoneyFeedItem, resolve: MoneyFeedResolve) => Promise<boolean>;
   /** 読めないメールに、口座・向き・日付・額を手で入れる。入れたあとは未確認として続けて片づける。 */
   onFill: (item: MoneyFeedItem, fill: MoneyFeedFill) => Promise<boolean>;
+  /** 帯に出す見込みのうち、日が来て記録が無い回。 */
+  estimates: PendingEstimate[];
+  /** この額で記録する（出金元があればその場で記録、無ければ記録の入力を開く）。 */
+  onRecordEstimate: (entry: PendingEstimate, amount: number) => void;
+  /** 翌月へ送る（翌月1日まで帯に出さない）。 */
+  onDeferEstimate: (entry: PendingEstimate) => Promise<boolean>;
+  /** 今月はなし（その回を skippedMonths に足す）。 */
+  onSkipEstimate: (entry: PendingEstimate) => Promise<boolean>;
   onClose: () => void;
 }
+
+const estimateKey = (entry: PendingEstimate) => `${entry.rule.id}|${entry.plannedMonth}`;
+
+/** 見込みの名前（品名、無ければカテゴリの名前）。 */
+const estimateName = (entry: PendingEstimate, categories: MoneyCategory[]) =>
+  entry.rule.name.trim() || categories.find((category) => category.id === entry.rule.categoryId)?.name || '見込み';
 
 export default function MoneyFeedInbox({
   items,
@@ -38,18 +55,27 @@ export default function MoneyFeedInbox({
   onRecord,
   onResolve,
   onFill,
+  estimates,
+  onRecordEstimate,
+  onDeferEstimate,
+  onSkipEstimate,
   onClose,
 }: MoneyFeedInboxProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const sorted = useMemo(() => sortFeedInbox(items), [items]);
   const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? null;
   const opened = items.find((item) => item.id === openId) ?? null;
+  const [estimateOpen, setEstimateOpen] = useState<string | null>(null);
+  const openedEstimate = estimates.find((entry) => estimateKey(entry) === estimateOpen) ?? null;
 
   return (
     <FullScreen onBack={onClose}>
-      <ScreenHeader title={`未確認 ${items.length}件`} icon="back" onClose={onClose} />
+      <ScreenHeader title={`未確定明細 ${items.length + estimates.length}件`} icon="back" onClose={onClose} />
       <div className="flex-1 min-h-0 overflow-y-auto space-y-2 bg-gray-50 p-4 pb-8">
-        {sorted.length === 0 && <p className="py-6 text-center text-sm text-gray-400">未確認の明細はありません</p>}
+        {sorted.length === 0 && estimates.length === 0 && (
+          <p className="py-6 text-center text-sm text-gray-400">未確定の明細はありません</p>
+        )}
+        {sorted.length > 0 && <p className="text-[13px] font-extrabold text-gray-700">Gmail から取り込んだ明細</p>}
         {sorted.map((item) => (
           <button
             key={item.id}
@@ -75,7 +101,51 @@ export default function MoneyFeedInbox({
             <ChevronRight size={18} className="text-gray-400" />
           </button>
         ))}
+        {estimates.length > 0 && (
+          <p className={`text-[13px] font-extrabold text-gray-700 ${sorted.length > 0 ? 'pt-2' : ''}`}>見込み</p>
+        )}
+        {estimates.map((entry) => (
+          <button
+            key={estimateKey(entry)}
+            type="button"
+            onClick={() => setEstimateOpen(estimateKey(entry))}
+            className="flex w-full items-center gap-2.5 rounded-2xl border border-gray-200 bg-white p-3 text-left hover:bg-gray-50"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-bold text-gray-900">{estimateName(entry, categories)}</span>
+              <span className="mt-0.5 block truncate text-xs text-gray-500">
+                {feedDayLabel(entry.date)}
+                {walletName(entry.rule.walletId) ? `・${walletName(entry.rule.walletId)}` : ''}
+              </span>
+            </span>
+            <span className="rounded-md bg-amber-100 px-1.5 py-px text-[11px] font-bold text-amber-800">
+              {entry.rule.amountMode === 'estimate' ? '見込み' : '確定'}
+            </span>
+            <span className="text-base font-extrabold tabular-nums text-gray-900">{formatYen(entry.amount)}</span>
+            <ChevronRight size={18} className="text-gray-400" />
+          </button>
+        ))}
       </div>
+      {openedEstimate && (
+        <EstimateModal
+          key={estimateKey(openedEstimate)}
+          entry={openedEstimate}
+          name={estimateName(openedEstimate, categories)}
+          wallets={wallets}
+          categories={categories}
+          onClose={() => setEstimateOpen(null)}
+          onRecord={(amount) => {
+            setEstimateOpen(null);
+            onRecordEstimate(openedEstimate, amount);
+          }}
+          onDefer={async () => {
+            if (await onDeferEstimate(openedEstimate)) setEstimateOpen(null);
+          }}
+          onSkip={async () => {
+            if (await onSkipEstimate(openedEstimate)) setEstimateOpen(null);
+          }}
+        />
+      )}
       {opened && (
         <FeedItemModal
           key={opened.id}
@@ -333,6 +403,91 @@ function FeedItemModal({
             : '記録を作成するを押すと、額・日付・出金元・お店を入れた記録の入力を開きます。カテゴリを選んで保存してください。'}
           記録しないときは、残高がずれたら口座の詳細から補正してください。
         </p>
+      </div>
+    </ModalShell>
+  );
+}
+
+/** 見込みの中: カテゴリ・日・出金元と額（直せる）。この額で記録する／翌月へ送る／今月はなし。 */
+function EstimateModal({
+  entry,
+  name,
+  wallets,
+  categories,
+  onClose,
+  onRecord,
+  onDefer,
+  onSkip,
+}: {
+  entry: PendingEstimate;
+  name: string;
+  wallets: MoneyWallet[];
+  categories: MoneyCategory[];
+  onClose: () => void;
+  onRecord: (amount: number) => void;
+  onDefer: () => Promise<void>;
+  onSkip: () => Promise<void>;
+}) {
+  const [amountText, setAmountText] = useState(String(entry.amount));
+  const [busy, setBusy] = useState(false);
+  const amount = Number(amountText.replace(/[^0-9]/g, ''));
+  const category = categories.find((item) => item.id === entry.rule.categoryId);
+  const parent = category?.parentId ? categories.find((item) => item.id === category.parentId) : undefined;
+  const wallet = wallets.find((item) => item.id === entry.rule.walletId);
+  const run = async (action: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await action();
+    } finally {
+      setBusy(false);
+    }
+  };
+  const rows: [string, string][] = [
+    ['カテゴリ', category ? (parent ? `${parent.name} › ${category.name}` : category.name) : '—'],
+    ['日', feedDayLabel(entry.date)],
+    ['出金元', wallet?.name ?? '記録の入力で選ぶ'],
+  ];
+  const secondaryClass = 'flex-1 rounded-xl border border-gray-300 py-3 text-sm font-bold text-gray-700 disabled:opacity-50';
+  return (
+    <ModalShell
+      title={name}
+      onClose={onClose}
+      footer={
+        <div className="space-y-2">
+          <PrimaryButton label="この額で記録する" disabled={busy || amount <= 0} onClick={() => onRecord(amount)} />
+          <div className="flex gap-2">
+            <button type="button" disabled={busy} onClick={() => void run(onDefer)} className={secondaryClass}>
+              翌月へ送る
+            </button>
+            <button type="button" disabled={busy} onClick={() => void run(onSkip)} className={secondaryClass}>
+              今月はなし
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <div className="rounded-xl bg-gray-100 px-3">
+          {rows.map(([label, value]) => (
+            <div key={label} className="flex items-center gap-3 py-2.5">
+              <span className="text-sm font-semibold text-gray-700">{label}</span>
+              <span className="min-w-0 flex-1 truncate text-right text-sm font-bold text-gray-900">{value}</span>
+            </div>
+          ))}
+        </div>
+        <Field label="金額（円）">
+          <input
+            className={feedInputClass}
+            value={amountText}
+            onChange={(event) => setAmountText(event.target.value)}
+            onFocus={(event) => event.target.select()}
+            inputMode="numeric"
+          />
+        </Field>
+        {entry.plannedMonth !== entry.date.slice(0, 7) && (
+          <p className="text-xs leading-relaxed text-gray-500">{Number(entry.plannedMonth.slice(5, 7))}月の分で、まだ記録がありません。</p>
+        )}
       </div>
     </ModalShell>
   );
