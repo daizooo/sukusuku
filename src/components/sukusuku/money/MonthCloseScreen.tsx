@@ -28,8 +28,8 @@ import { EstimateBadge, FullScreen, Hero, PrimaryButton, ScreenHeader, SectionHe
 // カードの利用通知と額が違う記録には、その旨を添える（通知が来ていない記録は、継続払いなど通知されないものもあるので出さない）。
 // 記録の一覧は、**口座（出金元）ごとに絞り込める**（財布・カードごとに見て、実際の明細と合わせるため。2026-10-16）。
 // 絞ると、その口座のその月の合計（入金・出金・差し引き。振替も入れる）を一覧の上に添える（2026-10-21。月末の残高は出さない）。
-// 未確認の明細はいちばん上に出す（締める前に片づけるもの。2026-10-21）。記録は月の初め（1日）から並べる（月の初めからさかのぼって見るため。2026-10-21）。
-// 一覧のあとに、これから自動で作られる記録を出す。
+// 未確認の明細と、これから自動で作られる記録は、いちばん上（収支より上）に出す（締める前に片づけるもの。2026-10-21）。
+// 記録は月の初め（1日）から並べる（月の初めからさかのぼって見るため。2026-10-21）。
 // 片づいていないものが残っていても「この月を締める」で締められる。年初からの累計は出さない（その月の締めなので）。
 // その月に、固定収入・固定費でこれから自動で作られる記録がある（自動の記録より前に締める）ときは、一覧で知らせ、
 // 締めるときにも確かめる（締めたあとに作られた記録は、締めた収支に入っていないため）。
@@ -179,7 +179,7 @@ export default function MonthCloseScreen({
     <FullScreen onBack={onClose}>
       <ScreenHeader title={`${label}の締め`} icon="back" onClose={onClose} />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-3">
-        {/* 未確認の明細は、締める前に片づけるものなので一番上に出す（2026-10-21）。 */}
+        {/* 未確認の明細と、これから自動で記録されるものは、締める前に片づけるものなので一番上に出す（2026-10-21）。 */}
         {feedCount > 0 && (
           <button
             type="button"
@@ -189,6 +189,22 @@ export default function MonthCloseScreen({
             <span className="flex-1 text-[13px] font-semibold text-amber-800">未確認の明細 {feedCount}件</span>
             <ChevronRight size={16} className="text-gray-500" />
           </button>
+        )}
+        {pending.length > 0 && (
+          <div className="mb-3">
+            <SectionHeader compact title="これから自動で記録されるもの" hint={`${pending.length}件`} />
+            <div className="overflow-hidden rounded-2xl border border-amber-100 bg-white">
+              {pending.map((entry, index) => (
+                <div key={entry.rule.id} className={`flex items-center gap-2.5 px-3.5 py-2.5 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
+                  <span className="w-11 shrink-0 text-[13px] font-semibold text-gray-500 tabular-nums">{formatShortDate(entry.date)}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{ruleTitle(entry.rule, categories)}</span>
+                  <span className={`text-[15px] font-extrabold tabular-nums ${entry.rule.kind === 'income' ? incomeAmountClass : 'text-gray-900'}`}>
+                    {formatYen(entry.amount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
         <Hero compact label={`収支（${label}）`} value={formatBalance(month.balance)} plus={month.balance > 0}>
           <StatRow compact label="収入" value={formatYen(month.income)} plus={month.income > 0} />
@@ -260,23 +276,6 @@ export default function MonthCloseScreen({
           </p>
         ) : (
           <RecordDayList records={shown} categories={categories} wallets={wallets} onOpen={onOpenRecord} closing={closing} oldestFirst />
-        )}
-
-        {pending.length > 0 && (
-          <>
-            <SectionHeader compact title="これから自動で記録されるもの" hint={`${pending.length}件`} />
-            <div className="overflow-hidden rounded-2xl border border-amber-100 bg-white">
-              {pending.map((entry, index) => (
-                <div key={entry.rule.id} className={`flex items-center gap-2.5 px-3.5 py-2.5 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
-                  <span className="w-11 shrink-0 text-[13px] font-semibold text-gray-500 tabular-nums">{formatShortDate(entry.date)}</span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{ruleTitle(entry.rule, categories)}</span>
-                  <span className={`text-[15px] font-extrabold tabular-nums ${entry.rule.kind === 'income' ? incomeAmountClass : 'text-gray-900'}`}>
-                    {formatYen(entry.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </>
         )}
       </div>
       <div className="shrink-0 space-y-1.5 border-t border-gray-200 px-4 pb-4 pt-2.5">
