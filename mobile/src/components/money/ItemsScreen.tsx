@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ChevronRight, Minus, Plus } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
@@ -121,8 +121,11 @@ export default function ItemsScreen({
     onChange({ ...work, groups: mapLines((lines) => lines.map((line) => (line.key === key ? { ...line, ...patch } : line))) });
 
   // 行を選ぶ。金額を押したときだけ電卓を出す（品名・行のほかの所なら閉じる）。
-  const select = (line: EditorLine, calc: boolean) =>
+  // 電卓を出すときはキーボードを閉じる（品名を入れた直後に金額を押すと、両方が重なって画面が見えなくなるため。2026-10-21）。
+  const select = (line: EditorLine, calc: boolean) => {
+    if (calc) Keyboard.dismiss();
     onChange({ ...work, selected: line.key, expr: line.unitPrice !== 0 ? String(Math.abs(line.unitPrice)) : '', calc });
+  };
 
   // 開いたまとまり・足したまとまりが見える所まで一覧を送る。行を足したときは、いちばん下のまとまりなら下まで送る。
   const scrollRef = useRef<ScrollView>(null);

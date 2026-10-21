@@ -123,8 +123,11 @@ export default function ItemsScreen({
     onChange({ ...work, groups: mapLines((lines) => lines.map((line) => (line.key === key ? { ...line, ...patch } : line))) });
 
   // 行を選ぶ。金額を押したときだけ電卓を出す（品名・行のほかの所なら閉じる）。
-  const select = (line: EditorLine, calc: boolean) =>
+  // 電卓を出すときは品名の入力を外してキーボードを閉じる（両方が重なって画面が見えなくなるため。2026-10-21）。
+  const select = (line: EditorLine, calc: boolean) => {
+    if (calc && document.activeElement instanceof HTMLElement) document.activeElement.blur();
     onChange({ ...work, selected: line.key, expr: line.unitPrice !== 0 ? String(Math.abs(line.unitPrice)) : '', calc });
+  };
 
   // 開いたまとまり・足したまとまりが見える所まで一覧を送る。行を足したときは、その行が見える所まで送る。
   const groupRefs = useRef(new Map<string, HTMLDivElement>());

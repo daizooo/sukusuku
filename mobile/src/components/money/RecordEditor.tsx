@@ -49,6 +49,9 @@ import RecordDetailView from '@/components/money/RecordDetailView';
 import RecordItemGroups from '@/components/money/RecordItemGroups';
 import { EstimateBadge, PrimaryButton, ScreenHeader, WalletTypeIcon } from '@/components/money/moneyVisual';
 
+// 帯の上の「記録して続ける」。要らなくなったら false にすればリンクごと消える（帯は「記録する」だけのまま）。
+const SHOW_SAVE_NEXT = true;
+
 // 記録の入力（docs/kakei.md §3.2。Zaim を踏襲）。PWA版の `src/components/sukusuku/money/RecordEditor.tsx` と同じ流れ・文言。
 //
 // 既にある記録は、まず記録の詳細（読むだけ。RecordDetailView）を見せ、「編集する」でこの入力画面へ（2026-10-15）。
@@ -645,21 +648,18 @@ export default function RecordEditor({
           </>
         )}
       </ScrollView>
-      {/* 新しく足すときは「記録して続ける」も出す（1日に何枚もレシートを入れるとき。取り込んだ明細からの記録は除く）。 */}
-      {!record && onSubmitNext && initialAmount === null ? (
-        <View style={styles.saveRow}>
-          <Pressable accessibilityRole="button" onPress={() => submit(true)} style={[styles.saveBar, styles.saveNext]}>
-            <Text style={[styles.saveText, styles.saveNextText]}>記録して続ける</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => submit()} style={[styles.saveBar, styles.flex]}>
-            <Text style={styles.saveText}>記録する</Text>
+      {/* 新しく足すときは、帯の上に「記録して続ける」を文字リンクで出す（1日に何枚もレシートを入れるとき。取り込んだ明細からの記録は除く）。
+          帯は「記録する」の1本のまま。 */}
+      {SHOW_SAVE_NEXT && !record && onSubmitNext && initialAmount === null && (
+        <View style={styles.nextRow}>
+          <Pressable accessibilityRole="button" onPress={() => submit(true)} hitSlop={8} style={styles.nextLink}>
+            <Text style={styles.nextText}>記録して続ける ＋</Text>
           </Pressable>
         </View>
-      ) : (
-        <Pressable accessibilityRole="button" onPress={() => submit()} style={styles.saveBar}>
-          <Text style={styles.saveText}>{record ? '保存する' : '記録する'}</Text>
-        </Pressable>
       )}
+      <Pressable accessibilityRole="button" onPress={() => submit()} style={styles.saveBar}>
+        <Text style={styles.saveText}>{record ? '保存する' : '記録する'}</Text>
+      </Pressable>
     </View>
   );
 
@@ -734,10 +734,10 @@ const styles = StyleSheet.create({
   // 下いっぱいの保存の帯（青）。
   saveBar: { alignItems: 'center', paddingVertical: 16, backgroundColor: colors.money },
   saveText: { fontSize: 16, fontWeight: '800', color: colors.primaryText },
-  // 「記録して続ける」は白地に青の枠で、「記録する」と横に並べる。
-  saveRow: { flexDirection: 'row' },
-  saveNext: { flex: 1, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.money },
-  saveNextText: { color: colors.money },
+  // 「記録して続ける」は帯の上の文字リンク（右寄せ）。
+  nextRow: { alignItems: 'flex-end', paddingHorizontal: 16, paddingVertical: 4, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface },
+  nextLink: { paddingHorizontal: 4, paddingVertical: 8 },
+  nextText: { fontSize: 14, fontWeight: '700', color: colors.money },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1, borderTopColor: colors.border },
   amountBox: { alignItems: 'flex-end', paddingHorizontal: 20, paddingVertical: 24, flex: 1, justifyContent: 'flex-end' },
   amountExpr: { fontSize: 14, fontWeight: '500', color: colors.textMuted },
