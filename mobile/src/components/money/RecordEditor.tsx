@@ -42,7 +42,14 @@ import {
 } from '@/lib/moneyUtils';
 import Calculator from '@/components/money/Calculator';
 import CategoryPicker, { type CategoryChoice } from '@/components/money/CategoryPicker';
-import ItemsScreen, { addWorkGroup, blankLine, changeWorkGroup, groupsFromWork, type ItemsWork } from '@/components/money/ItemsScreen';
+import ItemsScreen, {
+  addWorkGroup,
+  blankLine,
+  changeWorkGroup,
+  groupsFromWork,
+  moveWorkLineToCategory,
+  type ItemsWork,
+} from '@/components/money/ItemsScreen';
 import StorePicker from '@/components/money/StorePicker';
 import WalletPicker from '@/components/money/WalletPicker';
 import RecordDetailView from '@/components/money/RecordDetailView';
@@ -69,7 +76,7 @@ const SHOW_SAVE_NEXT = true;
 type Screen =
   | { type: 'edit' }
   | { type: 'items' }
-  | { type: 'category'; purpose: 'add' }
+  | { type: 'category'; purpose: 'add'; moveLineKey?: string }
   | { type: 'category'; purpose: 'change'; groupKey: string }
   | { type: 'wallet'; field: 'walletId' | 'toWalletId' }
   | { type: 'store' }
@@ -275,6 +282,12 @@ export default function RecordEditor({
       pop();
       return;
     }
+    if (work && target.type === 'category' && target.purpose === 'add' && target.moveLineKey) {
+      // 品目の画面で行を「カテゴリを追加」へ落とした。その行を選んだカテゴリへ移して、品目の画面へ戻る。
+      setWork(moveWorkLineToCategory(work, target.moveLineKey, picked, newGroupKey()));
+      pop();
+      return;
+    }
     if (work) {
       // 品目の画面の「カテゴリを追加」から。品目の画面へ戻る。
       setWork(addWorkGroup(work, picked, newGroupKey()));
@@ -366,7 +379,7 @@ export default function RecordEditor({
             title={groupTitle}
             iconKey={groupIconKey}
             onChangeCategory={(groupKey) => push({ type: 'category', purpose: 'change', groupKey })}
-            onAddCategory={() => push({ type: 'category', purpose: 'add' })}
+            onAddCategory={(moveLineKey) => push({ type: 'category', purpose: 'add', moveLineKey })}
             onSave={saveWork}
             onClose={back}
           />
