@@ -6,6 +6,7 @@ import {
   cardIssuerOf,
   isDiscardedCardMail,
   matchStoreByRomaji,
+  OLIVE_DEBIT_ACCOUNT,
   parseCardMail,
   RAKUTEN_ACCOUNT,
   romajiOf,
@@ -32,6 +33,23 @@ const smbcBody = `○○　様
 assert.equal(cardIssuerOf('三井住友カード <statement@vpass.ne.jp>'), 'smbc');
 assert.equal(cardIssuerOf('info@mail.rakuten-card.co.jp'), 'rakuten');
 assert.equal(cardIssuerOf('info@zaim.net'), null);
+assert.equal(cardIssuerOf('smbc-debit@smbc-card.com'), 'smbc');
+
+// 2026-10-21に届いた Olive のデビットの通知の形（宛名は伏せた）。「ご利用カード：」の行が無い
+const debitBody = `○○　様
+
+いつもＯｌｉｖｅフレキシブルペイをご利用頂きありがとうございます。
+お客様のカードご利用内容（デビットモード）をお知らせいたします。
+
+◇利用日 ：2026/10/21 21:01:30
+◇利用先　：LINE EC
+◇利用金額：2,500円
+◇承認番号：609580
+  ※利用日は日本標準時刻となります。`;
+assert.deepEqual(parseCardMail('smbc-debit@smbc-card.com', 'ご利用のお知らせ【三井住友カード】', debitBody), [
+  { accountName: OLIVE_DEBIT_ACCOUNT, occurredOn: '2026-10-21', amount: 2500, merchant: 'LINE EC' },
+]);
+assert.equal(isDiscardedCardMail('smbc-debit@smbc-card.com', 'ご利用のお知らせ【三井住友カード】', debitBody), false);
 
 assert.deepEqual(parseCardMail('statement@vpass.ne.jp', smbcSubject, smbcBody), [
   { accountName: '三井住友カードＶＩＳＡ（ＮＬ）', occurredOn: '2026-10-15', amount: 4415, merchant: 'YOKAMONNE JIYONANTEN' },
