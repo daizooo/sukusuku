@@ -70,6 +70,9 @@ type Screen =
 
 const KINDS: MoneyRecordKind[] = ['expense', 'income', 'transfer'];
 
+// 帯の上の「記録して続ける」。要らなくなったら false にすればリンクごと消える（帯は「記録する」だけのまま）。
+const SHOW_SAVE_NEXT = true;
+
 let groupSeq = 0;
 const newGroupKey = () => `group-${(groupSeq += 1)}`;
 
@@ -635,21 +638,18 @@ export default function RecordEditor({
           </>
         )}
       </div>
-      {/* 下いっぱいの保存の帯（青）。新しく足すときは「記録して続ける」も出す（取り込んだ明細からの記録は除く）。 */}
-      {!record && onSubmitNext && initialAmount === null ? (
-        <div className="flex shrink-0">
-          <button type="button" onClick={() => submit(true)} className="flex-1 border-t border-blue-600 bg-white py-4 text-base font-extrabold text-blue-600 hover:bg-blue-50">
-            記録して続ける
-          </button>
-          <button type="button" onClick={() => submit()} className="flex-1 bg-blue-600 py-4 text-base font-extrabold text-white hover:bg-blue-700">
-            記録する
+      {/* 下いっぱいの保存の帯（青）は「記録する」の1本。新しく足すときは、帯の上に「記録して続ける」を文字リンクで出す（取り込んだ明細からの記録は除く）。 */}
+      {SHOW_SAVE_NEXT && !record && onSubmitNext && initialAmount === null && (
+        <div className="flex shrink-0 justify-end border-t border-gray-200 bg-white px-4 py-1">
+          <button type="button" onClick={() => submit(true)} className="px-1 py-2 text-sm font-bold text-blue-600 hover:text-blue-700">
+            記録して続ける ＋
           </button>
         </div>
-      ) : (
-        <button type="button" onClick={() => submit()} className="shrink-0 bg-blue-600 py-4 text-base font-extrabold text-white hover:bg-blue-700">
-          {record ? '保存する' : '記録する'}
-        </button>
       )}
+      <button type="button" onClick={() => submit()} className="shrink-0 bg-blue-600 py-4 text-base font-extrabold text-white hover:bg-blue-700">
+        {record ? '保存する' : '記録する'}
+      </button>
+
     </>
   );
 
