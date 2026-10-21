@@ -819,8 +819,6 @@ export default function MoneyScreen() {
           onSubmit={(draft) => void saveRecord(draft)}
           onSubmitNext={(draft) => void saveRecord(draft, true)}
           onDelete={(record) => void removeRecord(record)}
-          onSaveWallet={saveWallet}
-          onDeleteWallet={(wallet) => void deleteWallet(wallet)}
           onEditCategories={() => setEditingCategories(true)}
         />
       )}

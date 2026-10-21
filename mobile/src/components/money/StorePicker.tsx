@@ -52,9 +52,6 @@ export default function StorePicker({ value, registered, others, canRegister, on
           style={styles.search}
           value={query}
           onChangeText={setQuery}
-          placeholder="お店の名前"
-          placeholderTextColor={colors.textFaint}
-          autoFocus={value === ''}
           returnKeyType="done"
           onSubmitEditing={() => onPick(typed, false)}
         />

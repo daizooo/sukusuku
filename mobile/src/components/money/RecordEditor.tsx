@@ -11,7 +11,6 @@ import type {
   MoneyRecordKind,
   MoneyStore,
   MoneyWallet,
-  MoneyWalletDraft,
   ReceiptScan,
   ReceiptScanItem,
 } from '@/types/app';
@@ -91,8 +90,6 @@ export interface RecordEditorProps {
   /** 記録して、続けて次の記録を入れる（新しく足すときだけ。日付を引き継ぐ。docs/kakei.md §3.2。2026-10-20）。 */
   onSubmitNext?: (draft: MoneyRecordDraft) => void;
   onDelete: (record: MoneyRecord) => void;
-  onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
-  onDeleteWallet: (wallet: MoneyWallet) => void;
   onEditCategories: () => void;
   /**
    * レシートの読み取りの結果。あれば、その内容を入れた新しい記録として開く（docs/kakei.md §10.4）。
@@ -137,8 +134,6 @@ export default function RecordEditor({
   onSubmit,
   onSubmitNext,
   onDelete,
-  onSaveWallet,
-  onDeleteWallet,
   onEditCategories,
   receipt = null,
   onScanReceipt,
@@ -394,8 +389,6 @@ export default function RecordEditor({
               pop();
             }}
             onClose={back}
-            onSave={onSaveWallet}
-            onDelete={onDeleteWallet}
           />
         );
       case 'store':
