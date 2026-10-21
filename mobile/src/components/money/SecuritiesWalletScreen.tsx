@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Modal from '@/components/ui/Modal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronRight, Pencil, Plus } from 'lucide-react-native';
 import type { MoneySecuritiesData, MoneySecurity, MoneySecurityDraft, MoneyWallet, MoneyWalletDraft } from '@/types/app';

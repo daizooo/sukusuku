@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { AppState, View } from 'react-native';
+import { AppState, KeyboardAvoidingView, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { SessionProvider, useSession } from '@/lib/session';
@@ -40,12 +40,17 @@ export default function RootLayout() {
         <StatusBar style="dark" />
         {/* 他の端末での変更を各画面へ届ける（src/lib/familySync.tsx）。画面より外側に1つだけ置く。 */}
         <FamilySyncProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.background },
-            }}
-          />
+          {/* キーボードが出たら画面をその分だけ縮め、下の入力欄がキーボードの裏に隠れないようにする。
+              edge-to-edge のAndroidはOSが縮めてくれない。Modal（別ウィンドウ）は src/components/ui/Modal.tsx と
+              SheetModal などが各自で避ける。 */}
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: colors.background },
+              }}
+            />
+          </KeyboardAvoidingView>
         </FamilySyncProvider>
         <StatusBarBand />
         <AppEffects />
