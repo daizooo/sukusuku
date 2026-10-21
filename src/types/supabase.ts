@@ -1672,6 +1672,7 @@ export type Database = {
           created_at: string
           day: number
           day_known: boolean
+          deferred_until: string | null
           end_month: string | null
           family_id: string
           holiday: string
@@ -1700,6 +1701,7 @@ export type Database = {
           created_at?: string
           day: number
           day_known?: boolean
+          deferred_until?: string | null
           end_month?: string | null
           family_id: string
           holiday?: string
@@ -1728,6 +1730,7 @@ export type Database = {
           created_at?: string
           day?: number
           day_known?: boolean
+          deferred_until?: string | null
           end_month?: string | null
           family_id?: string
           holiday?: string

@@ -753,9 +753,11 @@ export interface MoneyRecurring {
   intervalYears: number | null;
   /** 日が決まっているか。false（日付未定）は帯に出すものだけ。帯には出さず、同じ小分類の記録が入るのを待つ。 */
   dayKnown: boolean;
+  /** 帯に出すもので「翌月へ送る」にしたとき、この日（YYYY-MM-DD。翌月1日）まで帯に出さない。null は送っていない。 */
+  deferredUntil: string | null;
 }
 
-export type MoneyRecurringDraft = Omit<MoneyRecurring, 'id' | 'position' | 'archived' | 'createdAt'>;
+export type MoneyRecurringDraft = Omit<MoneyRecurring, 'id' | 'position' | 'archived' | 'createdAt' | 'deferredUntil'>;
 
 // ---- Zaim 取り込み（docs/kakei.md §9.5） ----
 

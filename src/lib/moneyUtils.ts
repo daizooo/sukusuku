@@ -877,6 +877,45 @@ export function estimateCostsInYear(
   );
 }
 
+/** 記録の上の帯（未確定明細）に出す、帯に出すルールの1回（docs/kakei.md §0.7）。 */
+export interface PendingEstimate {
+  rule: MoneyRecurring;
+  /** 予定の月（YYYY-MM）。「今月はなし」はこの月を skippedMonths に足す。 */
+  plannedMonth: string;
+  /** 記録するときの日（YYYY-MM-DD）。今月の回はその日、過ぎた月から送られた回は今日。 */
+  date: string;
+  /** 見積額（estimateCostsInYear の額）。 */
+  amount: number;
+}
+
+/**
+ * 帯に出す見込み（記録を作らないルール）のうち、日が来て、まだ記録が無い回（日の順）。today は YYYY-MM-DD。
+ * - 今月の回は、その日（recurringDateOf）から出す。予定の月を過ぎて記録が無い回（estimateCostsInYear の overdue）は今月に出る
+ * - 日付未定（dayKnown: false）は出さない。「翌月へ送る」にしたルールは deferredUntil の日まで出さない
+ * - 済（同じ小分類の記録が入った）・今月はなしの回は出さない
+ */
+export function pendingEstimates(
+  recurring: readonly MoneyRecurring[],
+  records: readonly MoneyRecord[],
+  today: string,
+): PendingEstimate[] {
+  const thisMonth = monthKeyOf(today);
+  const rules = recurring.filter((rule) => rule.dayKnown && (rule.deferredUntil ?? '') <= today);
+  const list: PendingEstimate[] = [];
+  for (const entry of estimateCostsInYear(rules, records, yearOfMonth(thisMonth), today)) {
+    if (entry.status === 'overdue') {
+      list.push({ rule: entry.rule, plannedMonth: entry.plannedMonth, date: today, amount: entry.amount });
+      continue;
+    }
+    if (entry.status !== 'upcoming' || entry.plannedMonth !== thisMonth) continue;
+    const date = recurringDateOf(yearOfMonth(thisMonth), Number(thisMonth.slice(5, 7)), entry.rule);
+    if (date <= today) list.push({ rule: entry.rule, plannedMonth: entry.plannedMonth, date, amount: entry.amount });
+  }
+  return list.sort((a, b) =>
+    a.plannedMonth !== b.plannedMonth ? (a.plannedMonth < b.plannedMonth ? -1 : 1) : a.date < b.date ? -1 : a.date > b.date ? 1 : a.rule.position - b.rule.position,
+  );
+}
+
 /**
  * 見積費から、大分類ごと・年ごとの1月〜12月の予算に足す額を出す（固定費の fixedBudgetRows と同じ形。fixed: true・estimate: true）。
  * 置く月（estimateCostsInYear の placedMonth）に見積額を足す。生活費の大分類のものだけ。ルールを作った年から今年の翌年まで。

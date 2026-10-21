@@ -16,7 +16,8 @@ import FastScrollBar from './FastScrollBar';
 // 右端の早送りバーは最初から出ていて、帯のどこを触っても、つかんで動かしても、その位置へ飛べる（触っているあいだだけ位置の日付が出る）。
 // いちばん上から15件さかのぼると、上に「今日に戻る」を出す（押すと、いちばん上へ戻る）。
 // その月に使った額は「振り返り」で見るので、ここには出さない（2026-10-08）。押すと記録の詳細。
-// Gmail から取り込んだ明細の「未確認 n件」は、一覧の上に固定して出す（2026-10-18。以前は口座の面。docs/kakei.md §9.5.6.1）。
+// 一覧の上に固定して「未確定明細 n件」の帯を出す（Gmail から取り込んだ明細の未確認と、日が来た帯に出す見込み。
+// 2026-10-21。以前は Gmail の「未確認 n件」だけ。docs/kakei.md §0.7・§9.5.6.1）。押すと一覧（MoneyFeedInbox）。
 // Apps Script から1時間以上届いていなければ、その上に「Gmail の取り込みが止まっています」を出す（2026-10-20。§9.8）。
 
 interface MoneyRecordsViewProps {
@@ -31,6 +32,8 @@ interface MoneyRecordsViewProps {
   onAddOnDate: (date: string) => void;
   /** Gmail から取り込んだ明細のうち、片づいていないものの数（docs/kakei.md §9.5.6.1）。0 なら出さない。 */
   feedOpenCount: number;
+  /** 帯に出す見込みのうち、日が来て記録が無い回の数（pendingEstimates。日付未定は数えない）。 */
+  estimateCount: number;
   onOpenFeed: () => void;
   /** Apps Script から1時間以上届いていない（docs/kakei.md §9.8）。 */
   feedStalled: boolean;
@@ -57,6 +60,7 @@ export default function MoneyRecordsView({
   onOpen,
   onAddOnDate,
   feedOpenCount,
+  estimateCount,
   onOpenFeed,
   feedStalled,
 }: MoneyRecordsViewProps) {
@@ -120,15 +124,19 @@ export default function MoneyRecordsView({
           <span className="flex-1 text-[13px] font-bold">Gmail の取り込みが止まっています（1時間以上届いていません）</span>
         </div>
       )}
-      {feedOpenCount > 0 && (
+      {feedOpenCount + estimateCount > 0 && (
         <button
           type="button"
           onClick={onOpenFeed}
           className="mb-1 mt-2 flex w-full shrink-0 items-center gap-2 rounded-2xl bg-blue-100 px-3.5 py-2.5 text-left text-blue-800 hover:bg-blue-200"
         >
           <Inbox size={18} />
-          <span className="text-[15px] font-extrabold">未確認 {feedOpenCount}件</span>
-          <span className="flex-1 text-xs">Gmail から取り込んだ明細</span>
+          <span className="text-[15px] font-extrabold">未確定明細 {feedOpenCount + estimateCount}件</span>
+          <span className="min-w-0 flex-1 truncate text-xs">
+            {[feedOpenCount > 0 ? `Gmail ${feedOpenCount}件` : '', estimateCount > 0 ? `見込み ${estimateCount}件` : '']
+              .filter(Boolean)
+              .join('・')}
+          </span>
           <ChevronRight size={16} />
         </button>
       )}
