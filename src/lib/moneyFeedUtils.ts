@@ -26,11 +26,17 @@ export const feedTimeLabel = (iso: string | null): string => {
 export const feedAmountLabel = (item: Pick<MoneyFeedItem, 'direction' | 'amount'>): string =>
   item.amount === null ? '' : item.direction === 'in' ? formatYen(item.amount) : formatBalance(-item.amount);
 
+// 利用先に店名が載らない通知（デビットは「iDデビット」とだけ載る）。お店は空にして、人が入れる（2026-10-22）
+const NO_STORE_DESCRIPTIONS = new Set(['iDデビット']);
+
 /**
  * 未確認の「記録を作成する」で入れるお店。利用先に当てたお店（store_hint）、当たらなければ利用先そのまま（§9.5.6.1）。
+ * 店名の載らない利用先（iDデビット）は空。
  */
-export const feedStoreName = (item: Pick<MoneyFeedItem, 'storeHint' | 'description'>): string =>
-  item.storeHint || item.description.trim();
+export const feedStoreName = (item: Pick<MoneyFeedItem, 'storeHint' | 'description'>): string => {
+  const description = item.description.trim();
+  return item.storeHint || (NO_STORE_DESCRIPTIONS.has(description.normalize('NFKC')) ? '' : description);
+};
 
 /** 一覧の並び: 手入力との確認 → 口座が決まっていない → 未確認 → 読めない。同じ中は日付の新しい順。 */
 const STATUS_ORDER = (item: MoneyFeedItem): number =>
