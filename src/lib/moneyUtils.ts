@@ -1467,6 +1467,10 @@ export interface RecurringPlan {
   income: number[];
   /** 固定費（確定・見込み。自動で記録するルールと、帯に出すルールの回）の1月〜12月。 */
   expense: number[];
+  /** expense のうち確定（固定額のルール）の1月〜12月。 */
+  confirmed: number[];
+  /** expense のうち見込み（額を見込むルール）の1月〜12月。 */
+  estimate: number[];
 }
 
 /**
@@ -1486,6 +1490,12 @@ export function recurringPlanInYear(
 ): RecurringPlan {
   const income = Array.from({ length: 12 }, () => 0);
   const expense = Array.from({ length: 12 }, () => 0);
+  const confirmed = Array.from({ length: 12 }, () => 0);
+  const estimate = Array.from({ length: 12 }, () => 0);
+  const addExpense = (rule: MoneyRecurring, index: number, amount: number) => {
+    expense[index] += amount;
+    (rule.amountMode === 'fixed' ? confirmed : estimate)[index] += amount;
+  };
   const inBudget = (categoryId: string | null, monthKey: string) => {
     const topId = categoryId === null ? null : topCategoryIdOf(categories, categoryId);
     return topId !== null && manualBudgetFor(budgets, topId, monthKey) !== null;
@@ -1504,15 +1514,15 @@ export function recurringPlanInYear(
       if (rule.kind === 'expense' && inBudget(rule.categoryId, monthKey)) continue;
       const amount = recurringMonthAmount(rule, monthKey, records, made);
       if (rule.kind === 'income') income[month - 1] += amount;
-      else expense[month - 1] += amount;
+      else addExpense(rule, month - 1, amount);
     }
   }
   for (const entry of estimateCostsInYear(recurring, records, year, today)) {
     if (entry.placedMonth === null || yearOfMonth(entry.placedMonth) !== year) continue;
     if (inBudget(entry.rule.categoryId, entry.placedMonth)) continue;
-    expense[Number(entry.placedMonth.slice(5, 7)) - 1] += entry.status === 'done' ? entry.actual : entry.amount;
+    addExpense(entry.rule, Number(entry.placedMonth.slice(5, 7)) - 1, entry.status === 'done' ? entry.actual : entry.amount);
   }
-  return { income, expense };
+  return { income, expense, confirmed, estimate };
 }
 
 /**
@@ -1536,6 +1546,201 @@ export function yearForecastBalances(
     const variable = tops.reduce((sum, category) => sum + (manualBudgetFor(budgets, category.id, monthKey) ?? 0), 0);
     return plan.income[index] - plan.expense[index] - variable - reserve[index];
   });
+}
+
+// ---- 振り返り・年間予算の支出の分け方（docs/kakei.md §0.7。2026-10-22） ----
+// 支出の品目を、変動費・予備費・固定費に分ける。年間予算の上の枠と振り返りで使う。
+// - 予備費: 予備費の小分類（money_reserve_budgets に行のある小分類）
+// - 変動費: 大分類にその月の手入力の予算（変動費）があるもの（電気・ガス・水道のように、ルールで記録するものも含む）
+// - 固定費: 自動記録ルール（支出）のカテゴリ。確定（固定額のルール）と見込み（額を見込むルール）に分ける
+// - どれでもないもの（予算もルールも無い大分類・削除したカテゴリ）は変動費に数える
+
+export type SpendGroup = 'variable' | 'reserve' | 'confirmed' | 'estimate';
+
+/** 自動記録ルール（支出・使っているもの）のカテゴリと、確定か見込みか（同じカテゴリに両方あれば確定）。 */
+export function fixedCategoryModes(recurring: readonly MoneyRecurring[]): Map<string, 'confirmed' | 'estimate'> {
+  const modes = new Map<string, 'confirmed' | 'estimate'>();
+  for (const rule of recurring) {
+    if (rule.archived || rule.kind !== 'expense' || rule.categoryId === null) continue;
+    if (modes.get(rule.categoryId) === 'confirmed') continue;
+    modes.set(rule.categoryId, rule.amountMode === 'fixed' ? 'confirmed' : 'estimate');
+  }
+  return modes;
+}
+
+/** 支出の品目（小分類）が、その月にどの分け方に入るか。 */
+export function spendGroupOf(
+  categoryId: string | null,
+  monthKey: string,
+  categories: readonly MoneyCategory[],
+  budgets: readonly MoneyBudget[],
+  reserveIds: ReadonlySet<string>,
+  fixedModes: ReadonlyMap<string, 'confirmed' | 'estimate'>,
+): SpendGroup {
+  if (categoryId === null) return 'variable';
+  if (reserveIds.has(categoryId)) return 'reserve';
+  const topId = topCategoryIdOf(categories, categoryId);
+  if (topId !== null && manualBudgetFor(budgets, topId, monthKey) !== null) return 'variable';
+  return fixedModes.get(categoryId) ?? 'variable';
+}
+
+export interface IncomePart {
+  /** 収入の大分類（無ければ null）。 */
+  categoryId: string | null;
+  name: string;
+  amount: number;
+}
+
+export interface PeriodSummary {
+  /** 収入の大分類ごと（カテゴリの並び。額のあるものだけ）。 */
+  income: IncomePart[];
+  incomeTotal: number;
+  variable: number;
+  reserve: number;
+  confirmed: number;
+  estimate: number;
+  expenseTotal: number;
+}
+
+/** 期間（月の並び）の収入（大分類ごと）と、支出の分け方ごとの額。振替は数えない。 */
+export function periodSummary(
+  records: readonly MoneyRecord[],
+  categories: readonly MoneyCategory[],
+  budgets: readonly MoneyBudget[],
+  reserves: readonly MoneyReserve[],
+  recurring: readonly MoneyRecurring[],
+  monthKeys: readonly string[],
+): PeriodSummary {
+  const reserveIds = reserveCategoryIds(reserves);
+  const fixedModes = fixedCategoryModes(recurring);
+  const incomeByTop = new Map<string | null, number>();
+  const groups = { variable: 0, reserve: 0, confirmed: 0, estimate: 0 };
+  for (const monthKey of monthKeys) {
+    for (const record of recordsInMonth(records, monthKey)) {
+      if (record.kind === 'transfer') continue;
+      for (const item of record.items) {
+        if (record.kind === 'income') {
+          const topId = item.categoryId === null ? null : topCategoryIdOf(categories, item.categoryId);
+          incomeByTop.set(topId, (incomeByTop.get(topId) ?? 0) + item.amount);
+        } else if (item.categoryId !== null || item.categoryName !== '') {
+          groups[spendGroupOf(item.categoryId, monthKey, categories, budgets, reserveIds, fixedModes)] += item.amount;
+        }
+      }
+    }
+  }
+  const income: IncomePart[] = topCategories(categories, 'income', true)
+    .map((category) => ({ categoryId: category.id as string | null, name: category.name, amount: incomeByTop.get(category.id) ?? 0 }))
+    .filter((part) => part.amount > 0);
+  const other = [...incomeByTop].filter(([id]) => id === null || !income.some((part) => part.categoryId === id));
+  const otherAmount = other.reduce((sum, [, amount]) => sum + amount, 0);
+  if (otherAmount > 0) income.push({ categoryId: null, name: 'その他', amount: otherAmount });
+  return {
+    income,
+    incomeTotal: income.reduce((sum, part) => sum + part.amount, 0),
+    ...groups,
+    expenseTotal: groups.variable + groups.reserve + groups.confirmed + groups.estimate,
+  };
+}
+
+/**
+ * 変動費の大分類ごとの予算と実績（カテゴリの並び）。実績は変動費に分けた品目だけ（予備費・固定費の品目は除く）。
+ * 予算のある大分類と、予算は無いが変動費の実績がある大分類を出す。
+ */
+export function variableTiles(
+  records: readonly MoneyRecord[],
+  categories: readonly MoneyCategory[],
+  budgets: readonly MoneyBudget[],
+  reserves: readonly MoneyReserve[],
+  recurring: readonly MoneyRecurring[],
+  monthKeys: readonly string[],
+): BudgetTile[] {
+  const reserveIds = reserveCategoryIds(reserves);
+  const fixedModes = fixedCategoryModes(recurring);
+  const spend = new Map<string, number>();
+  for (const monthKey of monthKeys) {
+    for (const record of recordsInMonth(records, monthKey)) {
+      if (record.kind !== 'expense') continue;
+      for (const item of record.items) {
+        if (item.categoryId === null) continue;
+        if (spendGroupOf(item.categoryId, monthKey, categories, budgets, reserveIds, fixedModes) !== 'variable') continue;
+        const topId = topCategoryIdOf(categories, item.categoryId);
+        if (topId !== null) spend.set(topId, (spend.get(topId) ?? 0) + item.amount);
+      }
+    }
+  }
+  return topCategories(categories, 'living', true)
+    .map((category) => {
+      const monthly = monthKeys.map((key) => budgetFor(budgets, category.id, key)).filter((value): value is number => value !== null);
+      const budget = monthly.length === 0 ? null : monthly.reduce((sum, value) => sum + value, 0);
+      const actual = spend.get(category.id) ?? 0;
+      return {
+        category,
+        budget,
+        actual,
+        diff: (budget ?? 0) - actual,
+        percent: budget !== null && budget > 0 ? Math.round((actual / budget) * 100) : null,
+      };
+    })
+    .filter((tile) => tile.budget !== null || tile.actual > 0);
+}
+
+/** 期間（月の並び）に、その小分類で使った額（支出の品目）。 */
+export function categorySpentIn(records: readonly MoneyRecord[], categoryId: string, monthKeys: readonly string[]): number {
+  let total = 0;
+  for (const monthKey of monthKeys) {
+    for (const record of recordsInMonth(records, monthKey)) {
+      if (record.kind !== 'expense') continue;
+      for (const item of record.items) if (item.categoryId === categoryId) total += item.amount;
+    }
+  }
+  return total;
+}
+
+export interface FixedSpend {
+  record: MoneyRecord;
+  categoryId: string;
+  mode: 'confirmed' | 'estimate';
+  amount: number;
+}
+
+/** その月に記録があった固定費（品目を小分類ごとにまとめた1行。日付の順）。 */
+export function fixedSpendInMonth(
+  records: readonly MoneyRecord[],
+  categories: readonly MoneyCategory[],
+  budgets: readonly MoneyBudget[],
+  reserves: readonly MoneyReserve[],
+  recurring: readonly MoneyRecurring[],
+  monthKey: string,
+): FixedSpend[] {
+  const reserveIds = reserveCategoryIds(reserves);
+  const fixedModes = fixedCategoryModes(recurring);
+  const list: FixedSpend[] = [];
+  for (const record of recordsInMonth(records, monthKey)) {
+    if (record.kind !== 'expense') continue;
+    const byCategory = new Map<string, FixedSpend>();
+    for (const item of record.items) {
+      if (item.categoryId === null) continue;
+      const group = spendGroupOf(item.categoryId, monthKey, categories, budgets, reserveIds, fixedModes);
+      if (group !== 'confirmed' && group !== 'estimate') continue;
+      const entry = byCategory.get(item.categoryId) ?? { record, categoryId: item.categoryId, mode: group, amount: 0 };
+      entry.amount += item.amount;
+      byCategory.set(item.categoryId, entry);
+    }
+    list.push(...byCategory.values());
+  }
+  return list.sort((a, b) => (a.record.occurredOn < b.record.occurredOn ? -1 : a.record.occurredOn > b.record.occurredOn ? 1 : 0));
+}
+
+/** 帯に出す見込み（額を見込むルール）のうち、その年に実績が入って、見込みと額が違った回（予定の月の順）。 */
+export function estimateDiffsInYear(
+  recurring: readonly MoneyRecurring[],
+  records: readonly MoneyRecord[],
+  year: number,
+  today: string,
+): EstimateCostOccurrence[] {
+  return estimateCostsInYear(recurring, records, year, today).filter(
+    (entry) => entry.status === 'done' && entry.rule.amountMode === 'estimate' && entry.actual !== entry.amount,
+  );
 }
 
 export interface LandingMonth {

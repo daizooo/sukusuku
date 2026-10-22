@@ -263,7 +263,7 @@ export default function RecurringSettings({
         />
       ) : (
         <>
-          <ScreenHeader title="固定費（支出、収入、振替）" icon="back" onClose={onBack} />
+          <ScreenHeader title="自動記録ルール（支出、収入、振替）" icon="back" onClose={onBack} />
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden" {...swipeHandlers}>
           <div role="tablist" className="shrink-0 flex border-b border-gray-200 px-2">
             {MODE_TABS.map(({ id: entry, label }) => {

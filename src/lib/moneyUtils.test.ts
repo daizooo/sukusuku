@@ -10,6 +10,11 @@ import {
   reserveForecastByMonth,
   recurringPlanInYear,
   yearForecastBalances,
+  periodSummary,
+  variableTiles,
+  fixedSpendInMonth,
+  spendGroupOf,
+  fixedCategoryModes,
   estimateCostBasis,
   estimateCostsInYear,
   pendingEstimates,
@@ -1409,6 +1414,67 @@ assert.deepEqual(
   assert.equal(moreForecast[9], 26666, '残り 80,000 を10〜12月へ');
   assert.equal(moreForecast[11], 80000 - 26666 * 2);
   assert.equal(yearForecastBalances([], cats, [], more, rs, 2027, today)[9], -26666, '着地見込みの月の見込みから、まだ使っていない予備費を引く');
+}
+
+// ---- 支出の分け方（変動費・予備費・固定費。docs/kakei.md §0.7） ----
+{
+  const cats = [
+    { id: 'food', kind: 'living', parentId: null, archived: false, position: 0, name: '食費' },
+    { id: 'grocery', kind: 'living', parentId: 'food', archived: false, position: 0, name: '食料品' },
+    { id: 'util', kind: 'living', parentId: null, archived: false, position: 1, name: '水道光熱費' },
+    { id: 'elec', kind: 'living', parentId: 'util', archived: false, position: 0, name: '電気' },
+    { id: 'fixed', kind: 'living', parentId: null, archived: false, position: 2, name: '固定費' },
+    { id: 'rent', kind: 'living', parentId: 'fixed', archived: false, position: 0, name: '家賃' },
+    { id: 'vfixed', kind: 'living', parentId: null, archived: false, position: 3, name: '変動固定費' },
+    { id: 'car', kind: 'living', parentId: 'vfixed', archived: false, position: 0, name: '自動車保険' },
+    { id: 'res', kind: 'living', parentId: null, archived: false, position: 4, name: '予備費' },
+    { id: 'gift', kind: 'living', parentId: 'res', archived: false, position: 0, name: '冠婚葬祭' },
+    { id: 'salary', kind: 'income', parentId: null, archived: false, position: 0, name: '給与' },
+    { id: 'bonus', kind: 'income', parentId: null, archived: false, position: 1, name: '賞与' },
+  ] as unknown as MoneyCategory[];
+  const buds: MoneyBudget[] = [
+    { id: 'b1', categoryId: 'food', year: 2027, monthAmounts: Array(12).fill(75000) },
+    { id: 'b2', categoryId: 'util', year: 2027, monthAmounts: Array(12).fill(32000) },
+  ];
+  const reserves = [{ categoryId: 'gift', year: 2027, amount: 100000 }];
+  const rule = (over: Partial<MoneyRecurring>) => ({ kind: 'expense', archived: false, amountMode: 'fixed', categoryId: null, ...over }) as MoneyRecurring;
+  const recurring = [
+    rule({ id: 'r1', categoryId: 'rent' }),
+    rule({ id: 'r2', categoryId: 'car', amountMode: 'estimate' }),
+    rule({ id: 'r3', categoryId: 'elec', amountMode: 'estimate' }),
+  ];
+  const rec = (id: string, occurredOn: string, kind: MoneyRecord['kind'], items: [string, number][]) =>
+    ({ id, occurredOn, kind, items: items.map(([categoryId, amount], index) => ({ id: `${id}-${index}`, categoryId, categoryName: '', amount })) }) as unknown as MoneyRecord;
+  const rs = [
+    rec('a', '2027-06-25', 'income', [['salary', 195000]]),
+    rec('b', '2027-06-10', 'income', [['bonus', 415000]]),
+    rec('c', '2027-06-05', 'expense', [['grocery', 68000], ['gift', 10000]]),
+    rec('d', '2027-06-20', 'expense', [['elec', 9000]]),
+    rec('e', '2027-06-27', 'expense', [['rent', 80000]]),
+    rec('f', '2027-06-15', 'expense', [['car', 34200]]),
+  ];
+  const modes = fixedCategoryModes(recurring);
+  const ids = new Set(['gift']);
+  assert.equal(spendGroupOf('elec', '2027-06', cats, buds, ids, modes), 'variable', '大分類に変動費の予算があれば変動費（ルールがあっても）');
+  assert.equal(spendGroupOf('rent', '2027-06', cats, buds, ids, modes), 'confirmed');
+  assert.equal(spendGroupOf('car', '2027-06', cats, buds, ids, modes), 'estimate');
+  assert.equal(spendGroupOf('gift', '2027-06', cats, buds, ids, modes), 'reserve');
+
+  const summary = periodSummary(rs, cats, buds, reserves, recurring, ['2027-06']);
+  assert.deepEqual(summary.income.map((part) => [part.name, part.amount]), [['給与', 195000], ['賞与', 415000]], '収入は大分類ごと（カテゴリの並び）');
+  assert.deepEqual([summary.variable, summary.reserve, summary.confirmed, summary.estimate], [77000, 10000, 80000, 34200]);
+  assert.equal(summary.expenseTotal, 201200);
+
+  assert.deepEqual(
+    variableTiles(rs, cats, buds, reserves, recurring, ['2027-06']).map((tile) => [tile.category.id, tile.actual, tile.budget]),
+    [['food', 68000, 75000], ['util', 9000, 32000]],
+    '変動費の大分類だけ（予備費・固定費の品目は除く）',
+  );
+  assert.deepEqual(
+    fixedSpendInMonth(rs, cats, buds, reserves, recurring, '2027-06').map((entry) => [entry.categoryId, entry.mode, entry.amount]),
+    [['car', 'estimate', 34200], ['rent', 'confirmed', 80000]],
+    'その月の固定費の記録（日付の順）',
+  );
 }
 
 // ---- 記録する月の言い方 ----
