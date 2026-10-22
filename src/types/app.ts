@@ -491,15 +491,35 @@ export interface MoneyCategory {
   position: number;
   /** 使わなくした（選べないが、記録には残る）。 */
   archived: boolean;
-  /** 予備費に紐づけた小分類（この小分類の記録は予備費の予算で数える。docs/kakei.md §3.7）。 */
+  /** 予備費に紐づけた小分類（0115。使っていない。docs/kakei.md §0.7）。 */
   reserve: boolean;
+  /** 大分類の予算の分け方（docs/kakei.md §0.7）。支出をどこで数えるかは大分類のこれだけで決める。小分類では使わない。 */
+  budgetGroup: MoneyBudgetGroup;
 }
 
-/** 予備費の小分類の、その年の額（docs/kakei.md §0.7・§3.7）。money_reserve_budgets に対応。行のある小分類が予備費の小分類。 */
-export interface MoneyReserve {
+/** 予算の分け方。変動費（大分類の月の予算）・予備費・固定費の確定・固定費の見込み（小分類ごとの予算の明細）。 */
+export type MoneyBudgetGroup = 'variable' | 'reserve' | 'fixed' | 'estimate';
+
+/**
+ * 予算の明細（docs/kakei.md §0.7）。money_budget_lines に対応。小分類（収入も）ごとの「単価 × その年に発生する回数」。
+ * 回数は発生月（months。null は毎月）・◯年ごと（intervalYears。startMonth の年から数える）・期間（startMonth〜endMonth）で決まる。
+ * noMonth は発生月なし（その年に1回ぶんを見込み支出として数える）。自動記録ルールとは別に持つ。
+ */
+export interface MoneyBudgetLine {
+  id: string;
   categoryId: string;
-  year: number;
+  /** 区別のための名前（「時短」「2回目」など。空でよい）。 */
+  name: string;
+  /** 単価（1回の額）。 */
   amount: number;
+  months: number[] | null;
+  noMonth: boolean;
+  intervalYears: number | null;
+  /** YYYY-MM。 */
+  startMonth: string | null;
+  /** YYYY-MM。 */
+  endMonth: string | null;
+  position: number;
 }
 
 /**

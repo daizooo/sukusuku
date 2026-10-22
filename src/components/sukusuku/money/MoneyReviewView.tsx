@@ -10,7 +10,7 @@ import type {
   MoneyMonth,
   MoneyRecord,
   MoneyRecurring,
-  MoneyReserve,
+  MoneyBudgetLine,
   MoneyWallet,
   MoneyWalletBalance,
 } from '@/types/app';
@@ -22,8 +22,8 @@ import {
   categoryYearLanding,
   buildYearLanding,
   dateKeyOfDate,
-  estimateDiffsInYear,
   estimatesInMonth,
+  fixedBudgetRows,
   fixedSpendInMonth,
   formatYear,
   formatYen,
@@ -31,10 +31,10 @@ import {
   monthKeyOfDate,
   periodSummary,
   recordTotal,
-  recurringPlanInYear,
-  reserveUsage,
+  reserveYearRows,
   topCategoryIdOf,
   unclosedMonths,
+  undatedPendingInMonth,
   variableTiles,
   yearActiveMonthKeys,
   yearMonthKeys,
@@ -56,7 +56,9 @@ import { yearTrendPoints } from '@/lib/yearTrend';
 // その下は 変動費 → 予備費 → 固定費 の枠（押すと折りたたむ。開いたときは固定費だけ閉じる）。
 // - 変動費: 大分類ごとの実績と、予算の残り（超過は赤）。行を押すと、簡単な分析と、その大分類に絞った記録の一覧（ReviewDetailScreen。§4.4）
 // - 予備費: 小分類ごとの年の予算の残り。月は今月使った額、年はその年に使った額
-// - 固定費: 月はその月に記録があったもの（予算との差は出さない。押すと記録）。年は確定・見込みの実績と年の予算、見込みと実績の差
+// - 固定費: 月はその月に記録があったもの（予算との差は出さない。押すと記録）。年は確定・見込みの実績と年の予算、
+//   予算と違ったもの（締めた月までの実績と、その月までに発生する回の予算の差。docs/kakei.md §0.7）
+// 支出の分け方は大分類の予算の分け方だけで決める。予算は年間予算の明細（自動記録ルールは使わない）。
 // 年は枠の下に推移のグラフ。
 // 見込みの額（毎月の記録で自動で作り、まだ確かめていない額）は実績に入れて数え、件数と額を添えて出す（§3.3・§4.1）。
 // 月の締め（§4.5）: 過ぎた月と今月の結論の下に「この月を締める」（月の最終週に締めることもあるため、今月も出す）（締めた月は「締めた月」）。押すと締めの画面（MonthCloseScreen）。
@@ -85,15 +87,16 @@ interface MoneyReviewViewProps {
   months: MoneyMonth[];
   /** 固定収入・固定費のルール（締めの画面に、これから自動で作られる記録を出す）。 */
   recurring: MoneyRecurring[];
-  /** 予備費（小分類ごとの年の額。年末の着地見込みで引く。docs/kakei.md §0.7）。 */
-  reserves: MoneyReserve[];
+  /** 予算の明細（収入・予備費・固定費。年末の着地見込みと、予備費・固定費の予算。docs/kakei.md §0.7）。 */
+  budgetLines: MoneyBudgetLine[];
   /** 未確認の明細（締めの画面に、その月の件数を出す）。 */
   feedItems: MoneyFeedItem[];
   /** カードの利用通知の取り込み（締めの画面で、カードの記録を明細と見比べる）。読み込み前は null。 */
   cardFeed: MoneyCardFeed | null;
   onConfirmEstimate: (record: MoneyRecord) => Promise<void>;
   onSetMonthClosed: (monthKey: string, closed: boolean) => void;
-  onOpenFeed: () => void;
+  /** 未確認の明細を開く。締めの画面からは、その月（日付未定の見込みもその月の分を出す）。 */
+  onOpenFeed: (monthKey?: string) => void;
 }
 
 export default function MoneyReviewView({
@@ -112,7 +115,7 @@ export default function MoneyReviewView({
   onOpenRecord,
   months: closings,
   recurring,
-  reserves,
+  budgetLines,
   feedItems,
   cardFeed,
   onConfirmEstimate,
@@ -137,13 +140,13 @@ export default function MoneyReviewView({
   const yearKeys = useMemo(() => yearMonthKeys(year).filter((key) => key <= today), [year, today]);
   const summaryKeys = useMemo(() => (isMonth ? [monthKey] : yearKeys), [isMonth, monthKey, yearKeys]);
   const summary = useMemo(
-    () => periodSummary(records, categories, budgets, reserves, recurring, summaryKeys),
-    [records, categories, budgets, reserves, recurring, summaryKeys],
+    () => periodSummary(records, categories, summaryKeys),
+    [records, categories, summaryKeys],
   );
   // 年末の着地見込みと「推移」グラフ（§4.6・§4.8）。締めた月は実額、ほかは年末まで見込み。
   const landing = useMemo(
-    () => (isMonth ? null : buildYearLanding(records, categories, budgets, recurring, reserves, closings, year, dateKeyOfDate(new Date()))),
-    [isMonth, records, categories, budgets, recurring, reserves, closings, year],
+    () => (isMonth ? null : buildYearLanding(records, categories, budgets, budgetLines, closings, year)),
+    [isMonth, records, categories, budgets, budgetLines, closings, year],
   );
   const trend = useMemo(() => (landing === null ? [] : yearTrendPoints(landing.months)), [landing]);
   // 見ている期間の月。月なら1つ、年なら使い始めた月から12月まで（年の予算がかかる月。使い始める前の月の予算は数えない。2026-10-15）。
@@ -152,34 +155,41 @@ export default function MoneyReviewView({
     [isMonth, monthKey, records, year],
   );
   const tiles = useMemo(
-    () => (periodKeys.length === 0 ? [] : variableTiles(records, categories, budgets, reserves, recurring, periodKeys)),
-    [periodKeys, records, categories, budgets, reserves, recurring],
+    () => (periodKeys.length === 0 ? [] : variableTiles(records, categories, budgets, periodKeys)),
+    [periodKeys, records, categories, budgets],
   );
   const reserveYear = isMonth ? Number(monthKey.slice(0, 4)) : year;
-  const reserveRows = useMemo(() => {
-    const usage = reserveUsage(reserves, records, reserveYear);
-    const position = (id: string | null) => categories.find((category) => category.id === id)?.position ?? 0;
-    return usage.rows
-      .map((row) => ({ ...row, category: categories.find((category) => category.id === row.categoryId) }))
-      .filter((row) => row.category !== undefined)
-      .sort((a, b) => position(a.category?.parentId ?? null) - position(b.category?.parentId ?? null) || (a.category?.position ?? 0) - (b.category?.position ?? 0))
-      .map((row) => ({ ...row, period: isMonth ? categorySpentIn(records, row.categoryId, [monthKey]) : row.spent }));
-  }, [reserves, records, reserveYear, categories, isMonth, monthKey]);
-  const fixedMonth = useMemo(
-    () => (isMonth ? fixedSpendInMonth(records, categories, budgets, reserves, recurring, monthKey) : []),
-    [isMonth, records, categories, budgets, reserves, recurring, monthKey],
+  const reserveRows = useMemo(
+    () =>
+      reserveYearRows(budgetLines, categories, records, reserveYear)
+        .map((row) => ({ ...row, category: categories.find((category) => category.id === row.categoryId) }))
+        .filter((row) => row.category !== undefined)
+        .map((row) => ({ ...row, period: isMonth ? categorySpentIn(records, row.categoryId, [monthKey]) : row.spent })),
+    [budgetLines, records, reserveYear, categories, isMonth, monthKey],
   );
+  const fixedMonth = useMemo(
+    () => (isMonth ? fixedSpendInMonth(records, categories, monthKey) : []),
+    [isMonth, records, categories, monthKey],
+  );
+  // 年の固定費: 確定・見込みの年の予算（明細）と、予算と違ったもの（締めた月までの実績と、その月までに発生する回の予算の差）。
   const fixedYear = useMemo(() => {
     if (isMonth) return null;
-    const todayKey = dateKeyOfDate(new Date());
-    const plan = recurringPlanInYear(recurring, categories, budgets, records, year, todayKey);
-    const total = (values: number[]) => values.reduce((sum, value) => sum + value, 0);
+    const closedKeys = yearMonthKeys(year).filter((key) => isMonthClosed(closings, key));
+    const upTo = closedKeys.length === 0 ? `${year}-00` : closedKeys[closedKeys.length - 1];
+    const rows = fixedBudgetRows(budgetLines, categories, records, year, upTo);
+    const total = (mode: 'confirmed' | 'estimate') => rows.filter((row) => row.mode === mode).reduce((sum, row) => sum + row.budget, 0);
     return {
-      confirmed: total(plan.confirmed),
-      estimate: total(plan.estimate),
-      diffs: estimateDiffsInYear(recurring, records, year, todayKey),
+      confirmed: total('confirmed'),
+      estimate: total('estimate'),
+      upTo: closedKeys.length === 0 ? null : upTo,
+      diffs: closedKeys.length === 0 ? [] : rows.filter((row) => row.budgetToDate > 0 && row.actual !== row.budgetToDate),
     };
-  }, [isMonth, recurring, categories, budgets, records, year]);
+  }, [isMonth, budgetLines, categories, records, year, closings]);
+  // 締めの画面の未確認の明細に足す、日付未定の見込み（その月に記録が無いもの）。
+  const undatedCount = useMemo(
+    () => (closing === null ? 0 : undatedPendingInMonth(recurring, records, closing, dateKeyOfDate(new Date())).length),
+    [closing, recurring, records],
+  );
   const [open, setOpen] = useState({ variable: true, reserve: true, fixed: false });
   const toggle = (key: keyof typeof open) => setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
 
@@ -295,6 +305,11 @@ export default function MoneyReviewView({
               <span className={`text-lg font-extrabold tabular-nums ${landing.total < 0 ? 'text-red-700' : 'text-gray-900'}`}>{signedYen(landing.total)}</span>
             </div>
           )}
+          {landing !== null && landing.unscheduled !== 0 && (
+            <p className="px-[18px] pb-2.5 text-xs font-medium text-gray-400">
+              締めた月は実績、ほかの月は予算。うち発生月なしの見込み {signedYen(landing.unscheduled)}
+            </p>
+          )}
           {isMonth && (monthClosed || monthKey <= today) && (
             <button
               type="button"
@@ -386,12 +401,13 @@ export default function MoneyReviewView({
               <>
                 <AmountRow name="確定" amount={formatYen(summary.confirmed)} right={{ text: `/ ${formatYen(fixedYear.confirmed)}`, muted: true }} />
                 <AmountRow name="見込み" amount={formatYen(summary.estimate)} right={{ text: `/ ${formatYen(fixedYear.estimate)}`, muted: true }} />
-                {fixedYear.diffs.map((entry) => (
+                {fixedYear.diffs.map((row) => (
                   <AmountRow
-                    key={`${entry.rule.id}-${entry.plannedMonth}`}
-                    name={`${entry.rule.name.trim() || categoryPath(categories, entry.rule.categoryId)}（${Number(entry.plannedMonth.slice(5, 7))}月）`}
-                    amount={formatYen(entry.actual)}
-                    right={{ text: `見込みより ${signedYen(entry.actual - entry.amount)}`, over: entry.actual > entry.amount }}
+                    key={row.categoryId}
+                    name={categoryPath(categories, row.categoryId)}
+                    sub={fixedYear.upTo === null ? undefined : `${Number(fixedYear.upTo.slice(5, 7))}月までの予算 ${formatYen(row.budgetToDate)}`}
+                    amount={formatYen(row.actual)}
+                    right={{ text: `予算より ${signedYen(row.actual - row.budgetToDate)}`, over: row.actual > row.budgetToDate }}
                   />
                 ))}
               </>
@@ -417,7 +433,7 @@ export default function MoneyReviewView({
           budgets={budgets}
           recurring={recurring}
           today={dateKeyOfDate(new Date())}
-          feedCount={feedItems.filter((item) => item.occurredOn !== null && item.occurredOn.startsWith(`${closing}-`)).length}
+          feedCount={feedItems.filter((item) => item.occurredOn !== null && item.occurredOn.startsWith(`${closing}-`)).length + undatedCount}
           cardChecks={cardFeed && cardFeed.walletIds.length > 0 ? cardMonthChecks(records, cardFeed, closing) : null}
           wallets={wallets}
           balances={balances}
@@ -426,7 +442,7 @@ export default function MoneyReviewView({
           onConfirmEstimate={onConfirmEstimate}
           // 記録・未確認の明細は締めの画面の上に重ねて開く（閉じる・戻るで締めの画面へ戻る。2026-10-21）
           onOpenRecord={onOpenRecord}
-          onOpenFeed={onOpenFeed}
+          onOpenFeed={() => onOpenFeed(closing)}
           onCloseMonth={() => {
             onSetMonthClosed(closing, true);
             setClosing(null);
