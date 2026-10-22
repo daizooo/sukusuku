@@ -8,7 +8,7 @@ import type {
   MoneyFeedData,
   MoneyFeedItem,
   MoneyMonth,
-  MoneyReserve,
+  MoneyBudgetLine,
   MoneyRecord,
   MoneyRecordDraft,
   MoneyRecurring,
@@ -72,6 +72,7 @@ import {
   monthKeyOf,
   monthKeyOfDate,
   pendingEstimates,
+  undatedPendingInMonth,
   receiptReplaceNotices,
   recordTotal,
   shiftMonth,
@@ -121,6 +122,7 @@ const NO_SECURITIES: MoneySecuritiesData = { securities: [], holdings: [], value
 
 /** 家計の読み込み（money_bootstrap と証券の評価額、Zaim 取り込み）が読む表。 */
 const MONEY_TABLES = [
+  'money_budget_lines',
   'money_budgets',
   'money_categories',
   'money_feed',
@@ -132,7 +134,6 @@ const MONEY_TABLES = [
   'money_months',
   'money_records',
   'money_recurring',
-  'money_reserve_budgets',
   'money_securities',
   'money_stores',
   'money_wallet_balances',
@@ -150,8 +151,8 @@ export default function MoneyScreen() {
   const [stores, setStores] = useState<MoneyStore[]>([]);
   const [records, setRecords] = useState<MoneyRecord[]>([]);
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
-  // 予備費の年の額（docs/kakei.md §3.7）。
-  const [reserves, setReserves] = useState<MoneyReserve[]>([]);
+  // 予算の明細（収入・予備費・固定費。docs/kakei.md §0.7）。
+  const [budgetLines, setBudgetLines] = useState<MoneyBudgetLine[]>([]);
   // 記録の上の帯に出す見込み（帯に出すルールの、日が来て記録が無い回。docs/kakei.md §0.7）。
   const estimates = useMemo(() => pendingEstimates(recurring, records, dateKeyOfDate(new Date())), [recurring, records]);
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
@@ -186,6 +187,14 @@ export default function MoneyScreen() {
   // Gmail から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
   const [feed, setFeed] = useState<MoneyFeedData | null>(null);
   const [feedOpen, setFeedOpen] = useState(false);
+  // 月の締めから未確認の明細を開いたときの、その月（日付未定の見込みも出す。docs/kakei.md §0.7）。
+  const [feedMonth, setFeedMonth] = useState<string | null>(null);
+  const inboxEstimates = useMemo(() => {
+    if (feedMonth === null) return estimates;
+    const shown = new Set(estimates.map((entry) => `${entry.rule.id}|${entry.plannedMonth}`));
+    const undated = undatedPendingInMonth(recurring, records, feedMonth, dateKeyOfDate(new Date()));
+    return [...estimates, ...undated.filter((entry) => !shown.has(`${entry.rule.id}|${entry.plannedMonth}`))];
+  }, [feedMonth, estimates, recurring, records]);
   // 未確認の明細の「記録を作成する」から開いた記録の入力の、その明細。保存したら記録と結ぶ（docs/kakei.md §9.5.6.1）。
   const [feedRecordFor, setFeedRecordFor] = useState<MoneyFeedItem | null>(null);
   // Amazon の注文メールの明細から記録するときの品目（docs/kakei.md §9.10）
@@ -213,7 +222,7 @@ export default function MoneyScreen() {
     setRecurring(money.recurring);
     setBalances(money.balances);
     setClosings(money.months);
-    setReserves(money.reserves);
+    setBudgetLines(money.budgetLines);
     setSecurities(loadedSecurities);
   }, []);
 
@@ -783,12 +792,15 @@ export default function MoneyScreen() {
               onOpenRecord={setEditing}
               months={closings}
               recurring={recurring}
-              reserves={reserves}
+              budgetLines={budgetLines}
               feedItems={feed?.open ?? []}
               cardFeed={feed?.cardFeed ?? null}
               onConfirmEstimate={confirmEstimate}
               onSetMonthClosed={(target, closed) => void setMonthClosed(target, closed)}
-              onOpenFeed={() => setFeedOpen(true)}
+              onOpenFeed={(month) => {
+                setFeedMonth(month ?? null);
+                setFeedOpen(true);
+              }}
             />
             </View>
           )}
@@ -885,8 +897,8 @@ export default function MoneyScreen() {
           onBudgets={setBudgets}
           onStores={setStores}
           onRecurring={setRecurring}
-          reserves={reserves}
-          onReserves={setReserves}
+          budgetLines={budgetLines}
+          onBudgetLines={setBudgetLines}
           initialRecurringId={recurringTarget}
           feed={feed}
           onFeedChanged={reloadFeed}
@@ -927,11 +939,14 @@ export default function MoneyScreen() {
           }}
           onResolve={resolveFeed}
           onFill={fillFeed}
-          estimates={estimates}
+          estimates={inboxEstimates}
           onRecordEstimate={recordEstimate}
           onDeferEstimate={(entry) => putOffEstimate(entry, 'defer')}
           onSkipEstimate={(entry) => putOffEstimate(entry, 'skip')}
-          onClose={() => setFeedOpen(false)}
+          onClose={() => {
+            setFeedOpen(false);
+            setFeedMonth(null);
+          }}
         />
       )}
 

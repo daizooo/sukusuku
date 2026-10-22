@@ -850,6 +850,69 @@ export type Database = {
           },
         ]
       }
+      money_budget_lines: {
+        Row: {
+          amount: number
+          category_id: string
+          created_at: string
+          end_month: string | null
+          family_id: string
+          id: string
+          interval_years: number | null
+          months: number[] | null
+          name: string
+          no_month: boolean
+          position: number
+          start_month: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          category_id: string
+          created_at?: string
+          end_month?: string | null
+          family_id: string
+          id?: string
+          interval_years?: number | null
+          months?: number[] | null
+          name?: string
+          no_month?: boolean
+          position?: number
+          start_month?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category_id?: string
+          created_at?: string
+          end_month?: string | null
+          family_id?: string
+          id?: string
+          interval_years?: number | null
+          months?: number[] | null
+          name?: string
+          no_month?: boolean
+          position?: number
+          start_month?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_budget_lines_category_id_family_id_fkey"
+            columns: ["category_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_categories"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
+            foreignKeyName: "money_budget_lines_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_budgets: {
         Row: {
           category_id: string
@@ -894,6 +957,7 @@ export type Database = {
       money_categories: {
         Row: {
           archived_at: string | null
+          budget_group: string | null
           created_at: string
           family_id: string
           icon: string | null
@@ -908,6 +972,7 @@ export type Database = {
         }
         Insert: {
           archived_at?: string | null
+          budget_group?: string | null
           created_at?: string
           family_id: string
           icon?: string | null
@@ -922,6 +987,7 @@ export type Database = {
         }
         Update: {
           archived_at?: string | null
+          budget_group?: string | null
           created_at?: string
           family_id?: string
           icon?: string | null

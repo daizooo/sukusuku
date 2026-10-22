@@ -10,7 +10,8 @@ import type {
   MoneyRecordDraft,
   MoneyRecurring,
   MoneyRecurringDraft,
-  MoneyReserve,
+  MoneyBudgetGroup,
+  MoneyBudgetLine,
   MoneyStore,
   MoneyWallet,
   MoneyWalletBalance,
@@ -41,12 +42,23 @@ export const rowToCategory = (row: CategoryRow): MoneyCategory => ({
   position: row.position,
   archived: row.archived_at !== null,
   reserve: row.reserve ?? false,
+  budgetGroup: budgetGroupOf(row.budget_group ?? null),
 });
 
-export const rowToReserve = (row: Tables<'money_reserve_budgets'>): MoneyReserve => ({
+const budgetGroupOf = (value: string | null): MoneyBudgetGroup =>
+  value === 'reserve' || value === 'fixed' || value === 'estimate' ? value : 'variable';
+
+export const rowToBudgetLine = (row: Tables<'money_budget_lines'>): MoneyBudgetLine => ({
+  id: row.id,
   categoryId: row.category_id,
-  year: row.year,
+  name: row.name,
   amount: row.amount,
+  months: row.months,
+  noMonth: row.no_month,
+  intervalYears: row.interval_years,
+  startMonth: row.start_month === null ? null : row.start_month.slice(0, 7),
+  endMonth: row.end_month === null ? null : row.end_month.slice(0, 7),
+  position: row.position,
 });
 
 export const rowToBudget = (row: BudgetRow): MoneyBudget => ({
@@ -191,12 +203,12 @@ export interface MoneyData {
   balances: MoneyWalletBalance[];
   /** 月の締め（docs/kakei.md §4.5）。 */
   months: MoneyMonth[];
-  /** 予備費の年の額（docs/kakei.md §3.7）。 */
-  reserves: MoneyReserve[];
+  /** 予算の明細（収入・予備費・固定費。docs/kakei.md §0.7）。 */
+  budgetLines: MoneyBudgetLine[];
 }
 
 export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise<MoneyData> {
-  const [categoryResult, budgetResult, walletResult, storeResult, recurringResult, balanceResult, monthResult, reserveResult, records] =
+  const [categoryResult, budgetResult, walletResult, storeResult, recurringResult, balanceResult, monthResult, lineResult, records] =
     await Promise.all([
       supabase.from('money_categories').select('*').eq('family_id', familyId),
       supabase.from('money_budgets').select('*').eq('family_id', familyId),
@@ -205,7 +217,7 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
       supabase.from('money_recurring').select('*').eq('family_id', familyId).order('position', { ascending: true }),
       supabase.from('money_wallet_balances').select('*').eq('family_id', familyId),
       supabase.from('money_months').select('*').eq('family_id', familyId),
-      supabase.from('money_reserve_budgets').select('*').eq('family_id', familyId),
+      supabase.from('money_budget_lines').select('*').eq('family_id', familyId).order('position', { ascending: true }),
       loadRecords(supabase, familyId),
     ]);
   if (categoryResult.error) throw categoryResult.error;
@@ -215,7 +227,7 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
   if (recurringResult.error) throw recurringResult.error;
   if (balanceResult.error) throw balanceResult.error;
   if (monthResult.error) throw monthResult.error;
-  if (reserveResult.error) throw reserveResult.error;
+  if (lineResult.error) throw lineResult.error;
   return {
     categories: (categoryResult.data ?? []).map(rowToCategory),
     budgets: (budgetResult.data ?? []).map(rowToBudget),
@@ -225,7 +237,7 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
     recurring: (recurringResult.data ?? []).map(rowToRecurring),
     balances: (balanceResult.data ?? []).map(rowToBalance),
     months: (monthResult.data ?? []).map(rowToMonth),
-    reserves: (reserveResult.data ?? []).map(rowToReserve),
+    budgetLines: (lineResult.data ?? []).map(rowToBudgetLine),
   };
 }
 
@@ -343,7 +355,14 @@ export async function insertMoneyCategory(
 export async function updateMoneyCategory(
   supabase: SupabaseDb,
   id: string,
-  fields: { name?: string; icon?: string | null; iconColor?: string | null; position?: number; archived?: boolean },
+  fields: {
+    name?: string;
+    icon?: string | null;
+    iconColor?: string | null;
+    position?: number;
+    archived?: boolean;
+    budgetGroup?: MoneyBudgetGroup;
+  },
 ): Promise<MoneyCategory> {
   const { data, error } = await supabase
     .from('money_categories')
@@ -353,6 +372,7 @@ export async function updateMoneyCategory(
       ...(fields.iconColor !== undefined && { icon_color: fields.iconColor }),
       ...(fields.position !== undefined && { position: fields.position }),
       ...(fields.archived !== undefined && { archived_at: fields.archived ? new Date().toISOString() : null }),
+      ...(fields.budgetGroup !== undefined && { budget_group: fields.budgetGroup === 'variable' ? null : fields.budgetGroup }),
     })
     .eq('id', id)
     .select('*')
@@ -438,28 +458,51 @@ export async function saveMoneyBudget(
   return rowToBudget(data);
 }
 
-// ---- 予備費（docs/kakei.md §0.7・§3.7。小分類ごとの年の額） ----
+// ---- 予算の明細（docs/kakei.md §0.7。収入・予備費・固定費） ----
 
-/** 小分類の、その年の予備費を決める（家族・小分類・年で1行）。 */
-export async function saveMoneyReserve(
-  supabase: SupabaseDb,
-  familyId: string,
-  categoryId: string,
-  year: number,
-  amount: number,
-): Promise<MoneyReserve> {
-  const { data, error } = await supabase
-    .from('money_reserve_budgets')
-    .upsert({ family_id: familyId, category_id: categoryId, year, amount }, { onConflict: 'family_id,category_id,year' })
-    .select('*')
-    .single();
-  if (error) throw error;
-  return rowToReserve(data);
+export interface MoneyBudgetLineDraft {
+  categoryId: string;
+  name: string;
+  amount: number;
+  months: number[] | null;
+  noMonth: boolean;
+  intervalYears: number | null;
+  /** YYYY-MM。 */
+  startMonth: string | null;
+  /** YYYY-MM。 */
+  endMonth: string | null;
 }
 
-/** 小分類を予備費から外す（その小分類の、すべての年の行を消す）。 */
-export async function deleteMoneyReserve(supabase: SupabaseDb, categoryId: string): Promise<void> {
-  const { error } = await supabase.from('money_reserve_budgets').delete().eq('category_id', categoryId);
+const budgetLineFields = (draft: MoneyBudgetLineDraft) => ({
+  category_id: draft.categoryId,
+  name: draft.name.trim(),
+  amount: draft.amount,
+  months: draft.noMonth ? null : draft.months,
+  no_month: draft.noMonth,
+  interval_years: draft.intervalYears,
+  start_month: draft.startMonth === null ? null : `${draft.startMonth}-01`,
+  end_month: draft.endMonth === null ? null : `${draft.endMonth}-01`,
+});
+
+/** 予算の明細を足す（id が null）か直す。 */
+export async function saveMoneyBudgetLine(
+  supabase: SupabaseDb,
+  familyId: string,
+  id: string | null,
+  draft: MoneyBudgetLineDraft,
+  position: number,
+): Promise<MoneyBudgetLine> {
+  const query =
+    id === null
+      ? supabase.from('money_budget_lines').insert({ ...budgetLineFields(draft), family_id: familyId, position })
+      : supabase.from('money_budget_lines').update(budgetLineFields(draft)).eq('id', id);
+  const { data, error } = await query.select('*').single();
+  if (error) throw error;
+  return rowToBudgetLine(data);
+}
+
+export async function deleteMoneyBudgetLine(supabase: SupabaseDb, id: string): Promise<void> {
+  const { error } = await supabase.from('money_budget_lines').delete().eq('id', id);
   if (error) throw error;
 }
 

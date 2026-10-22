@@ -33,6 +33,8 @@ interface CategoryPickerProps {
   onClose: () => void;
   /** カテゴリ・予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
   onEditCategories?: () => void;
+  /** 出す大分類を絞る（年間予算で、予算の分け方の合う大分類だけを選ばせる）。無ければすべて。 */
+  onlyTops?: (top: MoneyCategory) => boolean;
 }
 
 const chipClass = 'rounded-lg bg-gray-100 px-2.5 py-[7px] text-[15px] font-semibold leading-tight text-gray-900 hover:bg-blue-50 active:bg-blue-50';
@@ -43,9 +45,13 @@ export default function CategoryPicker({
   onPick,
   onClose,
   onEditCategories,
+  onlyTops,
 }: CategoryPickerProps) {
   const categoryKind = kind === 'income' ? 'income' : 'living';
-  const tops = useMemo(() => topCategories(categories, categoryKind), [categories, categoryKind]);
+  const tops = useMemo(
+    () => topCategories(categories, categoryKind).filter((top) => !onlyTops || onlyTops(top)),
+    [categories, categoryKind, onlyTops],
+  );
   const pickCategory = (categoryId: string) => onPick({ categoryId });
 
   return (

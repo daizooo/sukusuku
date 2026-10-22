@@ -8,7 +8,7 @@ import type {
   MoneyFeedData,
   MoneyRecord,
   MoneyRecurring,
-  MoneyReserve,
+  MoneyBudgetLine,
   MoneyStore,
   MoneyWallet,
 } from '@/types/app';
@@ -41,8 +41,8 @@ interface MoneySettingsProps {
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
   /** 予備費の年の額（docs/kakei.md §3.7）。 */
-  reserves: MoneyReserve[];
-  onReserves: (update: (prev: MoneyReserve[]) => MoneyReserve[]) => void;
+  budgetLines: MoneyBudgetLine[];
+  onBudgetLines: (update: (prev: MoneyBudgetLine[]) => MoneyBudgetLine[]) => void;
   /** 開いたときに編集を開く固定支出（予算の画面の固定費から来たとき）。 */
   initialRecurringId?: string | null;
   /** Zaim 取り込み（docs/kakei.md §9.5.6）。null は読み込み中。 */
@@ -67,8 +67,8 @@ export default function MoneySettings({
   onBudgets,
   onStores,
   onRecurring,
-  reserves,
-  onReserves,
+  budgetLines,
+  onBudgetLines,
   initialRecurringId = null,
   feed,
   onFeedChanged,
@@ -78,14 +78,8 @@ export default function MoneySettings({
     const rule = recurring.find((entry) => entry.id === initialRecurringId);
     return rule ? 'recurring' : 'menu';
   });
-  // 固定支出の編集を開くルール（予算の画面の固定費の行から）。
+  // 自動記録ルールの編集を開くルール（記録の詳細などから）。
   const [recurringTarget, setRecurringTarget] = useState<string | null>(initialRecurringId);
-  const openRecurring = (id: string) => {
-    const rule = recurring.find((entry) => entry.id === id);
-    if (!rule) return;
-    setRecurringTarget(id);
-    setPage('recurring');
-  };
 
   const rows: { id: Exclude<Page, 'menu'>; label: string; icon: LucideIcon }[] = [
     { id: 'categories', label: 'カテゴリ', icon: Tag },
@@ -165,13 +159,9 @@ export default function MoneySettings({
           year={year}
           categories={categories}
           budgets={budgets}
-          recurring={recurring}
-          records={records}
+          budgetLines={budgetLines}
           onBudgets={onBudgets}
-          onRecurring={onRecurring}
-          reserves={reserves}
-          onReserves={onReserves}
-          onOpenRecurring={openRecurring}
+          onBudgetLines={onBudgetLines}
           onClose={back}
         />
       )}

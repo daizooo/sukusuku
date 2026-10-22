@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Check, ChevronRight, GripVertical, Plus } from 'lucide-react';
-import type { MoneyBudget, MoneyCategory, MoneyCategoryKind } from '@/types/app';
+import type { MoneyBudget, MoneyBudgetGroup, MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import {
   CATEGORY_ICON_COLORS,
@@ -21,6 +21,7 @@ import {
 import { ModalShell } from '../modals/TaskForm';
 import { useDragReorder } from '../ui/useDragReorder';
 import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader } from './moneyVisual';
+import { Chip, ChipRow } from './feedParts';
 
 // カテゴリ（docs/kakei.md §3.1）。mobile版の `mobile/src/components/money/CategoryEditor.tsx` と同じ並び・文言。
 //
@@ -118,6 +119,9 @@ export default function CategoryEditor({
           iconColor: result.iconColor,
           position: siblings.reduce((max, entry) => Math.max(max, entry.position + 1), 0),
         });
+        if (result.budgetGroup !== category.budgetGroup) {
+          category = await updateMoneyCategory(supabase, category.id, { budgetGroup: result.budgetGroup });
+        }
         const created = category;
         onCategories((prev) => [...prev, created]);
       } else {
@@ -125,12 +129,14 @@ export default function CategoryEditor({
         if (
           result.name.trim() !== category.name ||
           result.icon !== category.icon ||
-          result.iconColor !== category.iconColor
+          result.iconColor !== category.iconColor ||
+          result.budgetGroup !== category.budgetGroup
         ) {
           category = await updateMoneyCategory(supabase, category.id, {
             name: result.name,
             icon: result.icon,
             iconColor: result.iconColor,
+            budgetGroup: result.budgetGroup,
           });
           replace(category);
         }
@@ -263,6 +269,7 @@ export default function CategoryEditor({
           key={editing.category?.id ?? `new-${editing.category === null ? editing.parentId : ''}`}
           category={editing.category}
           isTop={editing.category === null ? editing.parentId === null : editing.category.parentId === null}
+          withBudgetGroup={kind === 'living'}
           onClose={() => setEditing(null)}
           onSubmit={(result) => void save(result)}
           onDelete={editing.category ? () => void removeCategory(editing.category!) : undefined}
@@ -278,7 +285,17 @@ interface SheetResult {
   icon: string | null;
   /** アイコンの色（大分類だけ）。null は標準（アイコンごとの色）。 */
   iconColor: string | null;
+  /** 予算の分け方（支出の大分類だけ。docs/kakei.md §0.7）。 */
+  budgetGroup: MoneyBudgetGroup;
 }
+
+/** 予算の分け方の選択肢。支出をどこで数えるか（年間予算・振り返り）は、大分類のこれだけで決まる。 */
+const BUDGET_GROUPS: { id: MoneyBudgetGroup; label: string }[] = [
+  { id: 'variable', label: '変動費' },
+  { id: 'reserve', label: '予備費' },
+  { id: 'fixed', label: '固定費（確定）' },
+  { id: 'estimate', label: '固定費（見込み）' },
+];
 
 const inputClass =
   'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
@@ -287,12 +304,15 @@ const labelClass = 'block text-xs font-bold text-gray-700 mb-1.5';
 function CategoryModal({
   category,
   isTop,
+  withBudgetGroup,
   onClose,
   onSubmit,
   onDelete,
 }: {
   category: MoneyCategory | null;
   isTop: boolean;
+  /** 予算の分け方を選ばせるか（支出のカテゴリ）。 */
+  withBudgetGroup: boolean;
   onClose: () => void;
   onSubmit: (result: SheetResult) => void;
   onDelete?: () => void;
@@ -302,6 +322,7 @@ function CategoryModal({
   const [icon, setIcon] = useState<string>(category ? (category.icon ?? guessIconKey(category.name)) : 'other');
   const [iconColor, setIconColor] = useState<string | null>(category?.iconColor ?? null);
   const [pickingColor, setPickingColor] = useState(false);
+  const [budgetGroup, setBudgetGroup] = useState<MoneyBudgetGroup>(category?.budgetGroup ?? 'variable');
   const [error, setError] = useState<string | null>(null);
 
   const submit = () => {
@@ -310,6 +331,7 @@ function CategoryModal({
       name,
       icon: isTop ? icon : (category?.icon ?? null),
       iconColor: isTop ? iconColor : (category?.iconColor ?? null),
+      budgetGroup: isTop && withBudgetGroup ? budgetGroup : (category?.budgetGroup ?? 'variable'),
     });
   };
 
@@ -338,6 +360,17 @@ function CategoryModal({
             placeholder={isTop ? '例: 食費' : '例: 外食'}
           />
         </label>
+        {isTop && withBudgetGroup && (
+          <div>
+            <span className={labelClass}>予算の分け方</span>
+            <ChipRow>
+              {BUDGET_GROUPS.map((option) => (
+                <Chip key={option.id} label={option.label} selected={budgetGroup === option.id} onClick={() => setBudgetGroup(option.id)} />
+              ))}
+            </ChipRow>
+            <p className="mt-1.5 text-xs text-gray-500">変動費は大分類の月の予算、予備費・固定費は小分類ごとの予算（年間予算で決める）</p>
+          </div>
+        )}
         {isTop && (
           <div>
             <span className={labelClass}>アイコン</span>
