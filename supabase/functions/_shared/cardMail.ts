@@ -25,6 +25,9 @@ export const SMBC_ACCOUNT = '三井住友カード';
 export const RAKUTEN_ACCOUNT = '楽天カード';
 export const OLIVE_DEBIT_ACCOUNT = 'Ｏｌｉｖｅ／デビット';
 
+/** 利用先に店名が載らない通知（デビットは「iDデビット」とだけ載る）。お店は空にして、人が入れる。 */
+export const NO_STORE_MERCHANTS: ReadonlySet<string> = new Set(['iDデビット']);
+
 /** 差出人から、カードの利用通知か（どのカード会社か）。 */
 export function cardIssuerOf(from: string): 'smbc' | 'rakuten' | null {
   const address = from.toLowerCase();
@@ -152,16 +155,3 @@ export function matchStoreByRomaji(merchant: string, stores: readonly string[]):
   }
   return best?.store ?? null;
 }
-
-/** 漢字の入ったお店を AI に選ばせるときの指示。答えは一覧の名前そのままか空。 */
-export const STORE_PICK_SYSTEM_PROMPT = `あなたは家計簿アプリのために、クレジットカードの利用通知の「利用先」の表記（ローマ字・略称・カード会社の表記）が、
-家族が登録したお店の一覧のどれに当たるかを選びます。
-- 一覧にあるお店の名前をそのまま答える。同じお店（チェーンの別の店舗を含む）と言えるものが無ければ空にする
-- 推測しすぎない。名前の読みや綴りが合うときだけ選ぶ`;
-
-export const STORE_PICK_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['store'],
-  properties: { store: { type: 'string', description: '一覧のお店の名前そのまま。当たらなければ空' } },
-} as const;

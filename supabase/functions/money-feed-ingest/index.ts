@@ -34,8 +34,7 @@ import {
   isDiscardedCardMail,
   matchStoreByRomaji,
   parseCardMail,
-  STORE_PICK_SCHEMA,
-  STORE_PICK_SYSTEM_PROMPT,
+  NO_STORE_MERCHANTS,
 } from '../_shared/cardMail.ts';
 
 interface IncomingMessage {
@@ -74,46 +73,13 @@ const MODEL = 'claude-haiku-5-5';
 type Admin = ReturnType<typeof createClient>;
 
 /**
- * カードの利用先に当たるお店の候補（未確認の明細の「記録にする」に入れておく。docs/kakei.md §9.6）。
- * ① 同じ利用先の明細から作った・結んだ記録のお店（覚えたもの）→ ② 登録したお店の名前をローマ字にして当てる →
- * ③ AI（Haiku）に登録したお店の一覧から選ばせる。当たらなければ null。
+ * カードの利用先に当たるお店の候補（未確認の明細の「記録を作成する」に入れておく。docs/kakei.md §9.6.3）。
+ * 登録したお店の名前をローマ字にして当てるだけ。前の記録のお店や AI の推測は入れない（外れたお店が入るため。2026-10-22）。
+ * 利用先が決まらないデビット（iDデビット）は null。当たらなければ null。
  */
-async function storeHintFor(admin: Admin, familyId: string, merchant: string, stores: string[]): Promise<string | null> {
-  if (merchant === '') return null;
-  const { data: past } = await admin
-    .from('money_feed')
-    .select('received_at, money_records!money_feed_record_fkey(store)')
-    .eq('family_id', familyId)
-    .eq('source', 'card_mail')
-    .eq('description', merchant)
-    .not('record_id', 'is', null)
-    .order('received_at', { ascending: false })
-    .limit(5)
-    .returns<{ money_records: { store: string } | null }[]>();
-  const remembered = (past ?? []).map((row) => row.money_records?.store ?? '').find((store) => store !== '');
-  if (remembered) return remembered;
-
-  const byRomaji = matchStoreByRomaji(merchant, stores);
-  if (byRomaji) return byRomaji;
-
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-  if (!apiKey || stores.length === 0) return null;
-  try {
-    const response = await new Anthropic({ apiKey }).messages.create({
-      model: MODEL,
-      max_tokens: 1000,
-      system: STORE_PICK_SYSTEM_PROMPT,
-      output_config: { format: { type: 'json_schema', schema: STORE_PICK_SCHEMA } },
-      messages: [{ role: 'user', content: `利用先: ${merchant}\n\nお店の一覧:\n${stores.join('\n')}` }],
-    });
-    const block = response.content.find((entry) => entry.type === 'text');
-    if (!block || block.type !== 'text') return null;
-    const picked = String((JSON.parse(block.text) as { store?: unknown }).store ?? '').trim();
-    return stores.includes(picked) ? picked : null;
-  } catch {
-    console.error('store pick failed');
-    return null;
-  }
+function storeHintFor(merchant: string, stores: string[]): string | null {
+  if (merchant === '' || NO_STORE_MERCHANTS.has(merchant.normalize('NFKC'))) return null;
+  return matchStoreByRomaji(merchant, stores);
 }
 
 /** 注文メールの品目に付ける種類。同じ品名の過去の品目 → AI（小分類の一覧から選ばせる）。決まらなければ null。 */
@@ -350,7 +316,7 @@ Deno.serve(async (request) => {
               amount: entry.amount,
               account_name: entry.accountName,
               description: entry.merchant,
-              store_hint: await storeHintFor(supabase, familyId, entry.merchant, await loadStores()),
+              store_hint: storeHintFor(entry.merchant, await loadStores()),
             }),
           );
         }

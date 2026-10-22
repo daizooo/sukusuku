@@ -7,6 +7,7 @@ import {
   feedDuplicates,
   feedLinkCandidates,
   feedOrderItems,
+  feedStoreName,
   sortFeedInbox,
   storeCategoryGuess,
 } from './moneyFeedUtils.ts';
@@ -164,6 +165,14 @@ assert.deepEqual(
   assert.equal(shipping[2].categoryId, 'big');
   assert.equal(shipping[2].receiptName, '');
   assert.deepEqual(feedOrderItems([], 100), []);
+}
+
+// ---- 未確認の「記録を作成する」で入れるお店 ----
+{
+  assert.equal(feedStoreName({ storeHint: 'よかもんね', description: 'YOKAMONNE JIYONANTEN' }), 'よかもんね', '当てたお店');
+  assert.equal(feedStoreName({ storeHint: null, description: 'XPRICE' }), 'XPRICE', '当たらなければ利用先そのまま');
+  assert.equal(feedStoreName({ storeHint: null, description: 'iDデビット' }), '', 'iDデビットは店名が載らないので空');
+  assert.equal(feedStoreName({ storeHint: null, description: 'ｉＤデビット' }), '', '全角でも空');
 }
 
 console.log('moneyFeedUtils: ok');
