@@ -921,13 +921,10 @@ export const budgetLineCount = (line: MoneyBudgetLine, year: number): number =>
 /** 明細の、その年の額（単価 × 回数）。 */
 export const budgetLineYearAmount = (line: MoneyBudgetLine, year: number): number => line.amount * budgetLineCount(line, year);
 
-/** 明細の数え方の説明（「¥3,520 × 奇数月（6回）」の「奇数月（6回）」の部分）。 */
-export function budgetLineScheduleLabel(line: MoneyBudgetLine, year: number): string {
-  const count = budgetLineCount(line, year);
+/** 明細の短い説明（「¥3,520 × 奇数月」「¥47,500 × 2月・2年ごと」「¥100,000 × 発生月なし」）。 */
+export function budgetLineShortLabel(line: MoneyBudgetLine): string {
   const when = line.noMonth ? '発生月なし' : line.months === null ? '毎月' : monthsLabel(line.months);
-  const every = line.intervalYears === null ? '' : `・${line.intervalYears}年ごと`;
-  const period = recurringPeriodLabel(line);
-  return `${when}${every}${period === '' ? '' : `・${period}`}（${count}回）`;
+  return `${formatYen(line.amount)} × ${when}${line.intervalYears === null ? '' : `・${line.intervalYears}年ごと`}`;
 }
 
 /** 予算の分け方（収入の明細は 'income'）。 */
@@ -1331,12 +1328,15 @@ export function livingSpendByTop(
 /**
  * 生活費のタイル。カテゴリの並び（大分類の並び順）のまま（2026-10-08に、予算を超えた順から変えた）。
  * 使わなくした大分類は、その月に使っていれば出す。
+ * 予算は、変動費の大分類は月の予算、予備費・固定費の大分類は予算の明細（その月に発生する回。年〔2か月以上〕は発生月なしも1回ぶん。
+ * docs/kakei.md §0.7）。
  */
 export function buildBudgetTiles(
   records: readonly MoneyRecord[],
   categories: readonly MoneyCategory[],
   budgets: readonly MoneyBudget[],
   monthKeys: string | readonly string[],
+  lines: readonly MoneyBudgetLine[] = [],
 ): BudgetTile[] {
   // 月の振り返りは1か月、年の振り返りは記録のある月ぜんぶ。実績も予算も月ごとに足す。
   const keys = typeof monthKeys === 'string' ? [monthKeys] : monthKeys;
@@ -1349,10 +1349,7 @@ export function buildBudgetTiles(
   return topCategories(categories, 'living', true)
     .filter((category) => !category.archived || (spend.get(category.id) ?? 0) > 0)
     .map((category) => {
-      const monthly = keys
-        .map((key) => budgetFor(budgets, category.id, key))
-        .filter((value): value is number => value !== null);
-      const budget = monthly.length === 0 ? null : monthly.reduce((sum, value) => sum + value, 0);
+      const budget = category.budgetGroup === 'variable' ? manualBudgetIn(budgets, category.id, keys) : lineBudgetIn(lines, categories, category.id, keys);
       const actual = spend.get(category.id) ?? 0;
       return {
         category,
@@ -1362,6 +1359,33 @@ export function buildBudgetTiles(
         percent: budget !== null && budget > 0 ? Math.round((actual / budget) * 100) : null,
       };
     });
+}
+
+/** 大分類の、月の並びの月の予算の合計（どの月にも無ければ null）。 */
+function manualBudgetIn(budgets: readonly MoneyBudget[], topId: string, keys: readonly string[]): number | null {
+  const monthly = keys.map((key) => budgetFor(budgets, topId, key)).filter((value): value is number => value !== null);
+  return monthly.length === 0 ? null : monthly.reduce((sum, value) => sum + value, 0);
+}
+
+/** 大分類（の小分類）の予算の明細の、月の並びに発生する回の合計。2か月以上なら発生月なしも年に1回ぶん。明細が無ければ null。 */
+function lineBudgetIn(
+  lines: readonly MoneyBudgetLine[],
+  categories: readonly MoneyCategory[],
+  topId: string,
+  keys: readonly string[],
+): number | null {
+  const own = lines.filter((line) => topCategoryIdOf(categories, line.categoryId) === topId);
+  if (own.length === 0) return null;
+  let total = 0;
+  for (const line of own) {
+    if (line.noMonth) {
+      if (keys.length < 2) continue;
+      for (const year of new Set(keys.map(yearOfMonth))) if (budgetLineInYear(line, year)) total += line.amount;
+      continue;
+    }
+    for (const key of keys) if (budgetLineMonths(line, yearOfMonth(key)).includes(Number(key.slice(5, 7)))) total += line.amount;
+  }
+  return total;
 }
 
 export interface MonthSummary {

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   monthsLabel,
   budgetLineCount,
-  budgetLineScheduleLabel,
+  budgetLineShortLabel,
   budgetLineYearAmount,
   budgetPlanInYear,
   fixedBudgetRows,
@@ -70,6 +70,7 @@ import {
   recurringHistory,
   recurringScheduleLabel,
   formatSignedYen,
+  formatYen,
   groupsFromItems,
   groupsFromScan,
   itemsFromGroups,
@@ -328,7 +329,8 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
   assert.equal(budgetLineCount(line({ noMonth: true }), 2026), 1, '発生月なしは1回');
   assert.equal(budgetLineCount(line({ noMonth: true, startMonth: '2028-02', intervalYears: 2 }), 2029), 0, '発生月なしでも◯年ごとの間の年は0回');
   assert.equal(budgetLineYearAmount(line({ amount: 3520, months: [1, 3, 5, 7, 9, 11] }), 2026), 21120);
-  assert.equal(budgetLineScheduleLabel(line({ months: [2, 4, 6, 8, 10, 12] }), 2026), '偶数月（6回）');
+  assert.equal(budgetLineShortLabel(line({ amount: 30000, months: [2, 4, 6, 8, 10, 12] })), `${formatYen(30000)} × 偶数月`);
+  assert.equal(budgetLineShortLabel(line({ amount: 47500, months: [2], startMonth: '2028-02', intervalYears: 2 })), `${formatYen(47500)} × 2月・2年ごと`);
   assert.equal(spendGroupOf('rent', cats), 'confirmed', '大分類の予算の分け方で決まる（固定費は確定）');
   assert.equal(spendGroupOf('trip', cats), 'reserve');
   assert.equal(spendGroupOf('food', cats), 'variable');
