@@ -514,8 +514,6 @@ export interface MoneyCategory {
   position: number;
   /** 使わなくした（選べないが、記録には残る）。 */
   archived: boolean;
-  /** 予備費に紐づけた小分類（0115。使っていない。docs/kakei.md §0.7）。 */
-  reserve: boolean;
   /** 大分類の予算の分け方（docs/kakei.md §0.7）。支出をどこで数えるかは大分類のこれだけで決める。小分類では使わない。 */
   budgetGroup: MoneyBudgetGroup;
 }
