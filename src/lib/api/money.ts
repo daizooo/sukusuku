@@ -41,7 +41,6 @@ export const rowToCategory = (row: CategoryRow): MoneyCategory => ({
   iconColor: row.icon_color ?? null,
   position: row.position,
   archived: row.archived_at !== null,
-  reserve: row.reserve ?? false,
   budgetGroup: budgetGroupOf(row.budget_group ?? null),
 });
 

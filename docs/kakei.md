@@ -113,7 +113,7 @@
     **＋ 発生月なしの見込み**（小分類ごとに「年の額 − 締めた月までの実績」〔0未満は0〕。12月の収支に入れる）。月に均等に割り振ることはしない
   - 年の振り返りの固定費は、確定・見込みの実績と年の予算、予算と違ったもの（締めた月までの実績と、その月までに発生する回の予算の差）
   - **日付未定のルール**は帯に出さず、**締めまでに同じ小分類の記録が無ければ、締めの未確認の明細に出す**（`undatedPendingInMonth`。中は帯の見込みと同じ）
-  - 0127 の `money_reserve_budgets`（予備費の年の額）は使わない（あとで SQL Editor で消す）。画面イメージ https://claude.ai/artifact/Nphe5xZtZjJ8xBjczmS1MN
+  - 0127 の `money_reserve_budgets`（予備費の年の額）は使わない（0130 で消す）。画面イメージ https://claude.ai/artifact/Nphe5xZtZjJ8xBjczmS1MN
 - **固定費のルール（自動記録ルール）**は「種類」と「記録の作り方」の2つで決める
   | | 自動で記録する（その日に記録を作る） | 帯に出す（記録の上の帯から確かめて記録する） |
   | --- | --- | --- |
@@ -147,7 +147,7 @@
     - 年間予算: 上の枠（収入・支出〔変動費・固定費〔確定・見込み〕・予備費〕・収支見込み）、その下に 収入・変動費・固定費・予備費 の見出しと一覧。
       収入・固定費・予備費は予算の明細の行（大分類のアイコン・小分類の名前、右に年の額と「¥3,520 × 奇数月」）。「追加する」で小分類を選んで足す（PR3）
   - 月の予算（`budgetFor`）は手入力（変動費）だけ。固定費・予備費は月の予算に足さない（`fixedBudgetRows`・`estimateBudgetRows`・`reserveBudgetRows` はやめた）
-  - 予備費は大分類の予算の分け方が予備費の小分類。予算は予算の明細（PR3。0127 の `money_reserve_budgets` は使わない）。0115 の `money_reserves`・`money_categories.reserve` も使わない（あとで SQL Editor で消す）
+  - 予備費は大分類の予算の分け方が予備費の小分類。予算は予算の明細（PR3。0127 の `money_reserve_budgets` は使わない）。0115 の `money_reserves`・`money_categories.reserve` も使わない（0130 で消す。money_bootstrap の置き換えは MCP、削除は SQL Editor）
   - 年末の着地見込みは PR3 の項（締めた月は実績、ほかの月は予算、発生月なしは見込み支出）。PR2 の `recurringPlanInYear`・`yearForecastBalances`・`reserveForecastByMonth` はやめた
   - 年間予算の変動費には、予算の分け方が変動費の大分類だけを出す
 - 設定の入れ替え（カテゴリ・ルール・予算）は、PR1・PR1b・PR2 のアプリが入ってから
@@ -158,6 +158,7 @@
 | PR1b | 記録の上の帯（未確定明細）。翌月へ送る | 0126（`money_recurring.deferred_until`） |
 | PR2 | 年間予算（変動費・予備費・固定費）と振り返りの作り直し。予備費を小分類ごとに。着地見込み | 0127（`money_reserve_budgets`） |
 | PR3 | 予算を自動記録ルールから切り離す（予算の明細・大分類の予算の分け方・着地見込み・日付未定を締めに） | 0129（`money_budget_lines`・`money_categories.budget_group`） |
+| PR3b | 使わなくなった予備費の仕組み（`money_reserves`・`money_reserve_budgets`・`money_categories.reserve`）を消す | 0130（削除は SQL Editor） |
 | 4 | 本番の設定の入れ替え（カテゴリ・ルール・予算） | データだけ |
 
 ## 1. 方針
