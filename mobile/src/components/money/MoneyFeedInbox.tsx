@@ -18,12 +18,12 @@ import { Chip, ChipRow, Field, ToggleRow, WalletChoices } from '@/components/mon
 
 // 取り込んだ明細の「未確認」（docs/kakei.md §9.5.5・§9.5.6.1）。PWA版の `src/components/sukusuku/money/MoneyFeedInbox.tsx` と同じ並び・文言。
 //
-// 記録の面の上の帯「未確定明細 n件」から開く（2026-10-21。docs/kakei.md §0.7）。見出しは「Gmail から取り込んだ明細」と「見込み」の2つ。
+// 記録の面の上の帯「未確定明細 n件」から開く（2026-10-21。docs/kakei.md §0.7）。見出しは「Gmail から取り込んだ明細」と「見込み」（締めから開いたときだけ）の2つ。
 // 一覧にボタンは置かない。行を押すと中（下から開く画面）で片づける。
 // Gmail の明細は、手入力との確認 → 口座が決まっていない → 未確認 → 読めない の順。
 // 1件を押すと片づけ方を選ぶ枠: 口座を選ぶ／手入力と同じか（同じ取引・振替に置き換える・別の取引）／
 // 記録を作成する・記録しない。記録を作成するは、額・日付・出金元・お店を入れた記録の入力を開く（カテゴリは人が選ぶ。2026-10-19）。
-// 見込み（帯に出すルールの、日が来て記録が無い回。pendingEstimates）は、中で額を直して「この額で記録する」「翌月へ送る」「今月はなし」。
+// 見込み（締めで確認するルールの、その月に記録が無い回。undatedPendingInMonth。締めから開いたときだけ。2026-10-22）は、中で額を直して「この額で記録する」「今月はなし」。
 
 interface MoneyFeedInboxProps {
   items: MoneyFeedItem[];
@@ -35,12 +35,10 @@ interface MoneyFeedInboxProps {
   onResolve: (item: MoneyFeedItem, resolve: MoneyFeedResolve) => Promise<boolean>;
   /** 読めないメールに、口座・向き・日付・額を手で入れる。入れたあとは未確認として続けて片づける。 */
   onFill: (item: MoneyFeedItem, fill: MoneyFeedFill) => Promise<boolean>;
-  /** 帯に出す見込みのうち、日が来て記録が無い回。 */
+  /** 締めで確認するルールの、その月に記録が無い回（締めから開いたときだけ。帯から開いたときは空）。 */
   estimates: PendingEstimate[];
   /** この額で記録する（出金元があればその場で記録、無ければ記録の入力を開く）。 */
   onRecordEstimate: (entry: PendingEstimate, amount: number) => void;
-  /** 翌月へ送る（翌月1日まで帯に出さない）。 */
-  onDeferEstimate: (entry: PendingEstimate) => Promise<boolean>;
   /** 今月はなし（その回を skippedMonths に足す）。 */
   onSkipEstimate: (entry: PendingEstimate) => Promise<boolean>;
   onClose: () => void;
@@ -62,7 +60,6 @@ export default function MoneyFeedInbox({
   onFill,
   estimates,
   onRecordEstimate,
-  onDeferEstimate,
   onSkipEstimate,
   onClose,
 }: MoneyFeedInboxProps) {
@@ -141,9 +138,6 @@ export default function MoneyFeedInbox({
           onRecord={(amount) => {
             setEstimateOpen(null);
             onRecordEstimate(openedEstimate, amount);
-          }}
-          onDefer={async () => {
-            if (await onDeferEstimate(openedEstimate)) setEstimateOpen(null);
           }}
           onSkip={async () => {
             if (await onSkipEstimate(openedEstimate)) setEstimateOpen(null);
@@ -420,7 +414,7 @@ function FeedItemSheet({
   );
 }
 
-/** 見込みの中: カテゴリ・日・出金元と額（直せる）。この額で記録する／翌月へ送る／今月はなし。 */
+/** 見込みの中: カテゴリ・日・出金元と額（直せる）。この額で記録する／今月はなし。 */
 function EstimateSheet({
   entry,
   name,
@@ -428,7 +422,6 @@ function EstimateSheet({
   categories,
   onClose,
   onRecord,
-  onDefer,
   onSkip,
 }: {
   entry: PendingEstimate;
@@ -437,7 +430,6 @@ function EstimateSheet({
   categories: MoneyCategory[];
   onClose: () => void;
   onRecord: (amount: number) => void;
-  onDefer: () => Promise<void>;
   onSkip: () => Promise<void>;
 }) {
   const [amountText, setAmountText] = useState(String(entry.amount));
@@ -464,9 +456,6 @@ function EstimateSheet({
           <>
             <PrimaryButton label="この額で記録する" disabled={busy || amount <= 0} onPress={() => onRecord(amount)} />
             <View style={styles.estimateActions}>
-              <Pressable accessibilityRole="button" disabled={busy} onPress={() => void run(onDefer)} style={styles.estimateButton}>
-                <Text style={styles.secondaryText}>翌月へ送る</Text>
-              </Pressable>
               <Pressable accessibilityRole="button" disabled={busy} onPress={() => void run(onSkip)} style={styles.estimateButton}>
                 <Text style={styles.secondaryText}>今月はなし</Text>
               </Pressable>

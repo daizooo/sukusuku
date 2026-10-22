@@ -831,48 +831,20 @@ export function estimateCostsInYear(
   );
 }
 
-/** 記録の上の帯（未確定明細）に出す、帯に出すルールの1回（docs/kakei.md §0.7）。 */
+/** 締めの未確認の明細に出す、締めで確認するルール（日付未定）の1回（docs/kakei.md §0.7）。 */
 export interface PendingEstimate {
   rule: MoneyRecurring;
   /** 予定の月（YYYY-MM）。「今月はなし」はこの月を skippedMonths に足す。 */
   plannedMonth: string;
-  /** 記録するときの日（YYYY-MM-DD）。今月の回はその日、過ぎた月から送られた回は今日。 */
+  /** 記録するときの日（YYYY-MM-DD）。その月の末日（今月なら今日）。 */
   date: string;
   /** 見積額（estimateCostsInYear の額）。 */
   amount: number;
 }
 
 /**
- * 帯に出す見込み（記録を作らないルール）のうち、日が来て、まだ記録が無い回（日の順）。today は YYYY-MM-DD。
- * - 今月の回は、その日（recurringDateOf）から出す。予定の月を過ぎて記録が無い回（estimateCostsInYear の overdue）は今月に出る
- * - 日付未定（dayKnown: false）は出さない。「翌月へ送る」にしたルールは deferredUntil の日まで出さない
- * - 済（同じ小分類の記録が入った）・今月はなしの回は出さない
- */
-export function pendingEstimates(
-  recurring: readonly MoneyRecurring[],
-  records: readonly MoneyRecord[],
-  today: string,
-): PendingEstimate[] {
-  const thisMonth = monthKeyOf(today);
-  const rules = recurring.filter((rule) => rule.dayKnown && (rule.deferredUntil ?? '') <= today);
-  const list: PendingEstimate[] = [];
-  for (const entry of estimateCostsInYear(rules, records, yearOfMonth(thisMonth), today)) {
-    if (entry.status === 'overdue') {
-      list.push({ rule: entry.rule, plannedMonth: entry.plannedMonth, date: today, amount: entry.amount });
-      continue;
-    }
-    if (entry.status !== 'upcoming' || entry.plannedMonth !== thisMonth) continue;
-    const date = recurringDateOf(yearOfMonth(thisMonth), Number(thisMonth.slice(5, 7)), entry.rule);
-    if (date <= today) list.push({ rule: entry.rule, plannedMonth: entry.plannedMonth, date, amount: entry.amount });
-  }
-  return list.sort((a, b) =>
-    a.plannedMonth !== b.plannedMonth ? (a.plannedMonth < b.plannedMonth ? -1 : 1) : a.date < b.date ? -1 : a.date > b.date ? 1 : a.rule.position - b.rule.position,
-  );
-}
-
-/**
- * 日付未定の見込み（帯に出すルールで、日が決まらないもの）のうち、その月（YYYY-MM）の回で、まだ同じ小分類の記録が無いもの。
- * 帯には出さず、月の締めの未確認の明細に出す（docs/kakei.md §0.7。2026-10-22）。記録する日は、その月の末日（今月なら今日）。
+ * 締めで確認するルール（記録を作らない。日はいつも日付未定）のうち、その月（YYYY-MM）の回で、まだ同じ小分類の記録が無いもの。
+ * 記録の上の帯には出さず、月の締めの未確認の明細に出す（docs/kakei.md §0.7。2026-10-22）。記録する日は、その月の末日（今月なら今日）。
  */
 export function undatedPendingInMonth(
   recurring: readonly MoneyRecurring[],

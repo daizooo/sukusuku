@@ -730,22 +730,6 @@ export async function updateMoneyRecurringSkipped(
   return rowToRecurring(data);
 }
 
-/** 帯に出すものを「翌月へ送る」（docs/kakei.md §0.7）。until（YYYY-MM-DD）まで帯に出さない。null で戻す。 */
-export async function updateMoneyRecurringDeferred(
-  supabase: SupabaseDb,
-  id: string,
-  until: string | null,
-): Promise<MoneyRecurring> {
-  const { data, error } = await supabase
-    .from('money_recurring')
-    .update({ deferred_until: until })
-    .eq('id', id)
-    .select('*')
-    .single();
-  if (error) throw error;
-  return rowToRecurring(data);
-}
-
 /** ルールを削除する。作った記録は残る（記録の recurring_id が外れるだけ）。 */
 export async function deleteMoneyRecurring(supabase: SupabaseDb, id: string): Promise<void> {
   const { error } = await supabase.from('money_recurring').delete().eq('id', id);

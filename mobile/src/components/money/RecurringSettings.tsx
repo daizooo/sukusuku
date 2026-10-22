@@ -61,16 +61,16 @@ import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 // 種類は「確定」（額が決まっている。確定の記録を作る）と「見込み」（額が変わる。過去の記録から見込み、実額に直すと確定）の2つ（2026-10-21）。
 // 収入も同じ（児童手当は確定、給与・賞与は見込み）。振替はほぼ毎月額を変えるので、いつも見込みの記録を作る（DB は migration 0125）。
 //
-// 並べ替え（左の持ち手をつかんで動かす。リストと同じ操作）は、見出し（自動で記録・帯に出す）ごとの中で動かせる。
+// 並べ替え（左の持ち手をつかんで動かす。リストと同じ操作）は、見出し（自動で記録・締めで確認）ごとの中で動かせる。
 // 複製は、編集の画面の「複製して足す」から。日・月・額など全部を写し、品名に「のコピー」を付けた新規の編集を開き、直して保存すると足される。
 //
 // 期間（開始月・終了月。2026-10-15）: 育休給付金 〜2027/8、時短後の給与 2027/9〜 のように、期間の外の月は記録も予算も作らない。
 // 期間が終わったルールは、一覧の下に畳んで出す（押すと開く）。
 //
-// 帯に出す（2026-10-17、2026-10-21に見直し。docs/kakei.md §3.6）: 車検・JAF・自治会費のように、出ることは決まっているが、カードや現金で
-// 払うもの・日が決まらないもの。編集の「記録の作り方」で「帯に出す」を選ぶ。記録は作らず、その日になったら記録の上の帯に出し、確かめて記録する。
-// 日が決まらないものは「日付未定」にし、帯には出さない。どちらも、同じ小分類の記録が入ると済になる（自動で結びつく）。
-// 見込みの額は、その小分類で前回入った実績（無ければ入れた額）。一覧では支出の「自動で記録」のあと、「帯に出す」の見出しの下にまとめる。
+// 締めで確認（2026-10-22。旧「帯に出す」。docs/kakei.md §0.7）: 車検・自治会費・利用通知の来ないカード払い（スマホ・インターネット）のように、
+// 出ることは決まっているが、日が決まらないもの。編集の「記録の作り方」で「締めで確認する」を選ぶ。記録は作らず、日はいつも日付未定。
+// 同じ小分類の記録が入ると済になり（自動で結びつく）、締めまでに入らなければ締めの未確認の明細に出る。記録の上の帯には出さない。
+// 見込みの額は、その小分類で前回入った実績（無ければ入れた額）。一覧では支出の「自動で記録」のあと、「締めで確認」の見出しの下にまとめる。
 //
 // ◯年ごと（2026-10-21）: 車検・2年ごとの火災保険は、記録する月で「◯年ごと」を選び、間隔と期間の始まり（最初の回）を入れる。
 
@@ -146,12 +146,12 @@ export default function RecurringSettings({
   const ended = inTab.filter((rule) => !rule.archived && recurringEnded(rule, thisMonth));
   const archived = inTab.filter((rule) => rule.archived);
   const [showEnded, setShowEnded] = useState(false);
-  // 一覧の見出しごとのルール。支出は、自動で記録・帯に出す（記録しない）の順に分ける。
+  // 一覧の見出しごとのルール。支出は、自動で記録・締めで確認（記録しない）の順に分ける。
   const sections: { key: string; title: string | null; rules: MoneyRecurring[] }[] =
     tab === 'expense'
       ? [
           { key: 'fixed', title: '自動で記録', rules: usable.filter((rule) => !isEstimateCost(rule)) },
-          { key: 'estimate', title: '帯に出す', rules: usable.filter(isEstimateCost) },
+          { key: 'estimate', title: '締めで確認', rules: usable.filter(isEstimateCost) },
         ]
       : [{ key: tab, title: null, rules: usable }];
 
@@ -493,12 +493,11 @@ function RecurringEditor({
   const [endInput, setEndInput] = useState(periodMonthInput(base?.endMonth ?? null));
   // 種類。確定（fixed）は確定の記録、見込み（estimate）は過去の記録から見込んだ見込みの記録（振替はいつも見込み）。
   const [amountMode, setAmountMode] = useState<MoneyRecurring['amountMode']>(base?.amountMode ?? 'estimate');
-  // 記録の作り方。false は帯に出す（自動で記録しない。固定支出の支出だけ）。
+  // 記録の作り方。false は締めで確認（自動で記録しない。固定支出の支出だけ）。
   const [makesRecord, setMakesRecord] = useState(base ? !isEstimateCost(base) : true);
   const estimate = !isIncome && kind === 'expense' && !makesRecord;
-  // 日が決まっているか（帯に出すものだけ「日付未定」にできる。帯には出さない）。
-  const [dayKnown, setDayKnown] = useState(base?.dayKnown ?? true);
-  const noDay = estimate && !dayKnown;
+  // 締めで確認するものは、いつも日付未定（2026-10-22。日を決めて帯に出すのはやめた）。
+  const noDay = estimate;
   const [amount, setAmount] = useState(base && base.amount > 0 ? String(base.amount) : '');
   const [error, setError] = useState<string | null>(null);
 
@@ -546,7 +545,7 @@ function RecurringEditor({
       dayValue = Number(day.trim());
       if (!Number.isInteger(dayValue) || dayValue < 1 || dayValue > 31) return setError(`${isIncome ? '振込日' : '引き落とし日'}を 1〜31 で入れてください（末日は31）`);
     }
-    // 帯に出すものは、出金元を決めなくてよい（記録するときに選ぶ）。
+    // 締めで確認するものは、出金元を決めなくてよい（記録するときに選ぶ）。
     if (!estimate && walletId === null) return setError(kind === 'income' ? '入金先を選んでください' : '出金元を選んでください');
     if (kind === 'transfer' && (toWalletId === null || toWalletId === walletId)) return setError('入金先を選んでください（出金元と別の口座）');
     if (kind !== 'transfer' && categoryId === null) return setError('カテゴリを選んでください');
@@ -652,9 +651,9 @@ function RecurringEditor({
             <Text style={styles.label}>記録の作り方</Text>
             <View style={styles.chips}>
               <Chip label="自動で記録する" selected={makesRecord} onPress={() => setMakesRecord(true)} />
-              <Chip label="帯に出す" selected={!makesRecord} onPress={() => setMakesRecord(false)} />
+              <Chip label="締めで確認する" selected={!makesRecord} onPress={() => setMakesRecord(false)} />
             </View>
-            {!makesRecord && <Text style={styles.sub}>記録は作らず、その日に記録の上の帯に出します。同じ小分類の記録が入ると済になります</Text>}
+            {!makesRecord && <Text style={styles.sub}>記録は作りません。同じ小分類の記録が入ると済になり、締めまでに入らなければ締めの未確認の明細に出ます</Text>}
           </View>
         )}
 
@@ -703,16 +702,6 @@ function RecurringEditor({
             </View>
           </View>
         )}
-        {estimate && (
-          <View style={styles.field}>
-            <Text style={styles.label}>日</Text>
-            <View style={styles.chips}>
-              <Chip label="日を決める" selected={dayKnown} onPress={() => setDayKnown(true)} />
-              <Chip label="日付未定" selected={!dayKnown} onPress={() => setDayKnown(false)} />
-            </View>
-            {!dayKnown && <Text style={styles.sub}>帯には出しません。同じ小分類の記録が入るのを待ちます</Text>}
-          </View>
-        )}
         {noDay ? null : byWeekday ? (
           <View style={styles.field}>
             <Text style={styles.label}>振込日</Text>
@@ -729,7 +718,7 @@ function RecurringEditor({
           </View>
         ) : (
           <View style={styles.field}>
-            <Text style={styles.label}>{isIncome ? '振込日' : estimate ? '帯に出す日（払う日の目安）' : '引き落とし日（入る日）'}</Text>
+            <Text style={styles.label}>{isIncome ? '振込日' : '引き落とし日（入る日）'}</Text>
             <TextInput
               style={styles.input}
               value={day}
