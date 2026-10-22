@@ -43,7 +43,11 @@ export const rowToCategory = (row: CategoryRow): MoneyCategory => ({
   reserve: row.reserve ?? false,
 });
 
-export const rowToReserve = (row: Tables<'money_reserves'>): MoneyReserve => ({ year: row.year, amount: row.amount });
+export const rowToReserve = (row: Tables<'money_reserve_budgets'>): MoneyReserve => ({
+  categoryId: row.category_id,
+  year: row.year,
+  amount: row.amount,
+});
 
 export const rowToBudget = (row: BudgetRow): MoneyBudget => ({
   id: row.id,
@@ -201,7 +205,7 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
       supabase.from('money_recurring').select('*').eq('family_id', familyId).order('position', { ascending: true }),
       supabase.from('money_wallet_balances').select('*').eq('family_id', familyId),
       supabase.from('money_months').select('*').eq('family_id', familyId),
-      supabase.from('money_reserves').select('*').eq('family_id', familyId),
+      supabase.from('money_reserve_budgets').select('*').eq('family_id', familyId),
       loadRecords(supabase, familyId),
     ]);
   if (categoryResult.error) throw categoryResult.error;
@@ -434,24 +438,29 @@ export async function saveMoneyBudget(
   return rowToBudget(data);
 }
 
-// ---- 予備費（docs/kakei.md §3.7） ----
+// ---- 予備費（docs/kakei.md §0.7・§3.7。小分類ごとの年の額） ----
 
-/** その年の予備費の額を決める（家族・年で1行）。 */
-export async function saveMoneyReserve(supabase: SupabaseDb, familyId: string, year: number, amount: number): Promise<MoneyReserve> {
+/** 小分類の、その年の予備費を決める（家族・小分類・年で1行）。 */
+export async function saveMoneyReserve(
+  supabase: SupabaseDb,
+  familyId: string,
+  categoryId: string,
+  year: number,
+  amount: number,
+): Promise<MoneyReserve> {
   const { data, error } = await supabase
-    .from('money_reserves')
-    .upsert({ family_id: familyId, year, amount }, { onConflict: 'family_id,year' })
+    .from('money_reserve_budgets')
+    .upsert({ family_id: familyId, category_id: categoryId, year, amount }, { onConflict: 'family_id,category_id,year' })
     .select('*')
     .single();
   if (error) throw error;
   return rowToReserve(data);
 }
 
-/** 小分類を予備費に紐づける・外す。 */
-export async function setMoneyCategoryReserve(supabase: SupabaseDb, id: string, reserve: boolean): Promise<MoneyCategory> {
-  const { data, error } = await supabase.from('money_categories').update({ reserve }).eq('id', id).select('*').single();
+/** 小分類を予備費から外す（その小分類の、すべての年の行を消す）。 */
+export async function deleteMoneyReserve(supabase: SupabaseDb, categoryId: string): Promise<void> {
+  const { error } = await supabase.from('money_reserve_budgets').delete().eq('category_id', categoryId);
   if (error) throw error;
-  return rowToCategory(data);
 }
 
 // ---- 出金元 ----

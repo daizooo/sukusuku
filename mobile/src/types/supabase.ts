@@ -1782,6 +1782,48 @@ export type Database = {
           },
         ]
       }
+      money_reserve_budgets: {
+        Row: {
+          amount: number
+          category_id: string
+          created_at: string
+          family_id: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          amount: number
+          category_id: string
+          created_at?: string
+          family_id: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          amount?: number
+          category_id?: string
+          created_at?: string
+          family_id?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_reserve_budgets_category_id_family_id_fkey"
+            columns: ["category_id", "family_id"]
+            isOneToOne: false
+            referencedRelation: "money_categories"
+            referencedColumns: ["id", "family_id"]
+          },
+          {
+            foreignKeyName: "money_reserve_budgets_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_reserves: {
         Row: {
           amount: number

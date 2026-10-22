@@ -10,46 +10,37 @@ import type {
   MoneyMonth,
   MoneyRecord,
   MoneyRecurring,
+  MoneyReserve,
   MoneyWallet,
   MoneyWalletBalance,
 } from '@/types/app';
 import { cardMonthChecks } from '@/lib/moneyFeedUtils';
 import {
-  buildBudgetTiles,
-  buildMonthSummary,
   buildCategoryAnalysis,
+  categoryPath,
+  categorySpentIn,
   categoryYearLanding,
   buildYearLanding,
-  buildYearSummary,
-  compareWithPreviousYear,
   dateKeyOfDate,
+  estimateDiffsInYear,
   estimatesInMonth,
-  formatBalance,
-  formatSignedYen,
+  fixedSpendInMonth,
   formatYear,
   formatYen,
-  iconKeyOf,
   isMonthClosed,
   monthKeyOfDate,
+  periodSummary,
   recordTotal,
+  recurringPlanInYear,
+  reserveUsage,
+  topCategoryIdOf,
   unclosedMonths,
+  variableTiles,
   yearActiveMonthKeys,
   yearMonthKeys,
-  type BudgetTile,
 } from '@/lib/moneyUtils';
-import {
-  CategoryIcon,
-  EstimateBadge,
-  Hero,
-  PeriodBar,
-  ProgressBar,
-  SectionHeader,
-  StatRow,
-  cardClass,
-  incomeAmountClass,
-  type,
-  type ReviewPeriod,
-} from './moneyVisual';
+import { EstimateBadge, PeriodBar, SectionHeader, cardClass, type, type ReviewPeriod } from './moneyVisual';
+import { AmountRow, BalanceCard, SECTION_DOTS, SectionCard, remainingText, signedYen, type ChipTone } from './reviewParts';
 import ReviewDetailScreen, { type ReviewDetail } from './ReviewDetailScreen';
 import MonthCloseScreen from './MonthCloseScreen';
 import YearTrendChart from './YearTrendChart';
@@ -59,13 +50,14 @@ import { yearTrendPoints } from '@/lib/yearTrend';
 //
 // 月と年は同じ面。上の送りの右「月 / 年」で期間を切り替える（2026-10-08に、別々の面から1つにした）。
 // 年は暦年（1月〜12月。2026-10-09に年度から変えた。予算の月額も年ごと）。
-// 結論は収支＝収入 − 支出（生活費）。
-// 貯金は記録なので式にも表示にも入れない。
-// 月には年初からの累計、年には月平均・前年の同じ月ぶんとの比べ・月ごとの収支と累計のグラフを添える（§0.4）。
-// 年と累計は、記録のある月だけを数える（記録は2026年10月から）。
-// その下の「内訳」は、大分類の一覧（カテゴリの並び順）。
-// 内訳の行を押すと、簡単な分析と、その行に絞った記録の一覧が開く（ReviewDetailScreen。§4.4）。
-// 年は内訳の下に月ごとの収支（押すとその月へ）。
+// 結論は収支＝収入 − 支出。貯金は記録なので式にも表示にも入れない。
+// いちばん上の収支の枠（BalanceCard）は年間予算と同じ形（2026-10-22。docs/kakei.md §0.7）。収入・支出を切り替えて内訳の割合を出す
+// （収入は大分類ごと、支出は変動費〔変動費＋予備費〕と固定費〔固定費＋変動固定費〕）。年は枠の下に年末の着地見込み。
+// その下は 変動費 → 予備費 → 固定費 の枠（押すと折りたたむ。開いたときは固定費だけ閉じる）。
+// - 変動費: 大分類ごとの実績と、予算の残り（超過は赤）。行を押すと、簡単な分析と、その大分類に絞った記録の一覧（ReviewDetailScreen。§4.4）
+// - 予備費: 小分類ごとの年の予算の残り。月は今月使った額、年はその年に使った額
+// - 固定費: 月はその月に記録があったもの（予算との差は出さない。押すと記録）。年は確定・見込みの実績と年の予算、見込みと実績の差
+// 年は枠の下に推移のグラフ。
 // 見込みの額（毎月の記録で自動で作り、まだ確かめていない額）は実績に入れて数え、件数と額を添えて出す（§3.3・§4.1）。
 // 月の締め（§4.5）: 過ぎた月と今月の結論の下に「この月を締める」（月の最終週に締めることもあるため、今月も出す）（締めた月は「締めた月」）。押すと締めの画面（MonthCloseScreen）。
 // 締めていない過ぎた月があれば、いちばん上に「◯月が締まっていません」と出す（押すとその月の締めの画面）。
@@ -93,6 +85,8 @@ interface MoneyReviewViewProps {
   months: MoneyMonth[];
   /** 固定収入・固定費のルール（締めの画面に、これから自動で作られる記録を出す）。 */
   recurring: MoneyRecurring[];
+  /** 予備費（小分類ごとの年の額。年末の着地見込みで引く。docs/kakei.md §0.7）。 */
+  reserves: MoneyReserve[];
   /** 未確認の明細（締めの画面に、その月の件数を出す）。 */
   feedItems: MoneyFeedItem[];
   /** カードの利用通知の取り込み（締めの画面で、カードの記録を明細と見比べる）。読み込み前は null。 */
@@ -118,6 +112,7 @@ export default function MoneyReviewView({
   onOpenRecord,
   months: closings,
   recurring,
+  reserves,
   feedItems,
   cardFeed,
   onConfirmEstimate,
@@ -138,37 +133,56 @@ export default function MoneyReviewView({
     setClosing(target);
   };
 
-  const month = useMemo(
-    () => buildMonthSummary(records, categories, budgets, monthKey),
-    [records, categories, budgets, monthKey],
+  // 年の数える月（今月まで）。
+  const yearKeys = useMemo(() => yearMonthKeys(year).filter((key) => key <= today), [year, today]);
+  const summaryKeys = useMemo(() => (isMonth ? [monthKey] : yearKeys), [isMonth, monthKey, yearKeys]);
+  const summary = useMemo(
+    () => periodSummary(records, categories, budgets, reserves, recurring, summaryKeys),
+    [records, categories, budgets, reserves, recurring, summaryKeys],
   );
-  const yearSummary = useMemo(
-    () => buildYearSummary(records, categories, budgets, year, today),
-    [records, categories, budgets, year, today],
+  // 年末の着地見込みと「推移」グラフ（§4.6・§4.8）。締めた月は実額、ほかは年末まで見込み。
+  const landing = useMemo(
+    () => (isMonth ? null : buildYearLanding(records, categories, budgets, recurring, reserves, closings, year, dateKeyOfDate(new Date()))),
+    [isMonth, records, categories, budgets, recurring, reserves, closings, year],
   );
-  // 年の「推移」グラフ（§4.8）。締めた月は実額、ほかは年末まで見込み（年末の着地見込みと同じ数え方。§4.6）。
-  const trend = useMemo(() => {
-    if (isMonth) return [];
-    const result = buildYearLanding(records, categories, budgets, recurring, closings, year);
-    return result === null ? [] : yearTrendPoints(result.months);
-  }, [isMonth, records, categories, budgets, recurring, closings, year]);
-  // 年: 前の年の同じ期間との比べ。
-  const comparison = useMemo(
-    () => (isMonth ? null : compareWithPreviousYear(records, categories, budgets, year, today)),
-    [isMonth, records, categories, budgets, year, today],
-  );
+  const trend = useMemo(() => (landing === null ? [] : yearTrendPoints(landing.months)), [landing]);
   // 見ている期間の月。月なら1つ、年なら使い始めた月から12月まで（年の予算がかかる月。使い始める前の月の予算は数えない。2026-10-15）。
   const periodKeys = useMemo(
     () => (isMonth ? [monthKey] : yearActiveMonthKeys(records, year)),
     [isMonth, monthKey, records, year],
   );
   const tiles = useMemo(
-    () => (periodKeys.length === 0 ? [] : buildBudgetTiles(records, categories, budgets, periodKeys)),
-    [periodKeys, records, categories, budgets],
+    () => (periodKeys.length === 0 ? [] : variableTiles(records, categories, budgets, reserves, recurring, periodKeys)),
+    [periodKeys, records, categories, budgets, reserves, recurring],
   );
-  const income = isMonth ? month.income : yearSummary.total.income;
-  const living = isMonth ? month.living : yearSummary.total.living;
-  const balance = isMonth ? month.balance : yearSummary.total.balance;
+  const reserveYear = isMonth ? Number(monthKey.slice(0, 4)) : year;
+  const reserveRows = useMemo(() => {
+    const usage = reserveUsage(reserves, records, reserveYear);
+    const position = (id: string | null) => categories.find((category) => category.id === id)?.position ?? 0;
+    return usage.rows
+      .map((row) => ({ ...row, category: categories.find((category) => category.id === row.categoryId) }))
+      .filter((row) => row.category !== undefined)
+      .sort((a, b) => position(a.category?.parentId ?? null) - position(b.category?.parentId ?? null) || (a.category?.position ?? 0) - (b.category?.position ?? 0))
+      .map((row) => ({ ...row, period: isMonth ? categorySpentIn(records, row.categoryId, [monthKey]) : row.spent }));
+  }, [reserves, records, reserveYear, categories, isMonth, monthKey]);
+  const fixedMonth = useMemo(
+    () => (isMonth ? fixedSpendInMonth(records, categories, budgets, reserves, recurring, monthKey) : []),
+    [isMonth, records, categories, budgets, reserves, recurring, monthKey],
+  );
+  const fixedYear = useMemo(() => {
+    if (isMonth) return null;
+    const todayKey = dateKeyOfDate(new Date());
+    const plan = recurringPlanInYear(recurring, categories, budgets, records, year, todayKey);
+    const total = (values: number[]) => values.reduce((sum, value) => sum + value, 0);
+    return {
+      confirmed: total(plan.confirmed),
+      estimate: total(plan.estimate),
+      diffs: estimateDiffsInYear(recurring, records, year, todayKey),
+    };
+  }, [isMonth, recurring, categories, budgets, records, year]);
+  const [open, setOpen] = useState({ variable: true, reserve: true, fixed: false });
+  const toggle = (key: keyof typeof open) => setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+
   const estimates = useMemo(() => {
     const keys = isMonth ? [monthKey] : yearMonthKeys(year).filter((key) => key <= today);
     const list = keys.flatMap((key) => estimatesInMonth(records, key));
@@ -205,6 +219,35 @@ export default function MoneyReviewView({
     [monthDetail, records, categories, budgets],
   );
   const periodLabel = isMonth ? `${Number(monthKey.slice(5, 7))}月` : formatYear(year);
+  const lastYearMonth = yearKeys.length === 0 ? 0 : Number(yearKeys[yearKeys.length - 1].slice(5, 7));
+  const balanceLabel = isMonth
+    ? `収支（${Number(monthKey.slice(5, 7))}月）`
+    : lastYearMonth === 0 || lastYearMonth === 12
+      ? `収支（${formatYear(year)}）`
+      : `収支（1〜${lastYearMonth}月）`;
+  const budgeted = tiles.filter((tile) => tile.budget !== null);
+  const variableBudget = budgeted.reduce((sum, tile) => sum + (tile.budget ?? 0), 0);
+  const variableActual = budgeted.reduce((sum, tile) => sum + tile.actual, 0);
+  const chipOf = (value: number, label: string): { text: string; tone: ChipTone } =>
+    value < 0 ? { text: `超過 ${formatYen(value)}`, tone: 'over' } : { text: `${label} ${formatYen(value)}`, tone: 'good' };
+  const variableChip = budgeted.length === 0 ? null : chipOf(variableBudget - variableActual, '残り');
+  const reserveAmount = reserveRows.reduce((sum, row) => sum + row.amount, 0);
+  const reserveSpent = reserveRows.reduce((sum, row) => sum + row.spent, 0);
+  const reserveChip = isMonth
+    ? { text: `今月 ${formatYen(reserveRows.reduce((sum, row) => sum + row.period, 0))}`, tone: 'neutral' as const }
+    : chipOf(reserveAmount - reserveSpent, '残り');
+  const fixedChip: { text: string; tone: ChipTone } =
+    fixedYear === null
+      ? { text: `今月 ${formatYen(fixedMonth.reduce((sum, entry) => sum + entry.amount, 0))}`, tone: 'neutral' }
+      : fixedYear.confirmed + fixedYear.estimate - summary.confirmed - summary.estimate < 0
+        ? { text: `超過 ${formatYen(fixedYear.confirmed + fixedYear.estimate - summary.confirmed - summary.estimate)}`, tone: 'over' }
+        : { text: `これから ${formatYen(fixedYear.confirmed + fixedYear.estimate - summary.confirmed - summary.estimate)}`, tone: 'neutral' };
+  // 予備費の行を押したとき: その小分類の大分類の詳細。
+  const openTopOf = (categoryId: string) => {
+    const topId = topCategoryIdOf(categories, categoryId);
+    const top = categories.find((category) => category.id === topId);
+    if (top) setDetail({ type: 'category', category: top });
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -230,49 +273,33 @@ export default function MoneyReviewView({
             <ChevronRight size={16} className="text-amber-800" />
           </button>
         )}
-        <Hero
-          compact
-          label="収支"
-          value={formatBalance(balance)}
-          plus={balance > 0}
+        <BalanceCard
+          label={balanceLabel}
+          incomeParts={summary.income.map((part) => ({ name: part.name, amount: part.amount }))}
+          expenseParts={[
+            { name: '変動費', amount: summary.variable + summary.reserve, note: '変動費＋予備費' },
+            { name: '固定費', amount: summary.confirmed + summary.estimate, note: '固定費＋変動固定費' },
+          ]}
         >
-          <StatRow compact label="収入" value={formatYen(income)} plus={income > 0} />
-          <StatRow compact label="支出" value={formatBalance(-living)} />
           {estimates.count > 0 && (
-            <div className="flex items-center gap-2 pt-2">
+            <div className="flex items-center gap-2 border-t border-gray-100 px-[18px] py-3">
               <EstimateBadge />
               <span className={`flex-1 ${type.faint}`}>
                 見込み {estimates.count}件（{formatYen(estimates.amount)}）
               </span>
             </div>
           )}
-          {/* 年の月平均・前年との比べは、収支と混同しないよう、線で分ける（2026-10-16） */}
-          {!isMonth && (
-            <>
-              <div className="my-1.5 border-t border-gray-300" />
-              {yearSummary.average !== null && (
-                <StatRow
-                  compact
-                  label="月平均"
-                  value={formatBalance(yearSummary.average.balance)}
-                  plus={yearSummary.average.balance > 0}
-                />
-              )}
-              {comparison !== null && (
-                <StatRow
-                  compact
-                  label="前年の同じ期間より"
-                  value={formatSignedYen(comparison.diff)}
-                  plus={comparison.diff > 0}
-                />
-              )}
-            </>
+          {landing !== null && (
+            <div className="flex items-center gap-2 border-t border-gray-100 px-[18px] py-3">
+              <span className="flex-1 text-[13px] font-bold text-gray-500">年末の着地見込み</span>
+              <span className={`text-lg font-extrabold tabular-nums ${landing.total < 0 ? 'text-red-700' : 'text-gray-900'}`}>{signedYen(landing.total)}</span>
+            </div>
           )}
           {isMonth && (monthClosed || monthKey <= today) && (
             <button
               type="button"
               onClick={() => setClosing(monthKey)}
-              className="mt-2 flex w-full items-center gap-2 border-t border-gray-200 pt-2 text-left"
+              className="flex w-full items-center gap-2 border-t border-gray-100 px-[18px] py-3 text-left hover:bg-gray-50"
             >
               <span className={`flex-1 text-sm ${monthClosed ? 'font-semibold text-gray-500' : 'font-bold text-blue-600'}`}>
                 {monthClosed ? '締めた月' : 'この月を締める'}
@@ -280,50 +307,103 @@ export default function MoneyReviewView({
               <ChevronRight size={16} className="text-gray-400" />
             </button>
           )}
-        </Hero>
+        </BalanceCard>
 
-
-        {isMonth ? (
-          <>
-            <SectionHeader
-              compact
-              title="内訳"
-            />
+        <div className="mt-3">
+          <SectionCard
+            title="変動費"
+            dot={SECTION_DOTS.variable}
+            chip={variableChip}
+            progress={isMonth || variableBudget === 0 ? null : variableActual / variableBudget}
+            open={open.variable}
+            onToggle={() => toggle('variable')}
+          >
             {tiles.length === 0 && (
-              <p className="py-6 text-center text-[13px] text-gray-400">「カテゴリ」と「予算」を決めると、ここに予算との差が出ます</p>
+              <p className="py-6 text-center text-[13px] text-gray-400">「年間予算」で変動費の予算を決めると、ここに予算との差が出ます</p>
             )}
-            <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
-              {tiles.map((tile) => (
-                <CategoryRow
-                  key={tile.category.id}
-                  tile={tile}
-                  onClick={() => setDetail({ type: 'category', category: tile.category })}
+            {tiles.map((tile) => (
+              <AmountRow
+                key={tile.category.id}
+                name={tile.category.name}
+                amount={formatYen(tile.actual)}
+                right={tile.budget === null ? { text: '予算なし', muted: true } : remainingText(tile.diff)}
+                progress={tile.budget ? tile.actual / tile.budget : null}
+                onClick={() => setDetail({ type: 'category', category: tile.category })}
+              />
+            ))}
+          </SectionCard>
+        </div>
+
+        {reserveRows.length > 0 && (
+          <div className="mt-3">
+            <SectionCard
+              title="予備費"
+              dot={SECTION_DOTS.reserve}
+              chip={reserveChip}
+              progress={isMonth || reserveAmount === 0 ? null : reserveSpent / reserveAmount}
+              open={open.reserve}
+              onToggle={() => toggle('reserve')}
+            >
+              {reserveRows.map((row) => (
+                <AmountRow
+                  key={row.categoryId}
+                  name={row.category?.name ?? ''}
+                  amount={formatYen(row.period)}
+                  faint={row.period === 0}
+                  right={remainingText(row.amount - row.spent)}
+                  progress={row.amount > 0 ? row.spent / row.amount : row.spent > 0 ? 2 : 0}
+                  onClick={() => openTopOf(row.categoryId)}
                 />
               ))}
-            </div>
-          </>
-        ) : (
-          <>
-            {trend.length > 0 && (
+            </SectionCard>
+          </div>
+        )}
+
+        <div className="mt-3">
+          <SectionCard
+            title="固定費"
+            dot={SECTION_DOTS.fixed}
+            chip={fixedChip}
+            progress={
+              fixedYear === null || fixedYear.confirmed + fixedYear.estimate === 0
+                ? null
+                : (summary.confirmed + summary.estimate) / (fixedYear.confirmed + fixedYear.estimate)
+            }
+            open={open.fixed}
+            onToggle={() => toggle('fixed')}
+          >
+            {isMonth && fixedMonth.length === 0 && <p className="py-6 text-center text-[13px] text-gray-400">この月の固定費の記録はありません</p>}
+            {fixedMonth.map((entry) => (
+              <AmountRow
+                key={`${entry.record.id}-${entry.categoryId}`}
+                name={categories.find((category) => category.id === entry.categoryId)?.name ?? ''}
+                sub={`${Number(entry.record.occurredOn.slice(5, 7))}/${Number(entry.record.occurredOn.slice(8, 10))}・${entry.mode === 'confirmed' ? '確定' : '見込み'}`}
+                amount={formatYen(entry.amount)}
+                onClick={() => onOpenRecord(entry.record)}
+              />
+            ))}
+            {fixedYear !== null && (
               <>
-                <SectionHeader compact title="推移" right={<TrendLegend />} />
-                <div className={`${cardClass} px-1 py-1`}>
-                  <YearTrendChart points={trend} initialMonthKey={today} onSelectMonth={onSelectMonth} />
-                </div>
+                <AmountRow name="確定" amount={formatYen(summary.confirmed)} right={{ text: `/ ${formatYen(fixedYear.confirmed)}`, muted: true }} />
+                <AmountRow name="見込み" amount={formatYen(summary.estimate)} right={{ text: `/ ${formatYen(fixedYear.estimate)}`, muted: true }} />
+                {fixedYear.diffs.map((entry) => (
+                  <AmountRow
+                    key={`${entry.rule.id}-${entry.plannedMonth}`}
+                    name={`${entry.rule.name.trim() || categoryPath(categories, entry.rule.categoryId)}（${Number(entry.plannedMonth.slice(5, 7))}月）`}
+                    amount={formatYen(entry.actual)}
+                    right={{ text: `見込みより ${signedYen(entry.actual - entry.amount)}`, over: entry.actual > entry.amount }}
+                  />
+                ))}
               </>
             )}
-            <SectionHeader compact title="カテゴリ" />
-            {tiles.length === 0 && (
-              <p className="py-6 text-center text-[13px] text-gray-400">「カテゴリ」と「予算」を決めると、ここに年の予算との差が出ます</p>
-            )}
-            <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
-              {tiles.map((tile) => (
-                <CategoryRow
-                  key={tile.category.id}
-                  tile={tile}
-                  onClick={() => setDetail({ type: 'category', category: tile.category })}
-                />
-              ))}
+          </SectionCard>
+        </div>
+
+        {!isMonth && trend.length > 0 && (
+          <>
+            <SectionHeader compact title="推移" right={<TrendLegend />} />
+            <div className={`${cardClass} px-1 py-1`}>
+              <YearTrendChart points={trend} initialMonthKey={today} onSelectMonth={onSelectMonth} />
             </div>
           </>
         )}
@@ -409,43 +489,5 @@ function TrendLegend() {
         年の累計
       </span>
     </div>
-  );
-}
-
-/** 大分類の1行（Zaim と同じく小さく）。アイコン・名前・**予算との差**（予算 − 実績。黒字は緑・赤字は「−」の黒）、使った割合の帯、実績・予算（2026-10-16）。 */
-function CategoryRow({ tile, onClick }: { tile: BudgetTile; onClick: () => void }) {
-  const over = tile.budget !== null && tile.diff < 0;
-  return (
-    <button
-      type="button"
-      aria-label={`${tile.category.name}の内訳を見る`}
-      onClick={onClick}
-      className="flex w-full items-center gap-2.5 px-3 py-[7px] text-left hover:bg-gray-50"
-    >
-      <CategoryIcon iconKey={iconKeyOf(tile.category)} size={28} />
-      <div className="min-w-0 flex-1 space-y-[3px]">
-        <div className="flex items-baseline gap-2">
-          <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">{tile.category.name}</span>
-          {tile.budget === null ? (
-            <span className="text-[15px] font-extrabold text-gray-400">予算なし</span>
-          ) : (
-            <span className={`text-[15px] font-extrabold tabular-nums ${tile.diff > 0 ? incomeAmountClass : 'text-gray-900'}`}>
-              {formatBalance(tile.diff)}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <ProgressBar ratio={tile.budget ? tile.actual / tile.budget : 0} over={over} />
-          </div>
-          <span className={`shrink-0 ${type.faint}`}>
-            {formatYen(tile.actual)}
-            {tile.budget !== null ? ` / ${formatYen(tile.budget)}` : ''}
-            {tile.percent !== null ? `・${tile.percent}%` : ''}
-          </span>
-        </div>
-      </div>
-      <ChevronRight size={16} className="text-gray-400" />
-    </button>
   );
 }

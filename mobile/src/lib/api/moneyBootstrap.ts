@@ -58,7 +58,7 @@ export async function loadMoneyBootstrap(
       recurring: rows<Tables<'money_recurring'>>('recurring').map(rowToRecurring),
       balances: rows<Tables<'money_wallet_balances'>>('balances').map(rowToBalance),
       months: rows<Tables<'money_months'>>('months').map(rowToMonth),
-      reserves: rows<Tables<'money_reserves'>>('reserves').map(rowToReserve),
+      reserves: rows<Tables<'money_reserve_budgets'>>('reserves').map(rowToReserve),
     },
     securities: {
       securities: rows<Tables<'money_securities'>>('securities').map(rowToSecurity),

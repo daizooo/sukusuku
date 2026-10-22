@@ -67,9 +67,6 @@ import {
 import { feedDayLabel, feedDuplicates, feedStoreName } from '@/lib/moneyFeedUtils';
 import {
   dateKeyOfDate,
-  estimateBudgetRows,
-  fixedBudgetRows,
-  reserveBudgetRows,
   formatYen,
   isMonthClosed,
   monthKeyOf,
@@ -135,7 +132,7 @@ const MONEY_TABLES = [
   'money_months',
   'money_records',
   'money_recurring',
-  'money_reserves',
+  'money_reserve_budgets',
   'money_securities',
   'money_stores',
   'money_wallet_balances',
@@ -157,21 +154,6 @@ export default function MoneyScreen() {
   const [reserves, setReserves] = useState<MoneyReserve[]>([]);
   // 記録の上の帯に出す見込み（帯に出すルールの、日が来て記録が無い回。docs/kakei.md §0.7）。
   const estimates = useMemo(() => pendingEstimates(recurring, records, dateKeyOfDate(new Date())), [recurring, records]);
-  // 手入力の予算（budgets）に、固定費から出した月ごとの額（記録と同じ額）を足した予算。画面にはこちらを渡す（docs/kakei.md §3.1）。
-  const allBudgets = useMemo(
-    () => {
-      const today = dateKeyOfDate(new Date());
-      return [
-        ...budgets,
-        ...fixedBudgetRows(recurring, categories, records, today),
-        // 見積費（車検・ふるさと納税など。記録を作らず、予算と着地見込みにだけ入る。docs/kakei.md §3.6）。
-        ...estimateBudgetRows(recurring, categories, records, today),
-        // 予備費（使った分はその大分類・月、まだ使っていない分は着地見込みだけが読む行。docs/kakei.md §3.7）。
-        ...reserveBudgetRows(reserves, categories, records, today),
-      ];
-    },
-    [budgets, recurring, categories, records, reserves],
-  );
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   // 月の締め（docs/kakei.md §4.5）。
   const [closings, setClosings] = useState<MoneyMonth[]>([]);
@@ -791,7 +773,7 @@ export default function MoneyScreen() {
               onYear={setYear}
               records={records}
               categories={categories}
-              budgets={allBudgets}
+              budgets={budgets}
               wallets={wallets}
               balances={balances}
               onSelectMonth={(next) => {
@@ -801,6 +783,7 @@ export default function MoneyScreen() {
               onOpenRecord={setEditing}
               months={closings}
               recurring={recurring}
+              reserves={reserves}
               feedItems={feed?.open ?? []}
               cardFeed={feed?.cardFeed ?? null}
               onConfirmEstimate={confirmEstimate}
@@ -869,7 +852,7 @@ export default function MoneyScreen() {
           initialAmount={feedRecordFor?.amount ?? estimateDraft?.amount ?? null}
           initialItems={feedRecordFor ? feedOrderItems : (estimateDraft?.items ?? null)}
           categories={categories}
-          budgets={allBudgets}
+          budgets={budgets}
           wallets={wallets}
           stores={stores}
           records={records}
@@ -893,7 +876,7 @@ export default function MoneyScreen() {
           familyId={familyId}
           year={yearOfMonth(monthKey)}
           categories={categories}
-          budgets={allBudgets}
+          budgets={budgets}
           stores={stores}
           wallets={wallets}
           recurring={recurring}
