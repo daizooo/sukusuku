@@ -3,7 +3,7 @@
 // 呼ぶのは Gmail の Apps Script（tools/gas/gmail-feed.gs）。5分ごとに、まだ送っていない通知メールをまとめて送る。
 //   POST { messages: [{ id: GmailのメッセージID, received_at: ISO, from: 差出人, to: 宛先, subject: 件名, body: 本文（プレーンテキスト） }] }
 //   差出人がカード会社なら利用通知（source = 'card_mail'。1通に何件もあれば source_id を「ID#2」…と分ける）。
-//   差出人が Amazon（auto-confirm@amazon.co.jp）なら注文メール。注文と品目を覚え（money_amazon_*）、注文ごとに未確認の明細を作る
+//   差出人が Amazon（auto-confirm@amazon.co.jp）なら注文メール。注文と品目を覚え（money_amazon_*）、メール1通につき未確認の明細を1件作る
 //   （DB の money_amazon_order_receive。出金元は「三井住友カード（Amazon）」の口座の対応、日付は注文日。docs/kakei.md §9.10）。
 //   それ以外の差出人（Zaim など。Apps Script はもう送らない）は取り込まず「対象外」にする（§9.11）。
 //   Authorization: Bearer {取り込みの鍵}
@@ -139,7 +139,8 @@ async function categoriesForOrderLines(admin: Admin, familyId: string, receiptNa
 }
 
 /**
- * 注文メールの注文を覚え、注文ごとに未確認の明細を作る（DB の money_amazon_order_receive。§9.10）。
+ * 注文メールの注文を覚え、メール1通につき未確認の明細を1件作る（DB の money_amazon_order_receive は注文を1件ずつ受け、
+ * 同じメールの2件目以降は明細に足し込む。§9.10）。
  * 返り値はメールの状態（error 以外は受け取ったメールとして money_feed_mails に書く）。
  */
 async function receiveAmazonOrders(
@@ -282,7 +283,7 @@ Deno.serve(async (request) => {
       subject: subject.slice(0, 500),
     };
 
-    // Amazon の注文メール（§9.10）。注文ごとに未確認の明細を作る
+    // Amazon の注文メール（§9.10）。メール1通につき未確認の明細を1件作る
     if (isAmazonOrderSender(text(message.from))) {
       const status = await receiveAmazonOrders(supabase, familyId, { id, receivedAt, subject, body });
       results.push({ id, status });
