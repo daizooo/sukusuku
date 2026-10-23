@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { AppState, KeyboardAvoidingView, View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { SessionProvider, useSession } from '@/lib/session';
@@ -19,6 +19,7 @@ import {
   presentActionableNotification,
 } from '@/lib/notificationActions';
 import { colors } from '@/lib/theme';
+import KeyboardAvoidingView from '@/components/ui/KeyboardAvoidingView';
 import { useWidgetRefresh } from '@/widgets/useWidgetRefresh';
 
 // アプリを開いている間に届いたお知らせも、そのまま画面の上に出す。
@@ -43,7 +44,7 @@ export default function RootLayout() {
           {/* キーボードが出たら画面をその分だけ縮め、下の入力欄がキーボードの裏に隠れないようにする。
               edge-to-edge のAndroidはOSが縮めてくれない。Modal（別ウィンドウ）は src/components/ui/Modal.tsx と
               SheetModal などが各自で避ける。 */}
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+          <KeyboardAvoidingView style={{ flex: 1 }}>
             <Stack
               screenOptions={{
                 headerShown: false,
