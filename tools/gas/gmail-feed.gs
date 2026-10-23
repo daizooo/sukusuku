@@ -27,7 +27,8 @@
 //   3. 送る: まだのメールを50通ずつ送る。残り・送れなかったものは次の回にまた「まだ」として返る
 //   4. ラベルとゴミ箱: かぞく手帳が返すとおりに、メール1通ごとにラベルを付け替え、片づいたメールをゴミ箱へ移す（30日で削除）
 //        かぞく手帳/未確認  取り込んだが、明細をまだ記録していない（受信トレイに残す）
-//        かぞく手帳/済      記録した・記録しないを選んだ。Amazon の注文メールもここ（注文メールはゴミ箱へ移さない）
+//        かぞく手帳/済      記録した・記録しないを選んだ。Amazon の注文メールもここ（注文メールはゴミ箱へ移さない）。
+//                           Amazon の発送メールは、荷物の明細を記録するまで「未確認」（注文メール待ちのあいだは「済」）
 //        かぞく手帳/対象外  読んだが取り込まない（0円の注文など）
 //        かぞく手帳/読めない 書式が読めない（家計タブの「読めない」で手で入れる）
 //   5. 動いたことを伝える: 同期のたびに、かぞく手帳が時刻を残す。1時間以上届かなければ、家計タブに「Gmail の取り込みが止まっています」
@@ -44,8 +45,8 @@ var LABELS = {
   unreadable: 'かぞく手帳/読めない',
 };
 var OLD_LABELS = ['かぞく手帳済', 'かぞく手帳対象外'];
-// 探すメール（三井住友カードの利用通知・Olive のデビットの利用通知・Amazon の注文メール）
-var QUERY = '{from:statement@vpass.ne.jp from:smbc-debit@smbc-card.com from:auto-confirm@amazon.co.jp} {subject:利用 subject:注文済み} in:anywhere -in:trash';
+// 探すメール（三井住友カードの利用通知・Olive のデビットの利用通知・Amazon の注文メール・Amazon の発送メール。発送メールは 2026-10-23 から。§9.13）
+var QUERY = '{from:statement@vpass.ne.jp from:smbc-debit@smbc-card.com from:auto-confirm@amazon.co.jp from:shipment-tracking@amazon.co.jp} {subject:利用 subject:注文済み subject:発送済み} in:anywhere -in:trash';
 
 function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) {

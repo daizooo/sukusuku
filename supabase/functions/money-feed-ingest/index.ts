@@ -3,8 +3,10 @@
 // 呼ぶのは Gmail の Apps Script（tools/gas/gmail-feed.gs）。5分ごとに、まだ送っていない通知メールをまとめて送る。
 //   POST { messages: [{ id: GmailのメッセージID, received_at: ISO, from: 差出人, to: 宛先, subject: 件名, body: 本文（プレーンテキスト） }] }
 //   差出人がカード会社なら利用通知（source = 'card_mail'。1通に何件もあれば source_id を「ID#2」…と分ける）。
-//   差出人が Amazon（auto-confirm@amazon.co.jp）なら注文メール。注文と品目を覚え（money_amazon_*）、メール1通につき未確認の明細を1件作る
-//   （DB の money_amazon_order_receive。出金元は「三井住友カード（Amazon）」の口座の対応、日付は注文日。docs/kakei.md §9.10）。
+//   差出人が Amazon（auto-confirm@amazon.co.jp）なら注文メール。注文と品目（値引き後の合計も）を覚える（DB の money_amazon_order_receive）。
+//   差出人が Amazon の発送（shipment-tracking@amazon.co.jp）なら発送メール。どの品目が同じ荷物かを覚え、品目がすべて注文と結べたら
+//   荷物1つ（＝請求1件）につき未確認の明細を1件作る（DB の money_amazon_shipment_receive。日付は発送日、額は注文メールから。docs/kakei.md §9.13）。
+//   注文メールが後から届いたときは、待っている荷物の明細をそこで作る。
 //   それ以外の差出人（Zaim など。Apps Script はもう送らない）は取り込まず「対象外」にする（§9.11）。
 //   Authorization: Bearer {取り込みの鍵}
 // 返り値 { results: [{ id, status }] }。error 以外のメールは、受け取ったことを money_feed_mails に書く（§9.8）。
@@ -25,7 +27,9 @@ import {
   CATEGORY_PICK_SCHEMA,
   CATEGORY_PICK_SYSTEM_PROMPT,
   isAmazonOrderSender,
+  isAmazonShipmentSender,
   parseAmazonOrderMail,
+  parseAmazonShipmentMail,
   readCategoryPicks,
   type AmazonOrder,
 } from '../_shared/amazonOrder.ts';
@@ -139,8 +143,8 @@ async function categoriesForOrderLines(admin: Admin, familyId: string, receiptNa
 }
 
 /**
- * 注文メールの注文を覚え、メール1通につき未確認の明細を1件作る（DB の money_amazon_order_receive は注文を1件ずつ受け、
- * 同じメールの2件目以降は明細に足し込む。§9.10）。
+ * 注文メールの注文を覚える（DB の money_amazon_order_receive。注文ごと）。明細は発送メールの荷物ごとに作る（§9.13）。
+ * この注文を待っている荷物があれば、DB がそこで明細を作る。
  * 返り値はメールの状態（error 以外は受け取ったメールとして money_feed_mails に書く）。
  */
 async function receiveAmazonOrders(
@@ -195,6 +199,41 @@ async function receiveAmazonOrders(
   }
   if (statuses.includes('error')) return 'error';
   return statuses.every((status) => status === 'before_start') ? 'before_start' : 'saved';
+}
+
+/**
+ * 発送メールの荷物を覚え、品目がすべて注文と結べたら、荷物1つにつき未確認の明細を1件作る（DB の money_amazon_shipment_receive。§9.13）。
+ * 日付は発送日（発送メールの受信日、日本時間）。額は注文メールの合計を品目に配ったもの（発送メールの単価は値引き前なので使わない）。
+ */
+async function receiveAmazonShipment(
+  admin: Admin,
+  familyId: string,
+  mail: { id: string; receivedAt: string; subject: string; body: string },
+): Promise<string> {
+  const lines = parseAmazonShipmentMail(mail.subject, mail.body);
+  if (lines === null) {
+    console.error('amazon shipment mail unreadable');
+    return 'ignored';
+  }
+  if (lines.length === 0) return 'skipped';
+
+  const shippedOn = new Date(Date.parse(mail.receivedAt) + 9 * 3600_000).toISOString().slice(0, 10);
+  const { data, error } = await admin.rpc('money_amazon_shipment_receive', {
+    p_family: familyId,
+    p_shipment: {
+      source_id: mail.id,
+      received_at: mail.receivedAt,
+      subject: mail.subject.slice(0, 500),
+      shipped_on: shippedOn,
+      lines: lines.map((line) => ({ order_no: line.orderNo, receipt_name: line.receiptName, quantity: line.quantity })),
+    },
+  });
+  if (error) {
+    console.error('money_amazon_shipment_receive failed', error.code);
+    return 'error';
+  }
+  const status = String((data as { status?: string })?.status ?? 'error');
+  return status === 'before_start' || status === 'error' ? status : 'saved';
 }
 
 Deno.serve(async (request) => {
@@ -283,7 +322,16 @@ Deno.serve(async (request) => {
       subject: subject.slice(0, 500),
     };
 
-    // Amazon の注文メール（§9.10）。メール1通につき未確認の明細を1件作る
+    // Amazon の発送メール（§9.13）。荷物1つにつき未確認の明細を1件作る（注文メールとそろってから）
+    if (isAmazonShipmentSender(text(message.from))) {
+      const status = await receiveAmazonShipment(supabase, familyId, { id, receivedAt, subject, body });
+      results.push({ id, status });
+      const outcome = AMAZON_OUTCOMES[status];
+      if (outcome) remember(id, receivedAt, outcome);
+      continue;
+    }
+
+    // Amazon の注文メール（§9.10）。注文と品目を覚える（明細は発送メールの荷物ごと）
     if (isAmazonOrderSender(text(message.from))) {
       const status = await receiveAmazonOrders(supabase, familyId, { id, receivedAt, subject, body });
       results.push({ id, status });
