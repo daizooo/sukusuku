@@ -1,7 +1,14 @@
 // 実行: npm run test:amazon-order
 import assert from 'node:assert/strict';
 
-import { isAmazonOrderSender, parseAmazonOrderMail, readCategoryPicks, shortItemName } from './amazonOrder.ts';
+import {
+  isAmazonOrderSender,
+  isAmazonShipmentSender,
+  parseAmazonOrderMail,
+  parseAmazonShipmentMail,
+  readCategoryPicks,
+  shortItemName,
+} from './amazonOrder.ts';
 
 // 2026-10-16に届いた注文メールの形（1通に注文が2件。宛名・住所は伏せた）
 const subject = '注文済み: 「【テープ Sサイズ】パンパース オムツ...」2点とさらに4点の商品';
@@ -127,6 +134,53 @@ assert.deepEqual(
 assert.equal(shortItemName('【EC限定】ディアナ'), 'ディアナ');
 assert.equal(shortItemName('【A】【B】 ほげ'), 'ほげ');
 assert.equal(shortItemName('【全部かっこ】'), '【全部かっこ】');
+
+// ---- 発送メール ----
+// 2026-10-23に届いた発送メールの形（宛名・住所は伏せた。注文メールでは合計136円＝ポイント利用。発送メールは値引き前の1248円）
+const shipmentBody = `注文履歴
+
+https://www.amazon.co.jp/gp/css/order-history?ref_=fed_yo_default
+
+    荷物が発送されました。
+注文済み
+
+発送済み
+
+日曜日にお届け
+
+○○ - 熊本県
+
+注文番号
+250-2006575-1539859
+
+配送状況を確認
+https://www.amazon.co.jp/progress-tracker/package?_encoding=UTF8&orderId=250-2006575-1539859&packageIndex=0
+
+* コモライフ 焼き網シート 約25cm×1m グリルシート フッ素加工 水洗いOK
+  数量: 1
+  1248 JPY
+
+合計
+1248 JPY
+`;
+assert.ok(isAmazonShipmentSender('Amazon.co.jp <shipment-tracking@amazon.co.jp>'));
+assert.ok(!isAmazonShipmentSender('auto-confirm@amazon.co.jp'));
+assert.deepEqual(parseAmazonShipmentMail('発送済み：「コモライフ 焼き網シート 約25cm×1m...」', shipmentBody), [
+  { orderNo: '250-2006575-1539859', receiptName: 'コモライフ 焼き網シート 約25cm×1m グリルシート フッ素加工 水洗いOK', quantity: 1 },
+]);
+// 別々に注文した品目が同じ荷物に入る（注文番号が2つ）
+assert.deepEqual(
+  parseAmazonShipmentMail(
+    '発送済み：「A」',
+    '注文番号\n111-1111111-1111111\n\n* A\n  数量: 2\n  300 JPY\n\n注文番号\n222-2222222-2222222\n\n* B\n  数量: 1\n  500 JPY\n\n合計\n1100 JPY',
+  )?.map((line) => [line.orderNo, line.receiptName, line.quantity]),
+  [
+    ['111-1111111-1111111', 'A', 2],
+    ['222-2222222-2222222', 'B', 1],
+  ],
+);
+assert.equal(parseAmazonShipmentMail('注文済み: 「A」', shipmentBody), null);
+assert.deepEqual(parseAmazonShipmentMail('発送済み：「A」', '注文番号\n111-1111111-1111111\n\n* A\n  数量: 1\n  0 JPY'), []);
 
 // ---- 種類の答えを読む ----
 const ids = new Set(['c1', 'c2']);

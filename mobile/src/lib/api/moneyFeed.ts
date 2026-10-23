@@ -192,15 +192,22 @@ export async function loadMoneyFeed(supabase: SupabaseDb, familyId: string): Pro
 }
 
 /**
- * Amazon の注文メールの明細の品目（「記録を作成する」で入れる。docs/kakei.md §9.10）。DB の money_feed_order_lines が
- * 注文の合計と品目（品名・カテゴリは同じ品名の前の記録から）を返し、値引き・送料は feedOrderItems で品目に配る。
+ * Amazon の荷物の明細の品目（「記録を作成する」で入れる。docs/kakei.md §9.13）。DB の money_feed_order_lines が
+ * 合計と品目（品名・カテゴリは同じ品名の前の記録から。品目に乗る値引き）を返し、feedOrderItems が値引きの行を足す。
  */
 export async function loadFeedOrderLines(supabase: SupabaseDb, feedId: string): Promise<ReceiptScanItem[]> {
   const { data, error } = await supabase.rpc('money_feed_order_lines', { p_feed: feedId });
   if (error) throw error;
   const order = (data ?? {}) as {
     total?: number;
-    lines?: { receipt_name: string; name: string; quantity: number; unit_price: number; category_id: string | null }[];
+    lines?: {
+      receipt_name: string;
+      name: string;
+      quantity: number;
+      unit_price: number;
+      category_id: string | null;
+      discount?: number;
+    }[];
   };
   return feedOrderItems(
     (order.lines ?? []).map(
@@ -210,6 +217,7 @@ export async function loadFeedOrderLines(supabase: SupabaseDb, feedId: string): 
         quantity: row.quantity,
         unitPrice: row.unit_price,
         categoryId: row.category_id,
+        discount: row.discount ?? 0,
       }),
     ),
     order.total ?? 0,

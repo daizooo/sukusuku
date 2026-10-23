@@ -1,7 +1,8 @@
 // かぞく手帳: Amazon の注文メールを読む（家計タブ。docs/kakei.md §9.7・§9.10）
 //
 // Amazon の買い物は注文メールから取り込む（2026-10-20。Amazon のカードの利用通知は捨てる。§9.9）。
-// 注文ごとに未確認の明細を1件作り（出金元は「三井住友カード（Amazon）」の口座の対応、日付は注文日）、
+// 注文メールでは品目・個数・単価と、注文の合計（値引き後の、払う額）を覚える。未確認の明細は、発送メール（下）が届き、
+// 荷物の品目がすべて注文と結べてから、荷物1つにつき1件作る（請求の単位。日付は発送日。§9.13）。
 // 「記録を作成する」で品目まで入れて開く。値引きは品目に配る（DB の money_feed_order_lines）。
 //
 // 注文メール（auto-confirm@amazon.co.jp。件名「注文済み: 「…」2点とさらに4点の商品」）の本文は、注文ごとに
@@ -99,6 +100,55 @@ export function parseAmazonOrderMail(subject: string, body: string): AmazonOrder
   }
   if (orders.length > 0) return orders;
   return skipped > 0 ? [] : null;
+}
+
+// ---- 発送メール（請求の単位と日付。docs/kakei.md §9.13） ----
+//
+// Amazon は発送した日に、発送パッケージ（荷物）ごとにカードへ請求する。発送メール（shipment-tracking@amazon.co.jp。
+// 件名「発送済み：「…」」）は荷物1つにつき1通で、本文は注文メールと同じ形（注文番号 / * 品名 / 数量: N / {単価} JPY / 合計）。
+// 載る単価は値引き前なので、額は使わない。どの注文のどの品目が何個、同じ荷物に入ったかだけを読む（額は注文メールから。§9.13）。
+
+export interface AmazonShipmentLine {
+  orderNo: string;
+  /** メールの品名そのまま（注文メールの品名と同じ表記）。 */
+  receiptName: string;
+  quantity: number;
+}
+
+export const AMAZON_SHIPMENT_SENDER = 'shipment-tracking@amazon.co.jp';
+
+/** 差出人から、Amazon の発送メールか。 */
+export const isAmazonShipmentSender = (from: string): boolean => from.toLowerCase().includes(AMAZON_SHIPMENT_SENDER);
+
+/**
+ * 発送メールを読む。品目が1つも読めなければ null（発送済みのメールではない・書式が変わった）。
+ * 0円の品目（無料の商品）は注文メールでも覚えないので読まない。0円の品目だけの荷物は空の配列（「対象外」）。
+ */
+export function parseAmazonShipmentMail(subject: string, body: string): AmazonShipmentLine[] | null {
+  if (!subject.normalize('NFKC').includes('発送済み')) return null;
+
+  const heads = [...body.matchAll(ORDER_NO_RE)];
+  const lines: AmazonShipmentLine[] = [];
+  let free = 0;
+  for (const [index, head] of heads.entries()) {
+    const start = (head.index ?? 0) + head[0].length;
+    const end = heads[index + 1]?.index ?? body.length;
+    for (const match of body.slice(start, end).matchAll(LINE_RE)) {
+      const unitPrice = toInt(match[3] ?? match[4]);
+      if (unitPrice === 0) {
+        free += 1;
+        continue;
+      }
+      if (!Number.isSafeInteger(unitPrice) || unitPrice < 0) continue;
+      lines.push({
+        orderNo: head[1],
+        receiptName: match[1].trim(),
+        quantity: Math.min(9999, Math.max(1, Number(match[2]))),
+      });
+    }
+  }
+  if (lines.length > 0) return lines;
+  return free > 0 ? [] : null;
 }
 
 // ---- 品目の種類（カテゴリ）を AI に選ばせる ----
