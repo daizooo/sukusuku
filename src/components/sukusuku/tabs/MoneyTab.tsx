@@ -2,12 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
-  MoneyBudget,
   MoneyCategory,
   MoneyFeedData,
   MoneyFeedItem,
   MoneyMonth,
-  MoneyBudgetLine,
   MoneyRecord,
   MoneyRecordDraft,
   MoneyRecurring,
@@ -66,8 +64,9 @@ import {
   isMonthClosed,
   monthKeyOf,
   monthKeyOfDate,
-  pendingEstimates,
-  undatedPendingInMonth,
+  budgetLinesOf,
+  scheduledFixedInMonth,
+  variableBudgetsOf,
   receiptReplaceNotices,
   recordTotal,
   shiftMonth,
@@ -139,15 +138,13 @@ const MONEY_TABLES = [
 export default function MoneyTab({ familyId }: { familyId: string }) {
   const supabase = useMemo(() => createClient(), []);
   const [categories, setCategories] = useState<MoneyCategory[]>([]);
-  const [budgets, setBudgets] = useState<MoneyBudget[]>([]);
   const [wallets, setWallets] = useState<MoneyWallet[]>([]);
   const [stores, setStores] = useState<MoneyStore[]>([]);
   const [records, setRecords] = useState<MoneyRecord[]>([]);
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
-  // 予算の明細（収入・予備費・固定費。docs/kakei.md §0.7）。
-  const [budgetLines, setBudgetLines] = useState<MoneyBudgetLine[]>([]);
-  // 記録の上の帯に出す見込み（帯に出すルールの、日が来て記録が無い回。docs/kakei.md §0.7）。
-  const estimates = useMemo(() => pendingEstimates(recurring, records, dateKeyOfDate(new Date())), [recurring, records]);
+  // 予算は自動記録ルールの表の行（docs/kakei.md §0.8）。数えるときは、収入・予備費・固定費は予算の明細、変動費は大分類の月の予算の形にする。
+  const budgetLines = useMemo(() => budgetLinesOf(recurring, categories), [recurring, categories]);
+  const budgets = useMemo(() => variableBudgetsOf(recurring, categories), [recurring, categories]);
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   // 月の締め（docs/kakei.md §4.5）。
   const [closings, setClosings] = useState<MoneyMonth[]>([]);
@@ -182,14 +179,12 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   // Gmail から取り込んだ明細と取り込みの設定（docs/kakei.md §9.5）。null は読み込み中。
   const [feed, setFeed] = useState<MoneyFeedData | null>(null);
   const [feedOpen, setFeedOpen] = useState(false);
-  // 月の締めから未確認の明細を開いたときの、その月（日付未定の見込みも出す。docs/kakei.md §0.7）。
+  // 月の締めから未確定明細を開いたときの、その月（「今月記録予定の固定費」も出す。docs/kakei.md §0.8）。
   const [feedMonth, setFeedMonth] = useState<string | null>(null);
-  const inboxEstimates = useMemo(() => {
-    if (feedMonth === null) return estimates;
-    const shown = new Set(estimates.map((entry) => `${entry.rule.id}|${entry.plannedMonth}`));
-    const undated = undatedPendingInMonth(recurring, records, feedMonth, dateKeyOfDate(new Date()));
-    return [...estimates, ...undated.filter((entry) => !shown.has(`${entry.rule.id}|${entry.plannedMonth}`))];
-  }, [feedMonth, estimates, recurring, records]);
+  const inboxEstimates = useMemo(
+    () => (feedMonth === null ? [] : scheduledFixedInMonth(recurring, records, categories, feedMonth, dateKeyOfDate(new Date()))),
+    [feedMonth, recurring, records, categories],
+  );
   // 未確認の明細の「記録を作成する」から開いた記録の入力の、その明細。保存したら記録と結ぶ（docs/kakei.md §9.5.6.1）。
   const [feedRecordFor, setFeedRecordFor] = useState<MoneyFeedItem | null>(null);
   // Amazon の注文メールの明細から記録するときの品目（docs/kakei.md §9.10）
@@ -205,14 +200,12 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const apply = useCallback(
     ({ money, securities: loadedSecurities }: MoneyBootstrap) => {
       setCategories(money.categories);
-      setBudgets(money.budgets);
       setWallets(money.wallets);
       setStores(money.stores);
       setRecords(money.records);
       setRecurring(money.recurring);
       setBalances(money.balances);
       setClosings(money.months);
-      setBudgetLines(money.budgetLines);
       setSecurities(loadedSecurities);
     },
     [],
@@ -447,14 +440,19 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     });
   };
 
-  /** 見込みを「翌月へ送る」（翌月1日まで帯に出さない）／「今月はなし」（その回を skippedMonths に足す）。 */
+  /**
+   * 締めの「今月記録予定の固定費」を「翌月へ」（その回を締めた月から外し、翌月の締めに出す）／「今月はなし」（その回を出さない）。
+   * 「翌月へ」で送られてきた回の「今月はなし」は、送ったのをやめる（docs/kakei.md §0.8）。
+   */
   const putOffEstimate = async (entry: PendingEstimate, how: 'defer' | 'skip'): Promise<boolean> => {
     const { rule } = entry;
+    const shown = monthKeyOf(entry.date);
+    const carried = entry.plannedMonth !== shown;
     try {
-      const saved =
-        how === 'defer'
-          ? await updateMoneyRecurringDeferred(supabase, rule.id, `${shiftMonth(monthKeyOf(dateKeyOfDate(new Date())), 1)}-01`)
-          : await updateMoneyRecurringSkipped(supabase, rule.id, [...new Set([...rule.skippedMonths, entry.plannedMonth])]);
+      let saved = rule;
+      if (!carried) saved = await updateMoneyRecurringSkipped(supabase, rule.id, [...new Set([...rule.skippedMonths, entry.plannedMonth])]);
+      if (how === 'defer') saved = await updateMoneyRecurringDeferred(supabase, rule.id, `${shiftMonth(shown, 1)}-01`);
+      else if (carried) saved = await updateMoneyRecurringDeferred(supabase, rule.id, null);
       setRecurring((prev) => prev.map((item) => (item.id === saved.id ? saved : item)));
       return true;
     } catch {
@@ -691,8 +689,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               >
                 <span className={`relative text-[15px] ${selected ? 'font-bold text-gray-900' : 'font-semibold text-gray-400'}`}>
                   {entry.label}
-                  {/* 未確定明細があるあいだ、「記録」の右上に赤い点（無くなったら消す。2026-10-18。見込みも数える 2026-10-21）。 */}
-                  {entry.id === 'records' && (feed?.open.length ?? 0) + estimates.length > 0 && (
+                  {/* 未確定明細があるあいだ、「記録」の右上に赤い点（無くなったら消す。2026-10-18）。 */}
+                  {entry.id === 'records' && (feed?.open.length ?? 0) > 0 && (
                     <span className="absolute -right-[9px] -top-px h-2 w-2 rounded-full bg-red-500" />
                   )}
                 </span>
@@ -714,7 +712,6 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               onOpen={setEditing}
               onAddOnDate={addOnDate}
               feedOpenCount={feed?.open.length ?? 0}
-              estimateCount={estimates.length}
               onOpenFeed={() => setFeedOpen(true)}
               feedStalled={feed?.syncStalled ?? false}
             />
@@ -815,11 +812,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           recurring={recurring}
           records={records}
           onCategories={setCategories}
-          onBudgets={setBudgets}
           onStores={setStores}
           onRecurring={setRecurring}
-          budgetLines={budgetLines}
-          onBudgetLines={setBudgetLines}
           initialRecurringId={recurringTarget}
           feed={feed}
           onFeedChanged={reloadFeed}
@@ -910,7 +904,6 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           familyId={familyId}
           categories={categories}
           onCategories={setCategories}
-          onBudgets={setBudgets}
           onClose={() => setEditingCategories(false)}
         />
       )}

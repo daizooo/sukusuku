@@ -39,7 +39,6 @@ interface CategoryEditorProps {
   familyId: string;
   categories: MoneyCategory[];
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
-  /** 大分類を消すと、その予算も消える（DBの cascade）ので、画面の予算からも外す。 */
   onClose: () => void;
 }
 

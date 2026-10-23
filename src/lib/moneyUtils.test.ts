@@ -10,15 +10,14 @@ import {
   budgetPlanInYear,
   fixedBudgetRows,
   reserveYearRows,
-  undatedPendingInMonth,
+  budgetLinesOf,
+  manualBudgetFor,
+  scheduledFixedInMonth,
+  variableBudgetsOf,
   periodSummary,
   variableTiles,
   fixedSpendInMonth,
   spendGroupOf,
-  estimateCostBasis,
-  estimateCostsInYear,
-  pendingEstimates,
-  isEstimateCost,
   addDays,
   balanceChanges,
   balanceChecks,
@@ -1242,113 +1241,80 @@ assert.deepEqual(
   assert.deepEqual(receiptReplaceNotices(named, 4000), ['記録の ¥\u20094,415 とレシートの ¥\u20094,000 で合計が違います', '手で入れた品目があります']);
 }
 
-// ---- 見積費（記録を作らない固定支出。docs/kakei.md §3.6） ----
+// ---- 予算の行（予算・自動記録をまとめた1行。docs/kakei.md §0.8） ----
 {
   const cats = [
-    { id: 'car', kind: 'living', parentId: null, archived: false, position: 0, name: '車' },
-    { id: 'shaken', kind: 'living', parentId: 'car', archived: false, position: 0, name: '車検' },
-    { id: 'ins', kind: 'living', parentId: 'car', archived: false, position: 1, name: '自動車保険' },
-    { id: 'tax', kind: 'living', parentId: null, archived: false, position: 1, name: '税' },
-    { id: 'furusato', kind: 'living', parentId: 'tax', archived: false, position: 0, name: 'ふるさと納税' },
-    { id: 'event', kind: 'living', parentId: null, archived: false, position: 2, name: '行事' },
-    { id: 'trip', kind: 'living', parentId: 'event', archived: false, position: 0, name: '帰省' },
+    { id: 'food', kind: 'living', parentId: null, archived: false, position: 0, name: '食費', budgetGroup: 'variable' },
+    { id: 'eat', kind: 'living', parentId: 'food', archived: false, position: 0, name: '外食', budgetGroup: 'variable' },
+    { id: 'fixed', kind: 'living', parentId: null, archived: false, position: 1, name: '固定費', budgetGroup: 'fixed' },
+    { id: 'tax', kind: 'living', parentId: 'fixed', archived: false, position: 0, name: '自動車税', budgetGroup: 'variable' },
+    { id: 'club', kind: 'living', parentId: 'fixed', archived: false, position: 1, name: '自治会費', budgetGroup: 'variable' },
+    { id: 'est', kind: 'living', parentId: null, archived: false, position: 2, name: '固定費（見込み）', budgetGroup: 'estimate' },
+    { id: 'phone', kind: 'living', parentId: 'est', archived: false, position: 0, name: 'スマホ', budgetGroup: 'variable' },
+    { id: 'res', kind: 'living', parentId: null, archived: false, position: 3, name: '予備費', budgetGroup: 'reserve' },
+    { id: 'gift', kind: 'living', parentId: 'res', archived: false, position: 0, name: '誕生日お祝い', budgetGroup: 'variable' },
   ] as unknown as MoneyCategory[];
-  const plan = (id: string, position: number, over: Partial<MoneyRecurring>) =>
+  const row = (id: string, position: number, over: Partial<MoneyRecurring>) =>
     ({
       id, kind: 'expense', months: null, amount: 0, categoryId: null, archived: false, walletId: null, toWalletId: null,
       store: '', name: '', day: 1, weekOfMonth: null, weekday: null, holiday: 'next', amountMode: 'fixed',
-      startMonth: null, endMonth: null, createdAt: '2026-01-05', position, makesRecord: false, skippedMonths: [], ...over,
+      startMonth: null, endMonth: null, createdAt: '2026-01-05', position, makesRecord: false, skippedMonths: [],
+      intervalYears: null, dayKnown: false, deferredUntil: null, noMonth: false, ...over,
     }) as MoneyRecurring;
   const spent = (id: string, occurredOn: string, categoryId: string, amount: number) =>
     ({
       id, kind: 'expense', occurredOn, walletId: 'card', toWalletId: null, store: '', isEstimate: false, recurringId: null, month: null,
       items: [{ id: `i-${id}`, amount, categoryId, name: '' }],
     }) as unknown as MoneyRecord;
-  const shaken = plan('shaken', 0, { categoryId: 'shaken', months: [3], amount: 120000, startMonth: '2027-03', endMonth: '2027-03' });
-  const furusato = plan('furusato', 1, { categoryId: 'furusato', months: [11], amountMode: 'estimate', amount: 50000 });
-  const trip = plan('trip', 2, { categoryId: 'trip', months: [8, 12], amount: 60000 });
-  const ins = plan('ins', 3, { categoryId: 'ins', months: [9], amount: 58000 });
-  const late = plan('late', 4, { categoryId: 'ins', months: [5], amount: 1000, createdAt: '2027-06-01' });
-  const rules = [shaken, furusato, trip, ins, late];
-  const rs = [
-    spent('f26', '2026-11-20', 'furusato', 82000),
-    spent('s27', '2027-03-15', 'shaken', 118400),
-    spent('t27', '2027-08-14', 'trip', 72300),
-    spent('f27', '2027-10-05', 'furusato', 80000),
+  const rows = [
+    row('food', 0, { categoryId: 'food', amount: 60000, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] }),
+    row('food12', 1, { categoryId: 'food', amount: 80000, months: [12] }),
+    row('eat', 2, { categoryId: 'eat', amount: 10000 }),
+    row('tax', 3, { categoryId: 'tax', amount: 30500, months: [5] }),
+    row('club', 4, { categoryId: 'club', amount: 4500, noMonth: true }),
+    row('phone', 5, { categoryId: 'phone', amount: 3278, amountMode: 'estimate' }),
+    row('gift', 6, { categoryId: 'gift', amount: 15000, months: [8], name: '妻' }),
+    row('gift2', 7, { categoryId: 'gift', amount: 15000, months: [8], name: '子' }),
+    row('move', 8, { kind: 'transfer', amount: 1000 }),
+    row('old', 9, { categoryId: 'gift', amount: 9999, archived: true }),
   ];
-  const today = '2027-10-20';
 
-  assert.equal(isEstimateCost(shaken), true);
-  assert.equal(isEstimateCost(plan('x', 9, { makesRecord: true })), false, '記録を作るルールは見積費ではない');
-  assert.equal(isEstimateCost({ kind: 'expense' }), false, 'makesRecord の無い古いルールは見積費ではない');
+  // 収入・予備費・固定費は予算の明細の形に。変動費・振替・使っていない行は入れない
+  const lines = budgetLinesOf(rows, cats);
+  assert.deepEqual(lines.map((line) => line.id), ['tax', 'club', 'phone', 'gift', 'gift2']);
+  // 同じ月の2人（8月の誕生日）は1件ずつ持てて、年に2回ぶん
+  assert.equal(lines.filter((line) => line.categoryId === 'gift').reduce((sum, line) => sum + budgetLineYearAmount(line, 2027), 0), 30000);
 
-  // 前回の実績: その年より前のいちばん新しい回（予定の月に近い回を優先）
-  assert.deepEqual(estimateCostBasis('furusato', rs, '2027-11'), { monthKey: '2026-11', amount: 82000 });
-  assert.equal(estimateCostBasis('furusato', rs, '2026-11'), null, 'その年の実績は前回に数えない');
+  // 変動費の月の予算 ＝ 大分類の行 ＋ 小分類の行（その月に発生するもの）
+  const budgets = variableBudgetsOf(rows, cats);
+  assert.equal(manualBudgetFor(budgets, 'food', '2027-01'), 70000);
+  assert.equal(manualBudgetFor(budgets, 'food', '2027-12'), 90000, '12月だけ違う額');
+  assert.equal(manualBudgetFor(budgets, 'fixed', '2027-05'), null, '変動費でない大分類は月の予算を持たない');
 
-  const list = estimateCostsInYear(rules, rs, 2027, today);
-  const find = (id: string, month: string) => list.find((entry) => entry.rule.id === id && entry.plannedMonth === month);
+  // 締めの「今月記録予定の固定費」: 自動記録オフの固定費（確定・見込み）で、その月が発生月で、記録が無いもの
+  const today = '2027-06-10';
+  const names = (list: ReturnType<typeof scheduledFixedInMonth>) => list.map((entry) => [entry.rule.id, entry.plannedMonth, entry.date]);
   assert.deepEqual(
-    list.map((entry) => `${entry.rule.id}:${entry.plannedMonth}`),
-    ['shaken:2027-03', 'trip:2027-08', 'ins:2027-09', 'furusato:2027-11', 'trip:2027-12'],
-    '予定の月の順。ルールを作った月より前の回（late の5月）は出さない',
-  );
-  const s = find('shaken', '2027-03');
-  assert.equal(s?.status, 'done');
-  assert.equal(s?.actual, 118400);
-  assert.equal(s?.amount, 120000, '実績があっても見積額のまま');
-  assert.equal(s?.placedMonth, '2027-03');
-  const f = find('furusato', '2027-11');
-  assert.equal(f?.amount, 82000, '前回の実績から見込む');
-  assert.equal(f?.basisMonth, '2026-11');
-  assert.equal(f?.status, 'done');
-  assert.equal(f?.placedMonth, '2027-10', '早く払ったら実績の月へ移る');
-  assert.equal(find('trip', '2027-08')?.actual, 72300, '同じ小分類の回が2つあれば、近い回に当てる');
-  assert.equal(find('trip', '2027-12')?.status, 'upcoming');
-  assert.equal(find('trip', '2027-12')?.placedMonth, '2027-12');
-  assert.equal(find('ins', '2027-09')?.status, 'overdue');
-  assert.equal(find('ins', '2027-09')?.placedMonth, '2027-10', '予定の月を過ぎて記録が無ければ今月へ送る');
-  assert.equal(estimateCostsInYear(rules, rs, 2028, today).some((entry) => entry.rule.id === 'shaken'), false, '期間の外の年は出さない');
-  assert.equal(
-    estimateCostsInYear(rules, rs, 2026, today).find((entry) => entry.rule.id === 'trip' && entry.plannedMonth === '2026-08')?.placedMonth,
-    '2026-08',
-    '過ぎた年で記録が無い回は、予定の月のまま',
-  );
-
-  // 記録の上の帯（未確定明細。docs/kakei.md §0.7）: 日が来て記録が無い回。過ぎた月の回は今日の日で出す
-  const known = rules.map((rule) => ({ ...rule, dayKnown: true, deferredUntil: null }));
-  const phone = plan('phone', 5, { categoryId: 'phone', day: 5, amount: 3278, createdAt: '2027-10-01', dayKnown: true, deferredUntil: null });
-  const bill = plan('bill', 6, { categoryId: 'bill', day: 25, amount: 1000, createdAt: '2027-10-01', dayKnown: true, deferredUntil: null });
-  assert.deepEqual(
-    pendingEstimates([...known, phone, bill], rs, today).map((entry) => [entry.rule.id, entry.plannedMonth, entry.date, entry.amount]),
-    [['ins', '2027-09', today, 58000], ['phone', '2027-10', '2027-10-05', 3278]],
-    '送られた回と、日が来た今月の回（25日はまだ）。済・先の月は出さない',
+    names(scheduledFixedInMonth(rows, [], cats, '2027-05', today)),
+    [['tax', '2027-05', '2027-05-31'], ['phone', '2027-05', '2027-05-31']],
+    '発生月なし（自治会費）・予備費・変動費は出さない。記録する日は月末',
   );
   assert.deepEqual(
-    pendingEstimates([{ ...phone, deferredUntil: '2027-11-01' }, { ...phone, id: 'p2', dayKnown: false }], rs, today),
-    [],
-    '翌月へ送ったもの・日付未定は出さない',
+    names(scheduledFixedInMonth(rows, [spent('p', '2027-05-20', 'phone', 3300)], cats, '2027-05', today)).map((entry) => entry[0]),
+    ['tax'],
+    '同じ小分類の記録が入ったものは出さない',
   );
-  assert.equal(pendingEstimates([{ ...phone, deferredUntil: '2027-10-20' }], rs, today).length, 1, '送った日が来たらまた出す');
-  assert.equal(pendingEstimates([{ ...phone, skippedMonths: ['2027-10'] }], rs, today).length, 0, '今月はなし');
-
-  // 日付未定は帯に出さず、締めまでに記録が無ければ締めの未確認の明細に出す（docs/kakei.md §0.7）
-  const undated = { ...phone, id: 'p3', dayKnown: false };
+  assert.deepEqual(names(scheduledFixedInMonth(rows, [], cats, '2027-06', today)), [['phone', '2027-06', '2027-06-10']], '今月は今日の日付');
+  const deferred = rows.map((entry) => (entry.id === 'tax' ? { ...entry, skippedMonths: ['2027-05'], deferredUntil: '2027-06-01' } : entry));
+  assert.deepEqual(names(scheduledFixedInMonth(deferred, [], cats, '2027-05', today)).map((entry) => entry[0]), ['phone'], '翌月へ送った回は出さない');
   assert.deepEqual(
-    undatedPendingInMonth([undated, phone], rs, '2027-10', today).map((entry) => [entry.rule.id, entry.plannedMonth, entry.date]),
-    [['p3', '2027-10', today]],
-    '日付未定だけ。今月は今日の日',
+    names(scheduledFixedInMonth(deferred, [], cats, '2027-06', today)).map((entry) => [entry[0], entry[1]]),
+    [['tax', '2027-05'], ['phone', '2027-06']],
+    '送った先の月に出す（予定の月は前の月のまま）',
   );
-  assert.deepEqual(
-    undatedPendingInMonth([undated], rs, '2027-09', today).map((entry) => entry.date),
-    [],
-    'ルールを作る前の月は出さない',
-  );
-  assert.equal(undatedPendingInMonth([{ ...undated, skippedMonths: ['2027-10'] }], rs, '2027-10', today).length, 0, '今月はなし');
-  assert.equal(
-    estimateCostsInYear([{ ...ins, skippedMonths: ['2027-09'] }], rs, 2027, today)[0].status,
-    'skipped',
-  );
+  const auto = rows.map((entry) => (entry.id === 'phone' ? { ...entry, makesRecord: true, dayKnown: true } : entry));
+  assert.equal(scheduledFixedInMonth(auto, [], cats, '2027-06', today).length, 0, '自動記録オンは出さない（その日に記録を作る）');
+  assert.equal(scheduledFixedInMonth(rows, [], cats, '2025-12', today).length, 0, '予算を作る前の月は出さない');
 }
 
 // ---- 予備費・支出の分け方（変動費・予備費・固定費。docs/kakei.md §0.7） ----
