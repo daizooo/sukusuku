@@ -1746,6 +1746,7 @@ export type Database = {
           makes_record: boolean
           months: number[] | null
           name: string
+          no_month: boolean
           position: number
           skipped_months: string[]
           start_month: string | null
@@ -1775,6 +1776,7 @@ export type Database = {
           makes_record?: boolean
           months?: number[] | null
           name?: string
+          no_month?: boolean
           position?: number
           skipped_months?: string[]
           start_month?: string | null
@@ -1804,6 +1806,7 @@ export type Database = {
           makes_record?: boolean
           months?: number[] | null
           name?: string
+          no_month?: boolean
           position?: number
           skipped_months?: string[]
           start_month?: string | null

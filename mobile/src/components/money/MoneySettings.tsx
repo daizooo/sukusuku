@@ -2,14 +2,13 @@ import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Modal from '@/components/ui/Modal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CalendarClock, ChevronRight, Mail, PiggyBank, Store, Tag } from 'lucide-react-native';
+import { ArrowLeftRight, ChevronRight, Mail, PiggyBank, Store, Tag } from 'lucide-react-native';
 import type {
   MoneyBudget,
   MoneyCategory,
   MoneyFeedData,
   MoneyRecord,
   MoneyRecurring,
-  MoneyBudgetLine,
   MoneyStore,
   MoneyWallet,
 } from '@/types/app';
@@ -24,7 +23,8 @@ import { ScreenHeader } from '@/components/money/moneyVisual';
 
 // 家計の設定（docs/kakei.md §3.5）。PWA版の `src/components/sukusuku/money/MoneySettings.tsx` と同じ並び・文言。
 //
-// カテゴリ・予算（年ごと。2026-10-15にカテゴリと分けた）・固定費（支出・収入〔給与・賞与〕・振替）・よく行くお店を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
+// 年間予算（予算・カテゴリ・自動記録をまとめて決める。2026-10-23。docs/kakei.md §0.8）・カテゴリ（アイコン・並び）・振替の自動記録・
+// よく行くお店を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
 // （お店の名前を直しても、過去の記録のお店の名前はそのまま）。
 // 戻る操作（スマホの戻るボタン）は、開いている設定の面から入口へ、入口から家計タブへ。
 
@@ -33,6 +33,7 @@ interface MoneySettingsProps {
   /** 予算を最初に見る年（暦年）。 */
   year: number;
   categories: MoneyCategory[];
+  /** 変動費の月の予算（予算の行から作ったもの。取り込みの設定で使う）。 */
   budgets: MoneyBudget[];
   stores: MoneyStore[];
   /** 毎月の記録の出金元・入金先を選ぶのに使う（出金元そのものは「口座」の面で直す）。 */
@@ -40,13 +41,9 @@ interface MoneySettingsProps {
   recurring: MoneyRecurring[];
   records: MoneyRecord[];
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
-  onBudgets: (update: (prev: MoneyBudget[]) => MoneyBudget[]) => void;
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
-  /** 予備費の年の額（docs/kakei.md §3.7）。 */
-  budgetLines: MoneyBudgetLine[];
-  onBudgetLines: (update: (prev: MoneyBudgetLine[]) => MoneyBudgetLine[]) => void;
-  /** 開いたときに編集を開く固定支出（予算の画面の固定費から来たとき）。 */
+  /** 開いたときに編集を開く振替の自動記録。 */
   initialRecurringId?: string | null;
   /** Zaim 取り込み（docs/kakei.md §9.5.6）。null は読み込み中。 */
   feed: MoneyFeedData | null;
@@ -67,11 +64,8 @@ export default function MoneySettings({
   recurring,
   records,
   onCategories,
-  onBudgets,
   onStores,
   onRecurring,
-  budgetLines,
-  onBudgetLines,
   initialRecurringId = null,
   feed,
   onFeedChanged,
@@ -88,9 +82,9 @@ export default function MoneySettings({
   const innerBack = useRef<(() => void) | null>(null);
 
   const rows: { id: Exclude<Page, 'menu'>; label: string; icon: typeof Tag }[] = [
-    { id: 'categories', label: 'カテゴリ', icon: Tag },
-    { id: 'budget', label: '年間予算', icon: PiggyBank },
-    { id: 'recurring', label: '自動記録ルール（支出、収入、振替）', icon: CalendarClock },
+    { id: 'budget', label: '年間予算（カテゴリ・自動記録）', icon: PiggyBank },
+    { id: 'categories', label: 'カテゴリのアイコン・並び', icon: Tag },
+    { id: 'recurring', label: '振替の自動記録', icon: ArrowLeftRight },
     { id: 'stores', label: 'よく行くお店', icon: Store },
     { id: 'feed', label: 'Gmail 取り込み', icon: Mail },
   ];
@@ -165,17 +159,20 @@ export default function MoneySettings({
         )}
       </View>
       {page === 'categories' && (
-        <CategoryEditor familyId={familyId} categories={categories} onCategories={onCategories} onBudgets={onBudgets} onClose={back} />
+        <CategoryEditor familyId={familyId} categories={categories} onCategories={onCategories} onClose={back} />
       )}
       {page === 'budget' && (
         <BudgetEditor
           familyId={familyId}
           year={year}
           categories={categories}
-          budgets={budgets}
-          budgetLines={budgetLines}
-          onBudgets={onBudgets}
-          onBudgetLines={onBudgetLines}
+          recurring={recurring}
+          wallets={wallets}
+          stores={stores}
+          records={records}
+          onCategories={onCategories}
+          onRecurring={onRecurring}
+          onStores={onStores}
           onClose={back}
         />
       )}

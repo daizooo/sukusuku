@@ -677,225 +677,144 @@ export function recurringInYear(
   return rows.sort((a, b) => a.rule.position - b.rule.position);
 }
 
-// ---- 帯に出す固定支出（記録を作らない。docs/kakei.md §3.6。2026-10-17、2026-10-21に見直し） ----
-// 車検・自動車保険・JAF のように、出ることは決まっているが、額や日が決まらず、カードや現金で払うもの。
-// ルールは記録を作らず（makesRecord: false。出金元・日は帯から記録するときの下書きに使う）、その月の大分類の予算と、年末の着地見込みにだけ入る。
-// 実績は、その年に同じ小分類（ルールのカテゴリ）で入った記録を自動で結びつける（手で紐づけない）。
+// ---- 月の締めの「今月記録予定の固定費」（docs/kakei.md §0.8。2026-10-23） ----
+// 自動記録オフの固定費（確定・見込み）は、日が決まらず、いつ払うか分からないもの（自動車税・スマホ・車検など）。
+// 発生月にその小分類の記録が無ければ、月の締めで知らせる（設定は持たない。いつもそうする）。発生月なし（自治会費など）は知らせない。
 
-/** 見積費のルールか（記録を作らない支出のルール）。 */
-export const isEstimateCost = (rule: Pick<MoneyRecurring, 'kind'> & Partial<Pick<MoneyRecurring, 'makesRecord'>>): boolean =>
-  rule.kind === 'expense' && rule.makesRecord === false;
-
-/** 見積費の1回の状態。済（実績あり）／これから／実績なし（予定の月を過ぎた）／今年はなし。 */
-export type EstimateCostStatus = 'done' | 'upcoming' | 'overdue' | 'skipped';
-
-export interface EstimateCostOccurrence {
-  rule: MoneyRecurring;
-  /** 予定の月（YYYY-MM）。 */
-  plannedMonth: string;
-  /** 予算・着地見込みを置く月。実績があれば実績の月、予定の月を過ぎて実績が無ければ今月（今年のとき）。今年はなしは null。 */
-  placedMonth: string | null;
-  /** 見積額（予算に足す額。実績があっても見積額のまま。予定と実績の差が見えるように）。 */
-  amount: number;
-  status: EstimateCostStatus;
-  /** 結びついた実績の合計（無ければ 0）。 */
-  actual: number;
-  /** 実績の月（実績がいちばん多く入った月）。 */
-  actualMonth: string | null;
-  /** 「前回の実績から見込む」で使った前回の月。入れた額のときと、前回が無いときは null。 */
-  basisMonth: string | null;
-}
-
-/** 月（1〜12）の離れ（年をまたいで近い方。12月と1月は1）。 */
-const monthApart = (a: number, b: number): number => Math.min(Math.abs(a - b), 12 - Math.abs(a - b));
-
-/** その小分類の、記録ごとの額（品目のうち、その小分類の分の合計。支出だけ）。 */
-function categoryActuals(records: readonly MoneyRecord[], categoryId: string): { monthKey: string; amount: number }[] {
-  const list: { monthKey: string; amount: number }[] = [];
-  for (const record of records) {
-    if (record.kind !== 'expense') continue;
-    const amount = record.items.reduce((sum, item) => (item.categoryId === categoryId ? sum + item.amount : sum), 0);
-    if (amount > 0) list.push({ monthKey: monthKeyOf(record.occurredOn), amount });
-  }
-  return list;
-}
-
-/**
- * 「前回の実績から見込む」の額。その年より前に、その小分類の記録が入ったいちばん新しい月の合計。
- * 予定の月から2か月以内の月があればそちらを選ぶ（同じ小分類で年に2回あるもの〔帰省の8月と12月など〕を取り違えないため）。
- * 前回が無ければ null。2年に1回の車検は、2年前の回を使う。
- */
-export function estimateCostBasis(
-  categoryId: string,
-  records: readonly MoneyRecord[],
-  plannedMonth: string,
-): { monthKey: string; amount: number } | null {
-  const yearStart = `${plannedMonth.slice(0, 4)}-01`;
-  const sums = new Map<string, number>();
-  for (const entry of categoryActuals(records, categoryId)) {
-    if (entry.monthKey >= yearStart) continue;
-    sums.set(entry.monthKey, (sums.get(entry.monthKey) ?? 0) + entry.amount);
-  }
-  const months = [...sums.keys()].sort().reverse();
-  if (months.length === 0) return null;
-  const planned = Number(plannedMonth.slice(5, 7));
-  const near = months.find((monthKey) => monthApart(Number(monthKey.slice(5, 7)), planned) <= 2);
-  const monthKey = near ?? months[0];
-  return { monthKey, amount: sums.get(monthKey) ?? 0 };
-}
-
-/**
- * その年（暦年）の見積費の回の一覧（予定の月の順）。today は YYYY-MM-DD。
- * - 実績: その年に、ルールの小分類で入った記録。同じ小分類の回が年に2つ以上あれば、記録ごとに予定の月がいちばん近い回へ当てる
- *   （同じ近さなら早い回）。「今年はなし」の回には当てない
- * - 置く月: 実績があれば実績の月（いちばん多く入った月）。無ければ、予定の月が今月以降ならその月、過ぎていれば今月
- *   （今年のとき。年末まで見込みに残す）。過ぎた年で実績が無い回は予定の月のまま
- * - 額: 入れた額（fixed）か、前回の実績（estimate。estimateCostBasis。無ければ入れた額）
- * 使っていて、カテゴリが決まっていて、記録する月・期間の中の回だけ。ルールを作った月より前の回は出さない
- * （使い始める前の回が「記録なし」として今月へ送られないように。DBの make_money_recurring_records の「作る前に来た分は作らない」と同じ）。
- * ルールを作った月より前の記録は、その回の実績として当てない。
- */
-export function estimateCostsInYear(
-  recurring: readonly MoneyRecurring[],
-  records: readonly MoneyRecord[],
-  year: number,
-  today: string,
-): EstimateCostOccurrence[] {
-  const thisMonth = monthKeyOf(today);
-  const occurrences: EstimateCostOccurrence[] = [];
-  for (const rule of recurring) {
-    if (rule.archived || !isEstimateCost(rule) || rule.categoryId === null) continue;
-    const createdMonth = monthKeyOf(rule.createdAt);
-    if (year < yearOfMonth(createdMonth)) continue;
-    for (let month = 1; month <= 12; month += 1) {
-      const plannedMonth = `${year}-${pad2(month)}`;
-      if (plannedMonth < createdMonth) continue;
-      if (rule.months !== null && !rule.months.includes(month)) continue;
-      if (!inRecurringPeriod(rule, plannedMonth)) continue;
-      const basis = rule.amountMode === 'estimate' ? estimateCostBasis(rule.categoryId, records, plannedMonth) : null;
-      occurrences.push({
-        rule,
-        plannedMonth,
-        placedMonth: plannedMonth,
-        amount: basis !== null ? basis.amount : rule.amount,
-        status: (rule.skippedMonths ?? []).includes(plannedMonth) ? 'skipped' : 'upcoming',
-        actual: 0,
-        actualMonth: null,
-        basisMonth: basis?.monthKey ?? null,
-      });
-    }
-  }
-  // 小分類ごとに、その年の記録を近い回へ当てる。
-  const byMonthOf = new Map<EstimateCostOccurrence, Map<string, number>>();
-  for (const categoryId of new Set(occurrences.map((entry) => entry.rule.categoryId as string))) {
-    const targets = occurrences.filter((entry) => entry.rule.categoryId === categoryId && entry.status !== 'skipped');
-    if (targets.length === 0) continue;
-    for (const actual of categoryActuals(records, categoryId)) {
-      if (yearOfMonth(actual.monthKey) !== year) continue;
-      const month = Number(actual.monthKey.slice(5, 7));
-      let best: EstimateCostOccurrence | null = null;
-      for (const target of targets) {
-        if (actual.monthKey < monthKeyOf(target.rule.createdAt)) continue;
-        if (best === null) {
-          best = target;
-          continue;
-        }
-        const apart = Math.abs(Number(target.plannedMonth.slice(5, 7)) - month);
-        const bestApart = Math.abs(Number(best.plannedMonth.slice(5, 7)) - month);
-        if (apart < bestApart || (apart === bestApart && target.plannedMonth < best.plannedMonth)) best = target;
-      }
-      if (best === null) continue;
-      best.actual += actual.amount;
-      const months = byMonthOf.get(best) ?? new Map<string, number>();
-      months.set(actual.monthKey, (months.get(actual.monthKey) ?? 0) + actual.amount);
-      byMonthOf.set(best, months);
-    }
-  }
-  for (const entry of occurrences) {
-    if (entry.status === 'skipped') {
-      entry.placedMonth = null;
-      continue;
-    }
-    const months = byMonthOf.get(entry);
-    if (months) {
-      entry.status = 'done';
-      entry.actualMonth = [...months].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0][0];
-      entry.placedMonth = entry.actualMonth;
-    } else if (entry.plannedMonth < thisMonth) {
-      entry.status = 'overdue';
-      entry.placedMonth = year === yearOfMonth(thisMonth) ? thisMonth : entry.plannedMonth;
-    }
-  }
-  return occurrences.sort(
-    (a, b) => (a.plannedMonth < b.plannedMonth ? -1 : a.plannedMonth > b.plannedMonth ? 1 : a.rule.position - b.rule.position),
-  );
-}
-
-/** 記録の上の帯（未確定明細）に出す、帯に出すルールの1回（docs/kakei.md §0.7）。 */
+/** 締めの「今月記録予定の固定費」の1回。 */
 export interface PendingEstimate {
   rule: MoneyRecurring;
-  /** 予定の月（YYYY-MM）。「今月はなし」はこの月を skippedMonths に足す。 */
+  /** 予定の月（YYYY-MM）。「今月はなし」はこの月を skippedMonths に足す。「翌月へ」で送られてきた回は前の月。 */
   plannedMonth: string;
-  /** 記録するときの日（YYYY-MM-DD）。今月の回はその日、過ぎた月から送られた回は今日。 */
+  /** 記録するときの日（YYYY-MM-DD）。締める月の末日（今月なら今日）。 */
   date: string;
-  /** 見積額（estimateCostsInYear の額）。 */
+  /** 予算の額（1回の額）。 */
   amount: number;
 }
 
 /**
- * 帯に出す見込み（記録を作らないルール）のうち、日が来て、まだ記録が無い回（日の順）。today は YYYY-MM-DD。
- * - 今月の回は、その日（recurringDateOf）から出す。予定の月を過ぎて記録が無い回（estimateCostsInYear の overdue）は今月に出る
- * - 日付未定（dayKnown: false）は出さない。「翌月へ送る」にしたルールは deferredUntil の日まで出さない
- * - 済（同じ小分類の記録が入った）・今月はなしの回は出さない
+ * 締める月（YYYY-MM）の「今月記録予定の固定費」（カテゴリの並び → 予算の並び）。today は YYYY-MM-DD。
+ * 自動記録オフで発生月のある固定費（確定・見込み）のうち、その月が発生月（期間・◯年ごとを含む）で、その月に同じ小分類の
+ * 記録が無いもの。予算を作った月より前の回と、「今月はなし」にした回は出さない。「翌月へ」にした回（deferredUntil がその月）も出す。
  */
-export function pendingEstimates(
+export function scheduledFixedInMonth(
   recurring: readonly MoneyRecurring[],
   records: readonly MoneyRecord[],
-  today: string,
-): PendingEstimate[] {
-  const thisMonth = monthKeyOf(today);
-  const rules = recurring.filter((rule) => rule.dayKnown && (rule.deferredUntil ?? '') <= today);
-  const list: PendingEstimate[] = [];
-  for (const entry of estimateCostsInYear(rules, records, yearOfMonth(thisMonth), today)) {
-    if (entry.status === 'overdue') {
-      list.push({ rule: entry.rule, plannedMonth: entry.plannedMonth, date: today, amount: entry.amount });
-      continue;
-    }
-    if (entry.status !== 'upcoming' || entry.plannedMonth !== thisMonth) continue;
-    const date = recurringDateOf(yearOfMonth(thisMonth), Number(thisMonth.slice(5, 7)), entry.rule);
-    if (date <= today) list.push({ rule: entry.rule, plannedMonth: entry.plannedMonth, date, amount: entry.amount });
-  }
-  return list.sort((a, b) =>
-    a.plannedMonth !== b.plannedMonth ? (a.plannedMonth < b.plannedMonth ? -1 : 1) : a.date < b.date ? -1 : a.date > b.date ? 1 : a.rule.position - b.rule.position,
-  );
-}
-
-/**
- * 日付未定の見込み（帯に出すルールで、日が決まらないもの）のうち、その月（YYYY-MM）の回で、まだ同じ小分類の記録が無いもの。
- * 帯には出さず、月の締めの未確認の明細に出す（docs/kakei.md §0.7。2026-10-22）。記録する日は、その月の末日（今月なら今日）。
- */
-export function undatedPendingInMonth(
-  recurring: readonly MoneyRecurring[],
-  records: readonly MoneyRecord[],
+  categories: readonly MoneyCategory[],
   monthKey: string,
   today: string,
 ): PendingEstimate[] {
-  const rules = recurring.filter((rule) => rule.dayKnown === false);
   const year = yearOfMonth(monthKey);
   const month = Number(monthKey.slice(5, 7));
-  const lastDay = `${monthKey}-${pad2(new Date(year, month, 0).getDate())}`;
+  const lastDay = `${monthKey}-${pad2(lastDayOfMonth(year, month))}`;
   const date = lastDay < today ? lastDay : today;
-  return estimateCostsInYear(rules, records, year, today)
-    .filter((entry) => entry.plannedMonth === monthKey && (entry.status === 'upcoming' || entry.status === 'overdue'))
-    .map((entry) => ({ rule: entry.rule, plannedMonth: monthKey, date, amount: entry.amount }));
+  const recorded = new Set<string>();
+  for (const record of recordsInMonth(records, monthKey)) {
+    if (record.kind !== 'expense') continue;
+    for (const item of record.items) if (item.categoryId !== null) recorded.add(item.categoryId);
+  }
+  const list: PendingEstimate[] = [];
+  for (const rule of recurring) {
+    if (!isBudgetRow(rule) || rule.kind !== 'expense' || rule.makesRecord || rule.noMonth) continue;
+    const categoryId = rule.categoryId as string;
+    const group = spendGroupOf(categoryId, categories);
+    if ((group !== 'confirmed' && group !== 'estimate') || recorded.has(categoryId)) continue;
+    const planned =
+      (rule.months === null || rule.months.includes(month)) &&
+      inRecurringPeriod(rule, monthKey) &&
+      monthKey >= monthKeyOf(rule.createdAt) &&
+      !rule.skippedMonths.includes(monthKey);
+    if (planned) list.push({ rule, plannedMonth: monthKey, date, amount: rule.amount });
+    if (rule.deferredUntil !== null && monthKeyOf(rule.deferredUntil) === monthKey) {
+      list.push({ rule, plannedMonth: shiftMonth(monthKey, -1), date, amount: rule.amount });
+    }
+  }
+  const order = (rule: MoneyRecurring) => {
+    const category = categories.find((entry) => entry.id === rule.categoryId);
+    const top = categories.find((entry) => entry.id === topCategoryIdOf(categories, rule.categoryId as string));
+    return (top?.position ?? 0) * 10000 + (category?.parentId !== null ? (category?.position ?? 0) : 0);
+  };
+  return list.sort((a, b) => order(a.rule) - order(b.rule) || a.rule.position - b.rule.position || (a.plannedMonth < b.plannedMonth ? -1 : 1));
 }
 
-// ---- 予算の明細（docs/kakei.md §0.7。2026-10-22） ----
-// 年間予算は自動記録ルールとは別に持つ（ルールは記録を作るためだけ）。変動費は大分類の月の予算（money_budgets）、
-// 収入・予備費・固定費は小分類ごとの予算の明細（money_budget_lines）で「単価 × その年に発生する回数」。回数は発生月（毎月・月を選ぶ）・
+// ---- 予算（docs/kakei.md §0.8。2026-10-23） ----
+// 予算が本体。予算1件＝money_recurring の1行（MoneyRecurring）で、「単価 × その年に発生する回数」。回数は発生月（毎月・月を選ぶ）・
 // ◯年ごと・期間で決まる（毎月なら ×12、偶数月なら ×6、年に1回なら ×1）。発生月なし（noMonth）は、その年に1回ぶんを、
-// 月には置かずに見込み支出（収入なら見込みの収入）として数える。
+// 月には置かずに見込み支出（収入なら見込みの収入）として数える。自動記録はその行のオン／オフ（makesRecord）。
 // 支出をどこで数えるか（変動費・予備費・固定費の確定・見込み）は、大分類の予算の分け方（budgetGroup）だけで決める。
+// 数えるときは、収入・予備費・固定費は予算の明細（MoneyBudgetLine。budgetLinesOf）、変動費は大分類の月の予算
+// （MoneyBudget。variableBudgetsOf。大分類の行 ＋ その小分類の行）の形に直して使う。
+
+/** 予算の行か（振替でなく、カテゴリが決まっていて、使っているもの）。 */
+export const isBudgetRow = (rule: MoneyRecurring): boolean => !rule.archived && rule.kind !== 'transfer' && rule.categoryId !== null;
+
+/** 予算の行を、予算の明細の形にする（年の回数・額を数えるため）。 */
+export const budgetLineOf = (rule: MoneyRecurring): MoneyBudgetLine => ({
+  id: rule.id,
+  categoryId: rule.categoryId as string,
+  name: rule.name,
+  amount: rule.amount,
+  months: rule.noMonth ? null : rule.months,
+  noMonth: rule.noMonth,
+  intervalYears: rule.intervalYears,
+  startMonth: rule.startMonth,
+  endMonth: rule.endMonth,
+  position: rule.position,
+});
+
+/** 収入・予備費・固定費の予算（予算の明細の形）。変動費の行は入れない（variableBudgetsOf で月の予算にする）。 */
+export function budgetLinesOf(recurring: readonly MoneyRecurring[], categories: readonly MoneyCategory[]): MoneyBudgetLine[] {
+  return recurring
+    .filter(isBudgetRow)
+    .map(budgetLineOf)
+    .filter((line) => budgetLineGroup(line, categories) !== 'variable');
+}
+
+/**
+ * 支出の予算の、自動記録の額の決まり方（docs/kakei.md §0.8）。種類で決まる: 固定費（見込み）・変動費は見込み
+ * （過去の記録から見込んだ見込みの記録を作る）、固定費（確定）・予備費は確定。収入は行ごとに決める。
+ */
+export const amountModeOfGroup = (group: SpendGroup): MoneyRecurring['amountMode'] =>
+  group === 'estimate' || group === 'variable' ? 'estimate' : 'fixed';
+
+/** 変動費の月の予算を出す年の終わり（期間・◯年ごとのある行も、この年まで月ごとに出す）。 */
+const VARIABLE_BUDGET_LAST_YEAR = 2100;
+
+/**
+ * 変動費の大分類ごとの、年ごとの月の予算（大分類の行 ＋ その小分類の行のうち、その月に発生するもの）。発生する行の無い月は null。
+ * 最初の年は、行の期間の始まりのいちばん早い年（始まりの無い行があれば 2000年）。
+ */
+export function variableBudgetsOf(recurring: readonly MoneyRecurring[], categories: readonly MoneyCategory[]): MoneyBudget[] {
+  const byTop = new Map<string, MoneyBudgetLine[]>();
+  for (const rule of recurring) {
+    if (!isBudgetRow(rule) || rule.kind !== 'expense' || rule.noMonth) continue;
+    const line = budgetLineOf(rule);
+    if (budgetLineGroup(line, categories) !== 'variable') continue;
+    const topId = topCategoryIdOf(categories, line.categoryId);
+    if (topId === null) continue;
+    byTop.set(topId, [...(byTop.get(topId) ?? []), line]);
+  }
+  const budgets: MoneyBudget[] = [];
+  for (const [topId, lines] of byTop) {
+    const first = Math.min(...lines.map((line) => (line.startMonth === null ? 2000 : yearOfMonth(line.startMonth))));
+    for (let year = first; year <= VARIABLE_BUDGET_LAST_YEAR; year += 1) {
+      const monthAmounts: (number | null)[] = Array.from({ length: 12 }, () => null);
+      for (const line of lines) {
+        for (const month of budgetLineMonths(line, year)) monthAmounts[month - 1] = (monthAmounts[month - 1] ?? 0) + line.amount;
+      }
+      if (monthAmounts.some((value) => value !== null)) budgets.push({ id: `${topId}|${year}`, categoryId: topId, year, monthAmounts });
+    }
+  }
+  return budgets;
+}
+
+/** 予算の行の短い説明（「毎月 · 自動 27日」「2年ごと 3月」「発生月なし」）。一覧の名前の下に出す。 */
+export function budgetRowNote(rule: MoneyRecurring): string {
+  const when = rule.noMonth ? '発生月なし' : rule.months === null ? '毎月' : monthsLabel(rule.months);
+  const schedule = rule.intervalYears === null ? when : `${rule.intervalYears}年ごと ${when}`;
+  return rule.makesRecord ? `${schedule} · 自動 ${recurringDayLabel(rule)}` : schedule;
+}
+
 
 /** 明細が、その年に発生する月（1〜12。月の順）。発生月なしは空。 */
 export function budgetLineMonths(line: MoneyBudgetLine, year: number): number[] {

@@ -15,6 +15,7 @@ import {
   formatShortDate,
   formatYen,
   pendingRecurringInMonth,
+  scheduledFixedInMonth,
   recordsInMonth,
   recordTotal,
   walletDelta,
@@ -33,6 +34,8 @@ import { EstimateBadge, Hero, PrimaryButton, ScreenHeader, SectionHeader, StatRo
 // 記録の一覧は、**口座（出金元）ごとに絞り込める**（財布・カードごとに見て、実際の明細と合わせるため。2026-10-16）。
 // 絞ると、その口座のその月の合計（入金・出金・差し引き。振替も入れる）を一覧の上に添える（2026-10-21。月末の残高は出さない）。
 // 未確認の明細と、これから自動で作られる記録は、いちばん上（収支より上）に出す（締める前に片づけるもの。2026-10-21）。
+// 自動記録オフの固定費で、その月に記録が無いものは「今月記録予定の固定費 n件」として同じところに出す（日が決まらず、いつ払うか
+// 分からないため。設定は持たない。2026-10-23。docs/kakei.md §0.8）。押すと未確定明細の一覧で記録する・翌月へ・今月はなしを選ぶ。
 // 記録は月の初め（1日）から並べる（月の初めからさかのぼって見るため。2026-10-21）。
 // 片づいていないものが残っていても「この月を締める」で締められる。年初からの累計は出さない（その月の締めなので）。
 // その月に、固定収入・固定費でこれから自動で作られる記録がある（自動の記録より前に締める）ときは、一覧で知らせ、
@@ -47,7 +50,7 @@ interface MonthCloseScreenProps {
   recurring: MoneyRecurring[];
   /** 今日（YYYY-MM-DD）。 */
   today: string;
-  /** その月の日付の、未確認の明細の件数。 */
+  /** その月の日付の、未確認の明細（Gmail）の件数。 */
   feedCount: number;
   /** カードの記録を利用通知と見比べるための一覧（利用通知を取り込んでいるときだけ。docs/kakei.md §9.6.5 の C）。 */
   cardChecks: CardMonthChecks | null;
@@ -101,6 +104,11 @@ export default function MonthCloseScreen({
   const inMonth = useMemo(() => recordsInMonth(records, monthKey), [records, monthKey]);
   const estimates = useMemo(() => estimatesInMonth(records, monthKey), [records, monthKey]);
   const estimateAmount = estimates.reduce((sum, record) => sum + recordTotal(record), 0);
+  // 自動記録オフの固定費で、その月に記録が無いもの（docs/kakei.md §0.8）。押すと未確定明細の一覧で片づける。
+  const scheduled = useMemo(
+    () => scheduledFixedInMonth(recurring, records, categories, monthKey, today),
+    [recurring, records, categories, monthKey, today],
+  );
   const pending = useMemo(
     () => pendingRecurringInMonth(recurring, records, monthKey, today),
     [recurring, records, monthKey, today],
@@ -192,6 +200,12 @@ export default function MonthCloseScreen({
           {feedCount > 0 && (
             <Pressable accessibilityRole="button" onPress={onOpenFeed} style={({ pressed }) => [styles.notice, pressed && styles.pressed]}>
               <Text style={[styles.noticeText, styles.flex]}>未確認の明細 {feedCount}件</Text>
+              <ChevronRight size={16} color={colors.textMuted} />
+            </Pressable>
+          )}
+          {scheduled.length > 0 && (
+            <Pressable accessibilityRole="button" onPress={onOpenFeed} style={({ pressed }) => [styles.notice, pressed && styles.pressed]}>
+              <Text style={[styles.noticeText, styles.flex]}>今月記録予定の固定費 {scheduled.length}件</Text>
               <ChevronRight size={16} color={colors.textMuted} />
             </Pressable>
           )}

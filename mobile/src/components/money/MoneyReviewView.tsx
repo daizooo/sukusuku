@@ -34,7 +34,6 @@ import {
   monthKeyOfDate,
   recordTotal,
   unclosedMonths,
-  undatedPendingInMonth,
   yearActiveMonthKeys,
   yearMonthKeys,
   type BudgetTile,
@@ -355,10 +354,7 @@ export default function MoneyReviewView({
           budgets={budgets}
           recurring={recurring}
           today={dateKeyOfDate(new Date())}
-          feedCount={
-            feedItems.filter((item) => item.occurredOn !== null && item.occurredOn.startsWith(`${closing}-`)).length +
-            undatedPendingInMonth(recurring, records, closing, dateKeyOfDate(new Date())).length
-          }
+          feedCount={feedItems.filter((item) => item.occurredOn !== null && item.occurredOn.startsWith(`${closing}-`)).length}
           cardChecks={cardFeed && cardFeed.walletIds.length > 0 ? cardMonthChecks(records, cardFeed, closing) : null}
           wallets={wallets}
           balances={balances}
