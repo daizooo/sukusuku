@@ -339,11 +339,17 @@ export default function ItemsScreen({
                     >
                       <Minus size={12} color={colors.textMuted} />
                     </Pressable>
+                    {/* 電卓を開いているあいだは、品名を入力できない状態で作り直す（key を変える）。
+                        Keyboard.dismiss() だけだと、Androidは外れたフォーカスを別の入力欄へ移し、キーボードが
+                        電卓の下に残って品名の入力が続いてしまう。作り直すと、フォーカスのあった欄が消え、
+                        入力できない欄にはフォーカスが移らないので、キーボードも閉じたままになる。 */}
                     <TextInput
+                      key={work.calc ? `${line.key}:calc` : line.key}
                       style={styles.lineName}
                       value={line.name}
+                      editable={!work.calc}
                       onChangeText={(name) => updateLine(line.key, { name })}
-                      onFocus={() => (selected && !work.calc ? undefined : select(line, false))}
+                      onFocus={() => (work.calc || selected ? undefined : select(line, false))}
                       placeholder="品名"
                       placeholderTextColor={colors.textFaint}
                       returnKeyType="done"
