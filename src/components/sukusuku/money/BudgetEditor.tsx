@@ -1219,7 +1219,7 @@ function RowEditor({
         </ModalShell>
       )}
       {sheet === 'wallet' && (
-        <ModalShell title={isIncome ? '入金先' : '出金元'} onClose={() => setSheet(null)}>
+        <ModalShell title={isIncome ? '入金先' : '出金元'} onClose={() => setSheet(null)} footer={null}>
           <WalletChoices
             wallets={wallets}
             selectedId={walletId}
@@ -1261,7 +1261,7 @@ function GroupSheet({
 }) {
   const [choosingTop, setChoosingTop] = useState(false);
   return (
-    <ModalShell title={choosingTop ? '変動費のどの大分類に入れるか' : '種類'} onClose={onClose}>
+    <ModalShell title={choosingTop ? '変動費のどの大分類に入れるか' : '種類'} onClose={onClose} footer={null}>
       {choosingTop ? (
         <div className="overflow-hidden rounded-xl border border-gray-200">
           {variableTops.map((top, index) => (
