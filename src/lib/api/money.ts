@@ -216,9 +216,13 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
 export const rowToMonth = (row: Tables<'money_months'>): MoneyMonth => ({
   month: row.month.slice(0, 7),
   closedAt: row.closed_at,
+  closeStartedAt: row.close_started_at,
 });
 
-/** その月（YYYY-MM）を締める／締めを外す。締めを外しても行は残し、closed_at を空にする。 */
+/**
+ * その月（YYYY-MM）を締める／締めを外す。締めを外しても行は残し、closed_at を空にする。
+ * 締めを外すと、締めを始めた印（close_started_at）も空にする（締め直すときは、また夫婦で「この月を締める」を押す）。
+ */
 export async function setMoneyMonthClosed(
   supabase: SupabaseDb,
   familyId: string,
@@ -228,7 +232,9 @@ export async function setMoneyMonthClosed(
   const { data, error } = await supabase
     .from('money_months')
     .upsert(
-      { family_id: familyId, month: `${month}-01`, closed_at: closed ? new Date().toISOString() : null },
+      closed
+        ? { family_id: familyId, month: `${month}-01`, closed_at: new Date().toISOString() }
+        : { family_id: familyId, month: `${month}-01`, closed_at: null, close_started_at: null },
       { onConflict: 'family_id,month' },
     )
     .select('*')

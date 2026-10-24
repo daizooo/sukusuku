@@ -566,6 +566,27 @@ export interface MoneyMonth {
   month: string;
   /** 締めた日時。null は締めていない（締めを外した）。 */
   closedAt: string | null;
+  /** 締めを始めた日時（夫婦が5分以内に「この月を締める」を押した）。null は始めていない。 */
+  closeStartedAt: string | null;
+}
+
+/** 月の締めを始める合図（ひとりずつ）。money_month_requests に対応。docs/kakei.md §4.5。 */
+export interface MoneyMonthRequest {
+  /** YYYY-MM。 */
+  month: string;
+  userId: string;
+  /** 「この月を締める」を押した日時。null は押していない（やめた）。 */
+  requestedAt: string | null;
+}
+
+/** 月の締めの、口座ごと・ひとりずつの OK。money_month_wallet_checks に対応。docs/kakei.md §4.5。 */
+export interface MoneyMonthWalletCheck {
+  /** YYYY-MM。 */
+  month: string;
+  walletId: string;
+  userId: string;
+  /** OK を押したときの額。null は OK していない。今の額と違えば OK は外れた扱い。 */
+  amount: number | null;
 }
 
 /**

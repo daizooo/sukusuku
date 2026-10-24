@@ -53,6 +53,7 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadMoneyBootstrap } from '@/lib/api/moneyBootstrap';
+import { cancelMonthClose, loadMoneyClose, requestMonthClose, setMonthWalletCheck, type MoneyCloseData } from '@/lib/api/moneyClose';
 import { scanReceipt } from '@/lib/api/moneyReceipt';
 import { captureReceipt } from '@/lib/receiptCapture';
 import {
@@ -122,6 +123,7 @@ const NO_SECURITIES: MoneySecuritiesData = { securities: [], holdings: [], value
 
 /** 家計の読み込み（money_bootstrap と証券の評価額、Zaim 取り込み）が読む表。 */
 const MONEY_TABLES = [
+  'family_members',
   'money_categories',
   'money_feed',
   'money_feed_rules',
@@ -129,6 +131,8 @@ const MONEY_TABLES = [
   'money_holding_values',
   'money_holdings',
   'money_items',
+  'money_month_requests',
+  'money_month_wallet_checks',
   'money_months',
   'money_ratio_targets',
   'money_records',
@@ -155,6 +159,8 @@ export default function MoneyScreen() {
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   // 月の締め（docs/kakei.md §4.5）。
   const [closings, setClosings] = useState<MoneyMonth[]>([]);
+  // 月の締めを夫婦で行うための合図・口座ごとの OK・夫婦（docs/kakei.md §4.5）。
+  const [closeData, setCloseData] = useState<MoneyCloseData>({ requests: [], checks: [], guardians: [] });
   // 目安の割合（docs/kakei.md §0.9）
   const [ratioTargets, setRatioTargets] = useState<MoneyRatioTargets>({ variable: null, reserve: null, fixed: null });
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
@@ -171,6 +177,8 @@ export default function MoneyScreen() {
   const [newKind, setNewKind] = useState<MoneyRecordKind>('expense');
   // 記録の一覧の、日の見出しの「＋」から足すときの日。それ以外は null（今日）。
   const [newDate, setNewDate] = useState<string | null>(null);
+  // 月の締めの口座の詳細から足すときの出金元。それ以外は null。
+  const [newWallet, setNewWallet] = useState<string | null>(null);
   // 「記録して続ける」の続き（2026-10-20）。次の入力に引き継ぐ日付。続けていないときは null。
   const [chain, setChain] = useState<{ seq: number; occurredOn: string } | null>(null);
   // レシートの読み取りの結果（記録の入力に入れて開く）と、読み取り中か（docs/kakei.md §10）。
@@ -206,11 +214,13 @@ export default function MoneyScreen() {
   const reload = useCallback(async (id: string) => {
     // 起動で読むものは、DBの money_bootstrap で1回にまとめて読む（docs/kakei.md §9.2.6）。
     // Zaim 取り込み（未確認の明細・ルール・設定）は並べて読む。読めなくても家計は出す。
-    const [{ money, securities: loadedSecurities }, loadedFeed] = await Promise.all([
+    const [{ money, securities: loadedSecurities }, loadedFeed, loadedClose] = await Promise.all([
       loadMoneyBootstrap(supabase, id, historyWanted.current),
       loadMoneyFeed(supabase, id).catch(() => null),
+      loadMoneyClose(supabase, id).catch(() => null),
     ]);
     if (loadedFeed) setFeed(loadedFeed);
+    if (loadedClose) setCloseData(loadedClose);
     setCategories(money.categories);
     setWallets(money.wallets);
     setStores(money.stores);
@@ -320,6 +330,65 @@ export default function MoneyScreen() {
     }
   };
 
+  /** 「この月を締める」を押す（夫婦が5分以内に押すと締めが始まる。docs/kakei.md §4.5）。 */
+  const requestClose = async (target: string) => {
+    if (!familyId || !userId) return null;
+    try {
+      const result = await requestMonthClose(supabase, target);
+      const requestedAt = result.serverNow;
+      setCloseData((prev) => ({
+        ...prev,
+        requests: [
+          ...prev.requests.filter((entry) => !(entry.month === target && entry.userId === userId)),
+          ...(result.started ? [] : [{ month: target, userId, requestedAt }]),
+        ],
+      }));
+      if (result.started) {
+        setClosings((prev) => {
+          const current = prev.find((entry) => entry.month === target);
+          return [
+            ...prev.filter((entry) => entry.month !== target),
+            { month: target, closedAt: current?.closedAt ?? null, closeStartedAt: requestedAt },
+          ];
+        });
+      }
+      return result;
+    } catch {
+      failed('締めの開始');
+      return null;
+    }
+  };
+
+  const cancelClose = async (target: string) => {
+    if (!familyId || !userId) return;
+    setCloseData((prev) => ({
+      ...prev,
+      requests: prev.requests.map((entry) => (entry.month === target && entry.userId === userId ? { ...entry, requestedAt: null } : entry)),
+    }));
+    try {
+      await cancelMonthClose(supabase, familyId, target, userId);
+    } catch {
+      failed('取りやめ');
+    }
+  };
+
+  /** 締めで、口座の自分の OK を押す（amount）／外す（null）。 */
+  const setCloseCheck = async (target: string, walletId: string, amount: number | null) => {
+    if (!familyId || !userId) return;
+    const check = { month: target, walletId, userId, amount };
+    const previous = closeData.checks;
+    setCloseData((prev) => ({
+      ...prev,
+      checks: [...prev.checks.filter((entry) => !(entry.month === target && entry.walletId === walletId && entry.userId === userId)), check],
+    }));
+    try {
+      await setMonthWalletCheck(supabase, familyId, check);
+    } catch {
+      setCloseData((prev) => ({ ...prev, checks: previous }));
+      failed('保存');
+    }
+  };
+
   /**
    * 締めた月の記録を直す・足す・消す前に、締めを外すか聞く（docs/kakei.md §4.5）。外さないなら false。
    * monthKeys は、直す前と直したあとの記録の月。
@@ -372,6 +441,7 @@ export default function MoneyScreen() {
     const feedItem = feedRecordFor;
     setFeedRecordFor(null);
     setEstimateDraft(null);
+    setNewWallet(null);
     if (next) {
       setChain((prev) => ({ seq: (prev?.seq ?? 0) + 1, occurredOn: draft.occurredOn }));
       if (!fromReceipt) setEditing('new');
@@ -804,6 +874,22 @@ export default function MoneyScreen() {
                 setFeedMonth(month ?? null);
                 setFeedOpen(true);
               }}
+              userId={userId ?? ''}
+              guardians={closeData.guardians}
+              closeRequests={closeData.requests}
+              closeChecks={closeData.checks}
+              onRequestClose={requestClose}
+              onCancelClose={(target) => void cancelClose(target)}
+              onSetCloseCheck={(target, walletId, amount) => void setCloseCheck(target, walletId, amount)}
+              onAddRecord={(walletId, date) => {
+                setReceipt(null);
+                setChain(null);
+                setNewKind('expense');
+                setNewDate(date);
+                setNewWallet(walletId);
+                setEditing('new');
+              }}
+              onSaveBalance={(walletId, adjustment, amount, showInHistory) => void confirmBalance(walletId, adjustment, amount, showInHistory)}
             />
             </View>
           )}
@@ -856,13 +942,13 @@ export default function MoneyScreen() {
 
       {editing !== null && (
         <RecordEditor
-          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newKind}-${newDate ?? ''}-${feedRecordFor?.id ?? ''}-${estimateDraft?.key ?? ''}-${chain?.seq ?? 0}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
+          key={editing === 'new' ? (receipt ? 'receipt' : `new-${newKind}-${newDate ?? ''}-${feedRecordFor?.id ?? ''}-${estimateDraft?.key ?? ''}-${newWallet ?? ''}-${chain?.seq ?? 0}`) : `${editing.id}${receiptFor === editing.id ? '-receipt' : ''}`}
           record={editing === 'new' ? null : editing}
           receipt={editing === 'new' || receiptFor === editing.id ? receipt : null}
           onScanReceipt={(target) => void startReceiptScan(target ?? undefined)}
           initialKind={newKind}
           initialDate={chain?.occurredOn ?? newDate}
-          initialWallet={feedRecordFor?.walletId ?? null}
+          initialWallet={feedRecordFor?.walletId ?? newWallet}
           initialStore={feedRecordFor ? feedStoreName(feedRecordFor) : (estimateDraft?.store ?? '')}
           initialAmount={feedRecordFor?.amount ?? estimateDraft?.amount ?? null}
           initialItems={feedRecordFor ? feedOrderItems : (estimateDraft?.items ?? null)}
@@ -878,6 +964,7 @@ export default function MoneyScreen() {
             setFeedRecordFor(null);
             setEstimateDraft(null);
             setChain(null);
+            setNewWallet(null);
           }}
           onSubmit={(draft) => void saveRecord(draft)}
           onSubmitNext={(draft) => void saveRecord(draft, true)}
