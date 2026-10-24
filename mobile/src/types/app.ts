@@ -522,7 +522,7 @@ export interface MoneyCategory {
 export type MoneyBudgetGroup = 'variable' | 'reserve' | 'fixed' | 'estimate';
 
 /**
- * 予算の明細（docs/kakei.md §0.7）。money_budget_lines に対応。小分類（収入も）ごとの「単価 × その年に発生する回数」。
+ * 予算の明細（docs/kakei.md §0.7）。予算の行（money_recurring）から作る形（budgetLinesOf。表 money_budget_lines は 0138 で消した）。小分類（収入も）ごとの「単価 × その年に発生する回数」。
  * 回数は発生月（months。null は毎月）・◯年ごと（intervalYears。startMonth の年から数える）・期間（startMonth〜endMonth）で決まる。
  * noMonth は発生月なし（その年に1回ぶんを見込み支出として数える）。自動記録ルールとは別に持つ。
  */
@@ -544,7 +544,7 @@ export interface MoneyBudgetLine {
 }
 
 /**
- * 家計の予算。大分類・年（暦年）ごとに1月〜12月の月額を持つ。money_budgets に対応（列名は fiscal_year のまま）。
+ * 家計の予算。大分類・年（暦年）ごとに1月〜12月の月額を持つ。予算の行（money_recurring）から作る形（variableBudgetsOf。表 money_budgets は 0138 で消した）。
  * 年の途中で直しても、直した月より前の月は変わらない（docs/kakei.md §3.1）。
  */
 export interface MoneyBudget {
@@ -589,6 +589,16 @@ export interface MoneyMonth {
   month: string;
   /** 締めた日時。null は締めていない（締めを外した）。 */
   closedAt: string | null;
+}
+
+/**
+ * 目安の割合（docs/kakei.md §0.9）。money_ratio_targets に対応。支出の種類ごとの、収入に対する目安（%）。
+ * fixed は固定費全体（確定＋見込み）。決めていない種類は null。年の振り返りの見出しに出す。
+ */
+export interface MoneyRatioTargets {
+  variable: number | null;
+  reserve: number | null;
+  fixed: number | null;
 }
 
 export interface MoneyWalletBalance {

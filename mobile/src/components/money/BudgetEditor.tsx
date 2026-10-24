@@ -65,7 +65,7 @@ import { Chip, ChipRow, Field, WalletChoices } from '@/components/money/feedPart
 // - 上の枠: 円グラフ（1周＝収入）。支出の種類を青の濃淡で並べ、残りが収支見込み（緑）。赤字の年は、支出の種類を1周に並べ、
 //   収入からはみ出した分を外側の赤い弧で出す。円の下に収支見込み・収入・支出と、支出の種類（収入に対する割合）。
 //   行を押すと、下の一覧はその種類だけになる（もう一度押すと全部）
-// - 下の一覧: 収入・変動費・固定費（確定）・固定費（見込み）・予備費の見出しごと（見出しを押すと折りたたむ）。収入の見出しの下線は緑、
+// - 下の一覧: 収入・変動費・予備費・固定費（確定）・固定費（見込み）の見出しごと（見出しを押すと折りたたむ）。収入の見出しの下線は緑、
 //   ほかはグレー。行は名前と年の額だけ（詳細は押して開く枠で見る）。その年に発生しない予算は、グレーにして「期間外」を付け、各見出しの一番下
 // - 変動費の行は大分類。押すと大分類の画面（まとめての予算と小分類の予算・大分類の名前）
 // - 予算の枠（追加・編集）: 分類（種類・大分類〔変動費・収入だけ〕・小分類・区別）、予算（金額・いつ・期間）、自動記録（オン／オフ・日・出金元・お店）。
@@ -103,7 +103,8 @@ const PART_LABEL: Record<SpendGroup, string> = {
   reserve: '予備費',
 };
 
-const SPEND_GROUPS: SpendGroup[] = ['variable', 'confirmed', 'estimate', 'reserve'];
+// 並びは 変動費 → 予備費 → 固定費（確定・見込み）。家計全体で予算を並べるときの順（2026-10-24。docs/kakei.md §0.9）。
+const SPEND_GROUPS: SpendGroup[] = ['variable', 'reserve', 'confirmed', 'estimate'];
 const GROUPS: BudgetLineGroup[] = ['income', ...SPEND_GROUPS];
 
 /** 円グラフの色（支出の種類は青の濃淡。収支見込みは収入の緑、赤字は赤）。 */
@@ -548,9 +549,9 @@ export default function BudgetEditor({
 
           {shown('income') && section('income', ruleList('income'), totals.income)}
           {shown('variable') && section('variable', variableList, totals.variable)}
+          {shown('reserve') && section('reserve', ruleList('reserve'), totals.reserve)}
           {shown('confirmed') && section('confirmed', ruleList('confirmed'), totals.confirmed)}
           {shown('estimate') && section('estimate', ruleList('estimate'), totals.estimate)}
-          {shown('reserve') && section('reserve', ruleList('reserve'), totals.reserve)}
           {selected === null && orphans.length > 0 && (
             <View style={styles.section}>
               <View style={styles.sectionHead}>

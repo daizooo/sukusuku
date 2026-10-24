@@ -8,6 +8,11 @@ import {
   budgetLineShortLabel,
   budgetLineYearAmount,
   budgetPlanInYear,
+  buildReviewSections,
+  buildSubcategoryAnalysis,
+  noMonthYearAmount,
+  spendRatio,
+  UNCATEGORIZED,
   fixedBudgetRows,
   reserveYearRows,
   budgetLinesOf,
@@ -271,19 +276,24 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
   // 月の締め（docs/kakei.md §4.5）
   const r = (occurredOn: string, kind: MoneyRecord['kind'] = 'expense') => ({ occurredOn, kind }) as unknown as MoneyRecord;
   const closings = [
-    { month: '2026-09', closedAt: '2026-10-02T00:00:00Z' },
-    { month: '2026-08', closedAt: null }, // 締めを外した
+    { month: '2027-03', closedAt: '2027-04-02T00:00:00Z' },
+    { month: '2027-02', closedAt: null }, // 締めを外した
   ];
-  assert.equal(isMonthClosed(closings, '2026-09'), true);
-  assert.equal(isMonthClosed(closings, '2026-08'), false, '締めを外した月');
+  assert.equal(isMonthClosed(closings, '2027-03'), true);
+  assert.equal(isMonthClosed(closings, '2027-02'), false, '締めを外した月');
   assert.deepEqual(
     unclosedMonths(
-      [r('2026-07-03'), r('2026-08-10'), r('2026-09-01'), r('2026-06-05', 'transfer'), r('2026-10-01')],
+      [r('2027-01-03'), r('2027-02-10'), r('2027-03-01'), r('2026-12-05', 'transfer'), r('2027-04-01')],
       closings,
-      '2026-10-15',
+      '2027-04-15',
     ),
-    ['2026-07', '2026-08'],
+    ['2027-01', '2027-02'],
     '記録のある過ぎた月のうち締めていないもの（振替だけの月・今月は数えない）',
+  );
+  assert.deepEqual(
+    unclosedMonths([r('2026-09-10'), r('2026-10-02')], [], '2026-11-01'),
+    ['2026-10'],
+    '集計を始める前の月（2026年9月。カードの引き落としを合わせるためだけの記録）は締めない',
   );
 }
 {
@@ -337,29 +347,38 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
   assert.equal(plan.months.income[0], 300000);
   assert.equal(plan.months.confirmed[4], 80000 + 10000 + 30000, '5月は家賃・期間の中のもの・5月だけのもの');
   assert.equal(plan.months.confirmed[11], 80000, '期間の外は数えない');
-  assert.equal(plan.noMonth.reserve, 100000, '発生月なしは月に置かない');
-  assert.equal(plan.totals.reserve, 100000);
+  assert.equal(plan.noMonth.reserve, 25000, '発生月なしは月に置かない。集計を始めた2026年の予備費は3/12');
+  assert.equal(plan.totals.reserve, 25000);
+  assert.equal(budgetPlanInYear(lines, cats, 2027).noMonth.reserve, 100000, '2027年からは年の額のまま');
+  const fixedNoMonth = line({ id: 'club', categoryId: 'rent', amount: 4500, noMonth: true });
+  assert.equal(noMonthYearAmount(fixedNoMonth, 'confirmed', 2026), 0, '2026年の発生月なしの固定費はもう済んだので0');
+  assert.equal(noMonthYearAmount(fixedNoMonth, 'confirmed', 2027), 4500);
 
-  const landing = buildYearLanding(rs, cats, buds, lines, closings, 2026);
+  const landing = buildYearLanding(rs, cats, buds, lines, closings, 2026, '2026-10');
   assert.ok(landing);
-  assert.equal(landing.unscheduled, -(100000 - 30000), '発生月なしは、年の額 − 締めた月までの実績を見込み支出に');
+  assert.equal(landing.unscheduled, 0, '発生月なしは、年の額（2026年は3/12の25000）− 今月までの実績（30000）。0 未満は 0');
   assert.deepEqual(
     landing.months.filter((m) => m.counted).map((m) => [m.monthKey, m.closed, m.balance]),
     [
       ['2026-10', true, 300000 - 100000 - 30000],
       ['2026-11', false, 300000 - 50000 - 80000 - 10000],
-      ['2026-12', false, 300000 - 50000 - 80000 - 70000],
+      ['2026-12', false, 300000 - 50000 - 80000],
     ],
-    '使い始めた月から。締めた月は実績、ほかはその月の予算（発生月なしの見込みは12月に）',
+    '使い始めた月から。締めた月は実績、翌月からはその月の予算（発生月なしの見込みは12月に）',
   );
   assert.equal(landing.closedMonths, 1);
-  assert.equal(landing.total, 170000 + 160000 + 100000);
+  assert.equal(landing.total, 170000 + 160000 + 170000);
+  assert.equal(landing.income, 300000 * 3, '収入は締めた月は実績、ほかは予算');
+  assert.equal(landing.expense, landing.income - landing.total);
 
-  const open = buildYearLanding(rs, cats, buds, lines, [], 2026);
-  assert.equal(open?.months[9].balance, 300000 - 50000 - 80000 - 10000, '締めていない月は実績を使わず予算');
-  assert.equal(open?.unscheduled, -100000, '締めた月が無ければ、発生月なしは年の額のまま');
+  const open = buildYearLanding(rs, cats, buds, lines, [], 2026, '2026-10');
+  assert.equal(open?.months[9].balance, 300000 - 100000 - 90000 - 30000, '締めていない今月は、予算と実績の大きいほう（食費は実績、家賃は予算、旅行は実績）');
+  assert.equal(open?.unscheduled, 0);
+  const before = buildYearLanding(rs, cats, buds, lines, [], 2026, '2026-09');
+  assert.equal(before?.months[9].balance, 300000 - 50000 - 80000 - 10000, '先の月は実績を使わず予算');
+  assert.equal(before?.unscheduled, -25000, '今月までの実績が無ければ、発生月なしは年の額のまま');
 
-  const next = buildYearLanding(rs, cats, buds, lines, closings, 2027);
+  const next = buildYearLanding(rs, cats, buds, lines, closings, 2027, '2026-10');
   assert.equal(next?.months.every((m) => m.counted && !m.closed), true, '先の年は全部の月を予算');
   assert.equal(next?.total, (300000 - 50000 - 80000) * 12 - 30000 - 100000, '期間の終わった明細は数えない。5月だけのものは5月に。発生月なしは年に1回');
   assert.equal(buildYearLanding([], cats, buds, lines, closings, 2026), null, '記録が無ければ出さない');
@@ -1160,21 +1179,22 @@ assert.equal(yearOfMonth('2027-02'), 2027, '2027年2月は2027年');
   assert.deepEqual(special.children.map((child) => [child.name, child.amount]), [['自動車税', 20000]]);
   assert.deepEqual(special.records.map((r) => r.id), ['a5'], '特別費の記録だけ');
 
-  // 年の分析は月の流用ではなく年の基準（2026-10-15）。使い始めた月（8月）から12月までの5か月が年の予算
-  assert.deepEqual(yearActiveMonthKeys(rs, 2026), ['2026-08', '2026-09', '2026-10', '2026-11', '2026-12'], '使い始めた年だけ、使い始めた月から');
+  // 年の分析は月の流用ではなく年の基準（2026-10-15）。2026年は集計を始めた10月から12月までの3か月が年の予算
+  // （8・9月の記録は集計を始める前の月なので数えない。docs/kakei.md §0.9）
+  assert.deepEqual(yearActiveMonthKeys(rs, 2026), ['2026-10', '2026-11', '2026-12'], '2026年は集計を始めた月から');
   assert.equal(yearActiveMonthKeys(rs, 2027).length, 12, '次の年からは、その年すべて');
   assert.deepEqual(yearActiveMonthKeys(rs, 2025), [], '使い始める前の年は無い');
   // 年の振り返りの月ごとは、月の実績と月の予算を並べる
   const wholeYearMonths = buildCategoryAnalysis(rs, cats, buds, 'food', yearActiveMonthKeys(rs, 2026), null);
-  assert.equal(wholeYearMonths.actual, 8900, '年の実績');
-  assert.equal(wholeYearMonths.budget, 250000, '年の予算＝使い始めた月から12月までの月の予算の合計');
-  assert.deepEqual(wholeYearMonths.months.map((m) => [m.monthKey, m.amount, m.budget]).slice(0, 3), [
-    ['2026-08', 4000, 50000], ['2026-09', 4900, 50000], ['2026-10', 0, 50000],
+  assert.equal(wholeYearMonths.actual, 0, '年の実績（集計を始める前の月の記録は入らない）');
+  assert.equal(wholeYearMonths.budget, 150000, '年の予算＝集計を始めた月から12月までの月の予算の合計');
+  assert.deepEqual(wholeYearMonths.months.map((m) => [m.monthKey, m.amount, m.budget]), [
+    ['2026-10', 0, 50000], ['2026-11', 0, 50000], ['2026-12', 0, 50000],
   ], '月ごとの実績と月の予算');
 
   // 年の着地見込み: 締めた月は実績、ほかの月は月の予算（予算が無ければ締めた月の平均）
-  const landing = categoryYearLanding(wholeYearMonths.months, new Set(['2026-08', '2026-09']));
-  assert.equal(landing, 4000 + 4900 + 50000 * 3, '締めた月は実績・ほかは月の予算');
+  const landing = categoryYearLanding(wholeYearMonths.months, new Set(['2026-10']));
+  assert.equal(landing, 0 + 50000 * 2, '締めた月は実績・ほかは月の予算');
   assert.equal(
     categoryYearLanding([{ monthKey: '2026-08', amount: 4000, budget: null }, { monthKey: '2026-09', amount: 0, budget: null }], new Set(['2026-08'])),
     8000,
@@ -1390,6 +1410,29 @@ assert.deepEqual(
     [['rent', 'confirmed', 960000, 480000, 80000], ['car', 'estimate', 33000, 33000, 34200], ['oil', 'estimate', 7000, 0, 7500]],
     '固定費の小分類ごとの年の予算・その月までの予算・実績',
   );
+
+  // 振り返りの種類ごとの一覧（docs/kakei.md §0.9）
+  const month = buildReviewSections(rs, cats, buds, lines, ['2027-06'], false);
+  assert.deepEqual(month.variable.map((tile) => [tile.category.id, tile.actual, tile.budget]), [['food', 68000, 75000], ['util', 9000, 32000]]);
+  assert.deepEqual(month.reserve.map((row) => [row.category.id, row.actual, row.budget]), [['gift', 10000, null]], '月の予備費は額だけ');
+  assert.deepEqual(month.confirmed.map((row) => [row.category.id, row.actual, row.budget]), [['rent', 80000, null]], '確定は額だけ');
+  assert.deepEqual(
+    month.estimate.map((row) => [row.category.id, row.actual, row.budget]),
+    [['car', 34200, 33000], ['oil', 7500, null]],
+    '見込みは記録のあった月の予算（月は発生月なしを比べない）',
+  );
+  assert.deepEqual(month.spend, { variable: 77000, reserve: 10000, fixed: 121700 });
+  assert.deepEqual(month.uncategorized, { count: 0, amount: 0 });
+  const yearKeys = yearActiveMonthKeys(rs, 2027);
+  const yearly = buildReviewSections(rs, cats, buds, lines, yearKeys, true);
+  assert.deepEqual(yearly.reserve.map((row) => [row.category.id, row.budget]), [['gift', 50000]], '年の予備費は年の予算と比べる');
+  assert.deepEqual(yearly.estimate.map((row) => [row.category.id, row.budget]), [['car', 33000], ['oil', 7000]], '年は発生月なしも比べる');
+  const lost = [...rs, rec('h', '2027-06-30', 'expense', [['deleted', 2000]])];
+  assert.deepEqual(buildReviewSections(lost, cats, buds, lines, ['2027-06'], false).uncategorized, { count: 1, amount: 2000 }, '削除したカテゴリの品目はカテゴリなし');
+  const opened = buildSubcategoryAnalysis(lost, cats, UNCATEGORIZED.id, ['2027-06'], null);
+  assert.deepEqual([opened.actual, opened.records.map((r) => r.id)], [2000, ['h']]);
+  assert.equal(spendRatio(116983, 1060000), 11, '実績の割合（収入に対する%）');
+  assert.equal(spendRatio(1000, 0), null);
 }
 
 // ---- 記録する月の言い方 ----

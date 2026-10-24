@@ -6,6 +6,7 @@ import type {
   MoneyFeedData,
   MoneyFeedItem,
   MoneyMonth,
+  MoneyRatioTargets,
   MoneyRecord,
   MoneyRecordDraft,
   MoneyRecurring,
@@ -117,8 +118,6 @@ const NO_SECURITIES: MoneySecuritiesData = { securities: [], holdings: [], value
 
 /** 家計の読み込み（money_bootstrap と証券の評価額、Zaim 取り込み）が読む表。mobile版（mobile/app/(tabs)/money.tsx）と同じ。 */
 const MONEY_TABLES = [
-  'money_budget_lines',
-  'money_budgets',
   'money_categories',
   'money_feed',
   'money_feed_rules',
@@ -127,6 +126,7 @@ const MONEY_TABLES = [
   'money_holdings',
   'money_items',
   'money_months',
+  'money_ratio_targets',
   'money_records',
   'money_recurring',
   'money_securities',
@@ -148,6 +148,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   // 月の締め（docs/kakei.md §4.5）。
   const [closings, setClosings] = useState<MoneyMonth[]>([]);
+  // 目安の割合（docs/kakei.md §0.9）
+  const [ratioTargets, setRatioTargets] = useState<MoneyRatioTargets>({ variable: null, reserve: null, fixed: null });
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
   const [isLoading, setIsLoading] = useState(true);
   // 家計の面・月・年・期間は、ブラウザの更新をしても今のまま戻す（2026-10-16）。
@@ -206,6 +208,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
       setRecurring(money.recurring);
       setBalances(money.balances);
       setClosings(money.months);
+    setRatioTargets(money.ratioTargets);
       setSecurities(loadedSecurities);
     },
     [],
@@ -739,6 +742,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               months={closings}
               recurring={recurring}
               budgetLines={budgetLines}
+              ratioTargets={ratioTargets}
               feedItems={feed?.open ?? []}
               cardFeed={feed?.cardFeed ?? null}
               onConfirmEstimate={confirmEstimate}
@@ -815,6 +819,8 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           onStores={setStores}
           onRecurring={setRecurring}
           initialRecurringId={recurringTarget}
+          ratioTargets={ratioTargets}
+          onRatioTargets={setRatioTargets}
           feed={feed}
           onFeedChanged={reloadFeed}
           onClose={() => {

@@ -121,10 +121,11 @@ function ChildrenSection({ analysis }: { analysis: CategoryAnalysis }) {
   );
 }
 
-/** 上の収支。振り返りの画面と同じ作りで、収支＝予算 − 支出（予算が無ければ支出だけ）。 */
+/** 上の収支。振り返りの画面と同じ作りで、収支＝予算 − 支出。予算が無ければ支出の額だけ（固定費・確定、カテゴリなしなど。2026-10-24）。 */
 function SummaryHero({ analysis, landing }: { analysis: CategoryAnalysis; landing: number | null }) {
   const hasBudget = analysis.budget !== null;
   const over = hasBudget && analysis.diff < 0;
+  if (!hasBudget) return <Hero compact label="支出" value={formatYen(analysis.actual)} />;
   return (
     <Hero
       compact
