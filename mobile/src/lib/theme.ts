@@ -2,11 +2,13 @@
 export const colors = {
   // 画面の一番上の帯の色。アプリのアイコンの背景（白）に合わせる。PWA版のmanifestの theme_color と同じ。
   brand: '#ffffff',
-  background: '#f9fafb', // gray-50
+  // 画面の地と枠は、白いカードが浮いて見えるよう少し濃くしてある（2026-10-24。以前は gray-50 / gray-200）。
+  // PWA版は src/app/globals.css で Tailwind の gray-50 / gray-200 を同じ値に差し替えている。
+  background: '#f1f5f9', // slate-100
   surface: '#ffffff',
-  // 記録タブの一覧の地。カード（白）が浮いて見えるよう、画面の地より少しだけ青みを足す。
+  // 記録タブの一覧の地。画面の地と同じ値にそろえた。
   listSurface: '#f1f5f9', // slate-100
-  border: '#e5e7eb', // gray-200
+  border: '#d1d5db', // gray-300
   borderStrong: '#d1d5db', // gray-300
   text: '#111827', // gray-900
   textSubtle: '#374151', // gray-700

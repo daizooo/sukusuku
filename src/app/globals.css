@@ -17,6 +17,13 @@
   color-scheme: light;
 }
 
+/* 画面の地（gray-50）と枠（gray-200）を、mobile版の theme.ts（background / border）と同じ値に
+   そろえる。白いカードが浮いて見えるよう少し濃くした（2026-10-24）。 */
+@theme {
+  --color-gray-50: #f1f5f9; /* slate-100 */
+  --color-gray-200: #d1d5db; /* gray-300 */
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
