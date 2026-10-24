@@ -1,4 +1,4 @@
-// かぞく手帳: カード会社の利用通知メールと、Amazon の注文メールを、かぞく手帳へ送る（docs/kakei.md §9.6・§9.7・§9.8）
+// かぞく手帳: カード会社の利用通知メールと、Amazon の注文メール・発送メールを、かぞく手帳へ送る（docs/kakei.md §9.6・§9.7・§9.8）
 //
 // 2026-10-20 に、送ったかどうかをメール1通ごとにサーバーが覚える作りにした（§9.8）。
 // 同じ日に、Zaim を扱わなくなったので関数名を sendZaimMails → sendFeedMails に変えた（ファイル名も zaim-feed.gs → gmail-feed.gs）。
@@ -14,22 +14,24 @@
 //        START_AT    取り込みを始める日時（例: 2026-10-12T00:00:00+09:00）。これより前に届いたメールは取り込まない
 //   4. 関数 setup を1回実行する（Gmail と外部への送信を許可する）。以後5分ごとに sendFeedMails が動く
 //
-// 貼り直しのとき（2026-10-20 より前の版から）
-//   1. 上の 2.（Gmail API を足す）を行う
-//   2. 関数 removeOldLabels を手で実行する。前の版がスレッドに付けたラベル「かぞく手帳済」「かぞく手帳対象外」を外して消す
-//      （メールは消えない）。新しいラベルは、次の回から sendFeedMails がメールごとに付け直す（1回に100通ずつ）
-//   3. 関数 setup を1回実行する
+// 貼り直しのとき（2026-10-23 に、ラベルを「どこからのメールか」の4つにした。§9.8）
+//   1. このファイルの中身で貼り直す（関数名・プロパティ・トリガーはそのまま）
+//   2. 関数 removeOldLabels を手で1回実行する。前の版のラベル「かぞく手帳/未確認・済・対象外・読めない」と「かぞく手帳」を消す
+//      （メールは消えない）。新しいラベルは、次の回から sendFeedMails が付け直す（1回に100通ずつ）
+//   2026-10-20 より前の版からなら、先に「Gmail API」のサービスを足し、関数 setup も1回実行する
 //
 // 5分ごとにすること
-//   1. 探す: 差出人（三井住友カード・Amazon の注文）で、最後にうまく動いた時刻の1日前（初めは START_AT の1日前）から。
+//   1. 探す: 差出人（三井住友カード・Amazon の注文・Amazon の発送）で、最後にうまく動いた時刻の1日前（初めは START_AT の1日前）から。
 //      全フォルダと迷惑メールも探す（ゴミ箱は探さない）
 //   2. まだのものを聞く: 見つけたメールのIDをかぞく手帳に送り、まだ受け取っていないIDを返してもらう
 //   3. 送る: まだのメールを50通ずつ送る。残り・送れなかったものは次の回にまた「まだ」として返る
-//   4. ラベルとゴミ箱: かぞく手帳が返すとおりに、メール1通ごとにラベルを付け替え、片づいたメールをゴミ箱へ移す（30日で削除）
-//        かぞく手帳/未確認  取り込んだが、明細をまだ記録していない（受信トレイに残す）
-//        かぞく手帳/済      記録した・記録しないを選んだ。Amazon の注文メールもここ（注文メールはゴミ箱へ移さない）
-//        かぞく手帳/対象外  読んだが取り込まない（0円の注文など）
-//        かぞく手帳/読めない 書式が読めない（家計タブの「読めない」で手で入れる）
+//   4. ラベルとゴミ箱: かぞく手帳が返すとおりに、メール1通ごとにラベルを付け、**受信トレイから外す**（アーカイブ）。
+//      確認が済んだメールはゴミ箱へ移す（30日で削除）
+//        Olive/クレジット  Olive のクレジットの利用通知。明細を記録した・記録しないにしたらゴミ箱
+//        Olive/デビット    Olive のデビットの利用通知。同上
+//        Amazon            注文メール・発送メール。発送メールは荷物の明細が片づいたら、注文メールは注文が全部片づいたらゴミ箱
+//        対象外            読んだが取り込まない（Amazon のカード・楽天カードの利用通知、0円の注文など）。ゴミ箱へは移さない（人が確かめて消す）
+//      取り込みの開始より前のメールには何もしない
 //   5. 動いたことを伝える: 同期のたびに、かぞく手帳が時刻を残す。1時間以上届かなければ、家計タブに「Gmail の取り込みが止まっています」
 //
 // Gmail の画面が「スレッド表示」だと、同じ件名の利用通知が1行にまとまり、ラベルもまとめて出る。
@@ -38,14 +40,15 @@
 var BATCH = 50; // Edge Function が1回に受ける数
 var MAX_IDS = 2000; // 1回に探すメールの数
 var LABELS = {
-  open: 'かぞく手帳/未確認',
-  done: 'かぞく手帳/済',
-  skipped: 'かぞく手帳/対象外',
-  unreadable: 'かぞく手帳/読めない',
+  olive_credit: 'Olive/クレジット',
+  olive_debit: 'Olive/デビット',
+  amazon: 'Amazon',
+  skipped: '対象外',
 };
-var OLD_LABELS = ['かぞく手帳済', 'かぞく手帳対象外'];
-// 探すメール（三井住友カードの利用通知・Olive のデビットの利用通知・Amazon の注文メール）
-var QUERY = '{from:statement@vpass.ne.jp from:smbc-debit@smbc-card.com from:auto-confirm@amazon.co.jp} {subject:利用 subject:注文済み} in:anywhere -in:trash';
+// 前の版のラベル（removeOldLabels で消す。子のラベルを先に）
+var OLD_LABELS = ['かぞく手帳/未確認', 'かぞく手帳/済', 'かぞく手帳/対象外', 'かぞく手帳/読めない', 'かぞく手帳', 'かぞく手帳済', 'かぞく手帳対象外'];
+// 探すメール（三井住友カードの利用通知・Olive のデビットの利用通知・Amazon の注文メール・Amazon の発送メール。発送メールは 2026-10-23 から。§9.13）
+var QUERY = '{from:statement@vpass.ne.jp from:smbc-debit@smbc-card.com from:auto-confirm@amazon.co.jp from:shipment-tracking@amazon.co.jp} {subject:利用 subject:注文済み subject:発送済み} in:anywhere -in:trash';
 
 function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
@@ -132,7 +135,7 @@ function post(body) {
   return JSON.parse(res.getContentText());
 }
 
-// ラベルを付け替え、片づいたメールをゴミ箱へ移す。返り値はかぞく手帳に伝える [{ id, label, trashed }]
+// ラベルを付け替えて受信トレイから外し、片づいたメールをゴミ箱へ移す。返り値はかぞく手帳に伝える [{ id, label, trashed }]
 function applyChanges(changes) {
   if (changes.length === 0) return [];
   var byKey = labelIds();
@@ -143,8 +146,8 @@ function applyChanges(changes) {
     if (!labelId) return;
     try {
       Gmail.Users.Messages.modify({
-        addLabelIds: c.label === 'open' ? [labelId, 'INBOX'] : [labelId],
-        removeLabelIds: all.filter(function (id) { return id !== labelId; }),
+        addLabelIds: [labelId],
+        removeLabelIds: all.filter(function (id) { return id !== labelId; }).concat(['INBOX']),
       }, 'me', c.id);
       if (c.trash) Gmail.Users.Messages.trash('me', c.id);
       applied.push({ id: c.id, label: c.label, trashed: !!c.trash });
@@ -157,12 +160,12 @@ function applyChanges(changes) {
   return applied;
 }
 
-// ラベルのID（無ければ作る）。{ open: ID, done: ID, skipped: ID, unreadable: ID }
+// ラベルのID（無ければ作る）。{ olive_credit: ID, olive_debit: ID, amazon: ID, skipped: ID }
 function labelIds() {
   var existing = {};
   (Gmail.Users.Labels.list('me').labels || []).forEach(function (l) { existing[l.name] = l.id; });
-  // 「かぞく手帳」の下にまとめて出す
-  if (!existing['かぞく手帳']) Gmail.Users.Labels.create({ name: 'かぞく手帳' }, 'me');
+  // 「Olive/…」は「Olive」の下に出す
+  if (!existing['Olive']) Gmail.Users.Labels.create({ name: 'Olive' }, 'me');
   var ids = {};
   Object.keys(LABELS).forEach(function (key) {
     var name = LABELS[key];
@@ -171,17 +174,13 @@ function labelIds() {
   return ids;
 }
 
-// 前の版がスレッドに付けたラベルを外して消す（貼り直しのときに手で1回実行する。メールは消えない）
+// 前の版のラベルを消す（貼り直しのときに手で1回実行する。ラベルを消すとメールからも外れる。メールは消えない）
 function removeOldLabels() {
+  var existing = {};
+  (Gmail.Users.Labels.list('me').labels || []).forEach(function (l) { existing[l.name] = l.id; });
   OLD_LABELS.forEach(function (name) {
-    var label = GmailApp.getUserLabelByName(name);
-    if (!label) return;
-    var threads;
-    do {
-      threads = label.getThreads(0, 100);
-      if (threads.length > 0) label.removeFromThreads(threads);
-    } while (threads.length === 100);
-    label.deleteLabel();
+    if (!existing[name]) return;
+    Gmail.Users.Labels.remove('me', existing[name]);
     console.log('消したラベル: ' + name);
   });
 }

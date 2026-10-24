@@ -1151,6 +1151,7 @@ export type Database = {
           message_id: string
           outcome: string
           received_at: string
+          tag: string | null
           trashed_at: string | null
           updated_at: string
         }
@@ -1161,6 +1162,7 @@ export type Database = {
           message_id: string
           outcome: string
           received_at: string
+          tag?: string | null
           trashed_at?: string | null
           updated_at?: string
         }
@@ -1171,6 +1173,7 @@ export type Database = {
           message_id?: string
           outcome?: string
           received_at?: string
+          tag?: string | null
           trashed_at?: string | null
           updated_at?: string
         }
