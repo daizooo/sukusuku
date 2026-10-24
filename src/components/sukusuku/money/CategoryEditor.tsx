@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Check, ChevronRight, GripVertical } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, ChevronDown, ChevronUp, GripVertical, Palette } from 'lucide-react';
 import type { MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -22,6 +22,8 @@ import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader } from './moneyVi
 // ここでできるのは、大分類のアイコン（絵と色）と並べ替えだけ（2026-10-24）。名前の変更・追加・削除は、予算が本体なので年間予算（BudgetEditor）で行い、
 // カテゴリはそれを表示するだけ（固定費・予備費の小分類は、予算から決まる）。並べ替えは一覧のまま動かす
 // （大分類は左の持ち手をつかむ、小分類は長押し。マウスでも指でも。リストと同じ操作。ui/useDragReorder.ts）。
+// 大分類を1行ずつ並べ、押した1つだけ開いて小分類を出す（アコーディオン。2026-10-24。カテゴリの選択と同じ見せ方。docs/kakei.md §3.2）。
+// 小分類が多い大分類（固定費（確定）23件など）で、全部並べると見にくかった。大分類の行を押すのは開閉で、アイコンは開いた中の「アイコンを変える」から。
 // 大分類のアイコンは、大分類を押して絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。
 // カテゴリがまだ無い家族には「標準のカテゴリで始める」（Zaim のカテゴリをもとにした並び）。
 
@@ -49,6 +51,24 @@ export default function CategoryEditor({
   const [kind, setKind] = useState<MoneyCategoryKind>('living');
   const [editing, setEditing] = useState<Editing>(null);
   const [busy, setBusy] = useState(false);
+  // 開いている大分類（1つだけ）。人が開いたときだけ、その行を一覧の上に寄せる。
+  const [openId, setOpenId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const rowRefs = useRef(new Map<string, HTMLElement>());
+  const scrollOnOpen = useRef(false);
+
+  // scrollIntoView は枠（overflow-hidden）ごと動かしてしまうので、一覧のスクロールだけを送る。
+  useEffect(() => {
+    if (!scrollOnOpen.current) return;
+    scrollOnOpen.current = false;
+    const row = openId ? rowRefs.current.get(openId) : null;
+    if (row) listRef.current?.scrollTo({ top: Math.max(0, row.offsetTop - 8), behavior: 'smooth' });
+  }, [openId]);
+
+  const toggle = (id: string) => {
+    scrollOnOpen.current = openId !== id;
+    setOpenId(openId === id ? null : id);
+  };
 
   const tops = useMemo(() => topCategories(categories, kind, true), [categories, kind]);
   const ordered = [...tops.filter((top) => !top.archived), ...tops.filter((top) => top.archived)];
@@ -122,7 +142,7 @@ export default function CategoryEditor({
         ))}
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pt-2 pb-8 space-y-2.5">
+      <div ref={listRef} className="relative flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pt-2 pb-8 space-y-2.5">
         {categories.length === 0 && (
           <div className="space-y-3 py-4">
             <p className="text-sm leading-relaxed text-gray-500">
@@ -133,10 +153,16 @@ export default function CategoryEditor({
         )}
         {drag.arrange(`tops-${kind}`, ordered).map((top) => {
           const children = drag.arrange(`children-${top.id}`, childCategories(categories, top.id, true));
+          const open = openId === top.id;
+          const setDragRef = drag.dragRef(top.id);
           return (
             <div
               key={top.id}
-              ref={drag.dragRef(top.id)}
+              ref={(el) => {
+                setDragRef(el);
+                if (el) rowRefs.current.set(top.id, el);
+                else rowRefs.current.delete(top.id);
+              }}
               className={`space-y-2.5 rounded-xl border bg-white p-3 ${top.archived ? 'opacity-50' : ''} ${
                 drag.isDragging(top.id) ? 'relative z-20 border-blue-300 shadow-xl' : 'border-gray-200'
               }`}
@@ -152,31 +178,45 @@ export default function CategoryEditor({
                 </span>
                 <button
                   type="button"
-                  onClick={() => setEditing({ category: top })}
+                  aria-expanded={open}
+                  onClick={() => toggle(top.id)}
                   className="flex min-w-0 flex-1 items-center gap-2 text-left"
                 >
-                  <CategoryIcon iconKey={iconKeyOf(top)} />
-                  <span className="text-[15px] font-bold text-gray-900">{top.name}</span>
+                  <CategoryIcon iconKey={iconKeyOf(top)} size={30} />
+                  <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-gray-900">{top.name}</span>
                   {top.archived && <span className="text-[11px] font-semibold text-gray-400">使わない</span>}
-                  <span className="flex-1" />
-                  <ChevronRight size={16} className="text-gray-400" />
+                  <span className="text-xs font-medium tabular-nums text-gray-400">{children.length}件</span>
+                  {open ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
                 </button>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {children.map((child) => (
+              {open && (
+                <>
+                  <div className="flex flex-wrap gap-1.5">
+                    {children.map((child) => (
+                      <button
+                        key={child.id}
+                        type="button"
+                        ref={drag.dragRef(child.id)}
+                        {...drag.handleProps(`children-${top.id}`, children, child.id)}
+                        className={`select-none rounded-full bg-gray-100 px-2.5 py-1.5 text-[13px] text-gray-700 ${child.archived ? 'opacity-50' : ''} ${
+                          drag.isDragging(child.id) ? 'relative z-20 shadow-lg' : ''
+                        }`}
+                      >
+                        {child.name}
+                      </button>
+                    ))}
+                  </div>
                   <button
-                    key={child.id}
                     type="button"
-                    ref={drag.dragRef(child.id)}
-                    {...drag.handleProps(`children-${top.id}`, children, child.id)}
-                    className={`select-none rounded-full bg-gray-100 px-2.5 py-1.5 text-[13px] text-gray-700 ${child.archived ? 'opacity-50' : ''} ${
-                      drag.isDragging(child.id) ? 'relative z-20 shadow-lg' : ''
-                    }`}
+                    aria-label={`${top.name}のアイコンを変える`}
+                    onClick={() => setEditing({ category: top })}
+                    className="flex items-center gap-1 py-1 text-[13px] font-semibold text-blue-600"
                   >
-                    {child.name}
+                    <Palette size={14} />
+                    アイコンを変える
                   </button>
-                ))}
-              </div>
+                </>
+              )}
             </div>
           );
         })}

@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Settings2 } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Settings2 } from 'lucide-react-native';
 import type { MoneyCategory } from '@/types/app';
 import { colors } from '@/lib/theme';
 import {
@@ -12,14 +12,10 @@ import { CategoryIcon, ScreenHeader } from '@/components/money/moneyVisual';
 
 // カテゴリの選択（docs/kakei.md §3.1・§3.2）。PWA版の `src/components/sukusuku/money/CategoryPicker.tsx` と同じ並び・文言。
 //
-// 大分類を1行ずつ: 左に大分類（アイコン・名前。予算の残りは出さない）、
-// 右に小分類のボタン（入りきらなければ折り返す）。押すと大分類も決まる。
-// スクロールしなくても1画面に収まるように詰める（2026-10-20。以前は大分類ごとの枠と見出しの帯で、縦に長かった）。小分類を主役に、大分類は小さく。
-// 大分類の行は与えられた高さを行数で割って縦に伸ばす（下に余白を残さない）。ただし1行は ROW_MAX_STRETCH までで、
-// 行数の少ない収入（3行ほど）が画面いっぱいに引き伸ばされないようにする（2026-10-20）。入りきらないときだけスクロールする。
-
-/** 大分類の1行を、余った高さで伸ばしてよい上限（dp）。 */
-const ROW_MAX_STRETCH = 80;
+// 大分類を1行ずつ並べ、押した1つだけ開いて小分類のボタンを出す（アコーディオン。2026-10-24）。
+// 以前は大分類の右に小分類を全部並べていて、固定費（確定）23件・予備費14件のように件数が多いと見にくかった。
+// 別の大分類を押すと、開いていたものは閉じる。開いた行は画面の上に寄せる（下の方の大分類でも小分類が見える）。
+// 小分類を持たない大分類は、開かずにそのまま選ぶ。
 
 export interface CategoryChoice {
   categoryId: string;
@@ -50,8 +46,25 @@ export default function CategoryPicker({
     [categories, categoryKind, onlyTops],
   );
   const pickCategory = (categoryId: string) => onPick({ categoryId });
-  const [viewportHeight, setViewportHeight] = useState(0);
-  const rowMinHeight = tops.length > 0 ? Math.min(ROW_MAX_STRETCH, Math.floor(viewportHeight / tops.length)) : 0;
+  // 開いている大分類（1つだけ）。大分類が1つしか出ないときは最初から開いておく。
+  const [openId, setOpenId] = useState<string | null>(() => (tops.length === 1 ? tops[0].id : null));
+  const scrollRef = useRef<ScrollView>(null);
+  // 各大分類の行の位置（上端）と、開いている小分類の面の高さ。開いた行を上に寄せるために測る。
+  const rowY = useRef<Record<string, number>>({});
+  const panelHeight = useRef(0);
+
+  const toggle = (top: MoneyCategory) => {
+    if (openId === top.id) {
+      setOpenId(null);
+      return;
+    }
+    // 開いていた行が上にあれば、閉じたぶん（面の高さ）だけ新しい行の位置は上がる。
+    const openIndex = tops.findIndex((entry) => entry.id === openId);
+    const index = tops.findIndex((entry) => entry.id === top.id);
+    const closing = openIndex >= 0 && openIndex < index ? panelHeight.current : 0;
+    setOpenId(top.id);
+    scrollRef.current?.scrollTo({ y: Math.max(0, (rowY.current[top.id] ?? 0) - closing), animated: true });
+  };
 
   return (
     <View style={styles.screen}>
@@ -67,33 +80,49 @@ export default function CategoryPicker({
           )
         }
       />
-      <ScrollView contentContainerStyle={styles.content} onLayout={(e) => setViewportHeight(e.nativeEvent.layout.height)}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
         {tops.length === 0 && (
           <Text style={styles.empty}>カテゴリがまだありません。右上の歯車からカテゴリを作れます</Text>
         )}
         {tops.map((top) => {
           const children = childCategories(categories, top.id);
+          const open = openId === top.id;
+          const hasChildren = children.length > 0;
           return (
-            <View key={top.id} style={[styles.topRow, { minHeight: rowMinHeight }]}>
-              <View style={styles.top}>
-                <CategoryIcon iconKey={iconKeyOf(top)} size={24} />
+            <View key={top.id} onLayout={(e) => { rowY.current[top.id] = e.nativeEvent.layout.y; }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={top.name}
+                accessibilityState={{ expanded: hasChildren ? open : undefined }}
+                onPress={() => (hasChildren ? toggle(top) : pickCategory(top.id))}
+                style={({ pressed }) => [styles.head, open && styles.headOpen, pressed && styles.pressed]}
+              >
+                <CategoryIcon iconKey={iconKeyOf(top)} size={30} />
                 <Text style={[styles.topName, styles.flex]} numberOfLines={1}>
                   {top.name}
                 </Text>
-              </View>
-              <View style={styles.chips}>
-                {(children.length > 0 ? children : [top]).map((category) => (
-                  <Pressable
-                    key={category.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${top.name} ${category.name}`}
-                    onPress={() => pickCategory(category.id)}
-                    style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-                  >
-                    <Text style={styles.chipText}>{category.name}</Text>
-                  </Pressable>
-                ))}
-              </View>
+                {hasChildren && (
+                  <>
+                    <Text style={styles.count}>{children.length}件</Text>
+                    {open ? <ChevronUp size={18} color={colors.textFaint} /> : <ChevronDown size={18} color={colors.textFaint} />}
+                  </>
+                )}
+              </Pressable>
+              {open && hasChildren && (
+                <View style={styles.panel} onLayout={(e) => { panelHeight.current = e.nativeEvent.layout.height; }}>
+                  {children.map((category) => (
+                    <Pressable
+                      key={category.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${top.name} ${category.name}`}
+                      onPress={() => pickCategory(category.id)}
+                      style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+                    >
+                      <Text style={styles.chipText}>{category.name}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
             </View>
           );
         })}
@@ -105,22 +134,35 @@ export default function CategoryPicker({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
-  content: { flexGrow: 1, paddingBottom: 8 },
+  content: { paddingBottom: 8 },
   empty: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 24 },
-  // 大分類を1行ずつ（左に大分類、右に小分類）。
-  // minHeight（画面の高さ ÷ 行数。上限あり）で伸ばす。中身が高い行はそのまま伸び、入りきらない小さい画面ではスクロールになる。
-  topRow: {
+  // 大分類の行（アイコン・名前・件数・矢印）。
+  head: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     borderBottomWidth: 1,
     borderBottomColor: colors.listSurface,
   },
-  top: { width: 104, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  topName: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },
-  chips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  chip: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, backgroundColor: colors.neutralSurface },
+  headOpen: { backgroundColor: colors.neutralSurface },
+  pressed: { backgroundColor: colors.listSurface },
+  topName: { fontSize: 15, fontWeight: '700', color: colors.text },
+  count: { fontSize: 12, fontWeight: '500', color: colors.textFaint },
+  // 開いた大分類の小分類（折り返して並べる）。
+  panel: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 14,
+    backgroundColor: colors.neutralSurface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.listSurface,
+  },
+  chip: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 8, backgroundColor: colors.surface },
   chipPressed: { backgroundColor: colors.moneySurface },
   chipText: { fontSize: 15, fontWeight: '600', color: colors.text },
 });

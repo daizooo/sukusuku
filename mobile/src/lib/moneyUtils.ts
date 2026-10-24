@@ -580,6 +580,39 @@ export function estimateRecurringAmount(rule: MoneyRecurring, monthKey: string, 
   return rule.amount;
 }
 
+/**
+ * 固定費（見込み）の予算の、その年の額（docs/kakei.md §0.8。2026-10-24）。月ごとに、自動記録で作る見込みの額と同じ考え方で出す:
+ * 前年同月の記録があればその額、無ければ直近3回の平均、記録が1件も無ければルールの金額（estimateRecurringAmount）。
+ * 季節で額が変わる光熱費などが、月ごとの重みを持った予算になる。出金元の無いルール（自動記録をしないもの）は、出金元・お店を問わず、
+ * 前年同月の同じ小分類の記録（見込みでないもの）があればその合計、無ければルールの金額。
+ * 見込みでないルール・発生月なしのルールは、これまでどおり「単価 × 回数」。
+ */
+export function estimatedBudgetYearAmount(rule: MoneyRecurring, year: number, records: readonly MoneyRecord[]): number {
+  const line = budgetLineOf(rule);
+  if (rule.amountMode !== 'estimate' || rule.noMonth) return budgetLineYearAmount(line, year);
+  return budgetLineMonths(line, year).reduce((sum, month) => {
+    const monthKey = `${year}-${pad2(month)}`;
+    if (rule.walletId !== null) return sum + estimateRecurringAmount(rule, monthKey, records);
+    return sum + (sameMonthLastYearAmount(rule, monthKey, records) ?? rule.amount);
+  }, 0);
+}
+
+/** 前年の同じ月の、そのルールの小分類の記録（見込みでないもの）の合計。無ければ null。 */
+function sameMonthLastYearAmount(rule: MoneyRecurring, monthKey: string, records: readonly MoneyRecord[]): number | null {
+  const lastKey = `${yearOfMonth(monthKey) - 1}-${monthKey.slice(5, 7)}`;
+  let total = 0;
+  let found = false;
+  for (const record of records) {
+    if (record.kind !== rule.kind || record.isEstimate || record.occurredOn.slice(0, 7) !== lastKey) continue;
+    for (const item of record.items) {
+      if (item.categoryId !== rule.categoryId) continue;
+      total += item.amount;
+      found = true;
+    }
+  }
+  return found ? total : null;
+}
+
 export interface PendingRecurring {
   rule: MoneyRecurring;
   /** その月の記録する日（YYYY-MM-DD）。 */

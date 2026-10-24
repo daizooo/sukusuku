@@ -7,6 +7,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react-nativ
 import type {
   MoneyBudgetGroup,
   MoneyCategory,
+  MoneyCategoryKind,
   MoneyHolidayRule,
   MoneyRatioTargets,
   MoneyRecord,
@@ -25,6 +26,7 @@ import {
   budgetLineOf,
   budgetLineYearAmount,
   childCategories,
+  estimatedBudgetYearAmount,
   formatYear,
   formatYen,
   guessIconKey,
@@ -47,6 +49,7 @@ import {
   type SpendGroup,
 } from '@/lib/moneyUtils';
 import {
+  deleteMoneyCategory,
   deleteMoneyRecurring,
   insertMoneyCategory,
   insertMoneyRecurring,
@@ -58,7 +61,9 @@ import {
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import StorePicker from '@/components/money/StorePicker';
-import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
+import CategoryEditor from '@/components/money/CategoryEditor';
+import CategoryIconPicker from '@/components/money/CategoryIconPicker';
+import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 import { Chip, ChipRow, Field, WalletChoices } from '@/components/money/feedParts';
 
 // 年間予算（docs/kakei.md §0.8。2026-10-24）。PWA版の `src/components/sukusuku/money/BudgetEditor.tsx` と同じ並び・文言。
@@ -69,9 +74,12 @@ import { Chip, ChipRow, Field, WalletChoices } from '@/components/money/feedPart
 //   行を押すと、下の一覧はその種類だけになる（もう一度押すと全部）
 // - 下の一覧: 収入・変動費・予備費・固定費（確定）・固定費（見込み）の見出しごと（見出しを押すと折りたたむ）。収入の見出しの下線は緑、
 //   ほかはグレー。行は名前と年の額だけ（詳細は押して開く枠で見る）。その年に発生しない予算は、グレーにして「期間外」を付け、各見出しの一番下
-// - 変動費の行は大分類。押すと大分類の画面（まとめての予算と小分類の予算・大分類の名前）
-// - 予算の枠（追加・編集）: 分類（種類・大分類〔変動費・収入だけ〕・小分類・品目）、予算（金額・いつ・期間）、自動記録（オン／オフ・日・出金元・お店）。
-//   固定費（確定）・固定費（見込み）・予備費は、大分類＝種類（名前も種類の名前）。種類を変えて保存すると、その小分類は選んだ種類（大分類）へ移る
+// - 変動費の行は大分類。押すと予算の枠が開く（大分類の画面は無くした。2026-10-24）
+// - 予算の枠（追加・編集）は、種類で「分類」の項目が変わる（どの種類も「予算の1行」で数える。docs/kakei.md §0.8）:
+//   変動費＝1行が大分類: 種類・名前・アイコン・小分類（大分類の名前とアイコン、小分類の足す・直す・移す・消すをここで）
+//   固定費（確定）・固定費（見込み）・予備費＝1行が小分類（品目）: 種類・名前（大分類は種類そのもの。名前が小分類の名前になる）
+//   収入＝1行が小分類（種別）: 種類・大分類・小分類・品目（品目名は同じ小分類に予算が複数あるときの区別）
+//   予算（金額・いつ・期間）、自動記録（オン／オフ・日・出金元・お店）。種類を変えて保存できるのは、予備費・固定費の間だけ（小分類が選んだ種類へ移る）
 
 interface BudgetEditorProps {
   familyId: string;
@@ -134,7 +142,15 @@ const TYPE_TOP_NAME: Record<Exclude<SpendGroup, 'variable'>, string> = {
 /** 大分類を選ぶ種類（変動費・収入）。ほかは大分類＝種類。 */
 const choosesTop = (group: BudgetLineGroup): group is 'variable' | 'income' => group === 'variable' || group === 'income';
 
-type Screen = { type: 'list' } | { type: 'top'; topId: string } | { type: 'form'; ruleId: string | null; group?: BudgetLineGroup; topId?: string };
+/** 種類で変わる、カテゴリの扱い（保存のとき、予算の行より先に作る・直すもの）。 */
+type CategoryPlan =
+  | { group: 'variable'; topId: string | null; name: string; icon: string; iconColor: string | null; newKids: string[] }
+  | { group: Exclude<SpendGroup, 'variable'>; name: string }
+  | { group: 'income' };
+
+const isItemGroup = (group: BudgetLineGroup): group is Exclude<SpendGroup, 'variable'> => group === 'reserve' || group === 'confirmed' || group === 'estimate';
+
+type Screen = { type: 'list' } | { type: 'form'; ruleId: string | null; group?: BudgetLineGroup; topId?: string };
 
 const byPosition = (a: MoneyRecurring, b: MoneyRecurring) => a.position - b.position;
 
@@ -207,12 +223,18 @@ export default function BudgetEditor({
   const [selected, setSelected] = useState<BudgetLineGroup | 'expense' | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [renaming, setRenaming] = useState<MoneyCategory | null>(null);
+  // カテゴリ（アイコン・色・並べ替え）の画面。家計の設定から、年間予算の右上へ移した（2026-10-24）。
+  const [editingCategories, setEditingCategories] = useState(false);
   const screen = stack[stack.length - 1];
   const push = (next: Screen) => setStack((prev) => [...prev, next]);
   const pop = () => setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
 
   const rows = useMemo(() => recurring.filter(isBudgetRow).sort(byPosition), [recurring]);
-  const yearTotal = (rule: MoneyRecurring) => budgetLineYearAmount(budgetLineOf(rule), year);
+  /** 予算の行のその年の額。固定費（見込み）は、月ごとに前年の記録から見込む（docs/kakei.md §0.8）。ほかは単価 × 回数。 */
+  const yearTotal = (rule: MoneyRecurring) =>
+    rule.categoryId !== null && groupOf(rule.categoryId) === 'estimate'
+      ? estimatedBudgetYearAmount(rule, year, records)
+      : budgetLineYearAmount(budgetLineOf(rule), year);
   const variableBudgets = useMemo(() => variableBudgetsOf(recurring, categories), [recurring, categories]);
   const monthKeys = useMemo(() => yearMonthKeys(year), [year]);
   const category = (id: string | null) => categories.find((entry) => entry.id === id) ?? null;
@@ -256,14 +278,21 @@ export default function BudgetEditor({
       const own = categories.find((entry) => entry.id === rule.categoryId);
       const group: BudgetLineGroup = own?.kind === 'income' ? 'income' : spendGroupOf(rule.categoryId, categories);
       if (group === 'variable') continue;
-      result[group].push({ rule, total: budgetLineYearAmount(budgetLineOf(rule), year) });
+      result[group].push({
+        rule,
+        total: group === 'estimate' ? estimatedBudgetYearAmount(rule, year, records) : budgetLineYearAmount(budgetLineOf(rule), year),
+      });
     }
     for (const key of Object.keys(result) as (keyof typeof result)[]) {
       result[key].sort((a, b) => Number(a.total === 0) - Number(b.total === 0));
     }
     return result;
-  }, [rows, categories, year]);
+  }, [rows, categories, year, records]);
   const orphans = recurring.filter((rule) => !rule.archived && rule.kind !== 'transfer' && rule.categoryId === null).sort(byPosition);
+
+  /** 変動費の大分類の予算の行（大分類そのものの行。無ければ、昔の小分類の行）。 */
+  const variableRuleOf = (topId: string): MoneyRecurring | null =>
+    rows.find((rule) => rule.categoryId === topId) ?? rows.find((rule) => category(rule.categoryId)?.parentId === topId) ?? null;
 
   const sumOf = (list: { total: number }[]) => list.reduce((sum, entry) => sum + entry.total, 0);
   const totals: Record<BudgetLineGroup, number> = {
@@ -299,17 +328,23 @@ export default function BudgetEditor({
     return top;
   };
 
-  /** 小分類を作る（予算の枠の小分類の選択から）。 */
-  const createCategory = async (group: BudgetLineGroup, topId: string | null, name: string): Promise<MoneyCategory | null> => {
+  const nextPosition = (kind: MoneyCategoryKind, parentId: string | null) =>
+    (parentId === null ? topCategories(categories, kind, true) : childCategories(categories, parentId, true)).reduce(
+      (max, entry) => Math.max(max, entry.position + 1),
+      0,
+    );
+
+  /** 小分類を作る（収入の枠の小分類の選択から）。 */
+  const createCategory = async (topId: string | null, name: string): Promise<MoneyCategory | null> => {
     try {
-      const parent = choosesTop(group) ? category(topId) : await typeTop(group);
+      const parent = category(topId);
       if (parent === null) return null;
       const created = await insertMoneyCategory(supabase, familyId, {
         kind: parent.kind,
         parentId: parent.id,
         name,
         icon: null,
-        position: childCategories(categories, parent.id, true).reduce((max, entry) => Math.max(max, entry.position + 1), 0),
+        position: nextPosition(parent.kind, parent.id),
       });
       onCategories((prev) => [...prev, created]);
       return created;
@@ -319,19 +354,15 @@ export default function BudgetEditor({
     }
   };
 
-  /**
-   * 大分類を作る（予算の枠の大分類の選択から。変動費・収入だけ。ほかは大分類＝種類）。
-   * 予算が本体で、カテゴリは予算を表示するだけなので、カテゴリの設定を先にしなくても、ここで足せる。
-   */
-  const createTop = async (group: BudgetLineGroup, name: string): Promise<MoneyCategory | null> => {
+  /** 収入の大分類を作る（収入の枠の大分類の選択から）。 */
+  const createTop = async (name: string): Promise<MoneyCategory | null> => {
     try {
-      const kind = group === 'income' ? 'income' : 'living';
       const created = await insertMoneyCategory(supabase, familyId, {
-        kind,
+        kind: 'income',
         parentId: null,
         name,
         icon: guessIconKey(name),
-        position: topCategories(categories, kind, true).reduce((max, entry) => Math.max(max, entry.position + 1), 0),
+        position: nextPosition('income', null),
       });
       putCategory(created);
       return created;
@@ -351,36 +382,192 @@ export default function BudgetEditor({
     }
   };
 
+  // ---- 変動費の大分類の、小分類（予算の枠の「小分類」から。docs/kakei.md §0.8） ----
+
+  const addKid = async (topId: string, name: string): Promise<void> => {
+    const parent = category(topId);
+    if (parent === null) return;
+    try {
+      const created = await insertMoneyCategory(supabase, familyId, {
+        kind: parent.kind,
+        parentId: parent.id,
+        name,
+        icon: null,
+        position: nextPosition(parent.kind, parent.id),
+      });
+      onCategories((prev) => [...prev, created]);
+    } catch {
+      failed();
+    }
+  };
+
+  /** 小分類の名前を直す・別の大分類へ移す。 */
+  const updateKid = async (kid: MoneyCategory, fields: { name?: string; parentId?: string }): Promise<void> => {
+    try {
+      const moved = fields.parentId !== undefined && fields.parentId !== kid.parentId;
+      putCategory(
+        await updateMoneyCategory(supabase, kid.id, {
+          ...fields,
+          ...(moved && { position: nextPosition(kid.kind, fields.parentId as string) }),
+        }),
+      );
+    } catch {
+      failed();
+    }
+  };
+
+  /** 確認して、カテゴリ（と、それを持つ予算の行）を消す。消したあとは after を呼ぶ。 */
+  const confirmRemoveCategories = (
+    title: string,
+    message: string,
+    categoryIds: Set<string>,
+    deleteId: string,
+    after?: () => void,
+  ) => {
+    const own = recurring.filter((rule) => !rule.archived && rule.categoryId !== null && categoryIds.has(rule.categoryId));
+    Alert.alert(title, message.replace('{rules}', own.length > 0 ? `予算${own.length}行` : ''), [
+      { text: 'やめる', style: 'cancel' },
+      {
+        text: '削除する',
+        style: 'destructive',
+        onPress: () =>
+          void (async () => {
+            try {
+              for (const rule of own) await deleteMoneyRecurring(supabase, rule.id);
+              await deleteMoneyCategory(supabase, deleteId);
+              onRecurring((prev) => prev.filter((entry) => !own.some((rule) => rule.id === entry.id)));
+              onCategories((prev) => prev.filter((entry) => !categoryIds.has(entry.id)));
+              after?.();
+            } catch {
+              failed();
+            }
+          })(),
+      },
+    ]);
+  };
+
+  const removeKid = (kid: MoneyCategory) => {
+    const own = recurring.filter((rule) => !rule.archived && rule.categoryId === kid.id).length;
+    confirmRemoveCategories(
+      `「${kid.name}」を削除しますか？`,
+      `${own > 0 ? '{rules}も消えます。' : ''}これまでの記録には、名前だけが残ります。`,
+      new Set([kid.id]),
+      kid.id,
+    );
+  };
+
+  /** 変動費の大分類を消す（小分類と予算の行も消える）。 */
+  const removeTop = (top: MoneyCategory) => {
+    const kids = childCategories(categories, top.id, true);
+    const ids = new Set([top.id, ...kids.map((entry) => entry.id)]);
+    const hasRules = recurring.some((rule) => !rule.archived && rule.categoryId !== null && ids.has(rule.categoryId));
+    confirmRemoveCategories(
+      `「${top.name}」を削除しますか？`,
+      `小分類${kids.length}件${hasRules ? 'と{rules}' : ''}も消えます。これまでの記録には、名前だけが残ります。`,
+      ids,
+      top.id,
+      pop,
+    );
+  };
+
+  /** 固定費・予備費の品目（小分類＝予算の1行）を消す。小分類も一緒に消える。 */
+  const removeItem = (rule: MoneyRecurring) => {
+    const own = category(rule.categoryId);
+    if (own === null) return removeRule(rule);
+    const shared = recurring.some((entry) => !entry.archived && entry.id !== rule.id && entry.categoryId === own.id);
+    if (shared) return removeRule(rule);
+    confirmRemoveCategories(
+      `「${own.name}」を削除しますか？`,
+      '小分類と予算が消えます。これまでの記録には、名前だけが残ります。',
+      new Set([own.id]),
+      own.id,
+      pop,
+    );
+  };
+
+  /** 予算の行の種類に合わせて消す（変動費は大分類ごと、固定費・予備費は品目〔小分類〕ごと、収入は行だけ）。 */
+  const removeBudget = (rule: MoneyRecurring) => {
+    const own = category(rule.categoryId);
+    if (own !== null && own.kind === 'living') {
+      const group = groupOf(own.id);
+      if (group === 'variable') {
+        const top = category(topCategoryIdOf(categories, own.id));
+        if (top !== null) return removeTop(top);
+      } else return removeItem(rule);
+    }
+    removeRule(rule);
+  };
+
   /**
-   * 予算を保存する。小分類が選んだ種類（変動費・収入は選んだ大分類）の外にあれば、その小分類を移す
-   * （同じ小分類のほかの予算の確定／見込みも、種類に合わせて直す）。
+   * 予算を保存する。種類ごとに、先にカテゴリを作る・直す。
+   * 変動費は大分類（名前・アイコン・小分類）、固定費・予備費は小分類（名前。選んだ種類の大分類の下へ。種類を変えたら移す）、収入は選んだ小分類。
    */
   const saveBudget = async (
     target: MoneyRecurring | null,
     draft: MoneyRecurringDraft,
-    group: BudgetLineGroup,
-    topId: string | null,
+    plan: CategoryPlan,
     registerStore: boolean,
   ): Promise<boolean> => {
     try {
-      const own = category(draft.categoryId);
-      if (own !== null && own.parentId !== null) {
-        const parent = choosesTop(group) ? category(topId) : await typeTop(group);
-        if (parent !== null && own.parentId !== parent.id) {
-          const position = childCategories(categories, parent.id, true).reduce((max, entry) => Math.max(max, entry.position + 1), 0);
-          putCategory(await updateMoneyCategory(supabase, own.id, { parentId: parent.id, position }));
-          if (group !== 'income') {
-            const mode = amountModeOfGroup(group);
+      let categoryId = draft.categoryId;
+      if (plan.group === 'variable') {
+        let top = category(plan.topId);
+        const name = plan.name.trim();
+        if (top === null) {
+          top = await insertMoneyCategory(supabase, familyId, {
+            kind: 'living',
+            parentId: null,
+            name,
+            icon: plan.icon,
+            iconColor: plan.iconColor,
+            position: nextPosition('living', null),
+          });
+          putCategory(top);
+          for (const [index, kidName] of plan.newKids.entries()) {
+            const created = await insertMoneyCategory(supabase, familyId, { kind: 'living', parentId: top.id, name: kidName, icon: null, position: index });
+            onCategories((prev) => [...prev, created]);
+          }
+        } else if (top.name !== name || (top.icon ?? guessIconKey(top.name)) !== plan.icon || top.iconColor !== plan.iconColor) {
+          top = await updateMoneyCategory(supabase, top.id, { name, icon: plan.icon, iconColor: plan.iconColor });
+          putCategory(top);
+        }
+        categoryId = top.id;
+      } else if (plan.group !== 'income') {
+        const parent = await typeTop(plan.group);
+        const name = plan.name.trim();
+        const own = category(target?.categoryId ?? null);
+        if (own !== null && own.parentId !== null) {
+          let kid = own;
+          if (own.parentId !== parent.id) {
+            kid = await updateMoneyCategory(supabase, own.id, { parentId: parent.id, position: nextPosition(parent.kind, parent.id) });
+            putCategory(kid);
+            // 同じ小分類のほかの予算の確定／見込みも、種類に合わせて直す。
+            const mode = amountModeOfGroup(plan.group);
             for (const rule of rows.filter((entry) => entry.categoryId === own.id && entry.id !== target?.id && entry.kind === 'expense')) {
               if (rule.amountMode !== mode) putRule(await updateMoneyRecurring(supabase, rule.id, { ...draftOf(rule), amountMode: mode }));
             }
           }
+          if (kid.name !== name) {
+            kid = await updateMoneyCategory(supabase, kid.id, { name });
+            putCategory(kid);
+          }
+          categoryId = kid.id;
+        } else {
+          const created = await insertMoneyCategory(supabase, familyId, {
+            kind: parent.kind,
+            parentId: parent.id,
+            name,
+            icon: null,
+            position: nextPosition(parent.kind, parent.id),
+          });
+          onCategories((prev) => [...prev, created]);
+          categoryId = created.id;
         }
       }
       const saved =
         target === null
-          ? await insertMoneyRecurring(supabase, familyId, draft, recurring.reduce((max, rule) => Math.max(max, rule.position + 1), 0))
-          : await updateMoneyRecurring(supabase, target.id, draft);
+          ? await insertMoneyRecurring(supabase, familyId, { ...draft, categoryId }, recurring.reduce((max, rule) => Math.max(max, rule.position + 1), 0))
+          : await updateMoneyRecurring(supabase, target.id, { ...draft, categoryId });
       putRule(saved);
       // 「お店に登録して使う」を選んだお店は、お店の設定にも登録する（docs/kakei.md §3.5）。
       if (registerStore && draft.store !== '' && !stores.some((entry) => entry.name === draft.store && !entry.archived)) {
@@ -438,47 +625,16 @@ export default function BudgetEditor({
         onCreateCategory={createCategory}
         onCreateTop={createTop}
         onRenameCategory={setRenaming}
+        onKidAdd={addKid}
+        onKidUpdate={updateKid}
+        onKidRemove={removeKid}
+        onRemoveTop={removeTop}
         onClose={pop}
-        onSubmit={async (draft, group, topId, registerStore) => {
-          if (await saveBudget(rule, draft, group, topId, registerStore)) pop();
+        onSubmit={async (draft, plan, registerStore) => {
+          if (await saveBudget(rule, draft, plan, registerStore)) pop();
         }}
-        onRemove={rule ? () => removeRule(rule) : undefined}
+        onRemove={rule ? () => removeBudget(rule) : undefined}
       />
-    );
-  } else if (screen.type === 'top') {
-    const top = category(screen.topId);
-    const own = top ? rows.filter((rule) => rule.categoryId === top.id || category(rule.categoryId)?.parentId === top.id) : [];
-    const list = own.map((rule) => ({ rule, total: yearTotal(rule) })).sort((a, b) => Number(a.total === 0) - Number(b.total === 0));
-    const total = top ? (variableTops.find((entry) => entry.top.id === top.id)?.total ?? 0) : 0;
-    body = (
-      <>
-        <ScreenHeader title={top?.name ?? '変動費'} icon="back" onClose={pop} />
-        {top && (
-          <ScrollView contentContainerStyle={styles.content}>
-            <View style={styles.topTotal}>
-              <Text style={styles.topTotalValue}>{formatYen(total)}</Text>
-              <Text style={styles.topTotalNote}>{`月 ${formatYen(Math.round(total / 12))}`}</Text>
-            </View>
-            <View>
-              {list.map((entry, index) => (
-                <BudgetRow
-                  key={entry.rule.id}
-                  first={index === 0}
-                  label={entry.rule.categoryId === top.id ? `まとめて${entry.rule.name.trim() ? `（${entry.rule.name.trim()}）` : ''}` : rowLabel(entry.rule)}
-                  total={entry.total}
-                  onPress={() => push({ type: 'form', ruleId: entry.rule.id })}
-                />
-              ))}
-              {list.length === 0 && <Text style={styles.empty}>予算がまだありません</Text>}
-            </View>
-            <Text style={styles.groupTitle}>大分類の設定</Text>
-            <View style={styles.group}>
-              <SettingRow first label="名前" value={top.name} onPress={() => setRenaming(top)} />
-            </View>
-            <AddButton label={`${top.name}の予算を追加`} onPress={() => push({ type: 'form', ruleId: null, group: 'variable', topId: top.id })} />
-          </ScrollView>
-        )}
-      </>
     );
   } else {
     const shown = (group: BudgetLineGroup) => selected === null || selected === group || (selected === 'expense' && group !== 'income');
@@ -536,14 +692,25 @@ export default function BudgetEditor({
               label={entry.top.name}
               total={entry.total}
               offLabel="予算なし"
-              onPress={() => push({ type: 'top', topId: entry.top.id })}
+              onPress={() => {
+                const own = variableRuleOf(entry.top.id);
+                push({ type: 'form', ruleId: own?.id ?? null, group: 'variable', topId: entry.top.id });
+              }}
             />
           ))}
       </View>
     );
     body = (
       <>
-        <ScreenHeader title="年間予算" onClose={onClose} />
+        <ScreenHeader
+          title="年間予算"
+          onClose={onClose}
+          right={
+            <Pressable accessibilityRole="button" accessibilityLabel="カテゴリ（アイコン・色・並べ替え）" onPress={() => setEditingCategories(true)} style={styles.categoryButton}>
+              <Text style={styles.categoryButtonText}>カテゴリ</Text>
+            </Pressable>
+          }
+        />
         <View style={styles.bar}>
           <Pressable accessibilityRole="button" accessibilityLabel="前の年" onPress={() => setYear((current) => current - 1)} hitSlop={8} style={styles.yearButton}>
             <ChevronLeft size={18} color={colors.textSubtle} />
@@ -623,6 +790,9 @@ export default function BudgetEditor({
         {body}
       </View>
       {renaming !== null && <RenameSheet name={renaming.name} onClose={() => setRenaming(null)} onSubmit={(name) => void rename(renaming, name)} />}
+      {editingCategories && (
+        <CategoryEditor familyId={familyId} categories={categories} onCategories={onCategories} onClose={() => setEditingCategories(false)} />
+      )}
     </Modal>
   );
 }
@@ -785,17 +955,22 @@ function SettingRow({
   onPress,
   first,
   placeholder,
+  disabled,
 }: {
   label: string;
   value: string;
   onPress: () => void;
   first?: boolean;
   placeholder?: boolean;
+  /** 選び直せない（押せず、矢印も出さない）。 */
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${label}を選ぶ`}
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [styles.item, !first && styles.divided, pressed && styles.pressed]}
     >
@@ -803,7 +978,7 @@ function SettingRow({
       <Text style={[styles.settingValue, placeholder && styles.mutedValue]} numberOfLines={1}>
         {value}
       </Text>
-      <ChevronRight size={16} color={colors.textFaint} />
+      {!disabled && <ChevronRight size={16} color={colors.textFaint} />}
     </Pressable>
   );
 }
@@ -813,7 +988,7 @@ function SettingRow({
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const HOLIDAYS: MoneyHolidayRule[] = ['next', 'prev', 'none'];
 
-type FormSheet = 'group' | 'top' | 'category' | 'when' | 'period' | 'day' | 'wallet' | null;
+type FormSheet = 'group' | 'top' | 'category' | 'icon' | 'when' | 'period' | 'day' | 'wallet' | null;
 
 /** 予算1件の枠（追加・編集）。分類（種類・大分類・小分類・品目）、予算（金額・いつ・期間）、自動記録。 */
 function BudgetForm({
@@ -828,6 +1003,10 @@ function BudgetForm({
   onCreateCategory,
   onCreateTop,
   onRenameCategory,
+  onKidAdd,
+  onKidUpdate,
+  onKidRemove,
+  onRemoveTop,
   onClose,
   onSubmit,
   onRemove,
@@ -840,11 +1019,19 @@ function BudgetForm({
   wallets: MoneyWallet[];
   stores: MoneyStore[];
   records: MoneyRecord[];
-  onCreateCategory: (group: BudgetLineGroup, topId: string | null, name: string) => Promise<MoneyCategory | null>;
-  onCreateTop: (group: BudgetLineGroup, name: string) => Promise<MoneyCategory | null>;
+  /** 収入の小分類を作る。 */
+  onCreateCategory: (topId: string | null, name: string) => Promise<MoneyCategory | null>;
+  /** 収入の大分類を作る。 */
+  onCreateTop: (name: string) => Promise<MoneyCategory | null>;
   onRenameCategory: (category: MoneyCategory) => void;
+  /** 変動費の大分類の小分類を、足す・直す（名前・移す）・消す。 */
+  onKidAdd: (topId: string, name: string) => Promise<void>;
+  onKidUpdate: (kid: MoneyCategory, fields: { name?: string; parentId?: string }) => Promise<void>;
+  onKidRemove: (kid: MoneyCategory) => void;
+  /** 変動費の大分類を消す（小分類と予算の行も消える）。 */
+  onRemoveTop: (top: MoneyCategory) => void;
   onClose: () => void;
-  onSubmit: (draft: MoneyRecurringDraft, group: BudgetLineGroup, topId: string | null, registerStore: boolean) => Promise<void>;
+  onSubmit: (draft: MoneyRecurringDraft, plan: CategoryPlan, registerStore: boolean) => Promise<void>;
   onRemove?: () => void;
 }) {
   const topsOf = (group: BudgetLineGroup) =>
@@ -852,8 +1039,20 @@ function BudgetForm({
       ? topCategories(categories, 'income')
       : topCategories(categories, 'living').filter((top) => spendGroupOf(top.id, categories) === group);
   const [group, setGroup] = useState<BudgetLineGroup>(initialGroup);
-  const [topId, setTopId] = useState<string | null>(initialTopId ?? (choosesTop(initialGroup) ? (topsOf(initialGroup)[0]?.id ?? null) : null));
+  // 変動費は、いま直している大分類（無ければ新しく作る）。収入は選んだ大分類。
+  const [topId, setTopId] = useState<string | null>(initialTopId ?? (initialGroup === 'income' ? (topsOf('income')[0]?.id ?? null) : null));
   const [categoryId, setCategoryId] = useState<string | null>(rule?.categoryId ?? null);
+  const initialTop = categories.find((entry) => entry.id === initialTopId) ?? null;
+  const initialOwn = categories.find((entry) => entry.id === rule?.categoryId) ?? null;
+  // 変動費の大分類の名前とアイコン、固定費・予備費の名前（小分類の名前）。
+  const [catName, setCatName] = useState(
+    initialGroup === 'variable' ? (initialTop?.name ?? '') : isItemGroup(initialGroup) ? (initialOwn?.name ?? '') : '',
+  );
+  const [iconKey, setIconKey] = useState<string>(initialTop ? (initialTop.icon ?? guessIconKey(initialTop.name)) : 'other');
+  const [iconColor, setIconColor] = useState<string | null>(initialTop?.iconColor ?? null);
+  // 新しい変動費の大分類の小分類（保存するまで、この枠の中だけで持つ）。
+  const [newKids, setNewKids] = useState<string[]>([]);
+  const [kidSheet, setKidSheet] = useState<{ kidId: string | null; index: number | null } | null>(null);
   const [amountText, setAmountText] = useState(rule ? String(rule.amount) : '');
   const [mode, setMode] = useState<'monthly' | 'months' | 'none'>(rule?.noMonth ? 'none' : rule?.months ? 'months' : 'monthly');
   const [months, setMonths] = useState<number[]>(rule?.months ?? []);
@@ -861,6 +1060,7 @@ function BudgetForm({
   const [intervalText, setIntervalText] = useState(rule?.intervalYears != null ? String(rule.intervalYears) : '2');
   const [startText, setStartText] = useState(periodMonthInput(rule?.startMonth ?? null));
   const [endText, setEndText] = useState(periodMonthInput(rule?.endMonth ?? null));
+  // 品目（収入の、同じ小分類に予算が複数あるときの区別）。ほかの種類では今の値を残すだけ。
   const [name, setName] = useState(rule?.name ?? '');
   const [makesRecord, setMakesRecord] = useState(rule?.makesRecord ?? false);
   const [byWeekday, setByWeekday] = useState(rule?.weekOfMonth != null);
@@ -883,6 +1083,9 @@ function BudgetForm({
   const noMonth = mode === 'none';
   const auto = makesRecord && !noMonth;
   const top = categories.find((entry) => entry.id === topId) ?? null;
+  const topKids = top && group === 'variable' ? childCategories(categories, top.id) : [];
+  /** 種類を変えられるか。変動費・収入は、消して作り直す（固定費・予備費の間だけ、小分類が選んだ種類へ移る）。 */
+  const typeLocked = rule !== null && !isItemGroup(initialGroup);
   const selectedCategory = categories.find((entry) => entry.id === categoryId) ?? null;
   // 小分類の選択肢。変動費・収入は選んだ大分類（まとめての予算は大分類そのもの）、ほかはその種類の小分類。
   const categoryChoices: { category: MoneyCategory; label: string }[] = choosesTop(group)
@@ -892,19 +1095,33 @@ function BudgetForm({
     : topsOf(group).flatMap((entry) => childCategories(categories, entry.id).map((child) => ({ category: child, label: child.name })));
   const categoryLabel = selectedCategory === null ? '選ぶ' : selectedCategory.parentId === null ? 'まとめて（大分類）' : selectedCategory.name;
 
+  /** 種類の選択肢。直すときは、固定費・予備費の間だけ（変動費・収入は、消して作り直す）。 */
+  const groupChoices: BudgetLineGroup[] = rule !== null ? GROUPS.filter(isItemGroup) : GROUPS;
+
   const changeGroup = (next: BudgetLineGroup) => {
     setSheet(null);
     if (next === group) return;
     setGroup(next);
-    setTopId(choosesTop(next) ? (topsOf(next)[0]?.id ?? null) : null);
-    // 小分類は、収入と支出をまたぐか、大分類そのもの（まとめて）なら選び直す。ほかは保存のときに選んだ種類へ移す。
+    setTopId(next === 'income' ? (topsOf('income')[0]?.id ?? null) : null);
+    // 収入の小分類は、収入と支出をまたぐなら選び直す。固定費・予備費は、保存のときに選んだ種類へ移す。
     const own = selectedCategory;
     if (own === null || own.parentId === null || (own.kind === 'income') !== (next === 'income')) setCategoryId(null);
   };
 
   const build = (): MoneyRecurringDraft | string => {
-    if (choosesTop(group) && topId === null) return '大分類を選んでください';
-    if (categoryId === null) return '小分類を選んでください';
+    if (group === 'variable') {
+      if (catName.trim() === '') return '名前を入れてください';
+      const same = topsOf('variable').some((entry) => entry.id !== topId && entry.name === catName.trim());
+      if (same) return '同じ名前の大分類があります';
+    } else if (isItemGroup(group)) {
+      if (catName.trim() === '') return '名前を入れてください';
+      const parent = topsOf(group)[0];
+      const same = parent ? childCategories(categories, parent.id).some((entry) => entry.id !== initialOwn?.id && entry.name === catName.trim()) : false;
+      if (same) return '同じ名前があります';
+    } else {
+      if (topId === null) return '大分類を選んでください';
+      if (selectedCategory === null) return '小分類を選んでください';
+    }
     const amount = parseAmountInput(amountText);
     if (amountText.trim() === '' || amount === null) return '金額は0以上の整数（円）で入れてください';
     if (mode === 'months' && months.length === 0) return '発生する月を選んでください';
@@ -942,7 +1159,7 @@ function BudgetForm({
       walletId,
       toWalletId: null,
       store: isIncome ? '' : store,
-      categoryId,
+      categoryId: group === 'income' ? (selectedCategory?.id ?? null) : (rule?.categoryId ?? null),
       name,
       makesRecord: auto,
       skippedMonths: rule?.skippedMonths ?? [],
@@ -956,8 +1173,9 @@ function BudgetForm({
     typeof draft === 'string'
       ? null
       : (() => {
-          const line = budgetLineOf({ ...draft, id: '', position: 0, archived: false, createdAt: '', deferredUntil: null });
-          return { count: budgetLineCount(line, year), total: budgetLineYearAmount(line, year) };
+          const asRule = { ...draft, id: '', position: 0, archived: false, createdAt: '', deferredUntil: null };
+          const line = budgetLineOf(asRule);
+          return { count: budgetLineCount(line, year), total: group === 'estimate' ? estimatedBudgetYearAmount(asRule, year, records) : budgetLineYearAmount(line, year) };
         })();
 
   const submit = async () => {
@@ -966,7 +1184,13 @@ function BudgetForm({
     setError(null);
     setSaving(true);
     try {
-      await onSubmit(result, group, choosesTop(group) ? topId : null, result.store !== '' && registerStore);
+      const plan: CategoryPlan =
+        group === 'variable'
+          ? { group, topId, name: catName, icon: iconKey, iconColor, newKids }
+          : isItemGroup(group)
+            ? { group, name: catName }
+            : { group };
+      await onSubmit(result, plan, result.store !== '' && registerStore);
     } finally {
       setSaving(false);
     }
@@ -1007,14 +1231,83 @@ function BudgetForm({
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.groupTitle}>分類</Text>
         <View style={styles.group}>
-          <SettingRow first label="種類" value={GROUP_LABEL[group]} onPress={() => setSheet('group')} />
-          {choosesTop(group) && <SettingRow label="大分類" value={top?.name ?? '選ぶ'} placeholder={top === null} onPress={() => setSheet('top')} />}
-          <SettingRow label="小分類" value={categoryLabel} placeholder={selectedCategory === null} onPress={() => setSheet('category')} />
-          <View style={[styles.item, styles.divided]}>
-            <Text style={styles.settingLabel}>品目</Text>
-            <TextInput style={styles.inlineInput} value={name} onChangeText={setName} accessibilityLabel="品目" />
-          </View>
+          <SettingRow first label="種類" value={GROUP_LABEL[group]} disabled={typeLocked} onPress={() => setSheet('group')} />
+          {group === 'variable' && (
+            <>
+              <View style={[styles.item, styles.divided]}>
+                <Text style={styles.settingLabel}>名前</Text>
+                <TextInput
+                  style={styles.inlineInput}
+                  value={catName}
+                  onChangeText={setCatName}
+                  placeholder="例: 食費"
+                  placeholderTextColor={colors.textFaint}
+                  accessibilityLabel="名前"
+                />
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="アイコンと色を選ぶ"
+                onPress={() => setSheet('icon')}
+                style={({ pressed }) => [styles.item, styles.divided, pressed && styles.pressed]}
+              >
+                <Text style={[styles.settingLabel, styles.flex]}>アイコン</Text>
+                <CategoryIcon iconKey={iconColor ? `${iconKey}|${iconColor}` : iconKey} size={30} />
+                <ChevronRight size={16} color={colors.textFaint} />
+              </Pressable>
+              <View style={[styles.kidBlock, styles.divided]}>
+                <Text style={styles.settingLabel}>小分類</Text>
+                <View style={styles.kidChips}>
+                  {topKids.map((kid) => (
+                    <Pressable key={kid.id} accessibilityRole="button" onPress={() => setKidSheet({ kidId: kid.id, index: null })} style={styles.kidChip}>
+                      <Text style={styles.kidChipText}>{kid.name}</Text>
+                    </Pressable>
+                  ))}
+                  {top === null &&
+                    newKids.map((kidName, index) => (
+                      <Pressable key={`new-${index}`} accessibilityRole="button" onPress={() => setKidSheet({ kidId: null, index })} style={styles.kidChip}>
+                        <Text style={styles.kidChipText}>{kidName}</Text>
+                      </Pressable>
+                    ))}
+                  <Pressable accessibilityRole="button" accessibilityLabel="小分類を足す" onPress={() => setKidSheet({ kidId: null, index: null })} style={[styles.kidChip, styles.kidAdd]}>
+                    <Plus size={14} color={colors.money} />
+                    <Text style={styles.kidAddText}>小分類</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </>
+          )}
+          {isItemGroup(group) && (
+            <View style={[styles.item, styles.divided]}>
+              <Text style={styles.settingLabel}>名前</Text>
+              <TextInput
+                style={styles.inlineInput}
+                value={catName}
+                onChangeText={setCatName}
+                placeholder="例: 家賃"
+                placeholderTextColor={colors.textFaint}
+                accessibilityLabel="名前"
+              />
+            </View>
+          )}
+          {group === 'income' && (
+            <>
+              <SettingRow label="大分類" value={top?.name ?? '選ぶ'} placeholder={top === null} onPress={() => setSheet('top')} />
+              <SettingRow label="小分類" value={categoryLabel} placeholder={selectedCategory === null} onPress={() => setSheet('category')} />
+              <View style={[styles.item, styles.divided]}>
+                <Text style={styles.settingLabel}>品目</Text>
+                <TextInput style={styles.inlineInput} value={name} onChangeText={setName} accessibilityLabel="品目" />
+              </View>
+            </>
+          )}
         </View>
+        <Text style={styles.groupHint}>
+          {(group === 'variable'
+            ? '変動費は、1つの大分類が予算の1行です。小分類は、記録の分類に使います。'
+            : isItemGroup(group)
+              ? 'この名前が、記録のカテゴリ（小分類）の名前にもなります。'
+              : '品目は、同じ小分類に予算が複数あるときの区別に使います。') + (typeLocked ? '種類を変えるときは、消して作り直します。' : '')}
+        </Text>
 
         <Text style={styles.groupTitle}>予算</Text>
         <View style={styles.group}>
@@ -1034,6 +1327,7 @@ function BudgetForm({
           <SettingRow label="期間" value={periodValue} placeholder={periodValue === 'ずっと'} onPress={() => setSheet('period')} />
         </View>
 
+        {group === 'estimate' && <Text style={styles.groupHint}>前年の同じ月の記録があれば、その額で見込みます。無ければ、ここの金額を使います（自動記録も同じ額で作ります）。</Text>}
         <Text style={styles.groupTitle}>自動記録</Text>
         <View style={styles.group}>
           <View style={styles.item}>
@@ -1080,10 +1374,16 @@ function BudgetForm({
         )}
         {error && <Text style={styles.error}>{error}</Text>}
         <PrimaryButton label="保存する" disabled={saving} onPress={() => void submit()} />
-        {onRemove && (
-          <Pressable accessibilityRole="button" onPress={onRemove} style={styles.linkRow}>
-            <Text style={styles.dangerText}>この予算を消す</Text>
+        {group === 'variable' && top !== null ? (
+          <Pressable accessibilityRole="button" onPress={() => onRemoveTop(top)} style={styles.linkRow}>
+            <Text style={styles.dangerText}>この大分類を消す</Text>
           </Pressable>
+        ) : (
+          onRemove && (
+            <Pressable accessibilityRole="button" onPress={onRemove} style={styles.linkRow}>
+              <Text style={styles.dangerText}>{isItemGroup(group) ? 'この品目を消す' : 'この予算を消す'}</Text>
+            </Pressable>
+          )
         )}
       </ScrollView>
 
@@ -1091,12 +1391,56 @@ function BudgetForm({
         <SheetModal visible onClose={() => setSheet(null)}>
           <LogModalShell title="種類" onClose={() => setSheet(null)}>
             <View style={styles.options}>
-              {GROUPS.map((entry, index) => (
+              {groupChoices.map((entry, index) => (
                 <OptionRow key={entry} first={index === 0} label={GROUP_LABEL[entry]} selected={entry === group} onPress={() => changeGroup(entry)} />
               ))}
             </View>
           </LogModalShell>
         </SheetModal>
+      )}
+      {sheet === 'icon' && (
+        <CategoryIconPicker
+          icon={iconKey}
+          iconColor={iconColor}
+          onClose={() => setSheet(null)}
+          onSubmit={(icon, color) => {
+            setIconKey(icon);
+            setIconColor(color);
+            setSheet(null);
+          }}
+        />
+      )}
+      {kidSheet !== null && (
+        <KidSheet
+          key={kidSheet.kidId ?? `local-${kidSheet.index ?? 'new'}`}
+          kid={kidSheet.kidId !== null ? (categories.find((entry) => entry.id === kidSheet.kidId) ?? null) : null}
+          localName={kidSheet.index !== null ? (newKids[kidSheet.index] ?? null) : null}
+          topChoices={topsOf('variable').map((entry) => ({ id: entry.id, name: entry.name }))}
+          takenNames={(top ? topKids.map((entry) => entry.name) : newKids).filter((entry) => entry !== (kidSheet.kidId !== null ? categories.find((c) => c.id === kidSheet.kidId)?.name : kidSheet.index !== null ? newKids[kidSheet.index] : undefined))}
+          onClose={() => setKidSheet(null)}
+          onSubmit={(value, parentId) => {
+            const sheetKid = kidSheet.kidId !== null ? (categories.find((entry) => entry.id === kidSheet.kidId) ?? null) : null;
+            setKidSheet(null);
+            if (sheetKid !== null) {
+              const fields = { ...(value !== sheetKid.name && { name: value }), ...(parentId !== sheetKid.parentId && parentId !== null && { parentId }) };
+              if (Object.keys(fields).length > 0) void onKidUpdate(sheetKid, fields);
+            } else if (kidSheet.index !== null) {
+              const index = kidSheet.index;
+              setNewKids((prev) => prev.map((entry, i) => (i === index ? value : entry)));
+            } else if (top !== null) {
+              void onKidAdd(top.id, value);
+            } else {
+              setNewKids((prev) => [...prev, value]);
+            }
+          }}
+          onRemove={() => {
+            const sheetKid = kidSheet.kidId !== null ? (categories.find((entry) => entry.id === kidSheet.kidId) ?? null) : null;
+            const index = kidSheet.index;
+            setKidSheet(null);
+            if (sheetKid !== null) onKidRemove(sheetKid);
+            else if (index !== null) setNewKids((prev) => prev.filter((_, i) => i !== index));
+          }}
+        />
       )}
       {sheet === 'top' && (
         <NameSheet
@@ -1112,7 +1456,7 @@ function BudgetForm({
             setSheet(null);
           }}
           onCreate={async (newName) => {
-            const created = await onCreateTop(group, newName);
+            const created = await onCreateTop(newName);
             if (created) {
               setTopId(created.id);
               if (selectedCategory !== null && selectedCategory.parentId === null) setCategoryId(created.id);
@@ -1133,7 +1477,7 @@ function BudgetForm({
             setSheet(null);
           }}
           onCreate={async (newName) => {
-            const created = await onCreateCategory(group, topId, newName);
+            const created = await onCreateCategory(topId, newName);
             if (created) setCategoryId(created.id);
             setSheet(null);
           }}
@@ -1143,6 +1487,14 @@ function BudgetForm({
               ? () => {
                   setSheet(null);
                   onRenameCategory(selectedCategory);
+                }
+              : undefined
+          }
+          onDelete={
+            selectedCategory !== null && selectedCategory.parentId !== null
+              ? () => {
+                  setSheet(null);
+                  onKidRemove(selectedCategory);
                 }
               : undefined
           }
@@ -1302,6 +1654,7 @@ function NameSheet({
   onCreate,
   onRename,
   renameLabel,
+  onDelete,
 }: {
   title: string;
   placeholder: string;
@@ -1312,6 +1665,8 @@ function NameSheet({
   onCreate: (name: string) => Promise<void>;
   onRename?: () => void;
   renameLabel?: string;
+  /** 選んでいる小分類を消す（確認は呼び出し側）。 */
+  onDelete?: () => void;
 }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -1352,6 +1707,11 @@ function NameSheet({
         {onRename && (
           <Pressable accessibilityRole="button" onPress={onRename} style={styles.linkRow}>
             <Text style={styles.linkText}>{renameLabel}</Text>
+          </Pressable>
+        )}
+        {onDelete && (
+          <Pressable accessibilityRole="button" onPress={onDelete} style={styles.linkRow}>
+            <Text style={styles.dangerText}>選んでいる小分類を消す</Text>
           </Pressable>
         )}
       </LogModalShell>
@@ -1471,6 +1831,61 @@ function RatioPanel({ familyId, targets, onSaved }: { familyId: string; targets:
         </>
       )}
     </View>
+  );
+}
+
+/** 変動費の大分類の小分類を、足す・直す（名前・別の大分類へ移す）・消す。 */
+function KidSheet({
+  kid,
+  localName,
+  topChoices,
+  takenNames,
+  onClose,
+  onSubmit,
+  onRemove,
+}: {
+  /** 直す小分類（DBにあるもの）。無ければ足す、または保存前の小分類。 */
+  kid: MoneyCategory | null;
+  /** 保存前の小分類の名前（新しい大分類の中だけにあるもの）。 */
+  localName: string | null;
+  topChoices: { id: string; name: string }[];
+  /** ほかの小分類の名前（同じ名前は作れない）。 */
+  takenNames: string[];
+  onClose: () => void;
+  onSubmit: (name: string, parentId: string | null) => void;
+  onRemove: () => void;
+}) {
+  const editing = kid !== null || localName !== null;
+  const [text, setText] = useState(kid?.name ?? localName ?? '');
+  const [parentId, setParentId] = useState<string | null>(kid?.parentId ?? null);
+  const [error, setError] = useState<string | null>(null);
+  const submit = () => {
+    const value = text.trim();
+    if (value === '') return setError('名前を入れてください');
+    if (takenNames.includes(value)) return setError('同じ名前の小分類があります');
+    onSubmit(value, parentId);
+  };
+  return (
+    <SheetModal visible onClose={onClose}>
+      <LogModalShell title={editing ? '小分類を編集' : '小分類を足す'} onClose={onClose} footer={<PrimaryButton label={editing ? '保存する' : '足す'} onPress={submit} />}>
+        <TextInput style={styles.input} value={text} onChangeText={setText} autoFocus placeholder="例: 外食" placeholderTextColor={colors.textFaint} accessibilityLabel="小分類の名前" />
+        {kid !== null && topChoices.length > 1 && (
+          <Field label="大分類" hint="選び直すと、この小分類をほかの大分類へ移します">
+            <ChipRow>
+              {topChoices.map((entry) => (
+                <Chip key={entry.id} label={entry.name} selected={parentId === entry.id} onPress={() => setParentId(entry.id)} />
+              ))}
+            </ChipRow>
+          </Field>
+        )}
+        {error && <Text style={styles.error}>{error}</Text>}
+        {editing && (
+          <Pressable accessibilityRole="button" onPress={onRemove} style={styles.linkRow}>
+            <Text style={styles.dangerText}>この小分類を消す</Text>
+          </Pressable>
+        )}
+      </LogModalShell>
+    </SheetModal>
   );
 }
 
@@ -1625,6 +2040,15 @@ const styles = StyleSheet.create({
   totalLabel: { fontSize: 15, fontWeight: '700', color: colors.text },
   totalValue: { fontSize: 15, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   error: { fontSize: 12, fontWeight: '500', color: colors.danger },
+  categoryButton: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: colors.moneySoft },
+  categoryButtonText: { fontSize: 13, fontWeight: '700', color: colors.moneyText },
+  groupHint: { fontSize: 12, fontWeight: '500', color: colors.textMuted, paddingHorizontal: 4, marginTop: -6 },
+  kidBlock: { paddingHorizontal: 14, paddingVertical: 11, gap: 8 },
+  kidChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  kidChip: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: colors.neutralSurface },
+  kidChipText: { fontSize: 15, fontWeight: '600', color: colors.text },
+  kidAdd: { backgroundColor: colors.moneySurface },
+  kidAddText: { fontSize: 14, fontWeight: '700', color: colors.money },
   linkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10 },
   linkText: { fontSize: 14, fontWeight: '700', color: colors.money },
   dangerText: { fontSize: 14, fontWeight: '700', color: colors.danger },

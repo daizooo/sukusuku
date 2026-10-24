@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Modal from '@/components/ui/Modal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, ChevronRight, GripVertical } from 'lucide-react-native';
+import { Check, ChevronDown, ChevronUp, GripVertical, Palette } from 'lucide-react-native';
 import type { MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
@@ -26,6 +26,8 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 // ここでできるのは、大分類のアイコン（絵と色）と並べ替えだけ（2026-10-24）。名前の変更・追加・削除は、予算が本体なので年間予算（BudgetEditor）で行い、
 // カテゴリはそれを表示するだけ（固定費・予備費の小分類は、予算から決まる）。並べ替えは一覧のまま指で動かす
 // （大分類は左の持ち手をつかむ、小分類は長押し。リストと同じ操作。components/list/useDragReorder.ts）。
+// 大分類を1行ずつ並べ、押した1つだけ開いて小分類を出す（アコーディオン。2026-10-24。カテゴリの選択と同じ見せ方。docs/kakei.md §3.2）。
+// 小分類が多い大分類（固定費（確定）23件など）で、全部並べると見にくかった。大分類の行を押すのは開閉で、アイコンは開いた中の「アイコンを変える」から。
 // 大分類のアイコンは、大分類をタップして絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。
 // カテゴリがまだ無い家族には「標準のカテゴリで始める」（Zaim のカテゴリをもとにした並び）。
 
@@ -37,6 +39,9 @@ interface CategoryEditorProps {
 }
 
 type Editing = { category: MoneyCategory } | null;
+
+/** 大分類のカードの中の間隔（styles.card の gap）。開いた行を上に寄せる計算に使う。 */
+const CARD_GAP = 10;
 
 const KIND_OPTIONS: { id: MoneyCategoryKind; label: string }[] = [
   { id: 'living', label: '支出' },
@@ -53,6 +58,11 @@ export default function CategoryEditor({
   const [kind, setKind] = useState<MoneyCategoryKind>('living');
   const [editing, setEditing] = useState<Editing>(null);
   const [busy, setBusy] = useState(false);
+  // 開いている大分類（1つだけ）。開いた行は画面の上に寄せる。
+  const [openId, setOpenId] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const rowY = useRef<Record<string, number>>({});
+  const panelHeight = useRef(0);
 
   const tops = useMemo(() => topCategories(categories, kind, true), [categories, kind]);
   const ordered = [...tops.filter((top) => !top.archived), ...tops.filter((top) => top.archived)];
@@ -94,6 +104,19 @@ export default function CategoryEditor({
   };
   const drag = useDragReorder(reorder);
 
+  const toggle = (id: string) => {
+    if (openId === id) {
+      setOpenId(null);
+      return;
+    }
+    // 開いていた行が上にあれば、閉じたぶん（面の高さ＋カード内の間隔）だけ新しい行の位置は上がる。
+    const openIndex = ordered.findIndex((entry) => entry.id === openId);
+    const index = ordered.findIndex((entry) => entry.id === id);
+    const closing = openIndex >= 0 && openIndex < index ? panelHeight.current + CARD_GAP : 0;
+    setOpenId(id);
+    scrollRef.current?.scrollTo({ y: Math.max(0, (rowY.current[id] ?? 0) - closing), animated: true });
+  };
+
   const save = async (result: SheetResult) => {
     const target = editing;
     setEditing(null);
@@ -126,7 +149,7 @@ export default function CategoryEditor({
           ))}
         </View>
 
-        <ScrollView style={styles.flex} contentContainerStyle={styles.content} scrollEnabled={!drag.isActive}>
+        <ScrollView ref={scrollRef} style={styles.flex} contentContainerStyle={styles.content} scrollEnabled={!drag.isActive}>
           {categories.length === 0 && (
             <View style={styles.seed}>
               <Text style={styles.seedText}>
@@ -139,41 +162,67 @@ export default function CategoryEditor({
           {ordered.map((top) => {
             const children = childCategories(categories, top.id, true);
             const topSection = `tops-${kind}`;
+            const open = openId === top.id;
+            const measure = drag.measureProps(top.id);
             return (
               <View
                 key={top.id}
-                {...drag.measureProps(top.id)}
+                onLayout={(e) => {
+                  measure.onLayout(e);
+                  rowY.current[top.id] = e.nativeEvent.layout.y;
+                }}
                 style={[styles.card, top.archived && styles.archived, drag.styleFor(top.id), drag.isDragging(top.id) && styles.lifted]}
               >
                 <View style={styles.topLine}>
                   <View accessibilityLabel={`${top.name}を並べ替え`} {...drag.gripProps(topSection, ordered, top.id)} style={styles.grip}>
                     <GripVertical size={18} color={colors.borderStrong} />
                   </View>
-                <Pressable accessibilityRole="button" onPress={() => setEditing({ category: top })} style={[styles.topRow, styles.flex]}>
-                  <CategoryIcon iconKey={iconKeyOf(top)} />
-                  <Text style={styles.topName}>{top.name}</Text>
-                  {top.archived && <Text style={styles.archivedLabel}>使わない</Text>}
-                  <View style={styles.flex} />
-                  <ChevronRight size={16} color={colors.textFaint} />
-                </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={top.name}
+                    accessibilityState={{ expanded: open }}
+                    onPress={() => toggle(top.id)}
+                    style={[styles.topRow, styles.flex]}
+                  >
+                    <CategoryIcon iconKey={iconKeyOf(top)} size={30} />
+                    <Text style={[styles.topName, styles.flex]} numberOfLines={1}>
+                      {top.name}
+                    </Text>
+                    {top.archived && <Text style={styles.archivedLabel}>使わない</Text>}
+                    <Text style={styles.count}>{children.length}件</Text>
+                    {open ? <ChevronUp size={18} color={colors.textFaint} /> : <ChevronDown size={18} color={colors.textFaint} />}
+                  </Pressable>
                 </View>
-                <View style={styles.chips}>
-                  {children.map((child) => (
+                {open && (
+                  <View style={styles.panel} onLayout={(e) => { panelHeight.current = e.nativeEvent.layout.height; }}>
+                    <View style={styles.chips}>
+                      {children.map((child) => (
+                        <Pressable
+                          key={child.id}
+                          {...drag.holdProps(`children-${top.id}`, children, child.id)}
+                          {...drag.measureProps(child.id)}
+                          style={[
+                            styles.chip,
+                            child.archived && styles.archived,
+                            drag.styleFor(child.id),
+                            drag.isDragging(child.id) && styles.lifted,
+                          ]}
+                        >
+                          <Text style={styles.chipText}>{child.name}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
                     <Pressable
-                      key={child.id}
-                      {...drag.holdProps(`children-${top.id}`, children, child.id)}
-                      {...drag.measureProps(child.id)}
-                      style={[
-                        styles.chip,
-                        child.archived && styles.archived,
-                        drag.styleFor(child.id),
-                        drag.isDragging(child.id) && styles.lifted,
-                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${top.name}のアイコンを変える`}
+                      onPress={() => setEditing({ category: top })}
+                      style={styles.editTop}
                     >
-                      <Text style={styles.chipText}>{child.name}</Text>
+                      <Palette size={14} color={colors.money} />
+                      <Text style={styles.editTopText}>アイコンを変える</Text>
                     </Pressable>
-                  ))}
-                </View>
+                  </View>
+                )}
               </View>
             );
           })}
@@ -294,12 +343,16 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
     padding: 12,
-    gap: 10,
+    gap: CARD_GAP,
   },
   archived: { opacity: 0.5 },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topName: { fontSize: 15, fontWeight: '700', color: colors.text },
   archivedLabel: { fontSize: 11, fontWeight: '600', color: colors.textFaint },
+  count: { fontSize: 12, fontWeight: '500', color: colors.textFaint },
+  panel: { gap: 10 },
+  editTop: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 4 },
+  editTopText: { fontSize: 13, fontWeight: '600', color: colors.money },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: {
     flexDirection: 'row',
