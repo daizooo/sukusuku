@@ -680,7 +680,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     <div className="relative p-4 pb-0 h-full flex flex-col md:max-w-2xl lg:max-w-3xl md:mx-auto md:w-full">
       <div className="flex min-h-0 flex-1 flex-col" {...swipeHandlers}>
         {/* 3つの面の切り替え。等幅に並べ、選んでいる面は濃い文字と青い下線。 */}
-        <div role="tablist" className="shrink-0 flex border-b border-gray-200">
+        <div role="tablist" className="shrink-0 flex border-b border-gray-200 bg-white">
           {VIEWS.map((entry) => {
             const selected = entry.id === view;
             return (

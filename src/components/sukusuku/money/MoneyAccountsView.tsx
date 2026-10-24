@@ -16,7 +16,6 @@ import {
   buildWalletBalances,
   dateKeyOfDate,
   formatBalance,
-  groupWalletSections,
   reorderedPositions,
   WALLET_DELETE_NOTE,
   WALLET_TYPES,
@@ -27,7 +26,7 @@ import SecuritiesWalletScreen from './SecuritiesWalletScreen';
 import TotalTrendScreen from './TotalTrendScreen';
 import WalletBalanceScreen from './WalletBalanceScreen';
 import { WalletModal } from './WalletPicker';
-import { cardClass, Hero, incomeAmountClass, type, WalletTypeIcon } from './moneyVisual';
+import { cardClass, incomeAmountClass, type, WalletTypeIcon } from './moneyVisual';
 
 // 家計タブの「口座」（docs/kakei.md §7 の7・§9.3）。mobile版の `mobile/src/components/money/MoneyAccountsView.tsx` と同じ並び・文言。
 //
@@ -37,11 +36,6 @@ import { cardClass, Hero, incomeAmountClass, type, WalletTypeIcon } from './mone
 // 出金元を押すと詳細（履歴 / 推移 / 残高計算）。長押しでつかむと、同じ種類の中で並べ替えられる（2026-10-18。money_wallets.position）。出金元の追加・編集・使わなくする・また使うもこの面から。
 // 総残高に入れるのは使っている出金元だけ。カードは未払いがマイナスで入る（請求済み・未請求の内訳は、押した先の詳細だけに出す）。
 // 証券口座の残高は、記録からではなく保有銘柄の評価額（docs/kakei.md §9.2）。押すと証券口座の詳細（推移と保有銘柄）。
-
-interface WalletSection {
-  type: (typeof WALLET_TYPES)[number];
-  rows: WalletBalanceRow[];
-}
 
 interface MoneyAccountsViewProps {
   wallets: MoneyWallet[];
@@ -92,12 +86,6 @@ export default function MoneyAccountsView({
   );
   const usable = summary.rows.filter((row) => !row.wallet.archived);
   const archived = summary.rows.filter((row) => row.wallet.archived);
-  const sectionBlocks = groupWalletSections(
-    WALLET_TYPES.map((walletType) => ({
-      type: walletType,
-      rows: usable.filter((row) => row.wallet.type === walletType.id),
-    })).filter((section) => section.rows.length > 0),
-  );
   const drag = useDragReorder((_sectionKey, orderedIds) => {
     const changes = reorderedPositions(wallets, orderedIds);
     if (changes.length > 0) onReorderWallets(changes);
@@ -110,49 +98,39 @@ export default function MoneyAccountsView({
     if (needsHistory && !securities.historyLoaded) void onNeedSecurityHistory();
   }, [needsHistory, securities.historyLoaded, onNeedSecurityHistory]);
 
-  // 出金元の種類ごとの見出し＋タイル。Zaim の「残高」と同じく2列に並べる（2026-10-08）。金額は大きく太く、プラスは緑・マイナスは「−」と黒（2026-10-10）。
-  // paired は「1件だけの種類を2つ横に並べた」ときで、タイルは列いっぱいに広げる。
-  const renderSection = ({ type: walletType, rows }: WalletSection, paired: boolean) => {
+  // 出金元のタイル。Zaim の「残高」と同じく2列に並べる（2026-10-08）。金額は大きく太く、プラスは緑・マイナスは「−」と黒（2026-10-10）。
+  // 種類ごとの見出し・合計は出さず、種類の区切りも空けずに1つの2列に詰める（2026-10-24）。並びは種類の順（WALLET_TYPES）。
+  // 長押しの並べ替えは、これまでどおり同じ種類の中だけ。
+  const groups = WALLET_TYPES.map((walletType) => {
     const sectionKey = `wallets-${walletType.id}`;
-    const inType = drag.arrange(
+    const rows = drag.arrange(
       sectionKey,
-      rows.map((row) => ({ ...row, id: row.wallet.id })),
+      usable.filter((row) => row.wallet.type === walletType.id).map((row) => ({ ...row, id: row.wallet.id })),
     );
-    return (
-      <section className="space-y-[3px]">
-        <h4 className="flex items-baseline justify-between px-1 text-xs font-bold text-gray-700">
-          <span>{walletType.label}</span>
-          <span className="tabular-nums text-gray-500">{formatBalance(inType.reduce((sum, row) => sum + row.amount, 0))}</span>
-        </h4>
-        <div className={`grid gap-1.5 ${paired ? 'grid-cols-1' : 'grid-cols-2'}`}>
-          {inType.map((row) => (
-            <button
-              key={row.wallet.id}
-              type="button"
-              ref={drag.dragRef(row.wallet.id)}
-              {...drag.handleProps(sectionKey, inType, row.wallet.id)}
-              onClick={() => setOpenId(row.wallet.id)}
-              className={`flex min-w-0 select-none flex-col justify-between gap-0.5 rounded-xl border border-gray-200 bg-white px-2.5 pb-1.5 pt-[7px] text-left hover:bg-gray-50 ${
-                drag.isDragging(row.wallet.id) ? 'relative z-20 shadow-lg' : ''
-              }`}
-            >
-              <span className="flex min-w-0 items-start gap-1.5">
-                <span className="shrink-0">
-                  <WalletTypeIcon type={row.wallet.type} size={20} color={row.wallet.iconColor} />
-                </span>
-                <span className="line-clamp-2 min-w-0 flex-1 text-[13px] font-bold leading-4 text-gray-500">{row.wallet.name}</span>
-              </span>
-              <span
-                className={`self-end text-[21px] font-extrabold tabular-nums ${row.amount > 0 ? incomeAmountClass : 'text-gray-900'}`}
-              >
-                {formatBalance(row.amount)}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
-    );
-  };
+    return { sectionKey, rows };
+  });
+  const renderTile = (sectionKey: string, inType: (WalletBalanceRow & { id: string })[], row: WalletBalanceRow) => (
+    <button
+      key={row.wallet.id}
+      type="button"
+      ref={drag.dragRef(row.wallet.id)}
+      {...drag.handleProps(sectionKey, inType, row.wallet.id)}
+      onClick={() => setOpenId(row.wallet.id)}
+      className={`flex min-w-0 select-none flex-col justify-between gap-1 rounded-[14px] bg-white px-3 pb-2 pt-2.5 text-left shadow-sm hover:bg-gray-50 ${
+        drag.isDragging(row.wallet.id) ? 'relative z-20 shadow-lg' : ''
+      }`}
+    >
+      <span className="flex min-w-0 items-start gap-1.5">
+        <span className="shrink-0">
+          <WalletTypeIcon type={row.wallet.type} size={20} color={row.wallet.iconColor} />
+        </span>
+        <span className="line-clamp-2 min-w-0 flex-1 text-sm font-bold leading-[18px] text-gray-900">{row.wallet.name}</span>
+      </span>
+      <span className={`self-end text-[22px] font-extrabold tabular-nums ${row.amount > 0 ? incomeAmountClass : 'text-gray-900'}`}>
+        {formatBalance(row.amount)}
+      </span>
+    </button>
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -163,32 +141,20 @@ export default function MoneyAccountsView({
           aria-label="総残高の推移を見る"
           onClick={() => setShowTrend(true)}
           disabled={usable.length === 0}
-          className="block w-full pt-1.5 text-left"
+          className="mt-2 block w-full rounded-2xl bg-white py-3.5 text-center shadow-sm hover:bg-gray-50"
         >
-          <Hero
-            center
-            label="総残高"
-            value={formatBalance(summary.total)}
-            compact
-            note={usable.length === 0 ? '出金元を足すと、残高が出ます' : undefined}
-          />
+          {/* 総残高は白い札に大きく。口座のタイルより一段強く見せる（Zaim の「残高」と同じ。2026-10-24）。 */}
+          <span className="block text-sm font-bold text-gray-500">総残高</span>
+          <span className="block text-[40px] font-extrabold leading-tight tabular-nums text-gray-900">
+            {formatBalance(summary.total)}
+          </span>
+          {usable.length === 0 && <span className={`block ${type.sub}`}>出金元を足すと、残高が出ます</span>}
         </button>
         {isLoading && <p className="py-4 text-center text-sm text-gray-400">読み込み中...</p>}
-        {/* 項目が1つだけの種類（プリペイド・証券など）は、隣り合うもの同士を横に並べて1行にまとめ、高さを縮める。2つ以上になった種類は単独で2列に戻る。 */}
-        {sectionBlocks.map((block) =>
-          block.length === 1 ? (
-            <div key={block[0].type.id} className="mt-2">
-              {renderSection(block[0], false)}
-            </div>
-          ) : (
-            <div key={block.map((section) => section.type.id).join('+')} className="mt-2 grid grid-cols-2 gap-1.5">
-              {block.map((section) => (
-                <div key={section.type.id} className="min-w-0">
-                  {renderSection(section, true)}
-                </div>
-              ))}
-            </div>
-          ),
+        {usable.length > 0 && (
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {groups.flatMap(({ sectionKey, rows }) => rows.map((row) => renderTile(sectionKey, rows, row)))}
+          </div>
         )}
 
         <button

@@ -39,6 +39,8 @@ module.exports = {
         },
       ],
       './plugins/withDevVariant',
+      // 文字を M PLUS 1p にする（assets/fonts。既定にするのは patches/react-native+0.81.5.patch）。
+      './plugins/withAppFont',
       // ホーム画面のウィジェット（docs/widgets.md）。name は src/widgets/widgetNames.ts と同じにする。
       // どれも4×1の1段。previewImage はウィジェットの追加画面に出す見本（無いと全部アプリのアイコンになる）。
       // 中身を出す育児（次の目安）だけ30分ごと（Androidの最短）に描き直す。アプリを閉じたときにも描き直す。

@@ -987,6 +987,8 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    // 見出しの帯は白（地の色と同じだと沈む。2026-10-24）。
+    backgroundColor: colors.surface,
   },
   viewTab: { flex: 1, paddingTop: 8, alignItems: 'center' },
   viewText: { fontSize: 15, fontWeight: '600', color: colors.textFaint },

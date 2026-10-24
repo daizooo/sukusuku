@@ -116,11 +116,13 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 7,
+    // 「今日」と表示の切り替えは白い札（地の色と同じだと沈む。2026-10-24）。
+    backgroundColor: colors.surface,
   },
   todayText: { fontSize: 13, fontWeight: '700', color: colors.textSubtle },
   titleButton: { flex: 1, minWidth: 0 },
   title: { fontSize: 18, fontWeight: '700', color: colors.text },
-  viewSelect: { minHeight: 36, paddingHorizontal: 12, gap: 4, borderRadius: 999, borderColor: colors.borderStrong },
+  viewSelect: { minHeight: 36, paddingHorizontal: 12, gap: 4, borderRadius: 999, borderColor: colors.borderStrong, backgroundColor: colors.surface },
   viewSelectText: { fontSize: 13 },
   searchInput: {
     flex: 1,

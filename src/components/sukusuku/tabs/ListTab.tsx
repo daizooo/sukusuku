@@ -571,7 +571,7 @@ function ListOverviewCard({
     >
       <button type="button" onClick={onOpen} className="w-full text-left block hover:border-gray-300 transition">
       {/* 見出し（リスト名）は帯にして、中身と一目で分かれるようにする。 */}
-      <h3 className="flex items-center gap-1 px-2.5 py-2 pr-9 bg-gray-50 border-b border-gray-200 text-lg font-bold text-gray-900">
+      <h3 className="flex items-center gap-1 px-2.5 py-2 pr-9 bg-white border-b border-gray-200 text-lg font-bold text-gray-900">
         <span className="min-w-0 break-words">{list.name}</span>
         {/* 自分だけのリストは錠前を添える。 */}
         {list.isPrivate && <Lock size={11} className="flex-none text-gray-400" aria-label="自分だけ" />}
@@ -985,7 +985,7 @@ export default function ListTab({
 
         {doneItems.length > 0 && (
           <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className={`flex items-center justify-between px-2 py-1.5 bg-gray-50 ${showDone ? 'border-b border-gray-200' : ''}`}>
+            <div className={`flex items-center justify-between px-2 py-1.5 bg-white ${showDone ? 'border-b border-gray-200' : ''}`}>
               <button
                 onClick={() => setShowDone((prev) => !prev)}
                 className="flex items-center text-xs font-bold text-gray-500 py-1"
