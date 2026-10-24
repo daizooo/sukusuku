@@ -17,6 +17,11 @@
   color-scheme: light;
 }
 
+/* 画面の地（gray-50）を、青みのないグレーにする（gray-50 #f9fafb と同じ明るさ。mobile の colors.background と同じ。2026-10-24） */
+@theme {
+  --color-gray-50: #fafafa;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
