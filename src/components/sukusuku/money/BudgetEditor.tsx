@@ -65,7 +65,7 @@ import { FullScreen, PrimaryButton, ScreenHeader, StackedScreen } from './moneyV
 // - 下の一覧: 収入・変動費・予備費・固定費（確定）・固定費（見込み）の見出しごと（見出しを押すと折りたたむ）。収入の見出しの下線は緑、
 //   ほかはグレー。行は名前と年の額だけ（詳細は押して開く枠で見る）。その年に発生しない予算は、グレーにして「期間外」を付け、各見出しの一番下
 // - 変動費の行は大分類。押すと大分類の画面（まとめての予算と小分類の予算・大分類の名前）
-// - 予算の枠（追加・編集）: 分類（種類・大分類〔変動費・収入だけ〕・小分類・区別）、予算（金額・いつ・期間）、自動記録（オン／オフ・日・出金元・お店）。
+// - 予算の枠（追加・編集）: 分類（種類・大分類〔変動費・収入だけ〕・小分類・品目）、予算（金額・いつ・期間）、自動記録（オン／オフ・日・出金元・お店）。
 //   固定費（確定）・固定費（見込み）・予備費は、大分類＝種類（名前も種類の名前）。種類を変えて保存すると、その小分類は選んだ種類（大分類）へ移る
 
 interface BudgetEditorProps {
@@ -945,7 +945,7 @@ const HOLIDAYS: MoneyHolidayRule[] = ['next', 'prev', 'none'];
 
 type FormSheet = 'group' | 'top' | 'category' | 'when' | 'period' | 'day' | 'wallet' | null;
 
-/** 予算1件の枠（追加・編集）。分類（種類・大分類・小分類・区別）、予算（金額・いつ・期間）、自動記録。 */
+/** 予算1件の枠（追加・編集）。分類（種類・大分類・小分類・品目）、予算（金額・いつ・期間）、自動記録。 */
 function BudgetForm({
   rule,
   initialGroup,
@@ -1145,13 +1145,12 @@ function BudgetForm({
           {choosesTop(group) && <SettingRow label="大分類" value={top?.name ?? '選ぶ'} placeholder={top === null} onClick={() => setSheet('top')} />}
           <SettingRow label="小分類" value={categoryLabel} placeholder={selectedCategory === null} onClick={() => setSheet('category')} />
           <label className={`flex min-h-[46px] items-center gap-2.5 px-3.5 py-2.5 ${dividedClass}`}>
-            <span className="shrink-0 text-[15px] font-medium text-gray-500">区別</span>
+            <span className="shrink-0 text-[15px] font-medium text-gray-500">品目</span>
             <input
               className="min-w-0 flex-1 bg-transparent text-right text-[15px] text-gray-900 focus:outline-none"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="任意（例: 妻・時短）"
-              aria-label="区別"
+              aria-label="品目"
             />
           </label>
         </div>
