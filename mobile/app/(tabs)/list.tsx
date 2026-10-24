@@ -868,7 +868,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 8,
     paddingVertical: 6,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
   },
   doneHeaderOpen: { borderBottomWidth: 1, borderBottomColor: colors.border },
   doneToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 },

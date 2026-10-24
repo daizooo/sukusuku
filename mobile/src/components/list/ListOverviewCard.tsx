@@ -123,7 +123,8 @@ const styles = StyleSheet.create({
     // 右上のピンと重ならないように空けておく。
     paddingRight: 36,
     paddingVertical: 8,
-    backgroundColor: colors.background,
+    // 見出しの帯は白（地の色にすると、カードの外と同じ色になって沈む。2026-10-24）。
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
