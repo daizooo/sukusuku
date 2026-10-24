@@ -88,9 +88,9 @@ export default function MoneySettings({
   const innerBack = useRef<(() => void) | null>(null);
 
   const rows: { id: Exclude<Page, 'menu'>; label: string; icon: typeof Tag }[] = [
-    { id: 'budget', label: '年間予算（カテゴリ・自動記録・目標割合）', icon: PiggyBank },
-    { id: 'categories', label: 'カテゴリのアイコン・並び', icon: Tag },
-    { id: 'recurring', label: '振替の自動記録', icon: ArrowLeftRight },
+    { id: 'budget', label: '年間予算', icon: PiggyBank },
+    { id: 'categories', label: 'カテゴリ', icon: Tag },
+    { id: 'recurring', label: '振替', icon: ArrowLeftRight },
     { id: 'stores', label: 'よく行くお店', icon: Store },
     { id: 'feed', label: 'Gmail 取り込み', icon: Mail },
   ];
