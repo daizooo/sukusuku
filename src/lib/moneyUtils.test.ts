@@ -907,7 +907,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
   const after = walletBalanceOn('bank', '2026-10-10', rs, adjusted);
   assert.deepEqual([after.amount, after.adjustment, after.movement, after.count], [none.amount + 5005, 5005, none.amount, 4]);
   assert.equal(walletBalanceOn('bank', '2026-10-25', rs, adjusted).amount, none.amount + 5005 - 999, '今日までに来た記録は入る');
-  assert.equal(walletBalanceOn('bank', '2026-09-30', rs, adjusted).amount, 5, '日付より先の補正は入れない');
+  assert.equal(walletBalanceOn('bank', '2026-09-30', rs, adjusted).amount, 300000 - 7000 + 5, '日付より先の補正は入れない（その日までの記録は補正の前後を問わず数える）');
   const older = [...rs, record('b8', { walletId: 'bank', occurredOn: '2026-09-15', items: [item({ amount: 100 })] })];
   assert.equal(walletBalanceOn('bank', '2026-10-10', older, adjusted).amount, after.amount - 100, '補正より前の日付の記録も残高を動かす');
 
