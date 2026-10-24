@@ -17,9 +17,9 @@
   color-scheme: light;
 }
 
-/* 画面の地（gray-50）を、青みのないグレーにする（gray-50 #f9fafb と同じ明るさ。mobile の colors.background と同じ。2026-10-24） */
+/* 画面の地（gray-50）を、青みのないグレーにする（白い札が浮いて見える濃さ。mobile の colors.background と同じ。2026-10-24） */
 @theme {
-  --color-gray-50: #fafafa;
+  --color-gray-50: #f2f2f2;
 }
 
 @theme inline {
