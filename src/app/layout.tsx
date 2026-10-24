@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, M_PLUS_1p } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -10,6 +10,13 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+// 文字は M PLUS 1p（mobile の withAppFont と同じ。2026-10-24）。日本語は字数が多く先読みしきれないので、先読みはしない（使う字だけ順に読む）。
+const mplus = M_PLUS_1p({
+  variable: "--font-mplus-1p",
+  weight: ["400", "500", "700", "800"],
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -39,7 +46,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     // 下のタブバーを見るのに画面をスクロールしなければならなくなる。
     <html
       lang="ja"
-      className={`${geistSans.variable} ${geistMono.variable} h-svh antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${mplus.variable} h-svh antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

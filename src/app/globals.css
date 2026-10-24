@@ -25,7 +25,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-mplus-1p), var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
@@ -37,9 +37,8 @@ html {
 body {
   background: var(--background);
   color: var(--foreground);
-  /* 数字・英字は読み取りやすい Geist、日本語は端末標準のゴシック体に任せる
-     （Arial 指定のままだと日本語のフォールバック先が端末ごとにばらつく）。 */
-  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN',
+  /* 文字は M PLUS 1p（mobile と同じ。2026-10-24）。読み込めないときは Geist と端末のゴシック体。 */
+  font-family: var(--font-mplus-1p), var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN',
     'Noto Sans JP', 'Yu Gothic', Meiryo, sans-serif;
 }
 
