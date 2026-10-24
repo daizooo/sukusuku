@@ -47,7 +47,7 @@ interface WalletBalanceScreenProps {
   categories: MoneyCategory[];
   onClose: () => void;
   onOpenRecord: (record: MoneyRecord) => void;
-  onConfirm: (walletId: string, balanceOn: string, amount: number, showInHistory: boolean) => void;
+  onConfirm: (walletId: string, adjustment: number, amount: number, showInHistory: boolean) => void;
   onDeleteBalance: (balance: MoneyWalletBalance) => void;
   onSaveWallet: (target: MoneyWallet, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onDeleteWallet: (wallet: MoneyWallet) => void;
@@ -97,8 +97,8 @@ export default function WalletBalanceScreen({
 
   const today = dateKeyOfDate(new Date());
   const now = walletBalanceOn(wallet.id, today, records, balances);
-  const checks = balanceChecks(wallet.id, records, balances);
-  // 履歴に行として出すのは、「履歴に残す」を選んだ補正だけ（残さない補正も、残高の土台としては同じに効く）。
+  const checks = balanceChecks(wallet.id, balances);
+  // 履歴に行として出すのは、「履歴に残す」を選んだ補正だけ（残さない補正も、残高には同じに効く）。
   const shownChecks = checks.filter((check) => check.balance.showInHistory);
   const mine = recordsOfWallet(records, wallet.id);
   const points = dailyBalances([wallet.id], records, balances, today);
@@ -108,7 +108,7 @@ export default function WalletBalanceScreen({
   const payments = isCard ? cardPaymentHistory(wallet.id, records, today) : [];
 
   const remove = (balance: MoneyWalletBalance) => {
-    if (window.confirm(`${fullDate(balance.balanceOn)}の補正を取り消しますか？残高は、その前の補正と記録から出し直します。`)) {
+    if (window.confirm(`${fullDate(balance.balanceOn)}の補正を取り消しますか？残高は、その補正の分だけ戻ります。`)) {
       onDeleteBalance(balance);
     }
   };
@@ -242,9 +242,9 @@ export default function WalletBalanceScreen({
           records={records}
           balances={balances}
           onClose={() => setCorrecting(false)}
-          onSubmit={(balanceOn, amount, showInHistory) => {
+          onSubmit={(adjustment, amount, showInHistory) => {
             setCorrecting(false);
-            onConfirm(wallet.id, balanceOn, amount, showInHistory);
+            onConfirm(wallet.id, adjustment, amount, showInHistory);
           }}
         />
       )}

@@ -1,18 +1,15 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
-import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { CalendarDays } from 'lucide-react-native';
 import type { MoneyRecord, MoneyWallet, MoneyWalletBalance } from '@/types/app';
 import { colors } from '@/lib/theme';
-import { formatDateWithWeekday, toDateString } from '@/lib/dateUtils';
-import { formatBalance, formatSignedYen, formatYen, walletBalanceOn } from '@/lib/moneyUtils';
+import { dateKeyOfDate, formatBalance, formatSignedYen, formatYen, walletBalanceOn } from '@/lib/moneyUtils';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import { PrimaryButton, type } from '@/components/money/moneyVisual';
 
 // 残高を補正する（docs/kakei.md §9.3）。PWA版の `src/components/sukusuku/money/BalanceModal.tsx` と同じ並び・文言。
-// 通帳・銀行のアプリの残高を日付つきで入れる。入れた額と、記録から出した額との差を、入れながら出す。
-// はじめての補正は、記録から出した額も差も出さない（記録は使い始めの月からなので、はじめの残高になる）。余計な文字は入れない（2026-10-08）。
+// 通帳・銀行のアプリの残高を入れる。日付は無い（ただの補正。記録のあとから足した分も、補正は動かない）。
+// 入れながら、今の残高（記録から出した額）と差（補正する増減）を出す。差があれば、その分だけ補正する。
 // カードの未払いのように、マイナスの残高も入れられる。
 
 interface BalanceSheetProps {
@@ -20,12 +17,11 @@ interface BalanceSheetProps {
   records: MoneyRecord[];
   balances: MoneyWalletBalance[];
   onClose: () => void;
-  onSubmit: (balanceOn: string, amount: number, showInHistory: boolean) => void;
+  onSubmit: (adjustment: number, amount: number, showInHistory: boolean) => void;
 }
 
 export default function BalanceSheet({ wallet, records, balances, onClose, onSubmit }: BalanceSheetProps) {
-  const today = toDateString(new Date());
-  const [balanceOn, setBalanceOn] = useState(today);
+  const today = dateKeyOfDate(new Date());
   const [text, setText] = useState('');
   // カードは未払いの額が残高（マイナス）なので、はじめからマイナスにしておく。
   const [negative, setNegative] = useState(wallet.type === 'card');
@@ -34,18 +30,8 @@ export default function BalanceSheet({ wallet, records, balances, onClose, onSub
 
   const digits = text.replace(/[^0-9]/g, '');
   const entered = digits === '' ? null : (negative ? -1 : 1) * Number(digits);
-  const expected = walletBalanceOn(wallet.id, balanceOn, records, balances, true);
-  const diff = entered === null || expected.confirmed === null ? null : entered - expected.amount;
-
-  const openDate = () =>
-    DateTimePickerAndroid.open({
-      value: new Date(`${balanceOn}T00:00:00`),
-      mode: 'date',
-      maximumDate: new Date(),
-      onChange: (_event, picked) => {
-        if (picked) setBalanceOn(toDateString(picked));
-      },
-    });
+  const now = walletBalanceOn(wallet.id, today, records, balances);
+  const diff = entered === null ? null : entered - now.amount;
 
   return (
     <SheetModal visible onClose={onClose}>
@@ -55,16 +41,11 @@ export default function BalanceSheet({ wallet, records, balances, onClose, onSub
         footer={
           <PrimaryButton
             label="補正する"
-            disabled={entered === null}
-            onPress={() => entered !== null && onSubmit(balanceOn, entered, showInHistory)}
+            disabled={entered === null || diff === 0}
+            onPress={() => entered !== null && diff !== null && onSubmit(diff, entered, showInHistory)}
           />
         }
       >
-        <Pressable accessibilityRole="button" onPress={openDate} style={styles.field}>
-          <CalendarDays size={20} color={colors.textMuted} />
-          <Text style={styles.fieldText}>{formatDateWithWeekday(new Date(`${balanceOn}T00:00:00`))}の残高</Text>
-        </Pressable>
-
         <View style={styles.group}>
           <Text style={styles.label}>通帳・銀行のアプリの残高</Text>
           <View style={styles.amountRow}>
@@ -102,37 +83,24 @@ export default function BalanceSheet({ wallet, records, balances, onClose, onSub
           <Text style={styles.label}>履歴に残す</Text>
           <Switch value={showInHistory} onValueChange={setShowInHistory} />
         </View>
-        {expected.confirmed !== null && (
-          <View style={styles.check}>
-            <View style={styles.checkRow}>
-              <Text style={type.sub}>記録から出した額</Text>
-              <Text style={[type.amount, expected.amount < 0 && type.minus]}>{formatBalance(expected.amount)}</Text>
-            </View>
-            {diff !== null && (
-              <View style={styles.checkRow}>
-                <Text style={type.sub}>差</Text>
-                <Text style={[type.amount, diff !== 0 && type.minus]}>{diff === 0 ? formatYen(0) : formatSignedYen(diff)}</Text>
-              </View>
-            )}
+        <View style={styles.check}>
+          <View style={styles.checkRow}>
+            <Text style={type.sub}>今の残高</Text>
+            <Text style={[type.amount, now.amount < 0 && type.minus]}>{formatBalance(now.amount)}</Text>
           </View>
-        )}
+          {diff !== null && (
+            <View style={styles.checkRow}>
+              <Text style={type.sub}>差</Text>
+              <Text style={[type.amount, diff !== 0 && type.minus]}>{diff === 0 ? formatYen(0) : formatSignedYen(diff)}</Text>
+            </View>
+          )}
+        </View>
       </LogModalShell>
     </SheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  field: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-  },
-  fieldText: { fontSize: 15, fontWeight: '600', color: colors.text },
   group: { gap: 6 },
   label: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

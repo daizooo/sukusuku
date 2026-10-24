@@ -616,16 +616,18 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
     );
   };
 
-  /** 残高を確定する。同じ出金元・同じ日の確定は上書きされる。 */
-  const confirmBalance = async (walletId: string, balanceOn: string, amount: number, showInHistory: boolean) => {
+  /** 残高を補正する（日付は今日）。adjustment は増減、amount は補正後の残高。同じ日の補正があれば増減を足して1件にする。 */
+  const confirmBalance = async (walletId: string, adjustment: number, amount: number, showInHistory: boolean) => {
+    const balanceOn = dateKeyOfDate(new Date());
+    const sameDay = balances.find((entry) => entry.walletId === walletId && entry.balanceOn === balanceOn);
     try {
-      const saved = await saveMoneyWalletBalance(supabase, familyId, walletId, balanceOn, amount, showInHistory);
+      const saved = await saveMoneyWalletBalance(supabase, familyId, walletId, balanceOn, adjustment + (sameDay?.adjustment ?? 0), amount, showInHistory);
       setBalances((prev) => [
         ...prev.filter((entry) => !(entry.walletId === saved.walletId && entry.balanceOn === saved.balanceOn)),
         saved,
       ]);
     } catch {
-      failed('確定');
+      failed('補正');
     }
   };
 
@@ -764,7 +766,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               categories={categories}
               isLoading={isLoading}
               onOpenRecord={setEditing}
-              onConfirm={(walletId, balanceOn, amount, showInHistory) => void confirmBalance(walletId, balanceOn, amount, showInHistory)}
+              onConfirm={(walletId, adjustment, amount, showInHistory) => void confirmBalance(walletId, adjustment, amount, showInHistory)}
               onDeleteBalance={(balance) => void removeBalance(balance)}
               onSaveWallet={saveWallet}
               onDeleteWallet={(wallet) => void deleteWallet(wallet)}

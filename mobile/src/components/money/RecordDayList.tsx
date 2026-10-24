@@ -26,7 +26,7 @@ import { CategoryIcon, EstimateBadge, NextPeriodBadge, TransferIcon, WalletTypeI
 // 最後にメモのアイコンをつけた品名の要約（「牛乳、卵ほか」）。振替は回る矢印の丸で、「振替 出金元 → 入金先」。
 // 毎月の記録・カード代金で自動で作り、まだ額を確かめていないものは金額の右に「見込み」（§3.3）。
 // 口座の履歴では、残高の補正（corrections）も同じ日の先頭に1件のカードで混ぜる（その日の終わりの残高なので）。押すと取り消しの確認。
-// 補正のカードは、総額が画面の上にあるので「差」だけを出す（はじめの残高だけは差が無いので、その額）。
+// 補正のカードは、総額が画面の上にあるので補正の増減だけを出す。
 // スクロールは持たない（親のスクロールの中に置く）。
 
 interface RecordDayListProps {
@@ -201,12 +201,12 @@ export const RecordDayBlock = memo(function RecordDayBlock({
             style={({ pressed }) => [styles.card, pressed && styles.pressed]}
           >
             <View style={styles.top}>
-              <Text style={[styles.amount, check.diff !== null && check.diff > 0 && styles.income]}>
-                {formatBalance(check.diff === null ? check.balance.amount : check.diff)}
+              <Text style={[styles.amount, check.diff > 0 && styles.income]}>
+                {formatBalance(check.diff)}
               </Text>
             </View>
             <Text style={styles.title} numberOfLines={1}>
-              {check.diff === null ? 'はじめの残高' : '残高を補正'}
+              残高を補正
             </Text>
           </Pressable>
         </View>

@@ -1,16 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarDays } from 'lucide-react';
 import type { MoneyRecord, MoneyWallet, MoneyWalletBalance } from '@/types/app';
-import { toDateString } from '@/lib/dateUtils';
-import { formatBalance, formatSignedYen, formatYen, walletBalanceOn } from '@/lib/moneyUtils';
+import { dateKeyOfDate, formatBalance, formatSignedYen, formatYen, walletBalanceOn } from '@/lib/moneyUtils';
 import { ModalShell } from '../modals/TaskForm';
 import { minus, PrimaryButton, type } from './moneyVisual';
 
 // 残高を補正する（docs/kakei.md §9.3）。mobile版の `mobile/src/components/money/BalanceSheet.tsx` と同じ並び・文言。
-// 通帳・銀行のアプリの残高を日付つきで入れる。入れた額と、記録から出した額との差を、入れながら出す。
-// はじめての補正は、記録から出した額も差も出さない（記録は使い始めの月からなので、はじめの残高になる）。余計な文字は入れない（2026-10-08）。
+// 通帳・銀行のアプリの残高を入れる。日付は無い（ただの補正。記録のあとから足した分も、補正は動かない）。
+// 入れながら、今の残高（記録から出した額）と差（補正する増減）を出す。差があれば、その分だけ補正する。
 // カードの未払いのように、マイナスの残高も入れられる。
 
 interface BalanceModalProps {
@@ -18,12 +16,11 @@ interface BalanceModalProps {
   records: MoneyRecord[];
   balances: MoneyWalletBalance[];
   onClose: () => void;
-  onSubmit: (balanceOn: string, amount: number, showInHistory: boolean) => void;
+  onSubmit: (adjustment: number, amount: number, showInHistory: boolean) => void;
 }
 
 export default function BalanceModal({ wallet, records, balances, onClose, onSubmit }: BalanceModalProps) {
-  const today = toDateString(new Date());
-  const [balanceOn, setBalanceOn] = useState(today);
+  const today = dateKeyOfDate(new Date());
   const [text, setText] = useState('');
   // カードは未払いの額が残高（マイナス）なので、はじめからマイナスにしておく。
   const [negative, setNegative] = useState(wallet.type === 'card');
@@ -32,8 +29,8 @@ export default function BalanceModal({ wallet, records, balances, onClose, onSub
 
   const digits = text.replace(/[^0-9]/g, '');
   const entered = digits === '' ? null : (negative ? -1 : 1) * Number(digits);
-  const expected = walletBalanceOn(wallet.id, balanceOn, records, balances, true);
-  const diff = entered === null || expected.confirmed === null ? null : entered - expected.amount;
+  const now = walletBalanceOn(wallet.id, today, records, balances);
+  const diff = entered === null ? null : entered - now.amount;
 
   return (
     <ModalShell
@@ -42,25 +39,12 @@ export default function BalanceModal({ wallet, records, balances, onClose, onSub
       footer={
         <PrimaryButton
           label="補正する"
-          disabled={entered === null}
-          onClick={() => entered !== null && onSubmit(balanceOn, entered, showInHistory)}
+          disabled={entered === null || diff === 0}
+          onClick={() => entered !== null && diff !== null && onSubmit(diff, entered, showInHistory)}
         />
       }
     >
       <div className="space-y-4">
-        <label className="flex items-center gap-2.5 rounded-lg border border-gray-300 px-3 py-3">
-          <CalendarDays size={20} className="text-gray-500" />
-          <span className="sr-only">日付</span>
-          <input
-            type="date"
-            value={balanceOn}
-            max={today}
-            onChange={(event) => event.target.value && setBalanceOn(event.target.value)}
-            className="flex-1 bg-transparent text-[15px] font-semibold text-gray-900 focus:outline-none"
-          />
-          <span className="text-[15px] font-semibold text-gray-900">の残高</span>
-        </label>
-
         <div>
           <span className="mb-1.5 block text-xs font-bold text-gray-700">通帳・銀行のアプリの残高</span>
           <div className="flex items-center gap-2">
@@ -100,20 +84,18 @@ export default function BalanceModal({ wallet, records, balances, onClose, onSub
           <span className="text-xs font-bold text-gray-700">履歴に残す</span>
           <input type="checkbox" checked={showInHistory} onChange={(event) => setShowInHistory(event.target.checked)} className="h-5 w-5" />
         </label>
-        {expected.confirmed !== null && (
-          <div className="space-y-1 rounded-xl bg-gray-50 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className={type.sub}>記録から出した額</span>
-              <span className={minus(type.amount, expected.amount < 0)}>{formatBalance(expected.amount)}</span>
-            </div>
-            {diff !== null && (
-              <div className="flex items-center justify-between gap-2">
-                <span className={type.sub}>差</span>
-                <span className={minus(type.amount, diff !== 0)}>{diff === 0 ? formatYen(0) : formatSignedYen(diff)}</span>
-              </div>
-            )}
+        <div className="space-y-1 rounded-xl bg-gray-50 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className={type.sub}>今の残高</span>
+            <span className={minus(type.amount, now.amount < 0)}>{formatBalance(now.amount)}</span>
           </div>
-        )}
+          {diff !== null && (
+            <div className="flex items-center justify-between gap-2">
+              <span className={type.sub}>差</span>
+              <span className={minus(type.amount, diff !== 0)}>{diff === 0 ? formatYen(0) : formatSignedYen(diff)}</span>
+            </div>
+          )}
+        </div>
       </div>
     </ModalShell>
   );

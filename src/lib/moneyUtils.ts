@@ -2317,8 +2317,8 @@ export function pressCalcKey(expression: string, key: string): string {
 }
 
 // ---- 口座の残高（docs/kakei.md §9.3） ----
-// 残高 = 最後に確定した残高 + その後の記録（支出・収入・振替）。確定した残高が無ければ記録だけから出す。
-// 確定した残高は「その日の終わりの残高」なので、その日の記録は含まれている（足すのは翌日以降の記録）。
+// 残高 = 今日までの記録（支出・収入・振替）の合計 + 補正の増減の合計。
+// 補正は日付と結ばない「ただの増減」なので、あとからどの日付の記録を足しても残高に入る（2026-10-24）。
 
 /** 今日の日付（YYYY-MM-DD。端末のローカル）。 */
 export const dateKeyOfDate = (date: Date): string => `${monthKeyOfDate(date)}-${pad2(date.getDate())}`;
@@ -2339,42 +2339,36 @@ export function walletDelta(record: Pick<MoneyRecord, 'kind' | 'walletId' | 'toW
 }
 
 export interface WalletBalanceResult {
-  /** 残高（円）。 */
+  /** 残高（円）。記録の合計 + 補正の増減の合計。 */
   amount: number;
-  /** 土台にした、最後に確定した残高。まだ確定していなければ null（記録だけから出した額）。 */
-  confirmed: MoneyWalletBalance | null;
-  /** 確定のあとの記録の増減（確定が無ければ記録の全部）。 */
+  /** 記録の増減の合計。 */
   movement: number;
-  /** 確定のあとの記録の件数。 */
+  /** 補正の増減の合計。 */
+  adjustment: number;
+  /** 数えた記録の件数。 */
   count: number;
 }
 
-/**
- * 出金元 walletId の、date の終わりの残高。date までの記録だけを数える（先の日付の記録は入れない）。
- * ignoreOnDate を立てると、date の確定を土台にしない（その日の確定を入れる前の「記録から出した額」を出すとき）。
- */
+/** 出金元 walletId の、date の終わりの残高。date までの記録と補正を数える（先の日付の記録は入れない）。 */
 export function walletBalanceOn(
   walletId: string,
   date: string,
   records: readonly MoneyRecord[],
   balances: readonly MoneyWalletBalance[],
-  ignoreOnDate = false,
 ): WalletBalanceResult {
-  let confirmed: MoneyWalletBalance | null = null;
+  let adjustment = 0;
   for (const balance of balances) {
-    if (balance.walletId !== walletId) continue;
-    if (ignoreOnDate ? balance.balanceOn >= date : balance.balanceOn > date) continue;
-    if (confirmed === null || balance.balanceOn > confirmed.balanceOn) confirmed = balance;
+    if (balance.walletId === walletId && balance.balanceOn <= date) adjustment += balance.adjustment;
   }
   let movement = 0;
   let count = 0;
   for (const record of records) {
     if (record.walletId !== walletId && record.toWalletId !== walletId) continue;
-    if (record.occurredOn > date || (confirmed !== null && record.occurredOn <= confirmed.balanceOn)) continue;
+    if (record.occurredOn > date) continue;
     movement += walletDelta(record, walletId);
     count += 1;
   }
-  return { amount: (confirmed?.amount ?? 0) + movement, confirmed, movement, count };
+  return { amount: movement + adjustment, movement, adjustment, count };
 }
 
 export interface WalletBalanceRow extends WalletBalanceResult {
@@ -2404,8 +2398,8 @@ export function buildWalletBalances(
       ? {
           wallet,
           amount: securities ? securitiesValueOn([wallet.id], securities.holdings, securities.values, asOf) : 0,
-          confirmed: null,
           movement: 0,
+          adjustment: 0,
           count: 0,
         }
       : { wallet, ...walletBalanceOn(wallet.id, asOf, records, balances) },
@@ -2419,25 +2413,16 @@ export function buildWalletBalances(
 
 export interface BalanceCheck {
   balance: MoneyWalletBalance;
-  /** 確定の前の確定と、そのあとの記録から出した額。 */
-  expected: number;
-  /** 確定した額 − 記録から出した額。前の確定が無い（はじめの残高）ときは null。 */
-  diff: number | null;
+  /** 補正の増減（円）。 */
+  diff: number;
 }
 
-/** 出金元の確定の履歴（新しい順）。確定のたびの、記録との差つき。 */
-export function balanceChecks(
-  walletId: string,
-  records: readonly MoneyRecord[],
-  balances: readonly MoneyWalletBalance[],
-): BalanceCheck[] {
+/** 出金元の補正の履歴（新しい順）。 */
+export function balanceChecks(walletId: string, balances: readonly MoneyWalletBalance[]): BalanceCheck[] {
   return balances
     .filter((balance) => balance.walletId === walletId)
-    .sort((a, b) => b.balanceOn.localeCompare(a.balanceOn))
-    .map((balance) => {
-      const before = walletBalanceOn(walletId, balance.balanceOn, records, balances, true);
-      return { balance, expected: before.amount, diff: before.confirmed === null ? null : balance.amount - before.amount };
-    });
+    .sort((a, b) => b.balanceOn.localeCompare(a.balanceOn) || b.id.localeCompare(a.id))
+    .map((balance) => ({ balance, diff: balance.adjustment }));
 }
 
 // ---- 口座の推移・カードの請求（docs/kakei.md §9.3） ----
@@ -2463,7 +2448,7 @@ export interface BalancePoint {
 
 /**
  * 出金元（複数ならその合計）の、日ごとの残高。いちばん古い記録・補正の日から asOf（今日）まで、1日1点。
- * 数え方は walletBalanceOn と同じ（補正した日はその額、それ以外の日は前の日の残高 + その日の記録）。
+ * 数え方は walletBalanceOn と同じ（前の日の残高 + その日の記録 + その日の補正の増減）。
  * 記録も補正も無ければ空。今日より先の記録は入れない。
  */
 export function dailyBalances(
@@ -2473,7 +2458,7 @@ export function dailyBalances(
   asOf: string,
 ): BalancePoint[] {
   const ids = new Set(walletIds);
-  const perWallet = new Map<string, { deltas: Map<string, number>; anchors: Map<string, number> }>();
+  const perWallet = new Map<string, { deltas: Map<string, number> }>();
   let start: string | null = null;
   const see = (date: string) => {
     if (date <= asOf && (start === null || date < start)) start = date;
@@ -2481,7 +2466,7 @@ export function dailyBalances(
   const slot = (walletId: string) => {
     let entry = perWallet.get(walletId);
     if (!entry) {
-      entry = { deltas: new Map(), anchors: new Map() };
+      entry = { deltas: new Map() };
       perWallet.set(walletId, entry);
     }
     return entry;
@@ -2497,19 +2482,18 @@ export function dailyBalances(
   }
   for (const balance of balances) {
     if (balance.balanceOn > asOf || !ids.has(balance.walletId)) continue;
-    slot(balance.walletId).anchors.set(balance.balanceOn, balance.amount);
+    const { deltas } = slot(balance.walletId);
+    deltas.set(balance.balanceOn, (deltas.get(balance.balanceOn) ?? 0) + balance.adjustment);
     see(balance.balanceOn);
   }
   if (start === null) return [];
 
   const days = Math.round((parseDateKey(asOf) - parseDateKey(start)) / DAY_MS) + 1;
   const totals = new Array<number>(days).fill(0);
-  for (const { deltas, anchors } of perWallet.values()) {
+  for (const { deltas } of perWallet.values()) {
     let amount = 0;
     for (let index = 0; index < days; index += 1) {
-      const date = addDays(start, index);
-      const anchor = anchors.get(date);
-      amount = anchor !== undefined ? anchor : amount + (deltas.get(date) ?? 0);
+      amount += deltas.get(addDays(start, index)) ?? 0;
       totals[index] += amount;
     }
   }
