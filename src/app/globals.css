@@ -23,8 +23,8 @@
   --color-gray-50: #f1f5f9; /* slate-100 */
   --color-gray-200: #d1d5db; /* gray-300 */
   /* 育児タブの一覧の地（mobile版の listSurface）と、項目を押した・マウスを載せたときの地（同 pressed）。 */
-  --color-list-surface: #e5e7eb; /* gray-200（上で gray-200 を差し替えたので、別名で持つ） */
-  --color-pressed: #e5e7eb; /* gray-200 */
+  --color-list-surface: #f3f4f6; /* gray-100 */
+  --color-pressed: #f3f4f6; /* gray-100 */
 }
 
 /* 項目にマウスを載せたときの地。mobile版の theme.ts の pressed と同じ値。
