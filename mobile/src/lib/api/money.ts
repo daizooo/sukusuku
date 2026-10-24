@@ -10,6 +10,7 @@ import type {
   MoneyRecurring,
   MoneyRecurringDraft,
   MoneyBudgetGroup,
+  MoneyRatioTargets,
   MoneyStore,
   MoneyWallet,
   MoneyWalletBalance,
@@ -175,10 +176,12 @@ export interface MoneyData {
   balances: MoneyWalletBalance[];
   /** 月の締め（docs/kakei.md §4.5）。 */
   months: MoneyMonth[];
+  /** 目安の割合（docs/kakei.md §0.9）。 */
+  ratioTargets: MoneyRatioTargets;
 }
 
 export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise<MoneyData> {
-  const [categoryResult, walletResult, storeResult, recurringResult, balanceResult, monthResult, records] =
+  const [categoryResult, walletResult, storeResult, recurringResult, balanceResult, monthResult, ratioResult, records] =
     await Promise.all([
       supabase.from('money_categories').select('*').eq('family_id', familyId),
       supabase.from('money_wallets').select('*').eq('family_id', familyId).order('position', { ascending: true }),
@@ -186,6 +189,7 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
       supabase.from('money_recurring').select('*').eq('family_id', familyId).order('position', { ascending: true }),
       supabase.from('money_wallet_balances').select('*').eq('family_id', familyId),
       supabase.from('money_months').select('*').eq('family_id', familyId),
+      supabase.from('money_ratio_targets').select('*').eq('family_id', familyId),
       loadRecords(supabase, familyId),
     ]);
   if (categoryResult.error) throw categoryResult.error;
@@ -194,6 +198,7 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
   if (recurringResult.error) throw recurringResult.error;
   if (balanceResult.error) throw balanceResult.error;
   if (monthResult.error) throw monthResult.error;
+  if (ratioResult.error) throw ratioResult.error;
   return {
     categories: (categoryResult.data ?? []).map(rowToCategory),
     wallets: (walletResult.data ?? []).map(rowToWallet),
@@ -202,6 +207,7 @@ export async function loadMoney(supabase: SupabaseDb, familyId: string): Promise
     recurring: (recurringResult.data ?? []).map(rowToRecurring),
     balances: (balanceResult.data ?? []).map(rowToBalance),
     months: (monthResult.data ?? []).map(rowToMonth),
+    ratioTargets: rowsToRatioTargets(ratioResult.data ?? []),
   };
 }
 
@@ -229,6 +235,35 @@ export async function setMoneyMonthClosed(
     .single();
   if (error) throw error;
   return rowToMonth(data);
+}
+
+// ---- 目安の割合（docs/kakei.md §0.9） ----
+
+const RATIO_GROUPS = ['variable', 'reserve', 'fixed'] as const;
+
+/** 目安の割合の行（種類ごとに1行）を、画面の形にする。行の無い種類は null。 */
+export function rowsToRatioTargets(rows: readonly Pick<Tables<'money_ratio_targets'>, 'budget_group' | 'percent'>[]): MoneyRatioTargets {
+  const percentOf = (group: (typeof RATIO_GROUPS)[number]) => rows.find((row) => row.budget_group === group)?.percent ?? null;
+  return { variable: percentOf('variable'), reserve: percentOf('reserve'), fixed: percentOf('fixed') };
+}
+
+/** 目安の割合を保存する。null の種類は行を消す（決めていない）。 */
+export async function saveMoneyRatioTargets(supabase: SupabaseDb, familyId: string, targets: MoneyRatioTargets): Promise<void> {
+  const set = RATIO_GROUPS.filter((group) => targets[group] !== null);
+  const cleared = RATIO_GROUPS.filter((group) => targets[group] === null);
+  const [upserted, removed] = await Promise.all([
+    set.length === 0
+      ? Promise.resolve({ error: null })
+      : supabase.from('money_ratio_targets').upsert(
+          set.map((group) => ({ family_id: familyId, budget_group: group, percent: targets[group] as number })),
+          { onConflict: 'family_id,budget_group' },
+        ),
+    cleared.length === 0
+      ? Promise.resolve({ error: null })
+      : supabase.from('money_ratio_targets').delete().eq('family_id', familyId).in('budget_group', cleared),
+  ]);
+  if (upserted.error) throw upserted.error;
+  if (removed.error) throw removed.error;
 }
 
 /** 見込みの記録を、今の額のまま確定する（締めの画面の「確定」。記録の詳細の「この額で確定する」と同じ結果）。 */

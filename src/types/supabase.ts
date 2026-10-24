@@ -1584,6 +1584,38 @@ export type Database = {
           },
         ]
       }
+      money_ratio_targets: {
+        Row: {
+          budget_group: string
+          created_at: string
+          family_id: string
+          percent: number
+          updated_at: string
+        }
+        Insert: {
+          budget_group: string
+          created_at?: string
+          family_id: string
+          percent: number
+          updated_at?: string
+        }
+        Update: {
+          budget_group?: string
+          created_at?: string
+          family_id?: string
+          percent?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_ratio_targets_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_receipt_scans: {
         Row: {
           created_at: string

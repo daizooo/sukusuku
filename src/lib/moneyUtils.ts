@@ -867,7 +867,7 @@ export interface BudgetPlan {
 
 const BUDGET_LINE_GROUPS: BudgetLineGroup[] = ['income', 'variable', 'reserve', 'confirmed', 'estimate'];
 
-/** その年の予算の明細を、分け方ごとに月へ置く（発生月なしは月に置かない）。 */
+/** その年の予算の明細を、分け方ごとに月へ置く（発生月なしは月に置かない。額は noMonthYearAmount。集計を始めた年は減らす）。 */
 export function budgetPlanInYear(
   lines: readonly MoneyBudgetLine[],
   categories: readonly MoneyCategory[],
@@ -878,7 +878,7 @@ export function budgetPlanInYear(
   for (const line of lines) {
     const group = budgetLineGroup(line, categories);
     if (line.noMonth) {
-      if (budgetLineInYear(line, year)) noMonth[group] += line.amount;
+      noMonth[group] += noMonthYearAmount(line, group, year);
       continue;
     }
     for (const month of budgetLineMonths(line, year)) months[group][month - 1] += line.amount;
@@ -1002,7 +1002,8 @@ export const isMonthClosed = (months: readonly MoneyMonth[], monthKey: string): 
   months.some((entry) => entry.month === monthKey && entry.closedAt !== null);
 
 /**
- * 締めていない過ぎた月（古い順）。記録のある月（振替だけの月は数えない。年の数え方と同じ）のうち、今月より前で締めていないもの。
+ * 締めていない過ぎた月（古い順）。記録のある月（振替だけの月は数えない。年の数え方と同じ）のうち、今月より前で締めていないもの
+ * （集計を始めた月〔MONEY_COUNT_START〕より前の月は出さない）。
  * 振り返りの上に「◯月が締まっていません」と出す（docs/kakei.md §4.5）。today は YYYY-MM-DD。
  */
 export function unclosedMonths(records: readonly MoneyRecord[], months: readonly MoneyMonth[], today: string): string[] {
@@ -1011,7 +1012,8 @@ export function unclosedMonths(records: readonly MoneyRecord[], months: readonly
   for (const record of records) {
     if (record.kind === 'transfer') continue;
     const monthKey = monthKeyOf(record.occurredOn);
-    if (monthKey < current) recorded.add(monthKey);
+    // 集計を始める前の月（2026年9月。カードの引き落とし額を合わせるためだけの記録）は締めない（docs/kakei.md §0.9）
+    if (monthKey < current && monthKey >= MONEY_COUNT_START) recorded.add(monthKey);
   }
   return [...recorded].filter((monthKey) => !isMonthClosed(months, monthKey)).sort();
 }
@@ -1299,7 +1301,7 @@ function lineBudgetIn(
   for (const line of own) {
     if (line.noMonth) {
       if (keys.length < 2) continue;
-      for (const year of new Set(keys.map(yearOfMonth))) if (budgetLineInYear(line, year)) total += line.amount;
+      for (const year of new Set(keys.map(yearOfMonth))) total += noMonthYearAmount(line, budgetLineGroup(line, categories), year);
       continue;
     }
     for (const key of keys) if (budgetLineMonths(line, yearOfMonth(key)).includes(Number(key.slice(5, 7)))) total += line.amount;
@@ -1652,7 +1654,11 @@ export interface LandingMonth {
   counted: boolean;
   /** 締めた月（収支は実額）。締めていない月は見込み。 */
   closed: boolean;
-  /** 収支（締めた月は実額、ほかは見込み）。 */
+  /** 収入（締めた月は実額、ほかは予算）。 */
+  income: number;
+  /** 支出（締めた月は実額。締めていない今月まで〔締め忘れた月も〕は予算と実績の大きいほう、翌月からは予算）。 */
+  expense: number;
+  /** 収支（収入 − 支出）。 */
   balance: number;
   /** 年初からこの月までの累計（数えない月は、その前までの累計のまま）。 */
   cumulative: number;
@@ -1660,8 +1666,12 @@ export interface LandingMonth {
 
 export interface YearLanding {
   months: LandingMonth[];
-  /** 年末の着地見込み（12月の累計。発生月なしの見込みを含む）。 */
+  /** 年末の収支見込み（12月の累計。発生月なしの見込みを含む）。 */
   total: number;
+  /** 年の収入の見込み（締めた月は実額、ほかは予算）。 */
+  income: number;
+  /** 年の支出の見込み（発生月なしの見込みを含む）。 */
+  expense: number;
   /** 締めた月の数。 */
   closedMonths: number;
   /** 発生月なしの予算の見込み（収入 − 支出。まだ記録が無い分。12月の収支に入れてある）。 */
@@ -1669,11 +1679,13 @@ export interface YearLanding {
 }
 
 /**
- * 年末の着地見込み（docs/kakei.md §0.7・§4.6。2026-10-22）＝締めた月は実績 ＋ 締めていない月はその月の予算
- * （収入・予備費・固定費の明細のうち、その月に発生する回 − 変動費の月の予算）＋ 発生月なしの予算の見込み。
- * 発生月なしは、小分類ごとに「その年の額 − 締めた月までの実績」（0 未満は 0）を見込み支出（収入なら見込みの収入）として、
- * 12月の収支に入れる（12月を締めた年は入れない）。自動記録ルールは使わない。
- * 数えるのは使い始めた月（振替でない記録がいちばん古い月）から。記録が1件も無ければ null。先の年は全部の月を予算で出す。
+ * 年末の収支見込み（docs/kakei.md §0.9・§4.6。2026-10-24）。
+ * - 締めた月は実績（収入も支出も）
+ * - 締めていない月のうち、今月まで（current。締め忘れた過去の月も）は記録があるので、支出は予算と実績の大きいほう
+ *   （変動費は大分類ごと、予備費・固定費は小分類ごと。予算の無いもの・カテゴリの無い品目は実績）。収入は予算
+ * - 翌月からは記録が無いので予算だけ（収入 − 変動費の月の予算 − 予備費・固定費の明細のうち、その月に発生する回）
+ * - 発生月なしの予算は、小分類ごとに「その年の額（noMonthYearAmount）− 今月までの実績」（0 未満は 0）を見込み支出として12月に入れる（12月を締めた年は入れない）
+ * 数えるのは使い始めた月（usageStartMonth。2026年は10月から）から。記録が1件も無ければ null。先の年は全部の月を予算で出す。自動記録ルールは使わない。
  */
 export function buildYearLanding(
   records: readonly MoneyRecord[],
@@ -1682,62 +1694,114 @@ export function buildYearLanding(
   lines: readonly MoneyBudgetLine[],
   closings: readonly MoneyMonth[],
   year: number,
+  current: string = monthKeyOfDate(new Date()),
 ): YearLanding | null {
-  let start: string | null = null;
-  for (const record of records) {
-    if (record.kind === 'transfer') continue;
-    const monthKey = monthKeyOf(record.occurredOn);
-    if (start === null || monthKey < start) start = monthKey;
-  }
+  const start = usageStartMonth(records);
   if (start === null || start > `${year}-12`) return null;
   const plan = budgetPlanInYear(lines, categories, year);
   const variableTops = topCategories(categories, 'living').filter((category) => category.budgetGroup === 'variable');
-  const closedKeys = yearMonthKeys(year).filter((monthKey) => isMonthClosed(closings, monthKey));
-  const unscheduled = isMonthClosed(closings, `${year}-12`) ? 0 : unscheduledForecast(lines, categories, records, year, closedKeys);
+  const recordedKeys = yearMonthKeys(year).filter((monthKey) => monthKey >= start && monthKey <= current);
+  const unscheduled = isMonthClosed(closings, `${year}-12`) ? 0 : unscheduledForecast(lines, categories, records, year, recordedKeys);
   let cumulative = 0;
   let closedMonths = 0;
-  const months = yearMonthKeys(year).map((monthKey, index) => {
-    if (monthKey < start) return { monthKey, counted: false, closed: false, balance: 0, cumulative };
+  let incomeTotal = 0;
+  let expenseTotal = 0;
+  const months = yearMonthKeys(year).map((monthKey, index): LandingMonth => {
+    if (monthKey < start) return { monthKey, counted: false, closed: false, income: 0, expense: 0, balance: 0, cumulative };
     const closed = isMonthClosed(closings, monthKey);
-    let balance: number;
+    let income: number;
+    let expense: number;
     if (closed) {
-      balance = buildMonthSummary(records, categories, budgets, monthKey).balance;
+      const summary = buildMonthSummary(records, categories, budgets, monthKey);
+      income = summary.income;
+      expense = summary.living;
       closedMonths += 1;
     } else {
-      const variable = variableTops.reduce((sum, category) => sum + (manualBudgetFor(budgets, category.id, monthKey) ?? 0), 0);
-      balance =
-        plan.months.income[index] -
-        variable -
-        plan.months.variable[index] -
-        plan.months.reserve[index] -
-        plan.months.confirmed[index] -
-        plan.months.estimate[index];
-      if (index === 11) balance += unscheduled;
+      income = plan.months.income[index];
+      expense =
+        monthKey <= current
+          ? expenseWithActuals(records, categories, budgets, lines, monthKey)
+          : variableTops.reduce((sum, category) => sum + (manualBudgetFor(budgets, category.id, monthKey) ?? 0), 0) +
+            plan.months.variable[index] +
+            plan.months.reserve[index] +
+            plan.months.confirmed[index] +
+            plan.months.estimate[index];
+      if (index === 11) expense -= unscheduled;
     }
-    cumulative += balance;
-    return { monthKey, counted: true, closed, balance, cumulative };
+    incomeTotal += income;
+    expenseTotal += expense;
+    cumulative += income - expense;
+    return { monthKey, counted: true, closed, income, expense, balance: income - expense, cumulative };
   });
-  return { months, total: cumulative, closedMonths, unscheduled };
+  return { months, total: cumulative, income: incomeTotal, expense: expenseTotal, closedMonths, unscheduled };
 }
 
-/** 発生月なしの予算の見込み（収入 − 支出）。小分類ごとに、その年の額 − 締めた月（closedKeys）の実績（0 未満は 0）。 */
+/**
+ * 締めていない今月まで（締め忘れた月も）の、その月の支出の見込み＝予算と実績の大きいほうの合計。
+ * 変動費は大分類ごと（月の予算）、予備費・固定費は小分類ごと（その月に発生する明細）。発生月なしの小分類・予算の無いもの・
+ * カテゴリの無い品目は実績（発生月なしの残りは12月に入れる）。
+ */
+function expenseWithActuals(
+  records: readonly MoneyRecord[],
+  categories: readonly MoneyCategory[],
+  budgets: readonly MoneyBudget[],
+  lines: readonly MoneyBudgetLine[],
+  monthKey: string,
+): number {
+  const year = yearOfMonth(monthKey);
+  const month = Number(monthKey.slice(5, 7));
+  const budget = new Map<string, number>();
+  for (const top of topCategories(categories, 'living')) {
+    if (top.budgetGroup !== 'variable') continue;
+    const amount = manualBudgetFor(budgets, top.id, monthKey);
+    if (amount !== null) budget.set(`top:${top.id}`, amount);
+  }
+  for (const line of lines) {
+    if (line.noMonth || budgetLineGroup(line, categories) === 'income') continue;
+    if (!budgetLineMonths(line, year).includes(month)) continue;
+    budget.set(`sub:${line.categoryId}`, (budget.get(`sub:${line.categoryId}`) ?? 0) + line.amount);
+  }
+  const actual = new Map<string, number>();
+  let other = 0;
+  for (const record of recordsInMonth(records, monthKey)) {
+    if (record.kind !== 'expense') continue;
+    for (const item of record.items) {
+      const topId = item.categoryId === null ? null : topCategoryIdOf(categories, item.categoryId);
+      const top = topId === null ? undefined : categories.find((category) => category.id === topId);
+      if (top === undefined) {
+        // 削除したカテゴリの品目（名前だけ残っている）も支出に数える（buildMonthSummary と同じ）。
+        if (item.categoryId !== null || item.categoryName !== '') other += item.amount;
+        continue;
+      }
+      const key = top.budgetGroup === 'variable' ? `top:${top.id}` : `sub:${item.categoryId}`;
+      actual.set(key, (actual.get(key) ?? 0) + item.amount);
+    }
+  }
+  let total = other;
+  for (const key of new Set([...budget.keys(), ...actual.keys()])) total += Math.max(budget.get(key) ?? 0, actual.get(key) ?? 0);
+  return total;
+}
+
+/** 発生月なしの予算の見込み（収入 − 支出）。小分類ごとに、その年の額（noMonthYearAmount）− monthKeys の実績（0 未満は 0）。 */
 function unscheduledForecast(
   lines: readonly MoneyBudgetLine[],
   categories: readonly MoneyCategory[],
   records: readonly MoneyRecord[],
   year: number,
-  closedKeys: readonly string[],
+  monthKeys: readonly string[],
 ): number {
   const byCategory = new Map<string, number>();
   for (const line of lines) {
-    if (!line.noMonth || !budgetLineInYear(line, year)) continue;
-    byCategory.set(line.categoryId, (byCategory.get(line.categoryId) ?? 0) + line.amount);
+    if (!line.noMonth) continue;
+    const amount = noMonthYearAmount(line, budgetLineGroup(line, categories), year);
+    if (amount === 0) continue;
+    byCategory.set(line.categoryId, (byCategory.get(line.categoryId) ?? 0) + amount);
   }
   let total = 0;
   for (const [categoryId, amount] of byCategory) {
     const income = categories.find((category) => category.id === categoryId)?.kind === 'income';
     let actual = 0;
-    for (const monthKey of closedKeys) {
+    for (const monthKey of monthKeys) {
       for (const record of recordsInMonth(records, monthKey)) {
         if (record.kind !== (income ? 'income' : 'expense')) continue;
         for (const item of record.items) if (item.categoryId === categoryId) actual += item.amount;
@@ -1881,7 +1945,176 @@ export function buildCategoryAnalysis(
   };
 }
 
-/** 使い始めた月（振替でない記録がいちばん古い月。YYYY-MM）。記録が1件も無ければ null。 */
+// ---- 振り返りの種類ごとの一覧（docs/kakei.md §0.9。2026-10-24） ----
+// 振り返り（月・年）は、予算に対して見る。並びは 変動費 → 予備費 → 固定費（中に確定・見込み）→ カテゴリなし。
+// - 変動費: 大分類ごと。予算 − 実績・使った割合の帯（buildBudgetTiles と同じ）
+// - 予備費: 記録のあった小分類だけ。年は年の予算（発生月なしは noMonthYearAmount）と比べ、月は額だけ（予算が月に割り当たらない）
+// - 固定費: 記録のあった小分類だけ。額は記録の合計で、確定は額だけ、見込みは記録のあった月の予算との差を添える
+// - カテゴリなし: カテゴリの無い品目（削除したカテゴリの品目を含む）
+
+export interface ReviewSubRow {
+  /** 小分類（大分類そのものに付けた品目は大分類）。 */
+  category: MoneyCategory;
+  /** 期間の実績。 */
+  actual: number;
+  /** 比べる予算（無ければ null）。予備費は年だけ、見込みは記録のあった月の分（年は発生月なしも）、確定は null。 */
+  budget: number | null;
+}
+
+export interface ReviewSections {
+  variable: BudgetTile[];
+  reserve: ReviewSubRow[];
+  confirmed: ReviewSubRow[];
+  estimate: ReviewSubRow[];
+  /** カテゴリの無い品目（削除したカテゴリの品目を含む）。 */
+  uncategorized: { count: number; amount: number };
+  /** 種類ごとの実績（目安の割合に使う。固定費は確定＋見込み。カテゴリの無い品目は入れない）。 */
+  spend: { variable: number; reserve: number; fixed: number };
+}
+
+/** 振り返りの「カテゴリなし」の行を開いたときの、仮のカテゴリ。 */
+export const UNCATEGORIZED: MoneyCategory = {
+  id: 'uncategorized',
+  kind: 'living',
+  parentId: null,
+  name: 'カテゴリなし',
+  icon: null,
+  iconColor: null,
+  position: 0,
+  archived: false,
+  budgetGroup: 'variable',
+};
+
+/** 品目のカテゴリが、今あるカテゴリか（無い・削除したものは false）。 */
+const knownCategory = (categories: readonly MoneyCategory[], categoryId: string | null): MoneyCategory | undefined =>
+  categoryId === null ? undefined : categories.find((category) => category.id === categoryId);
+
+/** 見ている期間（monthKeys。月なら1つ、年なら数える月）の、振り返りの種類ごとの一覧。year は年の振り返りか。 */
+export function buildReviewSections(
+  records: readonly MoneyRecord[],
+  categories: readonly MoneyCategory[],
+  budgets: readonly MoneyBudget[],
+  lines: readonly MoneyBudgetLine[],
+  monthKeys: readonly string[],
+  year: boolean,
+): ReviewSections {
+  const keys = new Set(monthKeys);
+  // 小分類ごと・月ごとの実績（予備費・固定費）
+  const subActual = new Map<string, Map<string, number>>();
+  const spend = { variable: 0, reserve: 0, fixed: 0 };
+  const uncategorized = { count: 0, amount: 0 };
+  for (const record of records) {
+    if (record.kind !== 'expense') continue;
+    const monthKey = monthKeyOf(record.occurredOn);
+    if (!keys.has(monthKey)) continue;
+    for (const item of record.items) {
+      if (knownCategory(categories, item.categoryId) === undefined) {
+        // カテゴリも名前も無い品目は、支出にも数えない（buildMonthSummary と同じ）
+        if (item.categoryId === null && item.categoryName === '') continue;
+        uncategorized.count += 1;
+        uncategorized.amount += item.amount;
+        continue;
+      }
+      const group = spendGroupOf(item.categoryId, categories);
+      if (group === 'variable') {
+        spend.variable += item.amount;
+        continue;
+      }
+      if (group === 'reserve') spend.reserve += item.amount;
+      else spend.fixed += item.amount;
+      const byMonth = subActual.get(item.categoryId as string) ?? new Map<string, number>();
+      byMonth.set(monthKey, (byMonth.get(monthKey) ?? 0) + item.amount);
+      subActual.set(item.categoryId as string, byMonth);
+    }
+  }
+  const subBudget = (categoryId: string, group: SpendGroup, byMonth: Map<string, number>): number | null => {
+    if (group === 'confirmed' || (group === 'reserve' && !year)) return null;
+    const own = lines.filter((line) => line.categoryId === categoryId);
+    // 月は発生月なしの予算を比べない（どの月に出るか決めていない）。発生月のある予算が無ければ額だけ
+    if (own.length === 0 || (!year && own.every((line) => line.noMonth))) return null;
+    // 予備費は見ている期間の月すべて、見込みは記録のあった月だけ
+    const months = group === 'reserve' ? monthKeys : [...byMonth.keys()];
+    let total = 0;
+    for (const line of own) {
+      if (line.noMonth) {
+        if (year) for (const y of new Set(monthKeys.map(yearOfMonth))) total += noMonthYearAmount(line, group, y);
+        continue;
+      }
+      for (const monthKey of months) {
+        if (budgetLineMonths(line, yearOfMonth(monthKey)).includes(Number(monthKey.slice(5, 7)))) total += line.amount;
+      }
+    }
+    return total;
+  };
+  // 小分類の行（カテゴリの並び。大分類の並び → その中の並び。大分類に直接付けた品目は大分類の名前で先頭に）
+  const rowsOf = (group: SpendGroup): ReviewSubRow[] => {
+    const rows: ReviewSubRow[] = [];
+    for (const top of topCategories(categories, 'living', true)) {
+      if (spendGroupOf(top.id, categories) !== group) continue;
+      for (const category of [top, ...childCategories(categories, top.id, true)]) {
+        const byMonth = subActual.get(category.id);
+        if (byMonth === undefined) continue;
+        const actual = [...byMonth.values()].reduce((sum, value) => sum + value, 0);
+        rows.push({ category, actual, budget: subBudget(category.id, group, byMonth) });
+      }
+    }
+    return rows;
+  };
+  return {
+    variable: buildBudgetTiles(records, categories, budgets, monthKeys, lines).filter(
+      (tile) => tile.category.budgetGroup === 'variable' && (tile.budget !== null || tile.actual > 0),
+    ),
+    reserve: rowsOf('reserve'),
+    confirmed: rowsOf('confirmed'),
+    estimate: rowsOf('estimate'),
+    uncategorized,
+    spend,
+  };
+}
+
+/** 目安の割合の、実績の割合（%。整数に丸める）。収入が0以下なら null。 */
+export const spendRatio = (spend: number, income: number): number | null => (income > 0 ? Math.round((spend / income) * 100) : null);
+
+/**
+ * 予備費・固定費の小分類（categoryId）、またはカテゴリの無い品目（UNCATEGORIZED.id）の、見ている期間の記録と実績。
+ * 振り返りの小分類の行を押したときの画面（記録の一覧）に使う。budget は行と同じ比べる予算。
+ */
+export function buildSubcategoryAnalysis(
+  records: readonly MoneyRecord[],
+  categories: readonly MoneyCategory[],
+  categoryId: string,
+  monthKeys: readonly string[],
+  budget: number | null,
+): CategoryAnalysis {
+  const keep = (item: MoneyItem) =>
+    categoryId === UNCATEGORIZED.id ? knownCategory(categories, item.categoryId) === undefined : item.categoryId === categoryId;
+  const narrowed = narrowRecords(records, monthKeys, keep);
+  const sum = (list: readonly MoneyRecord[]) =>
+    list.reduce((total, record) => total + record.items.reduce((inner, item) => inner + item.amount, 0), 0);
+  const actual = sum(narrowed);
+  return {
+    actual,
+    budget,
+    diff: (budget ?? 0) - actual,
+    percent: budget !== null && budget > 0 ? Math.round((actual / budget) * 100) : null,
+    previous: null,
+    children: [],
+    months: monthKeys.map((key) => ({ monthKey: key, amount: sum(narrowed.filter((record) => monthKeyOf(record.occurredOn) === key)), budget: null })),
+    records: narrowed,
+  };
+}
+
+/**
+ * 集計を始めた月（2026-10-24。docs/kakei.md §0.9）。家計は2026年の途中から始めたので、2026年は10〜12月の3か月だけを数える。
+ * 9月の記録はカードの引き落とし額を合わせるためだけに入れたもので、振り返り・収支見込みに入れず、締めの確認も出さない。
+ * 2026年だけの特例で、2027年からはその年すべて（1〜12月）。
+ */
+export const MONEY_COUNT_START = '2026-10';
+
+/**
+ * 使い始めた月（振替でない記録がいちばん古い月。ただし集計を始めた月〔MONEY_COUNT_START〕より前にはしない。YYYY-MM）。
+ * 記録が1件も無ければ null。
+ */
 export function usageStartMonth(records: readonly MoneyRecord[]): string | null {
   let start: string | null = null;
   for (const record of records) {
@@ -1889,7 +2122,20 @@ export function usageStartMonth(records: readonly MoneyRecord[]): string | null 
     const monthKey = monthKeyOf(record.occurredOn);
     if (start === null || monthKey < start) start = monthKey;
   }
-  return start;
+  return start === null ? null : start < MONEY_COUNT_START ? MONEY_COUNT_START : start;
+}
+
+/**
+ * 発生月なしの予算の、その年に数える額（かからない年は0）。集計を始めた年（2026年）だけは、数える月が3か月なので、
+ * 予備費は年の額 × 数える月 / 12（円に丸める）、固定費（確定・見込み。ふるさと納税・自治会費・祭礼費）はその年はもう済んでいたので0
+ * （2026-10-24。docs/kakei.md §0.9）。年間予算の画面（年の予算そのもの）には使わない。
+ */
+export function noMonthYearAmount(line: MoneyBudgetLine, group: BudgetLineGroup, year: number): number {
+  if (!budgetLineInYear(line, year)) return 0;
+  if (year !== yearOfMonth(MONEY_COUNT_START)) return line.amount;
+  if (group === 'confirmed' || group === 'estimate') return 0;
+  if (group === 'reserve') return Math.round((line.amount * (13 - Number(MONEY_COUNT_START.slice(5, 7)))) / 12);
+  return line.amount;
 }
 
 /**

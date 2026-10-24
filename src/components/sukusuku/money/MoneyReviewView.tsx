@@ -1,13 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import type {
   MoneyBudget,
   MoneyCardFeed,
   MoneyCategory,
   MoneyFeedItem,
   MoneyMonth,
+  MoneyRatioTargets,
   MoneyRecord,
   MoneyRecurring,
   MoneyBudgetLine,
@@ -16,27 +17,27 @@ import type {
 } from '@/types/app';
 import { cardMonthChecks } from '@/lib/moneyFeedUtils';
 import {
-  buildBudgetTiles,
   buildMonthSummary,
   buildCategoryAnalysis,
-  categoryYearLanding,
+  buildReviewSections,
+  buildSubcategoryAnalysis,
   buildYearLanding,
-  buildYearSummary,
-  compareWithPreviousYear,
   dateKeyOfDate,
   estimatesInMonth,
   formatBalance,
-  formatSignedYen,
   formatYear,
   formatYen,
   iconKeyOf,
   isMonthClosed,
   monthKeyOfDate,
   recordTotal,
+  spendRatio,
   unclosedMonths,
   yearActiveMonthKeys,
   yearMonthKeys,
+  UNCATEGORIZED,
   type BudgetTile,
+  type ReviewSubRow,
 } from '@/lib/moneyUtils';
 import {
   CategoryIcon,
@@ -51,27 +52,27 @@ import {
   type,
   type ReviewPeriod,
 } from './moneyVisual';
-import ReviewDetailScreen, { type ReviewDetail } from './ReviewDetailScreen';
+import ReviewDetailScreen from './ReviewDetailScreen';
 import MonthCloseScreen from './MonthCloseScreen';
 import YearTrendChart from './YearTrendChart';
 import { yearTrendPoints } from '@/lib/yearTrend';
 
-// 家計タブの「振り返り」（docs/kakei.md §4）。mobile版の `mobile/src/components/money/MoneyReviewView.tsx` と同じ並び・文言。
+// 家計タブの「振り返り」（docs/kakei.md §4・§0.9）。mobile版の `mobile/src/components/money/MoneyReviewView.tsx` と同じ並び・文言。
 //
-// 月と年は同じ面。上の送りの右「月 / 年」で期間を切り替える（2026-10-08に、別々の面から1つにした）。
-// 年は暦年（1月〜12月。2026-10-09に年度から変えた。予算の月額も年ごと）。
-// 結論は収支＝収入 − 支出（生活費）。
-// 貯金は記録なので式にも表示にも入れない。
-// 月には年初からの累計、年には月平均・前年の同じ月ぶんとの比べ・月ごとの収支と累計のグラフを添える（§0.4）。
-// 年と累計は、記録のある月だけを数える（記録は2026年10月から）。
-// その下の「内訳」は、大分類の一覧（カテゴリの並び順）。
-// 内訳の行を押すと、簡単な分析と、その行に絞った記録の一覧が開く（ReviewDetailScreen。§4.4）。
-// 年は内訳の下に月ごとの収支（押すとその月へ）。
-// 見込みの額（毎月の記録で自動で作り、まだ確かめていない額）は実績に入れて数え、件数と額を添えて出す（§3.3・§4.1）。
-// 月の締め（§4.5）: 過ぎた月と今月の結論の下に「この月を締める」（月の最終週に締めることもあるため、今月も出す）（締めた月は「締めた月」）。押すと締めの画面（MonthCloseScreen）。
-// 締めていない過ぎた月があれば、いちばん上に「◯月が締まっていません」と出す（押すとその月の締めの画面）。
-// 年の「推移」（§4.8）: 結論とカテゴリの間に、月ごとの収支（棒）と年初からの累計（折れ線）。締めた月は実線、ほかは年末まで点線（年末の着地見込みと同じ数え方。§4.6）。
-// 月を押すと吹き出しで収支と累計、吹き出しを押すとその月の振り返りへ。
+// 振り返りは予算に対して見る（2026-10-24）。月と年は同じ面で、上の送りの右「月 / 年」で期間を切り替える。年は暦年（1月〜12月）。
+// - 月の結論: 収支＝収入 − 支出（実績）。見込みの額（自動で作り、まだ確かめていない額）は実績に入れて、件数と額を添える
+// - 年の結論: 収支見込み（buildYearLanding。締めた月は実績、締めていない今月までは支出を予算と実績の大きいほう、翌月からは予算。
+//   収入は締めるまで予算）。2026年は10〜12月の3か月だけ（集計を始めた年の特例。MONEY_COUNT_START）
+// - 年の「推移」（§4.8）: 月ごとの収支（棒）と年初からの累計（折れ線）。締めた月は実線、ほかは点線
+// - その下は、変動費 → 予備費 → 固定費（中に確定・見込み）→ カテゴリなし の見出しごと（buildReviewSections）。見出しを押すと折りたたむ。
+//   はじめは変動費・予備費を開き、固定費は閉じておく。年の見出しの右に、実績の割合（その種類の支出の実績 ÷ 年の収入）と目安の割合
+//   （家計の設定の「目安の割合」）を「11%（目安35%）」の形で出す（目安を超えたら赤。月には出さない）
+//   - 変動費: 大分類ごとに、予算 − 実績・使った割合の帯・「実績 / 予算・%」
+//   - 予備費: 記録のあった小分類。年は年の予算と比べる（変動費と同じ行）、月は額だけ
+//   - 固定費: 記録のあった小分類の額。見込みは「予算より ¥x」を添える
+//   - 行を押すと、変動費は大分類の詳細（月ごとの実績・小分類・記録）、予備費・固定費・カテゴリなしはその記録の一覧（ReviewDetailScreen）
+// 月の締め（§4.5）: 過ぎた月と今月の結論の下に「この月を締める」（締めた月は「締めた月」）。押すと締めの画面（MonthCloseScreen）。
+// 締めていない過ぎた月があれば、いちばん上に「◯月が締まっていません」と出す（集計を始める前の月は出さない）。
 
 interface MoneyReviewViewProps {
   period: ReviewPeriod;
@@ -86,9 +87,9 @@ interface MoneyReviewViewProps {
   wallets: MoneyWallet[];
   /** 確定した残高（月の締めで、月末の残高を出す）。 */
   balances: MoneyWalletBalance[];
-  /** 年の「月ごと」の行を押したとき。その月の月の振り返りへ。 */
+  /** 年の「推移」の吹き出しを押したとき。その月の月の振り返りへ。 */
   onSelectMonth: (monthKey: string) => void;
-  /** 内訳の詳細の中で記録を押したとき。詳細を閉じて、記録の詳細を開く。 */
+  /** 詳細の中で記録を押したとき。詳細を閉じて、記録の詳細を開く。 */
   onOpenRecord: (record: MoneyRecord) => void;
   /** 月の締め（docs/kakei.md §4.5）。 */
   months: MoneyMonth[];
@@ -100,11 +101,19 @@ interface MoneyReviewViewProps {
   cardFeed: MoneyCardFeed | null;
   onConfirmEstimate: (record: MoneyRecord) => Promise<void>;
   onSetMonthClosed: (monthKey: string, closed: boolean) => void;
-  /** 予算の明細（収入・予備費・固定費。内訳の予算と年の推移。docs/kakei.md §0.7）。 */
+  /** 予算の明細（収入・予備費・固定費。年の収支見込みと、予備費・固定費の予算。docs/kakei.md §0.7）。 */
   budgetLines: MoneyBudgetLine[];
+  /** 目安の割合（docs/kakei.md §0.9）。年の見出しに出す。 */
+  ratioTargets: MoneyRatioTargets;
   /** 未確認の明細を開く。締めの画面からは、その月（日付未定の見込みもその月の分を出す）。 */
   onOpenFeed: (monthKey?: string) => void;
 }
+
+/** 見出しの種類（折りたたむ単位）。 */
+type SectionKey = 'variable' | 'reserve' | 'fixed' | 'none';
+
+/** 詳細を開いている行。sub は予備費・固定費・カテゴリなし（記録の一覧）。budget はその行と同じ比べる予算。 */
+type OpenDetail = { category: MoneyCategory; sub: false } | { category: MoneyCategory; sub: true; budget: number | null };
 
 export default function MoneyReviewView({
   period,
@@ -123,6 +132,7 @@ export default function MoneyReviewView({
   months: closings,
   recurring,
   budgetLines,
+  ratioTargets,
   feedItems,
   cardFeed,
   onConfirmEstimate,
@@ -131,10 +141,19 @@ export default function MoneyReviewView({
 }: MoneyReviewViewProps) {
   const isMonth = period === 'month';
   const today = monthKeyOfDate(new Date());
-  const [detail, setDetail] = useState<ReviewDetail | null>(null);
+  const [detail, setDetail] = useState<OpenDetail | null>(null);
   const [monthDetail, setMonthDetail] = useState<{ category: MoneyCategory; monthKey: string } | null>(null);
   // 締めの画面を開いている月。
   const [closing, setClosing] = useState<string | null>(null);
+  // 折りたたんでいる見出し。はじめは固定費だけ閉じておく（2026-10-24）。
+  const [collapsed, setCollapsed] = useState<ReadonlySet<SectionKey>>(() => new Set<SectionKey>(['fixed']));
+  const toggle = (key: SectionKey) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   const unclosed = useMemo(() => unclosedMonths(records, closings, today), [records, closings, today]);
   const monthClosed = isMonthClosed(closings, monthKey);
   const openClosing = (target: string) => {
@@ -147,59 +166,58 @@ export default function MoneyReviewView({
     () => buildMonthSummary(records, categories, budgets, monthKey),
     [records, categories, budgets, monthKey],
   );
-  const yearSummary = useMemo(
-    () => buildYearSummary(records, categories, budgets, year, today),
-    [records, categories, budgets, year, today],
+  // 年の収支見込み（§0.9・§4.6）と「推移」（§4.8）。
+  const landing = useMemo(
+    () => (isMonth ? null : buildYearLanding(records, categories, budgets, budgetLines, closings, year, today)),
+    [isMonth, records, categories, budgets, budgetLines, closings, year, today],
   );
-  // 年の「推移」グラフ（§4.8）。締めた月は実額、ほかは年末まで見込み（年末の着地見込みと同じ数え方。§4.6）。
-  const trend = useMemo(() => {
-    if (isMonth) return [];
-    const result = buildYearLanding(records, categories, budgets, budgetLines, closings, year);
-    return result === null ? [] : yearTrendPoints(result.months);
-  }, [isMonth, records, categories, budgets, budgetLines, closings, year]);
-  // 年: 前の年の同じ期間との比べ。
-  const comparison = useMemo(
-    () => (isMonth ? null : compareWithPreviousYear(records, categories, budgets, year, today)),
-    [isMonth, records, categories, budgets, year, today],
-  );
-  // 見ている期間の月。月なら1つ、年なら使い始めた月から12月まで（年の予算がかかる月。使い始める前の月の予算は数えない。2026-10-15）。
+  const trend = useMemo(() => (landing === null ? [] : yearTrendPoints(landing.months)), [landing]);
+  // 見ている期間の月。月なら1つ、年なら数える月（2026年は10〜12月。2027年からは1〜12月）。
   const periodKeys = useMemo(
     () => (isMonth ? [monthKey] : yearActiveMonthKeys(records, year)),
     [isMonth, monthKey, records, year],
   );
-  const tiles = useMemo(
-    () => (periodKeys.length === 0 ? [] : buildBudgetTiles(records, categories, budgets, periodKeys, budgetLines)),
-    [periodKeys, records, categories, budgets, budgetLines],
+  const sections = useMemo(
+    () => (periodKeys.length === 0 ? null : buildReviewSections(records, categories, budgets, budgetLines, periodKeys, !isMonth)),
+    [periodKeys, records, categories, budgets, budgetLines, isMonth],
   );
-  const income = isMonth ? month.income : yearSummary.total.income;
-  const living = isMonth ? month.living : yearSummary.total.living;
-  const balance = isMonth ? month.balance : yearSummary.total.balance;
+
+  const income = isMonth ? month.income : (landing?.income ?? 0);
+  const living = isMonth ? month.living : (landing?.expense ?? 0);
+  const balance = isMonth ? month.balance : (landing?.total ?? 0);
   const estimates = useMemo(() => {
     const keys = isMonth ? [monthKey] : yearMonthKeys(year).filter((key) => key <= today);
     const list = keys.flatMap((key) => estimatesInMonth(records, key));
     return { count: list.length, amount: list.reduce((sum, record) => sum + recordTotal(record), 0) };
   }, [isMonth, monthKey, year, today, records]);
 
-  // 内訳の行を押したときの分析。見ている期間の予算（年は年の予算）・実績・小分類ごと・記録。年は締めた月ごとの実績も出す（2026-10-16）。
-  const analysis = useMemo(
-    () => (detail === null ? null : buildCategoryAnalysis(records, categories, budgets, detail.category.id, periodKeys, null)),
-    [detail, periodKeys, records, categories, budgets],
-  );
-  // 年の詳細の月ごとの行（1月から。締めていない月も入る。2026-10-16）。
+  // 年の見出しの右の割合（実績の割合〔目安〕。目安を決めていない種類は出さない）。
+  const ratioOf = (spend: number, target: number | null): ReactNode => {
+    if (isMonth || target === null) return null;
+    const ratio = spendRatio(spend, income);
+    if (ratio === null) return null;
+    return (
+      <span className="text-xs font-semibold tabular-nums text-gray-400">
+        <span className={`text-[13px] font-extrabold ${ratio > target ? 'text-red-600' : 'text-gray-900'}`}>{`${ratio}%`}</span>
+        {`（目安${target}%）`}
+      </span>
+    );
+  };
+
+  // 行を押したときの分析。変動費は大分類（月ごと・小分類・記録）、予備費・固定費・カテゴリなしはその記録。
+  const analysis = useMemo(() => {
+    if (detail === null) return null;
+    return detail.sub
+      ? buildSubcategoryAnalysis(records, categories, detail.category.id, periodKeys, detail.budget)
+      : buildCategoryAnalysis(records, categories, budgets, detail.category.id, periodKeys, null);
+  }, [detail, periodKeys, records, categories, budgets]);
+  // 年の大分類の詳細の、月ごとの行（数える月。締めていない月も入る。2026-10-16）。予備費・固定費は記録の一覧を出す。
   const monthRows = useMemo(
     () =>
-      isMonth || analysis === null
+      isMonth || analysis === null || detail === null || detail.sub
         ? null
         : analysis.months.map((entry) => ({ ...entry, closed: isMonthClosed(closings, entry.monthKey) })),
-    [isMonth, analysis, closings],
-  );
-  // 年の詳細の年末の着地見込み（締めた月は実績、ほかの月は月の予算）。
-  const categoryLanding = useMemo(
-    () =>
-      isMonth || analysis === null
-        ? null
-        : categoryYearLanding(analysis.months, new Set(analysis.months.filter((entry) => isMonthClosed(closings, entry.monthKey)).map((entry) => entry.monthKey))),
-    [isMonth, analysis, closings],
+    [isMonth, analysis, detail, closings],
   );
   // 年の詳細の月の行を押したときの、その月のカテゴリの詳細。
   const monthAnalysis = useMemo(
@@ -210,6 +228,25 @@ export default function MoneyReviewView({
     [monthDetail, records, categories, budgets],
   );
   const periodLabel = isMonth ? `${Number(monthKey.slice(5, 7))}月` : formatYear(year);
+
+  const openSub = (row: ReviewSubRow) => setDetail({ category: row.category, sub: true, budget: row.budget });
+  // 予備費・固定費の行。予算と比べるもの（年の予備費）は変動費と同じ行、ほかは額だけ（見込みは予算との差を添える）。
+  const subRow = (row: ReviewSubRow, compare: boolean) =>
+    compare && row.budget !== null ? (
+      <CategoryRow key={row.category.id} tile={tileOf(row)} onClick={() => openSub(row)} />
+    ) : (
+      <AmountRow
+        key={row.category.id}
+        category={row.category}
+        amount={row.actual}
+        diff={!compare && row.budget !== null ? row.budget - row.actual : null}
+        onClick={() => openSub(row)}
+      />
+    );
+
+  const fixedCount = sections === null ? 0 : sections.confirmed.length + sections.estimate.length;
+  // 年は目安を決めていれば記録が無くても見出しを出す（割合を見るため）。
+  const showSection = (count: number, target: number | null) => count > 0 || (!isMonth && target !== null);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -237,7 +274,7 @@ export default function MoneyReviewView({
         )}
         <Hero
           compact
-          label="収支"
+          label={isMonth ? '収支' : '収支見込み'}
           value={formatBalance(balance)}
           plus={balance > 0}
         >
@@ -250,28 +287,6 @@ export default function MoneyReviewView({
                 見込み {estimates.count}件（{formatYen(estimates.amount)}）
               </span>
             </div>
-          )}
-          {/* 年の月平均・前年との比べは、収支と混同しないよう、線で分ける（2026-10-16） */}
-          {!isMonth && (
-            <>
-              <div className="my-1.5 border-t border-gray-300" />
-              {yearSummary.average !== null && (
-                <StatRow
-                  compact
-                  label="月平均"
-                  value={formatBalance(yearSummary.average.balance)}
-                  plus={yearSummary.average.balance > 0}
-                />
-              )}
-              {comparison !== null && (
-                <StatRow
-                  compact
-                  label="前年の同じ期間より"
-                  value={formatSignedYen(comparison.diff)}
-                  plus={comparison.diff > 0}
-                />
-              )}
-            </>
           )}
           {isMonth && (monthClosed || monthKey <= today) && (
             <button
@@ -287,49 +302,50 @@ export default function MoneyReviewView({
           )}
         </Hero>
 
-
-        {isMonth ? (
+        {!isMonth && trend.length > 0 && (
           <>
-            <SectionHeader
-              compact
-              title="内訳"
-            />
-            {tiles.length === 0 && (
-              <p className="py-6 text-center text-[13px] text-gray-400">「カテゴリ」と「予算」を決めると、ここに予算との差が出ます</p>
-            )}
-            <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
-              {tiles.map((tile) => (
-                <CategoryRow
-                  key={tile.category.id}
-                  tile={tile}
-                  onClick={() => setDetail({ type: 'category', category: tile.category })}
-                />
-              ))}
+            <SectionHeader compact title="推移" right={<TrendLegend />} />
+            <div className={`${cardClass} px-1 py-1`}>
+              <YearTrendChart points={trend} initialMonthKey={today} onSelectMonth={onSelectMonth} />
             </div>
           </>
+        )}
+
+        {sections === null || (sections.variable.length === 0 && sections.reserve.length === 0 && fixedCount === 0 && sections.uncategorized.count === 0) ? (
+          <p className="py-6 text-center text-[13px] text-gray-400">「年間予算」を決めて記録をつけると、ここに予算との差が出ます</p>
         ) : (
           <>
-            {trend.length > 0 && (
-              <>
-                <SectionHeader compact title="推移" right={<TrendLegend />} />
-                <div className={`${cardClass} px-1 py-1`}>
-                  <YearTrendChart points={trend} initialMonthKey={today} onSelectMonth={onSelectMonth} />
-                </div>
-              </>
+            {showSection(sections.variable.length, ratioTargets.variable) && (
+              <Section title="変動費" count={sections.variable.length} open={!collapsed.has('variable')} onToggle={() => toggle('variable')} right={ratioOf(sections.spend.variable, ratioTargets.variable)}>
+                {sections.variable.map((tile) => (
+                  <CategoryRow key={tile.category.id} tile={tile} onClick={() => setDetail({ category: tile.category, sub: false })} />
+                ))}
+              </Section>
             )}
-            <SectionHeader compact title="カテゴリ" />
-            {tiles.length === 0 && (
-              <p className="py-6 text-center text-[13px] text-gray-400">「カテゴリ」と「予算」を決めると、ここに年の予算との差が出ます</p>
+            {showSection(sections.reserve.length, ratioTargets.reserve) && (
+              <Section title="予備費" count={sections.reserve.length} open={!collapsed.has('reserve')} onToggle={() => toggle('reserve')} right={ratioOf(sections.spend.reserve, ratioTargets.reserve)}>
+                {sections.reserve.map((row) => subRow(row, !isMonth))}
+              </Section>
             )}
-            <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>
-              {tiles.map((tile) => (
-                <CategoryRow
-                  key={tile.category.id}
-                  tile={tile}
-                  onClick={() => setDetail({ type: 'category', category: tile.category })}
+            {showSection(fixedCount, ratioTargets.fixed) && (
+              <Section title="固定費" count={fixedCount} open={!collapsed.has('fixed')} onToggle={() => toggle('fixed')} right={ratioOf(sections.spend.fixed, ratioTargets.fixed)}>
+                {sections.confirmed.length > 0 && <p className="px-3 pb-0.5 pt-1.5 text-xs font-bold text-gray-500">確定</p>}
+                {sections.confirmed.map((row) => subRow(row, false))}
+                {sections.estimate.length > 0 && <p className="px-3 pb-0.5 pt-1.5 text-xs font-bold text-gray-500">見込み</p>}
+                {sections.estimate.map((row) => subRow(row, false))}
+              </Section>
+            )}
+            {sections.uncategorized.count > 0 && (
+              <Section title="カテゴリなし" count={1} open={!collapsed.has('none')} onToggle={() => toggle('none')}>
+                <AmountRow
+                  category={UNCATEGORIZED}
+                  label={`${sections.uncategorized.count}品目`}
+                  amount={sections.uncategorized.amount}
+                  diff={null}
+                  onClick={() => setDetail({ category: UNCATEGORIZED, sub: true, budget: null })}
                 />
-              ))}
-            </div>
+              </Section>
+            )}
           </>
         )}
       </div>
@@ -363,11 +379,11 @@ export default function MoneyReviewView({
 
       {detail !== null && (
         <ReviewDetailScreen
-          detail={detail}
+          detail={{ type: 'category', category: detail.category }}
           periodLabel={periodLabel}
           analysis={analysis}
           monthRows={monthRows}
-          landing={categoryLanding}
+          landing={null}
           onOpenMonth={(key) => setMonthDetail({ category: detail.category, monthKey: key })}
           categories={categories}
           wallets={wallets}
@@ -401,6 +417,55 @@ export default function MoneyReviewView({
   );
 }
 
+/** 予算と比べる小分類の行（年の予備費）を、変動費と同じ行の形にする。 */
+const tileOf = (row: ReviewSubRow): BudgetTile => {
+  const budget = row.budget ?? 0;
+  return {
+    category: row.category,
+    budget: row.budget,
+    actual: row.actual,
+    diff: budget - row.actual,
+    percent: budget > 0 ? Math.round((row.actual / budget) * 100) : null,
+  };
+};
+
+/** 折りたためる見出し（押すと開く・閉じる。開閉の印は左）と、その中の一覧のカード。right は年の割合。 */
+function Section({
+  title,
+  count,
+  open,
+  onToggle,
+  right,
+  children,
+}: {
+  title: string;
+  /** 中の行の数（0 なら見出しだけ）。 */
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  right?: ReactNode;
+  children: ReactNode;
+}) {
+  const Icon = open ? ChevronDown : ChevronRight;
+  return (
+    <>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={`${title}を${open ? '閉じる' : '開く'}`}
+        onClick={onToggle}
+        className="mt-3.5 mb-1.5 flex w-full items-center gap-1.5 text-left"
+      >
+        <Icon size={16} className="text-gray-400" />
+        <h3 className={type.title}>{title}</h3>
+        <span className="flex-1" />
+        {right}
+      </button>
+      {open && count > 0 && <div className={`${cardClass} divide-y divide-gray-200 overflow-hidden`}>{children}</div>}
+    </>
+  );
+}
+
 /** 「推移」の見出しの右の凡例（棒＝収支、折れ線＝年の累計）。 */
 function TrendLegend() {
   return (
@@ -417,7 +482,7 @@ function TrendLegend() {
   );
 }
 
-/** 大分類の1行（Zaim と同じく小さく）。アイコン・名前・**予算との差**（予算 − 実績。黒字は緑・赤字は「−」の黒）、使った割合の帯、実績・予算（2026-10-16）。 */
+/** 大分類の1行（Zaim と同じく小さく）。アイコン・名前・**予算との差**（予算 − 実績。黒字は緑・赤字は「−」の黒）、使った割合の帯、実績・予算（2026-10-16）。予算が無ければ実績の額だけ。 */
 function CategoryRow({ tile, onClick }: { tile: BudgetTile; onClick: () => void }) {
   const over = tile.budget !== null && tile.diff < 0;
   return (
@@ -432,23 +497,63 @@ function CategoryRow({ tile, onClick }: { tile: BudgetTile; onClick: () => void 
         <div className="flex items-baseline gap-2">
           <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">{tile.category.name}</span>
           {tile.budget === null ? (
-            <span className="text-[15px] font-extrabold text-gray-400">予算なし</span>
+            <span className="text-[15px] font-extrabold tabular-nums text-gray-900">{formatYen(tile.actual)}</span>
           ) : (
             <span className={`text-[15px] font-extrabold tabular-nums ${tile.diff > 0 ? incomeAmountClass : 'text-gray-900'}`}>
               {formatBalance(tile.diff)}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <ProgressBar ratio={tile.budget ? tile.actual / tile.budget : 0} over={over} />
+        {tile.budget !== null && (
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <ProgressBar ratio={tile.budget ? tile.actual / tile.budget : 0} over={over} />
+            </div>
+            <span className={`shrink-0 ${type.faint}`}>
+              {`${formatYen(tile.actual)} / ${formatYen(tile.budget)}`}
+              {tile.percent !== null ? `・${tile.percent}%` : ''}
+            </span>
           </div>
-          <span className={`shrink-0 ${type.faint}`}>
-            {formatYen(tile.actual)}
-            {tile.budget !== null ? ` / ${formatYen(tile.budget)}` : ''}
-            {tile.percent !== null ? `・${tile.percent}%` : ''}
-          </span>
+        )}
+      </div>
+      <ChevronRight size={16} className="text-gray-400" />
+    </button>
+  );
+}
+
+/** 予備費・固定費・カテゴリなしの1行（額だけ。帯は付けない）。diff は固定費（見込み）の予算との差（予算 − 実績）。 */
+function AmountRow({
+  category,
+  label,
+  amount,
+  diff,
+  onClick,
+}: {
+  category: MoneyCategory;
+  label?: string;
+  amount: number;
+  diff: number | null;
+  onClick: () => void;
+}) {
+  const name = label ?? category.name;
+  return (
+    <button
+      type="button"
+      aria-label={`${name}の記録を見る`}
+      onClick={onClick}
+      className="flex w-full items-center gap-2.5 px-3 py-[7px] text-left hover:bg-gray-50"
+    >
+      <CategoryIcon iconKey={iconKeyOf(category)} size={28} />
+      <div className="min-w-0 flex-1 space-y-[3px]">
+        <div className="flex items-baseline gap-2">
+          <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">{name}</span>
+          <span className="text-[15px] font-extrabold tabular-nums text-gray-900">{formatYen(amount)}</span>
         </div>
+        {diff !== null && (
+          <p className={`text-[11px] font-semibold tabular-nums ${diff < 0 ? 'text-red-600' : diff > 0 ? incomeAmountClass : 'text-gray-400'}`}>
+            {`予算より ${formatBalance(diff)}`}
+          </p>
+        )}
       </div>
       <ChevronRight size={16} className="text-gray-400" />
     </button>

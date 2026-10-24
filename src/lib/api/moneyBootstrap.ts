@@ -6,6 +6,7 @@ import {
   rowToCategory,
   rowToMonth,
   rowToRecord,
+  rowsToRatioTargets,
   rowToRecurring,
   rowToStore,
   rowToWallet,
@@ -17,7 +18,7 @@ type SupabaseDb = SupabaseClient<Database>;
 
 // 家計タブの起動で読むものを、DBの関数 money_bootstrap(p_family_id)（0076）で1回にまとめて読む（docs/kakei.md §9.2.6）。
 // mobile版 の `mobile/src/lib/api/moneyBootstrap.ts` と同じ。
-// カテゴリ・予算・出金元・お店・定期・残高・記録（品目つき）・証券の銘柄と保有・
+// カテゴリ・出金元・お店・定期（予算）・残高・記録（品目つき）・月の締め・目安の割合・証券の銘柄と保有・
 // 保有ごとの最新の評価額を、表の行そのままの JSON で返すので、行 → 画面の型への変換は個別に読むときと同じものを使う。
 
 export interface MoneyBootstrap {
@@ -55,6 +56,7 @@ export async function loadMoneyBootstrap(
       recurring: rows<Tables<'money_recurring'>>('recurring').map(rowToRecurring),
       balances: rows<Tables<'money_wallet_balances'>>('balances').map(rowToBalance),
       months: rows<Tables<'money_months'>>('months').map(rowToMonth),
+      ratioTargets: rowsToRatioTargets(rows<Tables<'money_ratio_targets'>>('ratio_targets')),
     },
     securities: {
       securities: rows<Tables<'money_securities'>>('securities').map(rowToSecurity),
