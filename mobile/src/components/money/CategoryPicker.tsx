@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ChevronDown, ChevronUp, Settings2 } from 'lucide-react-native';
+import { ChevronDown, ChevronUp } from 'lucide-react-native';
 import type { MoneyCategory } from '@/types/app';
 import { colors } from '@/lib/theme';
 import {
@@ -26,8 +26,6 @@ interface CategoryPickerProps {
   categories: MoneyCategory[];
   onPick: (choice: CategoryChoice) => void;
   onClose: () => void;
-  /** カテゴリ・予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
-  onEditCategories?: () => void;
   /** 出す大分類を絞る（年間予算で、予算の分け方の合う大分類だけを選ばせる）。無ければすべて。 */
   onlyTops?: (top: MoneyCategory) => boolean;
 }
@@ -37,7 +35,6 @@ export default function CategoryPicker({
   categories,
   onPick,
   onClose,
-  onEditCategories,
   onlyTops,
 }: CategoryPickerProps) {
   const categoryKind = kind === 'income' ? 'income' : 'living';
@@ -68,21 +65,10 @@ export default function CategoryPicker({
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader
-        title="カテゴリを選ぶ"
-        icon="back"
-        onClose={onClose}
-        right={
-          onEditCategories && (
-            <Pressable accessibilityRole="button" accessibilityLabel="カテゴリ・予算を編集" onPress={onEditCategories} hitSlop={8}>
-              <Settings2 size={20} color={colors.textMuted} />
-            </Pressable>
-          )
-        }
-      />
+      <ScreenHeader title="カテゴリを選ぶ" icon="back" onClose={onClose} />
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
         {tops.length === 0 && (
-          <Text style={styles.empty}>カテゴリがまだありません。右上の歯車からカテゴリを作れます</Text>
+          <Text style={styles.empty}>カテゴリがまだありません。年間予算から作れます</Text>
         )}
         {tops.map((top) => {
           const children = childCategories(categories, top.id);

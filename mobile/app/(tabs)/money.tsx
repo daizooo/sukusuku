@@ -83,7 +83,6 @@ import MoneyAccountsView from '@/components/money/MoneyAccountsView';
 import MoneyRecordsView from '@/components/money/MoneyRecordsView';
 import MoneyReviewView from '@/components/money/MoneyReviewView';
 import RecordEditor from '@/components/money/RecordEditor';
-import CategoryEditor from '@/components/money/CategoryEditor';
 import MoneySettings from '@/components/money/MoneySettings';
 import MoneyFab from '@/components/money/MoneyFab';
 import MoneyFeedInbox from '@/components/money/MoneyFeedInbox';
@@ -178,7 +177,6 @@ export default function MoneyScreen() {
   // レシートを当てている既にある記録（§10.8）。null は新しい記録の読み取り。
   const [receiptFor, setReceiptFor] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [editingCategories, setEditingCategories] = useState(false);
   // 予算（年ごと）を開いている年。null は閉じている（docs/kakei.md §3.1）。
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 家計の設定を、この固定支出の編集から開く（予算の画面の固定費の行から）。
@@ -882,7 +880,6 @@ export default function MoneyScreen() {
           onSubmit={(draft) => void saveRecord(draft)}
           onSubmitNext={(draft) => void saveRecord(draft, true)}
           onDelete={(record) => void removeRecord(record)}
-          onEditCategories={() => setEditingCategories(true)}
         />
       )}
 
@@ -949,15 +946,6 @@ export default function MoneyScreen() {
             setFeedOpen(false);
             setFeedMonth(null);
           }}
-        />
-      )}
-
-      {editingCategories && familyId && (
-        <CategoryEditor
-          familyId={familyId}
-          categories={categories}
-          onCategories={setCategories}
-          onClose={() => setEditingCategories(false)}
         />
       )}
 

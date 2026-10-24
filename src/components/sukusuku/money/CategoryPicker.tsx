@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { MoneyCategory } from '@/types/app';
 import {
   childCategories,
@@ -26,8 +26,6 @@ interface CategoryPickerProps {
   categories: MoneyCategory[];
   onPick: (choice: CategoryChoice) => void;
   onClose: () => void;
-  /** カテゴリ・予算の編集へ。無ければ歯車を出さない（家計の設定の中から開いたとき）。 */
-  onEditCategories?: () => void;
   /** 出す大分類を絞る（年間予算で、予算の分け方の合う大分類だけを選ばせる）。無ければすべて。 */
   onlyTops?: (top: MoneyCategory) => boolean;
 }
@@ -39,7 +37,6 @@ export default function CategoryPicker({
   categories,
   onPick,
   onClose,
-  onEditCategories,
   onlyTops,
 }: CategoryPickerProps) {
   const categoryKind = kind === 'income' ? 'income' : 'living';
@@ -70,21 +67,10 @@ export default function CategoryPicker({
 
   return (
     <StackedScreen onBack={onClose}>
-      <ScreenHeader
-        title="カテゴリを選ぶ"
-        icon="back"
-        onClose={onClose}
-        right={
-          onEditCategories && (
-            <button type="button" aria-label="カテゴリ・予算を編集" onClick={onEditCategories} className="text-gray-500">
-              <Settings2 size={20} />
-            </button>
-          )
-        }
-      />
+      <ScreenHeader title="カテゴリを選ぶ" icon="back" onClose={onClose} />
       <div ref={listRef} className="relative flex flex-1 min-h-0 flex-col overflow-y-auto pb-2">
         {tops.length === 0 && (
-          <p className="py-6 text-center text-sm text-gray-400">カテゴリがまだありません。右上の歯車からカテゴリを作れます</p>
+          <p className="py-6 text-center text-sm text-gray-400">カテゴリがまだありません。年間予算から作れます</p>
         )}
         {tops.map((top) => {
           const children = childCategories(categories, top.id);

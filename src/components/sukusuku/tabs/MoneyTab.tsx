@@ -78,7 +78,6 @@ import MoneyAccountsView from '../money/MoneyAccountsView';
 import MoneyRecordsView from '../money/MoneyRecordsView';
 import MoneyReviewView from '../money/MoneyReviewView';
 import RecordEditor from '../money/RecordEditor';
-import CategoryEditor from '../money/CategoryEditor';
 import MoneySettings from '../money/MoneySettings';
 import MoneyFab from '../money/MoneyFab';
 import MoneyFeedInbox from '../money/MoneyFeedInbox';
@@ -173,7 +172,6 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const receiptTarget = useRef<MoneyRecord | null>(null);
   const [scanning, setScanning] = useState(false);
   const receiptInput = useRef<HTMLInputElement>(null);
-  const [editingCategories, setEditingCategories] = useState(false);
   // 予算（年ごと）を開いている年。null は閉じている（docs/kakei.md §3.1）。
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 家計の設定を、この固定支出の編集から開く（予算の画面の固定費の行から）。
@@ -903,16 +901,6 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
           onSubmit={(draft) => void saveRecord(draft)}
           onSubmitNext={(draft) => void saveRecord(draft, true)}
           onDelete={(record) => void removeRecord(record)}
-          onEditCategories={() => setEditingCategories(true)}
-        />
-      )}
-
-      {editingCategories && (
-        <CategoryEditor
-          familyId={familyId}
-          categories={categories}
-          onCategories={setCategories}
-          onClose={() => setEditingCategories(false)}
         />
       )}
 

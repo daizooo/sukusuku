@@ -101,7 +101,6 @@ export interface RecordEditorProps {
   /** 記録して、続けて次の記録を入れる（新しく足すときだけ。日付を引き継ぐ。docs/kakei.md §3.2。2026-10-20）。 */
   onSubmitNext?: (draft: MoneyRecordDraft) => void;
   onDelete: (record: MoneyRecord) => void;
-  onEditCategories: () => void;
   /**
    * レシートの読み取りの結果。あれば、その内容を入れた新しい記録として開く（docs/kakei.md §10.4）。
    * 既にある記録（record）と一緒に渡すと、出金元・日付はそのままで、品目をレシートの品目に入れ替えて開く（§10.8）。
@@ -145,7 +144,6 @@ export default function RecordEditor({
   onSubmit,
   onSubmitNext,
   onDelete,
-  onEditCategories,
   receipt = null,
   onScanReceipt,
   initialKind = 'expense',
@@ -391,7 +389,6 @@ export default function RecordEditor({
             categories={categories}
             onPick={(choice) => pickCategory(choice, screen)}
             onClose={back}
-            onEditCategories={onEditCategories}
           />
         );
       case 'wallet':
