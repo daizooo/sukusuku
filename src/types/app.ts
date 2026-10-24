@@ -506,7 +506,7 @@ export type MoneyBudgetGroup = 'variable' | 'reserve' | 'fixed' | 'estimate';
 export interface MoneyBudgetLine {
   id: string;
   categoryId: string;
-  /** 区別のための名前（「時短」「2回目」など。空でよい）。 */
+  /** 品目の名前（「時短」「2回目」など。空でよい）。 */
   name: string;
   /** 単価（1回の額）。 */
   amount: number;

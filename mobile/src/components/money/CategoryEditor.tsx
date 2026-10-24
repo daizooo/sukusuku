@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Modal from '@/components/ui/Modal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, ChevronDown, ChevronUp, GripVertical, Pencil, Plus } from 'lucide-react-native';
-import type { MoneyBudgetGroup, MoneyCategory, MoneyCategoryKind } from '@/types/app';
+import { Check, ChevronDown, ChevronUp, GripVertical, Palette } from 'lucide-react-native';
+import type { MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
@@ -15,26 +15,20 @@ import {
   MONEY_ICONS,
   topCategories,
 } from '@/lib/moneyUtils';
-import {
-  insertDefaultMoneyCategories,
-  deleteMoneyCategory,
-  insertMoneyCategory,
-  updateMoneyCategory,
-} from '@/lib/api/money';
+import { insertDefaultMoneyCategories, updateMoneyCategory } from '@/lib/api/money';
 import { useDragReorder } from '@/components/list/useDragReorder';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
-import { Chip, ChipRow } from '@/components/money/feedParts';
 
 // カテゴリ（docs/kakei.md §3.1）。PWA版の `src/components/sukusuku/money/CategoryEditor.tsx` と同じ並び・文言。
 //
-// 大分類（予算を置く単位）と小分類の追加・名前の変更・並べ替え・削除。並べ替えは一覧のまま指で動かす
+// ここでできるのは、大分類のアイコン（絵と色）と並べ替えだけ（2026-10-24）。名前の変更・追加・削除は、予算が本体なので年間予算（BudgetEditor）で行い、
+// カテゴリはそれを表示するだけ（固定費・予備費の小分類は、予算から決まる）。並べ替えは一覧のまま指で動かす
 // （大分類は左の持ち手をつかむ、小分類は長押し。リストと同じ操作。components/list/useDragReorder.ts）。
 // 大分類を1行ずつ並べ、押した1つだけ開いて小分類を出す（アコーディオン。2026-10-24。カテゴリの選択と同じ見せ方。docs/kakei.md §3.2）。
-// 小分類が多い大分類（固定費（確定）23件など）で、全部並べると見にくかった。大分類の名前・アイコンの編集は、開いた中の「大分類を編集」から。
-// 大分類のアイコンは絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。
-// 予算は年ごとに決めるものなので、ここには置かず、別の設定「予算」（BudgetEditor）にした（2026-10-15）。
+// 小分類が多い大分類（固定費（確定）23件など）で、全部並べると見にくかった。大分類の行を押すのは開閉で、アイコンは開いた中の「アイコンを変える」から。
+// 大分類のアイコンは、大分類をタップして絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。
 // カテゴリがまだ無い家族には「標準のカテゴリで始める」（Zaim のカテゴリをもとにした並び）。
 
 interface CategoryEditorProps {
@@ -44,10 +38,7 @@ interface CategoryEditorProps {
   onClose: () => void;
 }
 
-type Editing =
-  | { category: MoneyCategory }
-  | { category: null; parentId: string | null }
-  | null;
+type Editing = { category: MoneyCategory } | null;
 
 /** 大分類のカードの中の間隔（styles.card の gap）。開いた行を上に寄せる計算に使う。 */
 const CARD_GAP = 10;
@@ -92,11 +83,6 @@ export default function CategoryEditor({
     }
   };
 
-  const siblingsOf = (category: { parentId: string | null; kind: MoneyCategoryKind }) =>
-    category.parentId === null
-      ? topCategories(categories, category.kind, true)
-      : childCategories(categories, category.parentId, true);
-
   /** 指で動かしたあとの並び。きょうだいの並びを数え直し、変わったものだけ保存する。 */
   const reorder = (_sectionKey: string, orderedIds: string[]) => {
     const changed = orderedIds
@@ -135,67 +121,14 @@ export default function CategoryEditor({
     const target = editing;
     setEditing(null);
     if (target === null) return;
+    const category = target.category;
+    if (result.icon === category.icon && result.iconColor === category.iconColor) return;
     try {
-      let category: MoneyCategory;
-      if (target.category === null) {
-        const siblings = siblingsOf({ parentId: target.parentId, kind });
-        category = await insertMoneyCategory(supabase, familyId, {
-          kind,
-          parentId: target.parentId,
-          name: result.name,
-          icon: result.icon,
-          iconColor: result.iconColor,
-          position: siblings.reduce((max, entry) => Math.max(max, entry.position + 1), 0),
-        });
-        if (result.budgetGroup !== category.budgetGroup) {
-          category = await updateMoneyCategory(supabase, category.id, { budgetGroup: result.budgetGroup });
-        }
-        onCategories((prev) => [...prev, category]);
-      } else {
-        category = target.category;
-        if (
-          result.name.trim() !== category.name ||
-          result.icon !== category.icon ||
-          result.iconColor !== category.iconColor ||
-          result.budgetGroup !== category.budgetGroup
-        ) {
-          category = await updateMoneyCategory(supabase, category.id, {
-            name: result.name,
-            icon: result.icon,
-            iconColor: result.iconColor,
-            budgetGroup: result.budgetGroup,
-          });
-          replace(category);
-        }
-      }
+      replace(await updateMoneyCategory(supabase, category.id, { icon: result.icon, iconColor: result.iconColor }));
     } catch {
       failed('保存');
     }
   };
-
-  const removeCategory = async (category: MoneyCategory) => {
-    setEditing(null);
-    try {
-      await deleteMoneyCategory(supabase, category.id);
-      // 大分類を消すと、小分類も一緒に消える（DBの cascade）。予算の行はカテゴリなしになる（年間予算の「カテゴリなし」に出る）。
-      const gone = new Set([category.id, ...categories.filter((entry) => entry.parentId === category.id).map((entry) => entry.id)]);
-      onCategories((prev) => prev.filter((entry) => !gone.has(entry.id)));
-    } catch {
-      failed('削除');
-    }
-  };
-
-  const confirmDelete = (category: MoneyCategory) =>
-    Alert.alert(
-      `「${category.name}」を削除しますか？`,
-      category.parentId === null
-        ? '小分類と予算も消えます。これまでの記録には、名前だけが残ります。'
-        : 'これまでの記録には、名前だけが残ります。',
-      [
-        { text: 'やめる', style: 'cancel' },
-        { text: '削除する', style: 'destructive', onPress: () => void removeCategory(category) },
-      ],
-    );
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -220,7 +153,7 @@ export default function CategoryEditor({
           {categories.length === 0 && (
             <View style={styles.seed}>
               <Text style={styles.seedText}>
-                カテゴリがまだありません。Zaim のカテゴリをもとにした標準のカテゴリで始めて、名前や並びをあとで直せます。
+                カテゴリがまだありません。Zaim のカテゴリをもとにした標準のカテゴリで始めて、アイコンや並びをあとで直せます（名前は年間予算で直します）。
               </Text>
               <PrimaryButton label="標準のカテゴリで始める" onPress={() => void seed()} disabled={busy} />
             </View>
@@ -266,8 +199,6 @@ export default function CategoryEditor({
                       {children.map((child) => (
                         <Pressable
                           key={child.id}
-                          accessibilityRole="button"
-                          onPress={() => setEditing({ category: child })}
                           {...drag.holdProps(`children-${top.id}`, children, child.id)}
                           {...drag.measureProps(child.id)}
                           style={[
@@ -280,24 +211,15 @@ export default function CategoryEditor({
                           <Text style={styles.chipText}>{child.name}</Text>
                         </Pressable>
                       ))}
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`${top.name}に小分類を足す`}
-                        onPress={() => setEditing({ category: null, parentId: top.id })}
-                        style={[styles.chip, styles.addChip]}
-                      >
-                        <Plus size={14} color={colors.money} />
-                        <Text style={styles.addChipText}>小分類</Text>
-                      </Pressable>
                     </View>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={`${top.name}の名前やアイコンを編集`}
+                      accessibilityLabel={`${top.name}のアイコンを変える`}
                       onPress={() => setEditing({ category: top })}
                       style={styles.editTop}
                     >
-                      <Pencil size={14} color={colors.money} />
-                      <Text style={styles.addChipText}>大分類を編集</Text>
+                      <Palette size={14} color={colors.money} />
+                      <Text style={styles.editTopText}>アイコンを変える</Text>
                     </Pressable>
                   </View>
                 )}
@@ -305,27 +227,14 @@ export default function CategoryEditor({
             );
           })}
           </View>
-          {categories.length > 0 && (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setEditing({ category: null, parentId: null })}
-              style={styles.addTop}
-            >
-              <Plus size={18} color={colors.money} />
-              <Text style={styles.addTopText}>大分類を足す</Text>
-            </Pressable>
-          )}
         </ScrollView>
 
         {editing !== null && (
           <CategorySheet
-            key={editing.category?.id ?? `new-${editing.category === null ? editing.parentId : ''}`}
+            key={editing.category.id}
             category={editing.category}
-            isTop={editing.category === null ? editing.parentId === null : editing.category.parentId === null}
-            withBudgetGroup={kind === 'living'}
             onClose={() => setEditing(null)}
             onSubmit={(result) => void save(result)}
-            onDelete={editing.category ? () => confirmDelete(editing.category!) : undefined}
           />
         )}
       </View>
@@ -334,150 +243,84 @@ export default function CategoryEditor({
 }
 
 interface SheetResult {
-  name: string;
-  /** アイコン（大分類だけ。小分類は今のまま）。 */
+  /** アイコン。 */
   icon: string | null;
-  /** アイコンの色（大分類だけ）。null は標準（アイコンごとの色）。 */
+  /** アイコンの色。null は標準（アイコンごとの色）。 */
   iconColor: string | null;
-  /** 予算の分け方（支出の大分類だけ。docs/kakei.md §0.7）。 */
-  budgetGroup: MoneyBudgetGroup;
 }
 
-/** 予算の分け方の選択肢。支出をどこで数えるか（年間予算・振り返り）は、大分類のこれだけで決まる。 */
-const BUDGET_GROUPS: { id: MoneyBudgetGroup; label: string }[] = [
-  { id: 'variable', label: '変動費' },
-  { id: 'reserve', label: '予備費' },
-  { id: 'fixed', label: '固定費（確定）' },
-  { id: 'estimate', label: '固定費（見込み）' },
-];
-
+/** 大分類のアイコン（絵と色）を選ぶ。名前は年間予算で直す。 */
 function CategorySheet({
   category,
-  isTop,
-  withBudgetGroup,
   onClose,
   onSubmit,
-  onDelete,
 }: {
-  category: MoneyCategory | null;
-  isTop: boolean;
-  /** 予算の分け方を選ばせるか（支出のカテゴリ）。 */
-  withBudgetGroup: boolean;
+  category: MoneyCategory;
   onClose: () => void;
   onSubmit: (result: SheetResult) => void;
-  onDelete?: () => void;
 }) {
-  const [name, setName] = useState(category?.name ?? '');
   // 自動は無し。決めていないカテゴリは、今の名前から近いものを選んだ状態で始める。
-  const [icon, setIcon] = useState<string>(category ? (category.icon ?? guessIconKey(category.name)) : 'other');
-  const [iconColor, setIconColor] = useState<string | null>(category?.iconColor ?? null);
+  const [icon, setIcon] = useState<string>(category.icon ?? guessIconKey(category.name));
+  const [iconColor, setIconColor] = useState<string | null>(category.iconColor ?? null);
   const [pickingColor, setPickingColor] = useState(false);
-  const [budgetGroup, setBudgetGroup] = useState<MoneyBudgetGroup>(category?.budgetGroup ?? 'variable');
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = () => {
-    if (name.trim() === '') return setError('名前を入れてください');
-    onSubmit({
-      name,
-      icon: isTop ? icon : (category?.icon ?? null),
-      iconColor: isTop ? iconColor : (category?.iconColor ?? null),
-      budgetGroup: isTop && withBudgetGroup ? budgetGroup : (category?.budgetGroup ?? 'variable'),
-    });
-  };
 
   return (
     <SheetModal visible onClose={onClose}>
-      <LogModalShell
-        title={category ? (isTop ? '大分類を編集' : '小分類を編集') : isTop ? '大分類を足す' : '小分類を足す'}
-        onClose={onClose}
-        footer={
-          <>
-            <PrimaryButton label="保存する" onPress={submit} />
-            {onDelete && category && (
-              <Pressable accessibilityRole="button" onPress={onDelete} style={styles.secondary}>
-                <Text style={styles.deleteText}>削除する（記録には名前だけ残ります）</Text>
-              </Pressable>
-            )}
-          </>
-        }
-      >
+      <LogModalShell title={category.name} onClose={onClose} footer={<PrimaryButton label="保存する" onPress={() => onSubmit({ icon, iconColor })} />}>
+        <Text style={styles.hint}>名前の変更・追加は、年間予算で行います。</Text>
         <View style={styles.field}>
-          <Text style={styles.label}>名前</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder={isTop ? '例: 食費' : '例: 外食'}
-            placeholderTextColor={colors.textFaint}
-          />
-        </View>
-        {isTop && withBudgetGroup && (
-          <View style={styles.field}>
-            <Text style={styles.label}>予算の分け方</Text>
-            <ChipRow>
-              {BUDGET_GROUPS.map((option) => (
-                <Chip key={option.id} label={option.label} selected={budgetGroup === option.id} onPress={() => setBudgetGroup(option.id)} />
-              ))}
-            </ChipRow>
-            <Text style={styles.hint}>変動費は大分類の月の予算、予備費・固定費は小分類ごとの予算（年間予算で決める）</Text>
-          </View>
-        )}
-        {isTop && (
-          <View style={styles.field}>
-            <Text style={styles.label}>アイコン</Text>
-            {/* アイコンをタップすると色を選べる（出金元のアイコンの色と同じ候補）。 */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="アイコンの色を選ぶ"
-              accessibilityState={{ expanded: pickingColor }}
-              onPress={() => setPickingColor((open) => !open)}
-              style={styles.preview}
-            >
-              <CategoryIcon iconKey={iconColor ? `${icon}|${iconColor}` : icon} size={48} />
-              <Text style={styles.previewText}>タップして色を選ぶ</Text>
-            </Pressable>
-            {pickingColor && (
-              <View style={styles.colors}>
+          <Text style={styles.label}>アイコン</Text>
+          {/* アイコンをタップすると色を選べる（出金元のアイコンの色と同じ候補）。 */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="アイコンの色を選ぶ"
+            accessibilityState={{ expanded: pickingColor }}
+            onPress={() => setPickingColor((open) => !open)}
+            style={styles.preview}
+          >
+            <CategoryIcon iconKey={iconColor ? `${icon}|${iconColor}` : icon} size={48} />
+            <Text style={styles.previewText}>タップして色を選ぶ</Text>
+          </Pressable>
+          {pickingColor && (
+            <View style={styles.colors}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="標準の色"
+                accessibilityState={{ selected: iconColor === null }}
+                onPress={() => setIconColor(null)}
+                style={[styles.swatch, styles.swatchDefault, iconColor === null && styles.swatchSelected]}
+              >
+                <CategoryIcon iconKey={icon} size={26} />
+              </Pressable>
+              {CATEGORY_ICON_COLORS.map((entry) => (
                 <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="標準の色"
-                  accessibilityState={{ selected: iconColor === null }}
-                  onPress={() => setIconColor(null)}
-                  style={[styles.swatch, styles.swatchDefault, iconColor === null && styles.swatchSelected]}
-                >
-                  <CategoryIcon iconKey={icon} size={26} />
-                </Pressable>
-                {CATEGORY_ICON_COLORS.map((entry) => (
-                  <Pressable
-                    key={entry.color}
-                    accessibilityRole="button"
-                    accessibilityLabel={entry.label}
-                    accessibilityState={{ selected: iconColor === entry.color }}
-                    onPress={() => setIconColor(entry.color)}
-                    style={[styles.swatch, { backgroundColor: entry.color }, iconColor === entry.color && styles.swatchSelected]}
-                  >
-                    {iconColor === entry.color && <Check size={18} color="#ffffff" />}
-                  </Pressable>
-                ))}
-              </View>
-            )}
-            <View style={styles.icons}>
-              {MONEY_ICONS.map((entry) => (
-                <Pressable
-                  key={entry.key}
+                  key={entry.color}
                   accessibilityRole="button"
                   accessibilityLabel={entry.label}
-                  accessibilityState={{ selected: icon === entry.key }}
-                  onPress={() => setIcon(entry.key)}
-                  style={[styles.iconChoice, icon === entry.key && styles.iconChoiceSelected]}
+                  accessibilityState={{ selected: iconColor === entry.color }}
+                  onPress={() => setIconColor(entry.color)}
+                  style={[styles.swatch, { backgroundColor: entry.color }, iconColor === entry.color && styles.swatchSelected]}
                 >
-                  <CategoryIcon iconKey={iconColor ? `${entry.key}|${iconColor}` : entry.key} size={34} />
+                  {iconColor === entry.color && <Check size={18} color="#ffffff" />}
                 </Pressable>
               ))}
             </View>
+          )}
+          <View style={styles.icons}>
+            {MONEY_ICONS.map((entry) => (
+              <Pressable
+                key={entry.key}
+                accessibilityRole="button"
+                accessibilityLabel={entry.label}
+                accessibilityState={{ selected: icon === entry.key }}
+                onPress={() => setIcon(entry.key)}
+                style={[styles.iconChoice, icon === entry.key && styles.iconChoiceSelected]}
+              >
+                <CategoryIcon iconKey={iconColor ? `${entry.key}|${iconColor}` : entry.key} size={34} />
+              </Pressable>
+            ))}
           </View>
-        )}
-        {error && <Text style={styles.error}>{error}</Text>}
+        </View>
       </LogModalShell>
     </SheetModal>
   );
@@ -509,6 +352,7 @@ const styles = StyleSheet.create({
   count: { fontSize: 12, fontWeight: '500', color: colors.textFaint },
   panel: { gap: 10 },
   editTop: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 4 },
+  editTopText: { fontSize: 13, fontWeight: '600', color: colors.money },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: {
     flexDirection: 'row',
@@ -520,22 +364,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutralSurface,
   },
   chipText: { fontSize: 13, fontWeight: '500', color: colors.textSubtle },
-  addChip: { backgroundColor: colors.moneySurface },
-  addChipText: { fontSize: 13, fontWeight: '600', color: colors.money },
-  addTop: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
-  addTopText: { fontSize: 15, fontWeight: '700', color: colors.money },
   field: { gap: 6 },
   label: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.text,
-  },
   hint: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
   icons: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   iconChoice: {
@@ -558,7 +388,4 @@ const styles = StyleSheet.create({
   topLine: { flexDirection: 'row', alignItems: 'center' },
   grip: { width: 28, alignSelf: 'stretch', marginLeft: -8, marginVertical: -4, alignItems: 'center', justifyContent: 'center' },
   lifted: { opacity: 0.9, elevation: 8 },
-  error: { fontSize: 12, fontWeight: '500', color: colors.danger },
-  secondary: { paddingVertical: 10, alignItems: 'center' },
-  deleteText: { fontSize: 13, fontWeight: '500', color: colors.danger },
 });
