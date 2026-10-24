@@ -1656,7 +1656,7 @@ export interface LandingMonth {
   closed: boolean;
   /** 収入（締めた月は実額、ほかは予算）。 */
   income: number;
-  /** 支出（締めた月は実額。締めていない今月まで〔締め忘れた月も〕は予算と実績の大きいほう、翌月からは予算）。 */
+  /** 支出（締めた月と今月は実額。締めていない過去の月〔締め忘れ〕は予算と実績の大きいほう、翌月からは予算）。 */
   expense: number;
   /** 収支（収入 − 支出）。 */
   balance: number;
@@ -1680,8 +1680,8 @@ export interface YearLanding {
 
 /**
  * 年末の収支見込み（docs/kakei.md §0.9・§4.6。2026-10-24）。
- * - 締めた月は実績（収入も支出も）
- * - 締めていない月のうち、今月まで（current。締め忘れた過去の月も）は記録があるので、支出は予算と実績の大きいほう
+ * - 締めた月と、今月（current）は実績（収入も支出も。月の振り返りの収支と同じ。今月は締めていなくても実績）
+ * - 締めていない過去の月（締め忘れ）は記録があるので、支出は予算と実績の大きいほう
  *   （変動費は大分類ごと、予備費・固定費は小分類ごと。予算の無いもの・カテゴリの無い品目は実績）。収入は予算
  * - 翌月からは記録が無いので予算だけ（収入 − 変動費の月の予算 − 予備費・固定費の明細のうち、その月に発生する回）
  * - 発生月なしの予算は、小分類ごとに「その年の額（noMonthYearAmount）− 今月までの実績」（0 未満は 0）を見込み支出として12月に入れる（12月を締めた年は入れない）
@@ -1701,7 +1701,9 @@ export function buildYearLanding(
   const plan = budgetPlanInYear(lines, categories, year);
   const variableTops = topCategories(categories, 'living').filter((category) => category.budgetGroup === 'variable');
   const recordedKeys = yearMonthKeys(year).filter((monthKey) => monthKey >= start && monthKey <= current);
-  const unscheduled = isMonthClosed(closings, `${year}-12`) ? 0 : unscheduledForecast(lines, categories, records, year, recordedKeys);
+  // 12月が今月のときは12月も実績で出す（月の振り返りと同じ）ので、発生月なしの見込みは足さない。
+  const unscheduled =
+    isMonthClosed(closings, `${year}-12`) || current === `${year}-12` ? 0 : unscheduledForecast(lines, categories, records, year, recordedKeys);
   let cumulative = 0;
   let closedMonths = 0;
   let incomeTotal = 0;
@@ -1711,11 +1713,12 @@ export function buildYearLanding(
     const closed = isMonthClosed(closings, monthKey);
     let income: number;
     let expense: number;
-    if (closed) {
+    if (closed || monthKey === current) {
+      // 締めた月と今月は実績。今月は締める前でも実績を出す（月の振り返りの収支と合わせる）。
       const summary = buildMonthSummary(records, categories, budgets, monthKey);
       income = summary.income;
       expense = summary.living;
-      closedMonths += 1;
+      if (closed) closedMonths += 1;
     } else {
       income = plan.months.income[index];
       expense =
@@ -1737,7 +1740,7 @@ export function buildYearLanding(
 }
 
 /**
- * 締めていない今月まで（締め忘れた月も）の、その月の支出の見込み＝予算と実績の大きいほうの合計。
+ * 締めていない過去の月（締め忘れ）の、その月の支出の見込み＝予算と実績の大きいほうの合計。
  * 変動費は大分類ごと（月の予算）、予備費・固定費は小分類ごと（その月に発生する明細）。発生月なしの小分類・予算の無いもの・
  * カテゴリの無い品目は実績（発生月なしの残りは12月に入れる）。
  */

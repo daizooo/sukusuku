@@ -372,7 +372,10 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
   assert.equal(landing.expense, landing.income - landing.total);
 
   const open = buildYearLanding(rs, cats, buds, lines, [], 2026, '2026-10');
-  assert.equal(open?.months[9].balance, 300000 - 100000 - 90000 - 30000, '締めていない今月は、予算と実績の大きいほう（食費は実績、家賃は予算、旅行は実績）');
+  assert.equal(open?.months[9].balance, 300000 - 100000 - 30000, '締めていない今月も実績（月の振り返りの収支と同じ。予算は入れない）');
+  assert.equal(open?.months[9].closed, false);
+  const lapsed = buildYearLanding(rs, cats, buds, lines, [], 2026, '2026-11');
+  assert.equal(lapsed?.months[9].balance, 300000 - 100000 - 90000 - 30000, '締め忘れた過去の月は、予算と実績の大きいほう（食費は実績、家賃は予算、旅行は実績）');
   assert.equal(open?.unscheduled, 0);
   const before = buildYearLanding(rs, cats, buds, lines, [], 2026, '2026-09');
   assert.equal(before?.months[9].balance, 300000 - 50000 - 80000 - 10000, '先の月は実績を使わず予算');
