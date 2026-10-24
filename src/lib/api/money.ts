@@ -64,7 +64,7 @@ export const rowToBalance = (row: BalanceRow): MoneyWalletBalance => ({
   id: row.id,
   walletId: row.wallet_id,
   balanceOn: row.balance_on,
-  amount: row.amount,
+  adjustment: row.adjustment,
   showInHistory: row.show_in_history,
 });
 
@@ -493,12 +493,16 @@ export async function restoreMoneyWallet(supabase: SupabaseDb, id: string): Prom
 
 // ---- 確定した残高（docs/kakei.md §9.3） ----
 
-/** 出金元の、その日の終わりの残高を確定する。同じ日の確定があれば上書きする。 */
+/**
+ * 出金元の残高を補正する。adjustment は補正の増減（残高の計算に使う）、amount は補正したときの残高（古いアプリ用）。
+ * 同じ日の補正があれば上書きする（呼ぶ側で、その日の増減を足し合わせて渡す）。
+ */
 export async function saveMoneyWalletBalance(
   supabase: SupabaseDb,
   familyId: string,
   walletId: string,
   balanceOn: string,
+  adjustment: number,
   amount: number,
   showInHistory: boolean,
 ): Promise<MoneyWalletBalance> {
@@ -510,6 +514,7 @@ export async function saveMoneyWalletBalance(
         family_id: familyId,
         wallet_id: walletId,
         balance_on: balanceOn,
+        adjustment,
         amount,
         show_in_history: showInHistory,
         created_by: session.session?.user.id ?? null,
@@ -522,7 +527,7 @@ export async function saveMoneyWalletBalance(
   return rowToBalance(data);
 }
 
-/** 確定した残高を取り消す（入れ間違い）。 */
+/** 補正を取り消す（入れ間違い）。 */
 export async function deleteMoneyWalletBalance(supabase: SupabaseDb, id: string): Promise<void> {
   const { error } = await supabase.from('money_wallet_balances').delete().eq('id', id);
   if (error) throw error;

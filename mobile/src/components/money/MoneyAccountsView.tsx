@@ -53,7 +53,7 @@ interface MoneyAccountsViewProps {
   categories: MoneyCategory[];
   isLoading: boolean;
   onOpenRecord: (record: MoneyRecord) => void;
-  onConfirm: (walletId: string, balanceOn: string, amount: number, showInHistory: boolean) => void;
+  onConfirm: (walletId: string, adjustment: number, amount: number, showInHistory: boolean) => void;
   onDeleteBalance: (balance: MoneyWalletBalance) => void;
   onSaveWallet: (target: MoneyWallet | null, draft: MoneyWalletDraft) => Promise<MoneyWallet | null>;
   onDeleteWallet: (wallet: MoneyWallet) => void;

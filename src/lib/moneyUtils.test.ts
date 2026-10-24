@@ -856,7 +856,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
     money('b6', { walletId: 'bank', occurredOn: '2026-10-20' }, 999),
     money('b7', { walletId: null, occurredOn: '2026-10-02' }, 1),
   ];
-  const bal = (id: string, walletId: string, balanceOn: string, amount: number): MoneyWalletBalance => ({ id, walletId, balanceOn, amount, showInHistory: true });
+  const bal = (id: string, walletId: string, balanceOn: string, adjustment: number): MoneyWalletBalance => ({ id, walletId, balanceOn, adjustment, showInHistory: true });
   assert.equal(walletDelta(rs[0], 'bank'), 300000, '収入は入金先に増える');
   assert.equal(walletDelta(rs[1], 'bank'), -7000, '支出は出金元から減る');
   assert.equal(walletDelta(rs[1], 'card'), 0, '関係ない出金元は変わらない');
@@ -865,33 +865,28 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
   assert.equal(formatBalance(-12000), '¥\u2009−12,000');
   assert.equal(formatBalance(300), '¥\u2009300');
 
-  // 確定が無ければ、記録だけから出す（今日までの記録。先の日付は入れない）。
+  // 補正が無ければ、記録だけから出す（今日までの記録。先の日付は入れない）。
   const none = walletBalanceOn('bank', '2026-10-10', rs, []);
-  assert.deepEqual([none.amount, none.confirmed, none.count], [300000 - 7000 - 50000 - 12000, null, 4]);
+  assert.deepEqual([none.amount, none.adjustment, none.count], [300000 - 7000 - 50000 - 12000, 0, 4]);
   assert.equal(walletBalanceOn('card', '2026-10-10', rs, []).amount, -12000 + 12000, 'カードは支出でマイナス、引き落としの振替で戻る');
 
-  // 確定のあとの記録だけを足す。確定の日の記録は確定に含まれている。
-  const confirmed = [bal('x1', 'bank', '2026-10-01', 240000), bal('x0', 'bank', '2026-09-01', 5)];
-  const after = walletBalanceOn('bank', '2026-10-10', rs, confirmed);
-  assert.deepEqual([after.amount, after.confirmed?.id, after.movement, after.count], [228000, 'x1', -12000, 1]);
-  assert.equal(walletBalanceOn('bank', '2026-10-25', rs, confirmed).amount, 228000 - 999, '今日までに来た記録は入る');
-  assert.equal(walletBalanceOn('bank', '2026-09-30', rs, confirmed).confirmed?.id, 'x0', '日付より先の確定は土台にしない');
+  // 補正は日付と結ばない増減。補正の前の日付の記録も数える（あとから足した記録で残高が動く）。
+  const adjusted = [bal('x1', 'bank', '2026-10-01', 5000), bal('x0', 'bank', '2026-09-01', 5)];
+  const after = walletBalanceOn('bank', '2026-10-10', rs, adjusted);
+  assert.deepEqual([after.amount, after.adjustment, after.movement, after.count], [none.amount + 5005, 5005, none.amount, 4]);
+  assert.equal(walletBalanceOn('bank', '2026-10-25', rs, adjusted).amount, none.amount + 5005 - 999, '今日までに来た記録は入る');
+  assert.equal(walletBalanceOn('bank', '2026-09-30', rs, adjusted).amount, 5, '日付より先の補正は入れない');
+  const older = [...rs, record('b8', { walletId: 'bank', occurredOn: '2026-09-15', items: [item({ amount: 100 })] })];
+  assert.equal(walletBalanceOn('bank', '2026-10-10', older, adjusted).amount, after.amount - 100, '補正より前の日付の記録も残高を動かす');
 
-  // 確定の履歴: 前の確定とそのあとの記録から出した額との差。最初の確定は差を持たない。
-  const checks = balanceChecks('bank', rs, confirmed);
-  assert.deepEqual(checks.map((check) => check.balance.id), ['x1', 'x0'], '新しい順');
-  assert.deepEqual([checks[0].expected, checks[0].diff], [5 + 300000 - 7000 - 50000, 240000 - 243005]);
-  assert.deepEqual([checks[1].expected, checks[1].diff], [0, null], '最初の確定は差を持たない（はじめの残高）');
-  assert.equal(
-    walletBalanceOn('bank', '2026-10-01', rs, confirmed, true).amount,
-    checks[0].expected,
-    'ignoreOnDate はその日の確定を土台にしない',
-  );
+  // 補正の履歴: 新しい順。差は補正の増減。
+  const checks = balanceChecks('bank', adjusted);
+  assert.deepEqual(checks.map((check) => [check.balance.id, check.diff]), [['x1', 5000], ['x0', 5]]);
 
-  // 総残高: 使わなくした出金元は入れない。確定していない出金元の数を出す。
+  // 総残高: 使わなくした出金元は入れない。補正の増減は足される。
   const totals = buildWalletBalances(wallets, rs, [bal('y1', 'bank', '2026-10-10', 100000)], '2026-10-10');
   assert.deepEqual(totals.rows.map((row) => row.wallet.id), ['card', 'bank', 'save', 'gone']);
-  assert.equal(totals.total, 0 + 100000 + 50000, 'カード0（支出と引き落としが相殺）+ 口座 + 貯金口座');
+  assert.equal(totals.total, 0 + (231000 + 100000) + 50000, 'カード0（支出と引き落としが相殺）+ 口座（記録 + 補正の増減）+ 貯金口座');
 }
 
 // ---- 口座の推移（docs/kakei.md §9.3） ----
@@ -904,7 +899,7 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
     money('t3', { kind: 'transfer', walletId: 'bank', toWalletId: 'save', occurredOn: '2026-10-03' }, 200),
     money('t4', { walletId: 'bank', occurredOn: '2026-10-09' }, 5),
   ];
-  const anchor = (id: string, walletId: string, balanceOn: string, amount: number): MoneyWalletBalance => ({ id, walletId, balanceOn, amount, showInHistory: true });
+  const anchor = (id: string, walletId: string, balanceOn: string, adjustment: number): MoneyWalletBalance => ({ id, walletId, balanceOn, adjustment, showInHistory: true });
 
   assert.equal(addDays('2026-10-31', 1), '2026-11-01');
   assert.equal(addDays('2026-03-01', -1), '2026-02-28');
@@ -915,10 +910,10 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
   assert.deepEqual(bank.map((point) => point.amount), [1000, 1000, 500, 500, 500]);
   assert.deepEqual(bank, [1000, 1000, 500, 500, 500].map((amount, index) => ({ date: addDays('2026-10-01', index), amount })));
 
-  // 補正した日はその額になり、その後はそこから積み上げる（walletBalanceOn と同じ数え方）。
-  const fixed = dailyBalances(['bank'], rs, [anchor('a1', 'bank', '2026-10-02', 2000)], '2026-10-10');
+  // 補正した日にその増減が入り、その後はそこから積み上げる（walletBalanceOn と同じ数え方）。
+  const fixed = dailyBalances(['bank'], rs, [anchor('a1', 'bank', '2026-10-02', 1000)], '2026-10-10');
   assert.deepEqual(fixed.map((point) => point.amount), [1000, 2000, 1500, 1500, 1500, 1500, 1500, 1500, 1495, 1495]);
-  assert.equal(fixed[fixed.length - 1].amount, walletBalanceOn('bank', '2026-10-10', rs, [anchor('a1', 'bank', '2026-10-02', 2000)]).amount);
+  assert.equal(fixed[fixed.length - 1].amount, walletBalanceOn('bank', '2026-10-10', rs, [anchor('a1', 'bank', '2026-10-02', 1000)]).amount);
 
   // 複数の出金元は合計（振替は出金元から入金先へ動くだけなので、合計は変わらない）。
   const both = dailyBalances(['bank', 'save'], rs, [], '2026-10-04');

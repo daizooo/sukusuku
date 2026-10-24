@@ -604,11 +604,11 @@ export interface MoneyRatioTargets {
 export interface MoneyWalletBalance {
   id: string;
   walletId: string;
-  /** YYYY-MM-DD。その日の終わりの残高（この日の記録も含む）。 */
+  /** YYYY-MM-DD。補正した日（履歴に出す日。残高の計算には使わない）。 */
   balanceOn: string;
-  /** 残高（円）。マイナスもある（カードの未払いなど）。 */
-  amount: number;
-  /** 口座の履歴に行として出すか。false でも残高の土台としては同じに効く。 */
+  /** 補正の増減（円）。残高 = 記録の合計 + 補正の増減の合計。 */
+  adjustment: number;
+  /** 口座の履歴に行として出すか。false でも残高には同じに効く。 */
   showInHistory: boolean;
 }
 

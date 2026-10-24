@@ -1908,6 +1908,7 @@ export type Database = {
       }
       money_wallet_balances: {
         Row: {
+          adjustment: number
           amount: number
           balance_on: string
           created_at: string
@@ -1919,6 +1920,7 @@ export type Database = {
           wallet_id: string
         }
         Insert: {
+          adjustment?: number
           amount: number
           balance_on: string
           created_at?: string
@@ -1930,6 +1932,7 @@ export type Database = {
           wallet_id: string
         }
         Update: {
+          adjustment?: number
           amount?: number
           balance_on?: string
           created_at?: string
