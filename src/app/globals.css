@@ -19,7 +19,7 @@
 
 /* 画面の地（gray-50）を、青みのないグレーにする（白い札が浮いて見える濃さ。mobile の colors.background と同じ。2026-10-24） */
 @theme {
-  --color-gray-50: #f2f2f2;
+  --color-gray-50: #f4f4f4;
 }
 
 @theme inline {

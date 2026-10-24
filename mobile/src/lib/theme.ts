@@ -2,7 +2,7 @@
 export const colors = {
   // 画面の一番上の帯の色。アプリのアイコンの背景（白）に合わせる。PWA版のmanifestの theme_color と同じ。
   brand: '#ffffff',
-  background: '#f2f2f2', // 青みのないグレー。白い札が浮いて見える濃さ（Zaim の「残高」くらい。2026-10-24）
+  background: '#f4f4f4', // 青みのないグレー。白い札が浮いて見える濃さ（2026-10-24）
   surface: '#ffffff',
   // 記録タブの一覧の地。カード（白）が浮いて見えるよう、画面の地より少しだけ青みを足す。
   listSurface: '#f1f5f9', // slate-100
