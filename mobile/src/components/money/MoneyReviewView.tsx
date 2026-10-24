@@ -382,32 +382,31 @@ export default function MoneyReviewView({
                 <ChevronRight size={16} color={colors.textFaint} />
               </Pressable>
             ) : myRequest !== null ? (
-              <View style={styles.closeBox}>
-                <View style={styles.waiting}>
-                  <Text style={styles.waitingText}>
-                    {partnerNames}を待っています <Text style={styles.remaining}>{formatRemaining(myRequest - nowMs - clockOffset)}</Text>
-                  </Text>
-                </View>
-                <Pressable accessibilityRole="button" onPress={() => onCancelClose(monthKey)} style={styles.cancel}>
+              <View style={styles.closeRow}>
+                <Text style={[styles.closeText, styles.flex]}>
+                  {partnerNames}を待っています <Text style={styles.remaining}>{formatRemaining(myRequest - nowMs - clockOffset)}</Text>
+                </Text>
+                <Pressable accessibilityRole="button" onPress={() => onCancelClose(monthKey)} hitSlop={8}>
                   <Text style={styles.cancelText}>やめる</Text>
                 </Pressable>
               </View>
             ) : (
-              <View style={styles.closeBox}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => void requestClose()}
-                  style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}
-                >
-                  <Text style={styles.closeButtonText}>この月を締める</Text>
-                </Pressable>
-                {partnerRequest !== null && (
-                  <Text style={styles.partnerWaiting}>
-                    {nameOf(partnerRequest[0])}さんが待っています{' '}
-                    <Text style={styles.remaining}>{formatRemaining(partnerRequest[1] - nowMs - clockOffset)}</Text>
-                  </Text>
-                )}
-              </View>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void requestClose()}
+                style={({ pressed }) => [styles.closeRow, pressed && styles.pressed]}
+              >
+                <View style={styles.flex}>
+                  <Text style={styles.closeText}>この月を締める</Text>
+                  {partnerRequest !== null && (
+                    <Text style={styles.partnerWaiting}>
+                      {nameOf(partnerRequest[0])}さんが待っています{' '}
+                      <Text style={styles.remaining}>{formatRemaining(partnerRequest[1] - nowMs - clockOffset)}</Text>
+                    </Text>
+                  )}
+                </View>
+                <ChevronRight size={16} color={colors.textFaint} />
+              </Pressable>
             )
           )}
         </Hero>
@@ -737,15 +736,8 @@ const styles = StyleSheet.create({
   closeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border },
   closeText: { fontSize: 14, fontWeight: '700', color: colors.money },
   closedText: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
-  // 「この月を締める」（夫婦が5分以内に押すと始まる）と、相手を待っているあいだの表示。
-  closeBox: { marginTop: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, gap: 6 },
-  closeButton: { paddingVertical: 11, borderRadius: 12, alignItems: 'center', backgroundColor: colors.money },
-  closeButtonPressed: { opacity: 0.85 },
-  closeButtonText: { fontSize: 14, fontWeight: '700', color: colors.surface },
-  waiting: { paddingVertical: 11, borderRadius: 12, alignItems: 'center', backgroundColor: colors.moneySurface },
-  waitingText: { fontSize: 14, fontWeight: '700', color: colors.moneyText },
+  // 相手を待っているあいだの残り時間と、相手が押したときの添え書き（「この月を締める」の行は元のまま）。
   remaining: { fontWeight: '800', fontVariant: ['tabular-nums'] },
-  partnerWaiting: { fontSize: 12, fontWeight: '600', color: colors.moneyText, textAlign: 'center' },
-  cancel: { paddingVertical: 4, alignItems: 'center' },
+  partnerWaiting: { fontSize: 12, fontWeight: '600', color: colors.moneyText, marginTop: 2 },
   cancelText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
 });

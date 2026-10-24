@@ -375,31 +375,32 @@ export default function MoneyReviewView({
                 <ChevronRight size={16} className="text-gray-400" />
               </button>
             ) : myRequest !== null ? (
-              <div className="mt-2 space-y-1.5 border-t border-gray-200 pt-2.5">
-                <p className="rounded-xl bg-blue-50 py-2.5 text-center text-sm font-bold text-blue-800">
+              <div className="mt-2 flex w-full items-center gap-2 border-t border-gray-200 pt-2">
+                <span className="flex-1 text-sm font-bold text-blue-600">
                   {partnerNames}を待っています{' '}
                   <span className="font-extrabold tabular-nums">{formatRemaining(myRequest - nowMs - clockOffset)}</span>
-                </p>
-                <button type="button" onClick={() => onCancelClose(monthKey)} className="w-full py-1 text-[13px] font-bold text-gray-500">
+                </span>
+                <button type="button" onClick={() => onCancelClose(monthKey)} className="text-[13px] font-bold text-gray-500">
                   やめる
                 </button>
               </div>
             ) : (
-              <div className="mt-2 space-y-1.5 border-t border-gray-200 pt-2.5">
-                <button
-                  type="button"
-                  onClick={() => void requestClose()}
-                  className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
-                >
-                  この月を締める
-                </button>
-                {partnerRequest !== null && (
-                  <p className="text-center text-xs font-semibold text-blue-800">
-                    {nameOf(partnerRequest[0])}さんが待っています{' '}
-                    <span className="font-extrabold tabular-nums">{formatRemaining(partnerRequest[1] - nowMs - clockOffset)}</span>
-                  </p>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={() => void requestClose()}
+                className="mt-2 flex w-full items-center gap-2 border-t border-gray-200 pt-2 text-left"
+              >
+                <span className="flex-1">
+                  <span className="block text-sm font-bold text-blue-600">この月を締める</span>
+                  {partnerRequest !== null && (
+                    <span className="mt-0.5 block text-xs font-semibold text-blue-800">
+                      {nameOf(partnerRequest[0])}さんが待っています{' '}
+                      <span className="font-extrabold tabular-nums">{formatRemaining(partnerRequest[1] - nowMs - clockOffset)}</span>
+                    </span>
+                  )}
+                </span>
+                <ChevronRight size={16} className="text-gray-400" />
+              </button>
             )
           )}
         </Hero>
