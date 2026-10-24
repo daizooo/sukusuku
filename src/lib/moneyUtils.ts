@@ -1662,6 +1662,13 @@ export interface LandingMonth {
   balance: number;
   /** 年初からこの月までの累計（数えない月は、その前までの累計のまま）。 */
   cumulative: number;
+  /**
+   * 今月（締めていない）だけ、実績の収支（収入 − 支出。月の振り返りの収支と同じ）。ほかの月は null。
+   * 着地見込み（balance・cumulative）には使わず、推移グラフの今月の表示だけに使う（2026-10-24）。
+   */
+  actualBalance: number | null;
+  /** 今月だけ、実績の累計（その前の月までの累計 ＋ actualBalance）。ほかの月は null。 */
+  actualCumulative: number | null;
 }
 
 export interface YearLanding {
@@ -1707,7 +1714,9 @@ export function buildYearLanding(
   let incomeTotal = 0;
   let expenseTotal = 0;
   const months = yearMonthKeys(year).map((monthKey, index): LandingMonth => {
-    if (monthKey < start) return { monthKey, counted: false, closed: false, income: 0, expense: 0, balance: 0, cumulative };
+    if (monthKey < start) {
+      return { monthKey, counted: false, closed: false, income: 0, expense: 0, balance: 0, cumulative, actualBalance: null, actualCumulative: null };
+    }
     const closed = isMonthClosed(closings, monthKey);
     let income: number;
     let expense: number;
@@ -1728,10 +1737,13 @@ export function buildYearLanding(
             plan.months.estimate[index];
       if (index === 11) expense -= unscheduled;
     }
+    // 今月（締める前）は、推移グラフに実績の収支・累計も添える（着地見込みの数え方は変えない）。
+    const actualBalance = !closed && monthKey === current ? buildMonthSummary(records, categories, budgets, monthKey).balance : null;
+    const actualCumulative = actualBalance === null ? null : cumulative + actualBalance;
     incomeTotal += income;
     expenseTotal += expense;
     cumulative += income - expense;
-    return { monthKey, counted: true, closed, income, expense, balance: income - expense, cumulative };
+    return { monthKey, counted: true, closed, income, expense, balance: income - expense, cumulative, actualBalance, actualCumulative };
   });
   return { months, total: cumulative, income: incomeTotal, expense: expenseTotal, closedMonths, unscheduled };
 }

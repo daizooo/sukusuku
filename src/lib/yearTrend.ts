@@ -29,7 +29,10 @@ export interface YearTrendAxes {
   intervals: number;
 }
 
-/** 着地見込みの月のうち、数える月（使い始めた月から12月）だけをグラフの点にする。 */
+/**
+ * 着地見込みの月のうち、数える月（使い始めた月から12月）だけをグラフの点にする。
+ * 今月（締める前）は、月の振り返りの収支と合わせて収支・累計とも実績で出す（2026-10-24。先の月は着地見込みのまま）。
+ */
 export function yearTrendPoints(months: readonly LandingMonth[]): YearTrendPoint[] {
   return months
     .filter((row) => row.counted)
@@ -37,8 +40,8 @@ export function yearTrendPoints(months: readonly LandingMonth[]): YearTrendPoint
       monthKey: row.monthKey,
       month: Number(row.monthKey.slice(5, 7)),
       closed: row.closed,
-      balance: row.balance,
-      cumulative: row.cumulative,
+      balance: row.actualBalance ?? row.balance,
+      cumulative: row.actualCumulative ?? row.cumulative,
     }));
 }
 
