@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeftRight, ChevronRight, Mail, PiggyBank, Store, Tag, type LucideIcon } from 'lucide-react';
+import { ArrowLeftRight, ChevronRight, Mail, PiggyBank, Store, type LucideIcon } from 'lucide-react';
 import type {
   MoneyBudget,
   MoneyCategory,
@@ -12,7 +12,6 @@ import type {
   MoneyStore,
   MoneyWallet,
 } from '@/types/app';
-import CategoryEditor from './CategoryEditor';
 import BudgetEditor from './BudgetEditor';
 import RecurringSettings from './RecurringSettings';
 import StoreSettings from './StoreSettings';
@@ -21,9 +20,10 @@ import { FullScreen, ScreenHeader } from './moneyVisual';
 
 // 家計の設定（docs/kakei.md §3.5）。mobile版の `mobile/src/components/money/MoneySettings.tsx` と同じ並び・文言。
 //
-// 年間予算（予算・カテゴリ・自動記録をまとめて決める。2026-10-23。docs/kakei.md §0.8）（目標割合〔§0.9〕もここで決める。2026-10-24）・カテゴリ（アイコン・並び）・振替の自動記録・
+// 年間予算（予算・カテゴリ・自動記録をまとめて決める。2026-10-23。docs/kakei.md §0.8）（目標割合〔§0.9〕もここで決める。2026-10-24）・振替の自動記録・
 // よく行くお店を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
 // （お店の名前を直しても、過去の記録のお店の名前はそのまま）。
+// カテゴリ（アイコン・並び）は年間予算の右上「カテゴリ」から開く（2026-10-24。以前はここに「カテゴリ」の入口があった）。
 // 戻る操作（ブラウザの戻る）は、開いている設定の面から入口へ、入口から家計タブへ。
 
 interface MoneySettingsProps {
@@ -53,7 +53,7 @@ interface MoneySettingsProps {
   onClose: () => void;
 }
 
-type Page = 'menu' | 'categories' | 'budget' | 'stores' | 'recurring' | 'feed';
+type Page = 'menu' | 'budget' | 'stores' | 'recurring' | 'feed';
 
 export default function MoneySettings({
   familyId,
@@ -83,7 +83,6 @@ export default function MoneySettings({
 
   const rows: { id: Exclude<Page, 'menu'>; label: string; icon: LucideIcon }[] = [
     { id: 'budget', label: '年間予算', icon: PiggyBank },
-    { id: 'categories', label: 'カテゴリ', icon: Tag },
     { id: 'recurring', label: '振替', icon: ArrowLeftRight },
     { id: 'stores', label: 'よく行くお店', icon: Store },
     { id: 'feed', label: 'Gmail 取り込み', icon: Mail },
@@ -96,7 +95,7 @@ export default function MoneySettings({
 
   return (
     <FullScreen onBack={onClose}>
-      {(page === 'menu' || page === 'categories' || page === 'budget') && (
+      {(page === 'menu' || page === 'budget') && (
         <>
           <ScreenHeader title="家計の設定" onClose={onClose} />
           <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 p-4">
@@ -149,9 +148,6 @@ export default function MoneySettings({
           onStores={onStores}
           onBack={back}
         />
-      )}
-      {page === 'categories' && (
-        <CategoryEditor familyId={familyId} categories={categories} onCategories={onCategories} onClose={back} />
       )}
       {page === 'budget' && (
         <BudgetEditor

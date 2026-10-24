@@ -22,6 +22,7 @@ import {
   budgetLineOf,
   budgetLineYearAmount,
   childCategories,
+  estimatedBudgetYearAmount,
   formatYear,
   formatYen,
   guessIconKey,
@@ -56,6 +57,7 @@ import {
 import { ModalShell } from '../modals/TaskForm';
 import StorePicker from './StorePicker';
 import { Chip, ChipRow, Field, WalletChoices } from './feedParts';
+import CategoryEditor from './CategoryEditor';
 import CategoryIconPicker from './CategoryIconPicker';
 import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
 
@@ -225,12 +227,18 @@ export default function BudgetEditor({
   const [selected, setSelected] = useState<BudgetLineGroup | 'expense' | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [renaming, setRenaming] = useState<MoneyCategory | null>(null);
+  // カテゴリ（アイコン・色・並べ替え）の画面。家計の設定から、年間予算の右上へ移した（2026-10-24）。
+  const [editingCategories, setEditingCategories] = useState(false);
   const screen = stack[stack.length - 1];
   const push = (next: Screen) => setStack((prev) => [...prev, next]);
   const pop = () => setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
 
   const rows = useMemo(() => recurring.filter(isBudgetRow).sort(byPosition), [recurring]);
-  const yearTotal = (rule: MoneyRecurring) => budgetLineYearAmount(budgetLineOf(rule), year);
+  /** 予算の行のその年の額。固定費（見込み）は、月ごとに前年の記録から見込む（docs/kakei.md §0.8）。ほかは単価 × 回数。 */
+  const yearTotal = (rule: MoneyRecurring) =>
+    rule.categoryId !== null && groupOf(rule.categoryId) === 'estimate'
+      ? estimatedBudgetYearAmount(rule, year, records)
+      : budgetLineYearAmount(budgetLineOf(rule), year);
   const variableBudgets = useMemo(() => variableBudgetsOf(recurring, categories), [recurring, categories]);
   const monthKeys = useMemo(() => yearMonthKeys(year), [year]);
   const category = (id: string | null) => categories.find((entry) => entry.id === id) ?? null;
@@ -274,13 +282,16 @@ export default function BudgetEditor({
       const own = categories.find((entry) => entry.id === rule.categoryId);
       const group: BudgetLineGroup = own?.kind === 'income' ? 'income' : spendGroupOf(rule.categoryId, categories);
       if (group === 'variable') continue;
-      result[group].push({ rule, total: budgetLineYearAmount(budgetLineOf(rule), year) });
+      result[group].push({
+        rule,
+        total: group === 'estimate' ? estimatedBudgetYearAmount(rule, year, records) : budgetLineYearAmount(budgetLineOf(rule), year),
+      });
     }
     for (const key of Object.keys(result) as (keyof typeof result)[]) {
       result[key].sort((a, b) => Number(a.total === 0) - Number(b.total === 0));
     }
     return result;
-  }, [rows, categories, year]);
+  }, [rows, categories, year, records]);
   const orphans = recurring.filter((rule) => !rule.archived && rule.kind !== 'transfer' && rule.categoryId === null).sort(byPosition);
 
   /** 変動費の大分類の予算の行（大分類そのものの行。無ければ、昔の小分類の行）。 */
@@ -675,7 +686,20 @@ export default function BudgetEditor({
     );
     body = (
       <>
-        <ScreenHeader title="年間予算" onClose={onClose} />
+        <ScreenHeader
+          title="年間予算"
+          onClose={onClose}
+          right={
+            <button
+              type="button"
+              aria-label="カテゴリ（アイコン・色・並べ替え）"
+              onClick={() => setEditingCategories(true)}
+              className="rounded-2xl bg-blue-100 px-3.5 py-1.5 text-[13px] font-bold text-blue-800 hover:bg-blue-200"
+            >
+              カテゴリ
+            </button>
+          }
+        />
         <div className="shrink-0 flex items-center gap-2 px-4 py-2">
           <button type="button" aria-label="前の年" onClick={() => setYear((current) => current - 1)} className={yearButtonClass}>
             <ChevronLeft size={18} />
@@ -760,6 +784,9 @@ export default function BudgetEditor({
         body
       )}
       {renaming !== null && <RenameSheet name={renaming.name} onClose={() => setRenaming(null)} onSubmit={(name) => void rename(renaming, name)} />}
+      {editingCategories && (
+        <CategoryEditor familyId={familyId} categories={categories} onCategories={onCategories} onClose={() => setEditingCategories(false)} />
+      )}
     </FullScreen>
   );
 }
@@ -1273,8 +1300,9 @@ function BudgetForm({
     typeof draft === 'string'
       ? null
       : (() => {
-          const line = budgetLineOf({ ...draft, id: '', position: 0, archived: false, createdAt: '', deferredUntil: null });
-          return { count: budgetLineCount(line, year), total: budgetLineYearAmount(line, year) };
+          const asRule = { ...draft, id: '', position: 0, archived: false, createdAt: '', deferredUntil: null };
+          const line = budgetLineOf(asRule);
+          return { count: budgetLineCount(line, year), total: group === 'estimate' ? estimatedBudgetYearAmount(asRule, year, records) : budgetLineYearAmount(line, year) };
         })();
 
   const submit = async () => {
@@ -1448,6 +1476,7 @@ function BudgetForm({
           <SettingRow label="期間" value={periodValue} placeholder={periodValue === 'ずっと'} onClick={() => setSheet('period')} />
         </div>
 
+        {group === 'estimate' && <p className="px-1 text-xs font-medium text-gray-500">前年の同じ月の記録があれば、その額で見込みます。無ければ、ここの金額を使います（自動記録も同じ額で作ります）。</p>}
         <p className="px-1 text-[13px] font-bold text-gray-500">自動記録</p>
         <div className={groupClass}>
           <div className="flex min-h-[46px] items-center gap-2.5 px-3.5 py-2.5">

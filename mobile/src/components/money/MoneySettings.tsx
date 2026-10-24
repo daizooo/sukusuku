@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Modal from '@/components/ui/Modal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeftRight, ChevronRight, Mail, PiggyBank, Store, Tag } from 'lucide-react-native';
+import { ArrowLeftRight, ChevronRight, Mail, PiggyBank, Store } from 'lucide-react-native';
 import type {
   MoneyBudget,
   MoneyCategory,
@@ -15,7 +15,6 @@ import type {
 } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
-import CategoryEditor from '@/components/money/CategoryEditor';
 import BudgetEditor from '@/components/money/BudgetEditor';
 import RecurringSettings from '@/components/money/RecurringSettings';
 import StoreSettings from '@/components/money/StoreSettings';
@@ -24,9 +23,10 @@ import { ScreenHeader } from '@/components/money/moneyVisual';
 
 // 家計の設定（docs/kakei.md §3.5）。PWA版の `src/components/sukusuku/money/MoneySettings.tsx` と同じ並び・文言。
 //
-// 年間予算（予算・カテゴリ・自動記録をまとめて決める。2026-10-23。docs/kakei.md §0.8）（目標割合〔§0.9〕もここで決める。2026-10-24）・カテゴリ（アイコン・並び）・振替の自動記録・
+// 年間予算（予算・カテゴリ・自動記録をまとめて決める。2026-10-23。docs/kakei.md §0.8）（目標割合〔§0.9〕もここで決める。2026-10-24）・振替の自動記録・
 // よく行くお店を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
 // （お店の名前を直しても、過去の記録のお店の名前はそのまま）。
+// カテゴリ（アイコン・並び）は年間予算の右上「カテゴリ」から開く（2026-10-24。以前はここに「カテゴリ」の入口があった）。
 // 戻る操作（スマホの戻るボタン）は、開いている設定の面から入口へ、入口から家計タブへ。
 
 interface MoneySettingsProps {
@@ -56,7 +56,7 @@ interface MoneySettingsProps {
   onClose: () => void;
 }
 
-type Page = 'menu' | 'categories' | 'budget' | 'stores' | 'recurring' | 'feed';
+type Page = 'menu' | 'budget' | 'stores' | 'recurring' | 'feed';
 
 export default function MoneySettings({
   familyId,
@@ -87,9 +87,8 @@ export default function MoneySettings({
   // 設定の面の中で、さらに奥の画面を開いているときの戻り方（毎月の記録の編集など）。
   const innerBack = useRef<(() => void) | null>(null);
 
-  const rows: { id: Exclude<Page, 'menu'>; label: string; icon: typeof Tag }[] = [
+  const rows: { id: Exclude<Page, 'menu'>; label: string; icon: typeof Store }[] = [
     { id: 'budget', label: '年間予算', icon: PiggyBank },
-    { id: 'categories', label: 'カテゴリ', icon: Tag },
     { id: 'recurring', label: '振替', icon: ArrowLeftRight },
     { id: 'stores', label: 'よく行くお店', icon: Store },
     { id: 'feed', label: 'Gmail 取り込み', icon: Mail },
@@ -164,9 +163,6 @@ export default function MoneySettings({
           />
         )}
       </View>
-      {page === 'categories' && (
-        <CategoryEditor familyId={familyId} categories={categories} onCategories={onCategories} onClose={back} />
-      )}
       {page === 'budget' && (
         <BudgetEditor
           familyId={familyId}

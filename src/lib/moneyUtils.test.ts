@@ -50,6 +50,7 @@ import {
   budgetMonths,
   buildWalletBalances,
   estimateRecurringAmount,
+  estimatedBudgetYearAmount,
   inRecurringPeriod,
   recurringMonthsLabel,
   isMonthClosed,
@@ -226,6 +227,19 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
   assert.equal(estimateRecurringAmount(power, '2026-11', history), Math.round((8500 + 8000 + 7000) / 3), '無ければ直近3回の平均');
   assert.equal(estimateRecurringAmount(power, '2026-09', history), 7500, '確定した当月の記録は数えない（作った時点と同じ）');
   assert.equal(estimateRecurringAmount(power, '2026-11', []), 6000, '記録が1件も無ければルールの額');
+
+  // 固定費（見込み）の予算の年の額（月ごとに 前年同月 → 直近3回の平均 → 金額。2026-10-24）
+  assert.equal(
+    estimatedBudgetYearAmount({ ...power, months: [8, 11] }, 2026, history),
+    9000 + Math.round((8500 + 8000 + 7000) / 3),
+    '月ごとに見込む（季節の重み）',
+  );
+  assert.equal(
+    estimatedBudgetYearAmount(rule({ id: 'r5', categoryId: 'elec', walletId: null, amountMode: 'estimate', amount: 6000, months: [8, 9] }), 2026, history),
+    9000 + 6000,
+    '出金元の無いルールは、前年同月の同じ小分類の記録（無い月は金額）',
+  );
+  assert.equal(estimatedBudgetYearAmount(rule({ id: 'r6', categoryId: 'elec', amountMode: 'fixed', amount: 5000, months: [8, 9] }), 2026, history), 10000, '確定は単価 × 回数');
 
   assert.equal(budgetFor(budgets, 'house', '2026-04'), 85000, '月の予算は手入力（変動費）だけ');
 

@@ -26,6 +26,7 @@ import {
   budgetLineOf,
   budgetLineYearAmount,
   childCategories,
+  estimatedBudgetYearAmount,
   formatYear,
   formatYen,
   guessIconKey,
@@ -60,6 +61,7 @@ import {
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import StorePicker from '@/components/money/StorePicker';
+import CategoryEditor from '@/components/money/CategoryEditor';
 import CategoryIconPicker from '@/components/money/CategoryIconPicker';
 import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 import { Chip, ChipRow, Field, WalletChoices } from '@/components/money/feedParts';
@@ -221,12 +223,18 @@ export default function BudgetEditor({
   const [selected, setSelected] = useState<BudgetLineGroup | 'expense' | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [renaming, setRenaming] = useState<MoneyCategory | null>(null);
+  // カテゴリ（アイコン・色・並べ替え）の画面。家計の設定から、年間予算の右上へ移した（2026-10-24）。
+  const [editingCategories, setEditingCategories] = useState(false);
   const screen = stack[stack.length - 1];
   const push = (next: Screen) => setStack((prev) => [...prev, next]);
   const pop = () => setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
 
   const rows = useMemo(() => recurring.filter(isBudgetRow).sort(byPosition), [recurring]);
-  const yearTotal = (rule: MoneyRecurring) => budgetLineYearAmount(budgetLineOf(rule), year);
+  /** 予算の行のその年の額。固定費（見込み）は、月ごとに前年の記録から見込む（docs/kakei.md §0.8）。ほかは単価 × 回数。 */
+  const yearTotal = (rule: MoneyRecurring) =>
+    rule.categoryId !== null && groupOf(rule.categoryId) === 'estimate'
+      ? estimatedBudgetYearAmount(rule, year, records)
+      : budgetLineYearAmount(budgetLineOf(rule), year);
   const variableBudgets = useMemo(() => variableBudgetsOf(recurring, categories), [recurring, categories]);
   const monthKeys = useMemo(() => yearMonthKeys(year), [year]);
   const category = (id: string | null) => categories.find((entry) => entry.id === id) ?? null;
@@ -270,13 +278,16 @@ export default function BudgetEditor({
       const own = categories.find((entry) => entry.id === rule.categoryId);
       const group: BudgetLineGroup = own?.kind === 'income' ? 'income' : spendGroupOf(rule.categoryId, categories);
       if (group === 'variable') continue;
-      result[group].push({ rule, total: budgetLineYearAmount(budgetLineOf(rule), year) });
+      result[group].push({
+        rule,
+        total: group === 'estimate' ? estimatedBudgetYearAmount(rule, year, records) : budgetLineYearAmount(budgetLineOf(rule), year),
+      });
     }
     for (const key of Object.keys(result) as (keyof typeof result)[]) {
       result[key].sort((a, b) => Number(a.total === 0) - Number(b.total === 0));
     }
     return result;
-  }, [rows, categories, year]);
+  }, [rows, categories, year, records]);
   const orphans = recurring.filter((rule) => !rule.archived && rule.kind !== 'transfer' && rule.categoryId === null).sort(byPosition);
 
   /** 変動費の大分類の予算の行（大分類そのものの行。無ければ、昔の小分類の行）。 */
@@ -691,7 +702,15 @@ export default function BudgetEditor({
     );
     body = (
       <>
-        <ScreenHeader title="年間予算" onClose={onClose} />
+        <ScreenHeader
+          title="年間予算"
+          onClose={onClose}
+          right={
+            <Pressable accessibilityRole="button" accessibilityLabel="カテゴリ（アイコン・色・並べ替え）" onPress={() => setEditingCategories(true)} style={styles.categoryButton}>
+              <Text style={styles.categoryButtonText}>カテゴリ</Text>
+            </Pressable>
+          }
+        />
         <View style={styles.bar}>
           <Pressable accessibilityRole="button" accessibilityLabel="前の年" onPress={() => setYear((current) => current - 1)} hitSlop={8} style={styles.yearButton}>
             <ChevronLeft size={18} color={colors.textSubtle} />
@@ -771,6 +790,9 @@ export default function BudgetEditor({
         {body}
       </View>
       {renaming !== null && <RenameSheet name={renaming.name} onClose={() => setRenaming(null)} onSubmit={(name) => void rename(renaming, name)} />}
+      {editingCategories && (
+        <CategoryEditor familyId={familyId} categories={categories} onCategories={onCategories} onClose={() => setEditingCategories(false)} />
+      )}
     </Modal>
   );
 }
@@ -1151,8 +1173,9 @@ function BudgetForm({
     typeof draft === 'string'
       ? null
       : (() => {
-          const line = budgetLineOf({ ...draft, id: '', position: 0, archived: false, createdAt: '', deferredUntil: null });
-          return { count: budgetLineCount(line, year), total: budgetLineYearAmount(line, year) };
+          const asRule = { ...draft, id: '', position: 0, archived: false, createdAt: '', deferredUntil: null };
+          const line = budgetLineOf(asRule);
+          return { count: budgetLineCount(line, year), total: group === 'estimate' ? estimatedBudgetYearAmount(asRule, year, records) : budgetLineYearAmount(line, year) };
         })();
 
   const submit = async () => {
@@ -1304,6 +1327,7 @@ function BudgetForm({
           <SettingRow label="期間" value={periodValue} placeholder={periodValue === 'ずっと'} onPress={() => setSheet('period')} />
         </View>
 
+        {group === 'estimate' && <Text style={styles.groupHint}>前年の同じ月の記録があれば、その額で見込みます。無ければ、ここの金額を使います（自動記録も同じ額で作ります）。</Text>}
         <Text style={styles.groupTitle}>自動記録</Text>
         <View style={styles.group}>
           <View style={styles.item}>
@@ -2016,6 +2040,8 @@ const styles = StyleSheet.create({
   totalLabel: { fontSize: 15, fontWeight: '700', color: colors.text },
   totalValue: { fontSize: 15, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   error: { fontSize: 12, fontWeight: '500', color: colors.danger },
+  categoryButton: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: colors.moneySoft },
+  categoryButtonText: { fontSize: 13, fontWeight: '700', color: colors.moneyText },
   groupHint: { fontSize: 12, fontWeight: '500', color: colors.textMuted, paddingHorizontal: 4, marginTop: -6 },
   kidBlock: { paddingHorizontal: 14, paddingVertical: 11, gap: 8 },
   kidChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
