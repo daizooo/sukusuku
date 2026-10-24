@@ -56,9 +56,10 @@ const MAX_MESSAGES = 50;
 const MAX_SYNC_IDS = 2000;
 
 // 注文メールの状態 → 受け取ったメールの扱い（error は書かず、次の同期でまた送られる）
+// 0円の品目だけのメール（skipped）も Amazon のメールなので、ラベルは「Amazon」にする（対象外にはしない。ゴミ箱へは移さない）
 const AMAZON_OUTCOMES: Record<string, string> = {
   saved: 'order',
-  skipped: 'skipped',
+  skipped: 'order',
   ignored: 'unreadable',
   before_start: 'before_start',
 };
