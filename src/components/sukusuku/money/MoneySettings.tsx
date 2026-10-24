@@ -21,7 +21,7 @@ import { FullScreen, ScreenHeader } from './moneyVisual';
 
 // 家計の設定（docs/kakei.md §3.5）。mobile版の `mobile/src/components/money/MoneySettings.tsx` と同じ並び・文言。
 //
-// 年間予算（予算・カテゴリ・自動記録をまとめて決める。2026-10-23。docs/kakei.md §0.8）（目安の割合〔§0.9〕もここで決める。2026-10-24）・カテゴリ（アイコン・並び）・振替の自動記録・
+// 年間予算（予算・カテゴリ・自動記録をまとめて決める。2026-10-23。docs/kakei.md §0.8）（目標割合〔§0.9〕もここで決める。2026-10-24）・カテゴリ（アイコン・並び）・振替の自動記録・
 // よく行くお店を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
 // （お店の名前を直しても、過去の記録のお店の名前はそのまま）。
 // 戻る操作（ブラウザの戻る）は、開いている設定の面から入口へ、入口から家計タブへ。
@@ -43,7 +43,7 @@ interface MoneySettingsProps {
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
   /** 開いたときに編集を開く振替の自動記録。 */
   initialRecurringId?: string | null;
-  /** 目安の割合（docs/kakei.md §0.9）。 */
+  /** 目標割合（docs/kakei.md §0.9）。 */
   ratioTargets: MoneyRatioTargets;
   onRatioTargets: (targets: MoneyRatioTargets) => void;
   /** Zaim 取り込み（docs/kakei.md §9.5.6）。null は読み込み中。 */
@@ -82,7 +82,7 @@ export default function MoneySettings({
   const [recurringTarget, setRecurringTarget] = useState<string | null>(initialRecurringId);
 
   const rows: { id: Exclude<Page, 'menu'>; label: string; icon: LucideIcon }[] = [
-    { id: 'budget', label: '年間予算（カテゴリ・自動記録・目安の割合）', icon: PiggyBank },
+    { id: 'budget', label: '年間予算（カテゴリ・自動記録・目標割合）', icon: PiggyBank },
     { id: 'categories', label: 'カテゴリのアイコン・並び', icon: Tag },
     { id: 'recurring', label: '振替の自動記録', icon: ArrowLeftRight },
     { id: 'stores', label: 'よく行くお店', icon: Store },

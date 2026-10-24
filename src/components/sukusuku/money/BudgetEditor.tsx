@@ -47,12 +47,12 @@ import {
   insertMoneyCategory,
   insertMoneyRecurring,
   insertMoneyStore,
+  saveMoneyRatioTargets,
   updateMoneyCategory,
   updateMoneyRecurring,
 } from '@/lib/api/money';
 import { ModalShell } from '../modals/TaskForm';
 import StorePicker from './StorePicker';
-import RatioTargetSettings from './RatioTargetSettings';
 import { Chip, ChipRow, Field, WalletChoices } from './feedParts';
 import { FullScreen, PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
 
@@ -77,7 +77,7 @@ interface BudgetEditorProps {
   wallets: MoneyWallet[];
   stores: MoneyStore[];
   records: MoneyRecord[];
-  /** 目安の割合（docs/kakei.md §0.9）。年間予算の画面から決める。 */
+  /** 目標割合（docs/kakei.md §0.9）。年間予算の画面から決める。 */
   ratioTargets: MoneyRatioTargets;
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
@@ -134,15 +134,21 @@ type Screen = { type: 'list' } | { type: 'top'; topId: string } | { type: 'form'
 
 const byPosition = (a: MoneyRecurring, b: MoneyRecurring) => a.position - b.position;
 
-/** 目安の割合の要約（変動費35%・予備費15%・固定費35%）。 */
-const ratioSummary = (targets: MoneyRatioTargets): string => {
-  const parts = [
-    targets.variable === null ? null : `変動費${targets.variable}%`,
-    targets.reserve === null ? null : `予備費${targets.reserve}%`,
-    targets.fixed === null ? null : `固定費${targets.fixed}%`,
-  ].filter((part): part is string => part !== null);
-  return parts.length === 0 ? '未設定' : parts.join('・');
-};
+/** 目標割合（種類ごと。固定費は確定＋見込みで1つ）の行。 */
+const RATIO_ROWS: { key: keyof MoneyRatioTargets; label: string }[] = [
+  { key: 'variable', label: '変動費' },
+  { key: 'reserve', label: '予備費' },
+  { key: 'fixed', label: '固定費' },
+];
+
+/** 入力の文字を割合（0〜100 の整数）にする。空は null、読めない・範囲外は undefined。 */
+function parsePercent(text: string): number | null | undefined {
+  const value = text.replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0)).replace(/[%％\s]/g, '');
+  if (value === '') return null;
+  if (!/^\d+$/.test(value)) return undefined;
+  const percent = Number(value);
+  return percent <= 100 ? percent : undefined;
+}
 
 /** 割合（収入に対する）。一桁は前に数字1つぶんの空き。 */
 const percentText = (value: number, base: number): string => {
@@ -205,8 +211,6 @@ export default function BudgetEditor({
   const [selected, setSelected] = useState<BudgetLineGroup | 'expense' | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [renaming, setRenaming] = useState<MoneyCategory | null>(null);
-  // 目安の割合の画面（自分で戻る操作の層を持つので、画面の積み重ねには入れない）。
-  const [ratioOpen, setRatioOpen] = useState(false);
   const screen = stack[stack.length - 1];
   const push = (next: Screen) => setStack((prev) => [...prev, next]);
   const pop = () => setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
@@ -577,6 +581,7 @@ export default function BudgetEditor({
                 onClick={() => setSelected((current) => (current === group ? null : group))}
               />
             ))}
+            <RatioPanel familyId={familyId} targets={ratioTargets} onSaved={onRatioTargets} />
           </div>
 
           {shown('income') && section('income', ruleList('income'), totals.income)}
@@ -597,9 +602,6 @@ export default function BudgetEditor({
             </section>
           )}
           <AddButton label="予算を追加" onClick={() => push({ type: 'form', ruleId: null, group: selected === null || selected === 'expense' ? 'variable' : selected })} />
-          <div className={`${groupClass} mt-3`}>
-            <SettingRow first label="目安の割合" value={ratioSummary(ratioTargets)} placeholder={ratioSummary(ratioTargets) === '未設定'} onClick={() => setRatioOpen(true)} />
-          </div>
         </div>
       </>
     );
@@ -615,7 +617,6 @@ export default function BudgetEditor({
       ) : (
         body
       )}
-      {ratioOpen && <RatioTargetSettings familyId={familyId} targets={ratioTargets} onSaved={onRatioTargets} onBack={() => setRatioOpen(false)} />}
       {renaming !== null && <RenameSheet name={renaming.name} onClose={() => setRenaming(null)} onSubmit={(name) => void rename(renaming, name)} />}
     </FullScreen>
   );
@@ -684,6 +685,125 @@ function Donut({ income, parts }: { income: number; parts: { group: SpendGroup; 
           {centerText}
         </text>
       </svg>
+    </div>
+  );
+}
+
+/**
+ * 目標割合（docs/kakei.md §0.9）。上の枠の下に折りたたんで出す（はじめは閉じる）。開くと、種類ごと（変動費・予備費・固定費）の
+ * 目標と、貯金（100% − 合計）。「編集」でその場で直す（合計が100%を超えると保存できない。空は目標なし）。
+ */
+function RatioPanel({ familyId, targets, onSaved }: { familyId: string; targets: MoneyRatioTargets; onSaved: (targets: MoneyRatioTargets) => void }) {
+  const supabase = useMemo(() => createClient(), []);
+  const textsOf = (value: MoneyRatioTargets): Record<keyof MoneyRatioTargets, string> => ({
+    variable: value.variable === null ? '' : String(value.variable),
+    reserve: value.reserve === null ? '' : String(value.reserve),
+    fixed: value.fixed === null ? '' : String(value.fixed),
+  });
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [texts, setTexts] = useState(() => textsOf(targets));
+  const [saving, setSaving] = useState(false);
+
+  const parsed = RATIO_ROWS.map((row) => (editing ? parsePercent(texts[row.key]) : targets[row.key]));
+  const invalid = parsed.some((value) => value === undefined);
+  const total = parsed.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+  const anySet = parsed.some((value) => value !== null && value !== undefined);
+  const over = total > 100;
+  const savings = anySet ? `${100 - total}%` : '−';
+
+  const toggle = () => {
+    if (open) setEditing(false);
+    setOpen(!open);
+  };
+  const startEdit = () => {
+    setTexts(textsOf(targets));
+    setEditing(true);
+  };
+  const save = async () => {
+    if (invalid || over || saving) return;
+    const next: MoneyRatioTargets = { variable: parsed[0] ?? null, reserve: parsed[1] ?? null, fixed: parsed[2] ?? null };
+    setSaving(true);
+    try {
+      await saveMoneyRatioTargets(supabase, familyId, next);
+      onSaved(next);
+      setEditing(false);
+    } catch {
+      window.alert('保存できませんでした。もう一度お試しください。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 border-t border-gray-200 pt-2">
+      <div className="flex items-center gap-2">
+        <button type="button" aria-expanded={open} onClick={toggle} className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 text-left">
+          {open ? <ChevronDown size={14} className="shrink-0 text-gray-500" /> : <ChevronRight size={14} className="shrink-0 text-gray-500" />}
+          <span className="shrink-0 text-[15px] font-extrabold text-gray-900">目標割合</span>
+          {!open && (
+            <span className="min-w-0 flex-1 truncate text-right text-xs font-semibold tabular-nums text-gray-500">
+              {anySet ? `合計${total}%・貯金${100 - total}%` : '未設定'}
+            </span>
+          )}
+        </button>
+        {open && !editing && (
+          <button type="button" onClick={startEdit} className="rounded-2xl bg-blue-100 px-3.5 py-1.5 text-[13px] font-bold text-blue-800 hover:bg-blue-200">
+            編集
+          </button>
+        )}
+        {open && editing && (
+          <>
+            <button type="button" onClick={() => setEditing(false)} className="px-2 py-1.5 text-[13px] font-bold text-blue-800">
+              キャンセル
+            </button>
+            <button
+              type="button"
+              disabled={invalid || over || saving}
+              onClick={() => void save()}
+              className="rounded-2xl bg-blue-600 px-3.5 py-1.5 text-[13px] font-bold text-white disabled:opacity-40"
+            >
+              {saving ? '保存中' : '保存'}
+            </button>
+          </>
+        )}
+      </div>
+      {open && (
+        <>
+          <div className="mt-2 flex gap-2">
+            {RATIO_ROWS.map((row, index) => (
+              <div key={row.key} className="flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[10px] bg-gray-100 px-1 py-2">
+                <span className="text-[11px] font-semibold text-gray-500">{row.label}</span>
+                {editing ? (
+                  <label className="flex items-center gap-0.5">
+                    <input
+                      value={texts[row.key]}
+                      onChange={(event) => setTexts((prev) => ({ ...prev, [row.key]: event.target.value }))}
+                      inputMode="numeric"
+                      placeholder="−"
+                      maxLength={3}
+                      aria-label={`${row.label}の目標（%）`}
+                      className={`w-10 rounded-lg border bg-white px-1.5 py-[3px] text-right text-base font-extrabold tabular-nums text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400 ${parsed[index] === undefined ? 'border-red-500' : 'border-gray-300'}`}
+                    />
+                    <span className="text-[13px] font-semibold text-gray-500">%</span>
+                  </label>
+                ) : (
+                  <span className="text-[17px] font-extrabold tabular-nums text-gray-900">{targets[row.key] === null ? '−' : `${targets[row.key]}%`}</span>
+                )}
+              </div>
+            ))}
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[10px] bg-gray-100 px-1 py-2">
+              <span className="text-[11px] font-semibold text-gray-500">貯金</span>
+              <span className={`text-[17px] font-extrabold tabular-nums ${over ? 'text-red-600' : anySet ? 'text-green-700' : 'text-gray-900'}`}>{savings}</span>
+            </div>
+          </div>
+          {editing && (
+            <p className={`mt-2 text-xs font-medium ${over ? 'text-red-600' : 'text-gray-500'}`}>
+              {over ? '合計が100%を超えています' : '収入に対して、種類ごとに何%までに収めたいか。固定費は確定と見込みで1つ。貯金は 100% − 合計。'}
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }

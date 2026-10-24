@@ -1980,7 +1980,7 @@ export interface ReviewSections {
   estimate: ReviewSubRow[];
   /** カテゴリの無い品目（削除したカテゴリの品目を含む）。 */
   uncategorized: { count: number; amount: number };
-  /** 種類ごとの実績（目安の割合に使う。固定費は確定＋見込み。カテゴリの無い品目は入れない）。 */
+  /** 種類ごとの実績（目標割合に使う。固定費は確定＋見込み。カテゴリの無い品目は入れない）。 */
   spend: { variable: number; reserve: number; fixed: number };
 }
 
@@ -2084,7 +2084,7 @@ export function buildReviewSections(
   };
 }
 
-/** 目安の割合の、実績の割合（%。整数に丸める）。収入が0以下なら null。 */
+/** 目標割合の、実績の割合（%。整数に丸める）。収入が0以下なら null。 */
 export const spendRatio = (spend: number, income: number): number | null => (income > 0 ? Math.round((spend / income) * 100) : null);
 
 /**
