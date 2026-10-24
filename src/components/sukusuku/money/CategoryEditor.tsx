@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronUp, GripVertical, Palette } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Check, ChevronRight, GripVertical, Palette, X } from 'lucide-react';
 import type { MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -13,18 +13,22 @@ import {
   topCategories,
 } from '@/lib/moneyUtils';
 import { insertDefaultMoneyCategories, updateMoneyCategory } from '@/lib/api/money';
+import { useBackLayer } from '@/lib/browserHistory';
 import { ModalShell } from '../modals/TaskForm';
-import { useDragReorder } from '../ui/useDragReorder';
+import { useBackdropClose } from '../ui/useBackdropClose';
+import { useDragReorder, type DragReorder } from '../ui/useDragReorder';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader } from './moneyVisual';
 
 // カテゴリ（docs/kakei.md §3.1）。mobile版の `mobile/src/components/money/CategoryEditor.tsx` と同じ並び・文言。
 //
 // ここでできるのは、大分類のアイコン（絵と色）と並べ替えだけ（2026-10-24）。名前の変更・追加・削除は、予算が本体なので年間予算（BudgetEditor）で行い、
-// カテゴリはそれを表示するだけ（固定費・予備費の小分類は、予算から決まる）。並べ替えは一覧のまま動かす
-// （大分類は左の持ち手をつかむ、小分類は長押し。マウスでも指でも。リストと同じ操作。ui/useDragReorder.ts）。
-// 大分類を1行ずつ並べ、押した1つだけ開いて小分類を出す（アコーディオン。2026-10-24。カテゴリの選択と同じ見せ方。docs/kakei.md §3.2）。
-// 小分類が多い大分類（固定費（確定）23件など）で、全部並べると見にくかった。大分類の行を押すのは開閉で、アイコンは開いた中の「アイコンを変える」から。
-// 大分類のアイコンは、大分類を押して絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。
+// カテゴリはそれを表示するだけ（固定費・予備費の小分類は、予算から決まる）。並べ替えは動かす
+// （大分類は一覧の左の持ち手をつかむ、小分類はシートの中で長押し。マウスでも指でも。リストと同じ操作。ui/useDragReorder.ts）。
+// 大分類を1行ずつ並べ、押すと下からシート（ボトムシート）が出て、小分類を2列の枠つきボタンで見せる（2026-10-24。カテゴリの選択と同じ見せ方。docs/kakei.md §3.2）。
+// 小分類が多い大分類（固定費（確定）23件など）で、行の下に開くと見にくかった。件数は出さない。
+// アイコンは、シートの下の「アイコンを変える」から絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。
+// シートとアイコンの選択は同時に出せないので、「アイコンを変える」を押すとシートを閉じてから開く。
 // カテゴリがまだ無い家族には「標準のカテゴリで始める」（Zaim のカテゴリをもとにした並び）。
 
 interface CategoryEditorProps {
@@ -51,27 +55,12 @@ export default function CategoryEditor({
   const [kind, setKind] = useState<MoneyCategoryKind>('living');
   const [editing, setEditing] = useState<Editing>(null);
   const [busy, setBusy] = useState(false);
-  // 開いている大分類（1つだけ）。人が開いたときだけ、その行を一覧の上に寄せる。
+  // シートを出している大分類（1つだけ）。
   const [openId, setOpenId] = useState<string | null>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const rowRefs = useRef(new Map<string, HTMLElement>());
-  const scrollOnOpen = useRef(false);
-
-  // scrollIntoView は枠（overflow-hidden）ごと動かしてしまうので、一覧のスクロールだけを送る。
-  useEffect(() => {
-    if (!scrollOnOpen.current) return;
-    scrollOnOpen.current = false;
-    const row = openId ? rowRefs.current.get(openId) : null;
-    if (row) listRef.current?.scrollTo({ top: Math.max(0, row.offsetTop - 8), behavior: 'smooth' });
-  }, [openId]);
-
-  const toggle = (id: string) => {
-    scrollOnOpen.current = openId !== id;
-    setOpenId(openId === id ? null : id);
-  };
 
   const tops = useMemo(() => topCategories(categories, kind, true), [categories, kind]);
   const ordered = [...tops.filter((top) => !top.archived), ...tops.filter((top) => top.archived)];
+  const openTop = ordered.find((top) => top.id === openId) ?? null;
 
   const failed = (what: string) => window.alert(`${what}できませんでした。もう一度お試しください。`);
   const replace = (updated: MoneyCategory) =>
@@ -142,7 +131,7 @@ export default function CategoryEditor({
         ))}
       </div>
 
-      <div ref={listRef} className="relative flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pt-2 pb-8 space-y-2.5">
+      <div className="relative flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pt-2 pb-8 space-y-2.5">
         {categories.length === 0 && (
           <div className="space-y-3 py-4">
             <p className="text-sm leading-relaxed text-gray-500">
@@ -151,76 +140,49 @@ export default function CategoryEditor({
             <PrimaryButton label="標準のカテゴリで始める" onClick={() => void seed()} disabled={busy} />
           </div>
         )}
-        {drag.arrange(`tops-${kind}`, ordered).map((top) => {
-          const children = drag.arrange(`children-${top.id}`, childCategories(categories, top.id, true));
-          const open = openId === top.id;
-          const setDragRef = drag.dragRef(top.id);
-          return (
-            <div
-              key={top.id}
-              ref={(el) => {
-                setDragRef(el);
-                if (el) rowRefs.current.set(top.id, el);
-                else rowRefs.current.delete(top.id);
-              }}
-              className={`space-y-2.5 rounded-xl border bg-white p-3 ${top.archived ? 'opacity-50' : ''} ${
-                drag.isDragging(top.id) ? 'relative z-20 border-blue-300 shadow-xl' : 'border-gray-200'
-              }`}
+        {drag.arrange(`tops-${kind}`, ordered).map((top) => (
+          <div
+            key={top.id}
+            ref={drag.dragRef(top.id)}
+            className={`flex min-h-16 items-center rounded-xl border bg-white py-2 pl-1 pr-3.5 ${top.archived ? 'opacity-50' : ''} ${
+              drag.isDragging(top.id) ? 'relative z-20 border-blue-300 shadow-xl' : 'border-gray-200'
+            }`}
+          >
+            <span
+              role="button"
+              aria-label={`${top.name}を並べ替え`}
+              {...drag.gripProps(`tops-${kind}`, ordered, top.id)}
+              className="flex w-7 flex-none cursor-grab touch-none select-none items-center justify-center self-stretch text-gray-300"
             >
-              <div className="flex items-center">
-                <span
-                  role="button"
-                  aria-label={`${top.name}を並べ替え`}
-                  {...drag.gripProps(`tops-${kind}`, ordered, top.id)}
-                  className="-my-1 -ml-2 flex w-7 flex-none cursor-grab touch-none select-none items-center justify-center self-stretch text-gray-300"
-                >
-                  <GripVertical size={18} />
-                </span>
-                <button
-                  type="button"
-                  aria-expanded={open}
-                  onClick={() => toggle(top.id)}
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                >
-                  <CategoryIcon iconKey={iconKeyOf(top)} size={30} />
-                  <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-gray-900">{top.name}</span>
-                  {top.archived && <span className="text-[11px] font-semibold text-gray-400">使わない</span>}
-                  <span className="text-xs font-medium tabular-nums text-gray-400">{children.length}件</span>
-                  {open ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
-                </button>
-              </div>
-              {open && (
-                <>
-                  <div className="flex flex-wrap gap-1.5">
-                    {children.map((child) => (
-                      <button
-                        key={child.id}
-                        type="button"
-                        ref={drag.dragRef(child.id)}
-                        {...drag.handleProps(`children-${top.id}`, children, child.id)}
-                        className={`select-none rounded-full bg-gray-100 px-2.5 py-1.5 text-[13px] text-gray-700 ${child.archived ? 'opacity-50' : ''} ${
-                          drag.isDragging(child.id) ? 'relative z-20 shadow-lg' : ''
-                        }`}
-                      >
-                        {child.name}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    aria-label={`${top.name}のアイコンを変える`}
-                    onClick={() => setEditing({ category: top })}
-                    className="flex items-center gap-1 py-1 text-[13px] font-semibold text-blue-600"
-                  >
-                    <Palette size={14} />
-                    アイコンを変える
-                  </button>
-                </>
-              )}
-            </div>
-          );
-        })}
+              <GripVertical size={18} />
+            </span>
+            <button
+              type="button"
+              aria-label={top.name}
+              onClick={() => setOpenId(top.id)}
+              className="flex min-h-12 min-w-0 flex-1 items-center gap-2 text-left"
+            >
+              <CategoryIcon iconKey={iconKeyOf(top)} size={34} />
+              <span className="min-w-0 flex-1 truncate text-base font-bold text-gray-900">{top.name}</span>
+              {top.archived && <span className="text-[11px] font-semibold text-gray-400">使わない</span>}
+              <ChevronRight size={18} className="text-gray-500" />
+            </button>
+          </div>
+        ))}
       </div>
+
+      {openTop && (
+        <ChildSheet
+          top={openTop}
+          items={drag.arrange(`children-${openTop.id}`, childCategories(categories, openTop.id, true))}
+          drag={drag}
+          onEditIcon={() => {
+            setOpenId(null);
+            setEditing({ category: openTop });
+          }}
+          onClose={() => setOpenId(null)}
+        />
+      )}
 
       {editing !== null && (
         <CategoryModal
@@ -231,6 +193,74 @@ export default function CategoryEditor({
         />
       )}
     </FullScreen>
+  );
+}
+
+// 小分類のボトムシート。カテゴリの選択（CategoryPicker）と同じ見せ方で、長押しで並べ替える。
+// 戻る操作（ブラウザ・スマホ）・暗い部分・「×」で閉じる。
+function ChildSheet({
+  top,
+  items,
+  drag,
+  onEditIcon,
+  onClose,
+}: {
+  top: MoneyCategory;
+  items: MoneyCategory[];
+  drag: DragReorder;
+  onEditIcon: () => void;
+  onClose: () => void;
+}) {
+  useBackLayer(onClose);
+  const backdropClose = useBackdropClose(onClose);
+  return (
+    <div
+      className="absolute inset-0 z-50 flex items-end justify-center bg-black/50 p-4"
+      {...backdropClose}
+      {...swipeBoundary}
+    >
+      <div role="dialog" aria-label={top.name} className="flex max-h-[85%] w-full max-w-md flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
+        <div className="flex h-16 shrink-0 items-center gap-3 px-4">
+          <CategoryIcon iconKey={iconKeyOf(top)} size={36} />
+          <h3 className="min-w-0 flex-1 truncate text-lg font-bold text-gray-900">{top.name}</h3>
+          <button
+            type="button"
+            aria-label="閉じる"
+            onClick={onClose}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-100 text-gray-700 active:bg-gray-200"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        {items.length >= 2 && <p className="shrink-0 px-4 pb-2 text-[13px] font-medium text-gray-500">長押しして動かすと、並びを変えられます</p>}
+        <div className="grid min-h-0 grid-cols-2 gap-2 overflow-y-auto px-4 pb-1">
+          {items.map((child) => (
+            <button
+              key={child.id}
+              type="button"
+              ref={drag.dragRef(child.id)}
+              {...drag.handleProps(`children-${top.id}`, items, child.id)}
+              className={`flex min-h-12 select-none items-center rounded-xl border bg-white px-3 py-2 text-left text-[15px] font-semibold leading-tight text-gray-900 ${
+                child.archived ? 'opacity-50' : ''
+              } ${drag.isDragging(child.id) ? 'relative z-20 border-blue-300 shadow-lg' : 'border-gray-300'}`}
+            >
+              {child.name}
+            </button>
+          ))}
+        </div>
+        <div className="shrink-0 px-4 pb-6 pt-2.5 sm:pb-4">
+          <button
+            type="button"
+            aria-label={`${top.name}のアイコンを変える`}
+            onClick={onEditIcon}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 text-[15px] font-bold text-blue-800 active:bg-blue-100"
+          >
+            <Palette size={18} className="text-blue-600" />
+            アイコンを変える
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

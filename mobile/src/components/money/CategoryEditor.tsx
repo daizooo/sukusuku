@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Modal from '@/components/ui/Modal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, ChevronDown, ChevronUp, GripVertical, Palette } from 'lucide-react-native';
+import { Check, ChevronRight, GripVertical, Palette, X } from 'lucide-react-native';
 import type { MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
@@ -24,11 +24,12 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 // カテゴリ（docs/kakei.md §3.1）。PWA版の `src/components/sukusuku/money/CategoryEditor.tsx` と同じ並び・文言。
 //
 // ここでできるのは、大分類のアイコン（絵と色）と並べ替えだけ（2026-10-24）。名前の変更・追加・削除は、予算が本体なので年間予算（BudgetEditor）で行い、
-// カテゴリはそれを表示するだけ（固定費・予備費の小分類は、予算から決まる）。並べ替えは一覧のまま指で動かす
-// （大分類は左の持ち手をつかむ、小分類は長押し。リストと同じ操作。components/list/useDragReorder.ts）。
-// 大分類を1行ずつ並べ、押した1つだけ開いて小分類を出す（アコーディオン。2026-10-24。カテゴリの選択と同じ見せ方。docs/kakei.md §3.2）。
-// 小分類が多い大分類（固定費（確定）23件など）で、全部並べると見にくかった。大分類の行を押すのは開閉で、アイコンは開いた中の「アイコンを変える」から。
-// 大分類のアイコンは、大分類をタップして絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。
+// カテゴリはそれを表示するだけ（固定費・予備費の小分類は、予算から決まる）。並べ替えは指で動かす
+// （大分類は一覧の左の持ち手をつかむ、小分類はシートの中で長押し。リストと同じ操作。components/list/useDragReorder.ts）。
+// 大分類を1行ずつ並べ、押すと下からシート（ボトムシート）が出て、小分類を2列の枠つきボタンで見せる（2026-10-24。カテゴリの選択と同じ見せ方。docs/kakei.md §3.2）。
+// 小分類が多い大分類（固定費（確定）23件など）で、行の下に開くと見にくかった。件数は出さない。
+// アイコンは、シートの下の「アイコンを変える」から絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。
+// シートとアイコンの選択は同時に出せないので、「アイコンを変える」を押すとシートを閉じてから開く。
 // カテゴリがまだ無い家族には「標準のカテゴリで始める」（Zaim のカテゴリをもとにした並び）。
 
 interface CategoryEditorProps {
@@ -39,9 +40,6 @@ interface CategoryEditorProps {
 }
 
 type Editing = { category: MoneyCategory } | null;
-
-/** 大分類のカードの中の間隔（styles.card の gap）。開いた行を上に寄せる計算に使う。 */
-const CARD_GAP = 10;
 
 const KIND_OPTIONS: { id: MoneyCategoryKind; label: string }[] = [
   { id: 'living', label: '支出' },
@@ -58,14 +56,12 @@ export default function CategoryEditor({
   const [kind, setKind] = useState<MoneyCategoryKind>('living');
   const [editing, setEditing] = useState<Editing>(null);
   const [busy, setBusy] = useState(false);
-  // 開いている大分類（1つだけ）。開いた行は画面の上に寄せる。
+  // シートを出している大分類（1つだけ）。
   const [openId, setOpenId] = useState<string | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
-  const rowY = useRef<Record<string, number>>({});
-  const panelHeight = useRef(0);
 
   const tops = useMemo(() => topCategories(categories, kind, true), [categories, kind]);
   const ordered = [...tops.filter((top) => !top.archived), ...tops.filter((top) => top.archived)];
+  const openTop = ordered.find((top) => top.id === openId) ?? null;
 
   const failed = (what: string) => Alert.alert(`${what}できませんでした`, 'もう一度お試しください。');
   const replace = (updated: MoneyCategory) =>
@@ -104,19 +100,6 @@ export default function CategoryEditor({
   };
   const drag = useDragReorder(reorder);
 
-  const toggle = (id: string) => {
-    if (openId === id) {
-      setOpenId(null);
-      return;
-    }
-    // 開いていた行が上にあれば、閉じたぶん（面の高さ＋カード内の間隔）だけ新しい行の位置は上がる。
-    const openIndex = ordered.findIndex((entry) => entry.id === openId);
-    const index = ordered.findIndex((entry) => entry.id === id);
-    const closing = openIndex >= 0 && openIndex < index ? panelHeight.current + CARD_GAP : 0;
-    setOpenId(id);
-    scrollRef.current?.scrollTo({ y: Math.max(0, (rowY.current[id] ?? 0) - closing), animated: true });
-  };
-
   const save = async (result: SheetResult) => {
     const target = editing;
     setEditing(null);
@@ -129,6 +112,8 @@ export default function CategoryEditor({
       failed('保存');
     }
   };
+
+  const children = openTop ? childCategories(categories, openTop.id, true) : [];
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -149,7 +134,7 @@ export default function CategoryEditor({
           ))}
         </View>
 
-        <ScrollView ref={scrollRef} style={styles.flex} contentContainerStyle={styles.content} scrollEnabled={!drag.isActive}>
+        <ScrollView style={styles.flex} contentContainerStyle={styles.content} scrollEnabled={!drag.isActive}>
           {categories.length === 0 && (
             <View style={styles.seed}>
               <Text style={styles.seedText}>
@@ -160,74 +145,87 @@ export default function CategoryEditor({
           )}
           <View {...drag.panHandlers} style={styles.list}>
           {ordered.map((top) => {
-            const children = childCategories(categories, top.id, true);
             const topSection = `tops-${kind}`;
-            const open = openId === top.id;
             const measure = drag.measureProps(top.id);
             return (
               <View
                 key={top.id}
-                onLayout={(e) => {
-                  measure.onLayout(e);
-                  rowY.current[top.id] = e.nativeEvent.layout.y;
-                }}
+                onLayout={measure.onLayout}
                 style={[styles.card, top.archived && styles.archived, drag.styleFor(top.id), drag.isDragging(top.id) && styles.lifted]}
               >
-                <View style={styles.topLine}>
-                  <View accessibilityLabel={`${top.name}を並べ替え`} {...drag.gripProps(topSection, ordered, top.id)} style={styles.grip}>
-                    <GripVertical size={18} color={colors.borderStrong} />
-                  </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={top.name}
-                    accessibilityState={{ expanded: open }}
-                    onPress={() => toggle(top.id)}
-                    style={[styles.topRow, styles.flex]}
-                  >
-                    <CategoryIcon iconKey={iconKeyOf(top)} size={30} />
-                    <Text style={[styles.topName, styles.flex]} numberOfLines={1}>
-                      {top.name}
-                    </Text>
-                    {top.archived && <Text style={styles.archivedLabel}>使わない</Text>}
-                    <Text style={styles.count}>{children.length}件</Text>
-                    {open ? <ChevronUp size={18} color={colors.textFaint} /> : <ChevronDown size={18} color={colors.textFaint} />}
-                  </Pressable>
+                <View accessibilityLabel={`${top.name}を並べ替え`} {...drag.gripProps(topSection, ordered, top.id)} style={styles.grip}>
+                  <GripVertical size={18} color={colors.borderStrong} />
                 </View>
-                {open && (
-                  <View style={styles.panel} onLayout={(e) => { panelHeight.current = e.nativeEvent.layout.height; }}>
-                    <View style={styles.chips}>
-                      {children.map((child) => (
-                        <Pressable
-                          key={child.id}
-                          {...drag.holdProps(`children-${top.id}`, children, child.id)}
-                          {...drag.measureProps(child.id)}
-                          style={[
-                            styles.chip,
-                            child.archived && styles.archived,
-                            drag.styleFor(child.id),
-                            drag.isDragging(child.id) && styles.lifted,
-                          ]}
-                        >
-                          <Text style={styles.chipText}>{child.name}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`${top.name}のアイコンを変える`}
-                      onPress={() => setEditing({ category: top })}
-                      style={styles.editTop}
-                    >
-                      <Palette size={14} color={colors.money} />
-                      <Text style={styles.editTopText}>アイコンを変える</Text>
-                    </Pressable>
-                  </View>
-                )}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={top.name}
+                  onPress={() => setOpenId(top.id)}
+                  style={[styles.topRow, styles.flex]}
+                >
+                  <CategoryIcon iconKey={iconKeyOf(top)} size={34} />
+                  <Text style={[styles.topName, styles.flex]} numberOfLines={1}>
+                    {top.name}
+                  </Text>
+                  {top.archived && <Text style={styles.archivedLabel}>使わない</Text>}
+                  <ChevronRight size={18} color={colors.textMuted} />
+                </Pressable>
               </View>
             );
           })}
           </View>
         </ScrollView>
+
+        <SheetModal visible={openTop !== null} onClose={() => setOpenId(null)}>
+          {openTop && (
+            <View style={styles.sheet}>
+              <View style={styles.sheetHead}>
+                <CategoryIcon iconKey={iconKeyOf(openTop)} size={36} />
+                <Text style={[styles.sheetTitle, styles.flex]} numberOfLines={1}>
+                  {openTop.name}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="閉じる"
+                  onPress={() => setOpenId(null)}
+                  style={({ pressed }) => [styles.close, pressed && styles.closePressed]}
+                >
+                  <X size={20} color={colors.textSubtle} />
+                </Pressable>
+              </View>
+              {children.length >= 2 && <Text style={styles.sheetHint}>長押しして動かすと、並びを変えられます</Text>}
+              <ScrollView style={styles.sheetScroll} scrollEnabled={!drag.isActive}>
+                <View {...drag.panHandlers} style={styles.grid}>
+                  {children.map((child) => (
+                    <View
+                      key={child.id}
+                      {...drag.measureProps(child.id)}
+                      style={[styles.cell, drag.styleFor(child.id), drag.isDragging(child.id) && styles.lifted]}
+                    >
+                      <Pressable
+                        {...drag.holdProps(`children-${openTop.id}`, children, child.id)}
+                        style={[styles.button, child.archived && styles.archived, drag.isDragging(child.id) && styles.buttonLifted]}
+                      >
+                        <Text style={styles.buttonText}>{child.name}</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${openTop.name}のアイコンを変える`}
+                onPress={() => {
+                  setOpenId(null);
+                  setEditing({ category: openTop });
+                }}
+                style={({ pressed }) => [styles.editTop, pressed && styles.editTopPressed]}
+              >
+                <Palette size={18} color={colors.money} />
+                <Text style={styles.editTopText}>アイコンを変える</Text>
+              </Pressable>
+            </View>
+          )}
+        </SheetModal>
 
         {editing !== null && (
           <CategorySheet
@@ -338,32 +336,65 @@ const styles = StyleSheet.create({
   seed: { gap: 12, paddingVertical: 16 },
   seedText: { fontSize: 14, fontWeight: '500', color: colors.textMuted, lineHeight: 21 },
   card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 64,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    padding: 12,
-    gap: CARD_GAP,
+    paddingVertical: 8,
+    paddingRight: 14,
+    paddingLeft: 4,
   },
   archived: { opacity: 0.5 },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  topName: { fontSize: 15, fontWeight: '700', color: colors.text },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 48 },
+  topName: { fontSize: 16, fontWeight: '700', color: colors.text },
   archivedLabel: { fontSize: 11, fontWeight: '600', color: colors.textFaint },
-  count: { fontSize: 12, fontWeight: '500', color: colors.textFaint },
-  panel: { gap: 10 },
-  editTop: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 4 },
-  editTopText: { fontSize: 13, fontWeight: '600', color: colors.money },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: {
-    flexDirection: 'row',
+  // ボトムシート（小分類）。カテゴリの選択（CategoryPicker）と同じ見せ方。
+  sheet: { flexShrink: 1, paddingHorizontal: 16, paddingBottom: 12 },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 64 },
+  sheetTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
+  sheetHint: { fontSize: 13, fontWeight: '500', color: colors.textMuted, paddingBottom: 8 },
+  close: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    justifyContent: 'center',
     backgroundColor: colors.neutralSurface,
   },
-  chipText: { fontSize: 13, fontWeight: '500', color: colors.textSubtle },
+  closePressed: { backgroundColor: colors.border },
+  sheetScroll: { flexGrow: 0 },
+  // 2列。セルの外側の余白（4）を引いて、左右の端をシートの余白にそろえる。
+  grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4, paddingBottom: 4 },
+  cell: { width: '50%', padding: 4 },
+  button: {
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
+  },
+  buttonLifted: { borderColor: colors.dragBorder },
+  buttonText: { fontSize: 15, fontWeight: '600', color: colors.text },
+  editTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 48,
+    marginTop: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.moneyRing,
+    backgroundColor: colors.moneySurface,
+  },
+  editTopPressed: { backgroundColor: colors.moneySoft },
+  editTopText: { fontSize: 15, fontWeight: '700', color: colors.moneyText },
   field: { gap: 6 },
   label: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
   hint: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
@@ -385,7 +416,6 @@ const styles = StyleSheet.create({
   swatchDefault: { backgroundColor: colors.neutralSurface },
   swatchSelected: { borderWidth: 3, borderColor: colors.text },
   list: { gap: 10 },
-  topLine: { flexDirection: 'row', alignItems: 'center' },
-  grip: { width: 28, alignSelf: 'stretch', marginLeft: -8, marginVertical: -4, alignItems: 'center', justifyContent: 'center' },
+  grip: { width: 28, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   lifted: { opacity: 0.9, elevation: 8 },
 });
