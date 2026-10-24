@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Check, ChevronRight, GripVertical, Plus } from 'lucide-react';
-import type { MoneyBudgetGroup, MoneyCategory, MoneyCategoryKind } from '@/types/app';
+import { Check, ChevronRight, GripVertical } from 'lucide-react';
+import type { MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import {
   CATEGORY_ICON_COLORS,
@@ -12,23 +12,17 @@ import {
   MONEY_ICONS,
   topCategories,
 } from '@/lib/moneyUtils';
-import {
-  deleteMoneyCategory,
-  insertDefaultMoneyCategories,
-  insertMoneyCategory,
-  updateMoneyCategory,
-} from '@/lib/api/money';
+import { insertDefaultMoneyCategories, updateMoneyCategory } from '@/lib/api/money';
 import { ModalShell } from '../modals/TaskForm';
 import { useDragReorder } from '../ui/useDragReorder';
 import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader } from './moneyVisual';
-import { Chip, ChipRow } from './feedParts';
 
 // カテゴリ（docs/kakei.md §3.1）。mobile版の `mobile/src/components/money/CategoryEditor.tsx` と同じ並び・文言。
 //
-// 大分類（予算を置く単位）と小分類の追加・名前の変更・並べ替え・削除。並べ替えは一覧のまま動かす
+// ここでできるのは、大分類のアイコン（絵と色）と並べ替えだけ（2026-10-24）。名前の変更・追加・削除は、予算が本体なので年間予算（BudgetEditor）で行い、
+// カテゴリはそれを表示するだけ（固定費・予備費の小分類は、予算から決まる）。並べ替えは一覧のまま動かす
 // （大分類は左の持ち手をつかむ、小分類は長押し。マウスでも指でも。リストと同じ操作。ui/useDragReorder.ts）。
-// 大分類のアイコンは絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。
-// 予算は年ごとに決めるものなので、ここには置かず、別の設定「予算」（BudgetEditor）にした（2026-10-15）。
+// 大分類のアイコンは、大分類を押して絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。
 // カテゴリがまだ無い家族には「標準のカテゴリで始める」（Zaim のカテゴリをもとにした並び）。
 
 interface CategoryEditorProps {
@@ -38,7 +32,7 @@ interface CategoryEditorProps {
   onClose: () => void;
 }
 
-type Editing = { category: MoneyCategory } | { category: null; parentId: string | null } | null;
+type Editing = { category: MoneyCategory } | null;
 
 const KIND_OPTIONS: { id: MoneyCategoryKind; label: string }[] = [
   { id: 'living', label: '支出' },
@@ -75,11 +69,6 @@ export default function CategoryEditor({
     }
   };
 
-  const siblingsOf = (category: { parentId: string | null; kind: MoneyCategoryKind }) =>
-    category.parentId === null
-      ? topCategories(categories, category.kind, true)
-      : childCategories(categories, category.parentId, true);
-
   /** 動かしたあとの並び。きょうだいの並びを数え直し、変わったものだけ保存する。 */
   const drag = useDragReorder((_sectionKey, orderedIds) => {
     const changed = orderedIds
@@ -104,59 +93,12 @@ export default function CategoryEditor({
     const target = editing;
     setEditing(null);
     if (target === null) return;
+    const category = target.category;
+    if (result.icon === category.icon && result.iconColor === category.iconColor) return;
     try {
-      let category: MoneyCategory;
-      if (target.category === null) {
-        const siblings = siblingsOf({ parentId: target.parentId, kind });
-        category = await insertMoneyCategory(supabase, familyId, {
-          kind,
-          parentId: target.parentId,
-          name: result.name,
-          icon: result.icon,
-          iconColor: result.iconColor,
-          position: siblings.reduce((max, entry) => Math.max(max, entry.position + 1), 0),
-        });
-        if (result.budgetGroup !== category.budgetGroup) {
-          category = await updateMoneyCategory(supabase, category.id, { budgetGroup: result.budgetGroup });
-        }
-        const created = category;
-        onCategories((prev) => [...prev, created]);
-      } else {
-        category = target.category;
-        if (
-          result.name.trim() !== category.name ||
-          result.icon !== category.icon ||
-          result.iconColor !== category.iconColor ||
-          result.budgetGroup !== category.budgetGroup
-        ) {
-          category = await updateMoneyCategory(supabase, category.id, {
-            name: result.name,
-            icon: result.icon,
-            iconColor: result.iconColor,
-            budgetGroup: result.budgetGroup,
-          });
-          replace(category);
-        }
-      }
+      replace(await updateMoneyCategory(supabase, category.id, { icon: result.icon, iconColor: result.iconColor }));
     } catch {
       failed('保存');
-    }
-  };
-
-  const removeCategory = async (category: MoneyCategory) => {
-    const message =
-      category.parentId === null
-        ? `「${category.name}」を削除しますか？小分類と予算も消えます。これまでの記録には、名前だけが残ります。`
-        : `「${category.name}」を削除しますか？これまでの記録には、名前だけが残ります。`;
-    if (!window.confirm(message)) return;
-    setEditing(null);
-    try {
-      await deleteMoneyCategory(supabase, category.id);
-      // 大分類を消すと、小分類も一緒に消える（DBの cascade）。予算の行はカテゴリなしになる（年間予算の「カテゴリなし」に出る）。
-      const gone = new Set([category.id, ...categories.filter((entry) => entry.parentId === category.id).map((entry) => entry.id)]);
-      onCategories((prev) => prev.filter((entry) => !gone.has(entry.id)));
-    } catch {
-      failed('削除');
     }
   };
 
@@ -184,7 +126,7 @@ export default function CategoryEditor({
         {categories.length === 0 && (
           <div className="space-y-3 py-4">
             <p className="text-sm leading-relaxed text-gray-500">
-              カテゴリがまだありません。Zaim のカテゴリをもとにした標準のカテゴリで始めて、名前や並びをあとで直せます。
+              カテゴリがまだありません。Zaim のカテゴリをもとにした標準のカテゴリで始めて、アイコンや並びをあとで直せます（名前は年間予算で直します）。
             </p>
             <PrimaryButton label="標準のカテゴリで始める" onClick={() => void seed()} disabled={busy} />
           </div>
@@ -227,7 +169,6 @@ export default function CategoryEditor({
                     type="button"
                     ref={drag.dragRef(child.id)}
                     {...drag.handleProps(`children-${top.id}`, children, child.id)}
-                    onClick={() => setEditing({ category: child })}
                     className={`select-none rounded-full bg-gray-100 px-2.5 py-1.5 text-[13px] text-gray-700 ${child.archived ? 'opacity-50' : ''} ${
                       drag.isDragging(child.id) ? 'relative z-20 shadow-lg' : ''
                     }`}
@@ -235,40 +176,18 @@ export default function CategoryEditor({
                     {child.name}
                   </button>
                 ))}
-                <button
-                  type="button"
-                  aria-label={`${top.name}に小分類を足す`}
-                  onClick={() => setEditing({ category: null, parentId: top.id })}
-                  className="flex items-center gap-0.5 rounded-full bg-blue-50 px-2.5 py-1.5 text-[13px] font-semibold text-blue-600"
-                >
-                  <Plus size={14} />
-                  小分類
-                </button>
               </div>
             </div>
           );
         })}
-        {categories.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setEditing({ category: null, parentId: null })}
-            className="flex items-center gap-2 py-2.5 text-[15px] font-bold text-blue-600"
-          >
-            <Plus size={18} />
-            大分類を足す
-          </button>
-        )}
       </div>
 
       {editing !== null && (
         <CategoryModal
-          key={editing.category?.id ?? `new-${editing.category === null ? editing.parentId : ''}`}
+          key={editing.category.id}
           category={editing.category}
-          isTop={editing.category === null ? editing.parentId === null : editing.category.parentId === null}
-          withBudgetGroup={kind === 'living'}
           onClose={() => setEditing(null)}
           onSubmit={(result) => void save(result)}
-          onDelete={editing.category ? () => void removeCategory(editing.category!) : undefined}
         />
       )}
     </FullScreen>
@@ -276,160 +195,93 @@ export default function CategoryEditor({
 }
 
 interface SheetResult {
-  name: string;
-  /** アイコン（大分類だけ。小分類は今のまま）。 */
+  /** アイコン。 */
   icon: string | null;
-  /** アイコンの色（大分類だけ）。null は標準（アイコンごとの色）。 */
+  /** アイコンの色。null は標準（アイコンごとの色）。 */
   iconColor: string | null;
-  /** 予算の分け方（支出の大分類だけ。docs/kakei.md §0.7）。 */
-  budgetGroup: MoneyBudgetGroup;
 }
 
-/** 予算の分け方の選択肢。支出をどこで数えるか（年間予算・振り返り）は、大分類のこれだけで決まる。 */
-const BUDGET_GROUPS: { id: MoneyBudgetGroup; label: string }[] = [
-  { id: 'variable', label: '変動費' },
-  { id: 'reserve', label: '予備費' },
-  { id: 'fixed', label: '固定費（確定）' },
-  { id: 'estimate', label: '固定費（見込み）' },
-];
-
-const inputClass =
-  'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
 const labelClass = 'block text-xs font-bold text-gray-700 mb-1.5';
 
+/** 大分類のアイコン（絵と色）を選ぶ。名前は年間予算で直す。 */
 function CategoryModal({
   category,
-  isTop,
-  withBudgetGroup,
   onClose,
   onSubmit,
-  onDelete,
 }: {
-  category: MoneyCategory | null;
-  isTop: boolean;
-  /** 予算の分け方を選ばせるか（支出のカテゴリ）。 */
-  withBudgetGroup: boolean;
+  category: MoneyCategory;
   onClose: () => void;
   onSubmit: (result: SheetResult) => void;
-  onDelete?: () => void;
 }) {
-  const [name, setName] = useState(category?.name ?? '');
   // 自動は無し。決めていないカテゴリは、今の名前から近いものを選んだ状態で始める。
-  const [icon, setIcon] = useState<string>(category ? (category.icon ?? guessIconKey(category.name)) : 'other');
-  const [iconColor, setIconColor] = useState<string | null>(category?.iconColor ?? null);
+  const [icon, setIcon] = useState<string>(category.icon ?? guessIconKey(category.name));
+  const [iconColor, setIconColor] = useState<string | null>(category.iconColor ?? null);
   const [pickingColor, setPickingColor] = useState(false);
-  const [budgetGroup, setBudgetGroup] = useState<MoneyBudgetGroup>(category?.budgetGroup ?? 'variable');
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = () => {
-    if (name.trim() === '') return setError('名前を入れてください');
-    onSubmit({
-      name,
-      icon: isTop ? icon : (category?.icon ?? null),
-      iconColor: isTop ? iconColor : (category?.iconColor ?? null),
-      budgetGroup: isTop && withBudgetGroup ? budgetGroup : (category?.budgetGroup ?? 'variable'),
-    });
-  };
 
   return (
-    <ModalShell
-      title={category ? (isTop ? '大分類を編集' : '小分類を編集') : isTop ? '大分類を足す' : '小分類を足す'}
-      onClose={onClose}
-      footer={
-        <div className="space-y-1">
-          <PrimaryButton label="保存する" onClick={submit} />
-          {onDelete && category && (
-            <button type="button" onClick={onDelete} className="w-full py-2 text-sm text-red-500">
-              削除する（記録には名前だけ残ります）
-            </button>
-          )}
-        </div>
-      }
-    >
+    <ModalShell title={category.name} onClose={onClose} footer={<PrimaryButton label="保存する" onClick={() => onSubmit({ icon, iconColor })} />}>
       <div className="space-y-4">
-        <label className="block">
-          <span className={labelClass}>名前</span>
-          <input
-            className={inputClass}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder={isTop ? '例: 食費' : '例: 外食'}
-          />
-        </label>
-        {isTop && withBudgetGroup && (
-          <div>
-            <span className={labelClass}>予算の分け方</span>
-            <ChipRow>
-              {BUDGET_GROUPS.map((option) => (
-                <Chip key={option.id} label={option.label} selected={budgetGroup === option.id} onClick={() => setBudgetGroup(option.id)} />
-              ))}
-            </ChipRow>
-            <p className="mt-1.5 text-xs text-gray-500">変動費は大分類の月の予算、予備費・固定費は小分類ごとの予算（年間予算で決める）</p>
-          </div>
-        )}
-        {isTop && (
-          <div>
-            <span className={labelClass}>アイコン</span>
-            {/* アイコンをタップすると色を選べる（出金元のアイコンの色と同じ候補）。 */}
-            <button
-              type="button"
-              aria-label="アイコンの色を選ぶ"
-              aria-expanded={pickingColor}
-              onClick={() => setPickingColor((open) => !open)}
-              className="flex items-center gap-3 py-1"
-            >
-              <CategoryIcon iconKey={iconColor ? `${icon}|${iconColor}` : icon} size={48} />
-              <span className="text-[13px] font-semibold text-blue-600">タップして色を選ぶ</span>
-            </button>
-            {pickingColor && (
-              <div className="flex flex-wrap gap-2.5 py-1">
+        <p className="text-xs text-gray-500">名前の変更・追加は、年間予算で行います。</p>
+        <div>
+          <span className={labelClass}>アイコン</span>
+          {/* アイコンをタップすると色を選べる（出金元のアイコンの色と同じ候補）。 */}
+          <button
+            type="button"
+            aria-label="アイコンの色を選ぶ"
+            aria-expanded={pickingColor}
+            onClick={() => setPickingColor((open) => !open)}
+            className="flex items-center gap-3 py-1"
+          >
+            <CategoryIcon iconKey={iconColor ? `${icon}|${iconColor}` : icon} size={48} />
+            <span className="text-[13px] font-semibold text-blue-600">タップして色を選ぶ</span>
+          </button>
+          {pickingColor && (
+            <div className="flex flex-wrap gap-2.5 py-1">
+              <button
+                type="button"
+                aria-label="標準の色"
+                aria-pressed={iconColor === null}
+                onClick={() => setIconColor(null)}
+                className={`flex h-[34px] w-[34px] items-center justify-center rounded-full bg-gray-100 ${
+                  iconColor === null ? 'ring-[3px] ring-gray-900' : ''
+                }`}
+              >
+                <CategoryIcon iconKey={icon} size={26} />
+              </button>
+              {CATEGORY_ICON_COLORS.map((entry) => (
                 <button
-                  type="button"
-                  aria-label="標準の色"
-                  aria-pressed={iconColor === null}
-                  onClick={() => setIconColor(null)}
-                  className={`flex h-[34px] w-[34px] items-center justify-center rounded-full bg-gray-100 ${
-                    iconColor === null ? 'ring-[3px] ring-gray-900' : ''
-                  }`}
-                >
-                  <CategoryIcon iconKey={icon} size={26} />
-                </button>
-                {CATEGORY_ICON_COLORS.map((entry) => (
-                  <button
-                    key={entry.color}
-                    type="button"
-                    aria-label={entry.label}
-                    aria-pressed={iconColor === entry.color}
-                    onClick={() => setIconColor(entry.color)}
-                    style={{ backgroundColor: entry.color }}
-                    className={`flex h-[34px] w-[34px] items-center justify-center rounded-full text-white ${
-                      iconColor === entry.color ? 'ring-[3px] ring-gray-900' : ''
-                    }`}
-                  >
-                    {iconColor === entry.color && <Check size={18} />}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="flex flex-wrap gap-1">
-              {MONEY_ICONS.map((entry) => (
-                <button
-                  key={entry.key}
+                  key={entry.color}
                   type="button"
                   aria-label={entry.label}
-                  aria-pressed={icon === entry.key}
-                  onClick={() => setIcon(entry.key)}
-                  className={`flex h-[46px] w-[46px] items-center justify-center rounded-xl border-2 ${
-                    icon === entry.key ? 'border-blue-600' : 'border-transparent'
+                  aria-pressed={iconColor === entry.color}
+                  onClick={() => setIconColor(entry.color)}
+                  style={{ backgroundColor: entry.color }}
+                  className={`flex h-[34px] w-[34px] items-center justify-center rounded-full text-white ${
+                    iconColor === entry.color ? 'ring-[3px] ring-gray-900' : ''
                   }`}
                 >
-                  <CategoryIcon iconKey={iconColor ? `${entry.key}|${iconColor}` : entry.key} size={34} />
+                  {iconColor === entry.color && <Check size={18} />}
                 </button>
               ))}
             </div>
+          )}
+          <div className="flex flex-wrap gap-1">
+            {MONEY_ICONS.map((entry) => (
+              <button
+                key={entry.key}
+                type="button"
+                aria-label={entry.label}
+                aria-pressed={icon === entry.key}
+                onClick={() => setIcon(entry.key)}
+                className={`flex h-[46px] w-[46px] items-center justify-center rounded-xl border-2 ${
+                  icon === entry.key ? 'border-blue-600' : 'border-transparent'
+                }`}
+              >
+                <CategoryIcon iconKey={iconColor ? `${entry.key}|${iconColor}` : entry.key} size={34} />
+              </button>
+            ))}
           </div>
-        )}
-        {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
       </div>
     </ModalShell>
   );
