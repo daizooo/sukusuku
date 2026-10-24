@@ -17,7 +17,6 @@ import {
   spendGroupOf,
   estimateCostBasis,
   estimateCostsInYear,
-  pendingEstimates,
   isEstimateCost,
   addDays,
   balanceChanges,
@@ -1315,22 +1314,7 @@ assert.deepEqual(
     '過ぎた年で記録が無い回は、予定の月のまま',
   );
 
-  // 記録の上の帯（未確定明細。docs/kakei.md §0.7）: 日が来て記録が無い回。過ぎた月の回は今日の日で出す
-  const known = rules.map((rule) => ({ ...rule, dayKnown: true, deferredUntil: null }));
   const phone = plan('phone', 5, { categoryId: 'phone', day: 5, amount: 3278, createdAt: '2027-10-01', dayKnown: true, deferredUntil: null });
-  const bill = plan('bill', 6, { categoryId: 'bill', day: 25, amount: 1000, createdAt: '2027-10-01', dayKnown: true, deferredUntil: null });
-  assert.deepEqual(
-    pendingEstimates([...known, phone, bill], rs, today).map((entry) => [entry.rule.id, entry.plannedMonth, entry.date, entry.amount]),
-    [['ins', '2027-09', today, 58000], ['phone', '2027-10', '2027-10-05', 3278]],
-    '送られた回と、日が来た今月の回（25日はまだ）。済・先の月は出さない',
-  );
-  assert.deepEqual(
-    pendingEstimates([{ ...phone, deferredUntil: '2027-11-01' }, { ...phone, id: 'p2', dayKnown: false }], rs, today),
-    [],
-    '翌月へ送ったもの・日付未定は出さない',
-  );
-  assert.equal(pendingEstimates([{ ...phone, deferredUntil: '2027-10-20' }], rs, today).length, 1, '送った日が来たらまた出す');
-  assert.equal(pendingEstimates([{ ...phone, skippedMonths: ['2027-10'] }], rs, today).length, 0, '今月はなし');
 
   // 日付未定は帯に出さず、締めまでに記録が無ければ締めの未確認の明細に出す（docs/kakei.md §0.7）
   const undated = { ...phone, id: 'p3', dayKnown: false };

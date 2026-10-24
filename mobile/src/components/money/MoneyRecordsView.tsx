@@ -32,8 +32,6 @@ interface MoneyRecordsViewProps {
   onAddOnDate: (date: string) => void;
   /** Gmail から取り込んだ明細のうち、片づいていないものの数（docs/kakei.md §9.5.6.1）。0 なら出さない。 */
   feedOpenCount: number;
-  /** 帯に出す見込みのうち、日が来て記録が無い回の数（pendingEstimates。日付未定は数えない）。 */
-  estimateCount: number;
   onOpenFeed: () => void;
   /** Apps Script から1時間以上届いていない（docs/kakei.md §9.8）。 */
   feedStalled: boolean;
@@ -62,7 +60,6 @@ export default function MoneyRecordsView({
   onOpen,
   onAddOnDate,
   feedOpenCount,
-  estimateCount,
   onOpenFeed,
   feedStalled,
 }: MoneyRecordsViewProps) {
@@ -126,18 +123,16 @@ export default function MoneyRecordsView({
           <Text style={styles.stalledText}>Gmail の取り込みが止まっています（1時間以上届いていません）</Text>
         </View>
       )}
-      {feedOpenCount + estimateCount > 0 && (
+      {feedOpenCount > 0 && (
         <Pressable
           accessibilityRole="button"
           onPress={onOpenFeed}
           style={({ pressed }) => [styles.feed, pressed && styles.feedPressed]}
         >
           <Inbox size={18} color={colors.moneyText} />
-          <Text style={styles.feedText}>未確定明細 {feedOpenCount + estimateCount}件</Text>
+          <Text style={styles.feedText}>未確定明細 {feedOpenCount}件</Text>
           <Text style={styles.feedSub} numberOfLines={1}>
-            {[feedOpenCount > 0 ? `Gmail ${feedOpenCount}件` : '', estimateCount > 0 ? `見込み ${estimateCount}件` : '']
-              .filter(Boolean)
-              .join('・')}
+            Gmail から取り込んだ明細
           </Text>
           <ChevronRight size={16} color={colors.moneyText} />
         </Pressable>
