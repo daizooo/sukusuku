@@ -766,7 +766,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
               categories={categories}
               isLoading={isLoading}
               onOpenRecord={setEditing}
-              onConfirm={(walletId, balanceOn, amount, showInHistory) => void confirmBalance(walletId, balanceOn, amount, showInHistory)}
+              onConfirm={(walletId, adjustment, amount, showInHistory) => void confirmBalance(walletId, adjustment, amount, showInHistory)}
               onDeleteBalance={(balance) => void removeBalance(balance)}
               onSaveWallet={saveWallet}
               onDeleteWallet={(wallet) => void deleteWallet(wallet)}

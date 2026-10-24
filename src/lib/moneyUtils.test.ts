@@ -1035,10 +1035,10 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
   const secWallet: MoneyWallet = { id: 'sec', name: '証券', type: 'securities', closeDay: null, payDay: null, payWalletId: null, payMonthOffset: null, iconColor: null, position: 9, archived: false };
   const bankWallet: MoneyWallet = { ...secWallet, id: 'bank2', name: '口座', type: 'bank' };
   const transfer = record('tr', { kind: 'transfer', walletId: 'bank2', toWalletId: 'sec', occurredOn: '2026-10-07', items: [item({ amount: 50000 })] });
-  const summary = buildWalletBalances([bankWallet, secWallet], [transfer], [{ id: 'b', walletId: 'bank2', balanceOn: '2026-10-06', amount: 100000, showInHistory: true }], '2026-10-08', data);
+  const summary = buildWalletBalances([bankWallet, secWallet], [transfer], [{ id: 'b', walletId: 'bank2', balanceOn: '2026-10-06', adjustment: 100000, showInHistory: true }], '2026-10-08', data);
   assert.deepEqual(summary.rows.map((row) => row.amount), [50000, 945800], '証券口座への振替は口座から減るが、証券口座は評価額');
   assert.equal(summary.total, 995800);
-  const trend = totalDailyBalances([bankWallet, secWallet], [transfer], [{ id: 'b', walletId: 'bank2', balanceOn: '2026-10-06', amount: 100000, showInHistory: true }], data, '2026-10-08');
+  const trend = totalDailyBalances([bankWallet, secWallet], [transfer], [{ id: 'b', walletId: 'bank2', balanceOn: '2026-10-06', adjustment: 100000, showInHistory: true }], data, '2026-10-08');
   assert.deepEqual(trend, [
     { date: '2026-10-06', amount: 100000 + 570000 },
     { date: '2026-10-07', amount: 50000 + 450000 + 240000 + 15800 },
