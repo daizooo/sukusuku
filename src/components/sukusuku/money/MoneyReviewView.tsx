@@ -1,13 +1,16 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type {
+  FamilyMember,
   MoneyBudget,
   MoneyCardFeed,
   MoneyCategory,
   MoneyFeedItem,
   MoneyMonth,
+  MoneyMonthRequest,
+  MoneyMonthWalletCheck,
   MoneyRatioTargets,
   MoneyRecord,
   MoneyRecurring,
@@ -31,6 +34,7 @@ import {
   isMonthClosed,
   monthKeyOfDate,
   recordTotal,
+  scheduledFixedInMonth,
   spendRatio,
   unclosedMonths,
   yearActiveMonthKeys,
@@ -52,6 +56,7 @@ import {
   type,
   type ReviewPeriod,
 } from './moneyVisual';
+import { activeRequests, formatRemaining } from '@/lib/moneyClose';
 import ReviewDetailScreen from './ReviewDetailScreen';
 import MonthCloseScreen from './MonthCloseScreen';
 import YearTrendChart from './YearTrendChart';
@@ -71,7 +76,8 @@ import { yearTrendPoints } from '@/lib/yearTrend';
 //   - 予備費: 記録のあった小分類。年は年の予算と比べる（変動費と同じ行）、月は額だけ
 //   - 固定費: 記録のあった小分類の額。見込みは「予算より ¥x」を添える
 //   - 行を押すと、変動費は大分類の詳細（月ごとの実績・小分類・記録）、予備費・固定費・カテゴリなしはその記録の一覧（ReviewDetailScreen）
-// 月の締め（§4.5）: 過ぎた月と今月の結論の下に「この月を締める」（締めた月は「締めた月」）。押すと締めの画面（MonthCloseScreen）。
+// 月の締め（§4.5）: 過ぎた月と今月の結論の下に「この月を締める」（締めた月は「締めた月」）。夫婦が5分以内に押すと締めの画面（MonthCloseScreen）。
+// 押した人は「◯◯さんを待っています 4:32」と「やめる」、相手には「◯◯さんが待っています 4:32」を添える。始めたあとは「締めの途中」。
 // 締めていない過ぎた月があれば、いちばん上に「◯月が締まっていません」と出す（集計を始める前の月は出さない）。
 
 interface MoneyReviewViewProps {
@@ -101,6 +107,24 @@ interface MoneyReviewViewProps {
   cardFeed: MoneyCardFeed | null;
   onConfirmEstimate: (record: MoneyRecord) => Promise<void>;
   onSetMonthClosed: (monthKey: string, closed: boolean) => void;
+  /** 自分（アカウントの id）。 */
+  userId: string;
+  /** 締めに加わる人（夫婦）。 */
+  guardians: FamilyMember[];
+  /** 締めを始める合図（夫婦それぞれ）。 */
+  closeRequests: MoneyMonthRequest[];
+  /** 締めの、口座ごとの OK。 */
+  closeChecks: MoneyMonthWalletCheck[];
+  /** 「この月を締める」を押す。夫婦がそろって締めが始まったら true。serverNow はサーバーの今。 */
+  onRequestClose: (monthKey: string) => Promise<{ started: boolean; serverNow: string } | null>;
+  /** 押した合図をやめる。 */
+  onCancelClose: (monthKey: string) => void;
+  /** 締めで、自分の OK を押す（amount）／外す（null）。 */
+  onSetCloseCheck: (monthKey: string, walletId: string, amount: number | null) => void;
+  /** 締めの口座の詳細から記録を足す（出金元はその口座）。 */
+  onAddRecord: (walletId: string, date: string) => void;
+  /** 締めの口座の詳細から残高を補正する。 */
+  onSaveBalance: (walletId: string, adjustment: number, amount: number, showInHistory: boolean) => void;
   /** 予算の明細（収入・予備費・固定費。年の収支見込みと、予備費・固定費の予算。docs/kakei.md §0.7）。 */
   budgetLines: MoneyBudgetLine[];
   /** 目標割合（docs/kakei.md §0.9）。年の見出しに出す。 */
@@ -138,6 +162,15 @@ export default function MoneyReviewView({
   onConfirmEstimate,
   onSetMonthClosed,
   onOpenFeed,
+  userId,
+  guardians,
+  closeRequests,
+  closeChecks,
+  onRequestClose,
+  onCancelClose,
+  onSetCloseCheck,
+  onAddRecord,
+  onSaveBalance,
 }: MoneyReviewViewProps) {
   const isMonth = period === 'month';
   const today = monthKeyOfDate(new Date());
@@ -156,10 +189,51 @@ export default function MoneyReviewView({
     });
   const unclosed = useMemo(() => unclosedMonths(records, closings, today), [records, closings, today]);
   const monthClosed = isMonthClosed(closings, monthKey);
+  // 締めていない月の注意からは、その月の振り返りへ（締めは夫婦で「この月を締める」を押して始める）。
   const openClosing = (target: string) => {
     if (isMonth) onMonth(target);
     else onSelectMonth(target);
-    setClosing(target);
+  };
+
+  // 締めを始める合図（docs/kakei.md §4.5）。夫婦が5分以内に「この月を締める」を押すと締めが始まり、締めの画面が開く。
+  // 残り時間はサーバーの時刻に合わせる（offset。押したときに返る server_now との差）。
+  const [clockOffset, setClockOffset] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  // 自分が押して、相手を待っている月（相手が押して始まったら、締めの画面を開く）。
+  const waitingFor = useRef<string | null>(null);
+  const requests = useMemo(() => activeRequests(closeRequests, monthKey, nowMs + clockOffset), [closeRequests, monthKey, nowMs, clockOffset]);
+  const monthEntry = closings.find((entry) => entry.month === monthKey) ?? null;
+  const closeStarted = monthEntry?.closeStartedAt != null && !monthClosed;
+  const myRequest = requests.get(userId) ?? null;
+  const partnerRequest = [...requests.entries()].find(([id]) => id !== userId) ?? null;
+  const nameOf = (id: string) => guardians.find((member) => member.id === id)?.name ?? '家族';
+  const partnerNames = guardians.filter((member) => member.id !== userId).map((member) => `${member.name}さん`).join('・') || '家族';
+  // 合図が届いたら今の時刻を取り直す（古い時刻のままだと、切れた合図を有効と数えてしまう）。
+  useEffect(() => setNowMs(Date.now()), [closeRequests]);
+  useEffect(() => {
+    if (requests.size === 0) return;
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [requests.size]);
+  useEffect(() => {
+    if (closeStarted && waitingFor.current === monthKey) {
+      waitingFor.current = null;
+      setClosing(monthKey);
+    }
+  }, [closeStarted, monthKey]);
+  const requestClose = async () => {
+    waitingFor.current = monthKey;
+    setNowMs(Date.now());
+    const result = await onRequestClose(monthKey);
+    if (!result) {
+      waitingFor.current = null;
+      return;
+    }
+    setClockOffset(Date.parse(result.serverNow) - Date.now());
+    if (result.started) {
+      waitingFor.current = null;
+      setClosing(monthKey);
+    }
   };
 
   const month = useMemo(
@@ -289,16 +363,44 @@ export default function MoneyReviewView({
             </div>
           )}
           {isMonth && (monthClosed || monthKey <= today) && (
-            <button
-              type="button"
-              onClick={() => setClosing(monthKey)}
-              className="mt-2 flex w-full items-center gap-2 border-t border-gray-200 pt-2 text-left"
-            >
-              <span className={`flex-1 text-sm ${monthClosed ? 'font-semibold text-gray-500' : 'font-bold text-blue-600'}`}>
-                {monthClosed ? '締めた月' : 'この月を締める'}
-              </span>
-              <ChevronRight size={16} className="text-gray-400" />
-            </button>
+            monthClosed || closeStarted ? (
+              <button
+                type="button"
+                onClick={() => setClosing(monthKey)}
+                className="mt-2 flex w-full items-center gap-2 border-t border-gray-200 pt-2 text-left"
+              >
+                <span className={`flex-1 text-sm ${monthClosed ? 'font-semibold text-gray-500' : 'font-bold text-blue-600'}`}>
+                  {monthClosed ? '締めた月' : '締めの途中'}
+                </span>
+                <ChevronRight size={16} className="text-gray-400" />
+              </button>
+            ) : myRequest !== null ? (
+              <div className="mt-2 space-y-1.5 border-t border-gray-200 pt-2.5">
+                <p className="rounded-xl bg-blue-50 py-2.5 text-center text-sm font-bold text-blue-800">
+                  {partnerNames}を待っています{' '}
+                  <span className="font-extrabold tabular-nums">{formatRemaining(myRequest - nowMs - clockOffset)}</span>
+                </p>
+                <button type="button" onClick={() => onCancelClose(monthKey)} className="w-full py-1 text-[13px] font-bold text-gray-500">
+                  やめる
+                </button>
+              </div>
+            ) : (
+              <div className="mt-2 space-y-1.5 border-t border-gray-200 pt-2.5">
+                <button
+                  type="button"
+                  onClick={() => void requestClose()}
+                  className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
+                >
+                  この月を締める
+                </button>
+                {partnerRequest !== null && (
+                  <p className="text-center text-xs font-semibold text-blue-800">
+                    {nameOf(partnerRequest[0])}さんが待っています{' '}
+                    <span className="font-extrabold tabular-nums">{formatRemaining(partnerRequest[1] - nowMs - clockOffset)}</span>
+                  </p>
+                )}
+              </div>
+            )
           )}
         </Hero>
 
@@ -355,18 +457,25 @@ export default function MoneyReviewView({
           monthKey={closing}
           records={records}
           categories={categories}
-          budgets={budgets}
-          recurring={recurring}
-          today={dateKeyOfDate(new Date())}
-          feedCount={feedItems.filter((item) => item.occurredOn !== null && item.occurredOn.startsWith(`${closing}-`)).length}
-          cardChecks={cardFeed && cardFeed.walletIds.length > 0 ? cardMonthChecks(records, cardFeed, closing) : null}
           wallets={wallets}
           balances={balances}
+          today={dateKeyOfDate(new Date())}
+          checks={closeChecks}
+          guardians={guardians}
+          userId={userId}
+          todoCount={
+            feedItems.filter((item) => item.occurredOn !== null && item.occurredOn.startsWith(`${closing}-`)).length +
+            scheduledFixedInMonth(recurring, records, categories, closing, dateKeyOfDate(new Date())).length
+          }
+          cardChecks={cardFeed && cardFeed.walletIds.length > 0 ? cardMonthChecks(records, cardFeed, closing) : null}
           closed={isMonthClosed(closings, closing)}
           closedAt={closings.find((entry) => entry.month === closing)?.closedAt ?? null}
           onConfirmEstimate={onConfirmEstimate}
           // 記録・未確認の明細は締めの画面の上に重ねて開く（閉じる・戻るで締めの画面へ戻る。2026-10-21）
           onOpenRecord={onOpenRecord}
+          onAddRecord={onAddRecord}
+          onSaveBalance={onSaveBalance}
+          onSetCheck={(walletId, amount) => onSetCloseCheck(closing, walletId, amount)}
           onOpenFeed={() => onOpenFeed(closing)}
           onCloseMonth={() => {
             onSetMonthClosed(closing, true);

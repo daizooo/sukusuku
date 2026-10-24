@@ -1556,7 +1556,7 @@ function SukusukuAppContent({
               onDeleteGrowthRecord={deleteGrowthRecordHandler}
             />
           )}
-          {activeTab === 'money' && <MoneyTab familyId={familyId} />}
+          {activeTab === 'money' && <MoneyTab familyId={familyId} userId={userId} />}
           {activeTab === 'info' && (
             <InfoTab
               familyId={familyId}

@@ -295,8 +295,8 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
   // 月の締め（docs/kakei.md §4.5）
   const r = (occurredOn: string, kind: MoneyRecord['kind'] = 'expense') => ({ occurredOn, kind }) as unknown as MoneyRecord;
   const closings = [
-    { month: '2027-03', closedAt: '2027-04-02T00:00:00Z' },
-    { month: '2027-02', closedAt: null }, // 締めを外した
+    { month: '2027-03', closedAt: '2027-04-02T00:00:00Z', closeStartedAt: null },
+    { month: '2027-02', closedAt: null, closeStartedAt: null }, // 締めを外した
   ];
   assert.equal(isMonthClosed(closings, '2027-03'), true);
   assert.equal(isMonthClosed(closings, '2027-02'), false, '締めを外した月');
@@ -345,7 +345,7 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
     r('b', '2026-10-03', 'expense', 100000, 'food'),
     r('c', '2026-10-10', 'expense', 30000, 'trip'),
   ];
-  const closings = [{ month: '2026-10', closedAt: '2026-11-01T00:00:00Z' }];
+  const closings = [{ month: '2026-10', closedAt: '2026-11-01T00:00:00Z', closeStartedAt: null }];
 
   // 予算の明細（単価 × その年に発生する回数）
   assert.equal(budgetLineCount(line({ months: null }), 2026), 12, '毎月は12回');

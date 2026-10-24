@@ -1448,8 +1448,89 @@ export type Database = {
           },
         ]
       }
+      money_month_requests: {
+        Row: {
+          created_at: string
+          family_id: string
+          month: string
+          requested_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          family_id: string
+          month: string
+          requested_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          family_id?: string
+          month?: string
+          requested_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_month_requests_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_month_wallet_checks: {
+        Row: {
+          amount: number | null
+          created_at: string
+          family_id: string
+          month: string
+          updated_at: string
+          user_id: string
+          wallet_id: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          family_id: string
+          month: string
+          updated_at?: string
+          user_id: string
+          wallet_id: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          family_id?: string
+          month?: string
+          updated_at?: string
+          user_id?: string
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_month_wallet_checks_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_month_wallet_checks_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "money_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_months: {
         Row: {
+          close_started_at: string | null
           closed_at: string | null
           created_at: string
           family_id: string
@@ -1457,6 +1538,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          close_started_at?: string | null
           closed_at?: string | null
           created_at?: string
           family_id: string
@@ -1464,6 +1546,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          close_started_at?: string | null
           closed_at?: string | null
           created_at?: string
           family_id?: string
@@ -2983,6 +3066,7 @@ export type Database = {
         Args: { p_from: string; p_holding_id?: string; p_to: string }
         Returns: number
       }
+      request_money_month_close: { Args: { p_month: string }; Returns: Json }
       save_money_record: {
         Args: { p_items: Json; p_record: Json }
         Returns: string
