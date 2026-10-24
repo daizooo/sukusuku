@@ -183,8 +183,8 @@ export default function BudgetEditor({
   const supabase = useMemo(() => createClient(), []);
   const [year, setYear] = useState(initialYear);
   const [stack, setStack] = useState<Screen[]>([{ type: 'list' }]);
-  // 上の枠で押した種類（その種類だけ並べる）。null は全部。
-  const [selected, setSelected] = useState<BudgetLineGroup | null>(null);
+  // 上の枠で押した種類（その種類だけ並べる。expense は支出の種類すべて）。null は全部。
+  const [selected, setSelected] = useState<BudgetLineGroup | 'expense' | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [renaming, setRenaming] = useState<MoneyCategory | null>(null);
   const screen = stack[stack.length - 1];
@@ -424,14 +424,17 @@ export default function BudgetEditor({
       </>
     );
   } else {
-    const shown = (group: BudgetLineGroup) => selected === null || selected === group;
+    const shown = (group: BudgetLineGroup) => selected === null || selected === group || (selected === 'expense' && group !== 'income');
     const section = (group: BudgetLineGroup, content: ReactNode, total: number) => {
-      const open = selected === group || !collapsed.has(group);
+      // 上の枠で絞ったときは折りたたまない（折りたたみの印も出さない）。
+      const filtered = selected !== null;
+      const open = filtered || !collapsed.has(group);
       return (
         <section key={group} className="space-y-1">
           <button
             type="button"
-            aria-expanded={open}
+            aria-expanded={filtered ? undefined : open}
+            disabled={filtered}
             onClick={() =>
               setCollapsed((prev) => {
                 const next = new Set(prev);
@@ -442,7 +445,7 @@ export default function BudgetEditor({
             }
             className={`flex w-full items-center gap-1.5 border-b-2 px-0.5 pt-2.5 pb-1 text-left ${group === 'income' ? 'border-[#43b02a]' : 'border-gray-300'}`}
           >
-            {open ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-500" />}
+            {!filtered && (open ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-500" />)}
             <span className="text-lg font-extrabold text-gray-900">{GROUP_LABEL[group]}</span>
             <span className="flex-1" />
             <span className="text-lg font-extrabold tabular-nums text-gray-900">{formatYen(total)}</span>
@@ -512,7 +515,14 @@ export default function BudgetEditor({
               selected={selected === 'income'}
               onClick={() => setSelected((current) => (current === 'income' ? null : 'income'))}
             />
-            <LegendRow main label="支出" percent="" amount={formatYen(expense)} />
+            <LegendRow
+              main
+              label="支出"
+              percent=""
+              amount={formatYen(expense)}
+              selected={selected === 'expense'}
+              onClick={() => setSelected((current) => (current === 'expense' ? null : 'expense'))}
+            />
             {SPEND_GROUPS.map((group) => (
               <LegendRow
                 key={group}
@@ -543,7 +553,7 @@ export default function BudgetEditor({
               </div>
             </section>
           )}
-          <AddButton label="予算を追加" onClick={() => push({ type: 'form', ruleId: null, group: selected ?? 'variable' })} />
+          <AddButton label="予算を追加" onClick={() => push({ type: 'form', ruleId: null, group: selected === null || selected === 'expense' ? 'variable' : selected })} />
         </div>
       </>
     );

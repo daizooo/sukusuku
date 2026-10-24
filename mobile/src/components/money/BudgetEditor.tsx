@@ -179,8 +179,8 @@ export default function BudgetEditor({
   const insets = useSafeAreaInsets();
   const [year, setYear] = useState(initialYear);
   const [stack, setStack] = useState<Screen[]>([{ type: 'list' }]);
-  // 上の枠で押した種類（その種類だけ並べる）。null は全部。
-  const [selected, setSelected] = useState<BudgetLineGroup | null>(null);
+  // 上の枠で押した種類（その種類だけ並べる。expense は支出の種類すべて）。null は全部。
+  const [selected, setSelected] = useState<BudgetLineGroup | 'expense' | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [renaming, setRenaming] = useState<MoneyCategory | null>(null);
   const screen = stack[stack.length - 1];
@@ -434,14 +434,17 @@ export default function BudgetEditor({
       </>
     );
   } else {
-    const shown = (group: BudgetLineGroup) => selected === null || selected === group;
+    const shown = (group: BudgetLineGroup) => selected === null || selected === group || (selected === 'expense' && group !== 'income');
     const section = (group: BudgetLineGroup, content: ReactNode, total: number) => {
-      const open = selected === group || !collapsed.has(group);
+      // 上の枠で絞ったときは折りたたまない（折りたたみの印も出さない）。
+      const filtered = selected !== null;
+      const open = filtered || !collapsed.has(group);
       return (
         <View key={group} style={styles.section}>
           <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded: open }}
+            accessibilityRole={filtered ? undefined : 'button'}
+            accessibilityState={filtered ? undefined : { expanded: open }}
+            disabled={filtered}
             onPress={() =>
               setCollapsed((prev) => {
                 const next = new Set(prev);
@@ -452,7 +455,7 @@ export default function BudgetEditor({
             }
             style={[styles.sectionHead, group === 'income' ? styles.sectionHeadIncome : null]}
           >
-            {open ? <ChevronDown size={14} color={colors.textMuted} /> : <ChevronRight size={14} color={colors.textMuted} />}
+            {!filtered && (open ? <ChevronDown size={14} color={colors.textMuted} /> : <ChevronRight size={14} color={colors.textMuted} />)}
             <Text style={styles.sectionTitle}>{GROUP_LABEL[group]}</Text>
             <View style={styles.flex} />
             <Text style={styles.sectionTotal}>{formatYen(total)}</Text>
@@ -522,7 +525,14 @@ export default function BudgetEditor({
               selected={selected === 'income'}
               onPress={() => setSelected((current) => (current === 'income' ? null : 'income'))}
             />
-            <LegendRow main label="支出" percent="" amount={formatYen(expense)} />
+            <LegendRow
+              main
+              label="支出"
+              percent=""
+              amount={formatYen(expense)}
+              selected={selected === 'expense'}
+              onPress={() => setSelected((current) => (current === 'expense' ? null : 'expense'))}
+            />
             {SPEND_GROUPS.map((group) => (
               <LegendRow
                 key={group}
@@ -553,7 +563,7 @@ export default function BudgetEditor({
               </View>
             </View>
           )}
-          <AddButton label="予算を追加" onPress={() => push({ type: 'form', ruleId: null, group: selected ?? 'variable' })} />
+          <AddButton label="予算を追加" onPress={() => push({ type: 'form', ruleId: null, group: selected === null || selected === 'expense' ? 'variable' : selected })} />
         </ScrollView>
       </>
     );
