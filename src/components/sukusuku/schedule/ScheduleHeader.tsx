@@ -76,7 +76,7 @@ export default function ScheduleHeader({
     <div className="flex-none flex items-center gap-2 md:gap-3 mb-3 min-h-12">
       <button
         onClick={onToday}
-        className="flex-none text-[13px] md:text-sm font-bold text-gray-700 border border-gray-300 rounded-full px-3 md:px-4 py-[7px] md:py-2 hover:bg-gray-100 transition"
+        className="flex-none text-[13px] md:text-sm font-bold text-gray-700 bg-white border border-gray-300 rounded-full px-3 md:px-4 py-[7px] md:py-2 hover:bg-gray-100 transition"
       >
         今日
       </button>
@@ -121,7 +121,7 @@ export default function ScheduleHeader({
       <button onClick={onStartSearch} aria-label="予定を検索" className="flex-none p-1 text-gray-700 rounded-full hover:bg-gray-100">
         <Search size={22} />
       </button>
-      <label className="relative flex-none flex items-center gap-1 text-[13px] md:text-sm font-bold text-gray-700 border border-gray-300 rounded-full pl-3 pr-2 md:pl-4 md:pr-3 py-[7px] md:py-2 hover:bg-gray-100 transition">
+      <label className="relative flex-none flex items-center gap-1 text-[13px] md:text-sm font-bold text-gray-700 bg-white border border-gray-300 rounded-full pl-3 pr-2 md:pl-4 md:pr-3 py-[7px] md:py-2 hover:bg-gray-100 transition">
         {VIEW_OPTIONS.find((option) => option.value === view)?.label}
         <ChevronDown size={14} className="text-gray-500" />
         <select
