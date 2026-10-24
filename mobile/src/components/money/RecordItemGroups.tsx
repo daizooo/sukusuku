@@ -77,7 +77,7 @@ export default function RecordItemGroups({ groups, title, iconKey, size, onOpen 
 const styles = StyleSheet.create({
   group: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, paddingTop: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
   groupLarge: { gap: 14, paddingTop: 12, paddingBottom: 10 },
-  pressed: { backgroundColor: colors.background },
+  pressed: { backgroundColor: colors.pressed },
   icon: { marginTop: 1 },
   main: { flex: 1, minWidth: 0 },
   top: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },

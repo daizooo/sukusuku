@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 13,
   },
-  rowPressed: { backgroundColor: colors.background },
+  rowPressed: { backgroundColor: colors.pressed },
   chip: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, minWidth: 0, gap: 2 },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 8 },

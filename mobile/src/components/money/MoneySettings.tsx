@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  rowPressed: { backgroundColor: colors.neutralSurface },
+  rowPressed: { backgroundColor: colors.pressed },
   iconBox: {
     width: 40,
     height: 40,

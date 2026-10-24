@@ -2025,7 +2025,7 @@ const styles = StyleSheet.create({
   options: { borderRadius: 12, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
   item: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 11, minHeight: 46 },
   divided: { borderTopWidth: 1, borderTopColor: colors.border },
-  pressed: { backgroundColor: colors.background },
+  pressed: { backgroundColor: colors.pressed },
   settingLabel: { fontSize: 15, fontWeight: '500', color: colors.textMuted },
   settingValue: { flex: 1, textAlign: 'right', fontSize: 15, fontWeight: '600', color: colors.text },
   mutedValue: { color: colors.textFaint, fontWeight: '500' },

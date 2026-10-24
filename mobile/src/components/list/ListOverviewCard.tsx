@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     // 右上のピンと重ならないように空けておく。
     paddingRight: 36,
     paddingVertical: 8,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },

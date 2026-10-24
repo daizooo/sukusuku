@@ -6,9 +6,12 @@ export const colors = {
   // PWA版は src/app/globals.css で Tailwind の gray-50 / gray-200 を同じ値に差し替えている。
   background: '#f1f5f9', // slate-100
   surface: '#ffffff',
-  // 記録タブの一覧の地。画面の地と同じ値にそろえた。
-  listSurface: '#f1f5f9', // slate-100
+  // 記録タブ・育児タブの一覧の地。画面の地（background）より一段濃くして、一覧の面が見分けられるようにする。
+  listSurface: '#e2e8f0', // slate-200
   border: '#d1d5db', // gray-300
+  // 項目を押している間の地。白いカードや画面の地（slate-100）とも枠（gray-300）とも見分けがつくよう青みを足す。
+  // PWA版は src/app/globals.css で hover:bg-gray-50 / hover:bg-gray-100 をこの値に差し替えている。
+  pressed: '#dbeafe', // blue-100
   borderStrong: '#d1d5db', // gray-300
   text: '#111827', // gray-900
   textSubtle: '#374151', // gray-700

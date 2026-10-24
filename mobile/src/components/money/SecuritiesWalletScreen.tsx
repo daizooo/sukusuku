@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12 },
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
-  pressed: { backgroundColor: colors.background },
+  pressed: { backgroundColor: colors.pressed },
   amounts: { alignItems: 'flex-end', gap: 2 },
   add: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 16 },
   addText: { fontSize: 15, fontWeight: '700', color: colors.money },

@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 9 },
   categoryRow: { gap: 10, paddingHorizontal: 12, paddingVertical: 7 },
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
-  pressed: { backgroundColor: colors.background },
+  pressed: { backgroundColor: colors.pressed },
   plus: { color: colors.moneyIncome },
   over: { color: colors.moneyOver },
   rowBody: { flex: 1, gap: 3 },

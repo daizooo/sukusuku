@@ -79,7 +79,7 @@ export default function CategoryPicker({
               type="button"
               aria-label={top.name}
               onClick={() => (hasChildren ? setOpenId(top.id) : pickCategory(top.id))}
-              className="flex h-[60px] w-full shrink-0 items-center gap-3 border-b border-slate-100 px-4 text-left active:bg-slate-100"
+              className="flex h-[60px] w-full shrink-0 items-center gap-3 border-b border-slate-200 px-4 text-left active:bg-blue-100"
             >
               <CategoryIcon iconKey={iconKeyOf(top)} size={32} />
               <span className="min-w-0 flex-1 truncate text-base font-bold text-gray-900">{top.name}</span>

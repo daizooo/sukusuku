@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
   totalAmount: { fontSize: 20, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   message: { fontSize: 13, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
   divided: { borderTopWidth: 1, borderTopColor: colors.border },
-  pressed: { backgroundColor: colors.background },
+  pressed: { backgroundColor: colors.pressed },
   date: { width: 44, fontSize: 13, fontWeight: '600', color: colors.textMuted },
   amount: { fontSize: 15, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   plus: { color: colors.moneyIncome },

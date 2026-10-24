@@ -87,7 +87,7 @@ export default function TaskDetailModal({
           <button
             onClick={onToggleDone}
             className={`w-full flex items-center justify-center font-medium py-3 rounded-xl shadow-sm transition ${
-              !selectedTask.done ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              !selectedTask.done ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-400'
             }`}
           >
             {!selectedTask.done ? (

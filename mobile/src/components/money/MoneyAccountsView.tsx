@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
-  pressed: { backgroundColor: colors.background },
+  pressed: { backgroundColor: colors.pressed },
   // 1件だけの種類を2つ横に並べる行。区画の上の余白は行の側でとる。
   pairRow: { flexDirection: 'row', gap: 6 },
   sectionPaired: { flex: 1, minWidth: 0 },

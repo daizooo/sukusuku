@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
   title: { marginTop: 1, fontSize: 13, fontWeight: '600', color: colors.textSubtle },
   memo: { marginTop: 5, flexDirection: 'row', alignItems: 'center', gap: 6 },
   memoText: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.textSubtle },
-  pressed: { backgroundColor: colors.background },
+  pressed: { backgroundColor: colors.pressed },
   // 月の締め: 見込みの「確定」・カードの下の注意。
   confirm: { marginLeft: 4, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, backgroundColor: colors.moneyEstimateSurface },
   confirmBusy: { opacity: 0.5 },

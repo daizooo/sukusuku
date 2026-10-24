@@ -202,5 +202,5 @@ const styles = StyleSheet.create({
   childRow: { gap: 6, paddingHorizontal: 14, paddingVertical: 10 },
   childTop: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   divided: { borderTopWidth: 1, borderTopColor: colors.border },
-  pressed: { backgroundColor: colors.background },
+  pressed: { backgroundColor: colors.pressed },
 });

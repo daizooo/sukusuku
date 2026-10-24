@@ -556,7 +556,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  pressed: { backgroundColor: colors.neutralSurface },
+  pressed: { backgroundColor: colors.pressed },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   status: { fontSize: 11, fontWeight: '700', color: colors.moneyText },
   statusConfirm: { color: colors.moneyOver },

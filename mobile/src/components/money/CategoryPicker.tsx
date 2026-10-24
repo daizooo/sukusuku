@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.listSurface,
   },
-  pressed: { backgroundColor: colors.listSurface },
+  pressed: { backgroundColor: colors.pressed },
   topName: { fontSize: 16, fontWeight: '700', color: colors.text },
   // ボトムシート（小分類）。
   sheet: { flexShrink: 1, paddingHorizontal: 16, paddingBottom: 12 },
