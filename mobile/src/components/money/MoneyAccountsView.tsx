@@ -26,7 +26,7 @@ import { WalletSheet } from '@/components/money/WalletPicker';
 import TotalTrendScreen from '@/components/money/TotalTrendScreen';
 import WalletBalanceScreen from '@/components/money/WalletBalanceScreen';
 import SecuritiesWalletScreen from '@/components/money/SecuritiesWalletScreen';
-import { Hero, WalletTypeIcon, type } from '@/components/money/moneyVisual';
+import { WalletTypeIcon, type } from '@/components/money/moneyVisual';
 
 // 家計タブの「口座」（docs/kakei.md §7 の7・§9.3）。PWA版の `src/components/sukusuku/money/MoneyAccountsView.tsx` と同じ並び・文言。
 //
@@ -155,15 +155,12 @@ export default function MoneyAccountsView({
           accessibilityLabel="総残高の推移を見る"
           onPress={() => setShowTrend(true)}
           disabled={usable.length === 0}
-          style={styles.hero}
+          style={({ pressed }) => [styles.totalCard, pressed && styles.pressed]}
         >
-          <Hero
-            label="総残高"
-            center
-            value={formatBalance(summary.total)}
-            compact
-            note={usable.length === 0 ? '出金元を足すと、残高が出ます' : undefined}
-          />
+          {/* 総残高は白い札に大きく。口座のタイルより一段強く見せる（Zaim の「残高」と同じ。2026-10-24）。 */}
+          <Text style={styles.totalLabel}>総残高</Text>
+          <Text style={styles.totalValue}>{formatBalance(summary.total)}</Text>
+          {usable.length === 0 && <Text style={[type.sub, styles.totalNote]}>出金元を足すと、残高が出ます</Text>}
         </Pressable>
         {isLoading && <Text style={styles.message}>読み込み中...</Text>}
         {ordered.length > 0 && (
@@ -265,7 +262,22 @@ export default function MoneyAccountsView({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  hero: { paddingTop: 6 },
+  // 総残高と口座のタイルは、枠線を引かずに白い札を灰色の地に浮かせる（薄い影。2026-10-24）。
+  totalCard: {
+    marginTop: 8,
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  totalLabel: { fontSize: 14, fontWeight: '700', color: colors.textMuted },
+  totalValue: { fontSize: 40, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
+  totalNote: { textAlign: 'center' },
   // 右下の「＋」に一覧の最後が隠れないよう、下を空ける。
   content: { paddingHorizontal: 16, paddingBottom: 136 },
   message: { fontSize: 14, fontWeight: '500', color: colors.textFaint, textAlign: 'center', paddingVertical: 16 },
@@ -281,24 +293,28 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   rowDivided: { borderTopWidth: 1, borderTopColor: colors.border },
   pressed: { backgroundColor: colors.background },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tiles: { marginTop: 8 },
   tile: {
     width: '48.5%',
     justifyContent: 'space-between',
-    gap: 2,
-    paddingHorizontal: 10,
-    paddingTop: 7,
-    paddingBottom: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderRadius: 14,
     backgroundColor: colors.surface,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   tileTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  tileName: { flex: 1, fontSize: 13, fontWeight: '700', lineHeight: 16, color: colors.textMuted },
+  // 名前も黒く太く（灰色だと金額との差がぼやける。2026-10-24）。
+  tileName: { flex: 1, fontSize: 14, fontWeight: '700', lineHeight: 18, color: colors.text },
   // 金額は名前より大きく太く。プラスは明るい緑、マイナスは「−」をつけて黒（Zaim と同じ）。
-  tileAmount: { alignSelf: 'flex-end', fontSize: 21, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
+  tileAmount: { alignSelf: 'flex-end', fontSize: 22, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   tilePlus: { color: colors.moneyIncome },
   lifted: { opacity: 0.9, elevation: 8 },
   archivedName: { opacity: 0.7 },

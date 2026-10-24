@@ -26,7 +26,7 @@ import SecuritiesWalletScreen from './SecuritiesWalletScreen';
 import TotalTrendScreen from './TotalTrendScreen';
 import WalletBalanceScreen from './WalletBalanceScreen';
 import { WalletModal } from './WalletPicker';
-import { cardClass, Hero, incomeAmountClass, type, WalletTypeIcon } from './moneyVisual';
+import { cardClass, incomeAmountClass, type, WalletTypeIcon } from './moneyVisual';
 
 // 家計タブの「口座」（docs/kakei.md §7 の7・§9.3）。mobile版の `mobile/src/components/money/MoneyAccountsView.tsx` と同じ並び・文言。
 //
@@ -116,7 +116,7 @@ export default function MoneyAccountsView({
       ref={drag.dragRef(row.wallet.id)}
       {...drag.handleProps(sectionKey, inType, row.wallet.id)}
       onClick={() => setOpenId(row.wallet.id)}
-      className={`flex min-w-0 select-none flex-col justify-between gap-0.5 rounded-xl border border-gray-200 bg-white px-2.5 pb-1.5 pt-[7px] text-left hover:bg-gray-50 ${
+      className={`flex min-w-0 select-none flex-col justify-between gap-1 rounded-[14px] bg-white px-3 pb-2 pt-2.5 text-left shadow-sm hover:bg-gray-50 ${
         drag.isDragging(row.wallet.id) ? 'relative z-20 shadow-lg' : ''
       }`}
     >
@@ -124,9 +124,9 @@ export default function MoneyAccountsView({
         <span className="shrink-0">
           <WalletTypeIcon type={row.wallet.type} size={20} color={row.wallet.iconColor} />
         </span>
-        <span className="line-clamp-2 min-w-0 flex-1 text-[13px] font-bold leading-4 text-gray-500">{row.wallet.name}</span>
+        <span className="line-clamp-2 min-w-0 flex-1 text-sm font-bold leading-[18px] text-gray-900">{row.wallet.name}</span>
       </span>
-      <span className={`self-end text-[21px] font-extrabold tabular-nums ${row.amount > 0 ? incomeAmountClass : 'text-gray-900'}`}>
+      <span className={`self-end text-[22px] font-extrabold tabular-nums ${row.amount > 0 ? incomeAmountClass : 'text-gray-900'}`}>
         {formatBalance(row.amount)}
       </span>
     </button>
@@ -141,19 +141,18 @@ export default function MoneyAccountsView({
           aria-label="総残高の推移を見る"
           onClick={() => setShowTrend(true)}
           disabled={usable.length === 0}
-          className="block w-full pt-1.5 text-left"
+          className="mt-2 block w-full rounded-2xl bg-white py-3.5 text-center shadow-sm hover:bg-gray-50"
         >
-          <Hero
-            center
-            label="総残高"
-            value={formatBalance(summary.total)}
-            compact
-            note={usable.length === 0 ? '出金元を足すと、残高が出ます' : undefined}
-          />
+          {/* 総残高は白い札に大きく。口座のタイルより一段強く見せる（Zaim の「残高」と同じ。2026-10-24）。 */}
+          <span className="block text-sm font-bold text-gray-500">総残高</span>
+          <span className="block text-[40px] font-extrabold leading-tight tabular-nums text-gray-900">
+            {formatBalance(summary.total)}
+          </span>
+          {usable.length === 0 && <span className={`block ${type.sub}`}>出金元を足すと、残高が出ます</span>}
         </button>
         {isLoading && <p className="py-4 text-center text-sm text-gray-400">読み込み中...</p>}
         {usable.length > 0 && (
-          <div className="mt-2 grid grid-cols-2 gap-1.5">
+          <div className="mt-2 grid grid-cols-2 gap-2">
             {groups.flatMap(({ sectionKey, rows }) => rows.map((row) => renderTile(sectionKey, rows, row)))}
           </div>
         )}

@@ -84,7 +84,7 @@ export const RECORD_KIND_LABEL: Record<MoneyRecordKind, string> = {
   transfer: '振替',
 };
 
-/** 出金元の種類。並びは 財布 → プリペイド → カード → 口座 → 証券（2026-10-24。口座の一覧・出金元の選択もこの順）。QR決済は使っていないので最後。 */
+/** 出金元の種類。並びは 財布 → プリペイド → カード → 口座 → 証券（2026-10-24。口座の一覧・出金元の選択もこの順）。QR決済は使っていないので、選択肢・一覧に出さない（型と DB の値は残す）。 */
 /** 出金元を削除するときの確認文（記録は残り、出金元は「なし」になる）。 */
 export const WALLET_DELETE_NOTE = '記録は残りますが、出金元はなしになります。確定した残高や取り込みのルールは消えます。';
 
@@ -94,7 +94,6 @@ export const WALLET_TYPES: { id: MoneyWalletType; label: string }[] = [
   { id: 'card', label: 'カード' },
   { id: 'bank', label: '口座' },
   { id: 'securities', label: '証券' },
-  { id: 'qr', label: 'QR決済' },
 ];
 
 /**
