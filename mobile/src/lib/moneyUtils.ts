@@ -1663,11 +1663,11 @@ export interface LandingMonth {
   /** 年初からこの月までの累計（数えない月は、その前までの累計のまま）。 */
   cumulative: number;
   /**
-   * 今月（締めていない）だけ、実績の収支（収入 − 支出。月の振り返りの収支と同じ）。ほかの月は null。
-   * 着地見込み（balance・cumulative）には使わず、推移グラフの今月の表示だけに使う（2026-10-24）。
+   * 今月まで（締めていない今月と、締め忘れた過去の月）の、実績の収支（収入 − 支出。月の振り返りの収支と同じ）。ほかの月は null。
+   * 着地見込み（balance・cumulative）には使わず、推移グラフの表示だけに使う（2026-10-24）。
    */
   actualBalance: number | null;
-  /** 今月だけ、実績の累計（その前の月までの累計 ＋ actualBalance）。ほかの月は null。 */
+  /** 今月までの月の、実績の累計（年初からその月まで、締め忘れた月も実績で足したもの）。先の月は null。 */
   actualCumulative: number | null;
 }
 
@@ -1710,6 +1710,7 @@ export function buildYearLanding(
   const recordedKeys = yearMonthKeys(year).filter((monthKey) => monthKey >= start && monthKey <= current);
   const unscheduled = isMonthClosed(closings, `${year}-12`) ? 0 : unscheduledForecast(lines, categories, records, year, recordedKeys);
   let cumulative = 0;
+  let actualRunning = 0;
   let closedMonths = 0;
   let incomeTotal = 0;
   let expenseTotal = 0;
@@ -1737,9 +1738,14 @@ export function buildYearLanding(
             plan.months.estimate[index];
       if (index === 11) expense -= unscheduled;
     }
-    // 今月（締める前）は、推移グラフに実績の収支・累計も添える（着地見込みの数え方は変えない）。
-    const actualBalance = !closed && monthKey === current ? buildMonthSummary(records, categories, budgets, monthKey).balance : null;
-    const actualCumulative = actualBalance === null ? null : cumulative + actualBalance;
+    // 今月まで（締め忘れた過去の月を含む）は、推移グラフに実績の収支・累計も添える（着地見込みの数え方は変えない）。
+    let actualBalance: number | null = null;
+    let actualCumulative: number | null = null;
+    if (monthKey <= current) {
+      actualBalance = closed ? null : buildMonthSummary(records, categories, budgets, monthKey).balance;
+      actualRunning += actualBalance ?? income - expense;
+      actualCumulative = actualRunning;
+    }
     incomeTotal += income;
     expenseTotal += expense;
     cumulative += income - expense;
