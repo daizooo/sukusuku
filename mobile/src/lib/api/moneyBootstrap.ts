@@ -3,8 +3,6 @@ import type { Database, Tables } from '@/types/supabase';
 import type { MoneySecuritiesData } from '@/types/app';
 import {
   rowToBalance,
-  rowToBudgetLine,
-  rowToBudget,
   rowToCategory,
   rowToMonth,
   rowToRecord,
@@ -51,14 +49,12 @@ export async function loadMoneyBootstrap(
   return {
     money: {
       categories: rows<Tables<'money_categories'>>('categories').map(rowToCategory),
-      budgets: rows<Tables<'money_budgets'>>('budgets').map(rowToBudget),
       wallets: rows<Tables<'money_wallets'>>('wallets').map(rowToWallet),
       stores: rows<Tables<'money_stores'>>('stores').map(rowToStore),
       records: rows<Parameters<typeof rowToRecord>[0]>('records').map(rowToRecord),
       recurring: rows<Tables<'money_recurring'>>('recurring').map(rowToRecurring),
       balances: rows<Tables<'money_wallet_balances'>>('balances').map(rowToBalance),
       months: rows<Tables<'money_months'>>('months').map(rowToMonth),
-      budgetLines: rows<Tables<'money_budget_lines'>>('budget_lines').map(rowToBudgetLine),
     },
     securities: {
       securities: rows<Tables<'money_securities'>>('securities').map(rowToSecurity),

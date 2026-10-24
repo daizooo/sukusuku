@@ -779,18 +779,20 @@ export interface MoneyRecurring {
   /** ルールを作った日（YYYY-MM-DD）。固定費を予算に足すのはこの年から（年の中は全部の月）。 */
   createdAt: string;
   /**
-   * 記録を自動で作るか。false は「帯に出す」もの（車検・JAF など。記録は作らず、記録の上の帯から確かめて記録する。
-   * 同じ小分類の記録が入ると済になる）。docs/kakei.md §3.6
+   * 自動記録（オン／オフ。docs/kakei.md §0.8）。オンはその日に記録を作る。オフは記録を作らない（予算だけ）。
+   * オフの固定費は、発生月に記録が無いと月の締めで「今月記録予定の固定費」に出す。
    */
   makesRecord: boolean;
-  /** 帯に出すもので「今年はなし」にした回（予定の月 YYYY-MM）。 */
+  /** 締めの「今月記録予定の固定費」で「今月はなし」にした回（予定の月 YYYY-MM）。 */
   skippedMonths: string[];
   /** ◯年ごと（2〜10。車検・2年ごとの火災保険など）。開始月の年から数える。null は毎年。 */
   intervalYears: number | null;
-  /** 日が決まっているか。false（日付未定）は帯に出すものだけ。帯には出さず、同じ小分類の記録が入るのを待つ。 */
+  /** 日が決まっているか。自動記録オンのものだけ true（オフは日を持たない）。 */
   dayKnown: boolean;
-  /** 帯に出すもので「翌月へ送る」にしたとき、この日（YYYY-MM-DD。翌月1日）まで帯に出さない。null は送っていない。 */
+  /** 締めの「今月記録予定の固定費」で「翌月へ」にしたとき、その翌月の1日（YYYY-MM-DD）。その月の締めにも出す。null は送っていない。 */
   deferredUntil: string | null;
+  /** 発生月なし（月に置かず、その年に1回ぶんを見込みとして数える。自動記録はしない）。docs/kakei.md §0.8 */
+  noMonth: boolean;
 }
 
 export type MoneyRecurringDraft = Omit<MoneyRecurring, 'id' | 'position' | 'archived' | 'createdAt' | 'deferredUntil'>;

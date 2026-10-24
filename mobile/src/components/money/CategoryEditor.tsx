@@ -3,7 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import Modal from '@/components/ui/Modal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, ChevronRight, GripVertical, Plus } from 'lucide-react-native';
-import type { MoneyBudget, MoneyBudgetGroup, MoneyCategory, MoneyCategoryKind } from '@/types/app';
+import type { MoneyBudgetGroup, MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
@@ -39,8 +39,6 @@ interface CategoryEditorProps {
   familyId: string;
   categories: MoneyCategory[];
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
-  /** 大分類を消すと、その予算も消える（DBの cascade）ので、画面の予算からも外す。 */
-  onBudgets: (update: (prev: MoneyBudget[]) => MoneyBudget[]) => void;
   onClose: () => void;
 }
 
@@ -58,7 +56,6 @@ export default function CategoryEditor({
   familyId,
   categories,
   onCategories,
-  onBudgets,
   onClose,
 }: CategoryEditorProps) {
   const insets = useSafeAreaInsets();
@@ -157,10 +154,9 @@ export default function CategoryEditor({
     setEditing(null);
     try {
       await deleteMoneyCategory(supabase, category.id);
-      // 大分類を消すと、小分類と予算も一緒に消える（DBの cascade）。
+      // 大分類を消すと、小分類も一緒に消える（DBの cascade）。予算の行はカテゴリなしになる（年間予算の「カテゴリなし」に出る）。
       const gone = new Set([category.id, ...categories.filter((entry) => entry.parentId === category.id).map((entry) => entry.id)]);
       onCategories((prev) => prev.filter((entry) => !gone.has(entry.id)));
-      onBudgets((prev) => prev.filter((entry) => !gone.has(entry.categoryId)));
     } catch {
       failed('削除');
     }
