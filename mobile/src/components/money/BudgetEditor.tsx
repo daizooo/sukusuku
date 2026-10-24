@@ -8,6 +8,7 @@ import type {
   MoneyBudgetGroup,
   MoneyCategory,
   MoneyHolidayRule,
+  MoneyRatioTargets,
   MoneyRecord,
   MoneyRecurring,
   MoneyRecurringDraft,
@@ -56,6 +57,7 @@ import {
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
 import StorePicker from '@/components/money/StorePicker';
+import RatioTargetSettings from '@/components/money/RatioTargetSettings';
 import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
 import { Chip, ChipRow, Field, WalletChoices } from '@/components/money/feedParts';
 
@@ -80,9 +82,12 @@ interface BudgetEditorProps {
   wallets: MoneyWallet[];
   stores: MoneyStore[];
   records: MoneyRecord[];
+  /** 目安の割合（docs/kakei.md §0.9）。年間予算の画面から決める。 */
+  ratioTargets: MoneyRatioTargets;
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
+  onRatioTargets: (targets: MoneyRatioTargets) => void;
   onClose: () => void;
 }
 
@@ -129,9 +134,19 @@ const TYPE_TOP_NAME: Record<Exclude<SpendGroup, 'variable'>, string> = {
 /** 大分類を選ぶ種類（変動費・収入）。ほかは大分類＝種類。 */
 const choosesTop = (group: BudgetLineGroup): group is 'variable' | 'income' => group === 'variable' || group === 'income';
 
-type Screen = { type: 'list' } | { type: 'top'; topId: string } | { type: 'form'; ruleId: string | null; group?: BudgetLineGroup; topId?: string };
+type Screen = { type: 'list' } | { type: 'ratio' } | { type: 'top'; topId: string } | { type: 'form'; ruleId: string | null; group?: BudgetLineGroup; topId?: string };
 
 const byPosition = (a: MoneyRecurring, b: MoneyRecurring) => a.position - b.position;
+
+/** 目安の割合の要約（変動費35%・予備費15%・固定費35%）。 */
+const ratioSummary = (targets: MoneyRatioTargets): string => {
+  const parts = [
+    targets.variable === null ? null : `変動費${targets.variable}%`,
+    targets.reserve === null ? null : `予備費${targets.reserve}%`,
+    targets.fixed === null ? null : `固定費${targets.fixed}%`,
+  ].filter((part): part is string => part !== null);
+  return parts.length === 0 ? '未設定' : parts.join('・');
+};
 
 /** 割合（収入に対する）。一桁は前に数字1つぶんの空き。 */
 const percentText = (value: number, base: number): string => {
@@ -172,9 +187,11 @@ export default function BudgetEditor({
   wallets,
   stores,
   records,
+  ratioTargets,
   onCategories,
   onRecurring,
   onStores,
+  onRatioTargets,
   onClose,
 }: BudgetEditorProps) {
   const insets = useSafeAreaInsets();
@@ -296,6 +313,28 @@ export default function BudgetEditor({
     }
   };
 
+  /**
+   * 大分類を作る（予算の枠の大分類の選択から。変動費・収入だけ。ほかは大分類＝種類）。
+   * 予算が本体で、カテゴリは予算を表示するだけなので、カテゴリの設定を先にしなくても、ここで足せる。
+   */
+  const createTop = async (group: BudgetLineGroup, name: string): Promise<MoneyCategory | null> => {
+    try {
+      const kind = group === 'income' ? 'income' : 'living';
+      const created = await insertMoneyCategory(supabase, familyId, {
+        kind,
+        parentId: null,
+        name,
+        icon: guessIconKey(name),
+        position: topCategories(categories, kind, true).reduce((max, entry) => Math.max(max, entry.position + 1), 0),
+      });
+      putCategory(created);
+      return created;
+    } catch {
+      failed();
+      return null;
+    }
+  };
+
   const rename = async (target: MoneyCategory, name: string) => {
     setRenaming(null);
     if (name.trim() === '' || name.trim() === target.name) return;
@@ -391,6 +430,7 @@ export default function BudgetEditor({
         stores={stores}
         records={records}
         onCreateCategory={createCategory}
+        onCreateTop={createTop}
         onRenameCategory={setRenaming}
         onClose={pop}
         onSubmit={async (draft, group, topId, registerStore) => {
@@ -399,6 +439,8 @@ export default function BudgetEditor({
         onRemove={rule ? () => removeRule(rule) : undefined}
       />
     );
+  } else if (screen.type === 'ratio') {
+    body = <RatioTargetSettings familyId={familyId} targets={ratioTargets} onSaved={onRatioTargets} onBack={pop} />;
   } else if (screen.type === 'top') {
     const top = category(screen.topId);
     const own = top ? rows.filter((rule) => rule.categoryId === top.id || category(rule.categoryId)?.parentId === top.id) : [];
@@ -565,6 +607,9 @@ export default function BudgetEditor({
             </View>
           )}
           <AddButton label="予算を追加" onPress={() => push({ type: 'form', ruleId: null, group: selected === null || selected === 'expense' ? 'variable' : selected })} />
+          <View style={styles.group}>
+            <SettingRow first label="目安の割合" value={ratioSummary(ratioTargets)} placeholder={ratioSummary(ratioTargets) === '未設定'} onPress={() => push({ type: 'ratio' })} />
+          </View>
         </ScrollView>
       </>
     );
@@ -779,6 +824,7 @@ function BudgetForm({
   stores,
   records,
   onCreateCategory,
+  onCreateTop,
   onRenameCategory,
   onClose,
   onSubmit,
@@ -793,6 +839,7 @@ function BudgetForm({
   stores: MoneyStore[];
   records: MoneyRecord[];
   onCreateCategory: (group: BudgetLineGroup, topId: string | null, name: string) => Promise<MoneyCategory | null>;
+  onCreateTop: (group: BudgetLineGroup, name: string) => Promise<MoneyCategory | null>;
   onRenameCategory: (category: MoneyCategory) => void;
   onClose: () => void;
   onSubmit: (draft: MoneyRecurringDraft, group: BudgetLineGroup, topId: string | null, registerStore: boolean) => Promise<void>;
@@ -1056,30 +1103,33 @@ function BudgetForm({
         </SheetModal>
       )}
       {sheet === 'top' && (
-        <SheetModal visible onClose={() => setSheet(null)}>
-          <LogModalShell title="大分類" onClose={() => setSheet(null)}>
-            <View style={styles.options}>
-              {topsOf(group).map((entry, index) => (
-                <OptionRow
-                  key={entry.id}
-                  first={index === 0}
-                  label={entry.name}
-                  selected={entry.id === topId}
-                  onPress={() => {
-                    setTopId(entry.id);
-                    // まとめて（大分類）を選んでいたら、選んだ大分類のまとめてにする。
-                    if (selectedCategory !== null && selectedCategory.parentId === null) setCategoryId(entry.id);
-                    setSheet(null);
-                  }}
-                />
-              ))}
-            </View>
-          </LogModalShell>
-        </SheetModal>
+        <NameSheet
+          title="大分類"
+          placeholder="新しい大分類の名前"
+          choices={topsOf(group).map((entry) => ({ id: entry.id, label: entry.name }))}
+          selectedId={topId}
+          onClose={() => setSheet(null)}
+          onPick={(id) => {
+            setTopId(id);
+            // まとめて（大分類）を選んでいたら、選んだ大分類のまとめてにする。
+            if (selectedCategory !== null && selectedCategory.parentId === null) setCategoryId(id);
+            setSheet(null);
+          }}
+          onCreate={async (newName) => {
+            const created = await onCreateTop(group, newName);
+            if (created) {
+              setTopId(created.id);
+              if (selectedCategory !== null && selectedCategory.parentId === null) setCategoryId(created.id);
+            }
+            setSheet(null);
+          }}
+        />
       )}
       {sheet === 'category' && (
-        <CategorySheet
-          choices={categoryChoices}
+        <NameSheet
+          title="小分類"
+          placeholder="新しい小分類の名前"
+          choices={categoryChoices.map((entry) => ({ id: entry.category.id, label: entry.label }))}
           selectedId={categoryId}
           onClose={() => setSheet(null)}
           onPick={(id) => {
@@ -1091,6 +1141,7 @@ function BudgetForm({
             if (created) setCategoryId(created.id);
             setSheet(null);
           }}
+          renameLabel="選んでいる小分類の名前を直す"
           onRename={
             selectedCategory !== null && selectedCategory.parentId !== null
               ? () => {
@@ -1244,21 +1295,27 @@ function OptionRow({ label, selected, first, onPress }: { label: string; selecte
   );
 }
 
-/** 小分類を選ぶ。一番下で新しく作る。選んでいる小分類の名前もここから直す。 */
-function CategorySheet({
+/** 大分類・小分類を選ぶ。一番下で新しく作る。選んでいる小分類の名前もここから直す。 */
+function NameSheet({
+  title,
+  placeholder,
   choices,
   selectedId,
   onClose,
   onPick,
   onCreate,
   onRename,
+  renameLabel,
 }: {
-  choices: { category: MoneyCategory; label: string }[];
+  title: string;
+  placeholder: string;
+  choices: { id: string; label: string }[];
   selectedId: string | null;
   onClose: () => void;
-  onPick: (categoryId: string) => void;
+  onPick: (id: string) => void;
   onCreate: (name: string) => Promise<void>;
   onRename?: () => void;
+  renameLabel?: string;
 }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -1273,16 +1330,10 @@ function CategorySheet({
   };
   return (
     <SheetModal visible onClose={onClose}>
-      <LogModalShell title="小分類" onClose={onClose}>
+      <LogModalShell title={title} onClose={onClose}>
         <View style={styles.options}>
           {choices.map((entry, index) => (
-            <OptionRow
-              key={entry.category.id}
-              first={index === 0}
-              label={entry.label}
-              selected={entry.category.id === selectedId}
-              onPress={() => onPick(entry.category.id)}
-            />
+            <OptionRow key={entry.id} first={index === 0} label={entry.label} selected={entry.id === selectedId} onPress={() => onPick(entry.id)} />
           ))}
           <View style={[styles.item, choices.length > 0 && styles.divided]}>
             <Plus size={16} color={colors.money} />
@@ -1290,7 +1341,7 @@ function CategorySheet({
               style={[styles.inlineInput, styles.newInput]}
               value={name}
               onChangeText={setName}
-              placeholder="新しい小分類の名前"
+              placeholder={placeholder}
               placeholderTextColor={colors.textFaint}
               returnKeyType="done"
               onSubmitEditing={() => void create()}
@@ -1304,7 +1355,7 @@ function CategorySheet({
         </View>
         {onRename && (
           <Pressable accessibilityRole="button" onPress={onRename} style={styles.linkRow}>
-            <Text style={styles.linkText}>選んでいる小分類の名前を直す</Text>
+            <Text style={styles.linkText}>{renameLabel}</Text>
           </Pressable>
         )}
       </LogModalShell>

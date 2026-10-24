@@ -6,6 +6,7 @@ import type {
   MoneyBudgetGroup,
   MoneyCategory,
   MoneyHolidayRule,
+  MoneyRatioTargets,
   MoneyRecord,
   MoneyRecurring,
   MoneyRecurringDraft,
@@ -51,6 +52,7 @@ import {
 } from '@/lib/api/money';
 import { ModalShell } from '../modals/TaskForm';
 import StorePicker from './StorePicker';
+import RatioTargetSettings from './RatioTargetSettings';
 import { Chip, ChipRow, Field, WalletChoices } from './feedParts';
 import { FullScreen, PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
 
@@ -75,9 +77,12 @@ interface BudgetEditorProps {
   wallets: MoneyWallet[];
   stores: MoneyStore[];
   records: MoneyRecord[];
+  /** 目安の割合（docs/kakei.md §0.9）。年間予算の画面から決める。 */
+  ratioTargets: MoneyRatioTargets;
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
+  onRatioTargets: (targets: MoneyRatioTargets) => void;
   onClose: () => void;
 }
 
@@ -129,6 +134,16 @@ type Screen = { type: 'list' } | { type: 'top'; topId: string } | { type: 'form'
 
 const byPosition = (a: MoneyRecurring, b: MoneyRecurring) => a.position - b.position;
 
+/** 目安の割合の要約（変動費35%・予備費15%・固定費35%）。 */
+const ratioSummary = (targets: MoneyRatioTargets): string => {
+  const parts = [
+    targets.variable === null ? null : `変動費${targets.variable}%`,
+    targets.reserve === null ? null : `予備費${targets.reserve}%`,
+    targets.fixed === null ? null : `固定費${targets.fixed}%`,
+  ].filter((part): part is string => part !== null);
+  return parts.length === 0 ? '未設定' : parts.join('・');
+};
+
 /** 割合（収入に対する）。一桁は前に数字1つぶんの空き。 */
 const percentText = (value: number, base: number): string => {
   if (base <= 0) return '';
@@ -176,9 +191,11 @@ export default function BudgetEditor({
   wallets,
   stores,
   records,
+  ratioTargets,
   onCategories,
   onRecurring,
   onStores,
+  onRatioTargets,
   onClose,
 }: BudgetEditorProps) {
   const supabase = useMemo(() => createClient(), []);
@@ -188,6 +205,8 @@ export default function BudgetEditor({
   const [selected, setSelected] = useState<BudgetLineGroup | 'expense' | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [renaming, setRenaming] = useState<MoneyCategory | null>(null);
+  // 目安の割合の画面（自分で戻る操作の層を持つので、画面の積み重ねには入れない）。
+  const [ratioOpen, setRatioOpen] = useState(false);
   const screen = stack[stack.length - 1];
   const push = (next: Screen) => setStack((prev) => [...prev, next]);
   const pop = () => setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
@@ -300,6 +319,28 @@ export default function BudgetEditor({
     }
   };
 
+  /**
+   * 大分類を作る（予算の枠の大分類の選択から。変動費・収入だけ。ほかは大分類＝種類）。
+   * 予算が本体で、カテゴリは予算を表示するだけなので、カテゴリの設定を先にしなくても、ここで足せる。
+   */
+  const createTop = async (group: BudgetLineGroup, name: string): Promise<MoneyCategory | null> => {
+    try {
+      const kind = group === 'income' ? 'income' : 'living';
+      const created = await insertMoneyCategory(supabase, familyId, {
+        kind,
+        parentId: null,
+        name,
+        icon: guessIconKey(name),
+        position: topCategories(categories, kind, true).reduce((max, entry) => Math.max(max, entry.position + 1), 0),
+      });
+      putCategory(created);
+      return created;
+    } catch {
+      failed();
+      return null;
+    }
+  };
+
   const rename = async (target: MoneyCategory, name: string) => {
     setRenaming(null);
     if (name.trim() === '' || name.trim() === target.name) return;
@@ -381,6 +422,7 @@ export default function BudgetEditor({
         stores={stores}
         records={records}
         onCreateCategory={createCategory}
+        onCreateTop={createTop}
         onRenameCategory={setRenaming}
         onClose={pop}
         onSubmit={async (draft, group, topId, registerStore) => {
@@ -555,6 +597,9 @@ export default function BudgetEditor({
             </section>
           )}
           <AddButton label="予算を追加" onClick={() => push({ type: 'form', ruleId: null, group: selected === null || selected === 'expense' ? 'variable' : selected })} />
+          <div className={`${groupClass} mt-3`}>
+            <SettingRow first label="目安の割合" value={ratioSummary(ratioTargets)} placeholder={ratioSummary(ratioTargets) === '未設定'} onClick={() => setRatioOpen(true)} />
+          </div>
         </div>
       </>
     );
@@ -570,6 +615,7 @@ export default function BudgetEditor({
       ) : (
         body
       )}
+      {ratioOpen && <RatioTargetSettings familyId={familyId} targets={ratioTargets} onSaved={onRatioTargets} onBack={() => setRatioOpen(false)} />}
       {renaming !== null && <RenameSheet name={renaming.name} onClose={() => setRenaming(null)} onSubmit={(name) => void rename(renaming, name)} />}
     </FullScreen>
   );
@@ -790,6 +836,7 @@ function BudgetForm({
   stores,
   records,
   onCreateCategory,
+  onCreateTop,
   onRenameCategory,
   onClose,
   onSubmit,
@@ -804,6 +851,7 @@ function BudgetForm({
   stores: MoneyStore[];
   records: MoneyRecord[];
   onCreateCategory: (group: BudgetLineGroup, topId: string | null, name: string) => Promise<MoneyCategory | null>;
+  onCreateTop: (group: BudgetLineGroup, name: string) => Promise<MoneyCategory | null>;
   onRenameCategory: (category: MoneyCategory) => void;
   onClose: () => void;
   onSubmit: (draft: MoneyRecurringDraft, group: BudgetLineGroup, topId: string | null, registerStore: boolean) => Promise<void>;
@@ -1058,28 +1106,34 @@ function BudgetForm({
         </ModalShell>
       )}
       {sheet === 'top' && (
-        <ModalShell title="大分類" onClose={() => setSheet(null)} footer={null}>
-          <div className="overflow-hidden rounded-xl border border-gray-200">
-            {topsOf(group).map((entry, index) => (
-              <OptionRow
-                key={entry.id}
-                first={index === 0}
-                label={entry.name}
-                selected={entry.id === topId}
-                onClick={() => {
-                  setTopId(entry.id);
-                  // まとめて（大分類）を選んでいたら、選んだ大分類のまとめてにする。
-                  if (selectedCategory !== null && selectedCategory.parentId === null) setCategoryId(entry.id);
-                  setSheet(null);
-                }}
-              />
-            ))}
-          </div>
-        </ModalShell>
+        <NameSheet
+          title="大分類"
+          placeholder="新しい大分類の名前"
+          choices={topsOf(group).map((entry) => ({ id: entry.id, label: entry.name }))}
+          selectedId={topId}
+          onClose={() => setSheet(null)}
+          onPick={(id) => {
+            setTopId(id);
+            // まとめて（大分類）を選んでいたら、選んだ大分類のまとめてにする。
+            if (selectedCategory !== null && selectedCategory.parentId === null) setCategoryId(id);
+            setSheet(null);
+          }}
+          onCreate={async (newName) => {
+            const created = await onCreateTop(group, newName);
+            if (created) {
+              setTopId(created.id);
+              if (selectedCategory !== null && selectedCategory.parentId === null) setCategoryId(created.id);
+            }
+            setSheet(null);
+          }}
+        />
       )}
       {sheet === 'category' && (
-        <CategorySheet
-          choices={categoryChoices}
+        <NameSheet
+          title="小分類"
+          placeholder="新しい小分類の名前"
+          choices={categoryChoices.map((entry) => ({ id: entry.category.id, label: entry.label }))}
+          renameLabel="選んでいる小分類の名前を直す"
           selectedId={categoryId}
           onClose={() => setSheet(null)}
           onPick={(id) => {
@@ -1216,21 +1270,27 @@ function OptionRow({ label, selected, first, onClick }: { label: string; selecte
   );
 }
 
-/** 小分類を選ぶ。一番下で新しく作る。選んでいる小分類の名前もここから直す。 */
-function CategorySheet({
+/** 大分類・小分類を選ぶ。一番下で新しく作る。選んでいる小分類の名前もここから直す。 */
+function NameSheet({
+  title,
+  placeholder,
   choices,
   selectedId,
   onClose,
   onPick,
   onCreate,
   onRename,
+  renameLabel,
 }: {
-  choices: { category: MoneyCategory; label: string }[];
+  title: string;
+  placeholder: string;
+  choices: { id: string; label: string }[];
   selectedId: string | null;
   onClose: () => void;
-  onPick: (categoryId: string) => void;
+  onPick: (id: string) => void;
   onCreate: (name: string) => Promise<void>;
   onRename?: () => void;
+  renameLabel?: string;
 }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -1244,17 +1304,11 @@ function CategorySheet({
     }
   };
   return (
-    <ModalShell title="小分類" onClose={onClose} footer={null}>
+    <ModalShell title={title} onClose={onClose} footer={null}>
       <div className="space-y-2">
         <div className="overflow-hidden rounded-xl border border-gray-200">
           {choices.map((entry, index) => (
-            <OptionRow
-              key={entry.category.id}
-              first={index === 0}
-              label={entry.label}
-              selected={entry.category.id === selectedId}
-              onClick={() => onPick(entry.category.id)}
-            />
+            <OptionRow key={entry.id} first={index === 0} label={entry.label} selected={entry.id === selectedId} onClick={() => onPick(entry.id)} />
           ))}
           <div className={`flex min-h-[46px] items-center gap-2.5 px-3.5 py-2.5 ${choices.length > 0 ? dividedClass : ''}`}>
             <Plus size={16} className="shrink-0 text-blue-600" />
@@ -1265,8 +1319,8 @@ function CategorySheet({
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void create();
               }}
-              placeholder="新しい小分類の名前"
-              aria-label="新しい小分類の名前"
+              placeholder={placeholder}
+              aria-label={placeholder}
             />
             {name.trim() !== '' && (
               <button type="button" onClick={() => void create()} className="shrink-0 text-sm font-bold text-blue-600">
@@ -1277,7 +1331,7 @@ function CategorySheet({
         </div>
         {onRename && (
           <button type="button" onClick={onRename} className="w-full py-2.5 text-sm font-bold text-blue-600">
-            選んでいる小分類の名前を直す
+            {renameLabel}
           </button>
         )}
       </div>
