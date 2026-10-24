@@ -592,6 +592,8 @@ export interface PendingRecurring {
  * その月（YYYY-MM）に、固定収入・固定費のルールでこれから自動で作られる記録（today〔YYYY-MM-DD〕より後の日のもの）。
  * 作る条件は DBの make_money_recurring_records と同じ（使っていて、出金元とカテゴリが決まっていて、記録する月・期間の中で、
  * ルールを作ったあとの日で、まだ作っていないもの）。収支に入らない振替は除く。
+ * 人が手で入れた記録（ルールで作ったものでない記録）が、その月に同じ小分類であれば、もう記録済みとして除く（二重にならないように。
+ * DBの make_money_recurring_records も同じ。2026-10-24）。
  * 自動の記録より前に月を締めるときに知らせる（docs/kakei.md §4.5）。日の早い順。
  */
 export function pendingRecurringInMonth(
@@ -605,11 +607,17 @@ export function pendingRecurringInMonth(
   const made = new Set(
     records.filter((record) => record.recurringId !== null && record.month === monthKey).map((record) => record.recurringId),
   );
+  // 人が手で入れた記録の、月ごとの（種類|小分類）。同じ月に同じ小分類の記録があれば、ルールの記録は作られない。
+  const manual = new Set<string>();
+  for (const record of recordsInMonth(records, monthKey)) {
+    if (record.recurringId !== null) continue;
+    for (const item of record.items) if (item.categoryId !== null) manual.add(`${record.kind}|${item.categoryId}`);
+  }
   const pending: PendingRecurring[] = [];
   for (const rule of recurring) {
     if (rule.archived || rule.kind === 'transfer' || rule.walletId === null || rule.makesRecord === false || rule.categoryId === null) continue;
     if (rule.months !== null && !rule.months.includes(month)) continue;
-    if (!inRecurringPeriod(rule, monthKey) || made.has(rule.id)) continue;
+    if (!inRecurringPeriod(rule, monthKey) || made.has(rule.id) || manual.has(`${rule.kind}|${rule.categoryId}`)) continue;
     const date = recurringDateOf(year, month, rule);
     if (date <= today || date < rule.createdAt) continue;
     const amount = rule.amountMode === 'fixed' ? rule.amount : estimateRecurringAmount(rule, monthKey, records);
