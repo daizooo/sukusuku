@@ -22,15 +22,18 @@
 @theme {
   --color-gray-50: #f1f5f9; /* slate-100 */
   --color-gray-200: #d1d5db; /* gray-300 */
+  /* 育児タブの一覧の地（mobile版の listSurface）と、項目を押した・マウスを載せたときの地（同 pressed）。 */
+  --color-list-surface: #e5e7eb; /* gray-200（上で gray-200 を差し替えたので、別名で持つ） */
+  --color-pressed: #e5e7eb; /* gray-200 */
 }
 
-/* 項目にマウスを載せたときの地。mobile版の theme.ts の pressed（blue-100）と同じ値。
-   gray-50 / gray-100 のままだと、画面の地（slate-100）や枠とほぼ同じ色で変わったことが分からない。
+/* 項目にマウスを載せたときの地。mobile版の theme.ts の pressed と同じ値。
+   gray-50 / gray-100 のままだと、画面の地（slate-100）とほぼ同じ色で変わったことが分からない。
    クラスを書き換えずに済むよう、Tailwind の hover ユーティリティ（レイヤー内）を、レイヤー外のこの規則で上書きする。 */
 @media (hover: hover) {
   .hover\:bg-gray-50:hover,
   .hover\:bg-gray-100:hover {
-    background-color: #dbeafe;
+    background-color: var(--color-pressed);
   }
 }
 

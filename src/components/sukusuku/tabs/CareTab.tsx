@@ -275,7 +275,7 @@ export default function CareTab({
       </div>
 
       {/* グループ2: 日付・記録ボタン・その日の記録を、スレート色の1枚のパネルにまとめる。 */}
-      <div className="flex-1 min-h-0 flex flex-col bg-slate-200 rounded-[20px] overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col bg-list-surface rounded-[20px] overflow-hidden">
       {/* 日付の見出しは固定で、指に合わせて横に動くのはこの下の中身だけ（予定タブと同じ。2026-10-15）。 */}
       <div className="shrink-0 px-3 pt-2.5 pb-2">
         <>
@@ -452,7 +452,7 @@ export default function CareTab({
                   const badges = getLogBadges(log);
                   return (
                     <div key={log.id} className="relative pl-6">
-                      <div className={`absolute -left-[17px] top-0 w-8 h-8 rounded-full border-4 border-slate-200 flex items-center justify-center ${getLogColor(log.type)}`}>
+                      <div className={`absolute -left-[17px] top-0 w-8 h-8 rounded-full border-4 border-list-surface flex items-center justify-center ${getLogColor(log.type)}`}>
                         {getLogIcon(log.type)}
                       </div>
                       <button
