@@ -1,21 +1,24 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ChevronRight, Settings2, X } from 'lucide-react';
 import type { MoneyCategory } from '@/types/app';
 import {
   childCategories,
   iconKeyOf,
   topCategories,
 } from '@/lib/moneyUtils';
+import { useBackLayer } from '@/lib/browserHistory';
+import { useBackdropClose } from '../ui/useBackdropClose';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 import { CategoryIcon, ScreenHeader, StackedScreen } from './moneyVisual';
 
 // カテゴリの選択（docs/kakei.md §3.1・§3.2）。mobile版の `mobile/src/components/money/CategoryPicker.tsx` と同じ並び・文言。
 //
-// 大分類を1行ずつ並べ、押した1つだけ開いて小分類のボタンを出す（アコーディオン。2026-10-24）。
-// 以前は大分類の右に小分類を全部並べていて、固定費（確定）23件・予備費14件のように件数が多いと見にくかった。
-// 別の大分類を押すと、開いていたものは閉じる。開いた行は画面の上に寄せる（下の方の大分類でも小分類が見える）。
-// 小分類を持たない大分類は、開かずにそのまま選ぶ。
+// 大分類を1行ずつ並べ、押すと下からシート（ボトムシート）が出て、その大分類の小分類を2列の大きなボタンで見せる（2026-10-24）。
+// 以前は大分類の右に小分類を全部並べていた（のち、行の下に開くアコーディオンにした）が、固定費（確定）23件・予備費14件のように
+// 件数が多いと、ボタンの大きさや並びがそろわず、押せる場所がひと目で分からなかった。
+// 小分類を持たない大分類は、シートを出さずにそのまま選ぶ。件数は出さない。
 
 export interface CategoryChoice {
   categoryId: string;
@@ -32,8 +35,6 @@ interface CategoryPickerProps {
   onlyTops?: (top: MoneyCategory) => boolean;
 }
 
-const chipClass = 'rounded-lg bg-white px-3 py-[9px] text-[15px] font-semibold leading-tight text-gray-900 hover:bg-blue-50 active:bg-blue-50';
-
 export default function CategoryPicker({
   kind,
   categories,
@@ -48,25 +49,9 @@ export default function CategoryPicker({
     [categories, categoryKind, onlyTops],
   );
   const pickCategory = (categoryId: string) => onPick({ categoryId });
-  // 開いている大分類（1つだけ）。大分類が1つしか出ないときは最初から開いておく。
+  // シートを出している大分類（1つだけ）。大分類が1つしか出ないときは最初から出しておく。
   const [openId, setOpenId] = useState<string | null>(() => (tops.length === 1 ? tops[0].id : null));
-  const listRef = useRef<HTMLDivElement>(null);
-  const rowRefs = useRef(new Map<string, HTMLDivElement>());
-  // 人が開いたときだけ上に寄せる（最初から開いている1つだけのときは寄せない）。
-  const scrollOnOpen = useRef(false);
-
-  // 開いた行を一覧の上に寄せる。scrollIntoView は枠（overflow-hidden）ごと動かしてしまうので、一覧のスクロールだけを送る。
-  useEffect(() => {
-    if (!scrollOnOpen.current) return;
-    scrollOnOpen.current = false;
-    const row = openId ? rowRefs.current.get(openId) : null;
-    if (row) listRef.current?.scrollTo({ top: row.offsetTop, behavior: 'smooth' });
-  }, [openId]);
-
-  const toggle = (top: MoneyCategory) => {
-    scrollOnOpen.current = openId !== top.id;
-    setOpenId(openId === top.id ? null : top.id);
-  };
+  const openTop = tops.find((top) => top.id === openId) ?? null;
 
   return (
     <StackedScreen onBack={onClose}>
@@ -82,58 +67,86 @@ export default function CategoryPicker({
           )
         }
       />
-      <div ref={listRef} className="relative flex flex-1 min-h-0 flex-col overflow-y-auto pb-2">
+      <div className="relative flex flex-1 min-h-0 flex-col overflow-y-auto pb-2">
         {tops.length === 0 && (
           <p className="py-6 text-center text-sm text-gray-400">カテゴリがまだありません。右上の歯車からカテゴリを作れます</p>
         )}
         {tops.map((top) => {
-          const children = childCategories(categories, top.id);
-          const open = openId === top.id;
-          const hasChildren = children.length > 0;
+          const hasChildren = childCategories(categories, top.id).length > 0;
           return (
-            <div
+            <button
               key={top.id}
-              ref={(el) => {
-                if (el) rowRefs.current.set(top.id, el);
-                else rowRefs.current.delete(top.id);
-              }}
-              className="shrink-0"
+              type="button"
+              aria-label={top.name}
+              onClick={() => (hasChildren ? setOpenId(top.id) : pickCategory(top.id))}
+              className="flex h-[60px] w-full shrink-0 items-center gap-3 border-b border-slate-100 px-4 text-left active:bg-slate-100"
             >
-              <button
-                type="button"
-                aria-label={top.name}
-                aria-expanded={hasChildren ? open : undefined}
-                onClick={() => (hasChildren ? toggle(top) : pickCategory(top.id))}
-                className={`flex w-full items-center gap-2.5 border-b border-slate-100 px-3.5 py-[11px] text-left active:bg-slate-100 ${open ? 'bg-gray-100' : ''}`}
-              >
-                <CategoryIcon iconKey={iconKeyOf(top)} size={30} />
-                <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-gray-900">{top.name}</span>
-                {hasChildren && (
-                  <>
-                    <span className="text-xs font-medium tabular-nums text-gray-400">{children.length}件</span>
-                    {open ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
-                  </>
-                )}
-              </button>
-              {open && hasChildren && (
-                <div className="flex flex-wrap gap-1.5 border-b border-slate-100 bg-gray-100 px-3.5 pb-3.5 pt-2">
-                  {children.map((category) => (
-                    <button
-                      key={category.id}
-                      type="button"
-                      aria-label={`${top.name} ${category.name}`}
-                      onClick={() => pickCategory(category.id)}
-                      className={chipClass}
-                    >
-                      {category.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+              <CategoryIcon iconKey={iconKeyOf(top)} size={32} />
+              <span className="min-w-0 flex-1 truncate text-base font-bold text-gray-900">{top.name}</span>
+              {hasChildren && <ChevronRight size={18} className="text-gray-500" />}
+            </button>
           );
         })}
       </div>
+      {openTop && (
+        <ChildSheet
+          top={openTop}
+          items={childCategories(categories, openTop.id)}
+          onPick={pickCategory}
+          onClose={() => setOpenId(null)}
+        />
+      )}
     </StackedScreen>
+  );
+}
+
+// 小分類のボトムシート。戻る操作（ブラウザ・スマホ）・暗い部分・「×」で閉じる。
+function ChildSheet({
+  top,
+  items,
+  onPick,
+  onClose,
+}: {
+  top: MoneyCategory;
+  items: MoneyCategory[];
+  onPick: (categoryId: string) => void;
+  onClose: () => void;
+}) {
+  useBackLayer(onClose);
+  const backdropClose = useBackdropClose(onClose);
+  return (
+    <div
+      className="absolute inset-0 z-50 flex items-end justify-center bg-black/50 p-4"
+      {...backdropClose}
+      {...swipeBoundary}
+    >
+      <div role="dialog" aria-label={`${top.name}の小分類`} className="flex max-h-[85%] w-full max-w-md flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
+        <div className="flex h-16 shrink-0 items-center gap-3 px-4">
+          <CategoryIcon iconKey={iconKeyOf(top)} size={36} />
+          <h3 className="min-w-0 flex-1 truncate text-lg font-bold text-gray-900">{top.name}</h3>
+          <button
+            type="button"
+            aria-label="閉じる"
+            onClick={onClose}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-100 text-gray-700 active:bg-gray-200"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 overflow-y-auto px-4 pb-6 sm:pb-4">
+          {items.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              aria-label={`${top.name} ${category.name}`}
+              onClick={() => onPick(category.id)}
+              className="flex min-h-[52px] items-center rounded-xl border border-gray-300 bg-white px-3 py-2 text-left text-[15px] font-semibold leading-tight text-gray-900 hover:bg-blue-50 active:border-blue-300 active:bg-blue-50"
+            >
+              {category.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
