@@ -258,6 +258,11 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
     'まだ来ていない日のものだけ（作ったもの・過ぎた日・振替は除く。25日が日曜なので前営業日の23日）',
   );
   assert.deepEqual(pendingRecurringInMonth([salary], [], '2026-09', '2026-10-20'), [], '過ぎた月は無い');
+  assert.deepEqual(
+    pendingRecurringInMonth([salary], [rec('pn', '2026-10-15', 200000, { kind: 'income', items: [{ id: 'i-pn', amount: 200000, categoryId: 'salary', name: '' }] as unknown as MoneyRecord['items'] })], '2026-10', '2026-10-20'),
+    [],
+    '人が手で入れた記録が同じ月・同じ小分類にあれば、自動の記録は作られない（二重にならない）',
+  );
 
   // 期間（開始月・終了月。docs/kakei.md §3.3）
   const leave = rule({ id: 'r9', categoryId: 'rent', amount: 1000, startMonth: '2026-06', endMonth: '2026-08' });
