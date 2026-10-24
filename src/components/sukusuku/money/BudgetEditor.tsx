@@ -6,6 +6,7 @@ import type {
   MoneyBudgetGroup,
   MoneyCategory,
   MoneyHolidayRule,
+  MoneyRatioTargets,
   MoneyRecord,
   MoneyRecurring,
   MoneyRecurringDraft,
@@ -46,6 +47,7 @@ import {
   insertMoneyCategory,
   insertMoneyRecurring,
   insertMoneyStore,
+  saveMoneyRatioTargets,
   updateMoneyCategory,
   updateMoneyRecurring,
 } from '@/lib/api/money';
@@ -75,9 +77,12 @@ interface BudgetEditorProps {
   wallets: MoneyWallet[];
   stores: MoneyStore[];
   records: MoneyRecord[];
+  /** 目標割合（docs/kakei.md §0.9）。年間予算の画面から決める。 */
+  ratioTargets: MoneyRatioTargets;
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
+  onRatioTargets: (targets: MoneyRatioTargets) => void;
   onClose: () => void;
 }
 
@@ -129,6 +134,22 @@ type Screen = { type: 'list' } | { type: 'top'; topId: string } | { type: 'form'
 
 const byPosition = (a: MoneyRecurring, b: MoneyRecurring) => a.position - b.position;
 
+/** 目標割合（種類ごと。固定費は確定＋見込みで1つ）の行。 */
+const RATIO_ROWS: { key: keyof MoneyRatioTargets; label: string }[] = [
+  { key: 'variable', label: '変動費' },
+  { key: 'reserve', label: '予備費' },
+  { key: 'fixed', label: '固定費' },
+];
+
+/** 入力の文字を割合（0〜100 の整数）にする。空は null、読めない・範囲外は undefined。 */
+function parsePercent(text: string): number | null | undefined {
+  const value = text.replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0)).replace(/[%％\s]/g, '');
+  if (value === '') return null;
+  if (!/^\d+$/.test(value)) return undefined;
+  const percent = Number(value);
+  return percent <= 100 ? percent : undefined;
+}
+
 /** 割合（収入に対する）。一桁は前に数字1つぶんの空き。 */
 const percentText = (value: number, base: number): string => {
   if (base <= 0) return '';
@@ -176,9 +197,11 @@ export default function BudgetEditor({
   wallets,
   stores,
   records,
+  ratioTargets,
   onCategories,
   onRecurring,
   onStores,
+  onRatioTargets,
   onClose,
 }: BudgetEditorProps) {
   const supabase = useMemo(() => createClient(), []);
@@ -300,6 +323,28 @@ export default function BudgetEditor({
     }
   };
 
+  /**
+   * 大分類を作る（予算の枠の大分類の選択から。変動費・収入だけ。ほかは大分類＝種類）。
+   * 予算が本体で、カテゴリは予算を表示するだけなので、カテゴリの設定を先にしなくても、ここで足せる。
+   */
+  const createTop = async (group: BudgetLineGroup, name: string): Promise<MoneyCategory | null> => {
+    try {
+      const kind = group === 'income' ? 'income' : 'living';
+      const created = await insertMoneyCategory(supabase, familyId, {
+        kind,
+        parentId: null,
+        name,
+        icon: guessIconKey(name),
+        position: topCategories(categories, kind, true).reduce((max, entry) => Math.max(max, entry.position + 1), 0),
+      });
+      putCategory(created);
+      return created;
+    } catch {
+      failed();
+      return null;
+    }
+  };
+
   const rename = async (target: MoneyCategory, name: string) => {
     setRenaming(null);
     if (name.trim() === '' || name.trim() === target.name) return;
@@ -381,6 +426,7 @@ export default function BudgetEditor({
         stores={stores}
         records={records}
         onCreateCategory={createCategory}
+        onCreateTop={createTop}
         onRenameCategory={setRenaming}
         onClose={pop}
         onSubmit={async (draft, group, topId, registerStore) => {
@@ -535,6 +581,7 @@ export default function BudgetEditor({
                 onClick={() => setSelected((current) => (current === group ? null : group))}
               />
             ))}
+            <RatioPanel familyId={familyId} targets={ratioTargets} onSaved={onRatioTargets} />
           </div>
 
           {shown('income') && section('income', ruleList('income'), totals.income)}
@@ -638,6 +685,125 @@ function Donut({ income, parts }: { income: number; parts: { group: SpendGroup; 
           {centerText}
         </text>
       </svg>
+    </div>
+  );
+}
+
+/**
+ * 目標割合（docs/kakei.md §0.9）。上の枠の下に折りたたんで出す（はじめは閉じる）。開くと、種類ごと（変動費・予備費・固定費）の
+ * 目標と、貯金（100% − 合計）。「編集」でその場で直す（合計が100%を超えると保存できない。空は目標なし）。
+ */
+function RatioPanel({ familyId, targets, onSaved }: { familyId: string; targets: MoneyRatioTargets; onSaved: (targets: MoneyRatioTargets) => void }) {
+  const supabase = useMemo(() => createClient(), []);
+  const textsOf = (value: MoneyRatioTargets): Record<keyof MoneyRatioTargets, string> => ({
+    variable: value.variable === null ? '' : String(value.variable),
+    reserve: value.reserve === null ? '' : String(value.reserve),
+    fixed: value.fixed === null ? '' : String(value.fixed),
+  });
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [texts, setTexts] = useState(() => textsOf(targets));
+  const [saving, setSaving] = useState(false);
+
+  const parsed = RATIO_ROWS.map((row) => (editing ? parsePercent(texts[row.key]) : targets[row.key]));
+  const invalid = parsed.some((value) => value === undefined);
+  const total = parsed.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+  const anySet = parsed.some((value) => value !== null && value !== undefined);
+  const over = total > 100;
+  const savings = anySet ? `${100 - total}%` : '−';
+
+  const toggle = () => {
+    if (open) setEditing(false);
+    setOpen(!open);
+  };
+  const startEdit = () => {
+    setTexts(textsOf(targets));
+    setEditing(true);
+  };
+  const save = async () => {
+    if (invalid || over || saving) return;
+    const next: MoneyRatioTargets = { variable: parsed[0] ?? null, reserve: parsed[1] ?? null, fixed: parsed[2] ?? null };
+    setSaving(true);
+    try {
+      await saveMoneyRatioTargets(supabase, familyId, next);
+      onSaved(next);
+      setEditing(false);
+    } catch {
+      window.alert('保存できませんでした。もう一度お試しください。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 border-t border-gray-200 pt-2">
+      <div className="flex items-center gap-2">
+        <button type="button" aria-expanded={open} onClick={toggle} className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 text-left">
+          {open ? <ChevronDown size={14} className="shrink-0 text-gray-500" /> : <ChevronRight size={14} className="shrink-0 text-gray-500" />}
+          <span className="shrink-0 text-[15px] font-extrabold text-gray-900">目標割合</span>
+          {!open && (
+            <span className="min-w-0 flex-1 truncate text-right text-xs font-semibold tabular-nums text-gray-500">
+              {anySet ? `合計${total}%・貯金${100 - total}%` : '未設定'}
+            </span>
+          )}
+        </button>
+        {open && !editing && (
+          <button type="button" onClick={startEdit} className="rounded-2xl bg-blue-100 px-3.5 py-1.5 text-[13px] font-bold text-blue-800 hover:bg-blue-200">
+            編集
+          </button>
+        )}
+        {open && editing && (
+          <>
+            <button type="button" onClick={() => setEditing(false)} className="px-2 py-1.5 text-[13px] font-bold text-blue-800">
+              キャンセル
+            </button>
+            <button
+              type="button"
+              disabled={invalid || over || saving}
+              onClick={() => void save()}
+              className="rounded-2xl bg-blue-600 px-3.5 py-1.5 text-[13px] font-bold text-white disabled:opacity-40"
+            >
+              {saving ? '保存中' : '保存'}
+            </button>
+          </>
+        )}
+      </div>
+      {open && (
+        <>
+          <div className="mt-2 flex gap-2">
+            {RATIO_ROWS.map((row, index) => (
+              <div key={row.key} className="flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[10px] bg-gray-100 px-1 py-2">
+                <span className="text-[11px] font-semibold text-gray-500">{row.label}</span>
+                {editing ? (
+                  <label className="flex items-center gap-0.5">
+                    <input
+                      value={texts[row.key]}
+                      onChange={(event) => setTexts((prev) => ({ ...prev, [row.key]: event.target.value }))}
+                      inputMode="numeric"
+                      placeholder="−"
+                      maxLength={3}
+                      aria-label={`${row.label}の目標（%）`}
+                      className={`w-10 rounded-lg border bg-white px-1.5 py-[3px] text-right text-base font-extrabold tabular-nums text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400 ${parsed[index] === undefined ? 'border-red-500' : 'border-gray-300'}`}
+                    />
+                    <span className="text-[13px] font-semibold text-gray-500">%</span>
+                  </label>
+                ) : (
+                  <span className="text-[17px] font-extrabold tabular-nums text-gray-900">{targets[row.key] === null ? '−' : `${targets[row.key]}%`}</span>
+                )}
+              </div>
+            ))}
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[10px] bg-gray-100 px-1 py-2">
+              <span className="text-[11px] font-semibold text-gray-500">貯金</span>
+              <span className={`text-[17px] font-extrabold tabular-nums ${over ? 'text-red-600' : anySet ? 'text-green-700' : 'text-gray-900'}`}>{savings}</span>
+            </div>
+          </div>
+          {editing && (
+            <p className={`mt-2 text-xs font-medium ${over ? 'text-red-600' : 'text-gray-500'}`}>
+              {over ? '合計が100%を超えています' : '収入に対して、種類ごとに何%までに収めたいか。固定費は確定と見込みで1つ。貯金は 100% − 合計。'}
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -790,6 +956,7 @@ function BudgetForm({
   stores,
   records,
   onCreateCategory,
+  onCreateTop,
   onRenameCategory,
   onClose,
   onSubmit,
@@ -804,6 +971,7 @@ function BudgetForm({
   stores: MoneyStore[];
   records: MoneyRecord[];
   onCreateCategory: (group: BudgetLineGroup, topId: string | null, name: string) => Promise<MoneyCategory | null>;
+  onCreateTop: (group: BudgetLineGroup, name: string) => Promise<MoneyCategory | null>;
   onRenameCategory: (category: MoneyCategory) => void;
   onClose: () => void;
   onSubmit: (draft: MoneyRecurringDraft, group: BudgetLineGroup, topId: string | null, registerStore: boolean) => Promise<void>;
@@ -1058,28 +1226,34 @@ function BudgetForm({
         </ModalShell>
       )}
       {sheet === 'top' && (
-        <ModalShell title="大分類" onClose={() => setSheet(null)} footer={null}>
-          <div className="overflow-hidden rounded-xl border border-gray-200">
-            {topsOf(group).map((entry, index) => (
-              <OptionRow
-                key={entry.id}
-                first={index === 0}
-                label={entry.name}
-                selected={entry.id === topId}
-                onClick={() => {
-                  setTopId(entry.id);
-                  // まとめて（大分類）を選んでいたら、選んだ大分類のまとめてにする。
-                  if (selectedCategory !== null && selectedCategory.parentId === null) setCategoryId(entry.id);
-                  setSheet(null);
-                }}
-              />
-            ))}
-          </div>
-        </ModalShell>
+        <NameSheet
+          title="大分類"
+          placeholder="新しい大分類の名前"
+          choices={topsOf(group).map((entry) => ({ id: entry.id, label: entry.name }))}
+          selectedId={topId}
+          onClose={() => setSheet(null)}
+          onPick={(id) => {
+            setTopId(id);
+            // まとめて（大分類）を選んでいたら、選んだ大分類のまとめてにする。
+            if (selectedCategory !== null && selectedCategory.parentId === null) setCategoryId(id);
+            setSheet(null);
+          }}
+          onCreate={async (newName) => {
+            const created = await onCreateTop(group, newName);
+            if (created) {
+              setTopId(created.id);
+              if (selectedCategory !== null && selectedCategory.parentId === null) setCategoryId(created.id);
+            }
+            setSheet(null);
+          }}
+        />
       )}
       {sheet === 'category' && (
-        <CategorySheet
-          choices={categoryChoices}
+        <NameSheet
+          title="小分類"
+          placeholder="新しい小分類の名前"
+          choices={categoryChoices.map((entry) => ({ id: entry.category.id, label: entry.label }))}
+          renameLabel="選んでいる小分類の名前を直す"
           selectedId={categoryId}
           onClose={() => setSheet(null)}
           onPick={(id) => {
@@ -1216,21 +1390,27 @@ function OptionRow({ label, selected, first, onClick }: { label: string; selecte
   );
 }
 
-/** 小分類を選ぶ。一番下で新しく作る。選んでいる小分類の名前もここから直す。 */
-function CategorySheet({
+/** 大分類・小分類を選ぶ。一番下で新しく作る。選んでいる小分類の名前もここから直す。 */
+function NameSheet({
+  title,
+  placeholder,
   choices,
   selectedId,
   onClose,
   onPick,
   onCreate,
   onRename,
+  renameLabel,
 }: {
-  choices: { category: MoneyCategory; label: string }[];
+  title: string;
+  placeholder: string;
+  choices: { id: string; label: string }[];
   selectedId: string | null;
   onClose: () => void;
-  onPick: (categoryId: string) => void;
+  onPick: (id: string) => void;
   onCreate: (name: string) => Promise<void>;
   onRename?: () => void;
+  renameLabel?: string;
 }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -1244,17 +1424,11 @@ function CategorySheet({
     }
   };
   return (
-    <ModalShell title="小分類" onClose={onClose} footer={null}>
+    <ModalShell title={title} onClose={onClose} footer={null}>
       <div className="space-y-2">
         <div className="overflow-hidden rounded-xl border border-gray-200">
           {choices.map((entry, index) => (
-            <OptionRow
-              key={entry.category.id}
-              first={index === 0}
-              label={entry.label}
-              selected={entry.category.id === selectedId}
-              onClick={() => onPick(entry.category.id)}
-            />
+            <OptionRow key={entry.id} first={index === 0} label={entry.label} selected={entry.id === selectedId} onClick={() => onPick(entry.id)} />
           ))}
           <div className={`flex min-h-[46px] items-center gap-2.5 px-3.5 py-2.5 ${choices.length > 0 ? dividedClass : ''}`}>
             <Plus size={16} className="shrink-0 text-blue-600" />
@@ -1265,8 +1439,8 @@ function CategorySheet({
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void create();
               }}
-              placeholder="新しい小分類の名前"
-              aria-label="新しい小分類の名前"
+              placeholder={placeholder}
+              aria-label={placeholder}
             />
             {name.trim() !== '' && (
               <button type="button" onClick={() => void create()} className="shrink-0 text-sm font-bold text-blue-600">
@@ -1277,7 +1451,7 @@ function CategorySheet({
         </div>
         {onRename && (
           <button type="button" onClick={onRename} className="w-full py-2.5 text-sm font-bold text-blue-600">
-            選んでいる小分類の名前を直す
+            {renameLabel}
           </button>
         )}
       </div>

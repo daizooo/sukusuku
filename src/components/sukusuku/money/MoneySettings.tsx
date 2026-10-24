@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeftRight, ChevronRight, Mail, Percent, PiggyBank, Store, Tag, type LucideIcon } from 'lucide-react';
+import { ArrowLeftRight, ChevronRight, Mail, PiggyBank, Store, Tag, type LucideIcon } from 'lucide-react';
 import type {
   MoneyBudget,
   MoneyCategory,
@@ -17,12 +17,11 @@ import BudgetEditor from './BudgetEditor';
 import RecurringSettings from './RecurringSettings';
 import StoreSettings from './StoreSettings';
 import MoneyFeedSettings from './MoneyFeedSettings';
-import RatioTargetSettings from './RatioTargetSettings';
 import { FullScreen, ScreenHeader } from './moneyVisual';
 
 // 家計の設定（docs/kakei.md §3.5）。mobile版の `mobile/src/components/money/MoneySettings.tsx` と同じ並び・文言。
 //
-// 年間予算（予算・カテゴリ・自動記録をまとめて決める。2026-10-23。docs/kakei.md §0.8）・目安の割合（§0.9）・カテゴリ（アイコン・並び）・振替の自動記録・
+// 年間予算（予算・カテゴリ・自動記録をまとめて決める。2026-10-23。docs/kakei.md §0.8）（目標割合〔§0.9〕もここで決める。2026-10-24）・カテゴリ（アイコン・並び）・振替の自動記録・
 // よく行くお店を、いつでも編集・追加できる入口（出金元は「口座」の面で足す・直す。2026-10-08）。ここで直すのは設定データだけで、記録は変わらない
 // （お店の名前を直しても、過去の記録のお店の名前はそのまま）。
 // 戻る操作（ブラウザの戻る）は、開いている設定の面から入口へ、入口から家計タブへ。
@@ -44,7 +43,7 @@ interface MoneySettingsProps {
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
   /** 開いたときに編集を開く振替の自動記録。 */
   initialRecurringId?: string | null;
-  /** 目安の割合（docs/kakei.md §0.9）。 */
+  /** 目標割合（docs/kakei.md §0.9）。 */
   ratioTargets: MoneyRatioTargets;
   onRatioTargets: (targets: MoneyRatioTargets) => void;
   /** Zaim 取り込み（docs/kakei.md §9.5.6）。null は読み込み中。 */
@@ -54,7 +53,7 @@ interface MoneySettingsProps {
   onClose: () => void;
 }
 
-type Page = 'menu' | 'categories' | 'budget' | 'ratio' | 'stores' | 'recurring' | 'feed';
+type Page = 'menu' | 'categories' | 'budget' | 'stores' | 'recurring' | 'feed';
 
 export default function MoneySettings({
   familyId,
@@ -83,10 +82,9 @@ export default function MoneySettings({
   const [recurringTarget, setRecurringTarget] = useState<string | null>(initialRecurringId);
 
   const rows: { id: Exclude<Page, 'menu'>; label: string; icon: LucideIcon }[] = [
-    { id: 'budget', label: '年間予算（カテゴリ・自動記録）', icon: PiggyBank },
-    { id: 'ratio', label: '目安の割合', icon: Percent },
-    { id: 'categories', label: 'カテゴリのアイコン・並び', icon: Tag },
-    { id: 'recurring', label: '振替の自動記録', icon: ArrowLeftRight },
+    { id: 'budget', label: '年間予算', icon: PiggyBank },
+    { id: 'categories', label: 'カテゴリ', icon: Tag },
+    { id: 'recurring', label: '振替', icon: ArrowLeftRight },
     { id: 'stores', label: 'よく行くお店', icon: Store },
     { id: 'feed', label: 'Gmail 取り込み', icon: Mail },
   ];
@@ -121,9 +119,6 @@ export default function MoneySettings({
             })}
           </div>
         </>
-      )}
-      {page === 'ratio' && (
-        <RatioTargetSettings familyId={familyId} targets={ratioTargets} onSaved={onRatioTargets} onBack={back} />
       )}
       {page === 'stores' && <StoreSettings familyId={familyId} stores={stores} onStores={onStores} onBack={back} />}
       {page === 'feed' && (
@@ -167,9 +162,11 @@ export default function MoneySettings({
           wallets={wallets}
           stores={stores}
           records={records}
+          ratioTargets={ratioTargets}
           onCategories={onCategories}
           onRecurring={onRecurring}
           onStores={onStores}
+          onRatioTargets={onRatioTargets}
           onClose={back}
         />
       )}

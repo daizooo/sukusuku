@@ -218,7 +218,7 @@ export default function RecurringSettings({
         />
       ) : (
         <>
-          <ScreenHeader title="振替の自動記録" icon="back" onClose={onBack} />
+          <ScreenHeader title="振替" icon="back" onClose={onBack} />
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {usable.length === 0 && <p className="py-4 text-center text-sm text-gray-400">まだありません</p>}

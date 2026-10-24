@@ -226,7 +226,7 @@ export default function RecurringSettings({
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="振替の自動記録" icon="back" onClose={onBack} />
+      <ScreenHeader title="振替" icon="back" onClose={onBack} />
       <View style={styles.flex}>
       <ScrollView contentContainerStyle={styles.content} scrollEnabled={!drag.isActive}>
         {usable.length === 0 && <Text style={styles.empty}>まだありません</Text>}

@@ -148,7 +148,7 @@ export default function MoneyTab({ familyId }: { familyId: string }) {
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
   // 月の締め（docs/kakei.md §4.5）。
   const [closings, setClosings] = useState<MoneyMonth[]>([]);
-  // 目安の割合（docs/kakei.md §0.9）
+  // 目標割合（docs/kakei.md §0.9）
   const [ratioTargets, setRatioTargets] = useState<MoneyRatioTargets>({ variable: null, reserve: null, fixed: null });
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
   const [isLoading, setIsLoading] = useState(true);

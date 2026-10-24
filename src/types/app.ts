@@ -569,7 +569,7 @@ export interface MoneyMonth {
 }
 
 /**
- * 目安の割合（docs/kakei.md §0.9）。money_ratio_targets に対応。支出の種類ごとの、収入に対する目安（%）。
+ * 目標割合（docs/kakei.md §0.9）。money_ratio_targets に対応。支出の種類ごとの、収入に対する目標（%）。
  * fixed は固定費全体（確定＋見込み）。決めていない種類は null。年の振り返りの見出しに出す。
  */
 export interface MoneyRatioTargets {

@@ -65,8 +65,8 @@ import { yearTrendPoints } from '@/lib/yearTrend';
 //   収入は締めるまで予算）。2026年は10〜12月の3か月だけ（集計を始めた年の特例。MONEY_COUNT_START）
 // - 年の「推移」（§4.8）: 月ごとの収支（棒）と年初からの累計（折れ線）。締めた月は実線、ほかは点線
 // - その下は、変動費 → 予備費 → 固定費（中に確定・見込み）→ カテゴリなし の見出しごと（buildReviewSections）。見出しを押すと折りたたむ。
-//   はじめは変動費・予備費を開き、固定費は閉じておく。年の見出しの右に、実績の割合（その種類の支出の実績 ÷ 年の収入）と目安の割合
-//   （家計の設定の「目安の割合」）を「11%（目安35%）」の形で出す（目安を超えたら赤。月には出さない）
+//   はじめは変動費・予備費を開き、固定費は閉じておく。年の見出しの右に、実績の割合（その種類の支出の実績 ÷ 年の収入）と目標割合
+//   （年間予算の画面の「目標割合」）を「11%（目標35%）」の形で出す（目標を超えたら赤。月には出さない）
 //   - 変動費: 大分類ごとに、予算 − 実績・使った割合の帯・「実績 / 予算・%」
 //   - 予備費: 記録のあった小分類。年は年の予算と比べる（変動費と同じ行）、月は額だけ
 //   - 固定費: 記録のあった小分類の額。見込みは「予算より ¥x」を添える
@@ -103,7 +103,7 @@ interface MoneyReviewViewProps {
   onSetMonthClosed: (monthKey: string, closed: boolean) => void;
   /** 予算の明細（収入・予備費・固定費。年の収支見込みと、予備費・固定費の予算。docs/kakei.md §0.7）。 */
   budgetLines: MoneyBudgetLine[];
-  /** 目安の割合（docs/kakei.md §0.9）。年の見出しに出す。 */
+  /** 目標割合（docs/kakei.md §0.9）。年の見出しに出す。 */
   ratioTargets: MoneyRatioTargets;
   /** 未確認の明細を開く。締めの画面からは、その月（日付未定の見込みもその月の分を出す）。 */
   onOpenFeed: (monthKey?: string) => void;
@@ -191,7 +191,7 @@ export default function MoneyReviewView({
     return { count: list.length, amount: list.reduce((sum, record) => sum + recordTotal(record), 0) };
   }, [isMonth, monthKey, year, today, records]);
 
-  // 年の見出しの右の割合（実績の割合〔目安〕。目安を決めていない種類は出さない）。
+  // 年の見出しの右の割合（実績の割合〔目標〕。目標を決めていない種類は出さない）。
   const ratioOf = (spend: number, target: number | null): ReactNode => {
     if (isMonth || target === null) return null;
     const ratio = spendRatio(spend, income);
@@ -199,7 +199,7 @@ export default function MoneyReviewView({
     return (
       <span className="text-xs font-semibold tabular-nums text-gray-400">
         <span className={`text-[13px] font-extrabold ${ratio > target ? 'text-red-600' : 'text-gray-900'}`}>{`${ratio}%`}</span>
-        {`（目安${target}%）`}
+        {`（目標${target}%）`}
       </span>
     );
   };
@@ -245,7 +245,7 @@ export default function MoneyReviewView({
     );
 
   const fixedCount = sections === null ? 0 : sections.confirmed.length + sections.estimate.length;
-  // 年は目安を決めていれば記録が無くても見出しを出す（割合を見るため）。
+  // 年は目標を決めていれば記録が無くても見出しを出す（割合を見るため）。
   const showSection = (count: number, target: number | null) => count > 0 || (!isMonth && target !== null);
 
   return (

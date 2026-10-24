@@ -8,6 +8,7 @@ import type {
   MoneyBudgetGroup,
   MoneyCategory,
   MoneyHolidayRule,
+  MoneyRatioTargets,
   MoneyRecord,
   MoneyRecurring,
   MoneyRecurringDraft,
@@ -50,6 +51,7 @@ import {
   insertMoneyCategory,
   insertMoneyRecurring,
   insertMoneyStore,
+  saveMoneyRatioTargets,
   updateMoneyCategory,
   updateMoneyRecurring,
 } from '@/lib/api/money';
@@ -80,9 +82,12 @@ interface BudgetEditorProps {
   wallets: MoneyWallet[];
   stores: MoneyStore[];
   records: MoneyRecord[];
+  /** 目標割合（docs/kakei.md §0.9）。年間予算の画面から決める。 */
+  ratioTargets: MoneyRatioTargets;
   onCategories: (update: (prev: MoneyCategory[]) => MoneyCategory[]) => void;
   onRecurring: (update: (prev: MoneyRecurring[]) => MoneyRecurring[]) => void;
   onStores: (update: (prev: MoneyStore[]) => MoneyStore[]) => void;
+  onRatioTargets: (targets: MoneyRatioTargets) => void;
   onClose: () => void;
 }
 
@@ -133,6 +138,22 @@ type Screen = { type: 'list' } | { type: 'top'; topId: string } | { type: 'form'
 
 const byPosition = (a: MoneyRecurring, b: MoneyRecurring) => a.position - b.position;
 
+/** 目標割合（種類ごと。固定費は確定＋見込みで1つ）の行。 */
+const RATIO_ROWS: { key: keyof MoneyRatioTargets; label: string }[] = [
+  { key: 'variable', label: '変動費' },
+  { key: 'reserve', label: '予備費' },
+  { key: 'fixed', label: '固定費' },
+];
+
+/** 入力の文字を割合（0〜100 の整数）にする。空は null、読めない・範囲外は undefined。 */
+function parsePercent(text: string): number | null | undefined {
+  const value = text.replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0)).replace(/[%％\s]/g, '');
+  if (value === '') return null;
+  if (!/^\d+$/.test(value)) return undefined;
+  const percent = Number(value);
+  return percent <= 100 ? percent : undefined;
+}
+
 /** 割合（収入に対する）。一桁は前に数字1つぶんの空き。 */
 const percentText = (value: number, base: number): string => {
   if (base <= 0) return '';
@@ -172,9 +193,11 @@ export default function BudgetEditor({
   wallets,
   stores,
   records,
+  ratioTargets,
   onCategories,
   onRecurring,
   onStores,
+  onRatioTargets,
   onClose,
 }: BudgetEditorProps) {
   const insets = useSafeAreaInsets();
@@ -296,6 +319,28 @@ export default function BudgetEditor({
     }
   };
 
+  /**
+   * 大分類を作る（予算の枠の大分類の選択から。変動費・収入だけ。ほかは大分類＝種類）。
+   * 予算が本体で、カテゴリは予算を表示するだけなので、カテゴリの設定を先にしなくても、ここで足せる。
+   */
+  const createTop = async (group: BudgetLineGroup, name: string): Promise<MoneyCategory | null> => {
+    try {
+      const kind = group === 'income' ? 'income' : 'living';
+      const created = await insertMoneyCategory(supabase, familyId, {
+        kind,
+        parentId: null,
+        name,
+        icon: guessIconKey(name),
+        position: topCategories(categories, kind, true).reduce((max, entry) => Math.max(max, entry.position + 1), 0),
+      });
+      putCategory(created);
+      return created;
+    } catch {
+      failed();
+      return null;
+    }
+  };
+
   const rename = async (target: MoneyCategory, name: string) => {
     setRenaming(null);
     if (name.trim() === '' || name.trim() === target.name) return;
@@ -391,6 +436,7 @@ export default function BudgetEditor({
         stores={stores}
         records={records}
         onCreateCategory={createCategory}
+        onCreateTop={createTop}
         onRenameCategory={setRenaming}
         onClose={pop}
         onSubmit={async (draft, group, topId, registerStore) => {
@@ -545,6 +591,7 @@ export default function BudgetEditor({
                 onPress={() => setSelected((current) => (current === group ? null : group))}
               />
             ))}
+            <RatioPanel familyId={familyId} targets={ratioTargets} onSaved={onRatioTargets} />
           </View>
 
           {shown('income') && section('income', ruleList('income'), totals.income)}
@@ -779,6 +826,7 @@ function BudgetForm({
   stores,
   records,
   onCreateCategory,
+  onCreateTop,
   onRenameCategory,
   onClose,
   onSubmit,
@@ -793,6 +841,7 @@ function BudgetForm({
   stores: MoneyStore[];
   records: MoneyRecord[];
   onCreateCategory: (group: BudgetLineGroup, topId: string | null, name: string) => Promise<MoneyCategory | null>;
+  onCreateTop: (group: BudgetLineGroup, name: string) => Promise<MoneyCategory | null>;
   onRenameCategory: (category: MoneyCategory) => void;
   onClose: () => void;
   onSubmit: (draft: MoneyRecurringDraft, group: BudgetLineGroup, topId: string | null, registerStore: boolean) => Promise<void>;
@@ -1056,30 +1105,33 @@ function BudgetForm({
         </SheetModal>
       )}
       {sheet === 'top' && (
-        <SheetModal visible onClose={() => setSheet(null)}>
-          <LogModalShell title="大分類" onClose={() => setSheet(null)}>
-            <View style={styles.options}>
-              {topsOf(group).map((entry, index) => (
-                <OptionRow
-                  key={entry.id}
-                  first={index === 0}
-                  label={entry.name}
-                  selected={entry.id === topId}
-                  onPress={() => {
-                    setTopId(entry.id);
-                    // まとめて（大分類）を選んでいたら、選んだ大分類のまとめてにする。
-                    if (selectedCategory !== null && selectedCategory.parentId === null) setCategoryId(entry.id);
-                    setSheet(null);
-                  }}
-                />
-              ))}
-            </View>
-          </LogModalShell>
-        </SheetModal>
+        <NameSheet
+          title="大分類"
+          placeholder="新しい大分類の名前"
+          choices={topsOf(group).map((entry) => ({ id: entry.id, label: entry.name }))}
+          selectedId={topId}
+          onClose={() => setSheet(null)}
+          onPick={(id) => {
+            setTopId(id);
+            // まとめて（大分類）を選んでいたら、選んだ大分類のまとめてにする。
+            if (selectedCategory !== null && selectedCategory.parentId === null) setCategoryId(id);
+            setSheet(null);
+          }}
+          onCreate={async (newName) => {
+            const created = await onCreateTop(group, newName);
+            if (created) {
+              setTopId(created.id);
+              if (selectedCategory !== null && selectedCategory.parentId === null) setCategoryId(created.id);
+            }
+            setSheet(null);
+          }}
+        />
       )}
       {sheet === 'category' && (
-        <CategorySheet
-          choices={categoryChoices}
+        <NameSheet
+          title="小分類"
+          placeholder="新しい小分類の名前"
+          choices={categoryChoices.map((entry) => ({ id: entry.category.id, label: entry.label }))}
           selectedId={categoryId}
           onClose={() => setSheet(null)}
           onPick={(id) => {
@@ -1091,6 +1143,7 @@ function BudgetForm({
             if (created) setCategoryId(created.id);
             setSheet(null);
           }}
+          renameLabel="選んでいる小分類の名前を直す"
           onRename={
             selectedCategory !== null && selectedCategory.parentId !== null
               ? () => {
@@ -1244,21 +1297,27 @@ function OptionRow({ label, selected, first, onPress }: { label: string; selecte
   );
 }
 
-/** 小分類を選ぶ。一番下で新しく作る。選んでいる小分類の名前もここから直す。 */
-function CategorySheet({
+/** 大分類・小分類を選ぶ。一番下で新しく作る。選んでいる小分類の名前もここから直す。 */
+function NameSheet({
+  title,
+  placeholder,
   choices,
   selectedId,
   onClose,
   onPick,
   onCreate,
   onRename,
+  renameLabel,
 }: {
-  choices: { category: MoneyCategory; label: string }[];
+  title: string;
+  placeholder: string;
+  choices: { id: string; label: string }[];
   selectedId: string | null;
   onClose: () => void;
-  onPick: (categoryId: string) => void;
+  onPick: (id: string) => void;
   onCreate: (name: string) => Promise<void>;
   onRename?: () => void;
+  renameLabel?: string;
 }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -1273,16 +1332,10 @@ function CategorySheet({
   };
   return (
     <SheetModal visible onClose={onClose}>
-      <LogModalShell title="小分類" onClose={onClose}>
+      <LogModalShell title={title} onClose={onClose}>
         <View style={styles.options}>
           {choices.map((entry, index) => (
-            <OptionRow
-              key={entry.category.id}
-              first={index === 0}
-              label={entry.label}
-              selected={entry.category.id === selectedId}
-              onPress={() => onPick(entry.category.id)}
-            />
+            <OptionRow key={entry.id} first={index === 0} label={entry.label} selected={entry.id === selectedId} onPress={() => onPick(entry.id)} />
           ))}
           <View style={[styles.item, choices.length > 0 && styles.divided]}>
             <Plus size={16} color={colors.money} />
@@ -1290,7 +1343,7 @@ function CategorySheet({
               style={[styles.inlineInput, styles.newInput]}
               value={name}
               onChangeText={setName}
-              placeholder="新しい小分類の名前"
+              placeholder={placeholder}
               placeholderTextColor={colors.textFaint}
               returnKeyType="done"
               onSubmitEditing={() => void create()}
@@ -1304,11 +1357,126 @@ function CategorySheet({
         </View>
         {onRename && (
           <Pressable accessibilityRole="button" onPress={onRename} style={styles.linkRow}>
-            <Text style={styles.linkText}>選んでいる小分類の名前を直す</Text>
+            <Text style={styles.linkText}>{renameLabel}</Text>
           </Pressable>
         )}
       </LogModalShell>
     </SheetModal>
+  );
+}
+
+/**
+ * 目標割合（docs/kakei.md §0.9）。上の枠の下に折りたたんで出す（はじめは閉じる）。開くと、種類ごと（変動費・予備費・固定費）の
+ * 目標と、貯金（100% − 合計）。「編集」でその場で直す（合計が100%を超えると保存できない。空は目標なし）。
+ */
+function RatioPanel({ familyId, targets, onSaved }: { familyId: string; targets: MoneyRatioTargets; onSaved: (targets: MoneyRatioTargets) => void }) {
+  const textsOf = (value: MoneyRatioTargets): Record<keyof MoneyRatioTargets, string> => ({
+    variable: value.variable === null ? '' : String(value.variable),
+    reserve: value.reserve === null ? '' : String(value.reserve),
+    fixed: value.fixed === null ? '' : String(value.fixed),
+  });
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [texts, setTexts] = useState(() => textsOf(targets));
+  const [saving, setSaving] = useState(false);
+
+  const parsed = RATIO_ROWS.map((row) => (editing ? parsePercent(texts[row.key]) : targets[row.key]));
+  const invalid = parsed.some((value) => value === undefined);
+  const total = parsed.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+  const anySet = parsed.some((value) => value !== null && value !== undefined);
+  const over = total > 100;
+  const savings = anySet ? `${100 - total}%` : '−';
+
+  const toggle = () => {
+    if (open) setEditing(false);
+    setOpen(!open);
+  };
+  const startEdit = () => {
+    setTexts(textsOf(targets));
+    setEditing(true);
+  };
+  const save = async () => {
+    if (invalid || over || saving) return;
+    const next: MoneyRatioTargets = { variable: parsed[0] ?? null, reserve: parsed[1] ?? null, fixed: parsed[2] ?? null };
+    setSaving(true);
+    try {
+      await saveMoneyRatioTargets(supabase, familyId, next);
+      onSaved(next);
+      setEditing(false);
+    } catch {
+      Alert.alert('保存できませんでした', 'もう一度お試しください。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={styles.ratio}>
+      <View style={styles.ratioHead}>
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={toggle} style={styles.ratioToggle}>
+          {open ? <ChevronDown size={14} color={colors.textMuted} /> : <ChevronRight size={14} color={colors.textMuted} />}
+          <Text style={styles.ratioTitle}>目標割合</Text>
+          {!open && <Text style={styles.ratioSummary}>{anySet ? `合計${total}%・貯金${100 - total}%` : '未設定'}</Text>}
+        </Pressable>
+        {open && !editing && (
+          <Pressable accessibilityRole="button" onPress={startEdit} style={styles.ratioButton}>
+            <Text style={styles.ratioButtonText}>編集</Text>
+          </Pressable>
+        )}
+        {open && editing && (
+          <>
+            <Pressable accessibilityRole="button" onPress={() => setEditing(false)} style={styles.ratioCancel}>
+              <Text style={styles.ratioButtonText}>キャンセル</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={invalid || over || saving}
+              onPress={() => void save()}
+              style={[styles.ratioButton, styles.ratioSave, (invalid || over || saving) && styles.ratioDisabled]}
+            >
+              <Text style={[styles.ratioButtonText, styles.ratioSaveText]}>{saving ? '保存中' : '保存'}</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+      {open && (
+        <>
+          <View style={styles.ratioTiles}>
+            {RATIO_ROWS.map((row, index) => (
+              <View key={row.key} style={styles.ratioTile}>
+                <Text style={styles.ratioTileLabel}>{row.label}</Text>
+                {editing ? (
+                  <View style={styles.ratioInputRow}>
+                    <TextInput
+                      value={texts[row.key]}
+                      onChangeText={(text) => setTexts((prev) => ({ ...prev, [row.key]: text }))}
+                      keyboardType="number-pad"
+                      placeholder="−"
+                      placeholderTextColor={colors.textFaint}
+                      maxLength={3}
+                      accessibilityLabel={`${row.label}の目標（%）`}
+                      style={[styles.ratioInput, parsed[index] === undefined && styles.ratioInputError]}
+                    />
+                    <Text style={styles.ratioUnit}>%</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.ratioTileValue}>{targets[row.key] === null ? '−' : `${targets[row.key]}%`}</Text>
+                )}
+              </View>
+            ))}
+            <View style={styles.ratioTile}>
+              <Text style={styles.ratioTileLabel}>貯金</Text>
+              <Text style={[styles.ratioTileValue, over ? styles.ratioOver : anySet ? styles.ratioSavings : null]}>{savings}</Text>
+            </View>
+          </View>
+          {editing && (
+            <Text style={[styles.ratioHint, over && styles.ratioOver]}>
+              {over ? '合計が100%を超えています' : '収入に対して、種類ごとに何%までに収めたいか。固定費は確定と見込みで1つ。貯金は 100% − 合計。'}
+            </Text>
+          )}
+        </>
+      )}
+    </View>
   );
 }
 
@@ -1361,6 +1529,42 @@ const styles = StyleSheet.create({
   legendAmount: { flex: 1, textAlign: 'right', fontSize: 14, fontWeight: '600', color: colors.text, fontVariant: ['tabular-nums'] },
   legendMainAmount: { flex: 1, textAlign: 'right', fontSize: 16, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   selectedText: { color: colors.moneyText },
+  // 目標割合（上の枠の下。折りたたみ）
+  ratio: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border },
+  ratioHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ratioToggle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32 },
+  ratioTitle: { fontSize: 15, fontWeight: '800', color: colors.text },
+  ratioSummary: { flex: 1, textAlign: 'right', fontSize: 12, fontWeight: '600', color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  ratioButton: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: colors.moneySoft },
+  ratioCancel: { paddingHorizontal: 8, paddingVertical: 6 },
+  ratioButtonText: { fontSize: 13, fontWeight: '700', color: colors.moneyText },
+  ratioSave: { backgroundColor: colors.money },
+  ratioSaveText: { color: colors.surface },
+  ratioDisabled: { opacity: 0.4 },
+  ratioTiles: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  ratioTile: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 8, paddingHorizontal: 4, borderRadius: 10, backgroundColor: colors.neutralSurface },
+  ratioTileLabel: { fontSize: 11, fontWeight: '600', color: colors.textMuted },
+  ratioTileValue: { fontSize: 17, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
+  ratioSavings: { color: colors.moneyIncome },
+  ratioOver: { color: colors.moneyOver },
+  ratioInputRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  ratioInput: {
+    minWidth: 40,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text,
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+  },
+  ratioInputError: { borderColor: colors.moneyOver },
+  ratioUnit: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  ratioHint: { marginTop: 8, fontSize: 12, fontWeight: '500', color: colors.textMuted },
   // 一覧（見出しで区切る。行は枠を付けず、線だけ）
   section: { gap: 4 },
   sectionHead: {
