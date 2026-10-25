@@ -52,7 +52,7 @@ class NursingAlarmModule : Module() {
     /**
      * 起床アラームを予約する（既にあれば置き換える）。
      *
-     * @param triggerAt 鳴らす時刻(epoch ms)。目安の時刻の15分前。
+     * @param triggerAt 鳴らす時刻(epoch ms)。目安の時刻の5分前。
      * @param dueAt 次の授乳の目安の時刻(epoch ms)。通知の文面と、再鳴動の打ち切りに使う。
      */
     AsyncFunction("scheduleWakeAlarm") { triggerAt: Double, dueAt: Double ->

@@ -56,7 +56,7 @@ const fed = (iso: string): LastFeeding => ({
 });
 const base = { enabled: true, quiet: night, intervalMinutes: INTERVAL };
 
-// 夜 0:30 に飲ませ始めた → 目安 3:30（おやすみ中）→ 3:15 に鳴らす。
+// 夜 0:30 に飲ませ始めた → 目安 3:30（おやすみ中）→ 3:25 に鳴らす。
 {
   const plan = planWakeAlarm({
     ...base,
@@ -65,7 +65,7 @@ const base = { enabled: true, quiet: night, intervalMinutes: INTERVAL };
   });
   assert.ok(plan);
   assert.equal(plan.dueAt, jst('03:30'));
-  assert.equal(plan.triggerAt, jst('03:15'));
+  assert.equal(plan.triggerAt, jst('03:25'));
   assert.equal(plan.dueAt - plan.triggerAt, WAKE_LEAD_MINUTES * 60_000);
 }
 
@@ -75,7 +75,7 @@ assert.equal(
   null,
 );
 
-// 目安が 6:00 ちょうど → 外。5:59 → 中。判定は目安の時刻（鳴らす時刻 5:44 は中でも外でもよい）。
+// 目安が 6:00 ちょうど → 外。5:59 → 中。判定は目安の時刻（鳴らす時刻 5:54 は中でも外でもよい）。
 assert.equal(
   planWakeAlarm({ ...base, lastFeeding: fed('2026-10-05T03:00:00+09:00'), now: jst('03:10') }),
   null,
@@ -88,29 +88,29 @@ assert.equal(
     now: jst('03:10'),
   });
   assert.ok(plan, '目安 5:59 は中');
-  assert.equal(plan.triggerAt, jst('05:44'));
+  assert.equal(plan.triggerAt, jst('05:54'));
 }
 
-// 目安が 22:10（中）で、鳴らす時刻 21:55 は時間の外にはみ出ても鳴らす。
+// 目安が 22:03（中）で、鳴らす時刻 21:58 は時間の外にはみ出ても鳴らす。
 {
   const plan = planWakeAlarm({
     ...base,
-    lastFeeding: fed('2026-10-05T19:10:00+09:00'),
+    lastFeeding: fed('2026-10-05T19:03:00+09:00'),
     now: jst('19:20'),
   });
   assert.ok(plan);
-  assert.equal(plan.triggerAt, jst('21:55'));
+  assert.equal(plan.triggerAt, jst('21:58'));
 }
 
 // 鳴らす時刻がもう過ぎている → いきなり鳴らさない（目安の時刻の通知が拾う）。
 assert.equal(
-  planWakeAlarm({ ...base, lastFeeding: fed('2026-10-05T00:30:00+09:00'), now: jst('03:20') }),
+  planWakeAlarm({ ...base, lastFeeding: fed('2026-10-05T00:30:00+09:00'), now: jst('03:28') }),
   null,
-  '3:15 を過ぎている',
+  '3:25 を過ぎている',
 );
 // ちょうど鳴らす時刻 → 過去扱い。
 assert.equal(
-  planWakeAlarm({ ...base, lastFeeding: fed('2026-10-05T00:30:00+09:00'), now: jst('03:15') }),
+  planWakeAlarm({ ...base, lastFeeding: fed('2026-10-05T00:30:00+09:00'), now: jst('03:25') }),
   null,
 );
 
@@ -148,7 +148,7 @@ assert.equal(
   null,
 );
 
-// 記録待ち（測り終えて記録がまだ）は、止めた時刻から数える。0:45 に止めた → 目安 3:45 → 3:30 に鳴らす。
+// 記録待ち（測り終えて記録がまだ）は、止めた時刻から数える。0:45 に止めた → 目安 3:45 → 3:40 に鳴らす。
 {
   const plan = planWakeAlarm({
     ...base,
@@ -160,10 +160,10 @@ assert.equal(
   });
   assert.ok(plan);
   assert.equal(plan.dueAt, jst('03:45'));
-  assert.equal(plan.triggerAt, jst('03:30'));
+  assert.equal(plan.triggerAt, jst('03:40'));
 }
 
-// 間隔の設定が効く（4時間: 0:30 → 4:30 → 4:15）。
+// 間隔の設定が効く（4時間: 0:30 → 4:30 → 4:25）。
 {
   const plan = planWakeAlarm({
     ...base,
@@ -172,7 +172,7 @@ assert.equal(
     now: jst('00:40'),
   });
   assert.ok(plan);
-  assert.equal(plan.triggerAt, jst('04:15'));
+  assert.equal(plan.triggerAt, jst('04:25'));
 }
 
 // --- evaluateWakeAlarm: 予約しない理由 ---
@@ -201,12 +201,12 @@ assert.equal(
     { kind: 'skipped', reason: 'nursing', dueAt: null },
   );
   assert.deepEqual(
-    evaluateWakeAlarm({ ...base, lastFeeding: fed('2026-10-05T00:30:00+09:00'), now: jst('03:20') }),
+    evaluateWakeAlarm({ ...base, lastFeeding: fed('2026-10-05T00:30:00+09:00'), now: jst('03:28') }),
     { kind: 'skipped', reason: 'too-late', dueAt: jst('03:30') },
   );
   assert.deepEqual(
     evaluateWakeAlarm({ ...base, lastFeeding: fed('2026-10-05T00:30:00+09:00'), now: jst('00:40') }),
-    { kind: 'scheduled', triggerAt: jst('03:15'), dueAt: jst('03:30') },
+    { kind: 'scheduled', triggerAt: jst('03:25'), dueAt: jst('03:30') },
   );
 }
 

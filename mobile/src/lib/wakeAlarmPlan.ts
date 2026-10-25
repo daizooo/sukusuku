@@ -6,8 +6,8 @@
 
 import { nextFeedingSchedule, type LastFeeding } from './feedingSchedule.ts';
 
-/** 目安の時刻の何分前に鳴らすか。仕様で15分に固定（選べない）。 */
-export const WAKE_LEAD_MINUTES = 15;
+/** 目安の時刻の何分前に鳴らすか。仕様で5分に固定（選べない）。 */
+export const WAKE_LEAD_MINUTES = 5;
 
 /** 日本時間で数える（おやすみ時間は「日本の時計で何時」）。 */
 const JST_OFFSET_MS = 9 * 60 * 60_000;
