@@ -36,6 +36,7 @@ import {
   periodMonthInput,
   recurringDayLabel,
   spendGroupOf,
+  budgetLineGroupOf,
   storeChoices,
   topCategories,
   topCategoryIdOf,
@@ -246,7 +247,7 @@ export default function BudgetEditor({
   const monthKeys = useMemo(() => yearMonthKeys(year), [year]);
   const category = (id: string | null) => categories.find((entry) => entry.id === id) ?? null;
   const groupOf = (categoryId: string): BudgetLineGroup =>
-    category(categoryId)?.kind === 'income' ? 'income' : spendGroupOf(categoryId, categories);
+    category(categoryId)?.kind === 'income' ? 'income' : budgetLineGroupOf(categoryId, categories);
   const failed = () => window.alert('保存できませんでした。もう一度お試しください。');
 
   /** 行の名前（小分類〔大分類の行は大分類〕と区別）。収入は「給与 › 大造」。 */
@@ -283,7 +284,7 @@ export default function BudgetEditor({
     };
     for (const rule of [...rows].sort((a, b) => order(a) - order(b) || a.position - b.position)) {
       const own = categories.find((entry) => entry.id === rule.categoryId);
-      const group: BudgetLineGroup = own?.kind === 'income' ? 'income' : spendGroupOf(rule.categoryId, categories);
+      const group: BudgetLineGroup = own?.kind === 'income' ? 'income' : budgetLineGroupOf(rule.categoryId, categories);
       if (group === 'variable') continue;
       result[group].push({
         rule,

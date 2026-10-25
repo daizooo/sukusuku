@@ -1471,6 +1471,37 @@ assert.deepEqual(
   assert.equal(spendRatio(1000, 0), null);
 }
 
+// ---- 一時的な支出（docs/kakei.md §0.10） ----
+{
+  const cats = [
+    { id: 'food', kind: 'living', parentId: null, archived: false, position: 0, name: '食費', budgetGroup: 'variable' },
+    { id: 'grocery', kind: 'living', parentId: 'food', archived: false, position: 0, name: '食料品', budgetGroup: 'variable' },
+    { id: 'temp', kind: 'living', parentId: null, archived: false, position: 1, name: '一時的な支出', icon: 'savings', budgetGroup: 'temporary' },
+  ] as unknown as MoneyCategory[];
+  const rec = (id: string, occurredOn: string, items: [string, string, number][]) =>
+    ({ id, occurredOn, kind: 'expense', items: items.map(([categoryId, name, amount], index) => ({ id: `${id}-${index}`, categoryId, categoryName: '', name, amount })) }) as unknown as MoneyRecord;
+  const rs = [
+    rec('a', '2027-06-05', [['grocery', '', 5000]]),
+    rec('b', '2027-06-10', [['temp', '車の頭金', 300000]]),
+    rec('c', '2027-06-12', [['temp', '入学金', 80000]]),
+    rec('d', '2027-07-01', [['temp', '入学金', 20000], ['temp', '', 1000]]),
+  ];
+  assert.equal(spendGroupOf('temp', cats), 'temporary');
+  assert.equal(periodSummary(rs, cats, ['2027-06']).temporary, 380000, '一時的な支出も支出に数える');
+  assert.equal(periodSummary(rs, cats, ['2027-06']).expenseTotal, 385000);
+
+  const june = buildReviewSections(rs, cats, [], [], ['2027-06'], false);
+  assert.deepEqual(june.temporary.map((row) => [row.category.name, row.actual, row.budget]), [['車の頭金', 300000, null], ['入学金', 80000, null]], '品名ごと・額の多い順。予算は無い');
+  assert.deepEqual(june.spend, { variable: 5000, reserve: 0, fixed: 0 }, '目標割合には入れない');
+  const both = buildReviewSections(rs, cats, [], [], ['2027-06', '2027-07'], true);
+  assert.deepEqual(both.temporary.map((row) => [row.category.name, row.actual]), [['車の頭金', 300000], ['入学金', 100000], ['一時的な支出', 1000]], '年は同じ品名を足す。品名が空なら大分類の名前');
+  assert.deepEqual(variableTiles(rs, cats, [], ['2027-06']).map((tile) => tile.category.id), ['food'], '変動費に入れない');
+  assert.deepEqual(buildReviewSections([rec('x', '2027-08-01', [['grocery', '', 1]])], cats, [], [], ['2027-08'], false).temporary, [], '記録が無ければ出さない');
+
+  const opened = buildSubcategoryAnalysis(rs, cats, both.temporary[1].category.id, ['2027-06', '2027-07'], null);
+  assert.deepEqual([opened.actual, opened.records.map((r) => r.id)], [100000, ['c', 'd']], '行を押すと、その品名の記録だけ');
+}
+
 // ---- 記録する月の言い方 ----
 assert.equal(monthsLabel([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), '毎月');
 assert.equal(monthsLabel([11, 1, 3, 5, 7, 9]), '奇数月');

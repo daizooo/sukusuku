@@ -39,7 +39,7 @@ export const rowToCategory = (row: CategoryRow): MoneyCategory => ({
   iconColor: row.icon_color ?? null,
   position: row.position,
   archived: row.archived_at !== null,
-  budgetGroup: budgetGroupOf(row.budget_group ?? null),
+  budgetGroup: row.temporary ? 'temporary' : budgetGroupOf(row.budget_group ?? null),
 });
 
 const budgetGroupOf = (value: string | null): MoneyBudgetGroup =>
@@ -379,7 +379,7 @@ export async function updateMoneyCategory(
       ...(fields.iconColor !== undefined && { icon_color: fields.iconColor }),
       ...(fields.position !== undefined && { position: fields.position }),
       ...(fields.archived !== undefined && { archived_at: fields.archived ? new Date().toISOString() : null }),
-      ...(fields.budgetGroup !== undefined && { budget_group: fields.budgetGroup === 'variable' ? null : fields.budgetGroup }),
+      ...(fields.budgetGroup !== undefined && { budget_group: fields.budgetGroup === 'variable' || fields.budgetGroup === 'temporary' ? null : fields.budgetGroup }),
       ...(fields.parentId !== undefined && { parent_id: fields.parentId }),
     })
     .eq('id', id)
@@ -418,6 +418,7 @@ export async function insertDefaultMoneyCategories(supabase: SupabaseDb, familyI
         kind: category.kind,
         name: category.name,
         position: index,
+        ...(category.temporary && { icon: 'savings', temporary: true }),
       })),
     )
     .select('*');
