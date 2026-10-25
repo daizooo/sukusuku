@@ -7,8 +7,8 @@
 
 import { isWithinQuietHours } from './quietHours.ts';
 
-/** 目安の時刻の何分前に鳴らすか。仕様で15分に固定。 */
-export const WAKE_LEAD_MINUTES = 15;
+/** 目安の時刻の何分前に鳴らすか。仕様で5分に固定。 */
+export const WAKE_LEAD_MINUTES = 5;
 
 export interface WakePlan {
   /** 鳴らす時刻(epoch ms)。 */
