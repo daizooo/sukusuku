@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, InteractionManager, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type {
   MoneyCategory,
@@ -166,6 +166,14 @@ export default function MoneyScreen() {
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
   const [isLoading, setIsLoading] = useState(true);
   const [view, setView] = useState<View3>('accounts');
+  // 別のタブへ行って戻ったときも、開いている面をいちばん上から始める（面の active が false → true になるのを使う。2026-10-25）。
+  const [focused, setFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => setFocused(false);
+    }, []),
+  );
   // 一度開いた面は、開いたまま残して隠すだけにする（面の切り替えで毎回作り直すと、スワイプのあと表示が出るまで待たされるため。2026-10-15）。
   // 読み込みが終わって落ち着いたら、残りの面もあらかじめ作っておく。
   const [mountedViews, setMountedViews] = useState<ReadonlySet<View3>>(() => new Set<View3>(['accounts']));
@@ -840,7 +848,7 @@ export default function MoneyScreen() {
           {(view === 'records' || mountedViews.has('records')) && (
             <View style={view === 'records' ? styles.body : styles.hidden}>
             <MoneyRecordsView
-              active={view === 'records'}
+              active={focused && view === 'records'}
               records={records}
               categories={categories}
               wallets={wallets}
@@ -856,7 +864,7 @@ export default function MoneyScreen() {
           {(view === 'review' || mountedViews.has('review')) && (
             <View style={view === 'review' ? styles.body : styles.hidden}>
             <MoneyReviewView
-              active={view === 'review'}
+              active={focused && view === 'review'}
               period={period}
               onPeriod={changePeriod}
               monthKey={monthKey}
@@ -908,7 +916,7 @@ export default function MoneyScreen() {
           {(view === 'accounts' || mountedViews.has('accounts')) && (
             <View style={view === 'accounts' ? styles.body : styles.hidden}>
             <MoneyAccountsView
-              active={view === 'accounts'}
+              active={focused && view === 'accounts'}
               wallets={wallets}
               records={records}
               balances={balances}
