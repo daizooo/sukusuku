@@ -316,13 +316,12 @@ export default function MoneyReviewView({
 
   const openSub = (row: ReviewSubRow) => setDetail({ category: row.category, sub: true, budget: row.budget });
   // 予備費・固定費の行。予算と比べるもの（年の予備費）は変動費と同じ行、ほかは額だけ（見込みは予算との差を添える）。
-  // 月の予備費は、年の予算に対する年初からの実績を変動費と同じ行で出し、その月の額を添える（2026-10-25）。
+  // 月の予備費は、年の予算に対する年初からの実績を変動費と同じ行で出す（2026-10-25。帯の下の添え書きは出さない）。
   const subRow = (row: ReviewSubRow, index: number, compare: boolean) =>
     row.yearToDate !== null ? (
       <CategoryRow
         key={row.category.id}
         tile={tileOf({ ...row, actual: row.yearToDate.actual, budget: row.yearToDate.budget })}
-        note={`今月 ${formatYen(row.actual)}・年の予算に対して`}
         divided={index > 0}
         onPress={() => openSub(row)}
       />
@@ -617,9 +616,9 @@ function TrendLegend() {
 
 /**
  * 大分類の1行（Zaim と同じく小さく）。アイコン・名前・**予算との差**（予算 − 実績。黒字は緑・赤字は「−」の黒）、使った割合の帯、実績・予算（2026-10-16）。
- * 予算が無ければ実績の額だけ。使った割合（%）は出さない（2026-10-25）。note は帯の下の添え書き（月の予備費のその月の額）。
+ * 予算が無ければ実績の額だけ。使った割合（%）は出さない（2026-10-25）。
  */
-function CategoryRow({ tile, note, divided, onPress }: { tile: BudgetTile; note?: string; divided: boolean; onPress: () => void }) {
+function CategoryRow({ tile, divided, onPress }: { tile: BudgetTile; divided: boolean; onPress: () => void }) {
   const over = tile.budget !== null && tile.diff < 0;
   return (
     <Pressable
@@ -648,7 +647,6 @@ function CategoryRow({ tile, note, divided, onPress }: { tile: BudgetTile; note?
             <Text style={type.faint}>{`${formatYen(tile.actual)} / ${formatYen(tile.budget)}`}</Text>
           </View>
         )}
-        {note !== undefined && <Text style={type.faint}>{note}</Text>}
       </View>
       <ChevronRight size={16} color={colors.textFaint} />
     </Pressable>
