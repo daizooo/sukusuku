@@ -31,7 +31,7 @@ import { WalletSheet } from '@/components/money/WalletPicker';
 import BalanceSheet from '@/components/money/BalanceSheet';
 import BalanceTrend from '@/components/money/BalanceTrend';
 import RecordDayList from '@/components/money/RecordDayList';
-import { EstimateBadge, ScreenHeader, StatRow, type } from '@/components/money/moneyVisual';
+import { EstimateBadge, ScreenHeader, StatRow, type, fitText } from '@/components/money/moneyVisual';
 
 // 口座の詳細（docs/kakei.md §9.3）。PWA版の `src/components/sukusuku/money/WalletBalanceScreen.tsx` と同じ並び・文言。
 // 上に残高と「残高を補正」、その下に「履歴 / 推移」の2つ（2026-10-08に、使わない「残高計算」を外した。余計な文字は入れない）。
@@ -145,7 +145,7 @@ export default function WalletBalanceScreen({
         <View style={styles.summary}>
           <View style={styles.summaryTop}>
             <View style={styles.flex}>
-              <Text style={[type.hero, now.amount < 0 && type.minus]}>{formatBalance(now.amount)}</Text>
+              <Text {...fitText} style={[type.hero, now.amount < 0 && type.minus]}>{formatBalance(now.amount)}</Text>
             </View>
             <Pressable accessibilityRole="button" onPress={() => setCorrecting(true)} style={styles.correct}>
               <Text style={styles.correctText}>残高を補正</Text>
@@ -229,7 +229,7 @@ export default function WalletBalanceScreen({
                             )}
                           </View>
                           {payment.estimate && <EstimateBadge />}
-                          <Text style={type.amount}>{formatYen(payment.amount)}</Text>
+                          <Text {...fitText} style={type.amount}>{formatYen(payment.amount)}</Text>
                         </View>
                       );
                     })}

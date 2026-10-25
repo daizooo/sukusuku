@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { ArrowDownRight, ArrowLeft, ArrowUpRight, ChartCandlestick, ChevronLeft, ChevronRight, CreditCard, Landmark, PiggyBank, QrCode, RefreshCw, X } from 'lucide-react';
 import type { MoneyWalletType } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
@@ -187,7 +187,7 @@ export function PeriodBar({
       type="button"
       aria-label={other.id === 'year' ? '年の表示に切り替える' : '月の表示に切り替える'}
       onClick={() => onPeriod(other.id)}
-      className="rounded-full bg-gray-100 px-[9px] py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-200"
+      className="rounded-full border border-gray-200 bg-white px-[9px] py-1.5 text-xs font-bold text-gray-500 shadow-sm hover:bg-gray-50"
     >
       {other.id === 'year' ? '年で見る' : '月で見る'}
     </button>
@@ -241,7 +241,9 @@ export function Hero({
   return (
     <div className={`${cardClass} ${compact ? 'px-4 pb-2.5 pt-2' : 'p-4'} ${center ? 'text-center' : ''}`}>
       <p className="text-[13px] font-semibold text-gray-500">{label}</p>
-      <p className={minus(plus ? (compact ? type.hero.replace('text-[34px]', 'text-[32px]') : type.hero).replace('text-gray-900', incomeAmountClass) : compact ? type.hero.replace('text-[34px]', 'text-[32px]') : type.hero, isMinus)}>{value}</p>
+      <p className={minus(plus ? (compact ? type.hero.replace('text-[34px]', 'text-[32px]') : type.hero).replace('text-gray-900', incomeAmountClass) : compact ? type.hero.replace('text-[34px]', 'text-[32px]') : type.hero, isMinus)}>
+        <FitText>{value}</FitText>
+      </p>
       {note !== undefined && <p className={type.sub}>{note}</p>}
       {children !== undefined && <div className={`${compact ? 'mt-1.5' : 'mt-3 pt-1'} border-t border-gray-200`}>{children}</div>}
     </div>
@@ -467,5 +469,37 @@ export function PrimaryButton({ label, onClick, disabled }: { label: string; onC
     >
       {label}
     </button>
+  );
+}
+
+/**
+ * 金額を1行に収め、幅に入らなければ6割まで文字を縮める（mobile の fitText と同じ決まり。2026-10-25）。
+ * 置いた場所の幅いっぱいの箱になる（寄せは親の text-align に従う）。縮め方は描くたびに測って、文字の大きさに直接入れる。
+ */
+export function FitText({ children }: { children: ReactNode }) {
+  const box = useRef<HTMLSpanElement>(null);
+  const text = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const outer = box.current;
+    const inner = text.current;
+    if (!outer || !inner) return;
+    const fit = () => {
+      // 今の縮め方を外した、元の幅で比べる
+      inner.style.fontSize = '1em';
+      const natural = inner.scrollWidth;
+      const next = natural > 0 && natural > outer.clientWidth ? Math.max(0.6, outer.clientWidth / natural) : 1;
+      inner.style.fontSize = `${next}em`;
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(outer);
+    return () => observer.disconnect();
+  }, [children]);
+  return (
+    <span ref={box} className="block w-full overflow-hidden whitespace-nowrap">
+      <span ref={text} className="inline-block">
+        {children}
+      </span>
+    </span>
   );
 }

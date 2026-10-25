@@ -99,8 +99,8 @@ interface BudgetEditorProps {
 const GROUP_LABEL: Record<BudgetLineGroup, string> = {
   income: '収入',
   variable: '変動費',
-  confirmed: '固定費（確定）',
-  estimate: '固定費（見込み）',
+  confirmed: '固定費・確定',
+  estimate: '固定費・見込み',
   reserve: '予備費',
 };
 
@@ -131,8 +131,8 @@ const budgetGroupOf = (group: SpendGroup): MoneyBudgetGroup => (group === 'confi
 
 /** 大分類＝種類のもの（固定費・予備費）の大分類の名前。 */
 const TYPE_TOP_NAME: Record<Exclude<SpendGroup, 'variable'>, string> = {
-  confirmed: '固定費（確定）',
-  estimate: '固定費（見込み）',
+  confirmed: '固定費・確定',
+  estimate: '固定費・見込み',
   reserve: '予備費',
 };
 

@@ -26,7 +26,7 @@ import { WalletSheet } from '@/components/money/WalletPicker';
 import TotalTrendScreen from '@/components/money/TotalTrendScreen';
 import WalletBalanceScreen from '@/components/money/WalletBalanceScreen';
 import SecuritiesWalletScreen from '@/components/money/SecuritiesWalletScreen';
-import { WalletTypeIcon, type } from '@/components/money/moneyVisual';
+import { WalletTypeIcon, type, fitText } from '@/components/money/moneyVisual';
 
 // 家計タブの「口座」（docs/kakei.md §7 の7・§9.3）。PWA版の `src/components/sukusuku/money/MoneyAccountsView.tsx` と同じ並び・文言。
 //
@@ -133,7 +133,7 @@ export default function MoneyAccountsView({
             {row.wallet.name}
           </Text>
         </View>
-        <Text style={[styles.tileAmount, row.amount > 0 && styles.tilePlus]}>{formatBalance(row.amount)}</Text>
+        <Text {...fitText} style={[styles.tileAmount, row.amount > 0 && styles.tilePlus]}>{formatBalance(row.amount)}</Text>
       </Pressable>
     );
   };
@@ -159,7 +159,7 @@ export default function MoneyAccountsView({
         >
           {/* 総残高は白い札に大きく。口座のタイルより一段強く見せる（Zaim の「残高」と同じ。2026-10-24）。 */}
           <Text style={styles.totalLabel}>総残高</Text>
-          <Text style={styles.totalValue}>{formatBalance(summary.total)}</Text>
+          <Text {...fitText} style={styles.totalValue}>{formatBalance(summary.total)}</Text>
           {usable.length === 0 && <Text style={[type.sub, styles.totalNote]}>出金元を足すと、残高が出ます</Text>}
         </Pressable>
         {isLoading && <Text style={styles.message}>読み込み中...</Text>}

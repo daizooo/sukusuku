@@ -60,6 +60,7 @@ import {
   parsePeriodMonth,
   recurringEnded,
   recurringPeriodLabel,
+  budgetDiffLabel,
   formatBalance,
   walletBalanceOn,
   walletDelta,
@@ -114,9 +115,9 @@ import type { MoneyBudget, MoneyBudgetLine, MoneyCategory, MoneyHolding, MoneyHo
 assert.equal(shiftMonth('2026-12', 1), '2027-01');
 assert.equal(shiftMonth('2026-01', -1), '2025-12');
 assert.equal(shiftMonth('2026-09', -12), '2025-09');
-assert.equal(formatSignedYen(1200), '¥\u20091,200');
-assert.equal(formatSignedYen(-3800), '¥\u2009−3,800');
-assert.equal(formatSignedYen(0), '¥\u20090');
+assert.equal(formatSignedYen(1200), '¥\u202F1,200');
+assert.equal(formatSignedYen(-3800), '−\u2060¥\u202F3,800');
+assert.equal(formatSignedYen(0), '¥\u202F0');
 
 // ---- カテゴリ ----
 const cat = (id: string, name: string, parentId: string | null, extra: Partial<MoneyCategory> = {}): MoneyCategory => ({
@@ -894,8 +895,11 @@ assert.equal(cardScheduleLabel({ closeDay: 15, payDay: null, payMonthOffset: nul
   assert.equal(walletDelta(rs[1], 'card'), 0, '関係ない出金元は変わらない');
   assert.equal(walletDelta(rs[2], 'bank'), -50000, '振替は出金元から減る');
   assert.equal(walletDelta(rs[2], 'save'), 50000, '振替は入金先に増える');
-  assert.equal(formatBalance(-12000), '¥\u2009−12,000');
-  assert.equal(formatBalance(300), '¥\u2009300');
+  assert.equal(formatBalance(-12000), '−\u2060¥\u202F12,000');
+  assert.equal(formatBalance(300), '¥\u202F300');
+  assert.equal(budgetDiffLabel(-3000), '予算より ¥\u202F3,000', '予算を超えたら、超えた額（符号なし）');
+  assert.equal(budgetDiffLabel(1200), '予算より −\u2060¥\u202F1,200', '予算より少なければ −');
+  assert.equal(budgetDiffLabel(0), '予算どおり');
 
   // 補正が無ければ、記録だけから出す（今日までの記録。先の日付は入れない）。
   const none = walletBalanceOn('bank', '2026-10-10', rs, []);
@@ -1442,6 +1446,10 @@ assert.deepEqual(
   const month = buildReviewSections(rs, cats, buds, lines, ['2027-06'], false);
   assert.deepEqual(month.variable.map((tile) => [tile.category.id, tile.actual, tile.budget]), [['food', 68000, 75000], ['util', 9000, 32000]]);
   assert.deepEqual(month.reserve.map((row) => [row.category.id, row.actual, row.budget]), [['gift', 10000, null]], '月の予備費は額だけ');
+  assert.deepEqual(month.reserve[0].yearToDate, { actual: 10000, budget: 50000 }, '月の予備費は、年の予算に対する年初からの実績で進み具合を出す');
+  const later = buildReviewSections([...rs, rec('i', '2027-08-03', 'expense', [['gift', 20000]])], cats, buds, lines, ['2027-08'], false);
+  assert.deepEqual(later.reserve.map((row) => [row.category.id, row.actual, row.yearToDate]), [['gift', 20000, { actual: 30000, budget: 50000 }]], '年初からその月までを足す');
+  assert.equal(month.estimate[0].yearToDate, null, '予備費のほかは出さない');
   assert.deepEqual(month.confirmed.map((row) => [row.category.id, row.actual, row.budget]), [['rent', 80000, null]], '確定は額だけ');
   assert.deepEqual(
     month.estimate.map((row) => [row.category.id, row.actual, row.budget]),

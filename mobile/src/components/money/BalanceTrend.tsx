@@ -13,7 +13,7 @@ import {
   type BalancePoint,
   type TrendPeriod,
 } from '@/lib/moneyUtils';
-import { SectionHeader, type } from '@/components/money/moneyVisual';
+import { SectionHeader, type, fitText } from '@/components/money/moneyVisual';
 
 // 残高の推移（docs/kakei.md §9.3）。PWA版の `src/components/sukusuku/money/BalanceTrend.tsx` と同じ並び・文言。
 // 折れ線（日ごとの残高）・期間の切り替え（はじめは全期間）・対象期間の履歴（残高が変わった日。新しい順）。
@@ -172,7 +172,7 @@ function Chart({ points }: { points: BalancePoint[] }) {
       {selectedPoint && (
         <View pointerEvents="none" style={[styles.tooltip, { left: tooltipLeft }]}>
           <Text style={styles.tooltipDate}>{fullDateWithWeekday(selectedPoint.date)}</Text>
-          <Text style={styles.tooltipAmount}>{formatBalance(selectedPoint.amount)}</Text>
+          <Text {...fitText} style={styles.tooltipAmount}>{formatBalance(selectedPoint.amount)}</Text>
         </View>
       )}
     </View>
@@ -227,7 +227,7 @@ export default function BalanceTrend({
             {changes.map((point, index) => (
               <View key={point.date} style={[styles.row, index > 0 && styles.rowDivided]}>
                 <Text style={type.row}>{fullDate(point.date)}</Text>
-                <Text style={[type.amount, point.amount < 0 && type.minus]}>{formatBalance(point.amount)}</Text>
+                <Text {...fitText} style={[type.amount, point.amount < 0 && type.minus]}>{formatBalance(point.amount)}</Text>
               </View>
             ))}
           </View>

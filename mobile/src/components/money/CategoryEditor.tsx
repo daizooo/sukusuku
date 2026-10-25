@@ -29,7 +29,8 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 // 大分類を1行ずつ並べ、押すと下からシート（ボトムシート）が出て、小分類を2列の枠つきボタンで見せる（2026-10-24。カテゴリの選択と同じ見せ方。docs/kakei.md §3.2）。
 // 小分類が多い大分類（固定費（確定）23件など）で、行の下に開くと見にくかった。件数は出さない。
 // アイコンは、シートの下の「アイコンを変える」から絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。
-// シートとアイコンの選択は同時に出せないので、「アイコンを変える」を押すとシートを閉じてから開く。
+// 小分類のボタンにもアイコンを出し、押すとその小分類の絵と色を選べる（予備費・固定費の行に出るアイコン。2026-10-25）。
+// シートとアイコンの選択は同時に出せないので、「アイコンを変える」・小分類を押すとシートを閉じてから開く。
 // カテゴリがまだ無い家族には「標準のカテゴリで始める」（Zaim のカテゴリをもとにした並び）。
 
 interface CategoryEditorProps {
@@ -192,7 +193,11 @@ export default function CategoryEditor({
                   <X size={20} color={colors.textSubtle} />
                 </Pressable>
               </View>
-              {children.length >= 2 && <Text style={styles.sheetHint}>長押しして動かすと、並びを変えられます</Text>}
+              {children.length > 0 && (
+                <Text style={styles.sheetHint}>
+                  {children.length >= 2 ? '押すとアイコンを変えられます。長押しして動かすと、並びを変えられます' : '押すとアイコンを変えられます'}
+                </Text>
+              )}
               <ScrollView style={styles.sheetScroll} scrollEnabled={!drag.isActive}>
                 <View {...drag.panHandlers} style={styles.grid}>
                   {children.map((child) => (
@@ -203,9 +208,16 @@ export default function CategoryEditor({
                     >
                       <Pressable
                         {...drag.holdProps(`children-${openTop.id}`, children, child.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${child.name}のアイコンを変える`}
+                        onPress={() => {
+                          setOpenId(null);
+                          setEditing({ category: child });
+                        }}
                         style={[styles.button, child.archived && styles.archived, drag.isDragging(child.id) && styles.buttonLifted]}
                       >
-                        <Text style={styles.buttonText}>{child.name}</Text>
+                        <CategoryIcon iconKey={iconKeyOf(child)} size={24} />
+                        <Text style={[styles.buttonText, styles.flex]}>{child.name}</Text>
                       </Pressable>
                     </View>
                   ))}
@@ -221,7 +233,7 @@ export default function CategoryEditor({
                 style={({ pressed }) => [styles.editTop, pressed && styles.editTopPressed]}
               >
                 <Palette size={18} color={colors.money} />
-                <Text style={styles.editTopText}>アイコンを変える</Text>
+                <Text style={styles.editTopText}>{`${openTop.name}のアイコンを変える`}</Text>
               </Pressable>
             </View>
           )}
@@ -371,7 +383,9 @@ const styles = StyleSheet.create({
   cell: { width: '50%', padding: 4 },
   button: {
     minHeight: 48,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,

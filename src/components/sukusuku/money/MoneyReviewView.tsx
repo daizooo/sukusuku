@@ -20,6 +20,7 @@ import type {
 } from '@/types/app';
 import { cardMonthChecks } from '@/lib/moneyFeedUtils';
 import {
+  budgetDiffLabel,
   buildMonthSummary,
   buildCategoryAnalysis,
   buildReviewSections,
@@ -72,9 +73,9 @@ import { yearTrendPoints } from '@/lib/yearTrend';
 // - その下は、変動費 → 予備費 → 固定費（中に確定・見込み）→ カテゴリなし の見出しごと（buildReviewSections）。見出しを押すと折りたたむ。
 //   はじめは変動費・予備費を開き、固定費は閉じておく。年の見出しの右に、実績の割合（その種類の支出の実績 ÷ 年の収入）と目標割合
 //   （年間予算の画面の「目標割合」）を「11%（目標35%）」の形で出す（目標を超えたら赤。月には出さない）
-//   - 変動費: 大分類ごとに、予算 − 実績・使った割合の帯・「実績 / 予算・%」
-//   - 予備費: 記録のあった小分類。年は年の予算と比べる（変動費と同じ行）、月は額だけ
-//   - 固定費: 記録のあった小分類の額。見込みは「予算より ¥x」を添える
+//   - 変動費: 大分類ごとに、予算 − 実績・使った割合の帯・「実績 / 予算」（%は出さない。2026-10-25）
+//   - 予備費: 記録のあった小分類。年は年の予算と比べる（変動費と同じ行）、月は年の予算に対する年初からの実績（同じ行に、その月の額を添える）
+//   - 固定費: 記録のあった小分類の額。見込みは予算との差を添える（超えたら赤で「予算より ¥x」、少なければ黒で「予算より −¥x」。budgetDiffLabel）
 //   - 行を押すと、変動費は大分類の詳細（月ごとの実績・小分類・記録）、予備費・固定費・カテゴリなしはその記録の一覧（ReviewDetailScreen）
 // 月の締め（§4.5）: 過ぎた月と今月の結論の下に「この月を締める」（締めた月は「締めた月」）。夫婦が5分以内に押すと締めの画面（MonthCloseScreen）。
 // 押した人は「◯◯さんを待っています 4:32」と「やめる」、相手には「◯◯さんが待っています 4:32」を添える。始めたあとは「締めの途中」。
@@ -305,8 +306,16 @@ export default function MoneyReviewView({
 
   const openSub = (row: ReviewSubRow) => setDetail({ category: row.category, sub: true, budget: row.budget });
   // 予備費・固定費の行。予算と比べるもの（年の予備費）は変動費と同じ行、ほかは額だけ（見込みは予算との差を添える）。
+  // 月の予備費は、年の予算に対する年初からの実績を変動費と同じ行で出し、その月の額を添える（2026-10-25）。
   const subRow = (row: ReviewSubRow, compare: boolean) =>
-    compare && row.budget !== null ? (
+    row.yearToDate !== null ? (
+      <CategoryRow
+        key={row.category.id}
+        tile={tileOf({ ...row, actual: row.yearToDate.actual, budget: row.yearToDate.budget })}
+        note={`今月 ${formatYen(row.actual)}・年の予算に対して`}
+        onClick={() => openSub(row)}
+      />
+    ) : compare && row.budget !== null ? (
       <CategoryRow key={row.category.id} tile={tileOf(row)} onClick={() => openSub(row)} />
     ) : (
       <AmountRow
@@ -592,8 +601,11 @@ function TrendLegend() {
   );
 }
 
-/** 大分類の1行（Zaim と同じく小さく）。アイコン・名前・**予算との差**（予算 − 実績。黒字は緑・赤字は「−」の黒）、使った割合の帯、実績・予算（2026-10-16）。予算が無ければ実績の額だけ。 */
-function CategoryRow({ tile, onClick }: { tile: BudgetTile; onClick: () => void }) {
+/**
+ * 大分類の1行（Zaim と同じく小さく）。アイコン・名前・**予算との差**（予算 − 実績。黒字は緑・赤字は「−」の黒）、使った割合の帯、実績・予算（2026-10-16）。
+ * 予算が無ければ実績の額だけ。使った割合（%）は出さない（2026-10-25）。note は帯の下の添え書き（月の予備費のその月の額）。
+ */
+function CategoryRow({ tile, note, onClick }: { tile: BudgetTile; note?: string; onClick: () => void }) {
   const over = tile.budget !== null && tile.diff < 0;
   return (
     <button
@@ -619,12 +631,10 @@ function CategoryRow({ tile, onClick }: { tile: BudgetTile; onClick: () => void 
             <div className="min-w-0 flex-1">
               <ProgressBar ratio={tile.budget ? tile.actual / tile.budget : 0} over={over} />
             </div>
-            <span className={`shrink-0 ${type.faint}`}>
-              {`${formatYen(tile.actual)} / ${formatYen(tile.budget)}`}
-              {tile.percent !== null ? `・${tile.percent}%` : ''}
-            </span>
+            <span className={`shrink-0 ${type.faint}`}>{`${formatYen(tile.actual)} / ${formatYen(tile.budget)}`}</span>
           </div>
         )}
+        {note !== undefined && <p className={type.faint}>{note}</p>}
       </div>
       <ChevronRight size={16} className="text-gray-400" />
     </button>
@@ -660,8 +670,8 @@ function AmountRow({
           <span className="text-[15px] font-extrabold tabular-nums text-gray-900">{formatYen(amount)}</span>
         </div>
         {diff !== null && (
-          <p className={`text-[11px] font-semibold tabular-nums ${diff < 0 ? 'text-red-600' : diff > 0 ? incomeAmountClass : 'text-gray-400'}`}>
-            {`予算より ${formatBalance(diff)}`}
+          <p className={`text-[11px] font-semibold tabular-nums ${diff < 0 ? 'text-red-600' : diff > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
+            {budgetDiffLabel(diff)}
           </p>
         )}
       </div>

@@ -12,7 +12,7 @@ import {
   type CategoryAnalysis,
 } from '@/lib/moneyUtils';
 import RecordDayList from '@/components/money/RecordDayList';
-import { CategoryIcon, Hero, ProgressBar, ScreenHeader, SectionHeader, StatRow, type } from '@/components/money/moneyVisual';
+import { CategoryIcon, Hero, ProgressBar, ScreenHeader, SectionHeader, StatRow, type, fitText } from '@/components/money/moneyVisual';
 
 // 振り返りの内訳をタップしたときの画面（docs/kakei.md §4.4）。PWA版の `src/components/sukusuku/money/ReviewDetailScreen.tsx` と同じ並び・文言。
 // 上に**振り返りの画面と同じ作りの収支**（予算 − 支出を大きく、予算と支出を下に。年は年末の着地見込みを一番下に）、次に小分類の割合、下にその行に絞った記録の一覧
@@ -109,7 +109,7 @@ function ChildrenSection({ analysis }: { analysis: CategoryAnalysis }) {
                 {child.name}
               </Text>
               <Text style={type.faint}>{percentOf(child.amount, childTotal)}%</Text>
-              <Text style={type.amount}>{formatYen(child.amount)}</Text>
+              <Text {...fitText} style={type.amount}>{formatYen(child.amount)}</Text>
             </View>
             <ProgressBar ratio={childTotal > 0 ? child.amount / childTotal : 0} />
           </View>
@@ -170,9 +170,9 @@ function MonthRows({
               >
                 <View style={styles.childTop}>
                   <Text style={[type.row, styles.flex]}>{Number(row.monthKey.slice(5, 7))}月</Text>
-                  <Text style={type.faint}>{row.budget !== null ? `予算 ${formatYen(row.budget)}` : '予算なし'}</Text>
+                  <Text {...fitText} style={type.faint}>{row.budget !== null ? `予算 ${formatYen(row.budget)}` : '予算なし'}</Text>
                   {row.closed && <Text style={type.faint}>締め</Text>}
-                  <Text style={type.amount}>{formatYen(row.amount)}</Text>
+                  <Text {...fitText} style={type.amount}>{formatYen(row.amount)}</Text>
                   <ChevronRight size={16} color={colors.textFaint} />
                 </View>
                 <ProgressBar ratio={row.budget ? row.amount / row.budget : 0} over={over} />

@@ -5,7 +5,7 @@ import { colors } from '@/lib/theme';
 import { dateKeyOfDate, formatBalance, formatSignedYen, formatYen, walletBalanceOn } from '@/lib/moneyUtils';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
-import { PrimaryButton, type } from '@/components/money/moneyVisual';
+import { PrimaryButton, type, fitText } from '@/components/money/moneyVisual';
 
 // 残高を補正する（docs/kakei.md §9.3）。PWA版の `src/components/sukusuku/money/BalanceModal.tsx` と同じ並び・文言。
 // 通帳・銀行のアプリの残高を入れる。日付は無い（ただの補正。記録のあとから足した分も、補正は動かない）。
@@ -86,12 +86,12 @@ export default function BalanceSheet({ wallet, records, balances, onClose, onSub
         <View style={styles.check}>
           <View style={styles.checkRow}>
             <Text style={type.sub}>今の残高</Text>
-            <Text style={[type.amount, now.amount < 0 && type.minus]}>{formatBalance(now.amount)}</Text>
+            <Text {...fitText} style={[type.amount, now.amount < 0 && type.minus]}>{formatBalance(now.amount)}</Text>
           </View>
           {diff !== null && (
             <View style={styles.checkRow}>
               <Text style={type.sub}>差</Text>
-              <Text style={[type.amount, diff !== 0 && type.minus]}>{diff === 0 ? formatYen(0) : formatSignedYen(diff)}</Text>
+              <Text {...fitText} style={[type.amount, diff !== 0 && type.minus]}>{diff === 0 ? formatYen(0) : formatSignedYen(diff)}</Text>
             </View>
           )}
         </View>

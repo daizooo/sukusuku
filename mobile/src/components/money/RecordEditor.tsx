@@ -54,7 +54,7 @@ import StorePicker from '@/components/money/StorePicker';
 import WalletPicker from '@/components/money/WalletPicker';
 import RecordDetailView from '@/components/money/RecordDetailView';
 import RecordItemGroups from '@/components/money/RecordItemGroups';
-import { EstimateBadge, PrimaryButton, ScreenHeader, WalletTypeIcon } from '@/components/money/moneyVisual';
+import { EstimateBadge, PrimaryButton, ScreenHeader, WalletTypeIcon, fitText } from '@/components/money/moneyVisual';
 
 // 帯の上の「記録して続ける」。要らなくなったら false にすればリンクごと消える（帯は「記録する」だけのまま）。
 const SHOW_SAVE_NEXT = true;
@@ -429,7 +429,7 @@ export default function RecordEditor({
             <ScreenHeader title="金額" icon="back" onClose={back} />
             <View style={styles.amountBox}>
               {/[+\-*/]/.test(amountExpr) && <Text style={styles.amountExpr}>{formatCalc(amountExpr)} =</Text>}
-              <Text style={styles.amountValue}>{formatYen(evaluateCalc(amountExpr) ?? 0)}</Text>
+              <Text {...fitText} style={styles.amountValue}>{formatYen(evaluateCalc(amountExpr) ?? 0)}</Text>
             </View>
             <Calculator onKey={(key) => setAmountExpr((prev) => pressCalcKey(prev, key))} />
             <View style={styles.footer}>
@@ -567,7 +567,7 @@ export default function RecordEditor({
             <Text style={styles.currencyMark}>¥</Text>
             <Text style={styles.currencyCode}>JPY</Text>
           </View>
-          <Text style={styles.total}>{formatBalance(total).replace(/^¥\s*/, '')}</Text>
+          <Text {...fitText} style={styles.total}>{formatBalance(total).replace(/¥\s*/, '')}</Text>
         </Pressable>
         {receiptNotices.length > 0 && (
           <View style={styles.receiptNotice}>

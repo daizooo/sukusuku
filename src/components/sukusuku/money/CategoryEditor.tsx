@@ -28,7 +28,8 @@ import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader } from './moneyVi
 // 大分類を1行ずつ並べ、押すと下からシート（ボトムシート）が出て、小分類を2列の枠つきボタンで見せる（2026-10-24。カテゴリの選択と同じ見せ方。docs/kakei.md §3.2）。
 // 小分類が多い大分類（固定費（確定）23件など）で、行の下に開くと見にくかった。件数は出さない。
 // アイコンは、シートの下の「アイコンを変える」から絵と色を選ぶ（アイコンをタップすると色を選べる。出金元のアイコンの色と同じ候補）。
-// シートとアイコンの選択は同時に出せないので、「アイコンを変える」を押すとシートを閉じてから開く。
+// 小分類のボタンにもアイコンを出し、押すとその小分類の絵と色を選べる（予備費・固定費の行に出るアイコン。2026-10-25）。
+// シートとアイコンの選択は同時に出せないので、「アイコンを変える」・小分類を押すとシートを閉じてから開く。
 // カテゴリがまだ無い家族には「標準のカテゴリで始める」（Zaim のカテゴリをもとにした並び）。
 
 interface CategoryEditorProps {
@@ -176,9 +177,9 @@ export default function CategoryEditor({
           top={openTop}
           items={drag.arrange(`children-${openTop.id}`, childCategories(categories, openTop.id, true))}
           drag={drag}
-          onEditIcon={() => {
+          onEditIcon={(category) => {
             setOpenId(null);
-            setEditing({ category: openTop });
+            setEditing({ category });
           }}
           onClose={() => setOpenId(null)}
         />
@@ -208,7 +209,8 @@ function ChildSheet({
   top: MoneyCategory;
   items: MoneyCategory[];
   drag: DragReorder;
-  onEditIcon: () => void;
+  /** 大分類・小分類のアイコンを変える。 */
+  onEditIcon: (category: MoneyCategory) => void;
   onClose: () => void;
 }) {
   useBackLayer(onClose);
@@ -232,7 +234,11 @@ function ChildSheet({
             <X size={20} />
           </button>
         </div>
-        {items.length >= 2 && <p className="shrink-0 px-4 pb-2 text-[13px] font-medium text-gray-500">長押しして動かすと、並びを変えられます</p>}
+        {items.length > 0 && (
+          <p className="shrink-0 px-4 pb-2 text-[13px] font-medium text-gray-500">
+            {items.length >= 2 ? '押すとアイコンを変えられます。長押しして動かすと、並びを変えられます' : '押すとアイコンを変えられます'}
+          </p>
+        )}
         <div className="grid min-h-0 grid-cols-2 gap-2 overflow-y-auto px-4 pb-1">
           {items.map((child) => (
             <button
@@ -240,11 +246,14 @@ function ChildSheet({
               type="button"
               ref={drag.dragRef(child.id)}
               {...drag.handleProps(`children-${top.id}`, items, child.id)}
-              className={`flex min-h-12 select-none items-center rounded-xl border bg-white px-3 py-2 text-left text-[15px] font-semibold leading-tight text-gray-900 ${
+              aria-label={`${child.name}のアイコンを変える`}
+              onClick={() => onEditIcon(child)}
+              className={`flex min-h-12 select-none items-center gap-2 rounded-xl border bg-white px-3 py-2 text-left text-[15px] font-semibold leading-tight text-gray-900 ${
                 child.archived ? 'opacity-50' : ''
               } ${drag.isDragging(child.id) ? 'relative z-20 border-blue-300 shadow-lg' : 'border-gray-300'}`}
             >
-              {child.name}
+              <CategoryIcon iconKey={iconKeyOf(child)} size={24} />
+              <span className="min-w-0 flex-1">{child.name}</span>
             </button>
           ))}
         </div>
@@ -252,11 +261,11 @@ function ChildSheet({
           <button
             type="button"
             aria-label={`${top.name}のアイコンを変える`}
-            onClick={onEditIcon}
+            onClick={() => onEditIcon(top)}
             className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 text-[15px] font-bold text-blue-800 active:bg-blue-100"
           >
             <Palette size={18} className="text-blue-600" />
-            アイコンを変える
+            {`${top.name}のアイコンを変える`}
           </button>
         </div>
       </div>
