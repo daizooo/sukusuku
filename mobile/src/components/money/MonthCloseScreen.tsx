@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Modal from '@/components/ui/Modal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, ChevronRight, Plus } from 'lucide-react-native';
@@ -58,6 +58,8 @@ interface MonthCloseScreenProps {
   onOpenFeed: () => void;
   onCloseMonth: () => void;
   onReopenMonth: () => void;
+  /** 締めの途中をやめる（口座の OK は残す）。 */
+  onAbortMonth: () => void;
   onClose: () => void;
 }
 
@@ -95,11 +97,17 @@ export default function MonthCloseScreen({
   onOpenFeed,
   onCloseMonth,
   onReopenMonth,
+  onAbortMonth,
   onClose,
 }: MonthCloseScreenProps) {
   const insets = useSafeAreaInsets();
   const label = `${Number(monthKey.slice(5, 7))}月`;
   const [openId, setOpenId] = useState<string | null>(null);
+  const confirmAbort = () =>
+    Alert.alert('締めを中断しますか？', '口座の OK は残ります。もう一度、夫婦で「この月を締める」を押すと続きから締められます。', [
+      { text: '戻る', style: 'cancel' },
+      { text: '中断する', onPress: onAbortMonth },
+    ]);
 
   // 口座ごとの額と、今の額のまま OK している人。
   const rows = useMemo(
@@ -157,7 +165,12 @@ export default function MonthCloseScreen({
               </Pressable>
             </>
           ) : (
-            <PrimaryButton label="この月を締める" onPress={onCloseMonth} disabled={!allDone} />
+            <>
+              <PrimaryButton label="この月を締める" onPress={onCloseMonth} disabled={!allDone} />
+              <Pressable accessibilityRole="button" onPress={confirmAbort} style={styles.secondary}>
+                <Text style={styles.abortText}>締めを中断する</Text>
+              </Pressable>
+            </>
           )}
         </View>
       </View>
@@ -404,5 +417,6 @@ const styles = StyleSheet.create({
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1, borderTopColor: colors.border, gap: 6 },
   closedNote: { fontSize: 13, fontWeight: '600', color: colors.textMuted, textAlign: 'center', fontVariant: ['tabular-nums'] },
   secondary: { paddingVertical: 10, alignItems: 'center' },
+  abortText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
   reopenText: { fontSize: 13, fontWeight: '700', color: colors.danger },
 });
