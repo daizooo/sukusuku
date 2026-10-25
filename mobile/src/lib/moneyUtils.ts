@@ -912,7 +912,7 @@ export type BudgetLineGroup = 'income' | SpendGroup;
 export function budgetLineGroup(line: MoneyBudgetLine, categories: readonly MoneyCategory[]): BudgetLineGroup {
   const category = categories.find((entry) => entry.id === line.categoryId);
   if (category?.kind === 'income') return 'income';
-  return spendGroupOf(line.categoryId, categories);
+  return budgetLineGroupOf(line.categoryId, categories);
 }
 
 export interface BudgetPlan {
