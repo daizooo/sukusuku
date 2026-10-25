@@ -371,7 +371,7 @@ export default function CareTab({
                   setMilkModalMethod(undefined);
                   setLogModal({ type: 'milk', log: null });
                 }}
-                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-amber-50 transition active:scale-95"
+                className="relative bg-white px-1.5 py-2 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-amber-50 transition active:scale-95"
               >
                 <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
                 <span className="flex items-center gap-1.5">
@@ -379,7 +379,7 @@ export default function CareTab({
                   <span className="text-sm font-bold text-gray-800">授乳</span>
                 </span>
                 {/* 量・分数は出さず、その日の回数だけを出す（おむつと同じ並び）。 */}
-                <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
+                <span className="mt-px text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
                   計{summary.milk.count}回
                 </span>
                 {nursingBy && (
@@ -395,7 +395,7 @@ export default function CareTab({
               </button>
               <button
                 onClick={() => setLogModal({ type: 'diaper', log: null })}
-                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-blue-50 transition active:scale-95"
+                className="relative bg-white px-1.5 py-2 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-blue-50 transition active:scale-95"
               >
                 <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
                 <span className="flex items-center gap-1.5">
@@ -404,10 +404,10 @@ export default function CareTab({
                 </span>
                 {/* おしっことうんちは見たいことが別（水分が足りているか／お通じ）なので、
                     合わせた回数ではなくそれぞれの回数を出す。「両方」の記録は両方に数える。 */}
-                <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
+                <span className="mt-px text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
                   おしっこ {summary.diaper.peeCount}回
                 </span>
-                <span className="text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
+                <span className="mt-px text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
                   うんち {summary.diaper.poopCount}回
                 </span>
               </button>
@@ -415,17 +415,17 @@ export default function CareTab({
                   体温はその子の平熱だけ、体重はいちばん新しい値だけを出す。 */}
               <button
                 onClick={() => setBodyOpen(true)}
-                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-orange-50 transition active:scale-95"
+                className="relative bg-white px-1.5 py-2 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-orange-50 transition active:scale-95"
               >
                 <ChevronRight size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
                 <span className="flex items-center gap-1.5">
                   <Thermometer size={17} className="text-orange-600" />
                   <span className="text-sm font-bold text-gray-800">からだ</span>
                 </span>
-                <span className="mt-0.5 text-[11px] font-medium tabular-nums leading-tight text-center text-gray-500">
+                <span className="mt-px text-[11px] font-medium tabular-nums leading-tight text-center text-gray-500">
                   {temperatureSummaryText}
                 </span>
-                <span className="text-[11px] font-medium tabular-nums leading-tight text-center text-gray-500">
+                <span className="mt-px text-[11px] font-medium tabular-nums leading-tight text-center text-gray-500">
                   {latestWeightKg !== null ? `体重 ${latestWeightKg}kg` : '体重 -'}
                 </span>
               </button>

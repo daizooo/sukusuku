@@ -209,12 +209,9 @@ export const isLegacyLog = (log: CareLog): boolean => log.legacyAmount !== undef
 
 // --- 表示整形 ---
 
-/** 計測中の経過時間を 01:23:45 の形に。 */
-export const formatStopwatch = (ms: number): string => {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(Math.floor(totalSeconds / 3600))}:${pad(Math.floor(totalSeconds / 60) % 60)}:${pad(totalSeconds % 60)}`;
-};
+/** 計測中の経過時間を「12分」の形に。秒は出さない（記録も分まで）。 */
+export const formatStopwatch = (ms: number): string =>
+  `${Math.floor(Math.max(0, ms) / 60000)}分`;
 
 const LOG_TYPE_LABEL: Record<CareLog['type'], string> = {
   milk: 'ミルク',

@@ -392,20 +392,21 @@ function MilkLogModalBody({
             />
           )}
           {/* 計測中は経過時間（分）をそのまま入れておく。手で直した側はその値を優先する。 */}
-          <MinuteField
-            label="左（分）"
-            value={measuring && !editedLeft ? String(recordedLeft) : customLeft}
-            onChange={(value) => handleCustomMinutes('left', value)}
-          />
-          <MinuteField
-            label="右（分）"
-            value={measuring && !editedRight ? String(recordedRight) : customRight}
-            onChange={(value) => handleCustomMinutes('right', value)}
-          />
+          <div className="flex gap-3">
+            <MinuteField
+              label="左（分）"
+              value={measuring && !editedLeft ? String(recordedLeft) : customLeft}
+              onChange={(value) => handleCustomMinutes('left', value)}
+            />
+            <MinuteField
+              label="右（分）"
+              value={measuring && !editedRight ? String(recordedRight) : customRight}
+              onChange={(value) => handleCustomMinutes('right', value)}
+            />
+          </div>
           <div>
             <FieldLabel>最後に飲ませた側</FieldLabel>
             <OptionGrid options={SIDE_OPTIONS} value={lastSide} onChange={setLastSide} columns={2} accent="milk" />
-            <p className="text-[10px] text-gray-400 mt-1.5">次にどちらから授乳するかの目安になります。</p>
           </div>
         </>
       ) : method === 'pumped' ? (
@@ -688,7 +689,7 @@ interface MinuteFieldProps {
  */
 function MinuteField({ label, value, onChange }: MinuteFieldProps) {
   return (
-    <div>
+    <div className="flex-1 min-w-0">
       <FieldLabel>{label}</FieldLabel>
       <input
         type="number"
@@ -723,11 +724,8 @@ interface NursingSetTimerProps {
   onReset: () => void;
 }
 
-/** 残り時間を「M:SS」で。区切りの目安(5分)までどれくらいかを見るためのもの。 */
-const formatRemaining = (ms: number): string => {
-  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-  return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
-};
+/** 残り時間を「N分」で（切り上げ）。区切りの目安(5分)までどれくらいかを見るためのもの。 */
+const formatRemaining = (ms: number): string => `${Math.max(0, Math.ceil(ms / 60000))}分`;
 
 /**
  * 授乳1セット（左5分 → 右5分 → ゲップ5分）を測るストップウォッチ。
@@ -792,11 +790,6 @@ function NursingSetTimer({
           </button>
         )}
       </div>
-      <p className="text-[10px] text-gray-500 mb-2">
-        {order.map((phase) => `${getNursingPhaseLabel(phase)}${NURSING_PHASE_MINUTES}分`).join(' → ')}
-        で1セット。{NURSING_PHASE_MINUTES}分でお知らせが1回鳴り、ゲップまで終わると計測が止まります。
-        時間はこのセットのぶんで、記録に入るのは全セットの合計です。
-      </p>
       {/* ボタンの並びは「左・右・ゲップ」で固定する。おすすめの開始側で並べ替えると
           押すたびに左右の位置が入れ替わり、どちらを押しているのか分かりにくいため。
           どこから始めるかは、上の案内文とハイライトで示す。 */}
@@ -856,20 +849,9 @@ function NursingSetTimer({
         })}
       </div>
       {guide && <p className="text-[11px] font-bold text-amber-700 mt-2">{guide}</p>}
-      {hasSession ? (
-        <>
-          <p className="text-[11px] font-bold text-amber-700 mt-1">
-            左{recordedLeft}分・右{recordedRight}分で記録します
-          </p>
-          <p className="text-[10px] text-gray-500 mt-0.5">
-            止めるのを忘れたときは、下の「左（分）」「右（分）」で実際の時間に直せます。
-            ゲップの時間は記録には残りません。
-          </p>
-        </>
-      ) : (
-        <p className="text-[10px] text-gray-500 mt-1">
-          別の区切りをタップすると自動で切り替わります。この画面を閉じても計測は続きます。
-          記録に残るのは左右の分数だけです。
+      {hasSession && (
+        <p className="text-[11px] font-bold text-amber-700 mt-1">
+          左{recordedLeft}分・右{recordedRight}分で記録します
         </p>
       )}
 
