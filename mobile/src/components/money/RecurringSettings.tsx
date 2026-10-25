@@ -41,6 +41,7 @@ import {
   updateMoneyRecurringPosition,
 } from '@/lib/api/money';
 import { useDragReorder } from '@/components/list/useDragReorder';
+import { useKeepScroll } from '@/hooks/useKeepScroll';
 import CategoryPicker from '@/components/money/CategoryPicker';
 import StorePicker from '@/components/money/StorePicker';
 import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
@@ -103,6 +104,8 @@ export default function RecurringSettings({
   const [editing, setEditing] = useState<MoneyRecurring | 'new' | null>(
     () => recurring.find((rule) => rule.id === initialEditId) ?? null,
   );
+  // 編集から戻ったとき、一覧を直前の位置から始める。
+  const keepList = useKeepScroll();
   // 一覧に出す種類（支出／収入／振替）。予算の画面から開いたルールの種類で始める。新しく足すのもこの種類。
   // 出すのは振替だけ（支出・収入は年間予算で決める）。
   const tab: RecurringMode = 'transfer';
@@ -228,7 +231,7 @@ export default function RecurringSettings({
     <View style={styles.screen}>
       <ScreenHeader title="振替" icon="back" onClose={onBack} />
       <View style={styles.flex}>
-      <ScrollView contentContainerStyle={styles.content} scrollEnabled={!drag.isActive}>
+      <ScrollView contentContainerStyle={styles.content} scrollEnabled={!drag.isActive} {...keepList}>
         {usable.length === 0 && <Text style={styles.empty}>まだありません</Text>}
         {sections.map((section) => {
           const inKind = section.rules;
@@ -399,6 +402,8 @@ function RecurringEditor({
   const isIncome = mode === 'income';
   const base = rule ?? template;
   const [screen, setScreen] = useState<EditorScreen>('form');
+  // 分類・お店を選ぶ画面から戻ったとき、入力の途中の位置から始める。
+  const keepForm = useKeepScroll();
   useEffect(() => {
     backRef.current = () => (screen === 'form' ? onClose() : setScreen('form'));
   });
@@ -562,7 +567,7 @@ function RecurringEditor({
         icon="back"
         onClose={onClose}
       />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" {...keepForm}>
         {kind !== 'transfer' && (
           <View style={styles.field}>
             <Text style={styles.label}>種類</Text>

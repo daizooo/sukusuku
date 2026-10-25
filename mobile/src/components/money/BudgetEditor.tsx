@@ -19,6 +19,7 @@ import type {
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
+import { useKeepScroll } from '@/hooks/useKeepScroll';
 import { toDateString, WEEKDAY_LABELS } from '@/lib/dateUtils';
 import {
   amountModeOfGroup,
@@ -219,6 +220,8 @@ export default function BudgetEditor({
   const insets = useSafeAreaInsets();
   const [year, setYear] = useState(initialYear);
   const [stack, setStack] = useState<Screen[]>([{ type: 'list' }]);
+  // 予算の編集から戻ったとき、一覧を直前の位置から始める。
+  const keepList = useKeepScroll();
   // 上の枠で押した種類（その種類だけ並べる。expense は支出の種類すべて）。null は全部。
   const [selected, setSelected] = useState<BudgetLineGroup | 'expense' | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
@@ -720,7 +723,7 @@ export default function BudgetEditor({
             <ChevronRight size={18} color={colors.textSubtle} />
           </Pressable>
         </View>
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={styles.content} {...keepList}>
           <View style={styles.overview}>
             <Donut income={totals.income} parts={SPEND_GROUPS.map((group) => ({ group, amount: totals[group] }))} />
             <LegendRow
@@ -1075,6 +1078,8 @@ function BudgetForm({
   const [incomeFixed, setIncomeFixed] = useState(rule?.amountMode === 'fixed');
   const [sheet, setSheet] = useState<FormSheet>(null);
   const [pickingStore, setPickingStore] = useState(false);
+  // お店を選ぶ画面から戻ったとき、入力の途中の位置から始める。
+  const keepForm = useKeepScroll();
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const storeOptions = useMemo(() => storeChoices(stores, records, toDateString(new Date())), [stores, records]);
@@ -1228,7 +1233,7 @@ function BudgetForm({
   return (
     <>
       <ScreenHeader title={rule ? '予算を直す' : '予算を追加'} icon="back" onClose={onClose} />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" {...keepForm}>
         <Text style={styles.groupTitle}>分類</Text>
         <View style={styles.group}>
           <SettingRow first label="種類" value={GROUP_LABEL[group]} disabled={typeLocked} onPress={() => setSheet('group')} />
