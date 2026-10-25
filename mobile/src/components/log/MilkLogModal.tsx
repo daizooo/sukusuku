@@ -397,8 +397,6 @@ function MilkLogModalBody({
                 elapsed={timer.elapsed}
                 runningSide={timer.runningSide}
                 hasSession={timer.hasSession}
-                recordedLeft={recordedLeft}
-                recordedRight={recordedRight}
                 onToggleSide={handleToggleSide}
                 onReset={handleResetTimer}
               />
@@ -681,9 +679,6 @@ interface NursingStopwatchProps {
   elapsed: NursingSideValues;
   runningSide: BreastSide | null;
   hasSession: boolean;
-  /** この内容で保存したときに記録される分数。 */
-  recordedLeft: number;
-  recordedRight: number;
   onToggleSide: (side: BreastSide) => void;
   onReset: () => void;
 }
@@ -701,8 +696,6 @@ function NursingStopwatch({
   elapsed,
   runningSide,
   hasSession,
-  recordedLeft,
-  recordedRight,
   onToggleSide,
   onReset,
 }: NursingStopwatchProps) {
@@ -755,12 +748,6 @@ function NursingStopwatch({
           );
         })}
       </View>
-
-      {hasSession && (
-        <Text style={styles.stopwatchSummary}>
-          左{recordedLeft}分・右{recordedRight}分で記録します
-        </Text>
-      )}
     </View>
   );
 }
@@ -869,5 +856,4 @@ const styles = StyleSheet.create({
   trackFill: { height: '100%', borderRadius: 999, backgroundColor: colors.milk },
   trackFillRunning: { backgroundColor: colors.primaryText },
 
-  stopwatchSummary: { fontSize: 12, fontWeight: '700', color: colors.milkText, marginTop: 6, fontVariant: ['tabular-nums'] },
 });

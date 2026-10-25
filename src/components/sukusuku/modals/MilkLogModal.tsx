@@ -363,8 +363,6 @@ function MilkLogModalBody({
               elapsed={timer.elapsed}
               runningSide={timer.runningSide}
               hasSession={timer.hasSession}
-              recordedLeft={recordedLeft}
-              recordedRight={recordedRight}
               onToggleSide={handleToggleSide}
               onReset={handleResetTimer}
             />
@@ -687,9 +685,6 @@ interface NursingStopwatchProps {
   elapsed: NursingSideValues;
   runningSide: BreastSide | null;
   hasSession: boolean;
-  /** この内容で保存したときに記録される分数。 */
-  recordedLeft: number;
-  recordedRight: number;
   onToggleSide: (side: BreastSide) => void;
   onReset: () => void;
 }
@@ -707,8 +702,6 @@ function NursingStopwatch({
   elapsed,
   runningSide,
   hasSession,
-  recordedLeft,
-  recordedRight,
   onToggleSide,
   onReset,
 }: NursingStopwatchProps) {
@@ -779,11 +772,6 @@ function NursingStopwatch({
           );
         })}
       </div>
-      {hasSession && (
-        <p className="text-[11px] font-bold text-amber-700 mt-2">
-          左{recordedLeft}分・右{recordedRight}分で記録します
-        </p>
-      )}
     </div>
   );
 }
