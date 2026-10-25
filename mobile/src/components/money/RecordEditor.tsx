@@ -29,7 +29,6 @@ import {
   formatYen,
   groupsFromItems,
   groupsFromScan,
-  iconKeyOf,
   itemsFromGroups,
   lastWalletId,
   monthKeyOf,
@@ -37,7 +36,7 @@ import {
   recordTotal,
   storeChoices,
   RECORD_KIND_LABEL,
-  topCategoryIdOf,
+  recordIconKeyOf,
   type EditorGroup,
 } from '@/lib/moneyUtils';
 import Calculator from '@/components/money/Calculator';
@@ -228,11 +227,9 @@ export default function RecordEditor({
       ].filter((notice): notice is string => typeof notice === 'string')
     : [];
 
-  /** まとまりのアイコン（大分類のアイコン）。 */
+  /** まとまりのアイコン（小分類に決めていればそれ、無ければ大分類のアイコン）。 */
   const groupIconKey = (target: Pick<EditorGroup, 'categoryId'>) => {
-    if (target.categoryId === null) return 'receipt';
-    const topId = topCategoryIdOf(categories, target.categoryId);
-    return iconKeyOf(categories.find((category) => category.id === topId));
+    return recordIconKeyOf(categories, target.categoryId);
   };
 
   const changeKind = (next: MoneyRecordKind) => {

@@ -16,6 +16,16 @@ const ROWS: { key: string; label: string; op?: boolean }[][] = [
 export default function Calculator({ onKey }: { onKey: (key: string) => void }) {
   return (
     <div className="shrink-0 grid grid-cols-4 gap-1.5 px-3 py-2">
+      {/* C は式を全部消す（1文字だけ消すのは右下のキー）。 */}
+      <button
+        type="button"
+        aria-label="全部消す"
+        onClick={() => onKey('clear')}
+        className="col-span-3 flex h-11 items-center justify-center rounded-full text-[22px] font-semibold text-red-500 active:bg-blue-50"
+      >
+        C
+      </button>
+      <div />
       {ROWS.flat().map((entry) => (
         <button
           key={entry.key}

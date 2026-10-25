@@ -513,8 +513,11 @@ export interface MoneyCategory {
   budgetGroup: MoneyBudgetGroup;
 }
 
-/** 予算の分け方。変動費（大分類の月の予算）・予備費・固定費の確定・固定費の見込み（小分類ごとの予算の明細）。 */
-export type MoneyBudgetGroup = 'variable' | 'reserve' | 'fixed' | 'estimate';
+/**
+ * 予算の分け方。変動費（大分類の月の予算）・予備費・固定費の確定・固定費の見込み（小分類ごとの予算の明細）。
+ * temporary は特別費（予算に載せない。DBは money_categories.temporary で持ち、budget_group は null。docs/kakei.md §0.10）。
+ */
+export type MoneyBudgetGroup = 'variable' | 'reserve' | 'fixed' | 'estimate' | 'temporary';
 
 /**
  * 予算の明細（docs/kakei.md §0.7）。予算の行（money_recurring）から作る形（budgetLinesOf。表 money_budget_lines は 0138 で消した）。小分類（収入も）ごとの「単価 × その年に発生する回数」。
