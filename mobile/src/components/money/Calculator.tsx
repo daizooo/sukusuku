@@ -16,6 +16,19 @@ const ROWS: { key: string; label: string; op?: boolean }[][] = [
 export default function Calculator({ onKey, disabled }: { onKey: (key: string) => void; disabled?: boolean }) {
   return (
     <View style={[styles.pad, disabled && styles.disabled]}>
+      {/* C は式を全部消す（1文字だけ消すのは右下のキー）。 */}
+      <View style={styles.row}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="全部消す"
+          onPress={() => onKey('clear')}
+          disabled={disabled}
+          style={({ pressed }) => [styles.key, styles.clearKey, pressed && styles.pressed]}
+        >
+          <Text style={styles.clearText}>C</Text>
+        </Pressable>
+        <View style={styles.clearSpace} />
+      </View>
       {ROWS.map((row, index) => (
         <View key={index} style={styles.row}>
           {row.map((entry) => (
@@ -45,8 +58,11 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.4 },
   row: { flexDirection: 'row', gap: 6 },
   key: { flex: 1, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  clearKey: { flex: 3, height: 44 },
+  clearSpace: { flex: 1 },
   opKey: { backgroundColor: colors.neutralSurface, marginHorizontal: 8 },
   pressed: { backgroundColor: colors.moneySurface },
   keyText: { fontSize: 24, fontWeight: '600', color: colors.text },
+  clearText: { fontSize: 22, fontWeight: '600', color: colors.danger },
   opText: { fontSize: 22, fontWeight: '500', color: colors.textSubtle },
 });

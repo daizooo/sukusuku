@@ -632,6 +632,7 @@ assert.equal(pressCalcKey('12', '+'), '12+');
 assert.equal(pressCalcKey('12+', '*'), '12*', '演算子は置き換える');
 assert.equal(pressCalcKey('', '+'), '');
 assert.equal(pressCalcKey('12', 'back'), '1');
+assert.equal(pressCalcKey('12+3', 'clear'), '', 'C は式を全部消す');
 
 // ---- 年の収支 ----
 const year = buildYearSummary(records, categories, budgets, 2026, '2026-09');

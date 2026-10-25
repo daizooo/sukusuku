@@ -9,11 +9,10 @@ import {
   formatYen,
   groupItems,
   groupRecordsByDay,
-  iconKeyOf,
   isFixedEstimate,
   itemSummary,
   recordTotal,
-  topCategoryIdOf,
+  recordIconKeyOf,
   type BalanceCheck,
 } from '@/lib/moneyUtils';
 import { CategoryIcon, EstimateBadge, NextPeriodBadge, TransferIcon, WalletTypeIcon, incomeAmountClass } from './moneyVisual';
@@ -148,14 +147,13 @@ export const RecordDayBlock = memo(function RecordDayBlock({
     }
     const groups = groupItems(record.items);
     const first = groups[0];
-    const top = first?.categoryId ? topCategoryIdOf(categories, first.categoryId) : null;
     // 小分類だけ（大分類はアイコンで分かる）。
     const firstTitle = first?.categoryId
       ? (categories.find((category) => category.id === first.categoryId)?.name ?? '')
       : (first?.categoryName ?? '');
     const title = groups.length > 1 ? `${firstTitle} ほか` : firstTitle;
     return {
-      icon: top ? iconKeyOf(categories.find((category) => category.id === top)) : 'star',
+      icon: first?.categoryId ? recordIconKeyOf(categories, first.categoryId) : 'star',
       title: record.store.trim() !== '' ? `${title} @ ${record.store.trim()}` : title,
       sub: itemSummary(record.items),
     };

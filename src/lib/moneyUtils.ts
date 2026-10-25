@@ -491,6 +491,18 @@ export function topCategoryIdOf(categories: readonly MoneyCategory[], categoryId
   return category.parentId ?? category.id;
 }
 
+/**
+ * 記録の一覧・まとまりの見出しに出すアイコンの key。小分類に絵を決めていればそれ、無ければ大分類のもの
+ * （小分類の「名前から近いもの」までは見ない。決めていない小分類は、これまでどおり大分類の絵）。
+ */
+export function recordIconKeyOf(categories: readonly MoneyCategory[], categoryId: string | null): string {
+  if (categoryId === null) return 'receipt';
+  const category = categories.find((entry) => entry.id === categoryId);
+  if (!category) return 'other';
+  if (category.parentId !== null && category.icon !== null) return iconKeyOf(category);
+  return iconKeyOf(categories.find((entry) => entry.id === (category.parentId ?? category.id)));
+}
+
 /** 「食費 › 食料品」（大分類なら名前だけ）。 */
 export function categoryPath(categories: readonly MoneyCategory[], categoryId: string | null): string {
   if (categoryId === null) return '';
@@ -2390,8 +2402,9 @@ export function evaluateCalc(expression: string): number | null {
 /** 電卓の式の表示（* / を × ÷ に）。 */
 export const formatCalc = (expression: string) => expression.replace(/\*/g, '×').replace(/\//g, '÷').replace(/-/g, '−');
 
-/** 電卓のキーを押したあとの式。key は数字・'00'・演算子・'back'。 */
+/** 電卓のキーを押したあとの式。key は数字・'00'・演算子・'back'（1文字消す）・'clear'（C。全部消す）。 */
 export function pressCalcKey(expression: string, key: string): string {
+  if (key === 'clear') return '';
   if (key === 'back') return expression.slice(0, -1);
   if (/^[+\-*/]$/.test(key)) {
     if (expression === '') return expression;
