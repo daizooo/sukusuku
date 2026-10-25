@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { useKeepScroll } from '../ui/useKeepScroll';
 import type {
   MoneyBudgetGroup,
   MoneyCategory,
@@ -223,6 +224,8 @@ export default function BudgetEditor({
   const supabase = useMemo(() => createClient(), []);
   const [year, setYear] = useState(initialYear);
   const [stack, setStack] = useState<Screen[]>([{ type: 'list' }]);
+  // 予算の編集から戻ったとき、一覧を直前の位置から始める。
+  const keepList = useKeepScroll();
   // 上の枠で押した種類（その種類だけ並べる。expense は支出の種類すべて）。null は全部。
   const [selected, setSelected] = useState<BudgetLineGroup | 'expense' | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
@@ -709,7 +712,7 @@ export default function BudgetEditor({
             <ChevronRight size={18} />
           </button>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pt-2 pb-8 space-y-3">
+        <div {...keepList} className="flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pt-2 pb-8 space-y-3">
           <div className="rounded-2xl bg-white px-3.5 py-3 shadow-[0_6px_18px_rgba(17,24,39,0.12)]">
             <Donut income={totals.income} parts={SPEND_GROUPS.map((group) => ({ group, amount: totals[group] }))} />
             <LegendRow
@@ -1202,6 +1205,8 @@ function BudgetForm({
   const [incomeFixed, setIncomeFixed] = useState(rule?.amountMode === 'fixed');
   const [sheet, setSheet] = useState<FormSheet>(null);
   const [pickingStore, setPickingStore] = useState(false);
+  // お店を選ぶ画面から戻ったとき、入力の途中の位置から始める。
+  const keepForm = useKeepScroll();
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const storeOptions = useMemo(() => storeChoices(stores, records, toDateString(new Date())), [stores, records]);
@@ -1359,7 +1364,7 @@ function BudgetForm({
   return (
     <>
       <ScreenHeader title={rule ? '予算を直す' : '予算を追加'} icon="back" onClose={onClose} />
-      <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pt-3 pb-8 space-y-3">
+      <div {...keepForm} className="flex-1 min-h-0 overflow-y-auto bg-gray-50 px-4 pt-3 pb-8 space-y-3">
         <p className="px-1 text-[13px] font-bold text-gray-500">分類</p>
         <div className={groupClass}>
           <SettingRow first label="種類" value={GROUP_LABEL[group]} disabled={typeLocked} onClick={() => setSheet('group')} />

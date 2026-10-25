@@ -41,6 +41,7 @@ import {
   updateMoneyRecurringPosition,
 } from '@/lib/api/money';
 import { useDragReorder } from '../ui/useDragReorder';
+import { useKeepScroll } from '../ui/useKeepScroll';
 import CategoryPicker from './CategoryPicker';
 import StorePicker from './StorePicker';
 import { PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
@@ -100,6 +101,8 @@ export default function RecurringSettings({
   onBack,
 }: RecurringSettingsProps) {
   const supabase = useMemo(() => createClient(), []);
+  // 編集から戻ったとき、一覧を直前の位置から始める。
+  const keepList = useKeepScroll();
   const [editing, setEditing] = useState<MoneyRecurring | 'new' | null>(
     () => recurring.find((rule) => rule.id === initialEditId) ?? null,
   );
@@ -220,7 +223,7 @@ export default function RecurringSettings({
         <>
           <ScreenHeader title="振替" icon="back" onClose={onBack} />
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+          <div {...keepList} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {usable.length === 0 && <p className="py-4 text-center text-sm text-gray-400">まだありません</p>}
             {sections.map((section) => {
               const inKind = section.rules;
@@ -412,6 +415,8 @@ function RecurringEditor({
   const isIncome = mode === 'income';
   const base = rule ?? template;
   const [screen, setScreen] = useState<EditorScreen>('form');
+  // 分類・お店を選ぶ画面から戻ったとき、入力の途中の位置から始める。
+  const keepForm = useKeepScroll();
   // 種類（支出・収入・振替）は、一覧の切り替えで決まる（編集では変えない）。
   const kind: MoneyRecordKind = base?.kind ?? mode;
   const [categoryId, setCategoryId] = useState<string | null>(base?.categoryId ?? null);
@@ -564,7 +569,7 @@ function RecurringEditor({
       ) : (
         <>
           <ScreenHeader title={`${MODE_NAME[mode]}を${rule ? '編集' : template ? '複製して足す' : '足す'}`} icon="back" onClose={onClose} />
-          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+          <div {...keepForm} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {kind !== 'transfer' && (
               <div className="space-y-2">
                 <span className={labelClass}>種類</span>
