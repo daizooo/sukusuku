@@ -530,11 +530,8 @@ export default function CareScreen() {
   // 相手がまだ飲ませている最中は、次の側ではなくそれを出す（終わってから決まるため）。
   const nursingBy = lastFeeding.isNursing ? (familyNursing?.userId ?? null) : null;
   // 測り終えて記録がまだなら、その最後に飲ませた側の逆がおすすめ。
-  // （計測中の区切りにはゲップも入るが、記録待ちの印に入るのは左右だけ）
   const pendingLastSide =
-    lastFeeding.isPendingRecord && familyNursing && familyNursing.side !== 'burp'
-      ? familyNursing.side
-      : null;
+    lastFeeding.isPendingRecord && familyNursing ? familyNursing.side : null;
   const nextBreastSide: BreastSide | null = pendingLastSide
     ? pendingLastSide === 'left'
       ? 'right'
@@ -867,16 +864,10 @@ export default function CareScreen() {
               >
                 <View style={styles.flex}>
                   <Text style={styles.nursingTitle}>
-                    {timer.runningPhase === 'burp'
-                      ? 'ゲップの時間を計測中'
-                      : timer.runningPhase
-                        ? `授乳中（${getSideLabel(timer.runningPhase)}）`
-                        : '授乳の計測中'}
+                    {timer.runningSide ? `授乳中（${getSideLabel(timer.runningSide)}）` : '授乳の計測中'}
                   </Text>
-                  {/* 出すのは記録に入る合計。何セット目かは、続きから測るときの目印になる。 */}
                   <Text style={styles.nursingTime}>
-                    {timer.setNumber}セット目・左 {formatStopwatch(timer.total.left)} / 右{' '}
-                    {formatStopwatch(timer.total.right)}
+                    左 {formatStopwatch(timer.elapsed.left)} / 右 {formatStopwatch(timer.elapsed.right)}
                   </Text>
                 </View>
                 <Text style={styles.nursingOpen}>開く</Text>

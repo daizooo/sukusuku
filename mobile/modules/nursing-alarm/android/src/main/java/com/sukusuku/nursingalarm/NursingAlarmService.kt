@@ -22,16 +22,17 @@ import android.os.VibratorManager
 /**
  * 授乳中だけ動く前面サービス。
  *
- * 常駐通知に「授乳 3分 左」と出しながら経過時間を自分で数え、その区切りが5分に達したら
- * 音（[AlarmTonePlayer]）と振動を**1回だけ**鳴らす。ローカル通知を並べて予約する形に
- * しないのは、Android 8以降は通知の音と振動がチャンネルに固定され、鳴らし分けが
+ * 常駐通知に「授乳 3分 左」と出しながら経過時間を自分で数え、5分たつごとに
+ * 音（[AlarmTonePlayer]）と振動を鳴らす。鳴る回数は経過時間で変わり（5分=1回、10分=2回…。
+ * 規則は [buildAlarmPattern]）、画面を見なくても何分たったかが分かる。ローカル通知を並べて
+ * 予約する形にしないのは、Android 8以降は通知の音と振動がチャンネルに固定され、鳴らし分けが
  * できないため（docs/native-app-android.md §3）。
  *
- * 数えるのに要るのは「その区切りの合計時間が0だった時刻(baselineAt)」だけで、
- * 区切りの切り替えは baselineAt を入れ替えた [ACTION_START] として届く。
+ * 数えるのに要るのは「その側の合計時間が0だった時刻(baselineAt)」だけで、
+ * 左右の切り替えは baselineAt を入れ替えた [ACTION_START] として届く。
  *
- * ゲップの5分まで終わればそのセットは完了。そこで数えるのをやめ、常駐通知を
- * 「記録してください」に書き換えて残す（アプリを開いて記録するまでの目印）。
+ * 1つの側が [MAX_MINUTES] に達したら数えるのをやめ、常駐通知を「記録してください」に
+ * 書き換えて残す（止め忘れても鳴り続けない。アプリを開いて記録するまでの目印）。
  * 通知を消すのはアプリ側で、記録・リセット・締めのいずれかのときに [stop] が届く。
  */
 class NursingAlarmService : Service() {
@@ -43,8 +44,8 @@ class NursingAlarmService : Service() {
     const val EXTRA_BASELINE_AT = "baselineAt"
     const val EXTRA_PHASE_MINUTES = "phaseMinutes"
 
-    /** ゲップ。ここまで終われば1セット完了。 */
-    private const val PHASE_BURP = "burp"
+    /** 1つの側を測れる上限（分）。ここまで数えたら止める（アプリ側 NURSING_MAX_MS と合わせる）。 */
+    private const val MAX_MINUTES = 60
 
     private const val CHANNEL_ID = "nursing_ongoing"
     private const val NOTIFICATION_ID = 1001
@@ -57,13 +58,13 @@ class NursingAlarmService : Service() {
   private var phase: String = "left"
   private var baselineAt: Long = 0
 
-  /** 1区切りの長さ（分）。ここに達したら1回だけ鳴らす。 */
+  /** お知らせの間隔（分）。経過がこの倍数に達するたびに鳴らす。 */
   private var phaseMinutes: Int = 5
 
-  /** いまの区切りで鳴らし終えたか。預け直しのときは経過ぶんを見て決める。 */
-  private var notified: Boolean = false
+  /** どこまで鳴らし終えたか（何回目の間隔か）。預け直しのときは経過ぶんを見て決める。 */
+  private var notifiedStep: Int = 0
 
-  /** ゲップまで終わって、あとは記録を待つだけの状態か。 */
+  /** 上限まで測り終えて、あとは記録を待つだけの状態か。 */
   private var pendingRecord: Boolean = false
 
   /** 常駐通知の文言を書き換えるのは分が変わったときだけにする。 */
@@ -74,7 +75,7 @@ class NursingAlarmService : Service() {
   private val tick = object : Runnable {
     override fun run() {
       onTick()
-      // セットが終わったら次を積まない（onTick の中で外しても、この直後にまた積んでしまう）。
+      // 上限で止めたら次を積まない（onTick の中で外しても、この直後にまた積んでしまう）。
       if (!pendingRecord) handler.postDelayed(this, TICK_MS)
     }
   }
@@ -91,8 +92,8 @@ class NursingAlarmService : Service() {
     baselineAt = intent?.getLongExtra(EXTRA_BASELINE_AT, baselineAt) ?: baselineAt
     phaseMinutes = (intent?.getIntExtra(EXTRA_PHASE_MINUTES, phaseMinutes) ?: phaseMinutes)
       .coerceAtLeast(1)
-    // 預け直しで鳴り直さないよう、もう5分を過ぎている区切りは鳴らし済みとして始める。
-    notified = elapsedMinutes() >= phaseMinutes
+    // 預け直しで鳴り直さないよう、すでに過ぎた間隔は鳴らし済みとして始める。
+    notifiedStep = elapsedMinutes() / phaseMinutes
     pendingRecord = false
     shownMinutes = -1
 
@@ -121,14 +122,16 @@ class NursingAlarmService : Service() {
 
   private fun onTick() {
     val minutes = elapsedMinutes()
-    if (!notified && minutes >= phaseMinutes) {
-      notified = true
-      fireAlarm(buildAlarmPattern(phaseMinutes))
-      // ゲップまで終われば1セット完了。数えるのをやめ、記録を促す通知に切り替える。
-      if (phase == PHASE_BURP) {
-        finishSet()
-        return
-      }
+    val step = minutes / phaseMinutes
+    if (step > notifiedStep) {
+      notifiedStep = step
+      // 経過時間そのものを回数で伝える（5分=短1、10分=短2…。30分から長音が入る）。
+      fireAlarm(buildAlarmPattern(step * phaseMinutes))
+    }
+    // 上限まで測り終えたら、数えるのをやめ、記録を促す通知に切り替える。
+    if (minutes >= MAX_MINUTES) {
+      finishMeasuring()
+      return
     }
     if (minutes != shownMinutes) {
       shownMinutes = minutes
@@ -137,17 +140,17 @@ class NursingAlarmService : Service() {
   }
 
   /**
-   * 1セット終わったあと、記録されるまでの状態にする。
+   * 上限まで測り終えたあと、記録されるまでの状態にする。
    *
    * サービスは止めずに通知だけ残すのは、アプリを閉じたまま授乳を終えたときに
    * 「記録がまだ」と気づける場所が通知バーしかないため。アプリを開けば、
    * 端末に控えた計測から同じ締めが行われ、そのとき [stop] が届いて通知も消える。
    */
-  private fun finishSet() {
+  private fun finishMeasuring() {
     pendingRecord = true
     releaseWakeLock()
     shownMinutes = -1
-    notificationManager().notify(NOTIFICATION_ID, buildNotification(phaseMinutes))
+    notificationManager().notify(NOTIFICATION_ID, buildNotification(MAX_MINUTES))
   }
 
   private fun fireAlarm(pattern: AlarmPattern) {
@@ -156,7 +159,7 @@ class NursingAlarmService : Service() {
   }
 
   /**
-   * 区切りのお知らせを振動で伝える。
+   * お知らせを振動で伝える。
    *
    * **アラームとしての振動だと伝えないと、マナーモードでは振動しない。** 属性を付けずに
    * 呼ぶと用途が「不明」のまま扱われ、端末の設定（消音時の振動・通知の振動）に従って
@@ -221,12 +224,8 @@ class NursingAlarmService : Service() {
     }
   }
 
-  /** 区切りの呼び名。アプリ側の getNursingPhaseLabel と同じ。 */
-  private fun phaseLabel(): String = when (phase) {
-    PHASE_BURP -> "ゲップ"
-    "right" -> "右"
-    else -> "左"
-  }
+  /** 側の呼び名。アプリ側の getSideLabel と同じ。 */
+  private fun phaseLabel(): String = if (phase == "right") "右" else "左"
 
   private fun buildNotification(minutes: Int): Notification {
     val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -238,10 +237,8 @@ class NursingAlarmService : Service() {
     val title = if (pendingRecord) "授乳が終わりました" else "授乳 ${minutes}分 ${phaseLabel()}"
     val text = if (pendingRecord) {
       "タップして記録してください"
-    } else if (notified) {
-      "${phaseMinutes}分経過 — 次の区切りへ"
     } else {
-      "${phaseMinutes}分でお知らせします"
+      "${phaseMinutes}分ごとにお知らせします"
     }
     return builder
       .setContentTitle(title)

@@ -8,7 +8,6 @@ import type {
   FeedingEntryMode,
   FeedingMethod,
   MilkLog,
-  NursingPhase,
   PoopColor,
   PoopConsistency,
   PumpedBatch,
@@ -176,10 +175,6 @@ export const getLatestTemperature = (logs: CareLog[]): TemperatureLog | null =>
 
 export const getSideLabel = (side: BreastSide): string => (side === 'left' ? '左' : '右');
 
-/** 授乳1セットの区切りの呼び名。 */
-export const getNursingPhaseLabel = (phase: NursingPhase): string =>
-  phase === 'burp' ? 'ゲップ' : getSideLabel(phase);
-
 /**
  * 次にどちらの乳首から授乳すればよいか。
  * 直近の母乳の記録で最後に飲ませた側の反対側を返す。判断材料がなければ null。
@@ -225,9 +220,12 @@ export const isLegacyLog = (log: CareLog): boolean => log.legacyAmount !== undef
 
 // --- 表示整形 ---
 
-/** 計測中の経過時間を「12分」の形に。秒は出さない（記録も分まで）。 */
-export const formatStopwatch = (ms: number): string =>
-  `${Math.floor(Math.max(0, ms) / 60000)}分`;
+/** 計測中の経過時間を 12:34 の形に（59:59 まで。授乳の計測は60分で止まる）。 */
+export const formatStopwatch = (ms: number): string => {
+  const totalSeconds = Math.min(59 * 60 + 59, Math.max(0, Math.floor(ms / 1000)));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(Math.floor(totalSeconds / 60))}:${pad(totalSeconds % 60)}`;
+};
 
 const LOG_TYPE_LABEL: Record<CareLog['type'], string> = {
   milk: 'ミルク',

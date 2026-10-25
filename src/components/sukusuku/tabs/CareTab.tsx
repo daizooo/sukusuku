@@ -341,16 +341,13 @@ export default function CareTab({
                 <div>
                   <p className="text-xs font-bold text-amber-700 flex items-center">
                     <BabyBottleIcon size={12} className="mr-1" />
-                    {nursingTimer.runningPhase === 'burp'
-                      ? 'ゲップの時間を計測中'
-                      : nursingTimer.runningPhase
-                        ? `授乳中（${getSideLabel(nursingTimer.runningPhase)}）`
-                        : '授乳の計測中'}
+                    {nursingTimer.runningSide
+                      ? `授乳中（${getSideLabel(nursingTimer.runningSide)}）`
+                      : '授乳の計測中'}
                   </p>
-                  {/* 出すのは記録に入る合計。何セット目かは、続きから測るときの目印になる。 */}
                   <p className="text-[11px] text-amber-600 tabular-nums">
-                    {nursingTimer.setNumber}セット目・左 {formatStopwatch(nursingTimer.total.left)} / 右{' '}
-                    {formatStopwatch(nursingTimer.total.right)}
+                    左 {formatStopwatch(nursingTimer.elapsed.left)} / 右{' '}
+                    {formatStopwatch(nursingTimer.elapsed.right)}
                   </p>
                 </div>
                 <button
