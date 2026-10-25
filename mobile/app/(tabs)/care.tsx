@@ -870,7 +870,6 @@ export default function CareScreen() {
                     左 {formatStopwatch(timer.elapsed.left)} / 右 {formatStopwatch(timer.elapsed.right)}
                   </Text>
                 </View>
-                <Text style={styles.nursingOpen}>開く</Text>
               </Pressable>
             )}
 
@@ -1138,16 +1137,6 @@ const styles = StyleSheet.create({
   },
   nursingTitle: { fontSize: 12, fontWeight: '700', color: colors.milkText },
   nursingTime: { fontSize: 11, color: colors.milk, marginTop: 2, fontWeight: '500', fontVariant: ['tabular-nums'] },
-  nursingOpen: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primaryText,
-    backgroundColor: colors.milk,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    overflow: 'hidden',
-  },
 
   // 記録ボタン。授乳・おむつ・体温を横に3つ並べる（PWA版と同じ並び）。
   recordRow: { flexDirection: 'row', gap: 8 },

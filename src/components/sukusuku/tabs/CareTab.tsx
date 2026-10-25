@@ -337,7 +337,10 @@ export default function CareTab({
         <>
             {/* 計測中の授乳。アプリを開いた人が最初に気づけるよう一番上に出す */}
             {nursingTimer.hasSession && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center justify-between">
+              <button
+                onClick={() => setLogModal({ type: 'milk', log: null })}
+                className="w-full text-left bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 hover:bg-amber-100 transition active:scale-[0.99]"
+              >
                 <div>
                   <p className="text-xs font-bold text-amber-700 flex items-center">
                     <BabyBottleIcon size={12} className="mr-1" />
@@ -350,13 +353,7 @@ export default function CareTab({
                     {formatStopwatch(nursingTimer.elapsed.right)}
                   </p>
                 </div>
-                <button
-                  onClick={() => setLogModal({ type: 'milk', log: null })}
-                  className="bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-amber-700 transition active:scale-95"
-                >
-                  開く
-                </button>
-              </div>
+              </button>
             )}
 
             {/* 記録ボタン。その日のようすを同じボタンに載せ、「見る」と「記録する」を1つにまとめている。
