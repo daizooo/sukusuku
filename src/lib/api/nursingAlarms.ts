@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
-import type { NursingPhase } from '@/types/app';
+import type { BreastSide } from '@/types/app';
 
 type SupabaseDb = SupabaseClient<Database>;
 
@@ -16,9 +16,9 @@ type SupabaseDb = SupabaseClient<Database>;
 // 飛んでしまうのを防ぐため（この間はお知らせ自体は鳴らさない）。
 
 export interface NursingAlarmRegistration {
-  /** 計測中の区切り。左右のほか、ゲップの時間もここに入る。 */
-  side: NursingPhase;
-  /** 計測中の区切りの合計時間が0だった時刻(epoch ms)。経過分数 = now - baselineAt。 */
+  /** 計測中の側。 */
+  side: BreastSide;
+  /** 計測中の側の合計時間が0だった時刻(epoch ms)。経過分数 = now - baselineAt。 */
   baselineAt: number;
   intervalMinutes: number;
   /** 何回目のお知らせまで済んでいるか。 */
@@ -68,7 +68,7 @@ export async function upsertNursingAlarm(
 
 /**
  * 端末が自分で鳴らせた分をサーバーへ知らせる。
- * サーバーは区切りを少し過ぎてから送るので、これが間に合えば二重に鳴らない。
+ * サーバーは5分を少し過ぎてから送るので、これが間に合えば二重に鳴らない。
  */
 export async function updateNursingAlarmStep(
   supabase: SupabaseDb,
@@ -111,11 +111,11 @@ export interface FamilyNursingState {
   /** 測っている（測り終えた）人。 */
   userId: string;
   /**
-   * 計測中なら、いま測っている区切り（ゲップも入る）。
-   * 記録待ちなら、最後に飲ませた側（左右のみ）。「次はどちらから」に使える。
+   * 計測中なら、いま測っている側。
+   * 記録待ちなら、最後に飲ませた側。「次はどちらから」に使える。
    */
-  side: NursingPhase;
-  /** その区切りの合計時間が0だった時刻。飲ませ始めた時刻の目安として扱う。 */
+  side: BreastSide;
+  /** その側の合計時間が0だった時刻。飲ませ始めた時刻の目安として扱う。 */
   startedAt: Date;
   /** 計測を止めた時刻。記録待ちの間だけ入る（計測中は null）。 */
   stoppedAt: Date | null;
@@ -128,7 +128,7 @@ export async function listFamilyNursingState(supabase: SupabaseDb): Promise<Fami
   if (error) throw error;
   return (data ?? []).map((row) => ({
     userId: row.user_id,
-    side: row.side as NursingPhase,
+    side: row.side as BreastSide,
     startedAt: new Date(row.baseline_at),
     stoppedAt: row.stopped_at ? new Date(row.stopped_at) : null,
   }));

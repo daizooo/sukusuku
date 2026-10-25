@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
-import type { NursingPhase } from '@/types/app';
+import type { BreastSide } from '@/types/app';
 
 type SupabaseDb = SupabaseClient<Database>;
 
@@ -27,9 +27,9 @@ type SupabaseDb = SupabaseClient<Database>;
 const NOTIFIED_STEP = 1;
 
 export interface NursingStateRegistration {
-  /** 計測中の区切り。左右のほか、ゲップの時間もここに入る。 */
-  side: NursingPhase;
-  /** 計測中の区切りの合計時間が0だった時刻(epoch ms)。 */
+  /** 計測中の側。 */
+  side: BreastSide;
+  /** 計測中の側の合計時間が0だった時刻(epoch ms)。 */
   baselineAt: number;
   intervalMinutes: number;
   /**
@@ -87,12 +87,12 @@ export interface FamilyNursingState {
   /** 測っている（測り終えた）人。 */
   userId: string;
   /**
-   * 計測中なら、いま測っている区切り（ゲップも入る）。
-   * 記録待ちなら、最後に飲ませた側（左右のみ）。「次はどちらから」に使える。
+   * 計測中なら、いま測っている側。
+   * 記録待ちなら、最後に飲ませた側。「次はどちらから」に使える。
    */
-  side: NursingPhase;
+  side: BreastSide;
   /**
-   * その区切りの合計時間が0だった時刻。飲ませ始めた時刻の目安として扱う
+   * その側の合計時間が0だった時刻。飲ませ始めた時刻の目安として扱う
    * （feedingSchedule.ts の PendingNursing）。
    */
   startedAt: Date;
@@ -111,7 +111,7 @@ export async function listFamilyNursingState(
   if (error) throw error;
   return (data ?? []).map((row) => ({
     userId: row.user_id,
-    side: row.side as NursingPhase,
+    side: row.side as BreastSide,
     startedAt: new Date(row.baseline_at),
     stoppedAt: row.stopped_at ? new Date(row.stopped_at) : null,
   }));

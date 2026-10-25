@@ -11,7 +11,7 @@ import kotlin.math.sin
  * ひと節を、止めるまで繰り返す。音量は [setVolume] で小さく始めて上げていく
  * （呼ぶのはサービス側）。
  *
- * 授乳中の区切りの音（[AlarmTonePlayer]、低め・1回きり）とは別物にして、聞き分けられるようにする。
+ * 授乳中の5分ごとの音（[AlarmTonePlayer]、低め）とは別物にして、聞き分けられるようにする。
  * 音声ファイルは持たず、[AlarmTonePlayer] と同じく合成する。出し方も同じ
  * [AudioAttributes.USAGE_ALARM] で、マナーモードでも鳴り、端末のアラーム音量に乗る。
  */

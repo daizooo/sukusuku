@@ -530,11 +530,8 @@ export default function CareScreen() {
   // 相手がまだ飲ませている最中は、次の側ではなくそれを出す（終わってから決まるため）。
   const nursingBy = lastFeeding.isNursing ? (familyNursing?.userId ?? null) : null;
   // 測り終えて記録がまだなら、その最後に飲ませた側の逆がおすすめ。
-  // （計測中の区切りにはゲップも入るが、記録待ちの印に入るのは左右だけ）
   const pendingLastSide =
-    lastFeeding.isPendingRecord && familyNursing && familyNursing.side !== 'burp'
-      ? familyNursing.side
-      : null;
+    lastFeeding.isPendingRecord && familyNursing ? familyNursing.side : null;
   const nextBreastSide: BreastSide | null = pendingLastSide
     ? pendingLastSide === 'left'
       ? 'right'
@@ -867,19 +864,12 @@ export default function CareScreen() {
               >
                 <View style={styles.flex}>
                   <Text style={styles.nursingTitle}>
-                    {timer.runningPhase === 'burp'
-                      ? 'ゲップの時間を計測中'
-                      : timer.runningPhase
-                        ? `授乳中（${getSideLabel(timer.runningPhase)}）`
-                        : '授乳の計測中'}
+                    {timer.runningSide ? `授乳中（${getSideLabel(timer.runningSide)}）` : '授乳の計測中'}
                   </Text>
-                  {/* 出すのは記録に入る合計。何セット目かは、続きから測るときの目印になる。 */}
                   <Text style={styles.nursingTime}>
-                    {timer.setNumber}セット目・左 {formatStopwatch(timer.total.left)} / 右{' '}
-                    {formatStopwatch(timer.total.right)}
+                    左 {formatStopwatch(timer.elapsed.left)} / 右 {formatStopwatch(timer.elapsed.right)}
                   </Text>
                 </View>
-                <Text style={styles.nursingOpen}>開く</Text>
               </Pressable>
             )}
 
@@ -1147,16 +1137,6 @@ const styles = StyleSheet.create({
   },
   nursingTitle: { fontSize: 12, fontWeight: '700', color: colors.milkText },
   nursingTime: { fontSize: 11, color: colors.milk, marginTop: 2, fontWeight: '500', fontVariant: ['tabular-nums'] },
-  nursingOpen: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primaryText,
-    backgroundColor: colors.milk,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    overflow: 'hidden',
-  },
 
   // 記録ボタン。授乳・おむつ・体温を横に3つ並べる（PWA版と同じ並び）。
   recordRow: { flexDirection: 'row', gap: 8 },
@@ -1166,22 +1146,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 6,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   recordPlus: { position: 'absolute', top: 6, right: 6 },
-  recordTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  recordTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+  recordTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 1 },
+  recordTitle: { fontSize: 14, fontWeight: '700', color: colors.text, lineHeight: 18, includeFontPadding: false },
   recordValue: {
     fontSize: 11,
     fontWeight: '500',
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: 1,
+    lineHeight: 14,
+    includeFontPadding: false,
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
   },
-  recordHint: { fontSize: 10, fontWeight: '700', color: colors.milkText, marginTop: 1 },
+  recordHint: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.milkText,
+    marginTop: 1,
+    lineHeight: 13,
+    includeFontPadding: false,
+  },
 
   pastDayNote: { fontSize: 11, color: colors.textMuted, lineHeight: 17, fontWeight: '500' },
   unsent: { fontSize: 11, color: colors.milkText, fontWeight: '500' },

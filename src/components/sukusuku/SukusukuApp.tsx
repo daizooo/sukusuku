@@ -751,11 +751,8 @@ function SukusukuAppContent({
   // 相手がまだ飲ませている最中は、次の側ではなくそれを出す（終わってから決まるため）。
   const nursingBy = lastFeeding.isNursing ? (familyNursing?.userId ?? null) : null;
   // 測り終えて記録がまだなら、その最後に飲ませた側の逆がおすすめ。
-  // （計測中の区切りにはゲップも入るが、記録待ちの印に入るのは左右だけ）
   const pendingLastSide =
-    lastFeeding.isPendingRecord && familyNursing && familyNursing.side !== 'burp'
-      ? familyNursing.side
-      : null;
+    lastFeeding.isPendingRecord && familyNursing ? familyNursing.side : null;
   const nextBreastSide: BreastSide | null = pendingLastSide
     ? pendingLastSide === 'left'
       ? 'right'

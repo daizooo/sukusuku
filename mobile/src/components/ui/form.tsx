@@ -137,7 +137,7 @@ export function NumberInput({
 }: {
   value: string;
   onChangeText: (value: string) => void;
-  placeholder: string;
+  placeholder?: string;
   accessibilityLabel: string;
 }) {
   return (

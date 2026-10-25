@@ -337,29 +337,23 @@ export default function CareTab({
         <>
             {/* 計測中の授乳。アプリを開いた人が最初に気づけるよう一番上に出す */}
             {nursingTimer.hasSession && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center justify-between">
+              <button
+                onClick={() => setLogModal({ type: 'milk', log: null })}
+                className="w-full text-left bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 hover:bg-amber-100 transition active:scale-[0.99]"
+              >
                 <div>
                   <p className="text-xs font-bold text-amber-700 flex items-center">
                     <BabyBottleIcon size={12} className="mr-1" />
-                    {nursingTimer.runningPhase === 'burp'
-                      ? 'ゲップの時間を計測中'
-                      : nursingTimer.runningPhase
-                        ? `授乳中（${getSideLabel(nursingTimer.runningPhase)}）`
-                        : '授乳の計測中'}
+                    {nursingTimer.runningSide
+                      ? `授乳中（${getSideLabel(nursingTimer.runningSide)}）`
+                      : '授乳の計測中'}
                   </p>
-                  {/* 出すのは記録に入る合計。何セット目かは、続きから測るときの目印になる。 */}
                   <p className="text-[11px] text-amber-600 tabular-nums">
-                    {nursingTimer.setNumber}セット目・左 {formatStopwatch(nursingTimer.total.left)} / 右{' '}
-                    {formatStopwatch(nursingTimer.total.right)}
+                    左 {formatStopwatch(nursingTimer.elapsed.left)} / 右{' '}
+                    {formatStopwatch(nursingTimer.elapsed.right)}
                   </p>
                 </div>
-                <button
-                  onClick={() => setLogModal({ type: 'milk', log: null })}
-                  className="bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-amber-700 transition active:scale-95"
-                >
-                  開く
-                </button>
-              </div>
+              </button>
             )}
 
             {/* 記録ボタン。その日のようすを同じボタンに載せ、「見る」と「記録する」を1つにまとめている。
@@ -371,7 +365,7 @@ export default function CareTab({
                   setMilkModalMethod(undefined);
                   setLogModal({ type: 'milk', log: null });
                 }}
-                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-amber-50 transition active:scale-95"
+                className="relative bg-white px-1.5 py-2 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-amber-50 transition active:scale-95"
               >
                 <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
                 <span className="flex items-center gap-1.5">
@@ -379,7 +373,7 @@ export default function CareTab({
                   <span className="text-sm font-bold text-gray-800">授乳</span>
                 </span>
                 {/* 量・分数は出さず、その日の回数だけを出す（おむつと同じ並び）。 */}
-                <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
+                <span className="mt-px text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
                   計{summary.milk.count}回
                 </span>
                 {nursingBy && (
@@ -395,7 +389,7 @@ export default function CareTab({
               </button>
               <button
                 onClick={() => setLogModal({ type: 'diaper', log: null })}
-                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-blue-50 transition active:scale-95"
+                className="relative bg-white px-1.5 py-2 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-blue-50 transition active:scale-95"
               >
                 <Plus size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
                 <span className="flex items-center gap-1.5">
@@ -404,10 +398,10 @@ export default function CareTab({
                 </span>
                 {/* おしっことうんちは見たいことが別（水分が足りているか／お通じ）なので、
                     合わせた回数ではなくそれぞれの回数を出す。「両方」の記録は両方に数える。 */}
-                <span className="mt-0.5 text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
+                <span className="mt-px text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
                   おしっこ {summary.diaper.peeCount}回
                 </span>
-                <span className="text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
+                <span className="mt-px text-[11px] font-medium text-gray-500 tabular-nums leading-tight text-center">
                   うんち {summary.diaper.poopCount}回
                 </span>
               </button>
@@ -415,17 +409,17 @@ export default function CareTab({
                   体温はその子の平熱だけ、体重はいちばん新しい値だけを出す。 */}
               <button
                 onClick={() => setBodyOpen(true)}
-                className="relative bg-white px-1.5 py-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-orange-50 transition active:scale-95"
+                className="relative bg-white px-1.5 py-2 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:bg-orange-50 transition active:scale-95"
               >
                 <ChevronRight size={12} className="absolute top-1.5 right-1.5 text-gray-300" />
                 <span className="flex items-center gap-1.5">
                   <Thermometer size={17} className="text-orange-600" />
                   <span className="text-sm font-bold text-gray-800">からだ</span>
                 </span>
-                <span className="mt-0.5 text-[11px] font-medium tabular-nums leading-tight text-center text-gray-500">
+                <span className="mt-px text-[11px] font-medium tabular-nums leading-tight text-center text-gray-500">
                   {temperatureSummaryText}
                 </span>
-                <span className="text-[11px] font-medium tabular-nums leading-tight text-center text-gray-500">
+                <span className="mt-px text-[11px] font-medium tabular-nums leading-tight text-center text-gray-500">
                   {latestWeightKg !== null ? `体重 ${latestWeightKg}kg` : '体重 -'}
                 </span>
               </button>
