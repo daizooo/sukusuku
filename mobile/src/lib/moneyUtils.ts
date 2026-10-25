@@ -346,7 +346,7 @@ export const DEFAULT_CATEGORIES: { kind: MoneyCategoryKind; name: string; childr
   { kind: 'living', name: '娯楽', children: ['レジャー', '本・趣味', '交際費'] },
   { kind: 'living', name: '子ども費', children: ['日用品', '洋服・おもちゃ', '習い事'] },
   { kind: 'living', name: 'その他', children: ['お小遣い', '仕送り', '保険', '使途不明金'] },
-  { kind: 'living', name: '一時的な支出', children: [], temporary: true },
+  { kind: 'living', name: '特別費', children: [], temporary: true },
   { kind: 'income', name: '給料', children: [] },
   { kind: 'income', name: 'その他の収入', children: [] },
 ];
@@ -1524,7 +1524,7 @@ export function yearToDateBalance(
 
 export type SpendGroup = 'variable' | 'reserve' | 'confirmed' | 'estimate';
 
-/** 支出の品目（小分類）が、どの分け方に入るか。一時的な支出（予算に載せない。docs/kakei.md §0.10）は 'temporary'。 */
+/** 支出の品目（小分類）が、どの分け方に入るか。特別費（予算に載せない。docs/kakei.md §0.10）は 'temporary'。 */
 export function spendGroupOf(categoryId: string | null, categories: readonly MoneyCategory[]): SpendGroup | 'temporary' {
   if (categoryId === null) return 'variable';
   const topId = topCategoryIdOf(categories, categoryId);
@@ -1533,8 +1533,8 @@ export function spendGroupOf(categoryId: string | null, categories: readonly Mon
 }
 
 /**
- * 予算の行（年間予算）が扱う分け方。一時的な支出には予算の行を置かないので来ることはないが、型のうえでは変動費に寄せる
- * （年間予算の種類の選び方は spendGroupOf を直接見るので、一時的な支出の大分類はそこには出ない）。
+ * 予算の行（年間予算）が扱う分け方。特別費には予算の行を置かないので来ることはないが、型のうえでは変動費に寄せる
+ * （年間予算の種類の選び方は spendGroupOf を直接見るので、特別費の大分類はそこには出ない）。
  */
 export function budgetLineGroupOf(categoryId: string | null, categories: readonly MoneyCategory[]): SpendGroup {
   const group = spendGroupOf(categoryId, categories);
@@ -2056,7 +2056,7 @@ export interface ReviewSections {
   reserve: ReviewSubRow[];
   confirmed: ReviewSubRow[];
   estimate: ReviewSubRow[];
-  /** 一時的な支出（記録した品名ごと。予算は無い。固定費の下に出す。docs/kakei.md §0.10）。 */
+  /** 特別費（記録した品名ごと。予算は無い。固定費の下に出す。docs/kakei.md §0.10）。 */
   temporary: ReviewSubRow[];
   /** カテゴリの無い品目（削除したカテゴリの品目を含む）。 */
   uncategorized: { count: number; amount: number };
@@ -2077,10 +2077,10 @@ export const UNCATEGORIZED: MoneyCategory = {
   budgetGroup: 'variable',
 };
 
-/** 一時的な支出の行の id の頭（振り返りの行を押したとき、品名で記録を絞る。buildSubcategoryAnalysis）。 */
+/** 特別費の行の id の頭（振り返りの行を押したとき、品名で記録を絞る。buildSubcategoryAnalysis）。 */
 export const TEMPORARY_ROW_PREFIX = 'temporary:';
 
-/** 一時的な支出の品目の、振り返りの行の名前（品名。無ければ大分類の名前）。一時的な支出でない品目は null。 */
+/** 特別費の品目の、振り返りの行の名前（品名。無ければ大分類の名前）。特別費でない品目は null。 */
 function temporaryLabelOf(categories: readonly MoneyCategory[], item: Pick<MoneyItem, 'categoryId' | 'name'>): string | null {
   if (item.categoryId === null) return null;
   const topId = topCategoryIdOf(categories, item.categoryId);
@@ -2107,7 +2107,7 @@ export function buildReviewSections(
   const subActual = new Map<string, Map<string, number>>();
   const spend = { variable: 0, reserve: 0, fixed: 0 };
   const uncategorized = { count: 0, amount: 0 };
-  // 一時的な支出: 品名ごとの額（予算が無いので月ごとには持たない）
+  // 特別費: 品名ごとの額（予算が無いので月ごとには持たない）
   const temporary = new Map<string, { top: MoneyCategory; amount: number }>();
   for (const record of records) {
     if (record.kind !== 'expense') continue;
@@ -2221,7 +2221,7 @@ export function buildReviewSections(
 export const spendRatio = (spend: number, income: number): number | null => (income > 0 ? Math.round((spend / income) * 100) : null);
 
 /**
- * 予備費・固定費の小分類（categoryId）、一時的な支出の品名（TEMPORARY_ROW_PREFIX + 品名）、またはカテゴリの無い品目（UNCATEGORIZED.id）の、見ている期間の記録と実績。
+ * 予備費・固定費の小分類（categoryId）、特別費の品名（TEMPORARY_ROW_PREFIX + 品名）、またはカテゴリの無い品目（UNCATEGORIZED.id）の、見ている期間の記録と実績。
  * 振り返りの小分類の行を押したときの画面（記録の一覧）に使う。budget は行と同じ比べる予算。
  */
 export function buildSubcategoryAnalysis(

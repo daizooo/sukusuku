@@ -492,7 +492,7 @@ export interface MoneyCategory {
 
 /**
  * 予算の分け方。変動費（大分類の月の予算）・予備費・固定費の確定・固定費の見込み（小分類ごとの予算の明細）。
- * temporary は一時的な支出（予算に載せない。DBは money_categories.temporary で持ち、budget_group は null。docs/kakei.md §0.10）。
+ * temporary は特別費（予算に載せない。DBは money_categories.temporary で持ち、budget_group は null。docs/kakei.md §0.10）。
  */
 export type MoneyBudgetGroup = 'variable' | 'reserve' | 'fixed' | 'estimate' | 'temporary';
 

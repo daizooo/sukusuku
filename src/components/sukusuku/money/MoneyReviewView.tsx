@@ -70,13 +70,13 @@ import { yearTrendPoints } from '@/lib/yearTrend';
 // - 年の結論: 収支見込み（buildYearLanding。締めた月は実績、締めていない今月までは支出を予算と実績の大きいほう、翌月からは予算。
 //   収入は締めるまで予算）。2026年は10〜12月の3か月だけ（集計を始めた年の特例。MONEY_COUNT_START）
 // - 年の「推移」（§4.8）: 月ごとの収支（棒）と年初からの累計（折れ線）。締めた月は実線、ほかは点線
-// - その下は、変動費 → 予備費 → 固定費（中に確定・見込み）→ 一時的な支出 → カテゴリなし の見出しごと（buildReviewSections）。見出しを押すと折りたたむ。
+// - その下は、変動費 → 予備費 → 固定費（中に確定・見込み）→ 特別費 → カテゴリなし の見出しごと（buildReviewSections）。見出しを押すと折りたたむ。
 //   はじめは変動費・予備費を開き、固定費は閉じておく。年の見出しの右に、実績の割合（その種類の支出の実績 ÷ 年の収入）と目標割合
 //   （年間予算の画面の「目標割合」）を「11%（目標35%）」の形で出す（目標を超えたら赤。月には出さない）
 //   - 変動費: 大分類ごとに、予算 − 実績・使った割合の帯・「実績 / 予算」（%は出さない。2026-10-25）
 //   - 予備費: 記録のあった小分類。年は年の予算と比べる（変動費と同じ行）、月は年の予算に対する年初からの実績（同じ行に、その月の額を添える）
 //   - 固定費: 記録のあった小分類の額。見込みは予算との差を添える（超えたら赤で「予算より ¥x」、少なければ黒で「予算より −¥x」。budgetDiffLabel）
-//   - 一時的な支出: 記録したものだけを品名ごとに（予算は無い。docs/kakei.md §0.10）
+//   - 特別費: 記録したものだけを品名ごとに（予算は無い。docs/kakei.md §0.10）
 //   - 行を押すと、変動費は大分類の詳細（月ごとの実績・小分類・記録）、予備費・固定費・カテゴリなしはその記録の一覧（ReviewDetailScreen）
 // 月の締め（§4.5）: 過ぎた月と今月の結論の下に「この月を締める」（締めた月は「締めた月」）。夫婦が5分以内に押すと締めの画面（MonthCloseScreen）。
 // 押した人は「◯◯さんを待っています 4:32」と「やめる」、相手には「◯◯さんが待っています 4:32」を添える。始めたあとは「締めの途中」。
@@ -451,7 +451,7 @@ export default function MoneyReviewView({
               </Section>
             )}
             {sections.temporary.length > 0 && (
-              <Section title="一時的な支出" count={sections.temporary.length} open={!collapsed.has('temporary')} onToggle={() => toggle('temporary')}>
+              <Section title="特別費" count={sections.temporary.length} open={!collapsed.has('temporary')} onToggle={() => toggle('temporary')}>
                 {sections.temporary.map((row) => subRow(row, false))}
               </Section>
             )}
