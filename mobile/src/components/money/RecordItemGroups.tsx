@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/lib/theme';
 import { editorGroupTotal, editorLineAmount, formatBalance, formatYen, isBlankLine, type EditorGroup } from '@/lib/moneyUtils';
-import { CategoryIcon } from '@/components/money/moneyVisual';
+import { CategoryIcon, fitText } from '@/components/money/moneyVisual';
 
 // 記録のカテゴリごとの品目（docs/kakei.md §3.2）。PWA版の `src/components/sukusuku/money/RecordItemGroups.tsx` と同じ並び・文言。
 // 記録の詳細（読むだけ）と編集の両方で同じ書き方にする（2026-10-15）。
@@ -37,7 +37,7 @@ export default function RecordItemGroups({ groups, title, iconKey, size, onOpen 
                 <Text style={[styles.path, large && styles.pathLarge]} numberOfLines={1}>
                   {title(group)}
                 </Text>
-                <Text style={[styles.total, large && styles.totalLarge]}>{formatBalance(editorGroupTotal(group))}</Text>
+                <Text {...fitText} style={[styles.total, large && styles.totalLarge]}>{formatBalance(editorGroupTotal(group))}</Text>
               </View>
               {lines.map((line) => (
                 <View key={line.key} style={styles.line}>
@@ -49,7 +49,7 @@ export default function RecordItemGroups({ groups, title, iconKey, size, onOpen 
                       {formatYen(Math.abs(line.unitPrice))} × {line.quantity}
                     </Text>
                   )}
-                  {!single && <Text style={[styles.amount, large && styles.amountLarge]}>{formatBalance(editorLineAmount(line))}</Text>}
+                  {!single && <Text {...fitText} style={[styles.amount, large && styles.amountLarge]}>{formatBalance(editorLineAmount(line))}</Text>}
                 </View>
               ))}
             </View>

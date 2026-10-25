@@ -6,7 +6,7 @@ import { colors } from '@/lib/theme';
 import { formatDateWithYear } from '@/lib/dateUtils';
 import { formatYen, type EditorGroup } from '@/lib/moneyUtils';
 import RecordItemGroups from '@/components/money/RecordItemGroups';
-import { NextPeriodBadge, PrimaryButton, ScreenHeader, WalletTypeIcon } from '@/components/money/moneyVisual';
+import { NextPeriodBadge, PrimaryButton, ScreenHeader, WalletTypeIcon, fitText } from '@/components/money/moneyVisual';
 
 // 記録の詳細（読むだけ。docs/kakei.md §3.2）。PWA版の `src/components/sukusuku/money/RecordDetailView.tsx` と同じ並び・文言。
 // 既にある記録を開くと、まずこれを見せる（2026-10-15。Zaim と同じ）。直すときは下の「編集する」か、日付・金額・出金元・お店・品目のどこかを押して入力画面（RecordEditor）へ。
@@ -77,7 +77,7 @@ export default function RecordDetailView({
         {/* 日付・金額・出金元・お店・品目のどこを押しても編集画面へ（2026-10-16）。 */}
         <Pressable accessibilityRole="button" accessibilityLabel="この記録を編集する" onPress={onEdit}>
           <Text style={styles.date}>{formatDateWithYear(new Date(`${occurredOn}T00:00:00`))}</Text>
-          <Text style={[styles.amount, kind === 'income' && styles.income, kind === 'transfer' && styles.muted]}>{formatYen(total)}</Text>
+          <Text {...fitText} style={[styles.amount, kind === 'income' && styles.income, kind === 'transfer' && styles.muted]}>{formatYen(total)}</Text>
           <View style={styles.rows}>
             <WalletRow wallet={wallet} badge={cardNextPeriod} />
             {kind === 'transfer' ? (

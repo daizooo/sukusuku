@@ -16,7 +16,7 @@ import {
 } from '@/lib/moneyUtils';
 import BalanceTrend from '@/components/money/BalanceTrend';
 import SecuritySheet from '@/components/money/SecuritySheet';
-import { Gain, ScreenHeader, type } from '@/components/money/moneyVisual';
+import { Gain, ScreenHeader, type, fitText } from '@/components/money/moneyVisual';
 
 // 銘柄の詳細（docs/kakei.md §9.2.4）。PWA版の `src/components/sukusuku/money/SecurityScreen.tsx` と同じ並び・文言。
 // Zaim と同じく保有（預り区分）ごとに開く。上に評価額と推移、下に詳細（評価損益・現在値（投信は基準価額）・取得単価・
@@ -55,12 +55,12 @@ export default function SecurityScreen({ wallet, holding, security, securities, 
     details.push({
       key: 'price',
       label: isFund ? '基準価額' : '現在値',
-      value: <Text style={type.amount}>{row?.price != null ? formatYen(Math.round(row.price)) : '−'}</Text>,
+      value: <Text {...fitText} style={type.amount}>{row?.price != null ? formatYen(Math.round(row.price)) : '−'}</Text>,
     });
     details.push({
       key: 'cost',
       label: '取得単価',
-      value: <Text style={type.amount}>{holding.costPrice !== null ? formatYen(Math.round(holding.costPrice)) : '−'}</Text>,
+      value: <Text {...fitText} style={type.amount}>{holding.costPrice !== null ? formatYen(Math.round(holding.costPrice)) : '−'}</Text>,
     });
     details.push({
       key: 'quantity',
@@ -88,7 +88,7 @@ export default function SecurityScreen({ wallet, holding, security, securities, 
           }
         />
         <View style={styles.summary}>
-          <Text style={type.hero}>{formatBalance(row?.value ?? 0)}</Text>
+          <Text {...fitText} style={type.hero}>{formatBalance(row?.value ?? 0)}</Text>
           {row?.gain != null && <Gain gain={row.gain} rate={row.gainRate} />}
         </View>
         <ScrollView contentContainerStyle={styles.content}>

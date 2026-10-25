@@ -34,6 +34,12 @@ export const type = StyleSheet.create({
   link: { fontSize: 13, fontWeight: '700', color: colors.money },
 });
 
+/**
+ * 金額の Text に付ける（`<Text {...fitText} style=…>`）。金額は1行に収め、幅に入らなければ6割まで文字を縮める（2026-10-25）。
+ * M PLUS 1p にして字の幅が広がり、大きい額（証券の残高など）が入りきらなくなった。新しく金額を出す Text にも付ける。
+ */
+export const fitText = { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.6 } as const;
+
 /** 前後に送るボタンつきの見出し（‹ 2026年9月 ›）。 */
 function Stepper({
   label,
@@ -191,7 +197,7 @@ export function Hero({
   return (
     <View style={[styles.card, center && styles.cardCenter, compact && styles.cardCompact]}>
       <Text style={styles.heroLabel}>{label}</Text>
-      <Text style={[type.hero, compact && styles.heroCompact, plus && styles.plus, minus && type.minus]}>{value}</Text>
+      <Text {...fitText} style={[type.hero, compact && styles.heroCompact, plus && styles.plus, minus && type.minus]}>{value}</Text>
       {note !== undefined && <Text style={[type.sub, center && styles.centerText]}>{note}</Text>}
       {children !== undefined && <View style={[styles.heroBody, compact && styles.heroBodyCompact]}>{children}</View>}
     </View>
@@ -224,7 +230,7 @@ export function StatRow({
         <Text style={styles.statLabel}>{label}</Text>
         {note !== undefined && <Text style={[type.faint, noteMinus && type.minus]}>{note}</Text>}
       </View>
-      <Text style={[type.amount, compact && styles.statAmountCompact, plus && styles.plus, minus && type.minus]}>{value}</Text>
+      <Text {...fitText} style={[type.amount, compact && styles.statAmountCompact, plus && styles.plus, minus && type.minus]}>{value}</Text>
     </View>
   );
 }
@@ -437,7 +443,15 @@ const styles = StyleSheet.create({
   gain: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   flex: { flex: 1 },
   // 月 / 年 の切り替え（小さな2択）。
-  periodSwitch: { paddingHorizontal: 9, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.neutralSurface },
+  // 「年で見る / 月で見る」は白（細い枠つき。2026-10-25）。
+  periodSwitch: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
   periodSwitchText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
   // 中央に寄せるとき、左右を同じ幅（flex 1）にして年月を真ん中に置く。右は端に寄せる。

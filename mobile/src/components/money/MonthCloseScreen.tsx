@@ -11,7 +11,7 @@ import { formatBalance, formatYen } from '@/lib/moneyUtils';
 import { allOk, closeFigure, closeFigureLabel, closeRecords, closeWallets, okUsers } from '@/lib/moneyClose';
 import RecordDayList, { type RecordClosing } from '@/components/money/RecordDayList';
 import BalanceSheet from '@/components/money/BalanceSheet';
-import { PrimaryButton, ScreenHeader, WalletTypeIcon } from '@/components/money/moneyVisual';
+import { PrimaryButton, ScreenHeader, WalletTypeIcon, fitText } from '@/components/money/moneyVisual';
 
 // 月の締め（docs/kakei.md §4.5。2026-10-24に作り直した）。PWA版の `src/components/sukusuku/money/MonthCloseScreen.tsx` と同じ並び・文言。
 //
@@ -137,7 +137,7 @@ export default function MonthCloseScreen({
                 <Text style={[styles.walletName, styles.flex]} numberOfLines={1}>
                   {row.wallet.name}
                 </Text>
-                <Text style={[styles.walletAmount, row.figure < 0 && styles.minus]}>{formatBalance(row.figure)}</Text>
+                <Text {...fitText} style={[styles.walletAmount, row.figure < 0 && styles.minus]}>{formatBalance(row.figure)}</Text>
                 <View
                   accessibilityLabel={row.done ? '確認済み' : '未確認'}
                   style={[styles.tick, row.done && styles.tickOn]}
@@ -273,7 +273,7 @@ function WalletCloseScreen({
               disabled={!canAdjust}
               onPress={() => setAdjusting(true)}
             >
-              <Text style={[styles.figure, figure < 0 && styles.minus]}>{formatBalance(figure)}</Text>
+              <Text {...fitText} style={[styles.figure, figure < 0 && styles.minus]}>{formatBalance(figure)}</Text>
             </Pressable>
             <View style={styles.people}>
               {guardians.map((member) => {

@@ -26,7 +26,7 @@ import SecuritiesWalletScreen from './SecuritiesWalletScreen';
 import TotalTrendScreen from './TotalTrendScreen';
 import WalletBalanceScreen from './WalletBalanceScreen';
 import { WalletModal } from './WalletPicker';
-import { cardClass, incomeAmountClass, type, WalletTypeIcon } from './moneyVisual';
+import { cardClass, FitText, incomeAmountClass, type, WalletTypeIcon } from './moneyVisual';
 
 // 家計タブの「口座」（docs/kakei.md §7 の7・§9.3）。mobile版の `mobile/src/components/money/MoneyAccountsView.tsx` と同じ並び・文言。
 //
@@ -126,8 +126,8 @@ export default function MoneyAccountsView({
         </span>
         <span className="line-clamp-2 min-w-0 flex-1 text-sm font-bold leading-[18px] text-gray-900">{row.wallet.name}</span>
       </span>
-      <span className={`self-end text-[22px] font-extrabold tabular-nums ${row.amount > 0 ? incomeAmountClass : 'text-gray-900'}`}>
-        {formatBalance(row.amount)}
+      <span className={`block w-full text-right text-[22px] font-extrabold tabular-nums ${row.amount > 0 ? incomeAmountClass : 'text-gray-900'}`}>
+        <FitText>{formatBalance(row.amount)}</FitText>
       </span>
     </button>
   );
@@ -146,7 +146,7 @@ export default function MoneyAccountsView({
           {/* 総残高は白い札に大きく。口座のタイルより一段強く見せる（Zaim の「残高」と同じ。2026-10-24）。 */}
           <span className="block text-sm font-bold text-gray-500">総残高</span>
           <span className="block text-[40px] font-extrabold leading-tight tabular-nums text-gray-900">
-            {formatBalance(summary.total)}
+            <FitText>{formatBalance(summary.total)}</FitText>
           </span>
           {usable.length === 0 && <span className={`block ${type.sub}`}>出金元を足すと、残高が出ます</span>}
         </button>

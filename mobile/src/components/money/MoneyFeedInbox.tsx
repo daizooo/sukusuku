@@ -13,7 +13,7 @@ import { formatYen, recordTotal, type PendingEstimate } from '@/lib/moneyUtils';
 import { feedAmountLabel, feedDayLabel, feedStatusLabel, feedStoreName, sortFeedInbox } from '@/lib/moneyFeedUtils';
 import SheetModal from '@/components/ui/SheetModal';
 import LogModalShell from '@/components/log/LogModalShell';
-import { PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
+import { PrimaryButton, ScreenHeader, fitText } from '@/components/money/moneyVisual';
 import { Chip, ChipRow, Field, ToggleRow, WalletChoices } from '@/components/money/feedParts';
 
 // 取り込んだ明細の「未確認」（docs/kakei.md §9.5.5・§9.5.6.1）。PWA版の `src/components/sukusuku/money/MoneyFeedInbox.tsx` と同じ並び・文言。
@@ -126,7 +126,7 @@ export default function MoneyFeedInbox({
                 </Text>
               </View>
               <Text style={styles.badge}>{entry.rule.amountMode === 'estimate' ? '見込み' : '確定'}</Text>
-              <Text style={styles.amount}>{formatYen(entry.amount)}</Text>
+              <Text {...fitText} style={styles.amount}>{formatYen(entry.amount)}</Text>
               <ChevronRight size={18} color={colors.textFaint} />
             </Pressable>
           ))}
@@ -536,7 +536,7 @@ function RecordLine({
           {record.store !== '' ? `・${record.store}` : ''}
         </Text>
       </View>
-      <Text style={styles.recordAmount}>{formatYen(recordTotal(record))}</Text>
+      <Text {...fitText} style={styles.recordAmount}>{formatYen(recordTotal(record))}</Text>
     </View>
   );
 }

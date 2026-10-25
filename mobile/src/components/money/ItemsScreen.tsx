@@ -16,7 +16,7 @@ import {
   type EditorLine,
 } from '@/lib/moneyUtils';
 import Calculator from '@/components/money/Calculator';
-import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
+import { CategoryIcon, PrimaryButton, ScreenHeader, fitText } from '@/components/money/moneyVisual';
 
 // 品目の画面（docs/kakei.md §3.2）。PWA版の `src/components/sukusuku/money/ItemsScreen.tsx` と同じ並び・文言。
 //
@@ -272,7 +272,7 @@ export default function ItemsScreen({
     <View style={styles.screen}>
       <ScreenHeader title="品目" onClose={onClose} closeAtEnd />
       <View style={styles.totalBox}>
-        <Text style={styles.total}>{formatBalance(total)}</Text>
+        <Text {...fitText} style={styles.total}>{formatBalance(total)}</Text>
       </View>
 
       <ScrollView

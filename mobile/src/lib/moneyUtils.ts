@@ -65,15 +65,21 @@ export function formatShortDate(dateKey: string): string {
 // ---- 金額の表示 ----
 
 /** ¥1,234。 */
-/** ¥と数字のあいだの細いすき間（U+2009。詰まって見えないように）。 */
-const YEN_MARK = '¥\u2009';
+/**
+ * ¥と数字のあいだの細いすき間（詰まって見えないように）。改行しない細いすき間（U+202F）にする。
+ * 以前の U+2009 はそこで改行でき、額が1行に入らないと ¥ だけが上の行に残った（2026-10-25。楽天証券のタイル）。
+ */
+const YEN_MARK = '¥\u202F';
+
+/** 金額の前に付けるマイナス。家計全体で ¥ の左に置く（−¥1,234。2026-10-25）。U+2060 で「−」と ¥ のあいだも改行させない。 */
+const minusOf = (value: number) => (value < 0 ? '−\u2060' : '');
 
 export const formatYen = (value: number) => `${YEN_MARK}${Math.abs(value).toLocaleString('ja-JP')}`;
 
-/** マイナスだけ符号つき（¥1,234 / ¥−1,234 / ¥0）。プラスに符号は付けない（色で見せる）。¥は先頭。 */
+/** マイナスだけ符号つき（¥1,234 / −¥1,234 / ¥0）。プラスに符号は付けない（色で見せる）。マイナスは ¥ の左。 */
 export function formatSignedYen(value: number): string {
   if (value === 0) return formatYen(0);
-  return `${YEN_MARK}${value < 0 ? '−' : ''}${Math.abs(value).toLocaleString('ja-JP')}`;
+  return `${minusOf(value)}${formatYen(value)}`;
 }
 
 // ---- カテゴリ・出金元の決まりごと ----
@@ -2006,7 +2012,8 @@ export function buildCategoryAnalysis(
 // ---- 振り返りの種類ごとの一覧（docs/kakei.md §0.9。2026-10-24） ----
 // 振り返り（月・年）は、予算に対して見る。並びは 変動費 → 予備費 → 固定費（中に確定・見込み）→ カテゴリなし。
 // - 変動費: 大分類ごと。予算 − 実績・使った割合の帯（buildBudgetTiles と同じ）
-// - 予備費: 記録のあった小分類だけ。年は年の予算（発生月なしは noMonthYearAmount）と比べ、月は額だけ（予算が月に割り当たらない）
+// - 予備費: 記録のあった小分類だけ。年は年の予算（発生月なしは noMonthYearAmount）と比べる。月は予算が月に割り当たらないので、
+//   年の予算に対して、年初からその月までに使った額で進み具合を出す（yearToDate。2026-10-25）
 // - 固定費: 記録のあった小分類だけ。額は記録の合計で、確定は額だけ、見込みは記録のあった月の予算との差を添える
 // - カテゴリなし: カテゴリの無い品目（削除したカテゴリの品目を含む）
 
@@ -2017,6 +2024,8 @@ export interface ReviewSubRow {
   actual: number;
   /** 比べる予算（無ければ null）。予備費は年だけ、見込みは記録のあった月の分（年は発生月なしも）、確定は null。 */
   budget: number | null;
+  /** 月の予備費だけ: 年の予算と、年初からその月までの実績（進み具合。年の予算が無ければ null）。 */
+  yearToDate: { actual: number; budget: number } | null;
 }
 
 export interface ReviewSections {
@@ -2085,17 +2094,15 @@ export function buildReviewSections(
       subActual.set(item.categoryId as string, byMonth);
     }
   }
-  const subBudget = (categoryId: string, group: SpendGroup, byMonth: Map<string, number>): number | null => {
-    if (group === 'confirmed' || (group === 'reserve' && !year)) return null;
+  // 予算の明細の、months の分の額。isYear なら発生月なしの予算も入れる
+  const linesBudget = (categoryId: string, group: SpendGroup, months: readonly string[], isYear: boolean): number | null => {
     const own = lines.filter((line) => line.categoryId === categoryId);
     // 月は発生月なしの予算を比べない（どの月に出るか決めていない）。発生月のある予算が無ければ額だけ
-    if (own.length === 0 || (!year && own.every((line) => line.noMonth))) return null;
-    // 予備費は見ている期間の月すべて、見込みは記録のあった月だけ
-    const months = group === 'reserve' ? monthKeys : [...byMonth.keys()];
+    if (own.length === 0 || (!isYear && own.every((line) => line.noMonth))) return null;
     let total = 0;
     for (const line of own) {
       if (line.noMonth) {
-        if (year) for (const y of new Set(monthKeys.map(yearOfMonth))) total += noMonthYearAmount(line, group, y);
+        if (isYear) for (const y of new Set(months.map(yearOfMonth))) total += noMonthYearAmount(line, group, y);
         continue;
       }
       for (const monthKey of months) {
@@ -2103,6 +2110,27 @@ export function buildReviewSections(
       }
     }
     return total;
+  };
+  const subBudget = (categoryId: string, group: SpendGroup, byMonth: Map<string, number>): number | null => {
+    if (group === 'confirmed' || (group === 'reserve' && !year)) return null;
+    // 予備費は見ている期間の月すべて、見込みは記録のあった月だけ
+    return linesBudget(categoryId, group, group === 'reserve' ? monthKeys : [...byMonth.keys()], year);
+  };
+  // 月の予備費の進み具合: その年の数える月の予算（年の振り返りと同じ額）と、年初からその月までの実績
+  const lastKey = monthKeys[monthKeys.length - 1];
+  const yearKeys = year || lastKey === undefined ? [] : yearActiveMonthKeys(records, yearOfMonth(lastKey));
+  const yearToDateOf = (categoryId: string): ReviewSubRow['yearToDate'] => {
+    // 集計を始める前の月は出さない
+    if (!yearKeys.includes(lastKey)) return null;
+    const budget = linesBudget(categoryId, 'reserve', yearKeys, true);
+    if (budget === null) return null;
+    const upTo = new Set(yearKeys.filter((key) => key <= lastKey));
+    let actual = 0;
+    for (const record of records) {
+      if (record.kind !== 'expense' || !upTo.has(monthKeyOf(record.occurredOn))) continue;
+      for (const item of record.items) if (item.categoryId === categoryId) actual += item.amount;
+    }
+    return { actual, budget };
   };
   // 小分類の行（カテゴリの並び。大分類の並び → その中の並び。大分類に直接付けた品目は大分類の名前で先頭に）
   const rowsOf = (group: SpendGroup): ReviewSubRow[] => {
@@ -2113,7 +2141,12 @@ export function buildReviewSections(
         const byMonth = subActual.get(category.id);
         if (byMonth === undefined) continue;
         const actual = [...byMonth.values()].reduce((sum, value) => sum + value, 0);
-        rows.push({ category, actual, budget: subBudget(category.id, group, byMonth) });
+        rows.push({
+          category,
+          actual,
+          budget: subBudget(category.id, group, byMonth),
+          yearToDate: group === 'reserve' && !year ? yearToDateOf(category.id) : null,
+        });
       }
     }
     return rows;
@@ -2381,8 +2414,14 @@ export function pressCalcKey(expression: string, key: string): string {
 /** 今日の日付（YYYY-MM-DD。端末のローカル）。 */
 export const dateKeyOfDate = (date: Date): string => `${monthKeyOfDate(date)}-${pad2(date.getDate())}`;
 
-/** マイナスは「¥−1,234」（¥が先頭）。残高の表示に使う（formatYen は符号を付けない）。 */
-export const formatBalance = (value: number): string => `${YEN_MARK}${value < 0 ? '−' : ''}${Math.abs(value).toLocaleString('ja-JP')}`;
+/** マイナスは「−¥1,234」（マイナスは ¥ の左。家計全体の決まり）。残高の表示に使う（formatYen は符号を付けない）。 */
+export const formatBalance = (value: number): string => `${minusOf(value)}${formatYen(value)}`;
+
+/**
+ * 固定費・見込みの「予算より」（diff は 予算 − 実績。2026-10-25）。超えたら「予算より ¥3,000」（赤で出す）、
+ * 少なければ「予算より −¥1,200」（黒）、同じなら「予算どおり」。
+ */
+export const budgetDiffLabel = (diff: number): string => (diff === 0 ? '予算どおり' : `予算より ${formatBalance(-diff)}`);
 
 /**
  * 1件の記録が、出金元 walletId の残高に与える増減（円）。

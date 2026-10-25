@@ -64,7 +64,7 @@ import SheetModal from '@/components/ui/SheetModal';
 import StorePicker from '@/components/money/StorePicker';
 import CategoryEditor from '@/components/money/CategoryEditor';
 import CategoryIconPicker from '@/components/money/CategoryIconPicker';
-import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/moneyVisual';
+import { CategoryIcon, PrimaryButton, ScreenHeader, fitText } from '@/components/money/moneyVisual';
 import { Chip, ChipRow, Field, WalletChoices } from '@/components/money/feedParts';
 
 // 年間予算（docs/kakei.md §0.8。2026-10-24）。PWA版の `src/components/sukusuku/money/BudgetEditor.tsx` と同じ並び・文言。
@@ -104,8 +104,8 @@ interface BudgetEditorProps {
 const GROUP_LABEL: Record<BudgetLineGroup, string> = {
   income: '収入',
   variable: '変動費',
-  confirmed: '固定費（確定）',
-  estimate: '固定費（見込み）',
+  confirmed: '固定費・確定',
+  estimate: '固定費・見込み',
   reserve: '予備費',
 };
 
@@ -135,8 +135,8 @@ const budgetGroupOf = (group: SpendGroup): MoneyBudgetGroup => (group === 'confi
 
 /** 大分類＝種類のもの（固定費・予備費）の大分類の名前。 */
 const TYPE_TOP_NAME: Record<Exclude<SpendGroup, 'variable'>, string> = {
-  confirmed: '固定費（確定）',
-  estimate: '固定費（見込み）',
+  confirmed: '固定費・確定',
+  estimate: '固定費・見込み',
   reserve: '予備費',
 };
 
@@ -664,7 +664,7 @@ export default function BudgetEditor({
             {!filtered && (open ? <ChevronDown size={14} color={colors.textMuted} /> : <ChevronRight size={14} color={colors.textMuted} />)}
             <Text style={styles.sectionTitle}>{GROUP_LABEL[group]}</Text>
             <View style={styles.flex} />
-            <Text style={styles.sectionTotal}>{formatYen(total)}</Text>
+            <Text {...fitText} style={styles.sectionTotal}>{formatYen(total)}</Text>
           </Pressable>
           {open && content}
         </View>
@@ -937,7 +937,7 @@ function BudgetRow({
         {label}
       </Text>
       {off && <Text style={styles.offBadge}>{offLabel}</Text>}
-      <Text style={[styles.rowAmount, off && styles.offText]}>{formatYen(total)}</Text>
+      <Text {...fitText} style={[styles.rowAmount, off && styles.offText]}>{formatYen(total)}</Text>
     </Pressable>
   );
 }
@@ -1374,7 +1374,7 @@ function BudgetForm({
         {preview && (
           <View style={styles.total}>
             <Text style={styles.totalLabel}>{formatYear(year)}</Text>
-            <Text style={styles.totalValue}>{`${formatYen(preview.total)}（${preview.count}回）`}</Text>
+            <Text {...fitText} style={styles.totalValue}>{`${formatYen(preview.total)}（${preview.count}回）`}</Text>
           </View>
         )}
         {error && <Text style={styles.error}>{error}</Text>}

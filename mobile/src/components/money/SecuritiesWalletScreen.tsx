@@ -11,7 +11,7 @@ import { WalletSheet } from '@/components/money/WalletPicker';
 import BalanceTrend from '@/components/money/BalanceTrend';
 import SecuritySheet from '@/components/money/SecuritySheet';
 import SecurityScreen from '@/components/money/SecurityScreen';
-import { Gain, ScreenHeader, SectionHeader, type } from '@/components/money/moneyVisual';
+import { Gain, ScreenHeader, SectionHeader, type, fitText } from '@/components/money/moneyVisual';
 
 // 証券口座の詳細（docs/kakei.md §9.2.4）。PWA版の `src/components/sukusuku/money/SecuritiesWalletScreen.tsx` と同じ並び・文言。
 // 上に評価額と評価損益、評価額の推移（はじめは全期間。1ヶ月・半年・1年）、下に保有銘柄の一覧
@@ -82,7 +82,7 @@ export default function SecuritiesWalletScreen({
           }
         />
         <View style={styles.summary}>
-          <Text style={type.hero}>{formatBalance(total)}</Text>
+          <Text {...fitText} style={type.hero}>{formatBalance(total)}</Text>
           {gain !== null && <Gain gain={gain.gain} rate={gain.rate} />}
         </View>
 
@@ -108,7 +108,7 @@ export default function SecuritiesWalletScreen({
                     {row.security.name}
                   </Text>
                   <View style={styles.amounts}>
-                    <Text style={type.amount}>{formatBalance(row.value)}</Text>
+                    <Text {...fitText} style={type.amount}>{formatBalance(row.value)}</Text>
                     {row.gain !== null && <Gain gain={row.gain} rate={row.gainRate} size="sub" />}
                   </View>
                   <ChevronRight size={16} color={colors.textFaint} />

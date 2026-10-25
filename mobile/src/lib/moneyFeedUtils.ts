@@ -22,7 +22,7 @@ export const feedTimeLabel = (iso: string | null): string => {
   return `${jst.getUTCMonth() + 1}/${jst.getUTCDate()} ${hh}:${mm}`;
 };
 
-/** 入金は「¥1,000」（色は緑）、出金は「¥−1,000」。 */
+/** 入金は「¥1,000」（色は緑）、出金は「−¥1,000」。 */
 export const feedAmountLabel = (item: Pick<MoneyFeedItem, 'direction' | 'amount'>): string =>
   item.amount === null ? '' : item.direction === 'in' ? formatYen(item.amount) : formatBalance(-item.amount);
 
