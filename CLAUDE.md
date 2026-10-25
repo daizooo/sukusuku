@@ -138,7 +138,7 @@
   ホーム画面のウィジェット（docs/widgets.md）も、**説明用に作る画像・モック（Artifactなど）も同じ**で、
   アプリの配色（`mobile/src/lib/theme.ts`）に合わせ、ダーク用の配色を足さない
 - **画面を開くたびに、スクロールはその画面のいちばん上から始める**（2026-10-16）。タブ・面は一度開くと残るので、何もしないと前の位置が残る。
-  mobile: タブは `useScrollTopOnFocus`（`mobile/src/hooks/`）、家計の面は `active` が false → true のとき `scrollTo` する。PWA版: 家計の面は MoneyTab の切り替えで
+  mobile: タブは `useScrollTopOnFocus`（`mobile/src/hooks/`）、家計の面は `active` が false → true のとき `scrollTo` する。家計の面の `active` は、タブがフォーカスされていること（`useFocusEffect`）も条件にする（別のタブから戻ったときも上から。2026-10-25）。PWA版: 家計の面は MoneyTab の切り替えで
   隠していた面の中のスクロールを 0 に戻す。新しいタブ・隠して残す面を作るときも同じにする
 - **奥の画面（編集・選ぶ画面）から戻ったときは、直前のスクロール位置から始める**（2026-10-25。上の「いちばん上から」は、
   新しく開いたときの話）。奥の画面へ進むと一覧の `ScrollView` が取り除かれて作り直されるため、項目の多い設定では位置が失われていた。
