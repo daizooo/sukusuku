@@ -120,6 +120,8 @@ interface MoneyReviewViewProps {
   onRequestClose: (monthKey: string) => Promise<{ started: boolean; serverNow: string } | null>;
   /** 押した合図をやめる。 */
   onCancelClose: (monthKey: string) => void;
+  /** 締めの途中をやめる（OK は残す）。 */
+  onAbortClose: (monthKey: string) => void;
   /** 締めで、自分の OK を押す（amount）／外す（null）。 */
   onSetCloseCheck: (monthKey: string, walletId: string, amount: number | null) => void;
   /** 締めの口座の詳細から記録を足す（出金元はその口座）。 */
@@ -169,6 +171,7 @@ export default function MoneyReviewView({
   closeChecks,
   onRequestClose,
   onCancelClose,
+  onAbortClose,
   onSetCloseCheck,
   onAddRecord,
   onSaveBalance,
@@ -491,6 +494,10 @@ export default function MoneyReviewView({
             setClosing(null);
           }}
           onReopenMonth={() => onSetMonthClosed(closing, false)}
+          onAbortMonth={() => {
+            onAbortClose(closing);
+            setClosing(null);
+          }}
           onClose={() => setClosing(null)}
         />
       )}

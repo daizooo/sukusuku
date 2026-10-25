@@ -72,6 +72,17 @@ export async function cancelMonthClose(supabase: SupabaseDb, familyId: string, m
   if (error) throw error;
 }
 
+/**
+ * 締めの途中をやめる（締めを始めた印 close_started_at を空にする）。口座の OK は残す。
+ * 締めていない月が対象。合図（money_month_requests）は締めが始まった時点で空になっているので触らない。
+ */
+export async function abortMonthClose(supabase: SupabaseDb, familyId: string, month: string): Promise<void> {
+  const { error } = await supabase
+    .from('money_months')
+    .upsert({ family_id: familyId, month: `${month}-01`, close_started_at: null }, { onConflict: 'family_id,month' });
+  if (error) throw error;
+}
+
 /** 口座の OK を押す（amount はそのときの額）／外す（null）。 */
 export async function setMonthWalletCheck(
   supabase: SupabaseDb,

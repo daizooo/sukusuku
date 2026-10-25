@@ -55,6 +55,8 @@ interface MonthCloseScreenProps {
   onOpenFeed: () => void;
   onCloseMonth: () => void;
   onReopenMonth: () => void;
+  /** 締めの途中をやめる（口座の OK は残す）。 */
+  onAbortMonth: () => void;
   onClose: () => void;
 }
 
@@ -92,10 +94,14 @@ export default function MonthCloseScreen({
   onOpenFeed,
   onCloseMonth,
   onReopenMonth,
+  onAbortMonth,
   onClose,
 }: MonthCloseScreenProps) {
   const label = `${Number(monthKey.slice(5, 7))}月`;
   const [openId, setOpenId] = useState<string | null>(null);
+  const confirmAbort = () => {
+    if (window.confirm('締めを中断しますか？\n口座の OK は残ります。もう一度、夫婦で「この月を締める」を押すと続きから締められます。')) onAbortMonth();
+  };
 
   // 口座ごとの額と、今の額のまま OK している人。
   const rows = useMemo(
@@ -159,7 +165,12 @@ export default function MonthCloseScreen({
               </button>
             </>
           ) : (
-            <PrimaryButton label="この月を締める" onClick={onCloseMonth} disabled={!allDone} />
+            <>
+              <PrimaryButton label="この月を締める" onClick={onCloseMonth} disabled={!allDone} />
+              <button type="button" onClick={confirmAbort} className="w-full py-2.5 text-[13px] font-bold text-gray-500">
+                締めを中断する
+              </button>
+            </>
           )}
         </div>
       </FullScreen>

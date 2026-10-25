@@ -53,7 +53,7 @@ import {
   saveSecurity,
 } from '@/lib/api/moneySecurities';
 import { loadMoneyBootstrap } from '@/lib/api/moneyBootstrap';
-import { cancelMonthClose, loadMoneyClose, requestMonthClose, setMonthWalletCheck, type MoneyCloseData } from '@/lib/api/moneyClose';
+import { abortMonthClose, cancelMonthClose, loadMoneyClose, requestMonthClose, setMonthWalletCheck, type MoneyCloseData } from '@/lib/api/moneyClose';
 import { scanReceipt } from '@/lib/api/moneyReceipt';
 import { captureReceipt } from '@/lib/receiptCapture';
 import {
@@ -369,6 +369,17 @@ export default function MoneyScreen() {
       await cancelMonthClose(supabase, familyId, target, userId);
     } catch {
       failed('取りやめ');
+    }
+  };
+
+  /** 締めの途中をやめる（OK は残す。docs/kakei.md §4.5）。 */
+  const abortClose = async (target: string) => {
+    if (!familyId) return;
+    try {
+      await abortMonthClose(supabase, familyId, target);
+      setClosings((prev) => prev.map((entry) => (entry.month === target ? { ...entry, closeStartedAt: null } : entry)));
+    } catch {
+      failed('締めの中断');
     }
   };
 
@@ -880,6 +891,7 @@ export default function MoneyScreen() {
               closeChecks={closeData.checks}
               onRequestClose={requestClose}
               onCancelClose={(target) => void cancelClose(target)}
+              onAbortClose={(target) => void abortClose(target)}
               onSetCloseCheck={(target, walletId, amount) => void setCloseCheck(target, walletId, amount)}
               onAddRecord={(walletId, date) => {
                 setReceipt(null);
