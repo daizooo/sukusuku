@@ -670,7 +670,6 @@ function MinuteField({ label, value, onChange }: MinuteFieldProps) {
       <NumberInput
         value={value}
         onChangeText={onChange}
-        placeholder="分"
         accessibilityLabel={label}
       />
     </View>

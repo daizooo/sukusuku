@@ -677,7 +677,6 @@ function MinuteField({ label, value, onChange }: MinuteFieldProps) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500"
-        placeholder="分"
       />
     </div>
   );
