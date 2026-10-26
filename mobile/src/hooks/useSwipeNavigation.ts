@@ -39,6 +39,12 @@ const SLIDE_OUT_MS = 90;
 const SLIDE_IN_MS = 150;
 
 /**
+ * 折れ線をなぞっている間（長押しのあと）は、横の動きを日の選択に使うので、画面の切り替えのスワイプを
+ * 受け持たせない。BalanceTrend が立てて、指を離したら下ろす。
+ */
+export const swipeLock = { active: false };
+
+/**
  * スワイプを受け持つ場所が入れ子になったとき（家計タブの面の切り替えの中に、振り返りの
  * 期間の切り替えがある等）、指を置いた場所にいちばん近い（内側の）ものだけを反応させる印。
  * 触れ始めのイベントは内側から外側へ順に届くので、最初に届いたものが受け持つ。
@@ -49,6 +55,8 @@ let claimed: { event: object; owner: object | null } | null = null;
 const claim = (event: GestureResponderEvent, owner: object | null) => {
   if (claimed?.event === event.nativeEvent) return;
   claimed = { event: event.nativeEvent, owner };
+  // 新しく触れ始めたなら、前のなぞりは終わっている。ロックが残ったままでスワイプが効かなくならないように下ろす。
+  swipeLock.active = false;
 };
 
 /**
@@ -58,12 +66,6 @@ const claim = (event: GestureResponderEvent, owner: object | null) => {
 export const swipeBoundary = {
   onTouchStart: (event: GestureResponderEvent) => claim(event, null),
 };
-
-/**
- * 折れ線をなぞっている間（長押しのあと）は、横の動きを日の選択に使うので、画面の切り替えのスワイプを
- * 受け持たせない。BalanceTrend が立てて、指を離したら下ろす。
- */
-export const swipeLock = { active: false };
 
 export type SwipeHandlers = PanResponderInstance['panHandlers'] & {
   onTouchStart: (event: GestureResponderEvent) => void;
