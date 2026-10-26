@@ -132,6 +132,8 @@ export default function WalletBalanceScreen({
           </button>
         }
       />
+      {/* 残高の欄も含め、ヘッダーより下ぜんぶを左右スワイプで履歴/推移に切り替える。 */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden" {...swipeHandlers}>
       <div className="shrink-0 space-y-2 px-4 pb-2.5 pt-3">
         <div className="flex items-end gap-3">
           <div className="min-w-0 flex-1">
@@ -165,7 +167,6 @@ export default function WalletBalanceScreen({
           </div>
         )}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden" {...swipeHandlers}>
         <div role="tablist" className="shrink-0 flex border-b border-gray-200 px-2">
           {tabs.map((entry) => {
             const selected = entry.id === tab;

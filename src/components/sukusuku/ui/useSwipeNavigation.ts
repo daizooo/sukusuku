@@ -18,13 +18,15 @@ import { useCallback, useRef, type TouchEvent } from 'react';
 const REGION_ATTRIBUTE = 'data-swipe-region';
 
 /** これ未満の横移動は指の震え・タップの誤差とみなして無視する（mobile と同じ値）。 */
-const HORIZONTAL_THRESHOLD = 36;
+const HORIZONTAL_THRESHOLD = 28;
 /** 素早く払う動き（フリック）は、短い移動でも切り替える（mobile と同じ値）。 */
-const FLICK_DISTANCE = 14;
+const FLICK_DISTANCE = 10;
 /** フリックとみなす速さ（px/ms。mobile と同じ値）。 */
 const FLICK_VELOCITY = 0.3;
 /** 縦のスクロールを奪わないよう、横方向がこれを超えて動くまでは判定を始めない（mobile と同じ値）。 */
-const DIRECTION_LOCK_SLOP = 8;
+const DIRECTION_LOCK_SLOP = 4;
+/** 縦のスクロールと決めるまでの縦の動き（mobile にはない。ブラウザは縦スクロールを自分で始めるため）。 */
+const VERTICAL_LOCK_SLOP = 12;
 /** 進めない向きへ引いたときに、指の動きのどれだけ中身を動かすか（mobile と同じ値）。 */
 const EDGE_RESISTANCE = 0.3;
 /** 画面の外へ流れる時間と、反対側から流れ込む時間（ミリ秒。mobile と同じ値）。 */
@@ -85,7 +87,8 @@ export function useSwipeNavigation({ onSwipeLeft, onSwipeRight, enabled = true }
         const dy = event.touches[0].clientY - from.y;
         if (direction.current === null) {
           if (Math.abs(dx) > DIRECTION_LOCK_SLOP && Math.abs(dx) > Math.abs(dy)) direction.current = 'horizontal';
-          else if (Math.abs(dy) > DIRECTION_LOCK_SLOP) direction.current = 'vertical';
+          // 縦に固定するのは、はっきり縦へ動いたときだけ（斜めに払う指を縦と決めつけない）。
+          else if (Math.abs(dy) > VERTICAL_LOCK_SLOP && Math.abs(dy) > Math.abs(dx) * 1.5) direction.current = 'vertical';
         }
         if (direction.current !== 'horizontal' || !content.current) return;
         const action = dx < 0 ? onSwipeLeft : onSwipeRight;
