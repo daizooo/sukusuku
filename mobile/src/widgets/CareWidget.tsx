@@ -1,11 +1,10 @@
 import { FlexWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
 import { appLink, OPEN_LOG_PARAM } from '@/lib/appLinks';
 import { formatTimeString } from '@/lib/dateUtils';
-import { colors } from '@/lib/theme';
-import type { LogType } from '@/types/app';
 import { ActionButton, ButtonRow, DENSITY, GroupBox, hex, REFRESH_WIDGET_ACTION, WidgetFrame, type WidgetDensity } from './parts';
 import type { CareWidgetData, WidgetData, WidgetDataError } from './widgetData';
 import { widgetIcon, type WidgetIconName } from './icons';
+import type { WidgetPalette } from './widgetPalette';
 
 // B. 育児（docs/widgets.md §2.2）。4×1 の1段に、次の授乳の目安と3つのボタンを並べる。琥珀の地に白いボタン。
 // 見出しは出さない。搾乳は授乳の入力画面にまとめてある（頻度も少ない）ので、ボタンを置かない。
@@ -13,11 +12,11 @@ import { widgetIcon, type WidgetIconName } from './icons';
 // 目安と右隣のボタンの中間に更新のボタン（↻。四角は付けない）を置き、押すとその場で次の目安を読み直して描き直す。目安の欄そのものを押すと育児タブを開く。
 // ウィジェットから直接は保存しない（押し間違いで記録が増えないように）。
 
-// アイコンは記録の種類の色（育児タブと同じ）、名前は灰色でそろえる（地の琥珀と競わないように）。
-const BUTTONS: { type: LogType; icon: WidgetIconName; label: string; color: string }[] = [
-  { type: 'milk', icon: 'milk', label: '授乳', color: colors.milk },
-  { type: 'diaper', icon: 'diaper', label: 'おむつ', color: colors.diaper },
-  { type: 'temperature', icon: 'temperature', label: '体温', color: colors.temperature },
+// アイコンは記録の種類の色（育児タブと同じ。palette.care）、名前は灰色でそろえる（地の琥珀と競わないように）。
+const BUTTONS: { type: 'milk' | 'diaper' | 'temperature'; icon: WidgetIconName; label: string }[] = [
+  { type: 'milk', icon: 'milk', label: '授乳' },
+  { type: 'diaper', icon: 'diaper', label: 'おむつ' },
+  { type: 'temperature', icon: 'temperature', label: '体温' },
 ];
 
 const careUri = appLink('care');
@@ -41,9 +40,9 @@ const dueLines = (data: WidgetData<CareWidgetData>): { label: string; value: str
 };
 
 /** 目安の欄の中身。普通と tight は見出しの下に値、inline は横1行（時刻のときだけ「目安 12:30」）。 */
-function dueText(data: WidgetData<CareWidgetData>, density: WidgetDensity) {
+function dueText(data: WidgetData<CareWidgetData>, palette: WidgetPalette, density: WidgetDensity) {
   const { label, value, isTime } = dueLines(data);
-  const color = hex(colors.milkText);
+  const color = hex(palette.care.text);
   if (density === 'inline') {
     // 一言（要ログインなど）は時刻より長いので、見出しを省いて小さめに出す。
     return isTime ? (
@@ -63,7 +62,7 @@ function dueText(data: WidgetData<CareWidgetData>, density: WidgetDensity) {
 }
 
 /** 目安の欄と3つのボタン（地は持たない。単体は外枠、重ねたものは GroupBox が育児の地になる）。 */
-function careCells(data: WidgetData<CareWidgetData>, density: WidgetDensity = 'normal') {
+function careCells(data: WidgetData<CareWidgetData>, palette: WidgetPalette, density: WidgetDensity = 'normal') {
   const { label, value } = dueLines(data);
   const d = DENSITY[density];
   return [
@@ -77,7 +76,7 @@ function careCells(data: WidgetData<CareWidgetData>, density: WidgetDensity = 'n
         accessibilityLabel={`${label} ${value}`}
         style={{ height: 'match_parent', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
       >
-        {dueText(data, density)}
+        {dueText(data, palette, density)}
       </FlexWidget>
       <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: careUri }} style={{ flex: 1, height: 'match_parent' }} />
       <FlexWidget
@@ -85,18 +84,19 @@ function careCells(data: WidgetData<CareWidgetData>, density: WidgetDensity = 'n
         accessibilityLabel="次の目安を更新"
         style={{ height: 'match_parent', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}
       >
-        <SvgWidget svg={widgetIcon('refresh', colors.milkText)} style={{ width: d.icon + 2, height: d.icon + 2 }} />
+        <SvgWidget svg={widgetIcon('refresh', palette.care.text)} style={{ width: d.icon + 2, height: d.icon + 2 }} />
       </FlexWidget>
       <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: careUri }} style={{ flex: 1, height: 'match_parent' }} />
     </FlexWidget>,
-    ...BUTTONS.map(({ type, icon, label: buttonLabel, color }) => (
+    ...BUTTONS.map(({ type, icon, label: buttonLabel }) => (
       <ActionButton
         key={type}
         icon={icon}
         label={buttonLabel}
         uri={appLink('care', { [OPEN_LOG_PARAM]: type })}
-        color={color}
-        labelColor={colors.textSubtle}
+        color={palette.care[type]}
+        labelColor={palette.care.label}
+        palette={palette}
         density={density}
       />
     )),
@@ -104,18 +104,26 @@ function careCells(data: WidgetData<CareWidgetData>, density: WidgetDensity = 'n
 }
 
 /** 育児の地の1段。タブと1つにまとめたもの（CombinedWidgets.tsx）で使う。 */
-export function CareRow({ data, density = 'normal' }: { data: WidgetData<CareWidgetData>; density?: WidgetDensity }) {
+export function CareRow({
+  data,
+  palette,
+  density = 'normal',
+}: {
+  data: WidgetData<CareWidgetData>;
+  palette: WidgetPalette;
+  density?: WidgetDensity;
+}) {
   return (
-    <GroupBox tone="care" density={density}>
-      {careCells(data, density)}
+    <GroupBox palette={palette} tone="care" density={density}>
+      {careCells(data, palette, density)}
     </GroupBox>
   );
 }
 
-export function CareWidget({ data }: { data: WidgetData<CareWidgetData> }) {
+export function CareWidget({ data, palette }: { data: WidgetData<CareWidgetData>; palette: WidgetPalette }) {
   return (
-    <WidgetFrame tone="care">
-      <ButtonRow>{careCells(data)}</ButtonRow>
+    <WidgetFrame palette={palette} tone="care">
+      <ButtonRow>{careCells(data, palette)}</ButtonRow>
     </WidgetFrame>
   );
 }

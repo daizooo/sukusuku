@@ -3,6 +3,7 @@ import { TabsRow } from './LauncherWidget';
 import { MoneyRow } from './MoneyWidget';
 import { WidgetFrame } from './parts';
 import type { CareWidgetData, WidgetData } from './widgetData';
+import type { WidgetPalette } from './widgetPalette';
 
 // タブ（4×1）に育児・家計の段を重ねた、1つにまとめたウィジェット（docs/widgets.md §2.4）。
 // 段の中身は単体のウィジェット（TabLauncher・CareQuick・MoneyQuick）とまったく同じで、
@@ -10,32 +11,32 @@ import type { CareWidgetData, WidgetData } from './widgetData';
 // 外枠は白で、育児・家計の段はそれぞれ自分の地の色を持つ（どこからどこまでがどのまとまりか分かるように）。
 
 /** タブ＋育児＋家計（4×3）。 */
-export function TabsCareMoneyWidget({ care }: { care: WidgetData<CareWidgetData> }) {
+export function TabsCareMoneyWidget({ care, palette }: { care: WidgetData<CareWidgetData>; palette: WidgetPalette }) {
   return (
-    <WidgetFrame>
-      <TabsRow />
-      <CareRow data={care} />
-      <MoneyRow />
+    <WidgetFrame palette={palette}>
+      <TabsRow palette={palette} />
+      <CareRow data={care} palette={palette} />
+      <MoneyRow palette={palette} />
     </WidgetFrame>
   );
 }
 
 /** タブ＋育児（4×2）。 */
-export function TabsCareWidget({ care }: { care: WidgetData<CareWidgetData> }) {
+export function TabsCareWidget({ care, palette }: { care: WidgetData<CareWidgetData>; palette: WidgetPalette }) {
   return (
-    <WidgetFrame>
-      <TabsRow />
-      <CareRow data={care} />
+    <WidgetFrame palette={palette}>
+      <TabsRow palette={palette} />
+      <CareRow data={care} palette={palette} />
     </WidgetFrame>
   );
 }
 
 /** タブ＋家計（4×2）。 */
-export function TabsMoneyWidget() {
+export function TabsMoneyWidget({ palette }: { palette: WidgetPalette }) {
   return (
-    <WidgetFrame>
-      <TabsRow />
-      <MoneyRow />
+    <WidgetFrame palette={palette}>
+      <TabsRow palette={palette} />
+      <MoneyRow palette={palette} />
     </WidgetFrame>
   );
 }
@@ -44,23 +45,23 @@ export function TabsMoneyWidget() {
 // 段の中身（ボタンと飛び先）は4×3と同じで、寸法だけが違う（parts.tsx の DENSITY）。
 
 /** タブ＋育児＋家計（4×2・縦詰め）。アイコンの下に名前のまま、余白と隙間を詰める。 */
-export function TabsCareMoneyTightWidget({ care }: { care: WidgetData<CareWidgetData> }) {
+export function TabsCareMoneyTightWidget({ care, palette }: { care: WidgetData<CareWidgetData>; palette: WidgetPalette }) {
   return (
-    <WidgetFrame density="tight">
-      <TabsRow density="tight" />
-      <CareRow data={care} density="tight" />
-      <MoneyRow density="tight" />
+    <WidgetFrame palette={palette} density="tight">
+      <TabsRow palette={palette} density="tight" />
+      <CareRow data={care} palette={palette} density="tight" />
+      <MoneyRow palette={palette} density="tight" />
     </WidgetFrame>
   );
 }
 
 /** タブ＋育児＋家計（4×2・横並び）。アイコンと名前を横に並べて、同じ高さのまま文字とアイコンを大きく保つ。 */
-export function TabsCareMoneyInlineWidget({ care }: { care: WidgetData<CareWidgetData> }) {
+export function TabsCareMoneyInlineWidget({ care, palette }: { care: WidgetData<CareWidgetData>; palette: WidgetPalette }) {
   return (
-    <WidgetFrame density="inline">
-      <TabsRow density="inline" />
-      <CareRow data={care} density="inline" />
-      <MoneyRow density="inline" />
+    <WidgetFrame palette={palette} density="inline">
+      <TabsRow palette={palette} density="inline" />
+      <CareRow data={care} palette={palette} density="inline" />
+      <MoneyRow palette={palette} density="inline" />
     </WidgetFrame>
   );
 }

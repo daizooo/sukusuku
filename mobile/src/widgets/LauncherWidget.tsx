@@ -1,8 +1,8 @@
 import { appLink } from '@/lib/appLinks';
-import { colors } from '@/lib/theme';
 import type { TabId } from '@/types/app';
 import { ActionButton, ButtonRow, DENSITY, WidgetFrame, type WidgetDensity } from './parts';
 import type { WidgetIconName } from './icons';
+import type { WidgetPalette } from './widgetPalette';
 
 // A. 4タブのランチャー（docs/widgets.md §2.1）。押したタブでアプリを開く（最初のタブの設定に関係なく）。
 // データは読まないので、ログインしていなくても圏外でも同じように出る。
@@ -17,33 +17,42 @@ const TABS: { tab: TabId; icon: WidgetIconName; label: string }[] = [
   { tab: 'money', icon: 'money', label: '家計' },
 ];
 
-const button = ({ tab, icon, label }: (typeof TABS)[number], density: WidgetDensity = 'normal') => (
+const button = (
+  { tab, icon, label }: (typeof TABS)[number],
+  palette: WidgetPalette,
+  density: WidgetDensity = 'normal',
+) => (
   <ActionButton
     key={tab}
     icon={icon}
     label={label}
     uri={appLink(tab)}
-    color={colors.textSubtle}
+    color={palette.tabs.icon}
+    palette={palette}
     variant="plain"
     density={density}
   />
 );
 
 /** 4タブを横一列に並べた1段。 */
-export function TabsRow({ density = 'normal' }: { density?: WidgetDensity }) {
-  return <ButtonRow gap={density === 'normal' ? undefined : DENSITY[density].groupGap}>{TABS.map((tab) => button(tab, density))}</ButtonRow>;
+export function TabsRow({ palette, density = 'normal' }: { palette: WidgetPalette; density?: WidgetDensity }) {
+  return (
+    <ButtonRow gap={density === 'normal' ? undefined : DENSITY[density].groupGap}>
+      {TABS.map((tab) => button(tab, palette, density))}
+    </ButtonRow>
+  );
 }
 
-export function LauncherWidget({ width, height }: { width: number; height: number }) {
+export function LauncherWidget({ width, height, palette }: { width: number; height: number; palette: WidgetPalette }) {
   const twoRows = width < height * 2;
   return (
-    <WidgetFrame tone="tabs">
+    <WidgetFrame palette={palette} tone="tabs">
       {twoRows
         ? [
-            <ButtonRow key="top">{TABS.slice(0, 2).map((tab) => button(tab))}</ButtonRow>,
-            <ButtonRow key="bottom">{TABS.slice(2).map((tab) => button(tab))}</ButtonRow>,
+            <ButtonRow key="top">{TABS.slice(0, 2).map((tab) => button(tab, palette))}</ButtonRow>,
+            <ButtonRow key="bottom">{TABS.slice(2).map((tab) => button(tab, palette))}</ButtonRow>,
           ]
-        : <TabsRow />}
+        : <TabsRow palette={palette} />}
     </WidgetFrame>
   );
 }
