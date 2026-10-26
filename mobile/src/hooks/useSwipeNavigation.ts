@@ -25,13 +25,13 @@ import {
  */
 
 /** これ未満の横移動は指の震え・タップの誤差とみなして無視する。 */
-const HORIZONTAL_THRESHOLD = 36;
+const HORIZONTAL_THRESHOLD = 28;
 /** 素早く払う動き（フリック）は、短い移動でも切り替える（2026-10-15。ゆっくり引かなくても反応するように）。 */
-const FLICK_DISTANCE = 14;
+const FLICK_DISTANCE = 10;
 /** フリックとみなす速さ（px/ms）。 */
 const FLICK_VELOCITY = 0.3;
 /** 縦のスクロールを奪わないよう、横方向がこれを超えて動くまでは判定を始めない。 */
-const DIRECTION_LOCK_SLOP = 8;
+const DIRECTION_LOCK_SLOP = 4;
 /** 進めない向きへ引いたときに、指の動きのどれだけ中身を動かすか。 */
 const EDGE_RESISTANCE = 0.3;
 /** 画面の外へ流れる時間と、反対側から流れ込む時間（ミリ秒）。 */

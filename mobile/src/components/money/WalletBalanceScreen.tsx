@@ -142,6 +142,8 @@ export default function WalletBalanceScreen({
             </Pressable>
           }
         />
+        {/* 残高の欄も含め、ヘッダーより下ぜんぶを左右スワイプで履歴/推移に切り替える。 */}
+        <View style={styles.flex} {...swipe.handlers}>
         <View style={styles.summary}>
           <View style={styles.summaryTop}>
             <View style={styles.flex}>
@@ -171,7 +173,6 @@ export default function WalletBalanceScreen({
             </View>
           )}
         </View>
-        <View style={styles.flex} {...swipe.handlers}>
           <View accessibilityRole="tablist" style={styles.tabs}>
             {tabs.map((entry) => {
               const selected = entry.id === tab;
