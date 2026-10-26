@@ -23,6 +23,7 @@ import FamilySection from '@/components/info/FamilySection';
 import NotificationSetting from '@/components/info/NotificationSetting';
 import FeedingIntervalSetting from '@/components/info/FeedingIntervalSetting';
 import WakeAlarmSetting from '@/components/info/WakeAlarmSetting';
+import WidgetThemeSetting from '@/components/info/WidgetThemeSetting';
 import TemperatureReminderSetting from '@/components/info/TemperatureReminderSetting';
 
 // 設定の画面。その他タブの「設定」の行から開く（以前は設定タブそのもの。2026-10-13にその他タブへ改めた。
@@ -130,6 +131,9 @@ export default function SettingsScreen() {
               {/* 夜の授乳の起床アラーム。この端末だけの設定で、Androidのネイティブ版だけに出る。 */}
               <WakeAlarmSetting />
             </NotificationSetting>
+
+            {/* ホーム画面のウィジェットの配色（ライト・ダーク）。この端末だけの設定で、Androidのネイティブ版だけに出る。 */}
+            <WidgetThemeSetting />
 
             <AccountSection familyId={familyId} userId={session.user.id} />
           </>

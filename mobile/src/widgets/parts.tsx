@@ -1,13 +1,12 @@
 import { FlexWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
 import type { ColorProp } from 'react-native-android-widget';
-import { colors } from '@/lib/theme';
 import { widgetIcon, type WidgetIconName } from './icons';
+import type { WidgetPalette } from './widgetPalette';
 
 // ウィジェットの共通の部品（docs/widgets.md §2）。
 //
-// 色はアプリの配色（src/lib/theme.ts）をそのまま使う。アプリはライトだけ（app.config.js の
-// userInterfaceStyle: 'light'）なので、ウィジェットも端末がダークモードでもライトのまま描く
-// （ダーク用の絵は渡さない。ルートの CLAUDE.md の「配色」）。
+// 色は widgetPalette.ts のライト（アプリの配色 src/lib/theme.ts そのまま）かダークで、設定で切り替える
+// （docs/widgets.md §2.6）。パレットは各部品へ props で渡す（ウィジェットの絵は React の文脈を持たないため）。
 //
 // まとまり（タブ・育児・家計）ごとに地の色を決め、単体でも重ねても、どこからどこまでが
 // どのまとまりかが分かるようにする（2026-10-14。全部が淡い色の四角で見分けられなかった）。
@@ -58,24 +57,18 @@ export const DENSITY: Record<
   },
 };
 
-/** まとまりの地と枠の色。 */
-export const TONES: Record<WidgetTone, { surface: string; border: string }> = {
-  tabs: { surface: colors.surface, border: colors.border },
-  // 白いボタンが浮いて見え、隣の段と見分けがつく濃さ（100番台）にする。
-  care: { surface: colors.milkBadge, border: colors.milkBorder },
-  money: { surface: colors.moneySoft, border: colors.diaperBorder },
-};
-
 /**
  * ウィジェットの外枠。単体のときはそのまとまりの地の色で塗る。
  * 重ねたもの（CombinedWidgets.tsx）は白の地で、育児・家計の段がそれぞれ自分の地（GroupBox）を持つ。
  */
 export function WidgetFrame({
   children,
+  palette,
   tone = 'tabs',
   density = 'normal',
 }: {
   children: React.ReactNode;
+  palette: WidgetPalette;
   tone?: WidgetTone;
   density?: WidgetDensity;
 }) {
@@ -85,10 +78,10 @@ export function WidgetFrame({
         height: 'match_parent',
         width: 'match_parent',
         flexDirection: 'column',
-        backgroundColor: hex(TONES[tone].surface),
+        backgroundColor: hex(palette.tones[tone].surface),
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: hex(TONES[tone].border),
+        borderColor: hex(palette.tones[tone].border),
         padding: DENSITY[density].framePadding,
         flexGap: DENSITY[density].frameGap,
       }}
@@ -101,10 +94,12 @@ export function WidgetFrame({
 /** 重ねたものの中の1段ぶんの地（育児・家計）。 */
 export function GroupBox({
   children,
+  palette,
   tone,
   density = 'normal',
 }: {
   children: React.ReactNode;
+  palette: WidgetPalette;
   tone: WidgetTone;
   density?: WidgetDensity;
 }) {
@@ -114,10 +109,10 @@ export function GroupBox({
         flex: 1,
         width: 'match_parent',
         flexDirection: 'row',
-        backgroundColor: hex(TONES[tone].surface),
+        backgroundColor: hex(palette.tones[tone].surface),
         borderRadius: DENSITY[density].groupRadius,
         borderWidth: 1,
-        borderColor: hex(TONES[tone].border),
+        borderColor: hex(palette.tones[tone].border),
         padding: DENSITY[density].groupPadding,
         flexGap: DENSITY[density].groupGap,
       }}
@@ -137,6 +132,7 @@ export function ActionButton({
   uri,
   color,
   labelColor = color,
+  palette,
   variant = 'tile',
   density = 'normal',
 }: {
@@ -145,6 +141,7 @@ export function ActionButton({
   uri: string;
   color: string;
   labelColor?: string;
+  palette: WidgetPalette;
   variant?: 'tile' | 'plain';
   density?: WidgetDensity;
 }) {
@@ -160,7 +157,7 @@ export function ActionButton({
         flexDirection: d.direction,
         alignItems: 'center',
         justifyContent: 'center',
-        ...(variant === 'tile' && { backgroundColor: hex(colors.surface), borderRadius: d.buttonRadius }),
+        ...(variant === 'tile' && { backgroundColor: hex(palette.tile), borderRadius: d.buttonRadius }),
         paddingVertical: d.buttonPaddingVertical,
         flexGap: d.buttonGap,
       }}

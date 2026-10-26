@@ -1,7 +1,7 @@
 import { appLink, OPEN_MONEY_PARAM, type MoneyOpen } from '@/lib/appLinks';
-import { colors } from '@/lib/theme';
 import { ActionButton, ButtonRow, GroupBox, WidgetFrame, type WidgetDensity } from './parts';
 import type { WidgetIconName } from './icons';
+import type { WidgetPalette } from './widgetPalette';
 
 // C. 家計（docs/widgets.md §2.3）。4×1 の1段に4つのボタンだけを並べる（見出し・金額は出さない）。
 // 支出・収入・振替は記録の入力画面をその種類で開き、レシートは撮影から始める。
@@ -14,32 +14,33 @@ const BUTTONS: { open: MoneyOpen; icon: WidgetIconName; label: string }[] = [
   { open: 'receipt', icon: 'receipt', label: 'レシート' },
 ];
 
-const moneyCells = (density: WidgetDensity = 'normal') =>
+const moneyCells = (palette: WidgetPalette, density: WidgetDensity = 'normal') =>
   BUTTONS.map(({ open, icon, label }) => (
     <ActionButton
       key={open}
       icon={icon}
       label={label}
       uri={appLink('money', { [OPEN_MONEY_PARAM]: open })}
-      color={colors.money}
-      labelColor={colors.moneyText}
+      color={palette.money.icon}
+      labelColor={palette.money.label}
+      palette={palette}
       density={density}
     />
   ));
 
 /** 家計の地の1段。タブと1つにまとめたもの（CombinedWidgets.tsx）で使う。 */
-export function MoneyRow({ density = 'normal' }: { density?: WidgetDensity }) {
+export function MoneyRow({ palette, density = 'normal' }: { palette: WidgetPalette; density?: WidgetDensity }) {
   return (
-    <GroupBox tone="money" density={density}>
-      {moneyCells(density)}
+    <GroupBox palette={palette} tone="money" density={density}>
+      {moneyCells(palette, density)}
     </GroupBox>
   );
 }
 
-export function MoneyWidget() {
+export function MoneyWidget({ palette }: { palette: WidgetPalette }) {
   return (
-    <WidgetFrame tone="money">
-      <ButtonRow>{moneyCells()}</ButtonRow>
+    <WidgetFrame palette={palette} tone="money">
+      <ButtonRow>{moneyCells(palette)}</ButtonRow>
     </WidgetFrame>
   );
 }

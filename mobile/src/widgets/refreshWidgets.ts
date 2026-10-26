@@ -6,18 +6,34 @@ import { widgetsAvailable } from './availability';
 // ウィジェットの部品は Expo Go に無いので、使えるときだけ読み込む（availability.ts）。
 
 export async function refreshWidgets(): Promise<void> {
+  await requestUpdates('content');
+}
+
+/**
+ * 置いてあるウィジェットをすべて描き直す。配色（ライト・ダーク。docs/widgets.md §2.6）を切り替えたとき用で、
+ * 中身を出さないウィジェット（タブ・家計）も新しい配色にする。
+ */
+export async function refreshAllWidgets(): Promise<void> {
+  await requestUpdates('all');
+}
+
+async function requestUpdates(scope: 'content' | 'all'): Promise<void> {
   if (!widgetsAvailable) return;
   const { requestWidgetUpdate } = require('react-native-android-widget') as typeof import('react-native-android-widget');
   const { renderWidget } = require('./renderWidget') as typeof import('./renderWidget');
   const { WIDGET_NAMES } = require('./widgetNames') as typeof import('./widgetNames');
+  const names =
+    scope === 'all'
+      ? Object.values(WIDGET_NAMES)
+      : [
+          WIDGET_NAMES.care,
+          WIDGET_NAMES.tabsCareMoney,
+          WIDGET_NAMES.tabsCare,
+          WIDGET_NAMES.tabsCareMoneyTight,
+          WIDGET_NAMES.tabsCareMoneyInline,
+        ];
   await Promise.all(
-    [
-      WIDGET_NAMES.care,
-      WIDGET_NAMES.tabsCareMoney,
-      WIDGET_NAMES.tabsCare,
-      WIDGET_NAMES.tabsCareMoneyTight,
-      WIDGET_NAMES.tabsCareMoneyInline,
-    ].map((widgetName) =>
+    names.map((widgetName) =>
       requestWidgetUpdate({
         widgetName,
         renderWidget: async (info) => {

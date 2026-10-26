@@ -135,8 +135,8 @@
   mobile: `mobile/src/hooks/`、PWA版: `src/components/sukusuku/ui/`
 - **配色はライトだけ。ダークモードは作らない**（2026-10-14に明記。以前にも伝えていた）。
   アプリは `userInterfaceStyle: 'light'`（`mobile/app.config.js`）で、端末がダークモードでもライトのまま出す。
-  ホーム画面のウィジェット（docs/widgets.md）も、**説明用に作る画像・モック（Artifactなど）も同じ**で、
-  アプリの配色（`mobile/src/lib/theme.ts`）に合わせ、ダーク用の配色を足さない
+  **例外: ホーム画面のウィジェットだけは、設定でライト／ダークを切り替えられる**（2026-10-26に決定。既定はライト。docs/widgets.md §2.6）。
+  アプリの画面は変えない。**説明用に作る画像・モック（Artifactなど）は**アプリの配色（`mobile/src/lib/theme.ts`）に合わせ、ダーク用の配色を足さない
 - **画面を開くたびに、スクロールはその画面のいちばん上から始める**（2026-10-16）。タブ・面は一度開くと残るので、何もしないと前の位置が残る。
   mobile: タブは `useScrollTopOnFocus`（`mobile/src/hooks/`）、家計の面は `active` が false → true のとき `scrollTo` する。家計の面の `active` は、タブがフォーカスされていること（`useFocusEffect`）も条件にする（別のタブから戻ったときも上から。2026-10-25）。PWA版: 家計の面は MoneyTab の切り替えで
   隠していた面の中のスクロールを 0 に戻す。新しいタブ・隠して残す面を作るときも同じにする
