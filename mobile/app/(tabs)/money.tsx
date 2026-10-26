@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, InteractionManager, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, InteractionManager, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type {
@@ -25,7 +25,6 @@ import type {
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 import { colors } from '@/lib/theme';
-import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { getMyMembership } from '@/lib/api/me';
 import { useFamilyRefresh } from '@/lib/familySync';
 import { OPEN_MONEY_PARAM, parseMoneyOpen } from '@/lib/appLinks';
@@ -802,13 +801,15 @@ export default function MoneyScreen() {
     setView(next);
   }, []);
 
-  // 口座/記録/振り返りは、帯と中身の上の左右スワイプでも切り替える
-  // 帯の下の中身は指に合わせて横に動く。
-  const viewSwipe = useSwipeTabs(
-    VIEWS.map((entry) => entry.id),
-    view,
-    showView,
-  );
+  // 口座/記録/振り返りは、左右スワイプでも切り替える。横の動きは端末側（横のScrollView + pagingEnabled）が受け持つ。
+  // JS で拾う作り（useSwipeTabs）は、縦の一覧が先に横の動きを取ってしまい、効きが悪かった（2026-10-26）。
+  const viewPager = useRef<ScrollView>(null);
+  const [pagerSize, setPagerSize] = useState({ width: 0, height: 0 });
+  const viewIndex = VIEWS.findIndex((entry) => entry.id === view);
+  // 帯を押す・他の操作で面が変わったときも、ページを合わせる（スワイプで変わったときは、すでにそこにいる）。
+  useEffect(() => {
+    if (pagerSize.width > 0) viewPager.current?.scrollTo({ x: viewIndex * pagerSize.width, animated: true });
+  }, [viewIndex, pagerSize.width]);
 
   if (isSessionLoading) {
     return (
@@ -821,7 +822,7 @@ export default function MoneyScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.screen}>
-      <View style={styles.body} {...viewSwipe.handlers}>
+      <View style={styles.body}>
         <View accessibilityRole="tablist" style={styles.views}>
           {VIEWS.map((entry) => {
             const selected = entry.id === view;
@@ -844,9 +845,48 @@ export default function MoneyScreen() {
           })}
         </View>
 
-        <Animated.View style={[styles.body, viewSwipe.style]}>
+        <View style={styles.body} onLayout={(event) => setPagerSize(event.nativeEvent.layout)}>
+          {pagerSize.width > 0 && (
+            <ScrollView
+              ref={viewPager}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              overScrollMode="never"
+              contentOffset={{ x: viewIndex * pagerSize.width, y: 0 }}
+              onMomentumScrollEnd={(event) => {
+                const next = VIEWS[Math.round(event.nativeEvent.contentOffset.x / pagerSize.width)];
+                if (next && next.id !== view) showView(next.id);
+              }}
+            >
+            <View key="accounts" style={{ width: pagerSize.width, height: pagerSize.height }}>
+          {(view === 'accounts' || mountedViews.has('accounts')) && (
+            <View style={styles.body}>
+            <MoneyAccountsView
+              active={focused && view === 'accounts'}
+              wallets={wallets}
+              records={records}
+              balances={balances}
+              securities={securities}
+              categories={categories}
+              isLoading={isLoading}
+              onOpenRecord={setEditing}
+              onConfirm={(walletId, balanceOn, amount, showInHistory) => void confirmBalance(walletId, balanceOn, amount, showInHistory)}
+              onDeleteBalance={(balance) => void removeBalance(balance)}
+              onSaveWallet={saveWallet}
+              onDeleteWallet={(wallet) => void deleteWallet(wallet)}
+              onRestoreWallet={(wallet) => void restoreWallet(wallet)}
+              onReorderWallets={reorderWallets}
+              onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
+              onNeedSecurityHistory={needSecurityHistory}
+              onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
+            />
+            </View>
+          )}
+            </View>
+            <View key="records" style={{ width: pagerSize.width, height: pagerSize.height }}>
           {(view === 'records' || mountedViews.has('records')) && (
-            <View style={view === 'records' ? styles.body : styles.hidden}>
+            <View style={styles.body}>
             <MoneyRecordsView
               active={focused && view === 'records'}
               records={records}
@@ -861,8 +901,10 @@ export default function MoneyScreen() {
             />
             </View>
           )}
+            </View>
+            <View key="review" style={{ width: pagerSize.width, height: pagerSize.height }}>
           {(view === 'review' || mountedViews.has('review')) && (
-            <View style={view === 'review' ? styles.body : styles.hidden}>
+            <View style={styles.body}>
             <MoneyReviewView
               active={focused && view === 'review'}
               period={period}
@@ -913,30 +955,10 @@ export default function MoneyScreen() {
             />
             </View>
           )}
-          {(view === 'accounts' || mountedViews.has('accounts')) && (
-            <View style={view === 'accounts' ? styles.body : styles.hidden}>
-            <MoneyAccountsView
-              active={focused && view === 'accounts'}
-              wallets={wallets}
-              records={records}
-              balances={balances}
-              securities={securities}
-              categories={categories}
-              isLoading={isLoading}
-              onOpenRecord={setEditing}
-              onConfirm={(walletId, balanceOn, amount, showInHistory) => void confirmBalance(walletId, balanceOn, amount, showInHistory)}
-              onDeleteBalance={(balance) => void removeBalance(balance)}
-              onSaveWallet={saveWallet}
-              onDeleteWallet={(wallet) => void deleteWallet(wallet)}
-              onRestoreWallet={(wallet) => void restoreWallet(wallet)}
-              onReorderWallets={reorderWallets}
-              onSaveSecurity={(walletId, target, draft) => void saveSecurityOf(walletId, target, draft)}
-              onNeedSecurityHistory={needSecurityHistory}
-              onArchiveSecurity={(walletId, security) => void archiveSecurityOf(walletId, security)}
-            />
             </View>
+            </ScrollView>
           )}
-        </Animated.View>
+        </View>
       </View>
 
       {/* 右下の＋（記録を追加）と、その上の設定。どちらも1回で開く（2026-10-20）。 */}
@@ -1085,7 +1107,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   body: { flex: 1 },
   // 開いたことのある面のうち、いま見ていないもの（作り直さず隠すだけ）。
-  hidden: { display: 'none' },
   centered: { alignItems: 'center', justifyContent: 'center' },
   // 3つの面の切り替え。等幅に並べ、選んでいる面は濃い文字と青い下線。
   views: {
