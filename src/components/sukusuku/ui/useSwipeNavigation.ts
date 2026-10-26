@@ -36,6 +36,12 @@ const SLIDE_IN_MS = 150;
 /** スワイプを受け持たない区切り。モーダルの枠・横スクロールの帯に足す。 */
 export const swipeBoundary = { [REGION_ATTRIBUTE]: '' };
 
+/**
+ * 折れ線をなぞっている間（長押しのあと）は、横の動きを日の選択に使うので、画面の切り替えのスワイプを
+ * 動かさない。BalanceTrend が立てて、指を離したら下ろす（mobile の `swipeLock` と同じ）。
+ */
+export const swipeLock = { active: false };
+
 export interface UseSwipeNavigationOptions {
   /** 左スワイプ（指を左へ）＝次へ進む向き。矢印の「次へ」ボタンと同じ処理を渡す。進めないときは undefined。 */
   onSwipeLeft?: () => void;
@@ -83,6 +89,11 @@ export function useSwipeNavigation({ onSwipeLeft, onSwipeRight, enabled = true }
       onTouchMove: (event: TouchEvent<HTMLElement>) => {
         const from = start.current;
         if (!from || event.touches.length !== 1) return;
+        if (swipeLock.active) {
+          start.current = null;
+          settle();
+          return;
+        }
         const dx = event.touches[0].clientX - from.x;
         const dy = event.touches[0].clientY - from.y;
         if (direction.current === null) {

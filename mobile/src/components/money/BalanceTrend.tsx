@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
-import { swipeBoundary } from '@/hooks/useSwipeNavigation';
+import { swipeLock } from '@/hooks/useSwipeNavigation';
 import { colors } from '@/lib/theme';
 import {
   balanceChanges,
@@ -19,8 +19,11 @@ import { SectionHeader, type, fitText } from '@/components/money/moneyVisual';
 // 折れ線（日ごとの残高）・期間の切り替え（はじめは全期間）・対象期間の履歴（残高が変わった日。新しい順）。
 // 総残高と出金元ごとの推移で同じものを使う。親のスクロールの中に置く（この中ではスクロールしない）。
 // グラフに触れる（なぞる）と、その日の日付と残高を線の上に出す。指を離しても、次に触れるか期間を変えるまで残す。
-// グラフの中の横の動きは日付の選択に使い、画面の切り替えのスワイプ（useSwipeTabs）へは渡さない。
+// 触れて離す（タップ）と、その日を選ぶ。なぞって選ぶのは、グラフを少し押さえてから（長押し）。
+// 押さえずに横へ払うと、画面の切り替えのスワイプ（useSwipeTabs）になる（グラフの上からでも履歴/推移を行き来できるように）。
 
+/** これ以上押さえたままにすると、なぞって日を選ぶモードに入る（ミリ秒）。 */
+const SCRUB_HOLD_MS = 250;
 const TOOLTIP_AREA = 44; // 日付と残高の吹き出しを置く、グラフの上の余白
 const CHART_HEIGHT = 200 + TOOLTIP_AREA;
 const PAD = { left: 52, right: 10, top: 10 + TOOLTIP_AREA, bottom: 24 };
@@ -69,23 +72,52 @@ function Chart({ points }: { points: BalancePoint[] }) {
   // 触れた位置（グラフ左端からの x）にいちばん近い日を選ぶ。
   const latest = useRef({ points, width });
   latest.current = { points, width };
-  const select = useRef((event: GestureResponderEvent) => {
+  const select = useRef((locationX: number) => {
     const { points: current, width: currentWidth } = latest.current;
     const plotWidth = currentWidth - PAD.left - PAD.right;
     if (current.length === 0 || plotWidth <= 0) return;
-    const ratio = (event.nativeEvent.locationX - PAD.left) / plotWidth;
+    const ratio = (locationX - PAD.left) / plotWidth;
     const index = Math.min(current.length - 1, Math.max(0, Math.round(ratio * (current.length - 1))));
     setSelected({ points: current, index });
   }).current;
+  const scrub = useRef<{ timer: ReturnType<typeof setTimeout> | null; on: boolean; x: number }>({
+    timer: null,
+    on: false,
+    x: 0,
+  }).current;
+  const endScrub = useRef(() => {
+    if (scrub.timer) clearTimeout(scrub.timer);
+    scrub.timer = null;
+    scrub.on = false;
+    swipeLock.active = false;
+  }).current;
+  // 画面が閉じられても、スワイプを止めたままにしない。
+  useEffect(() => endScrub, [endScrub]);
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: select,
-        onPanResponderMove: select,
+        // なぞっている間は、親（画面の切り替えのスワイプ）に取られない。
+        onPanResponderTerminationRequest: () => !scrub.on,
+        onPanResponderGrant: (event) => {
+          scrub.x = event.nativeEvent.locationX;
+          scrub.timer = setTimeout(() => {
+            scrub.on = true;
+            swipeLock.active = true;
+            select(scrub.x);
+          }, SCRUB_HOLD_MS);
+        },
+        onPanResponderMove: (event) => {
+          scrub.x = event.nativeEvent.locationX;
+          if (scrub.on) select(scrub.x);
+        },
+        onPanResponderRelease: (event) => {
+          if (!scrub.on) select(event.nativeEvent.locationX);
+          endScrub();
+        },
+        onPanResponderTerminate: endScrub,
       }),
-    [select],
+    [select, scrub, endScrub],
   );
 
   const selectedPoint = selectedIndex === null ? null : points[selectedIndex];
@@ -98,7 +130,6 @@ function Chart({ points }: { points: BalancePoint[] }) {
     <View
       style={styles.chart}
       onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-      {...swipeBoundary}
       {...panResponder.panHandlers}
     >
       {geometry && (
