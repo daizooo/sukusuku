@@ -44,7 +44,7 @@ const fullDateWithWeekday = (dateKey: string) => {
   return `${fullDate(dateKey)}(${WEEKDAYS[new Date(year, month - 1, day).getDay()]})`;
 };
 
-function Chart({ points }: { points: BalancePoint[] }) {
+function Chart({ points, onScrub }: { points: BalancePoint[]; onScrub?: (active: boolean) => void }) {
   const [width, setWidth] = useState(0);
   const [selected, setSelected] = useState<{ points: BalancePoint[]; index: number } | null>(null);
   // 期間を変えて points が入れ替わったら、選んでいた日は捨てる。
@@ -85,11 +85,16 @@ function Chart({ points }: { points: BalancePoint[] }) {
     on: false,
     x: 0,
   }).current;
+  // 親には、なぞり始め・終わりを知らせる（横のページ送りを、なぞっている間だけ止めるため）。
+  const onScrubRef = useRef(onScrub);
+  onScrubRef.current = onScrub;
   const endScrub = useRef(() => {
     if (scrub.timer) clearTimeout(scrub.timer);
     scrub.timer = null;
+    const wasOn = scrub.on;
     scrub.on = false;
     swipeLock.active = false;
+    if (wasOn) onScrubRef.current?.(false);
   }).current;
   // 画面が閉じられても、スワイプを止めたままにしない。
   useEffect(() => endScrub, [endScrub]);
@@ -97,6 +102,8 @@ function Chart({ points }: { points: BalancePoint[] }) {
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
+        // 触れた時点では、縦のスクロールや横のページ送り（端末側）を止めない。なぞる（長押し）に入ってから止める。
+        onShouldBlockNativeResponder: () => false,
         // なぞっている間は、親（画面の切り替えのスワイプ）に取られない。
         onPanResponderTerminationRequest: () => !scrub.on,
         onPanResponderGrant: (event) => {
@@ -104,6 +111,7 @@ function Chart({ points }: { points: BalancePoint[] }) {
           scrub.timer = setTimeout(() => {
             scrub.on = true;
             swipeLock.active = true;
+            onScrubRef.current?.(true);
             select(scrub.x);
           }, SCRUB_HOLD_MS);
         },
@@ -219,11 +227,14 @@ export default function BalanceTrend({
   asOf,
   showHistory = true,
   emptyText = '記録も補正もまだないので、推移は出せません',
+  onScrub,
 }: {
   points: BalancePoint[];
   asOf: string;
   showHistory?: boolean;
   emptyText?: string;
+  /** 折れ線をなぞり始めたら true、終わったら false（横のページ送りを止めるために使う）。 */
+  onScrub?: (active: boolean) => void;
 }) {
   const [period, setPeriod] = useState<TrendPeriod>('all');
   const shown = useMemo(() => filterTrend(points, period, asOf), [points, period, asOf]);
@@ -234,7 +245,7 @@ export default function BalanceTrend({
   }
   return (
     <View>
-      <Chart points={shown} />
+      <Chart points={shown} onScrub={onScrub} />
       <View accessibilityRole="tablist" style={styles.periods}>
         {TREND_PERIODS.map((entry) => {
           const selected = entry.id === period;

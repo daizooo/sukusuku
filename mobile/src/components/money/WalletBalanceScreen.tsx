@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Modal from '@/components/ui/Modal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pencil } from 'lucide-react-native';
@@ -12,7 +12,6 @@ import type {
 } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
-import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import {
   balanceChecks,
   cardBilling,
@@ -117,12 +116,61 @@ export default function WalletBalanceScreen({
       { text: '取り消す', style: 'destructive', onPress: () => onDeleteBalance(balance) },
     ]);
 
-  // 履歴/推移は、帯と中身の上の左右スワイプでも切り替える。
-  const swipe = useSwipeTabs(
-    tabs.map((entry) => entry.id),
-    tab,
-    setTab,
-  );
+  // 履歴/推移は、左右スワイプでも切り替える。横の動きは端末側（横のScrollView + pagingEnabled）が受け持つ。
+  // JS で拾う作り（useSwipeTabs）は、縦のScrollViewが先に横の動きを取ってしまい、効かないことがあった（2026-10-26）。
+  const pager = useRef<ScrollView>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  // 折れ線をなぞっている間は、横のページ送りを止める（なぞる動きを取られないように）。
+  const [scrubbing, setScrubbing] = useState(false);
+  const showTab = (next: Tab) => {
+    setTab(next);
+    pager.current?.scrollTo({ x: tabs.findIndex((entry) => entry.id === next) * size.width, animated: true });
+  };
+
+  const renderTab = (id: Tab) => {
+    if (id === 'history') {
+      return mine.length === 0 && shownChecks.length === 0 ? (
+        <Text style={styles.empty}>この出金元の記録はまだありません</Text>
+      ) : (
+        <RecordDayList
+          records={mine}
+          categories={categories}
+          wallets={wallets}
+          onOpen={onOpenRecord}
+          corrections={shownChecks}
+          onOpenCorrection={(check) => remove(check.balance)}
+        />
+      );
+    }
+    if (!isCard) return <BalanceTrend points={points} asOf={today} onScrub={setScrubbing} />;
+    if (payments.length === 0) return <Text style={styles.empty}>引き落としの記録はまだありません</Text>;
+    return (
+      <View style={styles.paymentCard}>
+        {payments.map((payment, index) => {
+          const period = cardUsagePeriod(wallet, payment.monthKey);
+          const carried = cardCarriedIn(wallet, payment.monthKey, records);
+          return (
+            <View key={payment.monthKey} style={[styles.paymentRow, index > 0 && styles.paymentDivided]}>
+              <View style={styles.flex}>
+                <Text style={type.row}>{formatMonthKey(payment.monthKey)}</Text>
+                <Text style={type.faint}>
+                  {period ? `ご利用 ${shortDay(period.from)}〜${shortDay(period.to)}・` : ''}
+                  {monthDayLabel(payment.lastOn)}に引き落とし
+                </Text>
+                {carried && (
+                  <Text style={type.faint}>
+                    うち{Number(carried.monthKey.slice(5))}月分（翌月払い） {formatYen(carried.amount)}
+                  </Text>
+                )}
+              </View>
+              {payment.estimate && <EstimateBadge />}
+              <Text {...fitText} style={type.amount}>{formatYen(payment.amount)}</Text>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -142,8 +190,6 @@ export default function WalletBalanceScreen({
             </Pressable>
           }
         />
-        {/* 残高の欄も含め、ヘッダーより下ぜんぶを左右スワイプで履歴/推移に切り替える。 */}
-        <View style={styles.flex} {...swipe.handlers}>
         <View style={styles.summary}>
           <View style={styles.summaryTop}>
             <View style={styles.flex}>
@@ -173,73 +219,48 @@ export default function WalletBalanceScreen({
             </View>
           )}
         </View>
-          <View accessibilityRole="tablist" style={styles.tabs}>
-            {tabs.map((entry) => {
-              const selected = entry.id === tab;
-              return (
-                <Pressable
+        <View accessibilityRole="tablist" style={styles.tabs}>
+          {tabs.map((entry) => {
+            const selected = entry.id === tab;
+            return (
+              <Pressable
+                key={entry.id}
+                accessibilityRole="tab"
+                accessibilityState={{ selected }}
+                onPress={() => showTab(entry.id)}
+                style={styles.tab}
+              >
+                <Text style={[styles.tabText, selected && styles.tabTextSelected]}>{entry.label}</Text>
+                <View style={[styles.underline, selected && styles.underlineSelected]} />
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.flex} onLayout={(event) => setSize(event.nativeEvent.layout)}>
+          {size.width > 0 && (
+            <ScrollView
+              ref={pager}
+              horizontal
+              pagingEnabled
+              scrollEnabled={!scrubbing}
+              showsHorizontalScrollIndicator={false}
+              overScrollMode="never"
+              onMomentumScrollEnd={(event) => {
+                const next = tabs[Math.round(event.nativeEvent.contentOffset.x / size.width)];
+                if (next) setTab(next.id);
+              }}
+            >
+              {tabs.map((entry) => (
+                <ScrollView
                   key={entry.id}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected }}
-                  onPress={() => setTab(entry.id)}
-                  style={styles.tab}
+                  style={{ width: size.width, height: size.height }}
+                  contentContainerStyle={styles.content}
                 >
-                  <Text style={[styles.tabText, selected && styles.tabTextSelected]}>{entry.label}</Text>
-                  <View style={[styles.underline, selected && styles.underlineSelected]} />
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <Animated.ScrollView style={swipe.style} contentContainerStyle={styles.content}>
-            {tab === 'history' &&
-              (mine.length === 0 && shownChecks.length === 0 ? (
-                <Text style={styles.empty}>この出金元の記録はまだありません</Text>
-              ) : (
-                <RecordDayList
-                  records={mine}
-                  categories={categories}
-                  wallets={wallets}
-                  onOpen={onOpenRecord}
-                  corrections={shownChecks}
-                  onOpenCorrection={(check) => remove(check.balance)}
-                />
+                  {renderTab(entry.id)}
+                </ScrollView>
               ))}
-
-            {tab === 'trend' &&
-              (isCard ? (
-                payments.length === 0 ? (
-                  <Text style={styles.empty}>引き落としの記録はまだありません</Text>
-                ) : (
-                  <View style={styles.paymentCard}>
-                    {payments.map((payment, index) => {
-                      const period = cardUsagePeriod(wallet, payment.monthKey);
-                      const carried = cardCarriedIn(wallet, payment.monthKey, records);
-                      return (
-                        <View key={payment.monthKey} style={[styles.paymentRow, index > 0 && styles.paymentDivided]}>
-                          <View style={styles.flex}>
-                            <Text style={type.row}>{formatMonthKey(payment.monthKey)}</Text>
-                            <Text style={type.faint}>
-                              {period ? `ご利用 ${shortDay(period.from)}〜${shortDay(period.to)}・` : ''}
-                              {monthDayLabel(payment.lastOn)}に引き落とし
-                            </Text>
-                            {carried && (
-                              <Text style={type.faint}>
-                                うち{Number(carried.monthKey.slice(5))}月分（翌月払い） {formatYen(carried.amount)}
-                              </Text>
-                            )}
-                          </View>
-                          {payment.estimate && <EstimateBadge />}
-                          <Text {...fitText} style={type.amount}>{formatYen(payment.amount)}</Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )
-              ) : (
-                <BalanceTrend points={points} asOf={today} />
-              ))}
-          </Animated.ScrollView>
+            </ScrollView>
+          )}
         </View>
       </View>
 
