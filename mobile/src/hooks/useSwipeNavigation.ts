@@ -59,6 +59,12 @@ export const swipeBoundary = {
   onTouchStart: (event: GestureResponderEvent) => claim(event, null),
 };
 
+/**
+ * 折れ線をなぞっている間（長押しのあと）は、横の動きを日の選択に使うので、画面の切り替えのスワイプを
+ * 受け持たせない。BalanceTrend が立てて、指を離したら下ろす。
+ */
+export const swipeLock = { active: false };
+
 export type SwipeHandlers = PanResponderInstance['panHandlers'] & {
   onTouchStart: (event: GestureResponderEvent) => void;
 };
@@ -98,6 +104,7 @@ export function useSwipeNavigation({
 
   const isHorizontalSwipe = (dx: number, dy: number) =>
     latest.current.enabled &&
+    !swipeLock.active &&
     claimed?.owner === owner &&
     Math.abs(dx) > DIRECTION_LOCK_SLOP &&
     Math.abs(dx) > Math.abs(dy);
