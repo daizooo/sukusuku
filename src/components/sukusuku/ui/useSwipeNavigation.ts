@@ -76,6 +76,8 @@ export function useSwipeNavigation({ onSwipeLeft, onSwipeRight, enabled = true }
     handlers: {
       [REGION_ATTRIBUTE]: '',
       onTouchStart: (event: TouchEvent<HTMLElement>) => {
+        // 新しく触れ始めたなら、前のなぞりは終わっている。ロックが残ったままでスワイプが効かなくならないように下ろす。
+        swipeLock.active = false;
         start.current = null;
         direction.current = null;
         if (!enabled || event.touches.length !== 1) return;
