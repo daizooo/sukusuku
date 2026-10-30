@@ -32,8 +32,10 @@ SQL: `supabase/personal/0001`〜`0006`
 1. ~~プレビューで確認~~（済み）
 2. **切り替えの残り**
    1. ~~PR をマージ~~（済み。daizooo/sukusuku#356。main の Vercel・APK が Persol を見る。`deploy-functions.yml` の push 対象は main だけに戻してある）
-   2. Gmail 取り込みの Apps Script（`tools/gas/gmail-feed.gs`）のスクリプトプロパティ `FEED_URL` を
-      `https://jmysgeulujggdmdthqkn.supabase.co/functions/v1/money-feed-ingest` へ
+   2. ~~Gmail 取り込みの Apps Script（`tools/gas/gmail-feed.gs`）のスクリプトプロパティ `FEED_URL` を
+      `https://jmysgeulujggdmdthqkn.supabase.co/functions/v1/money-feed-ingest` へ~~（済み。2026-10-30 16:35 JST ごろ。
+      コードの冒頭コメントだけ直してもプロパティは変わらず、旧URLへの DNS エラーで 13:22 から止まっていた。
+      プロパティを直したあと、Persol の `money_feed_tokens.last_sync_at` が5分ごとに更新されることを確認）
    3. 新しい APK を各端末に入れる（古い APK は旧DBに書き続け、その分は Persol に来ない）
    4. ~~0004 で fdw のつなぎを消す（SQL Editor）~~（済み。Persol に `sukusuku_old*`・`postgres_fdw` が無いことを確認）
 3. 後片付け
