@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { X } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
+import { SHEET_HEIGHT } from '@/components/ui/SheetModal';
 
 // 記録の入力画面の外枠。PWA版の `src/components/sukusuku/modals/logModalParts.tsx` の
 // LogModalShell と同じ組み立てにしてある。
@@ -14,11 +15,11 @@ import { colors } from '@/lib/theme';
 //   長い画面で保存ボタンを探してスクロールする必要が無い
 
 /**
- * 記録の入力の枠の高さ。PWA版の `LOG_MODAL_HEIGHT`（h-[640px] max-h-full）と同じ。
+ * 記録の入力の枠の高さ。どの枠とも同じ（SheetModal の SHEET_HEIGHT。PWA版は `SHEET_SIZE`）。
  * 母乳/搾乳/ミルクのように入力項目が入れ替わっても枠が伸び縮みしないよう、
  * どの記録でも同じ高さで開く。画面に入りきらないときは枠のほうが縮む。
  */
-export const LOG_SHEET_HEIGHT = 640;
+export const LOG_SHEET_HEIGHT = SHEET_HEIGHT;
 
 interface LogModalShellProps {
   title: string;

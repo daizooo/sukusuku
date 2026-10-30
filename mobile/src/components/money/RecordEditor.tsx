@@ -82,8 +82,7 @@ type Screen =
 const KINDS: MoneyRecordKind[] = ['expense', 'income', 'transfer'];
 
 // 予定・育児の記録の入力と同じ、下から出る枠（SheetModal。横幅いっぱいで下の端に接する）。品目・カテゴリ・電卓なども、この枠の中で重ねる。
-// 高さは画面ごとに変えない（切り替えで枠が動かないよう決め打ち。入りきらない端末では枠のほうが縮む）。
-const SHEET_HEIGHT = 640;
+// 高さは SheetModal の既定（どの枠も同じ。切り替えで枠が動かない）。
 
 let groupSeq = 0;
 const newGroupKey = () => `group-${(groupSeq += 1)}`;
@@ -680,7 +679,7 @@ export default function RecordEditor({
   );
 
   return (
-    <SheetModal visible onClose={back} height={SHEET_HEIGHT}>
+    <SheetModal visible onClose={back}>
       {renderScreen()}
     </SheetModal>
   );

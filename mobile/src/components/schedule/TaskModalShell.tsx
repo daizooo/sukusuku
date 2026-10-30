@@ -13,17 +13,12 @@ import SheetModal from '@/components/ui/SheetModal';
 // 追加・編集の入力は高さを決め打ちにする（fixedHeight）。予定とタスクで項目の数が違うので、
 // 中身なりにすると、切り替えるたびに枠の大きさが変わってしまう（2026-10-13）。詳細の表示は中身なり。
 
-/** 追加・編集の枠の高さ。記録の入力（LOG_SHEET_HEIGHT）と同じ。入りきらない画面では縮む。 */
-const FORM_SHEET_HEIGHT = 640;
-
 interface TaskModalShellProps {
   show: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer: ReactNode;
-  /** 追加・編集の入力で true。種別の切り替えで枠の大きさが変わらないよう、高さを決め打ちにする。 */
-  fixedHeight?: boolean;
 }
 
 export default function TaskModalShell({
@@ -32,10 +27,9 @@ export default function TaskModalShell({
   onClose,
   children,
   footer,
-  fixedHeight = false,
 }: TaskModalShellProps) {
   return (
-    <SheetModal visible={show} onClose={onClose} height={fixedHeight ? FORM_SHEET_HEIGHT : undefined}>
+    <SheetModal visible={show} onClose={onClose}>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="閉じる" onPress={onClose} hitSlop={12}>
@@ -44,7 +38,7 @@ export default function TaskModalShell({
       </View>
 
       <ScrollView
-        style={[styles.scroll, fixedHeight && styles.scrollFill]}
+        style={[styles.scroll, styles.scrollFill]}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >

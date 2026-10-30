@@ -18,12 +18,15 @@ interface SheetModalProps {
   visible: boolean;
   onClose: () => void;
   /**
-   * 枠の高さ。PWA版で高さを決め打ちしている入力（記録の入力＝640px）に合わせるとき渡す。
-   * 渡さなければ中身の高さになり、入りきらないぶんは枠のほうが縮む（中身がスクロールする）。
+   * 枠の高さ。渡さなければ SHEET_HEIGHT。どの枠も同じ高さで開く（中身の量で伸び縮みしない）。
+   * 画面に入りきらない端末では、枠のほうが縮む（中身がスクロールする）。
    */
   height?: number;
   children: ReactNode;
 }
+
+/** 枠の高さ。PWA版の `SHEET_SIZE`（src/components/sukusuku/ui/sheetSize.ts）と同じ。 */
+export const SHEET_HEIGHT = 720;
 
 /** PWA版の枠の横幅（Tailwindの max-w-md）。 */
 const SHEET_MAX_WIDTH = 448;
@@ -31,7 +34,7 @@ const SHEET_MAX_WIDTH = 448;
 /** PWA版の枠の上の余白（Tailwindの pt-4）。左右・下は画面の端に接するので余白なし（広い画面は maxWidth で止める）。 */
 const SHEET_GAP = 16;
 
-export default function SheetModal({ visible, onClose, height, children }: SheetModalProps) {
+export default function SheetModal({ visible, onClose, height = SHEET_HEIGHT, children }: SheetModalProps) {
   const insets = useSafeAreaInsets();
 
   // PWA版は枠がそのまま出る（動きを付けていない）ので、暗い部分ごと薄く出す。
@@ -58,7 +61,7 @@ export default function SheetModal({ visible, onClose, height, children }: Sheet
           pointerEvents="box-none"
         >
           {/* 横幅いっぱいで、下は画面の端に接する。下の操作バーのぶんは、枠の中の余白で空ける。 */}
-          <View style={[styles.sheet, height !== undefined && { height }]}>
+          <View style={[styles.sheet, { height }]}>
             {children}
             <View style={{ height: insets.bottom }} />
           </View>

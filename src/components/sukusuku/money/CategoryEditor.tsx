@@ -18,6 +18,7 @@ import { ModalShell } from '../modals/TaskForm';
 import { useBackdropClose } from '../ui/useBackdropClose';
 import { useDragReorder, type DragReorder } from '../ui/useDragReorder';
 import { swipeBoundary } from '../ui/useSwipeNavigation';
+import { SHEET_SIZE } from '../ui/sheetSize';
 import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader } from './moneyVisual';
 
 // カテゴリ（docs/kakei.md §3.1）。mobile版の `mobile/src/components/money/CategoryEditor.tsx` と同じ並び・文言。
@@ -221,7 +222,7 @@ function ChildSheet({
       {...backdropClose}
       {...swipeBoundary}
     >
-      <div role="dialog" aria-label={top.name} className="flex max-h-[85%] w-full max-w-md flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl pb-[env(safe-area-inset-bottom)] sm:pb-0">
+      <div role="dialog" aria-label={top.name} className={`flex w-full max-w-md flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl pb-[env(safe-area-inset-bottom)] sm:pb-0 ${SHEET_SIZE}`}>
         <div className="flex h-16 shrink-0 items-center gap-3 px-4">
           <CategoryIcon iconKey={iconKeyOf(top)} size={36} />
           <h3 className="min-w-0 flex-1 truncate text-lg font-bold text-gray-900">{top.name}</h3>

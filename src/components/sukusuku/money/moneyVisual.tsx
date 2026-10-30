@@ -6,6 +6,7 @@ import type { MoneyWalletType } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
 import { useBackdropClose } from '../ui/useBackdropClose';
 import { swipeBoundary } from '../ui/useSwipeNavigation';
+import { SHEET_SIZE } from '../ui/sheetSize';
 import { formatGainRate, formatMonthKey, formatSignedYen, formatYear, iconTone, shiftMonth } from '@/lib/moneyUtils';
 import { MONEY_ICON_COMPONENTS } from './moneyIcons';
 
@@ -381,7 +382,7 @@ export function FullScreen({ onBack, sheet, children }: { onBack: () => void; sh
   const backdropClose = useBackdropClose(onBack);
   // sheet: 画面いっぱいにせず、予定・育児の記録の入力と同じ「暗くした画面の上に下から出る枠」にする（記録の入力）。
   // 狭い画面では横幅いっぱいで下の端に接し、広い画面では中央に浮かべる。
-  // 高さは画面ごとに変えない（LogModalShell の h-[640px] と同じ）。入りきらない画面では枠のほうが縮む。
+  // 高さは画面ごとに変えない（どの枠とも同じ SHEET_SIZE）。入りきらない画面では枠のほうが縮む。
   if (sheet) {
     return (
       <div
@@ -389,7 +390,7 @@ export function FullScreen({ onBack, sheet, children }: { onBack: () => void; sh
         {...backdropClose}
         {...swipeBoundary}
       >
-        <div className="relative flex h-[640px] max-h-full w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
+        <div className={`relative flex ${SHEET_SIZE} w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl`}>
           {children}
           <div className="h-[env(safe-area-inset-bottom)] shrink-0 sm:hidden" />
         </div>

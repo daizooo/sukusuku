@@ -9,6 +9,7 @@ import type { FeedingMethod } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
 import { useBackdropClose } from '../ui/useBackdropClose';
 import { swipeBoundary } from '../ui/useSwipeNavigation';
+import { SHEET_SIZE } from '../ui/sheetSize';
 
 export type LogAccent = 'milk' | 'diaper' | 'pumping' | 'temperature';
 
@@ -37,7 +38,7 @@ const ACCENT_TEXT: Record<LogAccent, string> = {
  * 記録の入力モーダルの高さ。どの記録でも同じ大きさで開くよう、ここでまとめて決める。
  * 画面の高さが足りない端末では、はみ出さないよう枠のほうを縮める（中身はスクロールする）。
  */
-const LOG_MODAL_HEIGHT = 'h-[640px] max-h-full';
+const LOG_MODAL_HEIGHT = SHEET_SIZE;
 
 interface LogModalShellProps {
   title: string;

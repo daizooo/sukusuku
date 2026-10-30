@@ -18,6 +18,7 @@ import {
   type RecurrencePresetKey,
 } from '@/lib/recurrence';
 import RecurrenceModal from './RecurrenceModal';
+import { SHEET_SIZE } from '../ui/sheetSize';
 
 // 予定・タスクの入力欄（追加・編集で共通）。Googleカレンダーの追加画面に
 // ならい、種別（予定/タスク）をまず選び、予定のときだけ場所・参加者を持つ。
@@ -366,17 +367,16 @@ function Toggle({ label, on, onClick }: { label: string; on: boolean; onClick: (
 }
 
 // 追加・編集モーダルの外枠
-// 追加・編集の入力は高さを決め打ちにする（fixedHeight。mobile版と同じ）。予定とタスクで項目の数が違うので、
-// 中身なりにすると、切り替えるたびに枠の大きさが変わってしまう（2026-10-13）。詳細の表示は中身なり。
+// 高さはどの枠とも同じ（SHEET_SIZE。mobile版と同じ）。予定とタスクで項目の数が違うので、
+// 中身なりにすると、切り替えるたびに枠の大きさが変わってしまう（2026-10-13）。
 interface ModalShellProps {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
   footer: React.ReactNode;
-  fixedHeight?: boolean;
 }
 
-export function ModalShell({ title, onClose, children, footer, fixedHeight = false }: ModalShellProps) {
+export function ModalShell({ title, onClose, children, footer }: ModalShellProps) {
   // 戻る操作（ブラウザ・スマホ）でこのモーダルを閉じる。
   useBackLayer(onClose);
   // 暗い部分を押しても閉じる。
@@ -388,9 +388,7 @@ export function ModalShell({ title, onClose, children, footer, fixedHeight = fal
       {...backdropClose}
       {...swipeBoundary}
     >
-      <div className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col pb-[env(safe-area-inset-bottom)] sm:pb-0 ${
-          fixedHeight ? 'h-[640px]' : ''
-        }`}>
+      <div className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col pb-[env(safe-area-inset-bottom)] sm:pb-0 ${SHEET_SIZE}`}>
         <div className="flex justify-between items-center px-5 py-3 border-b border-gray-100 flex-none">
           <h3 className="font-bold text-gray-800">{title}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="閉じる">
