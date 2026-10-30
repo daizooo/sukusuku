@@ -58,7 +58,7 @@ Deno.serve(async (request) => {
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    { auth: { persistSession: false } },
+    { auth: { persistSession: false }, db: { schema: 'sukusuku' } },
   );
 
   // 対象は「いま授乳中・記録待ちの端末」だけなので、ほとんどの実行はここで終わる。

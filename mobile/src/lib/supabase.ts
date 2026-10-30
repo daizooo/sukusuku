@@ -25,7 +25,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export type SupabaseDb = SupabaseClient<Database>;
 
+// 統合プロジェクト Persol の sukusuku スキーマだけを読む（他のアプリのスキーマには触れない）。
 export const supabase: SupabaseDb = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  db: { schema: 'sukusuku' },
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,

@@ -75,6 +75,7 @@ Deno.serve(async (request) => {
   const userClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
     auth: { persistSession: false },
     global: { headers: { Authorization: `Bearer ${token}` } },
+    db: { schema: 'sukusuku' },
   });
   const { data: userData, error: userError } = await userClient.auth.getUser(token);
   if (userError || !userData.user) return json({ error: 'unauthorized' }, 401);
@@ -102,6 +103,7 @@ Deno.serve(async (request) => {
 
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
     auth: { persistSession: false },
+    db: { schema: 'sukusuku' },
   });
   const now = Date.now();
 

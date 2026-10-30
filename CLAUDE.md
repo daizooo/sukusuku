@@ -1,3 +1,18 @@
+# 【DB】このプロジェクトは sukusuku スキーマ専任（統合Supabaseプロジェクト。2026-10-30に決定）
+
+DBは統合Supabaseプロジェクト「Persol」（`jmysgeulujggdmdthqkn`）の `sukusuku` スキーマへ移す
+（旧: 単独プロジェクト「sukusuku」`nbkpwjtkkiaklewtegzh` の `public`）。同じプロジェクトに他のアプリのスキーマが同居する。
+
+- **このプロジェクトは sukusuku スキーマ専任です。同一プロジェクト内の他スキーマ（denken3/fittrack/public）に対するテーブル作成・変更・データ削除は禁止します。**
+- **マイグレーションやSQL実行時は、必ず `sukusuku.テーブル名` の形式を使用してください。**
+  関数の `set search_path` も `sukusuku` にする。`auth.users` へのトリガー・cron・Vault の秘密など、
+  スキーマの外に置くしかない物は名前を `sukusuku_` / `sukusuku-` で始め、他のアプリの物と衝突させない
+- Supabaseクライアントは `db: { schema: 'sukusuku' }` を明示する（Web: `src/lib/supabase/`、mobile: `mobile/src/lib/supabase.ts`、Edge Functions の `createClient`）。
+  Realtime の購読も `schema: 'sukusuku'`
+- 型（`src/types/supabase.ts`・`mobile/src/types/supabase.ts`）は sukusuku スキーマから生成し、キーと `DefaultSchema` が `"sukusuku"` であることを確かめる
+- 移行用のSQLは `supabase/personal/`（0001: 表・関数・RLS・権限、0002: auth トリガー・Realtime・cron）。
+  切り替えが済むまでは、下の各節にある `public.` 前提の記述（`supabase/migrations`・`attach_family_sync('public.表')` など）は旧プロジェクト向けとして残す
+
 # 【第一優先】mobile版が本体。PWA版（`src/`）はそのWEB版（兼開発確認用）
 
 2026-09-29に、2026-09-20から続けていた `src/`（PWA版）の凍結を解いた。

@@ -11,7 +11,7 @@ import type {
 
 type SupabaseDb = SupabaseClient<Database>;
 type MemberRow = Omit<
-  Database['public']['Tables']['family_members']['Row'],
+  Database['sukusuku']['Tables']['family_members']['Row'],
   'family_id' | 'created_at' | 'updated_at'
 >;
 

@@ -1,6 +1,7 @@
 // Supabase CLI（generate_typescript_types）による自動生成ファイル。
 // 手動編集せず、スキーマ変更後は再生成すること。
-// プロジェクト: sukusuku (nbkpwjtkkiaklewtegzh)
+// プロジェクト: Persol (jmysgeulujggdmdthqkn) の sukusuku スキーマ（2026-10-30 に public から移行）。
+// 再生成したら、スキーマのキーと DefaultSchema が "sukusuku" になっていることを確かめる。
 
 export type Json =
   | string
@@ -16,7 +17,7 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.15"
   }
-  public: {
+  sukusuku: {
     Tables: {
       care_logs: {
         Row: {
@@ -2984,7 +2985,7 @@ export type Database = {
         Args: {
           p_action: string
           p_category?: string
-          p_feed: Database["public"]["Tables"]["money_feed"]["Row"]
+          p_feed: Database["sukusuku"]["Tables"]["money_feed"]["Row"]
           p_record_kind?: string
           p_recurring?: string
           p_store?: string
@@ -3042,7 +3043,7 @@ export type Database = {
         Args: {
           p_month: string
           p_on: string
-          p_rule: Database["public"]["Tables"]["money_recurring"]["Row"]
+          p_rule: Database["sukusuku"]["Tables"]["money_recurring"]["Row"]
         }
         Returns: number
       }
@@ -3086,7 +3087,7 @@ export type Database = {
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "sukusuku">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
@@ -3202,7 +3203,7 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  public: {
+  sukusuku: {
     Enums: {},
   },
 } as const
