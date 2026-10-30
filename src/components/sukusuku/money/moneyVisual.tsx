@@ -384,11 +384,11 @@ export function FullScreen({ onBack, sheet, children }: { onBack: () => void; sh
   if (sheet) {
     return (
       <div
-        className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-[calc(1rem+env(safe-area-inset-bottom))] sm:items-center"
+        className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 px-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:items-center sm:pb-[calc(1rem+env(safe-area-inset-bottom))]"
         {...backdropClose}
         {...swipeBoundary}
       >
-        <div className="relative flex h-[640px] max-h-full w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
+        <div className="relative flex h-[640px] max-h-full w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl pb-[env(safe-area-inset-bottom)] sm:pb-0">
           {children}
         </div>
       </div>

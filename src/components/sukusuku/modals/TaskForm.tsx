@@ -384,11 +384,11 @@ export function ModalShell({ title, onClose, children, footer, fixedHeight = fal
 
   return (
     <div
-      className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4"
+      className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center px-4 pt-4 sm:p-4"
       {...backdropClose}
       {...swipeBoundary}
     >
-      <div className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col ${
+      <div className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col pb-[env(safe-area-inset-bottom)] sm:pb-0 ${
           fixedHeight ? 'h-[640px]' : ''
         }`}>
         <div className="flex justify-between items-center px-5 py-3 border-b border-gray-100 flex-none">
