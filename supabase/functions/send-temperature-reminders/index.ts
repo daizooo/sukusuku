@@ -58,7 +58,7 @@ Deno.serve(async (request) => {
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    { auth: { persistSession: false } },
+    { auth: { persistSession: false }, db: { schema: 'sukusuku' } },
   );
 
   const now = Date.now();

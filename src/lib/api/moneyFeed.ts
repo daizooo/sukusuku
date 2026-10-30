@@ -254,7 +254,7 @@ export async function resolveMoneyFeed(supabase: SupabaseDb, feedId: string, res
   const { data, error } = await supabase.rpc('money_feed_resolve', {
     p_feed: feedId,
     p_action: resolve.action,
-    p_args: args as Database['public']['Functions']['money_feed_resolve']['Args']['p_args'],
+    p_args: args as Database['sukusuku']['Functions']['money_feed_resolve']['Args']['p_args'],
   });
   if (error) throw error;
   return data;

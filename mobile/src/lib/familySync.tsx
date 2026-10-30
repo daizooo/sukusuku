@@ -34,7 +34,7 @@ import { hasChanged, pickStamps, toStamps, type Stamps } from '@/lib/familySyncS
 // 渡し忘れは scripts/check-family-sync.mjs（npm run check:family-sync）が見つける。
 
 /** 台帳に載る表の名前。存在しない名前はコンパイルで弾く。 */
-export type FamilyTable = keyof Database['public']['Tables'];
+export type FamilyTable = keyof Database['sukusuku']['Tables'];
 
 interface FamilySyncState {
   /** 最新の台帳。まだ読めていなければ null。 */
@@ -107,7 +107,7 @@ export function FamilySyncProvider({ children }: { children: ReactNode }) {
       .channel(`family-sync:${familyId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'family_sync', filter: `family_id=eq.${familyId}` },
+        { event: '*', schema: 'sukusuku', table: 'family_sync', filter: `family_id=eq.${familyId}` },
         (payload) => {
           const next = (payload.new as { changed?: unknown } | null)?.changed;
           if (next !== undefined) setStamps(toStamps(next));
