@@ -31,7 +31,7 @@ SQL: `supabase/personal/0001`〜`0006`
 
 1. ~~プレビューで確認~~（済み）
 2. **切り替えの残り**
-   1. PR をマージ（main の Vercel・APK が Persol を見る。`deploy-functions.yml` の push 対象は main だけに戻してある）
+   1. ~~PR をマージ~~（済み。daizooo/sukusuku#356。main の Vercel・APK が Persol を見る。`deploy-functions.yml` の push 対象は main だけに戻してある）
    2. Gmail 取り込みの Apps Script（`tools/gas/gmail-feed.gs`）のスクリプトプロパティ `FEED_URL` を
       `https://jmysgeulujggdmdthqkn.supabase.co/functions/v1/money-feed-ingest` へ
    3. 新しい APK を各端末に入れる（古い APK は旧DBに書き続け、その分は Persol に来ない）
