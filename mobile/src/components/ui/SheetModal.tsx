@@ -22,8 +22,6 @@ interface SheetModalProps {
    * 渡さなければ中身の高さになり、入りきらないぶんは枠のほうが縮む（中身がスクロールする）。
    */
   height?: number;
-  /** 下の操作バー（safe area）のぶんの色。下に青い帯などが出ているときは、その色にして帯を画面の端までつなげる。既定は枠の白。 */
-  insetColor?: string;
   children: ReactNode;
 }
 
@@ -33,7 +31,7 @@ const SHEET_MAX_WIDTH = 448;
 /** PWA版の枠の上の余白（Tailwindの pt-4）。左右・下は画面の端に接するので余白なし（広い画面は maxWidth で止める）。 */
 const SHEET_GAP = 16;
 
-export default function SheetModal({ visible, onClose, height, insetColor, children }: SheetModalProps) {
+export default function SheetModal({ visible, onClose, height, children }: SheetModalProps) {
   const insets = useSafeAreaInsets();
 
   // PWA版は枠がそのまま出る（動きを付けていない）ので、暗い部分ごと薄く出す。
@@ -62,7 +60,7 @@ export default function SheetModal({ visible, onClose, height, insetColor, child
           {/* 横幅いっぱいで、下は画面の端に接する。下の操作バーのぶんは、枠の中の余白で空ける。 */}
           <View style={[styles.sheet, height !== undefined && { height }]}>
             {children}
-            <View style={{ height: insets.bottom, backgroundColor: insetColor ?? colors.surface }} />
+            <View style={{ height: insets.bottom }} />
           </View>
         </View>
       </KeyboardAvoidingView>

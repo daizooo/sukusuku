@@ -120,6 +120,10 @@ export const colors = {
   moneyOverBorder: '#fecaca', // red-200（超えたタイルの枠）
   moneyOverSurface: '#fef2f2', // red-50
   moneyIncome: '#43b02a', // 収入の額（明るい緑。green-500 と lime-600 の間）
+  // 記録の入力（RecordEditor）の「記録する」ボタンと、選んだ種類・リンクの緑。Zaim の緑に合わせた（2026-10-30）。
+  moneyRecord: '#49c54f',
+  moneyRecordText: '#2f8f3a', // 白地に置く文字・リンク用に少し濃くした緑
+  moneyRecordSoft: '#dcf5de', // 選んだ種類の下地
   moneyEstimate: '#92400e', // amber-800（見込みの額の印。docs/kakei.md §3.3）
   moneyEstimateSurface: '#fef3c7', // amber-100
 

@@ -531,7 +531,7 @@ export default function RecordEditor({
               aria-pressed={kind === entry}
               onClick={() => changeKind(entry)}
               className={`rounded-full px-3.5 py-1.5 text-[13px] ${
-                kind === entry ? 'bg-blue-100 font-bold text-blue-800' : 'bg-gray-100 font-semibold text-gray-700'
+                kind === entry ? 'bg-[#dcf5de] font-bold text-[#2f8f3a]' : 'bg-gray-100 font-semibold text-gray-700'
               }`}
             >
               {RECORD_KIND_LABEL[entry]}
@@ -652,24 +652,25 @@ export default function RecordEditor({
           </>
         )}
       </div>
-      {/* 下いっぱいの保存の帯（青）は「記録する」の1本。新しく足すときは、帯の上に「記録して続ける」を文字リンクで出す（取り込んだ明細からの記録は除く）。 */}
-      {SHOW_SAVE_NEXT && !record && onSubmitNext && initialAmount === null && (
-        <div className="flex shrink-0 justify-end border-t border-gray-200 bg-white px-4 py-1">
-          <button type="button" onClick={() => submit(true)} className="px-1 py-2 text-sm font-bold text-blue-600 hover:text-blue-700">
-            記録して続ける ＋
-          </button>
-        </div>
-      )}
-      <button type="button" onClick={() => submit()} className="shrink-0 bg-blue-600 py-4 text-base font-extrabold text-white hover:bg-blue-700">
-        {record ? '保存する' : '記録する'}
-      </button>
+      {/* 下は白の余白つきの枠に、緑の「記録する」ボタン（予定の入力の下の枠と同じ作り）。新しく足すときは、ボタンの上に「記録して続ける」を文字リンクで出す（取り込んだ明細からの記録は除く）。 */}
+      <div className="shrink-0 border-t border-gray-200 bg-white px-4 pb-4 pt-2.5">
+        {SHOW_SAVE_NEXT && !record && onSubmitNext && initialAmount === null && (
+          <div className="flex justify-end">
+            <button type="button" onClick={() => submit(true)} className="px-1 py-1.5 text-sm font-bold text-[#2f8f3a] hover:text-[#267a30]">
+              記録して続ける ＋
+            </button>
+          </div>
+        )}
+        <button type="button" onClick={() => submit()} className="w-full rounded-xl bg-[#49c54f] py-3 text-base font-extrabold text-white hover:bg-[#3fb145]">
+          {record ? '保存する' : '記録する'}
+        </button>
+      </div>
 
     </>
   );
 
   return (
-    // 下に青い保存の帯が出ているとき（入力の画面と、その上に重ねる出金元の選択）は、下の操作バーのぶんも青にする。
-    <FullScreen sheet onBack={onClose} insetClass={(screen.type === 'edit' && !(viewing && record)) || screen.type === 'wallet' ? 'bg-blue-600' : undefined}>
+    <FullScreen sheet onBack={onClose}>
       {renderScreen()}
     </FullScreen>
   );
