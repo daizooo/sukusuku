@@ -6,6 +6,7 @@ import type { MoneyWalletType } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
 import { useBackdropClose } from '../ui/useBackdropClose';
 import { swipeBoundary } from '../ui/useSwipeNavigation';
+import { SHEET_SIZE } from '../ui/sheetSize';
 import { formatGainRate, formatMonthKey, formatSignedYen, formatYear, iconTone, shiftMonth } from '@/lib/moneyUtils';
 import { MONEY_ICON_COMPONENTS } from './moneyIcons';
 
@@ -376,9 +377,26 @@ export function NextPeriodBadge() {
  * 全画面の入力の枠。戻る操作（ブラウザ・スマホ）で onBack を呼ぶ。
  * 横幅の広い画面（タブレット・PC）で両脇に出る暗い部分を押しても onBack を呼ぶ。
  */
-export function FullScreen({ onBack, children }: { onBack: () => void; children: ReactNode }) {
+export function FullScreen({ onBack, sheet, children }: { onBack: () => void; sheet?: boolean; children: ReactNode }) {
   useBackLayer(onBack);
   const backdropClose = useBackdropClose(onBack);
+  // sheet: 画面いっぱいにせず、予定・育児の記録の入力と同じ「暗くした画面の上に下から出る枠」にする（記録の入力）。
+  // 狭い画面では横幅いっぱいで下の端に接し、広い画面では中央に浮かべる。
+  // 高さは画面ごとに変えない（どの枠とも同じ SHEET_SIZE）。入りきらない画面では枠のほうが縮む。
+  if (sheet) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 pt-[calc(1rem+env(safe-area-inset-top))] sm:items-center sm:px-4 sm:pb-[calc(1rem+env(safe-area-inset-bottom))]"
+        {...backdropClose}
+        {...swipeBoundary}
+      >
+        <div className={`relative flex ${SHEET_SIZE} w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl`}>
+          {children}
+          <div className="h-[env(safe-area-inset-bottom)] shrink-0 sm:hidden" />
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="fixed inset-0 z-50 flex justify-center bg-black/30" {...backdropClose} {...swipeBoundary}>
       <div className="relative flex h-full w-full max-w-md flex-col bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">

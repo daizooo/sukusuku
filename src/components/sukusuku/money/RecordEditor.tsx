@@ -369,18 +369,22 @@ export default function RecordEditor({
           />
         );
       case 'wallet':
+        // 出金元の選択はそれ自体が下から出る枠。枠の下には入力の画面を残して重ねる。
         return (
-          <WalletPicker
-            title={screen.field === 'toWalletId' ? '入金先を選ぶ' : kind === 'income' ? '入金先を選ぶ' : '出金元を選ぶ'}
-            wallets={wallets}
-            selectedId={screen.field === 'toWalletId' ? toWalletId : walletId}
-            onPick={(id) => {
-              if (screen.field === 'toWalletId') setToWalletId(id);
-              else setWalletId(id);
-              pop();
-            }}
-            onClose={back}
-          />
+          <>
+            {renderEdit()}
+            <WalletPicker
+              title={screen.field === 'toWalletId' ? '入金先を選ぶ' : kind === 'income' ? '入金先を選ぶ' : '出金元を選ぶ'}
+              wallets={wallets}
+              selectedId={screen.field === 'toWalletId' ? toWalletId : walletId}
+              onPick={(id) => {
+                if (screen.field === 'toWalletId') setToWalletId(id);
+                else setWalletId(id);
+                pop();
+              }}
+              onClose={back}
+            />
+          </>
         );
       case 'store':
         return (
@@ -648,7 +652,7 @@ export default function RecordEditor({
           </>
         )}
       </div>
-      {/* 下いっぱいの保存の帯（青）は「記録する」の1本。新しく足すときは、帯の上に「記録して続ける」を文字リンクで出す（取り込んだ明細からの記録は除く）。 */}
+      {/* 下いっぱいの保存の帯（青）は「記録する」の1本。帯の下には白の余白を空ける。新しく足すときは、帯の上に「記録して続ける」を文字リンクで出す（取り込んだ明細からの記録は除く）。 */}
       {SHOW_SAVE_NEXT && !record && onSubmitNext && initialAmount === null && (
         <div className="flex shrink-0 justify-end border-t border-gray-200 bg-white px-4 py-1">
           <button type="button" onClick={() => submit(true)} className="px-1 py-2 text-sm font-bold text-blue-600 hover:text-blue-700">
@@ -659,9 +663,14 @@ export default function RecordEditor({
       <button type="button" onClick={() => submit()} className="shrink-0 bg-blue-600 py-4 text-base font-extrabold text-white hover:bg-blue-700">
         {record ? '保存する' : '記録する'}
       </button>
+      <div className="h-3 shrink-0 bg-white" />
 
     </>
   );
 
-  return <FullScreen onBack={onClose}>{renderScreen()}</FullScreen>;
+  return (
+    <FullScreen sheet onBack={onClose}>
+      {renderScreen()}
+    </FullScreen>
+  );
 }

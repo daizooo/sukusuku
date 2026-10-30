@@ -6,6 +6,7 @@ import type { Nursery, NurseryStatus } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
 import { useBackdropClose } from '../ui/useBackdropClose';
 import { swipeBoundary } from '../ui/useSwipeNavigation';
+import { SHEET_SIZE } from '../ui/sheetSize';
 
 // 園の情報（連絡先・見学の日時・メモ）を編集する。
 // 見学チェックリストは保活タブの「チェックリスト」側でその場で編集するため、ここでは触らない
@@ -65,11 +66,11 @@ export default function NurseryFormModal({ mode, nursery, onClose, onSubmit, onD
 
   return (
     <div
-      className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4"
+      className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center pt-4 sm:p-4"
       {...backdropClose}
       {...swipeBoundary}
     >
-      <div className="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
+      <div className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col ${SHEET_SIZE} pb-[env(safe-area-inset-bottom)] sm:pb-0`}>
         <div className="flex justify-between items-center px-5 py-3 border-b shrink-0">
           <h3 className="font-bold text-gray-800">{mode === 'add' ? '保育園を追加' : draft.name || '保育園を編集'}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">

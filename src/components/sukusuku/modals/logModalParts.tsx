@@ -9,6 +9,7 @@ import type { FeedingMethod } from '@/types/app';
 import { useBackLayer } from '@/lib/browserHistory';
 import { useBackdropClose } from '../ui/useBackdropClose';
 import { swipeBoundary } from '../ui/useSwipeNavigation';
+import { SHEET_SIZE } from '../ui/sheetSize';
 
 export type LogAccent = 'milk' | 'diaper' | 'pumping' | 'temperature';
 
@@ -37,7 +38,7 @@ const ACCENT_TEXT: Record<LogAccent, string> = {
  * 記録の入力モーダルの高さ。どの記録でも同じ大きさで開くよう、ここでまとめて決める。
  * 画面の高さが足りない端末では、はみ出さないよう枠のほうを縮める（中身はスクロールする）。
  */
-const LOG_MODAL_HEIGHT = 'h-[640px] max-h-full';
+const LOG_MODAL_HEIGHT = SHEET_SIZE;
 
 interface LogModalShellProps {
   title: string;
@@ -65,12 +66,12 @@ export function LogModalShell({ title, onClose, subheader, footer, children }: L
 
   return (
     <div
-      className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4"
+      className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center pt-4 sm:p-4"
       {...backdropClose}
       {...swipeBoundary}
     >
       <div
-        className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col ${LOG_MODAL_HEIGHT}`}
+        className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col pb-[env(safe-area-inset-bottom)] sm:pb-0 ${LOG_MODAL_HEIGHT}`}
       >
         <div className="shrink-0 flex justify-between items-center border-b px-5 py-3">
           <h3 className="font-bold text-gray-800">{title}</h3>

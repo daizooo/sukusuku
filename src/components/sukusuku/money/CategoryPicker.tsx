@@ -11,6 +11,7 @@ import {
 import { useBackLayer } from '@/lib/browserHistory';
 import { useBackdropClose } from '../ui/useBackdropClose';
 import { swipeBoundary } from '../ui/useSwipeNavigation';
+import { SHEET_SIZE } from '../ui/sheetSize';
 import { CategoryIcon, ScreenHeader, StackedScreen } from './moneyVisual';
 
 // カテゴリの選択（docs/kakei.md §3.1・§3.2）。mobile版の `mobile/src/components/money/CategoryPicker.tsx` と同じ並び・文言。
@@ -116,11 +117,11 @@ function ChildSheet({
   const backdropClose = useBackdropClose(onClose);
   return (
     <div
-      className="absolute inset-0 z-50 flex items-end justify-center bg-black/50 p-4"
+      className="absolute inset-0 z-50 flex items-end justify-center bg-black/50 pt-4 sm:px-4 sm:pb-4"
       {...backdropClose}
       {...swipeBoundary}
     >
-      <div role="dialog" aria-label={`${top.name}の小分類`} className="flex max-h-[85%] w-full max-w-md flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
+      <div role="dialog" aria-label={`${top.name}の小分類`} className={`flex w-full max-w-md flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl pb-[env(safe-area-inset-bottom)] sm:pb-0 ${SHEET_SIZE}`}>
         <div className="flex h-16 shrink-0 items-center gap-3 px-4">
           <CategoryIcon iconKey={iconKeyOf(top)} size={36} />
           <h3 className="min-w-0 flex-1 truncate text-lg font-bold text-gray-900">{top.name}</h3>
