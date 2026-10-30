@@ -88,7 +88,9 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
         style: 'destructive',
         onPress: () => {
           setIsSigningOut(true);
-          void supabase.auth.signOut().catch(() => setIsSigningOut(false));
+          // 統合プロジェクトでは他のアプリ（denken3・fittrack）と同じアカウントを使うため、既定の global だと
+          // それらのセッションまで失効させる。ログアウトはこの端末のこのアプリだけにする（docs/personal-migration.md）。
+          void supabase.auth.signOut({ scope: 'local' }).catch(() => setIsSigningOut(false));
         },
       },
     ]);

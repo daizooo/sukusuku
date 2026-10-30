@@ -86,7 +86,9 @@ export default function AccountSection({ familyId, userId }: AccountSectionProps
     if (!window.confirm('ログアウトしますか？')) return;
     setIsSigningOut(true);
     try {
-      await createClient().auth.signOut();
+      // 統合プロジェクトでは他のアプリ（denken3・fittrack）と同じアカウントを使うため、既定の global だと
+      // それらのセッションまで失効させる。ログアウトはこの端末のこのアプリだけにする（docs/personal-migration.md）。
+      await createClient().auth.signOut({ scope: 'local' });
       router.push('/login');
       router.refresh();
     } catch (err) {
