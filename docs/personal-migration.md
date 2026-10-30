@@ -3,7 +3,7 @@
 旧: Supabase プロジェクト「sukusuku」（`nbkpwjtkkiaklewtegzh`）の `public`
 新: Supabase プロジェクト「Persol」（`jmysgeulujggdmdthqkn`）の `sukusuku` スキーマ
 PR: daizooo/sukusuku#356（ブランチ `claude/eager-goodall-2bjzv3`。**切り替えの日までマージしない**）
-SQL: `supabase/personal/0001`〜`0005`
+SQL: `supabase/personal/0001`〜`0006`
 
 ## 済んだこと（2026-10-30）
 
@@ -19,22 +19,25 @@ SQL: `supabase/personal/0001`〜`0005`
 - [x] Persol の Edge Function Secrets: REMINDER_CRON_SECRET・FCM_SERVICE_ACCOUNT・ANTHROPIC_API_KEY・ALPHA_VANTAGE_API_KEY
 - [x] Persol の Auth: Email を有効化、Redirect URLs に sukusuku の本番・プレビュー・`sukusuku://**`
 - [x] Vercel: Preview（ブランチ `claude/eager-goodall-2bjzv3` だけ）に Persol の URL と anon key
+- [x] プレビューで確認（ユーザー。結果OK）
+- [x] Persol の Vault に `sukusuku_reminder_cron_secret`（旧の `reminder_cron_secret` の値を fdw で写した）。
+      ただし Persol の Edge Function の REMINDER_CRON_SECRET とは値が違った（check で 401）ので、
+      切り替えの日に Vault の値を Persol の値へ直す（下の 2.1）
 
 ## 残り
 
-1. **プレビューで確認**（ユーザー）: ログイン（パスワードは旧と同じ）、各タブのデータ、家族の同期、
-   レシート読み取り・証券の価格取得（Edge Functions）
-2. **切り替えの日**（この順で）
-   1. 旧DBの最新を写し直す: Persol の sukusuku の全表を空にしてから 0003 をもう一度流す
-      （**`truncate` を含むので SQL Editor**。全文をチャットに出す。0003 の fdw のつなぎは残してある）
-   2. Vault に `sukusuku_reminder_cron_secret`（値は Edge Function の REMINDER_CRON_SECRET と同じ）を入れ、0005（cron）を流す
-   3. 旧プロジェクトの cron を止める（`cron.unschedule`。SQL Editor）
-   4. Vercel の Production の `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY` と、GitHub Secrets の
-      `EXPO_PUBLIC_SUPABASE_URL` / `_ANON_KEY` を Persol の値へ
+1. ~~プレビューで確認~~（済み）
+2. **切り替えの日**（この順で。静かな時間に、1〜4を続けて行う）
+   1. Persol の SQL Editor: Vault の値を Edge Function の REMINDER_CRON_SECRET に揃え、
+      0006（旧DBの最新を写し直す。`truncate` を含む）と 0005（cron）を流す
+   2. 旧プロジェクトの SQL Editor: cron を全部止める（`cron.unschedule`）
+   3. GitHub Secrets の `EXPO_PUBLIC_SUPABASE_URL` / `_ANON_KEY` を Persol の値へ（ユーザー）。
+      Vercel の Production の `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY` を Persol の値へ（Claude が MCP で）
+   4. PR をマージ（main の Vercel・APK が Persol を見る）。マージ後に
+      `deploy-functions.yml` の push 対象から作業ブランチを外す
    5. Gmail 取り込みの Apps Script（`tools/gas/gmail-feed.gs`）のスクリプトプロパティ `FEED_URL` を
       `https://jmysgeulujggdmdthqkn.supabase.co/functions/v1/money-feed-ingest` へ
-   6. PR をマージ（main の Vercel・APK が Persol を見る）。マージ後に
-      `deploy-functions.yml` の push 対象から作業ブランチを外す
+   6. 新しい APK を各端末に入れる（古い APK は旧DBに書き続け、その分は Persol に来ない）
    7. 0004 で fdw のつなぎを消す（SQL Editor）
 3. 後片付け: `scripts/check-table-grants.mjs`・`check-family-sync.mjs` を `supabase/personal`・
    `sukusuku.` 前提に直す。CLAUDE.md の `public.` 前提の節を書き換える。旧プロジェクトはしばらく残してから止める

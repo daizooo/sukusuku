@@ -3,7 +3,7 @@
 --
 -- 前提:
 --   - Edge Functions を Persol にデプロイ済み（cron が呼ぶ URL がこのプロジェクトを指すため）
---   - Vault にこの名前で秘密を登録済み（値は Persol の Edge Function の REMINDER_CRON_SECRET と同じ）:
+--   - Vault にこの名前で秘密を登録済み（値は Persol の Edge Function の REMINDER_CRON_SECRET と同じ。2026-10-30 に作成済み）:
 --       select vault.create_secret('<ランダムな文字列>', 'sukusuku_reminder_cron_secret');
 -- 0002 で pg_cron・pg_net を有効にしてあること。スケジュールは旧本番の実際の値。
 
