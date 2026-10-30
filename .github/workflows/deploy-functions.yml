@@ -6,8 +6,7 @@ name: deploy edge functions
 
 on:
   push:
-    # 切り替え前に Persol へ載せるため、移行の作業ブランチでも動かす（マージ後に外す）
-    branches: [main, claude/eager-goodall-2bjzv3]
+    branches: [main]
     paths:
       - 'supabase/functions/**'
       - 'supabase/config.toml'

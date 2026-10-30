@@ -22,23 +22,19 @@ SQL: `supabase/personal/0001`〜`0006`
 - [x] プレビューで確認（ユーザー。結果OK）
 - [x] REMINDER_CRON_SECRET を新しい値で登録し直し、Persol の Vault `sukusuku_reminder_cron_secret` も同じ値に
       （fetch-security-prices の check で 200 を確認）
-- [x] 0006（写し直し）と 0005（cron 12本）を一度流した（全56表の件数一致）。旧の cron と二重に通知が飛ばないよう、
-      Persol の cron は `cron.alter_job(..., active := false)` で止めてある
+- [x] 0005（cron 12本）を Persol に入れた
+- [x] 切り替え（2026-10-30）: GitHub Secrets（`EXPO_PUBLIC_*`）を Persol に、0006 で旧DBの最新を写し直し
+      （全56表の件数一致）、旧プロジェクトの cron を全部止め、Persol の cron を有効に、
+      Vercel の `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY`（Production・Preview 共通）を Persol に
 
 ## 残り
 
 1. ~~プレビューで確認~~（済み）
-2. **切り替えの日**（この順で。静かな時間に、1〜5を続けて行う）
-   1. GitHub Secrets の `EXPO_PUBLIC_SUPABASE_URL` / `_ANON_KEY` を Persol の値へ（ユーザー）
-   2. Persol の SQL Editor で 0006 をもう一度流す（その日までの旧DBの記録を写す。`truncate` を含む）
-   3. 旧プロジェクトの SQL Editor で cron を全部止める（`cron.unschedule`）
-   4. Claude が MCP で: Persol の cron を `active := true` に戻し、Vercel の Production の
-      `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY` を Persol の値へ
-   5. PR をマージ（main の Vercel・APK が Persol を見る）。マージ後に
-      `deploy-functions.yml` の push 対象から作業ブランチを外す
-   6. Gmail 取り込みの Apps Script（`tools/gas/gmail-feed.gs`）のスクリプトプロパティ `FEED_URL` を
+2. **切り替えの残り**
+   1. PR をマージ（main の Vercel・APK が Persol を見る。`deploy-functions.yml` の push 対象は main だけに戻してある）
+   2. Gmail 取り込みの Apps Script（`tools/gas/gmail-feed.gs`）のスクリプトプロパティ `FEED_URL` を
       `https://jmysgeulujggdmdthqkn.supabase.co/functions/v1/money-feed-ingest` へ
-   7. 新しい APK を各端末に入れる（古い APK は旧DBに書き続け、その分は Persol に来ない）
-   8. 0004 で fdw のつなぎを消す（SQL Editor）
+   3. 新しい APK を各端末に入れる（古い APK は旧DBに書き続け、その分は Persol に来ない）
+   4. 0004 で fdw のつなぎを消す（SQL Editor）
 3. 後片付け: `scripts/check-table-grants.mjs`・`check-family-sync.mjs` を `supabase/personal`・
    `sukusuku.` 前提に直す。CLAUDE.md の `public.` 前提の節を書き換える。旧プロジェクトはしばらく残してから止める
