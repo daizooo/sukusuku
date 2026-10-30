@@ -8,7 +8,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict 2phUgbBHlGKQzkdxnK2088fY3IB9Tiz02rqmXxk7L8cEKhvnWQch5tZh4bEoDBH
 
 
 SET statement_timeout = 0;
@@ -8146,7 +8145,6 @@ CREATE POLICY users_update_self ON sukusuku.users FOR UPDATE USING ((id = ( SELE
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 2phUgbBHlGKQzkdxnK2088fY3IB9Tiz02rqmXxk7L8cEKhvnWQch5tZh4bEoDBH
 
 
 --

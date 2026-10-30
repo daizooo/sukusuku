@@ -24,6 +24,7 @@ HEAD
   pg_dump "$PGURL" -n public --schema-only --no-owner --no-privileges --no-comments \
     | sed -E \
         -e '/^-- Dumped (from|by) /d' \
+        -e '/^\\(un)?restrict /d' \
         -e 's/^CREATE SCHEMA public;$/CREATE SCHEMA IF NOT EXISTS sukusuku;/' \
         -e "s/SET search_path TO 'public'/SET search_path TO 'sukusuku'/" \
         -e "s/nspname = 'public'/nspname = 'sukusuku'/" \
