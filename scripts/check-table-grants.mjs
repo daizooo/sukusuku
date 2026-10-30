@@ -1,14 +1,14 @@
-// public に新しく作る表に、明示的な GRANT を付け忘れていないか確かめる。
+// sukusuku スキーマに新しく作る表に、明示的な GRANT を付け忘れていないか確かめる。
 // 実行: npm run check:table-grants
 //
-// Supabase は 2026-10-30 から、public の新しい表に Data API 用の権限を自動では付けない。
+// sukusuku スキーマ（統合プロジェクト Persol）の新しい表には、Data API 用の権限が自動では付かない。
 // 付け忘れると、その表だけ supabase-js から permission denied になる（本番に出してから気づく）。
-// 0122 より後の migration で `create table public.表` をしたら、同じファイルに
-// `grant ... on public.表 to ...`（authenticated か service_role 向け）を書く。
+// supabase/personal の 0006 より後の SQL で `create table sukusuku.表` をしたら、同じファイルに
+// `grant ... on sukusuku.表 to ...`（authenticated か service_role 向け）を書く。
 //
 // 例（アプリから読み書きする表）:
-//   grant select, insert, update, delete on public.表 to authenticated;
-//   grant all on public.表 to service_role;
+//   grant select, insert, update, delete on sukusuku.表 to authenticated;
+//   grant all on sukusuku.表 to service_role;
 // 関数からだけ触る表は service_role だけでよい。
 // 付けない理由がある表は、そのファイルに `-- grant-ignore: 表名 （理由）` と書けば除ける。
 
@@ -17,10 +17,10 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const dir = join(root, 'supabase', 'migrations');
+const dir = join(root, 'supabase', 'personal');
 
-// この番号より後の migration だけ見る。0122 が、いままでの表の権限をまとめて明示している。
-const AFTER = 122;
+// この番号より後の SQL だけ見る。0001 が、移行した表の権限をまとめて明示している。
+const AFTER = 6;
 
 const errors = [];
 
@@ -38,20 +38,20 @@ for (const file of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
   const sql = raw.replace(/--[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
 
   const tables = [
-    ...sql.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?public\.("?)([a-z0-9_]+)\1/gi),
+    ...sql.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?sukusuku\.("?)([a-z0-9_]+)\1/gi),
   ].map((m) => m[2]);
 
   for (const table of new Set(tables)) {
     if (ignored.has(table)) continue;
     const grant = new RegExp(
-      `grant\\s+[^;]*?\\bon\\s+(?:table\\s+)?public\\."?${table}"?\\s+to\\s+[^;]*\\b(?:authenticated|service_role)\\b`,
+      `grant\\s+[^;]*?\\bon\\s+(?:table\\s+)?sukusuku\\."?${table}"?\\s+to\\s+[^;]*\\b(?:authenticated|service_role)\\b`,
       'i',
     );
     if (!grant.test(sql)) {
       errors.push(
-        `supabase/migrations/${file}: public.${table} に GRANT が無い。` +
-          `\`grant select, insert, update, delete on public.${table} to authenticated;\` と ` +
-          `\`grant all on public.${table} to service_role;\` を足す（理由があって付けないなら \`-- grant-ignore: ${table} （理由）\`）`,
+        `supabase/personal/${file}: sukusuku.${table} に GRANT が無い。` +
+          `\`grant select, insert, update, delete on sukusuku.${table} to authenticated;\` と ` +
+          `\`grant all on sukusuku.${table} to service_role;\` を足す（理由があって付けないなら \`-- grant-ignore: ${table} （理由）\`）`,
       );
     }
   }

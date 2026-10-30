@@ -12,6 +12,9 @@
 // 台帳に載っていない表（push_subscriptions など）は、画面側の宣言を求めない。
 // family_id を持たない表（親をたどって家族が決まる表）は、DB側の検査では見つけられない。
 // 新しい表を足したときは attach_family_sync の第2引数に家族の取り方を渡す（0078 の例）。
+//
+// DB の定義は supabase/personal（統合プロジェクト Persol の sukusuku スキーマ）から読む。0001 が移行時点の全定義、
+// 0007 以降がその後の変更。supabase/migrations は旧プロジェクトの履歴で、もう見ない。
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
@@ -21,7 +24,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
 const errors = [];
 
-// 台帳に載せない表（家族で共有しない・本人だけのもの）。0078 の family_sync_missing() と同じ。
+// 台帳に載せない表（家族で共有しない・本人だけのもの）。sukusuku.family_sync_missing() と同じ。
 const NOT_SHARED = new Set([
   'family_sync',
   'users',
@@ -47,41 +50,41 @@ const RPC_TABLES = {
 // 端末内の控え（SQLite）ごしに読むもの。
 const MODULE_TABLES = { 'offline/careLogs': ['care_logs'] };
 
-// migration ファイルの外で本番から落とした表（コードにはまだ名前が残っている）。
-const DROPPED_OUTSIDE_MIGRATIONS = new Set(['family_profiles']);
-
 // --- 1. DB ---
-const migrationDir = 'supabase/migrations';
+const migrationDir = 'supabase/personal';
 const migrations = readdirSync(join(root, migrationDir))
   .filter((name) => name.endsWith('.sql'))
   .sort()
   .map((name) => ({ name, text: read(`${migrationDir}/${name}`) }));
 
+// 台帳に載っている表: 0001 では生成された family_sync_ins トリガー、0007 以降では attach_family_sync の呼び出し。
 const tracked = new Set();
 for (const { text } of migrations) {
-  if (!text.includes('attach_family_sync')) continue;
-  for (const match of text.matchAll(/'public\.([a-z0-9_]+)'/g)) tracked.add(match[1]);
+  for (const match of text.matchAll(/attach_family_sync\(\s*'sukusuku\.([a-z0-9_]+)'/g)) tracked.add(match[1]);
+  for (const match of text.matchAll(/create (?:or replace )?trigger family_sync_ins\b[^;]*?\bon sukusuku\.([a-z0-9_]+)/gi)) {
+    tracked.add(match[1]);
+  }
 }
 
 const withFamilyId = new Set();
 for (const { text } of migrations) {
   for (const match of text.matchAll(
-    /create table(?: if not exists)?\s+(?:public\.)?([a-z0-9_]+)\s*\(([\s\S]*?)\n\)\s*;/gi,
+    /create table(?: if not exists)?\s+(?:sukusuku\.)?([a-z0-9_]+)\s*\(([\s\S]*?)\n\)\s*;/gi,
   )) {
     if (/\bfamily_id\b/.test(match[2])) withFamilyId.add(match[1]);
   }
 }
-const dropped = new Set(DROPPED_OUTSIDE_MIGRATIONS);
+const dropped = new Set();
 for (const { text } of migrations) {
-  for (const match of text.matchAll(/drop table(?: if exists)?\s+(?:public\.)?([a-z0-9_]+)/gi)) {
+  for (const match of text.matchAll(/drop table(?: if exists)?\s+(?:sukusuku\.)?([a-z0-9_]+)/gi)) {
     dropped.add(match[1]);
   }
 }
 for (const table of [...withFamilyId].sort()) {
   if (NOT_SHARED.has(table) || tracked.has(table) || dropped.has(table)) continue;
   errors.push(
-    `DB: ${table} は family_id を持つが、変更台帳へ載っていない。migration の中で ` +
-      `select public.attach_family_sync('public.${table}'); を呼ぶ（共有しない表なら NOT_SHARED と 0078 の family_sync_missing に足す）`,
+    `DB: ${table} は family_id を持つが、変更台帳へ載っていない。supabase/personal の SQL の中で ` +
+      `select sukusuku.attach_family_sync('sukusuku.${table}'); を呼ぶ（共有しない表なら NOT_SHARED と sukusuku.family_sync_missing に足す）`,
   );
 }
 

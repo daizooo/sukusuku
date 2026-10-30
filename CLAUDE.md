@@ -1,6 +1,6 @@
 # 【DB】このプロジェクトは sukusuku スキーマ専任（統合Supabaseプロジェクト。2026-10-30に決定）
 
-DBは統合Supabaseプロジェクト「Persol」（`jmysgeulujggdmdthqkn`）の `sukusuku` スキーマへ移す
+DBは統合Supabaseプロジェクト「Persol」（`jmysgeulujggdmdthqkn`）の `sukusuku` スキーマ（2026-10-30に切り替え済み。docs/personal-migration.md）
 （旧: 単独プロジェクト「sukusuku」`nbkpwjtkkiaklewtegzh` の `public`）。同じプロジェクトに他のアプリのスキーマが同居する。
 
 - **このプロジェクトは sukusuku スキーマ専任です。同一プロジェクト内の他スキーマ（denken3/fittrack/public）に対するテーブル作成・変更・データ削除は禁止します。**
@@ -10,8 +10,10 @@ DBは統合Supabaseプロジェクト「Persol」（`jmysgeulujggdmdthqkn`）の
 - Supabaseクライアントは `db: { schema: 'sukusuku' }` を明示する（Web: `src/lib/supabase/`、mobile: `mobile/src/lib/supabase.ts`、Edge Functions の `createClient`）。
   Realtime の購読も `schema: 'sukusuku'`
 - 型（`src/types/supabase.ts`・`mobile/src/types/supabase.ts`）は sukusuku スキーマから生成し、キーと `DefaultSchema` が `"sukusuku"` であることを確かめる
-- 移行用のSQLは `supabase/personal/`（0001: 表・関数・RLS・権限、0002: auth トリガー・Realtime、0003/0004: データの移行とその後片付け、0005: cron）。
-  切り替えが済むまでは、下の各節にある `public.` 前提の記述（`supabase/migrations`・`attach_family_sync('public.表')` など）は旧プロジェクト向けとして残す
+- **migration は `supabase/personal/` に、0007 から番号を続けて書く**（0001: 移行時点の表・関数・RLS・権限、0002: auth トリガー・Realtime、
+  0003/0004/0006: データの移行とその後片付け、0005: cron）。`supabase/migrations`（0001〜0143）は旧プロジェクトの履歴で、もう足さない・直さない。
+  docs などに出てくる migration 番号（「0078 の例」など）は、この旧い履歴の番号
+- MCP（`apply_migration`・`execute_sql`・`generate_typescript_types` など）は Persol（`jmysgeulujggdmdthqkn`）に向ける。旧プロジェクトには流さない
 
 # 【第一優先】mobile版が本体。PWA版（`src/`）はそのWEB版（兼開発確認用）
 
@@ -81,13 +83,12 @@ DBは統合Supabaseプロジェクト「Persol」（`jmysgeulujggdmdthqkn`）の
 - 1回の `apply_migration` は小さく分ける（関数・表・cron ごとなど）
 - 適用したら確かめる: 物ができたか（表・列・関数・cron）、`generate_typescript_types` の結果と
   `src/types/supabase.ts`・`mobile/src/types/supabase.ts` の該当部分が同じか、計算の結果
-- **public に新しい表を作る migration は、同じファイルで GRANT を明示する**（2026-10-20。Supabase が
-  2026-10-30 から、public の新しい表へ Data API 権限を自動付与しなくなるため。付け忘れると、その表だけ
-  supabase-js が permission denied になる）。アプリから触る表は
-  `grant select, insert, update, delete on public.表 to authenticated;` と
-  `grant all on public.表 to service_role;`、関数からだけ触る表は service_role だけ。
-  anon（ログイン前）には付けない（0123 で外し、今後作る表にも自動では付かない）。
-  0122 が既存の表をまとめて明示済み。付け忘れは `npm run check:table-grants`（CI の「table grants check」）が落ちる
+- **新しい表を作る migration は、同じファイルで GRANT を明示する**（2026-10-20。sukusuku スキーマの新しい表には
+  Data API 権限が自動では付かない。付け忘れると、その表だけ supabase-js が permission denied になる）。アプリから触る表は
+  `grant select, insert, update, delete on sukusuku.表 to authenticated;` と
+  `grant all on sukusuku.表 to service_role;`、関数からだけ触る表は service_role だけ。
+  anon（ログイン前）には付けない。
+  `supabase/personal/0001` が移行した表をまとめて明示済み。付け忘れは `npm run check:table-grants`（CI の「table grants check」）が落ちる
 
 ## コンフリクトを減らすための設計・実装方針
 
@@ -191,7 +192,7 @@ DBは統合Supabaseプロジェクト「Persol」（`jmysgeulujggdmdthqkn`）の
   他の端末での変更は、DBの変更台帳 `family_sync` がその表の時刻を更新し、変わった表を読む画面だけが読み直す。
   - **新しい画面・タブを足すとき・タブを統合するとき**は、読む表を宣言する。足りなければ
     `npm run check:family-sync`（CI の「family sync check」）が落ちる
-  - **新しい共有表を作るとき**は、その migration の中で `select public.attach_family_sync('public.表名');` を呼ぶ
-    （`family_id` を持たない表は第2引数で親をたどる。0078 の例）。本番では `select * from public.family_sync_missing();` が空であること
+  - **新しい共有表を作るとき**は、その migration の中で `select sukusuku.attach_family_sync('sukusuku.表名');` を呼ぶ
+    （`family_id` を持たない表は第2引数で親をたどる。旧 0078 の例）。本番では `select * from sukusuku.family_sync_missing();` が空であること
 - mobile: 所属（`family_id`）と最初のタブは `src/lib/api/me.ts` が1回の問い合わせで取って使い回す（ログイン時に先読み）。
   タブごとに `users` を取りに行かず、`getMyMembership` を呼ぶ

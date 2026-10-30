@@ -1,11 +1,11 @@
-# public に新しく作る表の GRANT の付け忘れを見つける（Supabase の 2026-10-30 の仕様変更への対応）。
+# sukusuku スキーマに新しく作る表の GRANT の付け忘れを見つける（新しい表には Data API 権限が自動では付かない）。
 # 依存を入れず Node だけで数秒で終わる。
 name: table grants check
 
 on:
   pull_request:
     paths:
-      - 'supabase/migrations/**'
+      - 'supabase/personal/**'
       - 'scripts/check-table-grants.mjs'
       - '.github/workflows/table-grants-check.yml'
 

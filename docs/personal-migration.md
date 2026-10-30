@@ -36,5 +36,8 @@ SQL: `supabase/personal/0001`〜`0006`
       `https://jmysgeulujggdmdthqkn.supabase.co/functions/v1/money-feed-ingest` へ
    3. 新しい APK を各端末に入れる（古い APK は旧DBに書き続け、その分は Persol に来ない）
    4. 0004 で fdw のつなぎを消す（SQL Editor）
-3. 後片付け: `scripts/check-table-grants.mjs`・`check-family-sync.mjs` を `supabase/personal`・
-   `sukusuku.` 前提に直す。CLAUDE.md の `public.` 前提の節を書き換える。旧プロジェクトはしばらく残してから止める
+3. 後片付け
+   1. ~~`scripts/check-table-grants.mjs`・`check-family-sync.mjs` を `supabase/personal`・`sukusuku.` 前提に直す~~（済み。
+      CI の paths も `supabase/personal/**` に）
+   2. ~~CLAUDE.md の `public.` 前提の節を書き換える~~（済み。migration は `supabase/personal/0007` 以降）
+   3. 旧プロジェクトはしばらく残してから止める
