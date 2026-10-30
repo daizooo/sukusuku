@@ -8,7 +8,7 @@ import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 // 「暗くした画面の上に、下から浮かぶ枠」にする。
 //
 // PWA版の作り（`src/components/sukusuku/modals/logModalParts.tsx` ほか）:
-//   <div className="absolute inset-0 bg-black/50 flex items-end justify-center p-4">
+//   <div className="absolute inset-0 bg-black/50 flex items-end justify-center px-4 pt-4">
 //     <div className="bg-white w-full max-w-md rounded-t-2xl shadow-xl flex flex-col">
 // 暗くするのは画面の上の帯（アプリの色で塗ってある部分）より下だけ。PWA版も
 // safe-area のぶんは覆わないため、同じ見え方にそろえている。
@@ -28,7 +28,7 @@ interface SheetModalProps {
 /** PWA版の枠の横幅（Tailwindの max-w-md）。 */
 const SHEET_MAX_WIDTH = 448;
 
-/** PWA版の枠の外側の余白（Tailwindの p-4）。 */
+/** PWA版の枠の左右・上の余白（Tailwindの px-4 pt-4）。下は画面の端に接するので余白なし。 */
 const SHEET_GAP = 16;
 
 export default function SheetModal({ visible, onClose, height, children }: SheetModalProps) {
@@ -53,11 +53,12 @@ export default function SheetModal({ visible, onClose, height, children }: Sheet
         <View
           style={[
             styles.container,
-            { paddingTop: insets.top + SHEET_GAP, paddingBottom: insets.bottom + SHEET_GAP },
+            { paddingTop: insets.top + SHEET_GAP },
           ]}
           pointerEvents="box-none"
         >
-          <View style={[styles.sheet, height !== undefined && { height }]}>{children}</View>
+          {/* 下は画面の端に接する。下の操作バーのぶんは、枠の中の余白（白のまま）で空ける。 */}
+          <View style={[styles.sheet, { paddingBottom: insets.bottom }, height !== undefined && { height }]}>{children}</View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
