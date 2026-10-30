@@ -217,7 +217,7 @@ function ChildSheet({
   const backdropClose = useBackdropClose(onClose);
   return (
     <div
-      className="absolute inset-0 z-50 flex items-end justify-center bg-black/50 px-4 pt-4 sm:pb-4"
+      className="absolute inset-0 z-50 flex items-end justify-center bg-black/50 pt-4 sm:px-4 sm:pb-4"
       {...backdropClose}
       {...swipeBoundary}
     >

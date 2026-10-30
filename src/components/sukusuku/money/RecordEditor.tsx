@@ -668,7 +668,8 @@ export default function RecordEditor({
   );
 
   return (
-    <FullScreen sheet onBack={onClose}>
+    // 下に青い保存の帯が出ているとき（入力の画面と、その上に重ねる出金元の選択）は、下の操作バーのぶんも青にする。
+    <FullScreen sheet onBack={onClose} insetClass={(screen.type === 'edit' && !(viewing && record)) || screen.type === 'wallet' ? 'bg-blue-600' : undefined}>
       {renderScreen()}
     </FullScreen>
   );

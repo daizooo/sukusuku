@@ -384,7 +384,7 @@ export function ModalShell({ title, onClose, children, footer, fixedHeight = fal
 
   return (
     <div
-      className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center px-4 pt-4 sm:p-4"
+      className="absolute inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center pt-4 sm:p-4"
       {...backdropClose}
       {...swipeBoundary}
     >
