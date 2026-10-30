@@ -10,7 +10,7 @@ on:
     paths:
       - 'mobile/**'
       - 'src/**'
-      - 'supabase/migrations/**'
+      - 'supabase/personal/**'
       - 'scripts/check-family-sync.mjs'
       - '.github/workflows/family-sync-check.yml'
 

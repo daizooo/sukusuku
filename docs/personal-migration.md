@@ -31,10 +31,14 @@ SQL: `supabase/personal/0001`〜`0006`
 
 1. ~~プレビューで確認~~（済み）
 2. **切り替えの残り**
-   1. PR をマージ（main の Vercel・APK が Persol を見る。`deploy-functions.yml` の push 対象は main だけに戻してある）
+   1. ~~PR をマージ~~（済み。daizooo/sukusuku#356。main の Vercel・APK が Persol を見る。`deploy-functions.yml` の push 対象は main だけに戻してある）
    2. Gmail 取り込みの Apps Script（`tools/gas/gmail-feed.gs`）のスクリプトプロパティ `FEED_URL` を
       `https://jmysgeulujggdmdthqkn.supabase.co/functions/v1/money-feed-ingest` へ
    3. 新しい APK を各端末に入れる（古い APK は旧DBに書き続け、その分は Persol に来ない）
-   4. 0004 で fdw のつなぎを消す（SQL Editor）
-3. 後片付け: `scripts/check-table-grants.mjs`・`check-family-sync.mjs` を `supabase/personal`・
-   `sukusuku.` 前提に直す。CLAUDE.md の `public.` 前提の節を書き換える。旧プロジェクトはしばらく残してから止める
+   4. ~~0004 で fdw のつなぎを消す（SQL Editor）~~（済み。Persol に `sukusuku_old*`・`postgres_fdw` が無いことを確認）
+3. 後片付け
+   1. ~~`scripts/check-table-grants.mjs`・`check-family-sync.mjs` を `supabase/personal`・`sukusuku.` 前提に直す~~（済み。
+      CI の paths も `supabase/personal/**` に）
+   2. ~~CLAUDE.md の `public.` 前提の節を書き換える~~（済み。migration は `supabase/personal/0007` 以降）
+   3. ~~旧プロジェクトを止める~~（2026-10-30 に削除。その前に `public`・`auth` を `pg_dump` で書き出し
+      （`sukusuku_old_20261030.dump` / `.sql`、`TABLE DATA public` 56件を確認）、ユーザーの Google Drive に保管）
