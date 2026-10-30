@@ -1,4 +1,4 @@
-project_id = "nbkpwjtkkiaklewtegzh"
+project_id = "jmysgeulujggdmdthqkn"
 
 [functions.send-reminders]
 # pg_cron から呼ぶため Supabase の JWT 検証は使わない。
