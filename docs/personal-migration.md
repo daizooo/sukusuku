@@ -42,3 +42,14 @@ SQL: `supabase/personal/0001`〜`0006`
    2. ~~CLAUDE.md の `public.` 前提の節を書き換える~~（済み。migration は `supabase/personal/0007` 以降）
    3. ~~旧プロジェクトを止める~~（2026-10-30 に削除。その前に `public`・`auth` を `pg_dump` で書き出し
       （`sukusuku_old_20261030.dump` / `.sql`、`TABLE DATA public` 56件を確認）、ユーザーの Google Drive に保管）
+
+## ログアウトは `scope: 'local'`（2026-10-30）
+
+Persol は sukusuku・denken3・fittrack が同じ `auth.users` を共有する。supabase-js の `signOut()` は既定で
+`scope: 'global'`（そのユーザーの全セッションの refresh token を失効）なので、**どれか1つのアプリでログアウトすると、
+他のアプリのセッションも消える**。アクセストークン（JWT・最長1時間）が切れるまでは動くため、
+「数十分たって開くとログイン画面になる」ように見えた（Auth ログ: denken3・fittrack の `/logout` のあと、
+`refresh_token_not_found`）。
+
+- sukusuku のログアウト（Web 2か所・mobile 1か所）は `signOut({ scope: 'local' })` にした
+- **denken3・fittrack のログアウトも `scope: 'local'` にしないと、そちらでのログアウトで sukusuku が落ち続ける**（各リポジトリで直す）
