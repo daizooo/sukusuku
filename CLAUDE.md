@@ -10,7 +10,7 @@ DBは統合Supabaseプロジェクト「Persol」（`jmysgeulujggdmdthqkn`）の
 - Supabaseクライアントは `db: { schema: 'sukusuku' }` を明示する（Web: `src/lib/supabase/`、mobile: `mobile/src/lib/supabase.ts`、Edge Functions の `createClient`）。
   Realtime の購読も `schema: 'sukusuku'`
 - 型（`src/types/supabase.ts`・`mobile/src/types/supabase.ts`）は sukusuku スキーマから生成し、キーと `DefaultSchema` が `"sukusuku"` であることを確かめる
-- 移行用のSQLは `supabase/personal/`（0001: 表・関数・RLS・権限、0002: auth トリガー・Realtime・cron）。
+- 移行用のSQLは `supabase/personal/`（0001: 表・関数・RLS・権限、0002: auth トリガー・Realtime、0003/0004: データの移行とその後片付け、0005: cron）。
   切り替えが済むまでは、下の各節にある `public.` 前提の記述（`supabase/migrations`・`attach_family_sync('public.表')` など）は旧プロジェクト向けとして残す
 
 # 【第一優先】mobile版が本体。PWA版（`src/`）はそのWEB版（兼開発確認用）
