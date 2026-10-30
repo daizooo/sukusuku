@@ -1122,6 +1122,6 @@ const styles = StyleSheet.create({
   viewText: { fontSize: 15, fontWeight: '600', color: colors.textFaint },
   viewTextSelected: { color: colors.text, fontWeight: '700' },
   underline: { marginTop: 8, height: 3, width: 32, borderRadius: 2, backgroundColor: 'transparent' },
-  underlineSelected: { backgroundColor: colors.moneyRecord },
+  underlineSelected: { backgroundColor: colors.money },
   badge: { position: 'absolute', top: -1, right: -9, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger },
 });

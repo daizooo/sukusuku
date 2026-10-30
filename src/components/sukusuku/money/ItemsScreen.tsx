@@ -421,7 +421,7 @@ export default function ItemsScreen({
       </div>
 
       <div className="shrink-0 px-4 pt-2 pb-4">
-        <PrimaryButton label="保存" record disabled={filled.length === 0} onClick={onSave} />
+        <PrimaryButton label="保存" disabled={filled.length === 0} onClick={onSave} />
       </div>
 
       {work.calc && selectedLine !== null && (
@@ -449,7 +449,7 @@ export default function ItemsScreen({
                   </button>
                 )}
               </span>
-              <button type="button" onClick={closeCalc} className="h-[52px] flex-1 rounded-full bg-[#49c54f] text-lg font-extrabold text-white hover:bg-[#3fb145]">
+              <button type="button" onClick={closeCalc} className="h-[52px] flex-1 rounded-full bg-blue-600 text-lg font-extrabold text-white hover:bg-blue-700">
                 OK
               </button>
               <span className="w-24" />

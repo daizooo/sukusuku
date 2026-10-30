@@ -437,7 +437,6 @@ export default function RecordEditor({
             <View style={styles.footer}>
               <PrimaryButton
                 label="決める"
-                record
                 onPress={() => {
                   setTransferAmount(evaluateCalc(amountExpr) ?? 0);
                   pop();
@@ -693,9 +692,9 @@ const styles = StyleSheet.create({
   content: { paddingTop: 4, paddingBottom: 16 },
   kinds: { flexDirection: 'row', gap: 8, paddingHorizontal: 16 },
   kind: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.neutralSurface },
-  kindSelected: { backgroundColor: colors.moneyRecordSoft },
+  kindSelected: { backgroundColor: colors.moneySoft },
   kindText: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
-  kindTextSelected: { color: colors.moneyRecordText, fontWeight: '700' },
+  kindTextSelected: { color: colors.moneyText, fontWeight: '700' },
   // 金額: 左に「¥ JPY」、右に大きな数字（Zaim と同じ。数字を出す Text には fontWeight を必ず付ける）。
   amountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 6, paddingBottom: 2 },
   currency: { alignItems: 'center' },
@@ -748,13 +747,13 @@ const styles = StyleSheet.create({
   addGroup: { paddingHorizontal: 20, paddingVertical: 10 },
   addMark: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.moneySoft },
   // 下いっぱいの保存の帯（青）。
-  saveBar: { alignItems: 'center', paddingVertical: 16, backgroundColor: colors.moneyRecord },
+  saveBar: { alignItems: 'center', paddingVertical: 16, backgroundColor: colors.money },
   saveGap: { height: 12, backgroundColor: colors.surface },
   saveText: { fontSize: 16, fontWeight: '800', color: colors.primaryText },
   // 「記録して続ける」は帯の上の文字リンク（右寄せ）。
   nextRow: { alignItems: 'flex-end', paddingHorizontal: 16, paddingVertical: 4, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface },
   nextLink: { paddingHorizontal: 4, paddingVertical: 8 },
-  nextText: { fontSize: 14, fontWeight: '700', color: colors.moneyRecordText },
+  nextText: { fontSize: 14, fontWeight: '700', color: colors.money },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1, borderTopColor: colors.border },
   amountBox: { alignItems: 'flex-end', paddingHorizontal: 20, paddingVertical: 24, flex: 1, justifyContent: 'flex-end' },
   amountExpr: { fontSize: 14, fontWeight: '500', color: colors.textMuted },

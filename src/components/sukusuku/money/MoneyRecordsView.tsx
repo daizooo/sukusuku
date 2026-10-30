@@ -157,7 +157,7 @@ export default function MoneyRecordsView({
               type="button"
               aria-label="今日の記録へ戻る"
               onClick={() => scrollToTop((recordsBefore[firstIndex] ?? 0) < 200)}
-              className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-[#49c54f] px-[18px] py-2.5 text-[15px] font-bold text-white shadow-md transition active:opacity-85"
+              className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-blue-600 px-[18px] py-2.5 text-[15px] font-bold text-white shadow-md transition active:opacity-85"
             >
               <Undo2 size={16} />
               今日に戻る

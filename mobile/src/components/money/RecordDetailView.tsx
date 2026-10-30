@@ -111,7 +111,7 @@ export default function RecordDetailView({
         </Pressable>
       </ScrollView>
       <View style={styles.footer}>
-        <PrimaryButton label="編集する" record onPress={onEdit} />
+        <PrimaryButton label="編集する" onPress={onEdit} />
       </View>
     </View>
   );

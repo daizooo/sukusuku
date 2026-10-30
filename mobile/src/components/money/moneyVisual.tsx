@@ -408,16 +408,15 @@ export function ScreenHeader({
 }
 
 /** 下に固定の大きなボタン（淡い青）。 */
-/** record: 記録の入力まわり（記録する・決める・保存・編集する）の緑のボタン。ほかの設定の保存は従来の淡い青。 */
-export function PrimaryButton({ label, onPress, disabled, record }: { label: string; onPress: () => void; disabled?: boolean; record?: boolean }) {
+export function PrimaryButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       disabled={disabled}
-      style={[styles.primary, record && styles.primaryRecord, disabled && styles.primaryDisabled]}
+      style={[styles.primary, disabled && styles.primaryDisabled]}
     >
-      <Text style={[styles.primaryText, record && styles.primaryRecordText]}>{label}</Text>
+      <Text style={styles.primaryText}>{label}</Text>
     </Pressable>
   );
 }
@@ -509,8 +508,6 @@ const styles = StyleSheet.create({
   // 右端の小さな丸の閉じるボタン（見える大きさは28。押せる範囲は hitSlop で足す）。
   closeSmall: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.neutralSurface },
   primary: { borderRadius: 14, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.moneySoft },
-  primaryRecord: { backgroundColor: colors.moneyRecord },
-  primaryRecordText: { color: colors.primaryText },
   primaryDisabled: { opacity: 0.5 },
   primaryText: { fontSize: 15, fontWeight: '700', color: colors.moneyText },
   estimate: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, backgroundColor: colors.moneyEstimateSurface },

@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: colors.moneyRecord,
+    backgroundColor: colors.money,
     shadowColor: '#000000',
     shadowOpacity: 0.2,
     shadowRadius: 4,

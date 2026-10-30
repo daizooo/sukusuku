@@ -121,7 +121,7 @@ export default function RecordDetailView({
         </div>
       </div>
       <div className="shrink-0 border-t border-gray-200 px-4 pt-2.5 pb-4">
-        <PrimaryButton label="編集する" record onClick={onEdit} />
+        <PrimaryButton label="編集する" onClick={onEdit} />
       </div>
     </>
   );
