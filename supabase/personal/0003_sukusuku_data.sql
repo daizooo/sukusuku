@@ -14,6 +14,12 @@
 --   5. 最後に、表ごとの件数を旧DBと比べた結果を出す
 -- 写し終えたら 0004_sukusuku_data_cleanup.sql で外部テーブルとつなぎを消す。
 
+-- 途中で失敗してもう一度流せるよう、前回のつなぎを先に消す（旧DBの中身には触れない）
+drop schema if exists sukusuku_old cascade;
+drop schema if exists sukusuku_old_auth cascade;
+drop user mapping if exists for current_user server sukusuku_old;
+drop server if exists sukusuku_old;
+
 create extension if not exists postgres_fdw with schema extensions;
 
 create server sukusuku_old foreign data wrapper postgres_fdw
