@@ -415,6 +415,7 @@ export default function RecordEditor({
             <div className="shrink-0 border-t border-gray-200 px-4 pt-2.5 pb-4">
               <PrimaryButton
                 label="決める"
+                record
                 onClick={() => {
                   setTransferAmount(evaluateCalc(amountExpr) ?? 0);
                   pop();
@@ -652,19 +653,18 @@ export default function RecordEditor({
           </>
         )}
       </div>
-      {/* 下は白の余白つきの枠に、緑の「記録する」ボタン（予定の入力の下の枠と同じ作り）。新しく足すときは、ボタンの上に「記録して続ける」を文字リンクで出す（取り込んだ明細からの記録は除く）。 */}
-      <div className="shrink-0 border-t border-gray-200 bg-white px-4 pb-4 pt-2.5">
-        {SHOW_SAVE_NEXT && !record && onSubmitNext && initialAmount === null && (
-          <div className="flex justify-end">
-            <button type="button" onClick={() => submit(true)} className="px-1 py-1.5 text-sm font-bold text-[#2f8f3a] hover:text-[#267a30]">
-              記録して続ける ＋
-            </button>
-          </div>
-        )}
-        <button type="button" onClick={() => submit()} className="w-full rounded-xl bg-[#49c54f] py-3 text-base font-extrabold text-white hover:bg-[#3fb145]">
-          {record ? '保存する' : '記録する'}
-        </button>
-      </div>
+      {/* 下いっぱいの保存の帯（緑）は「記録する」の1本。帯の下には白の余白を空ける。新しく足すときは、帯の上に「記録して続ける」を文字リンクで出す（取り込んだ明細からの記録は除く）。 */}
+      {SHOW_SAVE_NEXT && !record && onSubmitNext && initialAmount === null && (
+        <div className="flex shrink-0 justify-end border-t border-gray-200 bg-white px-4 py-1">
+          <button type="button" onClick={() => submit(true)} className="px-1 py-2 text-sm font-bold text-[#2f8f3a] hover:text-[#267a30]">
+            記録して続ける ＋
+          </button>
+        </div>
+      )}
+      <button type="button" onClick={() => submit()} className="shrink-0 bg-[#49c54f] py-4 text-base font-extrabold text-white hover:bg-[#3fb145]">
+        {record ? '保存する' : '記録する'}
+      </button>
+      <div className="h-3 shrink-0 bg-white" />
 
     </>
   );

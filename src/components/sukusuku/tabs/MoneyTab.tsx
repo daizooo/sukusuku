@@ -788,7 +788,7 @@ export default function MoneyTab({ familyId, userId }: { familyId: string; userI
                     <span className="absolute -right-[9px] -top-px h-2 w-2 rounded-full bg-red-500" />
                   )}
                 </span>
-                <span className={`mt-2 h-[3px] w-8 rounded-full ${selected ? 'bg-blue-600' : 'bg-transparent'}`} />
+                <span className={`mt-2 h-[3px] w-8 rounded-full ${selected ? 'bg-[#49c54f]' : 'bg-transparent'}`} />
               </button>
             );
           })}

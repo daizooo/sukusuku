@@ -437,6 +437,7 @@ export default function RecordEditor({
             <View style={styles.footer}>
               <PrimaryButton
                 label="決める"
+                record
                 onPress={() => {
                   setTransferAmount(evaluateCalc(amountExpr) ?? 0);
                   pop();
@@ -663,20 +664,19 @@ export default function RecordEditor({
           </>
         )}
       </ScrollView>
-      {/* 下は白の余白つきの枠に、緑の「記録する」ボタン（予定の入力の下の枠と同じ作り）。
-          新しく足すときは、ボタンの上に「記録して続ける」を文字リンクで出す（1日に何枚もレシートを入れるとき。取り込んだ明細からの記録は除く）。 */}
-      <View style={styles.footer}>
-        {SHOW_SAVE_NEXT && !record && onSubmitNext && initialAmount === null && (
-          <View style={styles.nextRow}>
-            <Pressable accessibilityRole="button" onPress={() => submit(true)} hitSlop={8} style={styles.nextLink}>
-              <Text style={styles.nextText}>記録して続ける ＋</Text>
-            </Pressable>
-          </View>
-        )}
-        <Pressable accessibilityRole="button" onPress={() => submit()} style={styles.saveBar}>
-          <Text style={styles.saveText}>{record ? '保存する' : '記録する'}</Text>
-        </Pressable>
-      </View>
+      {/* 新しく足すときは、帯の上に「記録して続ける」を文字リンクで出す（1日に何枚もレシートを入れるとき。取り込んだ明細からの記録は除く）。
+          帯は「記録する」の1本のまま。帯の下には白の余白を空ける。 */}
+      {SHOW_SAVE_NEXT && !record && onSubmitNext && initialAmount === null && (
+        <View style={styles.nextRow}>
+          <Pressable accessibilityRole="button" onPress={() => submit(true)} hitSlop={8} style={styles.nextLink}>
+            <Text style={styles.nextText}>記録して続ける ＋</Text>
+          </Pressable>
+        </View>
+      )}
+      <Pressable accessibilityRole="button" onPress={() => submit()} style={styles.saveBar}>
+        <Text style={styles.saveText}>{record ? '保存する' : '記録する'}</Text>
+      </Pressable>
+      <View style={styles.saveGap} />
     </View>
   );
 
@@ -748,10 +748,11 @@ const styles = StyleSheet.create({
   addGroup: { paddingHorizontal: 20, paddingVertical: 10 },
   addMark: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.moneySoft },
   // 下いっぱいの保存の帯（青）。
-  saveBar: { alignItems: 'center', paddingVertical: 13, borderRadius: 12, backgroundColor: colors.moneyRecord },
+  saveBar: { alignItems: 'center', paddingVertical: 16, backgroundColor: colors.moneyRecord },
+  saveGap: { height: 12, backgroundColor: colors.surface },
   saveText: { fontSize: 16, fontWeight: '800', color: colors.primaryText },
   // 「記録して続ける」は帯の上の文字リンク（右寄せ）。
-  nextRow: { alignItems: 'flex-end' },
+  nextRow: { alignItems: 'flex-end', paddingHorizontal: 16, paddingVertical: 4, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface },
   nextLink: { paddingHorizontal: 4, paddingVertical: 8 },
   nextText: { fontSize: 14, fontWeight: '700', color: colors.moneyRecordText },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1, borderTopColor: colors.border },

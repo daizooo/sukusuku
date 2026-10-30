@@ -411,7 +411,7 @@ export default function ItemsScreen({
       </ScrollView>
 
       <View style={styles.footer}>
-        <PrimaryButton label="保存" disabled={filled.length === 0} onPress={onSave} />
+        <PrimaryButton label="保存" record disabled={filled.length === 0} onPress={onSave} />
       </View>
 
       {work.calc && selectedLine !== null && (
@@ -537,6 +537,6 @@ const styles = StyleSheet.create({
   calcFooter: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 4 },
   signBox: { width: 96, alignItems: 'center' },
   signText: { fontSize: 12, fontWeight: '600', color: colors.money },
-  okButton: { flex: 1, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.money },
+  okButton: { flex: 1, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.moneyRecord },
   okText: { fontSize: 18, fontWeight: '800', color: colors.primaryText },
 });

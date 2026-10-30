@@ -476,13 +476,16 @@ export function ScreenHeader({
 }
 
 /** 下に固定の大きなボタン（淡い青）。 */
-export function PrimaryButton({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
+/** record: 記録の入力まわり（決める・保存・編集する）の緑のボタン。ほかの設定の保存は従来の淡い青。 */
+export function PrimaryButton({ label, onClick, disabled, record }: { label: string; onClick: () => void; disabled?: boolean; record?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="w-full rounded-2xl bg-blue-100 py-3.5 text-[15px] font-bold text-blue-800 hover:bg-blue-200 disabled:opacity-50"
+      className={`w-full rounded-2xl py-3.5 text-[15px] font-bold disabled:opacity-50 ${
+        record ? 'bg-[#49c54f] text-white hover:bg-[#3fb145]' : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+      }`}
     >
       {label}
     </button>
