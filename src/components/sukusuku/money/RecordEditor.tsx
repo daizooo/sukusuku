@@ -369,18 +369,22 @@ export default function RecordEditor({
           />
         );
       case 'wallet':
+        // 出金元の選択はそれ自体が下から出る枠。枠の下には入力の画面を残して重ねる。
         return (
-          <WalletPicker
-            title={screen.field === 'toWalletId' ? '入金先を選ぶ' : kind === 'income' ? '入金先を選ぶ' : '出金元を選ぶ'}
-            wallets={wallets}
-            selectedId={screen.field === 'toWalletId' ? toWalletId : walletId}
-            onPick={(id) => {
-              if (screen.field === 'toWalletId') setToWalletId(id);
-              else setWalletId(id);
-              pop();
-            }}
-            onClose={back}
-          />
+          <>
+            {renderEdit()}
+            <WalletPicker
+              title={screen.field === 'toWalletId' ? '入金先を選ぶ' : kind === 'income' ? '入金先を選ぶ' : '出金元を選ぶ'}
+              wallets={wallets}
+              selectedId={screen.field === 'toWalletId' ? toWalletId : walletId}
+              onPick={(id) => {
+                if (screen.field === 'toWalletId') setToWalletId(id);
+                else setWalletId(id);
+                pop();
+              }}
+              onClose={back}
+            />
+          </>
         );
       case 'store':
         return (
@@ -663,5 +667,9 @@ export default function RecordEditor({
     </>
   );
 
-  return <FullScreen onBack={onClose}>{renderScreen()}</FullScreen>;
+  return (
+    <FullScreen sheet onBack={onClose}>
+      {renderScreen()}
+    </FullScreen>
+  );
 }

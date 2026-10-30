@@ -376,9 +376,24 @@ export function NextPeriodBadge() {
  * 全画面の入力の枠。戻る操作（ブラウザ・スマホ）で onBack を呼ぶ。
  * 横幅の広い画面（タブレット・PC）で両脇に出る暗い部分を押しても onBack を呼ぶ。
  */
-export function FullScreen({ onBack, children }: { onBack: () => void; children: ReactNode }) {
+export function FullScreen({ onBack, sheet, children }: { onBack: () => void; sheet?: boolean; children: ReactNode }) {
   useBackLayer(onBack);
   const backdropClose = useBackdropClose(onBack);
+  // sheet: 画面いっぱいにせず、予定・育児の記録の入力と同じ「暗くした画面の上に下から浮かぶ枠」にする（記録の入力）。
+  // 高さは画面ごとに変えない（LogModalShell の h-[640px] と同じ）。入りきらない画面では枠のほうが縮む。
+  if (sheet) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-[calc(1rem+env(safe-area-inset-bottom))] sm:items-center"
+        {...backdropClose}
+        {...swipeBoundary}
+      >
+        <div className="relative flex h-[640px] max-h-full w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
+          {children}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="fixed inset-0 z-50 flex justify-center bg-black/30" {...backdropClose} {...swipeBoundary}>
       <div className="relative flex h-full w-full max-w-md flex-col bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">

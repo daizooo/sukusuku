@@ -1,7 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Modal from '@/components/ui/Modal';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import SheetModal from '@/components/ui/SheetModal';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { ArrowRight, CalendarDays, Camera, Plus, Square, SquareCheck, Store, Trash2, X } from 'lucide-react-native';
 import type {
@@ -16,7 +15,6 @@ import type {
   ReceiptScanItem,
 } from '@/types/app';
 import { colors } from '@/lib/theme';
-import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 import { formatDateWithYear, toDateString } from '@/lib/dateUtils';
 import {
   canCardNextPeriod,
@@ -82,6 +80,10 @@ type Screen =
   | { type: 'amount' };
 
 const KINDS: MoneyRecordKind[] = ['expense', 'income', 'transfer'];
+
+// 予定・育児の記録の入力と同じ、下から浮かぶ枠（SheetModal）。品目・カテゴリ・電卓なども、この枠の中で重ねる。
+// 高さは画面ごとに変えない（切り替えで枠が動かないよう決め打ち。入りきらない端末では枠のほうが縮む）。
+const SHEET_HEIGHT = 640;
 
 let groupSeq = 0;
 const newGroupKey = () => `group-${(groupSeq += 1)}`;
@@ -154,7 +156,6 @@ export default function RecordEditor({
   initialAmount = null,
   initialItems = null,
 }: RecordEditorProps) {
-  const insets = useSafeAreaInsets();
   const [kind, setKind] = useState<MoneyRecordKind>(record?.kind ?? (receipt ? 'expense' : initialKind));
   const [occurredOn, setOccurredOn] = useState(record?.occurredOn ?? receipt?.occurredOn ?? initialDate ?? toDateString(new Date()));
   // レシートから出金元が当たらなかったときは、前回の出金元を入れて「確かめてください」を出す（§10.4）。
@@ -392,18 +393,22 @@ export default function RecordEditor({
           />
         );
       case 'wallet':
+        // 出金元の選択はそれ自体が下から出る枠（SheetModal）。枠の下には入力の画面を残して重ねる。
         return (
-          <WalletPicker
-            title={screen.field === 'toWalletId' ? '入金先を選ぶ' : kind === 'income' ? '入金先を選ぶ' : '出金元を選ぶ'}
-            wallets={wallets}
-            selectedId={screen.field === 'toWalletId' ? toWalletId : walletId}
-            onPick={(id) => {
-              if (screen.field === 'toWalletId') setToWalletId(id);
-              else setWalletId(id);
-              pop();
-            }}
-            onClose={back}
-          />
+          <>
+            {renderEdit()}
+            <WalletPicker
+              title={screen.field === 'toWalletId' ? '入金先を選ぶ' : kind === 'income' ? '入金先を選ぶ' : '出金元を選ぶ'}
+              wallets={wallets}
+              selectedId={screen.field === 'toWalletId' ? toWalletId : walletId}
+              onPick={(id) => {
+                if (screen.field === 'toWalletId') setToWalletId(id);
+                else setWalletId(id);
+                pop();
+              }}
+              onClose={back}
+            />
+          </>
         );
       case 'store':
         return (
@@ -674,14 +679,13 @@ export default function RecordEditor({
   );
 
   return (
-    <Modal visible animationType="slide" onRequestClose={back}>
-      <View style={[styles.frame, { paddingTop: insets.top, paddingBottom: insets.bottom }]} {...swipeBoundary}>{renderScreen()}</View>
-    </Modal>
+    <SheetModal visible onClose={back} height={SHEET_HEIGHT}>
+      {renderScreen()}
+    </SheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  frame: { flex: 1, backgroundColor: colors.surface },
   screen: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
   content: { paddingTop: 4, paddingBottom: 16 },
