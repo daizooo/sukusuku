@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import Modal from '@/components/ui/Modal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, ChevronRight, GripVertical, Palette, X } from 'lucide-react-native';
+import { Check, ChevronRight, GripVertical, Palette, Plus, X } from 'lucide-react-native';
 import type { MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/lib/theme';
@@ -15,7 +15,7 @@ import {
   MONEY_ICONS,
   topCategories,
 } from '@/lib/moneyUtils';
-import { insertDefaultMoneyCategories, updateMoneyCategory } from '@/lib/api/money';
+import { insertDefaultMoneyCategories, insertMoneyCategory, updateMoneyCategory } from '@/lib/api/money';
 import { useDragReorder } from '@/components/list/useDragReorder';
 import LogModalShell from '@/components/log/LogModalShell';
 import SheetModal from '@/components/ui/SheetModal';
@@ -32,6 +32,8 @@ import { CategoryIcon, PrimaryButton, ScreenHeader } from '@/components/money/mo
 // 小分類のボタンにもアイコンを出し、押すとその小分類の絵と色を選べる（固定費・特別費の行に出るアイコン。2026-10-25）。
 // シートとアイコンの選択は同時に出せないので、「アイコンを変える」・小分類を押すとシートを閉じてから開く。
 // カテゴリがまだ無い家族には「標準のカテゴリで始める」（Zaim のカテゴリをもとにした並び）。
+// 例外: 特別費の小分類は予算を持たないので、ここで足す・名前を直す・使わなくする（2026-10-31。docs/kakei.md §0.10.1）。
+// 特別費のシートに「小分類を足す」を出し、小分類を押した画面で名前・アイコン・使う／使わないを直す（消さない。記録は小分類に付いたまま）。
 
 interface CategoryEditorProps {
   familyId: string;
@@ -40,7 +42,8 @@ interface CategoryEditorProps {
   onClose: () => void;
 }
 
-type Editing = { category: MoneyCategory } | null;
+/** アイコン（特別費の小分類は名前も）を直すカテゴリ、または特別費に足す小分類（parent）。 */
+type Editing = { category: MoneyCategory } | { parent: MoneyCategory } | null;
 
 const KIND_OPTIONS: { id: MoneyCategoryKind; label: string }[] = [
   { id: 'living', label: '支出' },
@@ -105,16 +108,48 @@ export default function CategoryEditor({
     const target = editing;
     setEditing(null);
     if (target === null) return;
+    if ('parent' in target) {
+      const siblings = childCategories(categories, target.parent.id, true);
+      try {
+        const created = await insertMoneyCategory(supabase, familyId, {
+          kind: target.parent.kind,
+          parentId: target.parent.id,
+          name: result.name,
+          icon: result.icon,
+          iconColor: result.iconColor,
+          position: siblings.reduce((max, entry) => Math.max(max, entry.position), -1) + 1,
+        });
+        onCategories((prev) => [...prev, created]);
+      } catch {
+        failed('追加');
+      }
+      return;
+    }
     const category = target.category;
-    if (result.icon === category.icon && result.iconColor === category.iconColor) return;
+    const name = result.name.trim() === '' ? category.name : result.name.trim();
+    if (result.icon === category.icon && result.iconColor === category.iconColor && name === category.name && result.archived === category.archived) return;
     try {
-      replace(await updateMoneyCategory(supabase, category.id, { icon: result.icon, iconColor: result.iconColor }));
+      replace(
+        await updateMoneyCategory(supabase, category.id, {
+          icon: result.icon,
+          iconColor: result.iconColor,
+          ...(name !== category.name && { name }),
+          ...(result.archived !== category.archived && { archived: result.archived }),
+        }),
+      );
     } catch {
       failed('保存');
     }
   };
 
   const children = openTop ? childCategories(categories, openTop.id, true) : [];
+  // 特別費の小分類は、ここで足す・名前を直す（予算を持たないので、年間予算では扱わない）
+  const ownsChildren = openTop?.budgetGroup === 'temporary';
+  /** 名前を直せるカテゴリ（特別費の小分類）。 */
+  const namesHere = (category: MoneyCategory) =>
+    category.parentId !== null && categories.find((entry) => entry.id === category.parentId)?.budgetGroup === 'temporary';
+  const editingCategory = editing !== null && 'category' in editing ? editing.category : null;
+  const editingParentId = editing === null ? null : 'parent' in editing ? editing.parent.id : editing.category.parentId;
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -195,7 +230,7 @@ export default function CategoryEditor({
               </View>
               {children.length > 0 && (
                 <Text style={styles.sheetHint}>
-                  {children.length >= 2 ? '押すとアイコンを変えられます。長押しして動かすと、並びを変えられます' : '押すとアイコンを変えられます'}
+                  {`${ownsChildren ? '押すと名前やアイコンを変えられます' : '押すとアイコンを変えられます'}${children.length >= 2 ? '。長押しして動かすと、並びを変えられます' : ''}`}
                 </Text>
               )}
               <ScrollView style={styles.sheetScroll} scrollEnabled={!drag.isActive}>
@@ -209,7 +244,7 @@ export default function CategoryEditor({
                       <Pressable
                         {...drag.holdProps(`children-${openTop.id}`, children, child.id)}
                         accessibilityRole="button"
-                        accessibilityLabel={`${child.name}のアイコンを変える`}
+                        accessibilityLabel={ownsChildren ? `${child.name}を直す` : `${child.name}のアイコンを変える`}
                         onPress={() => {
                           setOpenId(null);
                           setEditing({ category: child });
@@ -223,6 +258,19 @@ export default function CategoryEditor({
                   ))}
                 </View>
               </ScrollView>
+              {ownsChildren && (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setOpenId(null);
+                    setEditing({ parent: openTop });
+                  }}
+                  style={({ pressed }) => [styles.editTop, pressed && styles.editTopPressed]}
+                >
+                  <Plus size={18} color={colors.money} />
+                  <Text style={styles.editTopText}>小分類を足す</Text>
+                </Pressable>
+              )}
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`${openTop.name}のアイコンを変える`}
@@ -241,8 +289,16 @@ export default function CategoryEditor({
 
         {editing !== null && (
           <CategorySheet
-            key={editing.category.id}
-            category={editing.category}
+            key={editingCategory?.id ?? 'new'}
+            category={editingCategory}
+            nameEditable={editingCategory === null || namesHere(editingCategory)}
+            siblingNames={
+              editingParentId === null
+                ? []
+                : childCategories(categories, editingParentId, true)
+                    .filter((entry) => entry.id !== editingCategory?.id)
+                    .map((entry) => entry.name)
+            }
             onClose={() => setEditing(null)}
             onSubmit={(result) => void save(result)}
           />
@@ -253,31 +309,75 @@ export default function CategoryEditor({
 }
 
 interface SheetResult {
+  /** 名前（名前を直せないカテゴリは、今の名前のまま）。 */
+  name: string;
+  /** 使わない（特別費の小分類だけ。ほかは今のまま）。 */
+  archived: boolean;
   /** アイコン。 */
   icon: string | null;
   /** アイコンの色。null は標準（アイコンごとの色）。 */
   iconColor: string | null;
 }
 
-/** 大分類のアイコン（絵と色）を選ぶ。名前は年間予算で直す。 */
+/**
+ * カテゴリのアイコン（絵と色）を選ぶ。名前は年間予算で直す。特別費の小分類（nameEditable）は、名前と使う／使わないもここで直す。
+ * category が null なら、特別費に足す小分類（名前・アイコン）。
+ */
 function CategorySheet({
   category,
+  nameEditable,
+  siblingNames,
   onClose,
   onSubmit,
 }: {
-  category: MoneyCategory;
+  category: MoneyCategory | null;
+  nameEditable: boolean;
+  /** 同じ大分類の、ほかの小分類の名前（同じ名前は付けない）。 */
+  siblingNames: string[];
   onClose: () => void;
   onSubmit: (result: SheetResult) => void;
 }) {
+  const [name, setName] = useState(category?.name ?? '');
+  const [archived, setArchived] = useState(category?.archived ?? false);
   // 自動は無し。決めていないカテゴリは、今の名前から近いものを選んだ状態で始める。
-  const [icon, setIcon] = useState<string>(category.icon ?? guessIconKey(category.name));
-  const [iconColor, setIconColor] = useState<string | null>(category.iconColor ?? null);
+  const [icon, setIcon] = useState<string>(category?.icon ?? guessIconKey(category?.name ?? ''));
+  const [iconColor, setIconColor] = useState<string | null>(category?.iconColor ?? null);
   const [pickingColor, setPickingColor] = useState(false);
+
+  const trimmed = name.trim();
+  const problem = !nameEditable ? null : trimmed === '' ? '名前を入れてください' : siblingNames.includes(trimmed) ? '同じ名前の小分類があります' : null;
+  const submit = () => {
+    if (problem !== null) {
+      Alert.alert(problem);
+      return;
+    }
+    onSubmit({ name: nameEditable ? trimmed : (category?.name ?? ''), archived, icon, iconColor });
+  };
 
   return (
     <SheetModal visible onClose={onClose}>
-      <LogModalShell title={category.name} onClose={onClose} footer={<PrimaryButton label="保存する" onPress={() => onSubmit({ icon, iconColor })} />}>
-        <Text style={styles.hint}>名前の変更・追加は、年間予算で行います。</Text>
+      <LogModalShell
+        title={category === null ? '小分類を足す' : category.name}
+        onClose={onClose}
+        footer={<PrimaryButton label={category === null ? '足す' : '保存する'} onPress={submit} />}
+      >
+        {nameEditable ? (
+          <View style={styles.field}>
+            <Text style={styles.label}>名前</Text>
+            <TextInput value={name} onChangeText={setName} placeholder="例: 引き落とし" placeholderTextColor={colors.textFaint} style={styles.input} />
+          </View>
+        ) : (
+          <Text style={styles.hint}>名前の変更・追加は、年間予算で行います。</Text>
+        )}
+        {nameEditable && category !== null && (
+          <View style={styles.switchRow}>
+            <View style={styles.flex}>
+              <Text style={styles.switchLabel}>使う</Text>
+              <Text style={styles.hint}>使わない小分類は、記録で選べなくなります（今までの記録はそのまま）</Text>
+            </View>
+            <Switch value={!archived} onValueChange={(value) => setArchived(!value)} />
+          </View>
+        )}
         <View style={styles.field}>
           <Text style={styles.label}>アイコン</Text>
           {/* アイコンをタップすると色を選べる（出金元のアイコンの色と同じ候補）。 */}
@@ -412,6 +512,18 @@ const styles = StyleSheet.create({
   field: { gap: 6 },
   label: { fontSize: 12, fontWeight: '700', color: colors.textSubtle },
   hint: { fontSize: 11, fontWeight: '500', color: colors.textFaint },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
+  switchLabel: { fontSize: 15, fontWeight: '600', color: colors.text },
   icons: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   iconChoice: {
     width: 46,

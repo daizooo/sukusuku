@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Check, ChevronRight, GripVertical, Palette, X } from 'lucide-react';
+import { Check, ChevronRight, GripVertical, Palette, Plus, X } from 'lucide-react';
 import type { MoneyCategory, MoneyCategoryKind } from '@/types/app';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -12,7 +12,7 @@ import {
   MONEY_ICONS,
   topCategories,
 } from '@/lib/moneyUtils';
-import { insertDefaultMoneyCategories, updateMoneyCategory } from '@/lib/api/money';
+import { insertDefaultMoneyCategories, insertMoneyCategory, updateMoneyCategory } from '@/lib/api/money';
 import { useBackLayer } from '@/lib/browserHistory';
 import { ModalShell } from '../modals/TaskForm';
 import { useBackdropClose } from '../ui/useBackdropClose';
@@ -32,6 +32,8 @@ import { CategoryIcon, FullScreen, PrimaryButton, ScreenHeader } from './moneyVi
 // 小分類のボタンにもアイコンを出し、押すとその小分類の絵と色を選べる（固定費・特別費の行に出るアイコン。2026-10-25）。
 // シートとアイコンの選択は同時に出せないので、「アイコンを変える」・小分類を押すとシートを閉じてから開く。
 // カテゴリがまだ無い家族には「標準のカテゴリで始める」（Zaim のカテゴリをもとにした並び）。
+// 例外: 特別費の小分類は予算を持たないので、ここで足す・名前を直す・使わなくする（2026-10-31。docs/kakei.md §0.10.1）。
+// 特別費のシートに「小分類を足す」を出し、小分類を押した画面で名前・アイコン・使う／使わないを直す（消さない。記録は小分類に付いたまま）。
 
 interface CategoryEditorProps {
   familyId: string;
@@ -40,7 +42,8 @@ interface CategoryEditorProps {
   onClose: () => void;
 }
 
-type Editing = { category: MoneyCategory } | null;
+/** アイコン（特別費の小分類は名前も）を直すカテゴリ、または特別費に足す小分類（parent）。 */
+type Editing = { category: MoneyCategory } | { parent: MoneyCategory } | null;
 
 const KIND_OPTIONS: { id: MoneyCategoryKind; label: string }[] = [
   { id: 'living', label: '支出' },
@@ -104,14 +107,45 @@ export default function CategoryEditor({
     const target = editing;
     setEditing(null);
     if (target === null) return;
+    if ('parent' in target) {
+      const siblings = childCategories(categories, target.parent.id, true);
+      try {
+        const created = await insertMoneyCategory(supabase, familyId, {
+          kind: target.parent.kind,
+          parentId: target.parent.id,
+          name: result.name,
+          icon: result.icon,
+          iconColor: result.iconColor,
+          position: siblings.reduce((max, entry) => Math.max(max, entry.position), -1) + 1,
+        });
+        onCategories((prev) => [...prev, created]);
+      } catch {
+        failed('追加');
+      }
+      return;
+    }
     const category = target.category;
-    if (result.icon === category.icon && result.iconColor === category.iconColor) return;
+    const name = result.name.trim() === '' ? category.name : result.name.trim();
+    if (result.icon === category.icon && result.iconColor === category.iconColor && name === category.name && result.archived === category.archived) return;
     try {
-      replace(await updateMoneyCategory(supabase, category.id, { icon: result.icon, iconColor: result.iconColor }));
+      replace(
+        await updateMoneyCategory(supabase, category.id, {
+          icon: result.icon,
+          iconColor: result.iconColor,
+          ...(name !== category.name && { name }),
+          ...(result.archived !== category.archived && { archived: result.archived }),
+        }),
+      );
     } catch {
       failed('保存');
     }
   };
+
+  /** 名前を直せるカテゴリ（特別費の小分類。予算を持たないので、年間予算では扱わない）。 */
+  const namesHere = (category: MoneyCategory) =>
+    category.parentId !== null && categories.find((entry) => entry.id === category.parentId)?.budgetGroup === 'temporary';
+  const editingCategory = editing !== null && 'category' in editing ? editing.category : null;
+  const editingParentId = editing === null ? null : 'parent' in editing ? editing.parent.id : editing.category.parentId;
 
   return (
     <FullScreen onBack={onClose}>
@@ -182,14 +216,30 @@ export default function CategoryEditor({
             setOpenId(null);
             setEditing({ category });
           }}
+          onAdd={
+            openTop.budgetGroup === 'temporary'
+              ? () => {
+                  setOpenId(null);
+                  setEditing({ parent: openTop });
+                }
+              : null
+          }
           onClose={() => setOpenId(null)}
         />
       )}
 
       {editing !== null && (
         <CategoryModal
-          key={editing.category.id}
-          category={editing.category}
+          key={editingCategory?.id ?? 'new'}
+          category={editingCategory}
+          nameEditable={editingCategory === null || namesHere(editingCategory)}
+          siblingNames={
+            editingParentId === null
+              ? []
+              : childCategories(categories, editingParentId, true)
+                  .filter((entry) => entry.id !== editingCategory?.id)
+                  .map((entry) => entry.name)
+          }
           onClose={() => setEditing(null)}
           onSubmit={(result) => void save(result)}
         />
@@ -205,13 +255,16 @@ function ChildSheet({
   items,
   drag,
   onEditIcon,
+  onAdd,
   onClose,
 }: {
   top: MoneyCategory;
   items: MoneyCategory[];
   drag: DragReorder;
-  /** 大分類・小分類のアイコンを変える。 */
+  /** 大分類・小分類のアイコン（特別費の小分類は名前も）を変える。 */
   onEditIcon: (category: MoneyCategory) => void;
+  /** 小分類を足す（特別費だけ。ほかは null）。 */
+  onAdd: (() => void) | null;
   onClose: () => void;
 }) {
   useBackLayer(onClose);
@@ -237,7 +290,7 @@ function ChildSheet({
         </div>
         {items.length > 0 && (
           <p className="shrink-0 px-4 pb-2 text-[13px] font-medium text-gray-500">
-            {items.length >= 2 ? '押すとアイコンを変えられます。長押しして動かすと、並びを変えられます' : '押すとアイコンを変えられます'}
+            {`${onAdd !== null ? '押すと名前やアイコンを変えられます' : '押すとアイコンを変えられます'}${items.length >= 2 ? '。長押しして動かすと、並びを変えられます' : ''}`}
           </p>
         )}
         <div className="grid min-h-0 grid-cols-2 gap-2 overflow-y-auto px-4 pb-1">
@@ -247,7 +300,7 @@ function ChildSheet({
               type="button"
               ref={drag.dragRef(child.id)}
               {...drag.handleProps(`children-${top.id}`, items, child.id)}
-              aria-label={`${child.name}のアイコンを変える`}
+              aria-label={onAdd !== null ? `${child.name}を直す` : `${child.name}のアイコンを変える`}
               onClick={() => onEditIcon(child)}
               className={`flex min-h-12 select-none items-center gap-2 rounded-xl border bg-white px-3 py-2 text-left text-[15px] font-semibold leading-tight text-gray-900 ${
                 child.archived ? 'opacity-50' : ''
@@ -258,7 +311,17 @@ function ChildSheet({
             </button>
           ))}
         </div>
-        <div className="shrink-0 px-4 pb-6 pt-2.5 sm:pb-4">
+        <div className="shrink-0 space-y-2.5 px-4 pb-6 pt-2.5 sm:pb-4">
+          {onAdd !== null && (
+            <button
+              type="button"
+              onClick={onAdd}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 text-[15px] font-bold text-blue-800 active:bg-blue-100"
+            >
+              <Plus size={18} className="text-blue-600" />
+              小分類を足す
+            </button>
+          )}
           <button
             type="button"
             aria-label={`${top.name}のアイコンを変える`}
@@ -275,6 +338,10 @@ function ChildSheet({
 }
 
 interface SheetResult {
+  /** 名前（名前を直せないカテゴリは、今の名前のまま）。 */
+  name: string;
+  /** 使わない（特別費の小分類だけ。ほかは今のまま）。 */
+  archived: boolean;
   /** アイコン。 */
   icon: string | null;
   /** アイコンの色。null は標準（アイコンごとの色）。 */
@@ -283,25 +350,71 @@ interface SheetResult {
 
 const labelClass = 'block text-xs font-bold text-gray-700 mb-1.5';
 
-/** 大分類のアイコン（絵と色）を選ぶ。名前は年間予算で直す。 */
+/**
+ * カテゴリのアイコン（絵と色）を選ぶ。名前は年間予算で直す。特別費の小分類（nameEditable）は、名前と使う／使わないもここで直す。
+ * category が null なら、特別費に足す小分類（名前・アイコン）。
+ */
 function CategoryModal({
   category,
+  nameEditable,
+  siblingNames,
   onClose,
   onSubmit,
 }: {
-  category: MoneyCategory;
+  category: MoneyCategory | null;
+  nameEditable: boolean;
+  /** 同じ大分類の、ほかの小分類の名前（同じ名前は付けない）。 */
+  siblingNames: string[];
   onClose: () => void;
   onSubmit: (result: SheetResult) => void;
 }) {
+  const [name, setName] = useState(category?.name ?? '');
+  const [archived, setArchived] = useState(category?.archived ?? false);
   // 自動は無し。決めていないカテゴリは、今の名前から近いものを選んだ状態で始める。
-  const [icon, setIcon] = useState<string>(category.icon ?? guessIconKey(category.name));
-  const [iconColor, setIconColor] = useState<string | null>(category.iconColor ?? null);
+  const [icon, setIcon] = useState<string>(category?.icon ?? guessIconKey(category?.name ?? ''));
+  const [iconColor, setIconColor] = useState<string | null>(category?.iconColor ?? null);
   const [pickingColor, setPickingColor] = useState(false);
 
+  const trimmed = name.trim();
+  const problem = !nameEditable ? null : trimmed === '' ? '名前を入れてください' : siblingNames.includes(trimmed) ? '同じ名前の小分類があります' : null;
+  const submit = () => {
+    if (problem !== null) {
+      window.alert(problem);
+      return;
+    }
+    onSubmit({ name: nameEditable ? trimmed : (category?.name ?? ''), archived, icon, iconColor });
+  };
+
   return (
-    <ModalShell title={category.name} onClose={onClose} footer={<PrimaryButton label="保存する" onClick={() => onSubmit({ icon, iconColor })} />}>
+    <ModalShell
+      title={category === null ? '小分類を足す' : category.name}
+      onClose={onClose}
+      footer={<PrimaryButton label={category === null ? '足す' : '保存する'} onClick={submit} />}
+    >
       <div className="space-y-4">
-        <p className="text-xs text-gray-500">名前の変更・追加は、年間予算で行います。</p>
+        {nameEditable ? (
+          <label className="block">
+            <span className={labelClass}>名前</span>
+            <input
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="例: 引き落とし"
+              className="w-full rounded-[10px] border border-gray-300 px-3 py-2.5 text-[15px] text-gray-900"
+            />
+          </label>
+        ) : (
+          <p className="text-xs text-gray-500">名前の変更・追加は、年間予算で行います。</p>
+        )}
+        {nameEditable && category !== null && (
+          <label className="flex items-center gap-3 py-1">
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-semibold text-gray-900">使う</span>
+              <span className="block text-[11px] text-gray-500">使わない小分類は、記録で選べなくなります（今までの記録はそのまま）</span>
+            </span>
+            <input type="checkbox" checked={!archived} onChange={(event) => setArchived(!event.target.checked)} className="h-5 w-5" />
+          </label>
+        )}
         <div>
           <span className={labelClass}>アイコン</span>
           {/* アイコンをタップすると色を選べる（出金元のアイコンの色と同じ候補）。 */}
