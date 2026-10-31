@@ -9,11 +9,16 @@ import KeyboardAvoidingView from './KeyboardAvoidingView';
  * 使い方は react-native の Modal と同じ（import 元を変えるだけ）。transparent の枠
  * （SheetModal・RecurrenceModal など）は、各自の KeyboardAvoidingView で
  * 枠の位置まで考えて避けているので、ここでは何も足さない。
+ *
+ * 全画面のモーダルは、statusBarTranslucent・navigationBarTranslucent で画面の端（上の帯・下の操作バーの裏）まで広げる。
+ * アプリは edge-to-edge なのに、付けないと Modal のウィンドウだけが上の帯の下から始まり、下の操作バーの手前で終わる。
+ * 中身は useSafeAreaInsets（アプリ本体の値）で上下を空けているので、余白が二重になり、下の端に下の画面がのぞいていた
+ * （2026-10-31。transparent の枠は #362 で同じように直した）。
  */
 export default function Modal({ children, ...props }: ModalProps) {
   if (props.transparent) return <RNModal {...props}>{children}</RNModal>;
   return (
-    <RNModal {...props}>
+    <RNModal statusBarTranslucent navigationBarTranslucent {...props}>
       <KeyboardAvoidingView style={styles.fill}>
         {children}
       </KeyboardAvoidingView>
