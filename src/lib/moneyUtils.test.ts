@@ -14,7 +14,6 @@ import {
   spendRatio,
   UNCATEGORIZED,
   fixedBudgetRows,
-  reserveYearRows,
   budgetLinesOf,
   manualBudgetFor,
   scheduledFixedInMonth,
@@ -323,8 +322,8 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
     { id: 'house', kind: 'living', parentId: null, archived: false, position: 1, name: '固定費', budgetGroup: 'fixed' },
     { id: 'rent', kind: 'living', parentId: 'house', archived: false, position: 0, name: '家賃', budgetGroup: 'variable' },
     { id: 'tax', kind: 'living', parentId: 'house', archived: false, position: 1, name: '自動車税', budgetGroup: 'variable' },
-    { id: 'res', kind: 'living', parentId: null, archived: false, position: 2, name: '予備費', budgetGroup: 'reserve' },
-    { id: 'trip', kind: 'living', parentId: 'res', archived: false, position: 0, name: '旅行', budgetGroup: 'variable' },
+    { id: 'temp', kind: 'living', parentId: null, archived: false, position: 2, name: '特別費', budgetGroup: 'temporary' },
+    { id: 'trip', kind: 'living', parentId: 'temp', archived: false, position: 0, name: '旅行', budgetGroup: 'variable' },
     { id: 'salary', kind: 'income', parentId: null, archived: false, position: 0, name: '給料', budgetGroup: 'variable' },
   ] as unknown as MoneyCategory[];
   const buds: MoneyBudget[] = [{ id: 'b1', categoryId: 'food', year: 2026, monthAmounts: Array.from({ length: 12 }, () => 50000) }];
@@ -336,7 +335,6 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
     line({ id: 'sal', categoryId: 'salary', amount: 300000 }),
     line({ id: 'rent', categoryId: 'rent', amount: 80000 }),
     line({ id: 'tax', categoryId: 'tax', amount: 30000, months: [5] }),
-    line({ id: 'trip', categoryId: 'trip', amount: 100000, noMonth: true }),
     line({ id: 'end', categoryId: 'rent', amount: 10000, endMonth: '2026-11' }), // 11月まで
   ];
   const r = (id: string, occurredOn: string, kind: MoneyRecord['kind'], amount: number, categoryId: string) =>
@@ -360,23 +358,20 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
   assert.equal(budgetLineShortLabel(line({ amount: 30000, months: [2, 4, 6, 8, 10, 12] })), `${formatYen(30000)} × 偶数月`);
   assert.equal(budgetLineShortLabel(line({ amount: 47500, months: [2], startMonth: '2028-02', intervalYears: 2 })), `${formatYen(47500)} × 2月・2年ごと`);
   assert.equal(spendGroupOf('rent', cats), 'confirmed', '大分類の予算の分け方で決まる（固定費は確定）');
-  assert.equal(spendGroupOf('trip', cats), 'reserve');
+  assert.equal(spendGroupOf('trip', cats), 'temporary', '特別費の小分類（旧予備費）は特別費');
   assert.equal(spendGroupOf('food', cats), 'variable');
   assert.equal(spendGroupOf(null, cats), 'variable');
   const plan = budgetPlanInYear(lines, cats, 2026);
   assert.equal(plan.months.income[0], 300000);
   assert.equal(plan.months.confirmed[4], 80000 + 10000 + 30000, '5月は家賃・期間の中のもの・5月だけのもの');
   assert.equal(plan.months.confirmed[11], 80000, '期間の外は数えない');
-  assert.equal(plan.noMonth.reserve, 25000, '発生月なしは月に置かない。集計を始めた2026年の予備費は3/12');
-  assert.equal(plan.totals.reserve, 25000);
-  assert.equal(budgetPlanInYear(lines, cats, 2027).noMonth.reserve, 100000, '2027年からは年の額のまま');
   const fixedNoMonth = line({ id: 'club', categoryId: 'rent', amount: 4500, noMonth: true });
   assert.equal(noMonthYearAmount(fixedNoMonth, 'confirmed', 2026), 0, '2026年の発生月なしの固定費はもう済んだので0');
   assert.equal(noMonthYearAmount(fixedNoMonth, 'confirmed', 2027), 4500);
 
   const landing = buildYearLanding(rs, cats, buds, lines, closings, 2026, '2026-10');
   assert.ok(landing);
-  assert.equal(landing.unscheduled, 0, '発生月なしは、年の額（2026年は3/12の25000）− 今月までの実績（30000）。0 未満は 0');
+  assert.equal(landing.unscheduled, 0, '発生月なしの予算が無ければ0');
   assert.deepEqual(
     landing.months.filter((m) => m.counted).map((m) => [m.monthKey, m.closed, m.balance]),
     [
@@ -392,7 +387,7 @@ assert.equal(budgetFor(budgets, 'med', '2026-01'), 5000);
   assert.equal(landing.expense, landing.income - landing.total);
 
   const open = buildYearLanding(rs, cats, buds, lines, [], 2026, '2026-10');
-  assert.equal(open?.months[9].balance, 300000 - 100000 - 90000 - 30000, '締めていない今月は、予算と実績の大きいほう（食費は実績、家賃は予算、旅行は実績）');
+  assert.equal(open?.months[9].balance, 300000 - 100000 - 90000 - 30000, '締めていない今月は、予算と実績の大きいほう（食費は実績、家賃は予算、特別費の旅行は実績）');
   assert.equal(open?.unscheduled, 0);
   assert.equal(open?.months[9].actualBalance, 300000 - 100000 - 30000, '今月は実績の収支も持つ（月の振り返りの収支と同じ。着地見込みには使わない）');
   assert.equal(open?.months[9].actualCumulative, 300000 - 100000 - 30000, '今月の実績の累計（その前の月までの累計 ＋ 今月の実績の収支）');
@@ -1303,8 +1298,7 @@ assert.deepEqual(
     { id: 'club', kind: 'living', parentId: 'fixed', archived: false, position: 1, name: '自治会費', budgetGroup: 'variable' },
     { id: 'est', kind: 'living', parentId: null, archived: false, position: 2, name: '固定費（見込み）', budgetGroup: 'estimate' },
     { id: 'phone', kind: 'living', parentId: 'est', archived: false, position: 0, name: 'スマホ', budgetGroup: 'variable' },
-    { id: 'res', kind: 'living', parentId: null, archived: false, position: 3, name: '予備費', budgetGroup: 'reserve' },
-    { id: 'gift', kind: 'living', parentId: 'res', archived: false, position: 0, name: '誕生日お祝い', budgetGroup: 'variable' },
+    { id: 'gift', kind: 'living', parentId: 'fixed', archived: false, position: 2, name: '誕生日お祝い', budgetGroup: 'variable' },
   ] as unknown as MoneyCategory[];
   const row = (id: string, position: number, over: Partial<MoneyRecurring>) =>
     ({
@@ -1331,7 +1325,7 @@ assert.deepEqual(
     row('old', 9, { categoryId: 'gift', amount: 9999, archived: true }),
   ];
 
-  // 収入・予備費・固定費は予算の明細の形に。変動費・振替・使っていない行は入れない
+  // 収入・固定費は予算の明細の形に。変動費・振替・使っていない行は入れない
   const lines = budgetLinesOf(rows, cats);
   assert.deepEqual(lines.map((line) => line.id), ['tax', 'club', 'phone', 'gift', 'gift2']);
   // 同じ月の2人（8月の誕生日）は1件ずつ持てて、年に2回ぶん
@@ -1349,7 +1343,7 @@ assert.deepEqual(
   assert.deepEqual(
     names(scheduledFixedInMonth(rows, [], cats, '2027-05', today)),
     [['tax', '2027-05', '2027-05-31'], ['phone', '2027-05', '2027-05-31']],
-    '発生月なし（自治会費）・予備費・変動費は出さない。記録する日は月末',
+    '発生月なし（自治会費）・その月に発生しないもの（誕生日お祝い）・変動費は出さない。記録する日は月末',
   );
   assert.deepEqual(
     names(scheduledFixedInMonth(rows, [spent('p', '2027-05-20', 'phone', 3300)], cats, '2027-05', today)).map((entry) => entry[0]),
@@ -1369,7 +1363,7 @@ assert.deepEqual(
   assert.equal(scheduledFixedInMonth(rows, [], cats, '2025-12', today).length, 0, '予算を作る前の月は出さない');
 }
 
-// ---- 予備費・支出の分け方（変動費・予備費・固定費。docs/kakei.md §0.7） ----
+// ---- 支出の分け方（変動費・固定費・特別費。docs/kakei.md §0.7） ----
 {
   const cats = [
     { id: 'food', kind: 'living', parentId: null, archived: false, position: 0, name: '食費', budgetGroup: 'variable' },
@@ -1381,9 +1375,9 @@ assert.deepEqual(
     { id: 'vfixed', kind: 'living', parentId: null, archived: false, position: 3, name: '変動固定費', budgetGroup: 'estimate' },
     { id: 'car', kind: 'living', parentId: 'vfixed', archived: false, position: 0, name: '自動車保険', budgetGroup: 'variable' },
     { id: 'oil', kind: 'living', parentId: 'vfixed', archived: false, position: 1, name: 'オイル交換', budgetGroup: 'variable' },
-    { id: 'res', kind: 'living', parentId: null, archived: false, position: 4, name: '予備費', budgetGroup: 'reserve' },
-    { id: 'gift', kind: 'living', parentId: 'res', archived: false, position: 0, name: '冠婚葬祭', budgetGroup: 'variable' },
-    { id: 'trip', kind: 'living', parentId: 'res', archived: false, position: 1, name: '旅行', budgetGroup: 'variable' },
+    { id: 'temp', kind: 'living', parentId: null, archived: false, position: 4, name: '特別費', budgetGroup: 'temporary' },
+    { id: 'gift', kind: 'living', parentId: 'temp', archived: false, position: 0, name: '冠婚葬祭', budgetGroup: 'variable' },
+    { id: 'trip', kind: 'living', parentId: 'temp', archived: false, position: 1, name: '旅行', budgetGroup: 'variable' },
     { id: 'salary', kind: 'income', parentId: null, archived: false, position: 0, name: '給与', budgetGroup: 'variable' },
     { id: 'bonus', kind: 'income', parentId: null, archived: false, position: 1, name: '賞与', budgetGroup: 'variable' },
   ] as unknown as MoneyCategory[];
@@ -1399,7 +1393,6 @@ assert.deepEqual(
     line({ id: 'l1', categoryId: 'rent', amount: 80000 }),
     line({ id: 'l2', categoryId: 'car', amount: 33000, months: [6] }),
     line({ id: 'l3', categoryId: 'oil', amount: 7000, noMonth: true }),
-    line({ id: 'l4', categoryId: 'gift', amount: 50000, noMonth: true }),
   ];
   const rec = (id: string, occurredOn: string, kind: MoneyRecord['kind'], items: [string, number][]) =>
     ({ id, occurredOn, kind, items: items.map(([categoryId, amount], index) => ({ id: `${id}-${index}`, categoryId, categoryName: '', amount })) }) as unknown as MoneyRecord;
@@ -1415,27 +1408,22 @@ assert.deepEqual(
   assert.equal(spendGroupOf('elec', cats), 'variable', '電気は水道光熱費（変動費）で数える（ルールがあっても）');
   assert.equal(spendGroupOf('rent', cats), 'confirmed');
   assert.equal(spendGroupOf('oil', cats), 'estimate', 'ルール・予算が無くても、大分類が変動固定費なら見込み');
-  assert.equal(spendGroupOf('gift', cats), 'reserve');
+  assert.equal(spendGroupOf('gift', cats), 'temporary');
 
   const summary = periodSummary(rs, cats, ['2027-06']);
   assert.deepEqual(summary.income.map((part) => [part.name, part.amount]), [['給与', 195000], ['賞与', 415000]], '収入は大分類ごと（カテゴリの並び）');
-  assert.deepEqual([summary.variable, summary.reserve, summary.confirmed, summary.estimate], [77000, 10000, 80000, 41700]);
+  assert.deepEqual([summary.variable, summary.confirmed, summary.estimate, summary.temporary], [77000, 80000, 41700, 10000]);
   assert.equal(summary.expenseTotal, 208700);
 
   assert.deepEqual(
     variableTiles(rs, cats, buds, ['2027-06']).map((tile) => [tile.category.id, tile.actual, tile.budget]),
     [['food', 68000, 75000], ['util', 9000, 32000]],
-    '変動費の大分類だけ（予備費・固定費の品目は除く）',
+    '変動費の大分類だけ（特別費・固定費の品目は除く）',
   );
   assert.deepEqual(
     fixedSpendInMonth(rs, cats, '2027-06').map((entry) => [entry.categoryId, entry.mode, entry.amount]),
     [['car', 'estimate', 34200], ['oil', 'estimate', 7500], ['rent', 'confirmed', 80000]],
     'その月の固定費の記録（日付の順）',
-  );
-  assert.deepEqual(
-    reserveYearRows(lines, cats, rs, 2027).map((row) => [row.categoryId, row.amount, row.spent]),
-    [['gift', 50000, 10000], ['trip', 0, 0]],
-    '予備費の小分類ごとの年の予算と使った額',
   );
   assert.deepEqual(
     fixedBudgetRows(lines, cats, rs, 2027, '2027-06').map((row) => [row.categoryId, row.mode, row.budget, row.budgetToDate, row.actual]),
@@ -1446,22 +1434,18 @@ assert.deepEqual(
   // 振り返りの種類ごとの一覧（docs/kakei.md §0.9）
   const month = buildReviewSections(rs, cats, buds, lines, ['2027-06'], false);
   assert.deepEqual(month.variable.map((tile) => [tile.category.id, tile.actual, tile.budget]), [['food', 68000, 75000], ['util', 9000, 32000]]);
-  assert.deepEqual(month.reserve.map((row) => [row.category.id, row.actual, row.budget]), [['gift', 10000, null]], '月の予備費は額だけ');
-  assert.deepEqual(month.reserve[0].yearToDate, { actual: 10000, budget: 50000 }, '月の予備費は、年の予算に対する年初からの実績で進み具合を出す');
-  const later = buildReviewSections([...rs, rec('i', '2027-08-03', 'expense', [['gift', 20000]])], cats, buds, lines, ['2027-08'], false);
-  assert.deepEqual(later.reserve.map((row) => [row.category.id, row.actual, row.yearToDate]), [['gift', 20000, { actual: 30000, budget: 50000 }]], '年初からその月までを足す');
-  assert.equal(month.estimate[0].yearToDate, null, '予備費のほかは出さない');
+  assert.deepEqual(month.temporary.map((row) => [row.category.id, row.actual, row.budget]), [['gift', 10000, null]], '特別費は小分類ごとの額だけ（予算は無い）');
   assert.deepEqual(month.confirmed.map((row) => [row.category.id, row.actual, row.budget]), [['rent', 80000, null]], '確定は額だけ');
   assert.deepEqual(
     month.estimate.map((row) => [row.category.id, row.actual, row.budget]),
     [['car', 34200, 33000], ['oil', 7500, null]],
     '見込みは記録のあった月の予算（月は発生月なしを比べない）',
   );
-  assert.deepEqual(month.spend, { variable: 77000, reserve: 10000, fixed: 121700 });
+  assert.deepEqual(month.spend, { variable: 77000, fixed: 121700 }, '特別費は目標割合に入れない');
   assert.deepEqual(month.uncategorized, { count: 0, amount: 0 });
   const yearKeys = yearActiveMonthKeys(rs, 2027);
   const yearly = buildReviewSections(rs, cats, buds, lines, yearKeys, true);
-  assert.deepEqual(yearly.reserve.map((row) => [row.category.id, row.budget]), [['gift', 50000]], '年の予備費は年の予算と比べる');
+  assert.deepEqual(yearly.temporary.map((row) => [row.category.id, row.actual, row.budget]), [['gift', 10000, null]], '年も特別費は額だけ');
   assert.deepEqual(yearly.estimate.map((row) => [row.category.id, row.budget]), [['car', 33000], ['oil', 7000]], '年は発生月なしも比べる');
   const lost = [...rs, rec('h', '2027-06-30', 'expense', [['deleted', 2000]])];
   assert.deepEqual(buildReviewSections(lost, cats, buds, lines, ['2027-06'], false).uncategorized, { count: 1, amount: 2000 }, '削除したカテゴリの品目はカテゴリなし');
@@ -1477,6 +1461,7 @@ assert.deepEqual(
     { id: 'food', kind: 'living', parentId: null, archived: false, position: 0, name: '食費', budgetGroup: 'variable' },
     { id: 'grocery', kind: 'living', parentId: 'food', archived: false, position: 0, name: '食料品', budgetGroup: 'variable' },
     { id: 'temp', kind: 'living', parentId: null, archived: false, position: 1, name: '特別費', icon: 'savings', budgetGroup: 'temporary' },
+    { id: 'trip', kind: 'living', parentId: 'temp', archived: false, position: 0, name: '旅行', budgetGroup: 'variable' },
   ] as unknown as MoneyCategory[];
   const rec = (id: string, occurredOn: string, items: [string, string, number][]) =>
     ({ id, occurredOn, kind: 'expense', items: items.map(([categoryId, name, amount], index) => ({ id: `${id}-${index}`, categoryId, categoryName: '', name, amount })) }) as unknown as MoneyRecord;
@@ -1492,7 +1477,7 @@ assert.deepEqual(
 
   const june = buildReviewSections(rs, cats, [], [], ['2027-06'], false);
   assert.deepEqual(june.temporary.map((row) => [row.category.name, row.actual, row.budget]), [['車の頭金', 300000, null], ['入学金', 80000, null]], '品名ごと・額の多い順。予算は無い');
-  assert.deepEqual(june.spend, { variable: 5000, reserve: 0, fixed: 0 }, '目標割合には入れない');
+  assert.deepEqual(june.spend, { variable: 5000, fixed: 0 }, '目標割合には入れない');
   const both = buildReviewSections(rs, cats, [], [], ['2027-06', '2027-07'], true);
   assert.deepEqual(both.temporary.map((row) => [row.category.name, row.actual]), [['車の頭金', 300000], ['入学金', 100000], ['特別費', 1000]], '年は同じ品名を足す。品名が空なら大分類の名前');
   assert.deepEqual(variableTiles(rs, cats, [], ['2027-06']).map((tile) => tile.category.id), ['food'], '変動費に入れない');
@@ -1500,6 +1485,18 @@ assert.deepEqual(
 
   const opened = buildSubcategoryAnalysis(rs, cats, both.temporary[1].category.id, ['2027-06', '2027-07'], null);
   assert.deepEqual([opened.actual, opened.records.map((r) => r.id)], [100000, ['c', 'd']], '行を押すと、その品名の記録だけ');
+
+  // 小分類（2026-10-31に予備費を特別費の小分類にした）は小分類ごと。品名では分けない
+  const withSub = [...rs, rec('e', '2027-06-20', [['trip', '温泉', 40000]]), rec('f', '2027-06-21', [['trip', '入学金', 2000]])];
+  const subJune = buildReviewSections(withSub, cats, [], [], ['2027-06'], false);
+  assert.deepEqual(
+    subJune.temporary.map((row) => [row.category.id, row.category.name, row.actual]),
+    [['temporary:車の頭金', '車の頭金', 300000], ['temporary:入学金', '入学金', 80000], ['trip', '旅行', 42000]],
+    '小分類は小分類の名前で1行（同じ品名でも大分類に直接付けた品目とは分ける）',
+  );
+  const openedSub = buildSubcategoryAnalysis(withSub, cats, 'trip', ['2027-06'], null);
+  assert.deepEqual([openedSub.actual, openedSub.records.map((r) => r.id)], [42000, ['e', 'f']], '小分類の行を押すと、その小分類の記録');
+  assert.equal(spendGroupOf('trip', cats), 'temporary');
 }
 
 // ---- 記録する月の言い方 ----

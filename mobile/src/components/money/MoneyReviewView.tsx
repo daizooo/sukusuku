@@ -69,14 +69,13 @@ import {
 // - 年の結論: 収支見込み（buildYearLanding。締めた月は実績、締めていない今月までは支出を予算と実績の大きいほう、翌月からは予算。
 //   収入は締めるまで予算）。2026年は10〜12月の3か月だけ（集計を始めた年の特例。MONEY_COUNT_START）
 // - 年の「推移」（§4.8）: 月ごとの収支（棒）と年初からの累計（折れ線）。締めた月は実線、ほかは点線
-// - その下は、変動費 → 予備費 → 固定費（中に確定・見込み）→ 特別費 → カテゴリなし の見出しごと（buildReviewSections）。見出しを押すと折りたたむ。
-//   はじめは変動費・予備費を開き、固定費は閉じておく。年の見出しの右に、実績の割合（その種類の支出の実績 ÷ 年の収入）と目標割合
+// - その下は、変動費 → 固定費（中に確定・見込み）→ 特別費 → カテゴリなし の見出しごと（buildReviewSections）。見出しを押すと折りたたむ。
+//   はじめは変動費・特別費を開き、固定費は閉じておく。年の見出しの右に、実績の割合（その種類の支出の実績 ÷ 年の収入）と目標割合
 //   （年間予算の画面の「目標割合」）を「11%（目標35%）」の形で出す（目標を超えたら赤。月には出さない）
 //   - 変動費: 大分類ごとに、予算 − 実績・使った割合の帯・「実績 / 予算」（%は出さない。2026-10-25）
-//   - 予備費: 記録のあった小分類。年は年の予算と比べる（変動費と同じ行）、月は年の予算に対する年初からの実績（同じ行に、その月の額を添える）
 //   - 固定費: 記録のあった小分類の額。見込みは予算との差を添える（超えたら赤で「予算より ¥x」、少なければ黒で「予算より −¥x」。budgetDiffLabel）
-//   - 特別費: 記録したものだけを品名ごとに（予算は無い。docs/kakei.md §0.10）
-//   - 行を押すと、変動費は大分類の詳細（月ごとの実績・小分類・記録）、予備費・固定費・カテゴリなしはその記録の一覧（ReviewDetailScreen）
+//   - 特別費: 記録したものだけを小分類ごとに（大分類に直接付けた品目は品名ごと。予算は無い。2026-10-31に予備費を特別費の小分類にした。docs/kakei.md §0.10）
+//   - 行を押すと、変動費は大分類の詳細（月ごとの実績・小分類・記録）、固定費・特別費・カテゴリなしはその記録の一覧（ReviewDetailScreen）
 // 月の締め（§4.5）: 過ぎた月と今月の結論の下に「この月を締める」（締めた月は「締めた月」）。夫婦が5分以内に押すと締めの画面（MonthCloseScreen）。
 // 押した人は「◯◯さんを待っています 4:32」と「やめる」、相手には「◯◯さんが待っています 4:32」を添える。始めたあとは「締めの途中」。
 // 締めていない過ぎた月があれば、いちばん上に「◯月が締まっていません」と出す（集計を始める前の月は出さない）。
@@ -130,7 +129,7 @@ interface MoneyReviewViewProps {
   onAddRecord: (walletId: string, date: string) => void;
   /** 締めの口座の詳細から残高を補正する。 */
   onSaveBalance: (walletId: string, adjustment: number, amount: number, showInHistory: boolean) => void;
-  /** 予算の明細（収入・予備費・固定費。年の収支見込みと、予備費・固定費の予算。docs/kakei.md §0.7）。 */
+  /** 予算の明細（収入・固定費。年の収支見込みと、固定費の予算。docs/kakei.md §0.7）。 */
   budgetLines: MoneyBudgetLine[];
   /** 目標割合（docs/kakei.md §0.9）。年の見出しに出す。 */
   ratioTargets: MoneyRatioTargets;
@@ -139,9 +138,9 @@ interface MoneyReviewViewProps {
 }
 
 /** 見出しの種類（折りたたむ単位）。 */
-type SectionKey = 'variable' | 'reserve' | 'fixed' | 'temporary' | 'none';
+type SectionKey = 'variable' | 'fixed' | 'temporary' | 'none';
 
-/** 詳細を開いている行。sub は予備費・固定費・カテゴリなし（記録の一覧）。budget はその行と同じ比べる予算。 */
+/** 詳細を開いている行。sub は固定費・特別費・カテゴリなし（記録の一覧）。budget はその行と同じ比べる予算。 */
 type OpenDetail = { category: MoneyCategory; sub: false } | { category: MoneyCategory; sub: true; budget: number | null };
 
 export default function MoneyReviewView({
@@ -285,14 +284,14 @@ export default function MoneyReviewView({
     );
   };
 
-  // 行を押したときの分析。変動費は大分類（月ごと・小分類・記録）、予備費・固定費・カテゴリなしはその記録。
+  // 行を押したときの分析。変動費は大分類（月ごと・小分類・記録）、固定費・特別費・カテゴリなしはその記録。
   const analysis = useMemo(() => {
     if (detail === null) return null;
     return detail.sub
       ? buildSubcategoryAnalysis(records, categories, detail.category.id, periodKeys, detail.budget)
       : buildCategoryAnalysis(records, categories, budgets, detail.category.id, periodKeys, null);
   }, [detail, periodKeys, records, categories, budgets]);
-  // 年の大分類の詳細の、月ごとの行（数える月。締めていない月も入る。2026-10-16）。予備費・固定費は記録の一覧を出す。
+  // 年の大分類の詳細の、月ごとの行（数える月。締めていない月も入る。2026-10-16）。固定費・特別費は記録の一覧を出す。
   const monthRows = useMemo(
     () =>
       isMonth || analysis === null || detail === null || detail.sub
@@ -319,28 +318,17 @@ export default function MoneyReviewView({
   }, [active]);
 
   const openSub = (row: ReviewSubRow) => setDetail({ category: row.category, sub: true, budget: row.budget });
-  // 予備費・固定費の行。予算と比べるもの（年の予備費）は変動費と同じ行、ほかは額だけ（見込みは予算との差を添える）。
-  // 月の予備費は、年の予算に対する年初からの実績を変動費と同じ行で出す（2026-10-25。帯の下の添え書きは出さない）。
-  const subRow = (row: ReviewSubRow, index: number, compare: boolean) =>
-    row.yearToDate !== null ? (
-      <CategoryRow
-        key={row.category.id}
-        tile={tileOf({ ...row, actual: row.yearToDate.actual, budget: row.yearToDate.budget })}
-        divided={index > 0}
-        onPress={() => openSub(row)}
-      />
-    ) : compare && row.budget !== null ? (
-      <CategoryRow key={row.category.id} tile={tileOf(row)} divided={index > 0} onPress={() => openSub(row)} />
-    ) : (
-      <AmountRow
-        key={row.category.id}
-        category={row.category}
-        amount={row.actual}
-        diff={!compare && row.budget !== null ? row.budget - row.actual : null}
-        divided={index > 0}
-        onPress={() => openSub(row)}
-      />
-    );
+  // 固定費・特別費の行。額だけ（見込みは予算との差を添える）。
+  const subRow = (row: ReviewSubRow, index: number) => (
+    <AmountRow
+      key={row.category.id}
+      category={row.category}
+      amount={row.actual}
+      diff={row.budget !== null ? row.budget - row.actual : null}
+      divided={index > 0}
+      onPress={() => openSub(row)}
+    />
+  );
 
   const fixedCount = sections === null ? 0 : sections.confirmed.length + sections.estimate.length;
   // 年は目標を決めていれば記録が無くても見出しを出す（割合を見るため）。
@@ -434,7 +422,7 @@ export default function MoneyReviewView({
           </>
         )}
 
-        {sections === null || (sections.variable.length === 0 && sections.reserve.length === 0 && fixedCount === 0 && sections.temporary.length === 0 && sections.uncategorized.count === 0) ? (
+        {sections === null || (sections.variable.length === 0 && fixedCount === 0 && sections.temporary.length === 0 && sections.uncategorized.count === 0) ? (
           <Text style={styles.message}>「年間予算」を決めて記録をつけると、ここに予算との差が出ます</Text>
         ) : (
           <>
@@ -450,22 +438,17 @@ export default function MoneyReviewView({
                 ))}
               </Section>
             )}
-            {showSection(sections.reserve.length, ratioTargets.reserve) && (
-              <Section title="予備費" count={sections.reserve.length} open={!collapsed.has('reserve')} onToggle={() => toggle('reserve')} right={ratioOf(sections.spend.reserve, ratioTargets.reserve)}>
-                {sections.reserve.map((row, index) => subRow(row, index, !isMonth))}
-              </Section>
-            )}
             {showSection(fixedCount, ratioTargets.fixed) && (
               <Section title="固定費" count={fixedCount} open={!collapsed.has('fixed')} onToggle={() => toggle('fixed')} right={ratioOf(sections.spend.fixed, ratioTargets.fixed)}>
                 {sections.confirmed.length > 0 && <Text style={styles.subTitle}>確定</Text>}
-                {sections.confirmed.map((row, index) => subRow(row, index, false))}
+                {sections.confirmed.map((row, index) => subRow(row, index))}
                 {sections.estimate.length > 0 && <Text style={[styles.subTitle, sections.confirmed.length > 0 && styles.subDivided]}>見込み</Text>}
-                {sections.estimate.map((row, index) => subRow(row, index, false))}
+                {sections.estimate.map((row, index) => subRow(row, index))}
               </Section>
             )}
             {sections.temporary.length > 0 && (
               <Section title="特別費" count={sections.temporary.length} open={!collapsed.has('temporary')} onToggle={() => toggle('temporary')}>
-                {sections.temporary.map((row, index) => subRow(row, index, false))}
+                {sections.temporary.map((row, index) => subRow(row, index))}
               </Section>
             )}
             {sections.uncategorized.count > 0 && (
@@ -562,18 +545,6 @@ export default function MoneyReviewView({
   );
 }
 
-/** 予算と比べる小分類の行（年の予備費）を、変動費と同じ行の形にする。 */
-const tileOf = (row: ReviewSubRow): BudgetTile => {
-  const budget = row.budget ?? 0;
-  return {
-    category: row.category,
-    budget: row.budget,
-    actual: row.actual,
-    diff: budget - row.actual,
-    percent: budget > 0 ? Math.round((row.actual / budget) * 100) : null,
-  };
-};
-
 /** 折りたためる見出し（押すと開く・閉じる。開閉の印は左）と、その中の一覧のカード。right は年の割合。 */
 function Section({
   title,
@@ -666,7 +637,7 @@ function CategoryRow({ tile, divided, onPress }: { tile: BudgetTile; divided: bo
   );
 }
 
-/** 予備費・固定費・カテゴリなしの1行（額だけ。帯は付けない）。diff は固定費（見込み）の予算との差（予算 − 実績）。 */
+/** 固定費・特別費・カテゴリなしの1行（額だけ。帯は付けない）。diff は固定費（見込み）の予算との差（予算 − 実績）。 */
 function AmountRow({
   category,
   label,

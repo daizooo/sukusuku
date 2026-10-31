@@ -43,7 +43,7 @@ export const rowToCategory = (row: CategoryRow): MoneyCategory => ({
 });
 
 const budgetGroupOf = (value: string | null): MoneyBudgetGroup =>
-  value === 'reserve' || value === 'fixed' || value === 'estimate' ? value : 'variable';
+  value === 'fixed' || value === 'estimate' ? value : 'variable';
 
 const WALLET_TYPES = ['card', 'cash', 'bank', 'prepaid', 'qr', 'securities'] as const;
 
@@ -245,12 +245,13 @@ export async function setMoneyMonthClosed(
 
 // ---- 目標割合（docs/kakei.md §0.9） ----
 
-const RATIO_GROUPS = ['variable', 'reserve', 'fixed'] as const;
+// 予備費（reserve）は2026-10-31に特別費の小分類にしたので、目標割合は持たない（残っている行は読まない。docs/kakei.md §0.10）。
+const RATIO_GROUPS = ['variable', 'fixed'] as const;
 
 /** 目標割合の行（種類ごとに1行）を、画面の形にする。行の無い種類は null。 */
 export function rowsToRatioTargets(rows: readonly Pick<Tables<'money_ratio_targets'>, 'budget_group' | 'percent'>[]): MoneyRatioTargets {
   const percentOf = (group: (typeof RATIO_GROUPS)[number]) => rows.find((row) => row.budget_group === group)?.percent ?? null;
-  return { variable: percentOf('variable'), reserve: percentOf('reserve'), fixed: percentOf('fixed') };
+  return { variable: percentOf('variable'), fixed: percentOf('fixed') };
 }
 
 /** 目標割合を保存する。null の種類は行を消す（決めていない）。 */

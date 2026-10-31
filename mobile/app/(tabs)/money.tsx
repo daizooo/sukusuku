@@ -152,7 +152,7 @@ export default function MoneyScreen() {
   const [stores, setStores] = useState<MoneyStore[]>([]);
   const [records, setRecords] = useState<MoneyRecord[]>([]);
   const [recurring, setRecurring] = useState<MoneyRecurring[]>([]);
-  // 予算は自動記録ルールの表の行（docs/kakei.md §0.8）。数えるときは、収入・予備費・固定費は予算の明細、変動費は大分類の月の予算の形にする。
+  // 予算は自動記録ルールの表の行（docs/kakei.md §0.8）。数えるときは、収入・固定費は予算の明細、変動費は大分類の月の予算の形にする。
   const budgetLines = useMemo(() => budgetLinesOf(recurring, categories), [recurring, categories]);
   const budgets = useMemo(() => variableBudgetsOf(recurring, categories), [recurring, categories]);
   const [balances, setBalances] = useState<MoneyWalletBalance[]>([]);
@@ -161,7 +161,7 @@ export default function MoneyScreen() {
   // 月の締めを夫婦で行うための合図・口座ごとの OK・夫婦（docs/kakei.md §4.5）。
   const [closeData, setCloseData] = useState<MoneyCloseData>({ requests: [], checks: [], guardians: [] });
   // 目安の割合（docs/kakei.md §0.9）
-  const [ratioTargets, setRatioTargets] = useState<MoneyRatioTargets>({ variable: null, reserve: null, fixed: null });
+  const [ratioTargets, setRatioTargets] = useState<MoneyRatioTargets>({ variable: null, fixed: null });
   const [securities, setSecurities] = useState<MoneySecuritiesData>(NO_SECURITIES);
   const [isLoading, setIsLoading] = useState(true);
   const [view, setView] = useState<View3>('accounts');
