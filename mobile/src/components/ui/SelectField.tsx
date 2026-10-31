@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ChevronDown } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 
@@ -8,6 +9,7 @@ import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 //
 // React Nativeには <select> が無いので、押すと選択肢を下から出して選ぶ形にする。
 // 出している中身・並び・既定の文言はWeb版と同じ。
+// 選択肢の枠は画面の下の端まで（Modal を statusBarTranslucent・navigationBarTranslucent で広げ、下の操作バーのぶんは枠の中で空ける。SheetModal と同じ）。
 
 export interface SelectOption<T extends string> {
   value: T;
@@ -37,6 +39,7 @@ export default function SelectField<T extends string>({
   icon,
   chevronColor,
 }: SelectFieldProps<T>) {
+  const insets = useSafeAreaInsets();
   const [isOpen, setIsOpen] = useState(false);
   const selected = options.find((option) => option.value === value);
 
@@ -55,9 +58,9 @@ export default function SelectField<T extends string>({
         <ChevronDown size={14} color={chevronColor ?? colors.textMuted} />
       </Pressable>
 
-      <Modal visible={isOpen} transparent animationType="fade" onRequestClose={() => setIsOpen(false)}>
+      <Modal visible={isOpen} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={() => setIsOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setIsOpen(false)} {...swipeBoundary}>
-          <Pressable style={styles.sheet} onPress={() => {}}>
+          <Pressable style={[styles.sheet, { paddingBottom: 24 + insets.bottom }]} onPress={() => {}}>
             <Text style={styles.sheetTitle}>{accessibilityLabel}</Text>
             <ScrollView>
               {options.map((option) => {

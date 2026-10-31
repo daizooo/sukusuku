@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,6 +23,7 @@ import {
 } from '@/lib/recurrence';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
+import KeyboardAvoidingView from '@/components/ui/KeyboardAvoidingView';
 import SelectField from '@/components/ui/SelectField';
 
 // 「カスタムの繰り返し」。Googleカレンダーの同名の画面と同じ並び:
@@ -89,141 +88,140 @@ export default function RecurrenceModal({ initial, startDate, onCancel, onDone }
   };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
-      <KeyboardAvoidingView
-        style={styles.backdrop}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        {...swipeBoundary}
-      >
-        {/* 暗い部分を押すと、戻る操作と同じく閉じる（変えた内容は捨てる）。 */}
-        <Pressable accessibilityLabel="閉じる" style={StyleSheet.absoluteFill} onPress={onCancel} />
-        <View style={styles.card}>
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-            <Text style={styles.heading}>カスタムの繰り返し</Text>
+    <Modal visible transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onCancel}>
+      {/* 画面の端まで広げた Modal の中は、自前でキーボードを避ける（ui/KeyboardAvoidingView.tsx。SheetModal と同じ）。 */}
+      <KeyboardAvoidingView style={styles.fill}>
+        <View style={styles.backdrop} {...swipeBoundary}>
+          {/* 暗い部分を押すと、戻る操作と同じく閉じる（変えた内容は捨てる）。 */}
+          <Pressable accessibilityLabel="閉じる" style={StyleSheet.absoluteFill} onPress={onCancel} />
+          <View style={styles.card}>
+            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+              <Text style={styles.heading}>カスタムの繰り返し</Text>
 
-            {/* 繰り返す間隔 */}
-            <View style={styles.intervalRow}>
-              <Text style={styles.label}>繰り返す間隔:</Text>
-              <TextInput
-                style={styles.numberInput}
-                value={intervalText}
-                onChangeText={(text) => setIntervalText(text.replace(/[^0-9]/g, ''))}
-                keyboardType="number-pad"
-                inputMode="numeric"
-                maxLength={3}
-                accessibilityLabel="繰り返す間隔"
-              />
-              <SelectField<RecurrenceFreq>
-                accessibilityLabel="繰り返しの単位"
-                options={FREQ_OPTIONS}
-                value={rule.freq}
-                onChange={(freq) => setRule(withFreq(rule, freq, start))}
-                style={styles.freqSelect}
-                textStyle={styles.selectText}
-              />
-            </View>
-
-            {/* 曜日（週間ごと。複数選べる） */}
-            {rule.freq === 'weekly' && (
-              <View style={styles.block}>
-                <Text style={styles.label}>曜日:</Text>
-                <View style={styles.weekdayRow}>
-                  {WEEKDAY_LABELS.map((label, day) => {
-                    const selected = (rule.byWeekday ?? []).includes(day);
-                    return (
-                      <Pressable
-                        key={day}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${label}曜日`}
-                        accessibilityState={{ selected }}
-                        onPress={() => toggleWeekday(day)}
-                        style={[styles.weekdayButton, selected && styles.weekdayButtonOn]}
-                      >
-                        <Text style={[styles.weekdayText, selected && styles.weekdayTextOn]}>
-                          {label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+              {/* 繰り返す間隔 */}
+              <View style={styles.intervalRow}>
+                <Text style={styles.label}>繰り返す間隔:</Text>
+                <TextInput
+                  style={styles.numberInput}
+                  value={intervalText}
+                  onChangeText={(text) => setIntervalText(text.replace(/[^0-9]/g, ''))}
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                  maxLength={3}
+                  accessibilityLabel="繰り返す間隔"
+                />
+                <SelectField<RecurrenceFreq>
+                  accessibilityLabel="繰り返しの単位"
+                  options={FREQ_OPTIONS}
+                  value={rule.freq}
+                  onChange={(freq) => setRule(withFreq(rule, freq, start))}
+                  style={styles.freqSelect}
+                  textStyle={styles.selectText}
+                />
               </View>
-            )}
 
-            {/* 毎月の数え方（か月ごと）。「毎月 2日」か「毎月 第1金曜日」 */}
-            {rule.freq === 'monthly' && (
-              <SelectField
-                accessibilityLabel="毎月の繰り返し"
-                options={monthlyOptions(start)}
-                value={monthlyValueOf(rule)}
-                onChange={(value) => setRule(withMonthlyValue(rule, value, start))}
-                style={styles.monthlySelect}
-                textStyle={styles.selectText}
-              />
-            )}
+              {/* 曜日（週間ごと。複数選べる） */}
+              {rule.freq === 'weekly' && (
+                <View style={styles.block}>
+                  <Text style={styles.label}>曜日:</Text>
+                  <View style={styles.weekdayRow}>
+                    {WEEKDAY_LABELS.map((label, day) => {
+                      const selected = (rule.byWeekday ?? []).includes(day);
+                      return (
+                        <Pressable
+                          key={day}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${label}曜日`}
+                          accessibilityState={{ selected }}
+                          onPress={() => toggleWeekday(day)}
+                          style={[styles.weekdayButton, selected && styles.weekdayButtonOn]}
+                        >
+                          <Text style={[styles.weekdayText, selected && styles.weekdayTextOn]}>
+                            {label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
 
-            {/* 終了日。なし／終了日を指定／回数を指定。選んでいない項目の入力欄は薄くして押せなくする。 */}
-            <View style={styles.block}>
-              <Text style={styles.heading2}>終了日</Text>
-              {END_TYPE_OPTIONS.map((option) => {
-                const selected = endType === option.value;
-                return (
-                  <View key={option.value} style={styles.endRow}>
-                    <Pressable
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected }}
-                      onPress={() => setEndType(option.value)}
-                      style={styles.radioRow}
-                    >
-                      <View style={[styles.radioDot, selected && styles.radioDotOn]}>
-                        {selected && <View style={styles.radioDotInner} />}
-                      </View>
-                      <Text style={styles.radioText}>
-                        {option.label}
-                        {option.value === 'never' ? '' : ':'}
-                      </Text>
-                    </Pressable>
+              {/* 毎月の数え方（か月ごと）。「毎月 2日」か「毎月 第1金曜日」 */}
+              {rule.freq === 'monthly' && (
+                <SelectField
+                  accessibilityLabel="毎月の繰り返し"
+                  options={monthlyOptions(start)}
+                  value={monthlyValueOf(rule)}
+                  onChange={(value) => setRule(withMonthlyValue(rule, value, start))}
+                  style={styles.monthlySelect}
+                  textStyle={styles.selectText}
+                />
+              )}
 
-                    {option.value === 'until' && (
+              {/* 終了日。なし／終了日を指定／回数を指定。選んでいない項目の入力欄は薄くして押せなくする。 */}
+              <View style={styles.block}>
+                <Text style={styles.heading2}>終了日</Text>
+                {END_TYPE_OPTIONS.map((option) => {
+                  const selected = endType === option.value;
+                  return (
+                    <View key={option.value} style={styles.endRow}>
                       <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="終了日"
-                        disabled={!selected}
-                        onPress={openEndDatePicker}
-                        style={[styles.endField, !selected && styles.dimmed]}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected }}
+                        onPress={() => setEndType(option.value)}
+                        style={styles.radioRow}
                       >
-                        <Text style={styles.endFieldText}>
-                          {formatDateString(parseDateString(endDate))}
+                        <View style={[styles.radioDot, selected && styles.radioDotOn]}>
+                          {selected && <View style={styles.radioDotInner} />}
+                        </View>
+                        <Text style={styles.radioText}>
+                          {option.label}
+                          {option.value === 'never' ? '' : ':'}
                         </Text>
                       </Pressable>
-                    )}
-                    {option.value === 'count' && (
-                      <View style={[styles.countRow, !selected && styles.dimmed]}>
-                        <TextInput
-                          style={styles.numberInput}
-                          value={countText}
-                          onChangeText={(text) => setCountText(text.replace(/[^0-9]/g, ''))}
-                          editable={selected}
-                          keyboardType="number-pad"
-                          inputMode="numeric"
-                          maxLength={4}
-                          accessibilityLabel="繰り返す回数"
-                        />
-                        <Text style={styles.countUnit}>回</Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          </ScrollView>
 
-          <View style={styles.actions}>
-            <Pressable accessibilityRole="button" onPress={onCancel} style={styles.cancel}>
-              <Text style={styles.cancelText}>キャンセル</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={done} style={styles.done}>
-              <Text style={styles.doneText}>完了</Text>
-            </Pressable>
+                      {option.value === 'until' && (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="終了日"
+                          disabled={!selected}
+                          onPress={openEndDatePicker}
+                          style={[styles.endField, !selected && styles.dimmed]}
+                        >
+                          <Text style={styles.endFieldText}>
+                            {formatDateString(parseDateString(endDate))}
+                          </Text>
+                        </Pressable>
+                      )}
+                      {option.value === 'count' && (
+                        <View style={[styles.countRow, !selected && styles.dimmed]}>
+                          <TextInput
+                            style={styles.numberInput}
+                            value={countText}
+                            onChangeText={(text) => setCountText(text.replace(/[^0-9]/g, ''))}
+                            editable={selected}
+                            keyboardType="number-pad"
+                            inputMode="numeric"
+                            maxLength={4}
+                            accessibilityLabel="繰り返す回数"
+                          />
+                          <Text style={styles.countUnit}>回</Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <View style={styles.actions}>
+              <Pressable accessibilityRole="button" onPress={onCancel} style={styles.cancel}>
+                <Text style={styles.cancelText}>キャンセル</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={done} style={styles.done}>
+                <Text style={styles.doneText}>完了</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -232,6 +230,7 @@ export default function RecurrenceModal({ initial, startDate, onCancel, onDone }
 }
 
 const styles = StyleSheet.create({
+  fill: { flex: 1 },
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

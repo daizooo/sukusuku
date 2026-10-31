@@ -1,8 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,6 +13,7 @@ import { Lock, Pin, PinOff, Trash2, Users } from 'lucide-react-native';
 import type { ListBoard } from '@/types/app';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
+import KeyboardAvoidingView from '@/components/ui/KeyboardAvoidingView';
 
 // リストの編集モード。Google Keepと同じく、一覧でタップしたカードが画面の中央に
 // 拡大して開き、見出し・項目・グループ・共有・固定・削除までここで済ませる。
@@ -73,108 +72,106 @@ export default function ListEditorModal({
   };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={() => onClose(name)}>
-      <KeyboardAvoidingView
-        style={styles.overlay}
-        // Modalの中はOSのwindowSoftInputModeが効かないため、Androidも指定する（SheetModalと同じ）。
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        {...swipeBoundary}
-      >
-        {/* 暗い部分を押すと閉じる（Keepと同じ）。カードの外側だけがこの受け口になる。 */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="閉じる"
-          onPress={() => onClose(name)}
-          style={styles.backdrop}
-        />
-        <View
-          style={[
-            styles.container,
-            { paddingTop: insets.top + CARD_GAP, paddingBottom: insets.bottom + CARD_GAP },
-          ]}
-          pointerEvents="box-none"
-        >
-          <View style={styles.card}>
-            <View style={styles.header}>
-              <TextInput
-                style={styles.title}
-                value={name}
-                onChangeText={setName}
-                onBlur={commitName}
-                onSubmitEditing={commitName}
-                autoFocus={focusTitle}
-                returnKeyType="done"
-                placeholder="タイトル"
-                placeholderTextColor={colors.textFaint}
-                accessibilityLabel="リスト名"
-              />
-              {/* よく開くリストを一覧の先頭へ固定する（Keepのピン止め）。 */}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={list.pinned ? '固定を外す' : '一覧の先頭に固定する'}
-                accessibilityState={{ selected: list.pinned }}
-                onPress={onTogglePin}
-                hitSlop={6}
-                style={styles.headerButton}
-              >
-                {list.pinned ? (
-                  <Pin size={18} color={colors.navActiveText} fill={colors.navActiveText} />
-                ) : (
-                  <PinOff size={18} color={colors.textFaint} />
-                )}
-              </Pressable>
-            </View>
-
-            <ScrollView
-              style={styles.body}
-              contentContainerStyle={styles.bodyContent}
-              scrollEnabled={scrollEnabled}
-              keyboardShouldPersistTaps="handled"
-            >
-              {children}
-            </ScrollView>
-
-            {/* 下の道具列。共有・削除・閉じる。 */}
-            <View style={styles.toolbar}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={
-                  list.isPrivate ? '共有設定: 自分だけ。押すと家族全員に共有する' : '共有設定: 共有中。押すと自分だけにする'
-                }
-                onPress={onToggleShare}
-                hitSlop={6}
-                style={[styles.tool, styles.shareTool]}
-              >
-                {list.isPrivate ? (
-                  <Lock size={16} color={colors.textMuted} />
-                ) : (
-                  <Users size={16} color={colors.navActiveText} />
-                )}
-                <Text
-                  style={[styles.toolText, !list.isPrivate && styles.toolTextOn]}
-                  numberOfLines={1}
+    <Modal visible transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={() => onClose(name)}>
+      {/* 画面の端まで広げた Modal の中は、自前でキーボードを避ける（ui/KeyboardAvoidingView.tsx。SheetModal と同じ）。 */}
+      <KeyboardAvoidingView style={styles.fill}>
+        <View style={styles.overlay} {...swipeBoundary}>
+          {/* 暗い部分を押すと閉じる（Keepと同じ）。カードの外側だけがこの受け口になる。 */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="閉じる"
+            onPress={() => onClose(name)}
+            style={styles.backdrop}
+          />
+          <View
+            style={[
+              styles.container,
+              { paddingTop: insets.top + CARD_GAP, paddingBottom: insets.bottom + CARD_GAP },
+            ]}
+            pointerEvents="box-none"
+          >
+            <View style={styles.card}>
+              <View style={styles.header}>
+                <TextInput
+                  style={styles.title}
+                  value={name}
+                  onChangeText={setName}
+                  onBlur={commitName}
+                  onSubmitEditing={commitName}
+                  autoFocus={focusTitle}
+                  returnKeyType="done"
+                  placeholder="タイトル"
+                  placeholderTextColor={colors.textFaint}
+                  accessibilityLabel="リスト名"
+                />
+                {/* よく開くリストを一覧の先頭へ固定する（Keepのピン止め）。 */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={list.pinned ? '固定を外す' : '一覧の先頭に固定する'}
+                  accessibilityState={{ selected: list.pinned }}
+                  onPress={onTogglePin}
+                  hitSlop={6}
+                  style={styles.headerButton}
                 >
-                  {list.isPrivate ? '自分だけ' : '共有中'}
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="このリストを削除する"
-                onPress={onDelete}
-                hitSlop={6}
-                style={styles.tool}
+                  {list.pinned ? (
+                    <Pin size={18} color={colors.navActiveText} fill={colors.navActiveText} />
+                  ) : (
+                    <PinOff size={18} color={colors.textFaint} />
+                  )}
+                </Pressable>
+              </View>
+
+              <ScrollView
+                style={styles.body}
+                contentContainerStyle={styles.bodyContent}
+                scrollEnabled={scrollEnabled}
+                keyboardShouldPersistTaps="handled"
               >
-                <Trash2 size={16} color={colors.danger} />
-              </Pressable>
-              <View style={styles.spacer} />
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => onClose(name)}
-                hitSlop={6}
-                style={styles.tool}
-              >
-                <Text style={styles.closeText}>閉じる</Text>
-              </Pressable>
+                {children}
+              </ScrollView>
+
+              {/* 下の道具列。共有・削除・閉じる。 */}
+              <View style={styles.toolbar}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    list.isPrivate ? '共有設定: 自分だけ。押すと家族全員に共有する' : '共有設定: 共有中。押すと自分だけにする'
+                  }
+                  onPress={onToggleShare}
+                  hitSlop={6}
+                  style={[styles.tool, styles.shareTool]}
+                >
+                  {list.isPrivate ? (
+                    <Lock size={16} color={colors.textMuted} />
+                  ) : (
+                    <Users size={16} color={colors.navActiveText} />
+                  )}
+                  <Text
+                    style={[styles.toolText, !list.isPrivate && styles.toolTextOn]}
+                    numberOfLines={1}
+                  >
+                    {list.isPrivate ? '自分だけ' : '共有中'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="このリストを削除する"
+                  onPress={onDelete}
+                  hitSlop={6}
+                  style={styles.tool}
+                >
+                  <Trash2 size={16} color={colors.danger} />
+                </Pressable>
+                <View style={styles.spacer} />
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => onClose(name)}
+                  hitSlop={6}
+                  style={styles.tool}
+                >
+                  <Text style={styles.closeText}>閉じる</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </View>
@@ -184,6 +181,7 @@ export default function ListEditorModal({
 }
 
 const styles = StyleSheet.create({
+  fill: { flex: 1 },
   overlay: { flex: 1 },
   backdrop: {
     position: 'absolute',
