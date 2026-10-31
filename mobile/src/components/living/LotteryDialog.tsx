@@ -21,7 +21,7 @@ interface LotteryDialogProps {
 
 export default function LotteryDialog({ title, onClose, fill, footer, children }: LotteryDialogProps) {
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <View style={styles.overlay} {...swipeBoundary}>
         <Pressable accessibilityLabel="閉じる" style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.card, fill && styles.cardFill]}>

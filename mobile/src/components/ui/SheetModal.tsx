@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/lib/theme';
 import { swipeBoundary } from '@/hooks/useSwipeNavigation';
+import KeyboardAvoidingView from '@/components/ui/KeyboardAvoidingView';
 
 // 入力画面の外枠。PWA版と同じく、画面いっぱいにはせず
 // 「暗くした画面の上に、下から浮かぶ枠」にする。
@@ -13,6 +14,11 @@ import { swipeBoundary } from '@/hooks/useSwipeNavigation';
 // 暗くするのは画面の上の帯（アプリの色で塗ってある部分）より下だけ。PWA版も
 // safe-area のぶんは覆わないため、同じ見え方にそろえている。
 // 暗い部分を押すと、戻る操作と同じく閉じる（onClose）。
+//
+// Modal は別のウィンドウで開く。アプリは edge-to-edge（上の帯・下の操作バーの裏まで描く）なのに、
+// statusBarTranslucent・navigationBarTranslucent を付けないと、Modal のウィンドウだけ上の帯の下から始まり、
+// 下の操作バーの手前で終わる。すると枠の下に下の画面がのぞき、枠が浮いて見えた（2026-10-31）。
+// さらに insets（アプリ本体の値）を足していたので、上と下の余白が二重になっていた。両方を付けて、画面の端まで広げる。
 
 interface SheetModalProps {
   visible: boolean;
@@ -40,30 +46,27 @@ export default function SheetModal({ visible, onClose, height = SHEET_HEIGHT, ch
   // PWA版は枠がそのまま出る（動きを付けていない）ので、暗い部分ごと薄く出す。
   // transparent と slide を組み合わせると、暗い部分まで下から流れてきて別物に見える。
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={styles.overlay}
-        // Androidも指定しないと、Modal（別ウィンドウで開く）の中はOSのwindowSoftInputMode
-        // が効かず、キーボードが出てもメモ欄などの入力欄が隠れたままになる。
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        {...swipeBoundary}
-      >
-        <Pressable
-          accessibilityLabel="閉じる"
-          onPress={onClose}
-          style={[styles.backdrop, { top: insets.top }]}
-        />
-        <View
-          style={[
-            styles.container,
-            { paddingTop: insets.top + SHEET_GAP },
-          ]}
-          pointerEvents="box-none"
-        >
-          {/* 横幅いっぱいで、下は画面の端に接する。下の操作バーのぶんは、枠の中の余白で空ける。 */}
-          <View style={[styles.sheet, { height }]}>
-            {children}
-            <View style={{ height: insets.bottom }} />
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
+      {/* Modal（別ウィンドウで開く）の中はOSのwindowSoftInputModeが効かないので、自前でキーボードを避ける。 */}
+      <KeyboardAvoidingView style={styles.overlay}>
+        <View style={styles.overlay} {...swipeBoundary}>
+          <Pressable
+            accessibilityLabel="閉じる"
+            onPress={onClose}
+            style={[styles.backdrop, { top: insets.top }]}
+          />
+          <View
+            style={[
+              styles.container,
+              { paddingTop: insets.top + SHEET_GAP },
+            ]}
+            pointerEvents="box-none"
+          >
+            {/* 横幅いっぱいで、下は画面の端に接する。下の操作バーのぶんは、枠の中の余白で空ける。 */}
+            <View style={[styles.sheet, { height }]}>
+              {children}
+              <View style={{ height: insets.bottom }} />
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
