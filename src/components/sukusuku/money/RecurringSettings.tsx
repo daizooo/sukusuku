@@ -49,7 +49,8 @@ import { PrimaryButton, ScreenHeader, StackedScreen } from './moneyVisual';
 // 振替の自動記録（docs/kakei.md §3.3・§0.8）。mobile版の `mobile/src/components/money/RecurringSettings.tsx` と同じ並び・文言。
 //
 // 支出・収入の自動記録は、年間予算の予算1件ごとに決める（2026-10-23。BudgetEditor）。ここに残すのは振替（予算に数えないもの）だけ。
-// サーバーが毎朝、その日に当たる記録を作る（DBの make_money_recurring_records）。振替はほぼ毎月額を変えるので、いつも見込みの記録を作る。
+// サーバーが毎朝、その日に当たる記録を作る（DBの make_money_recurring_records）。振替も支出・収入と同じく、確定（入れた額で確定の記録）か
+// 見込み（過去の記録から見込んだ見込みの記録）を選ぶ（2026-10-31。それまでは、いつも見込みの記録を作っていた）。
 // カード代金はここではなく、出金元のカードに締め日・引き落とし日・引き落とし口座を入れると作られる（2026-10-18）。
 // 直すのはルールだけで、もう作った記録は変わらない。並べ替えは左の持ち手をつかんで動かす。複製は編集の画面の「複製して足す」から。
 // 期間（開始月・終了月）の外の月は記録を作らない。期間が終わったルールは、一覧の下に畳んで出す（押すと開く）。
@@ -59,8 +60,7 @@ type RecurringMode = 'expense' | 'income' | 'transfer';
 /** 一覧の切り替え。'expense'＝固定支出（固定・予定）、'income'＝固定収入（給与・賞与）、'transfer'＝振替。 */
 const modeOf = (rule: MoneyRecurring): RecurringMode => rule.kind;
 
-// 振替はほぼ毎月額が変わるので、いつも見込みとして記録を作る（docs/kakei.md §3.3）。
-const MODE_NAME: Record<RecurringMode, string> = { expense: '固定支出', income: '固定収入', transfer: '振替の見込み' };
+const MODE_NAME: Record<RecurringMode, string> = { expense: '固定支出', income: '固定収入', transfer: '振替' };
 
 interface RecurringSettingsProps {
   familyId: string;
@@ -347,9 +347,9 @@ export default function RecurringSettings({
   );
 }
 
-/** 額の言い方。「確定 ¥55,000」「見込み 過去の記録から（無ければ ¥23,000）」。振替は入れた額でも見込み。 */
+/** 額の言い方。「確定 ¥55,000」「見込み 過去の記録から（無ければ ¥23,000）」。 */
 function amountLabel(rule: MoneyRecurring): string {
-  if (rule.amountMode === 'fixed') return `${rule.kind === 'transfer' ? '見込み' : '確定'} ${formatYen(rule.amount)}`;
+  if (rule.amountMode === 'fixed') return `確定 ${formatYen(rule.amount)}`;
   const source = '過去の記録から';
   return rule.amount > 0 ? `見込み ${source}（無ければ ${formatYen(rule.amount)}）` : `見込み ${source}`;
 }
@@ -441,7 +441,7 @@ function RecurringEditor({
   // 期間（2027/9 の形で入れる。空は無期限）。
   const [startInput, setStartInput] = useState(periodMonthInput(base?.startMonth ?? null));
   const [endInput, setEndInput] = useState(periodMonthInput(base?.endMonth ?? null));
-  // 種類。確定（fixed）は確定の記録、見込み（estimate）は過去の記録から見込んだ見込みの記録（振替はいつも見込み）。
+  // 種類。確定（fixed）は確定の記録、見込み（estimate）は過去の記録から見込んだ見込みの記録（振替も同じ）。
   const [amountMode, setAmountMode] = useState<MoneyRecurring['amountMode']>(base?.amountMode ?? 'estimate');
   // 支出・収入の自動記録のオン／オフ・日付未定は年間予算で決める（ここは振替だけ。いつも自動で記録する）。
   const estimate = false;
@@ -503,7 +503,7 @@ function RecurringEditor({
     }
     const amountValue = amount.trim() === '' ? 0 : Number(amount.trim());
     if (!Number.isInteger(amountValue) || amountValue < 0) return setError('額は0以上の整数で入れてください');
-    if (amountMode === 'fixed' && amountValue === 0) return setError(kind === 'transfer' ? '見込みの額を入れてください' : '確定の額を入れてください');
+    if (amountMode === 'fixed' && amountValue === 0) return setError('確定の額を入れてください');
     onSubmit({
       kind,
       day: dayValue,
@@ -738,8 +738,8 @@ function RecurringEditor({
               <span className={labelClass}>{kind === 'transfer' ? '額の決め方' : amountMode === 'fixed' ? '額' : '見込みの額'}</span>
               {kind === 'transfer' && (
                 <div className="flex flex-wrap gap-2">
-                  <Chip label="過去の記録から" selected={amountMode === 'estimate'} onClick={() => setAmountMode('estimate')} />
-                  <Chip label="入れた額" selected={amountMode === 'fixed'} onClick={() => setAmountMode('fixed')} />
+                  <Chip label="確定（入れた額）" selected={amountMode === 'fixed'} onClick={() => setAmountMode('fixed')} />
+                  <Chip label="見込み（過去の記録から）" selected={amountMode === 'estimate'} onClick={() => setAmountMode('estimate')} />
                 </div>
               )}
               <input
@@ -756,7 +756,10 @@ function RecurringEditor({
                     : `過去1年の記録 ${history.length}件（直近 ${formatShortDate(history[0].occurredOn)} ${formatYen(history[0].amount)}）`}
                 </span>
               )}
-              {(kind === 'transfer' || amountMode === 'estimate') && (
+              {kind === 'transfer' && amountMode === 'fixed' && (
+                <span className={subClass}>振替の日に、入れた額で確定の記録を作ります</span>
+              )}
+              {amountMode === 'estimate' && (
                 <span className={subClass}>{kind === 'income' ? '振込日' : kind === 'transfer' ? '振替の日' : '引き落とし日'}に見込みの記録を作ります。実額に直すと確定します</span>
               )}
             </div>

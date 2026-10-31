@@ -800,8 +800,8 @@ export function scheduledFixedInMonth(
 // 予算が本体。予算1件＝money_recurring の1行（MoneyRecurring）で、「単価 × その年に発生する回数」。回数は発生月（毎月・月を選ぶ）・
 // ◯年ごと・期間で決まる（毎月なら ×12、偶数月なら ×6、年に1回なら ×1）。発生月なし（noMonth）は、その年に1回ぶんを、
 // 月には置かずに見込み支出（収入なら見込みの収入）として数える。自動記録はその行のオン／オフ（makesRecord）。
-// 支出をどこで数えるか（変動費・予備費・固定費の確定・見込み）は、大分類の予算の分け方（budgetGroup）だけで決める。
-// 数えるときは、収入・予備費・固定費は予算の明細（MoneyBudgetLine。budgetLinesOf）、変動費は大分類の月の予算
+// 支出をどこで数えるか（変動費・固定費の確定・見込み）は、大分類の予算の分け方（budgetGroup）だけで決める。
+// 数えるときは、収入・固定費は予算の明細（MoneyBudgetLine。budgetLinesOf）、変動費は大分類の月の予算
 // （MoneyBudget。variableBudgetsOf。大分類の行 ＋ その小分類の行）の形に直して使う。
 
 /** 予算の行か（振替でなく、カテゴリが決まっていて、使っているもの）。 */
@@ -821,7 +821,7 @@ export const budgetLineOf = (rule: MoneyRecurring): MoneyBudgetLine => ({
   position: rule.position,
 });
 
-/** 収入・予備費・固定費の予算（予算の明細の形）。変動費の行は入れない（variableBudgetsOf で月の予算にする）。 */
+/** 収入・固定費の予算（予算の明細の形）。変動費の行は入れない（variableBudgetsOf で月の予算にする）。 */
 export function budgetLinesOf(recurring: readonly MoneyRecurring[], categories: readonly MoneyCategory[]): MoneyBudgetLine[] {
   return recurring
     .filter(isBudgetRow)
@@ -831,7 +831,7 @@ export function budgetLinesOf(recurring: readonly MoneyRecurring[], categories: 
 
 /**
  * 支出の予算の、自動記録の額の決まり方（docs/kakei.md §0.8）。種類で決まる: 固定費（見込み）・変動費は見込み
- * （過去の記録から見込んだ見込みの記録を作る）、固定費（確定）・予備費は確定。収入は行ごとに決める。
+ * （過去の記録から見込んだ見込みの記録を作る）、固定費（確定）は確定。収入は行ごとに決める。
  */
 export const amountModeOfGroup = (group: SpendGroup): MoneyRecurring['amountMode'] =>
   group === 'estimate' || group === 'variable' ? 'estimate' : 'fixed';
@@ -924,7 +924,7 @@ export interface BudgetPlan {
   totals: Record<BudgetLineGroup, number>;
 }
 
-const BUDGET_LINE_GROUPS: BudgetLineGroup[] = ['income', 'variable', 'reserve', 'confirmed', 'estimate'];
+const BUDGET_LINE_GROUPS: BudgetLineGroup[] = ['income', 'variable', 'confirmed', 'estimate'];
 
 /** その年の予算の明細を、分け方ごとに月へ置く（発生月なしは月に置かない。額は noMonthYearAmount。集計を始めた年は減らす）。 */
 export function budgetPlanInYear(
@@ -955,36 +955,6 @@ export function budgetLineTotalsByCategory(lines: readonly MoneyBudgetLine[], ye
   return totals;
 }
 
-export interface ReserveRow {
-  categoryId: string;
-  /** その年の予算（明細の合計）。 */
-  amount: number;
-  /** その年にその小分類で使った額。 */
-  spent: number;
-}
-
-/** 予備費の小分類（大分類の分け方が予備費）ごとの、その年の予算と使った額（カテゴリの並び）。使っていない小分類で予算も無いものは出さない。 */
-export function reserveYearRows(
-  lines: readonly MoneyBudgetLine[],
-  categories: readonly MoneyCategory[],
-  records: readonly MoneyRecord[],
-  year: number,
-): ReserveRow[] {
-  const totals = budgetLineTotalsByCategory(lines, year);
-  const keys = yearMonthKeys(year);
-  const rows: ReserveRow[] = [];
-  for (const top of topCategories(categories, 'living', true)) {
-    if (top.budgetGroup !== 'reserve') continue;
-    for (const child of childCategories(categories, top.id, true)) {
-      const amount = totals.get(child.id) ?? 0;
-      const spent = categorySpentIn(records, child.id, keys);
-      if (amount === 0 && spent === 0 && child.archived) continue;
-      rows.push({ categoryId: child.id, amount, spent });
-    }
-  }
-  return rows;
-}
-
 /**
  * その月（YYYY-MM）の大分類の、手入力の月の予算（変動費）。予算は年ごとに12か月ぶんを持つので、
  * 年の途中で直しても、直した月より前の月は変わらない。
@@ -1004,7 +974,7 @@ export function manualBudgetFor(budgets: readonly MoneyBudget[], categoryId: str
 
 /**
  * その月（YYYY-MM）の大分類の月の予算。予算を充てるのは変動費（手入力）だけ（2026-10-21。固定費〔確定・見込み〕は足さない。
- * 予備費は小分類ごとの年の額で、別に数える。docs/kakei.md §0.7）。無い月は null（予算なし）。
+ * docs/kakei.md §0.7）。無い月は null（予算なし）。
  */
 export const budgetFor = (budgets: readonly MoneyBudget[], categoryId: string, monthKey: string): number | null =>
   manualBudgetFor(budgets, categoryId, monthKey);
@@ -1308,7 +1278,7 @@ export function livingSpendByTop(
 /**
  * 生活費のタイル。カテゴリの並び（大分類の並び順）のまま（2026-10-08に、予算を超えた順から変えた）。
  * 使わなくした大分類は、その月に使っていれば出す。
- * 予算は、変動費の大分類は月の予算、予備費・固定費の大分類は予算の明細（その月に発生する回。年〔2か月以上〕は発生月なしも1回ぶん。
+ * 予算は、変動費の大分類は月の予算、固定費の大分類は予算の明細（その月に発生する回。年〔2か月以上〕は発生月なしも1回ぶん。
  * docs/kakei.md §0.7）。
  */
 export function buildBudgetTiles(
@@ -1519,10 +1489,10 @@ export function yearToDateBalance(
 }
 
 // ---- 振り返り・年間予算の支出の分け方（docs/kakei.md §0.7。2026-10-22） ----
-// 支出の品目を、変動費・予備費・固定費（確定・見込み）に分ける。大分類の予算の分け方（budgetGroup）だけで決める
+// 支出の品目を、変動費・固定費（確定・見込み）に分ける。大分類の予算の分け方（budgetGroup）だけで決める
 // （自動記録ルール・予算の有無は関係しない）。カテゴリの無い品目・削除したカテゴリの品目は変動費。
 
-export type SpendGroup = 'variable' | 'reserve' | 'confirmed' | 'estimate';
+export type SpendGroup = 'variable' | 'confirmed' | 'estimate';
 
 /** 支出の品目（小分類）が、どの分け方に入るか。特別費（予算に載せない。docs/kakei.md §0.10）は 'temporary'。 */
 export function spendGroupOf(categoryId: string | null, categories: readonly MoneyCategory[]): SpendGroup | 'temporary' {
@@ -1553,7 +1523,6 @@ export interface PeriodSummary {
   income: IncomePart[];
   incomeTotal: number;
   variable: number;
-  reserve: number;
   confirmed: number;
   estimate: number;
   temporary: number;
@@ -1567,7 +1536,7 @@ export function periodSummary(
   monthKeys: readonly string[],
 ): PeriodSummary {
   const incomeByTop = new Map<string | null, number>();
-  const groups = { variable: 0, reserve: 0, confirmed: 0, estimate: 0, temporary: 0 };
+  const groups = { variable: 0, confirmed: 0, estimate: 0, temporary: 0 };
   for (const monthKey of monthKeys) {
     for (const record of recordsInMonth(records, monthKey)) {
       if (record.kind === 'transfer') continue;
@@ -1591,7 +1560,7 @@ export function periodSummary(
     income,
     incomeTotal: income.reduce((sum, part) => sum + part.amount, 0),
     ...groups,
-    expenseTotal: groups.variable + groups.reserve + groups.confirmed + groups.estimate + groups.temporary,
+    expenseTotal: groups.variable + groups.confirmed + groups.estimate + groups.temporary,
   };
 }
 
@@ -1758,8 +1727,8 @@ export interface YearLanding {
  * 年末の収支見込み（docs/kakei.md §0.9・§4.6。2026-10-24）。
  * - 締めた月は実績（収入も支出も）
  * - 締めていない月のうち、今月まで（current。締め忘れた過去の月も）は記録があるので、支出は予算と実績の大きいほう
- *   （変動費は大分類ごと、予備費・固定費は小分類ごと。予算の無いもの・カテゴリの無い品目は実績）。収入は予算
- * - 翌月からは記録が無いので予算だけ（収入 − 変動費の月の予算 − 予備費・固定費の明細のうち、その月に発生する回）
+ *   （変動費は大分類ごと、固定費は小分類ごと。予算の無いもの・カテゴリの無い品目は実績）。収入は予算
+ * - 翌月からは記録が無いので予算だけ（収入 − 変動費の月の予算 − 固定費の明細のうち、その月に発生する回）
  * - 発生月なしの予算は、小分類ごとに「その年の額（noMonthYearAmount）− 今月までの実績」（0 未満は 0）を見込み支出として12月に入れる（12月を締めた年は入れない）
  * 数えるのは使い始めた月（usageStartMonth。2026年は10月から）から。記録が1件も無ければ null。先の年は全部の月を予算で出す。自動記録ルールは使わない。
  */
@@ -1802,7 +1771,6 @@ export function buildYearLanding(
           ? expenseWithActuals(records, categories, budgets, lines, monthKey)
           : variableTops.reduce((sum, category) => sum + (manualBudgetFor(budgets, category.id, monthKey) ?? 0), 0) +
             plan.months.variable[index] +
-            plan.months.reserve[index] +
             plan.months.confirmed[index] +
             plan.months.estimate[index];
       if (index === 11) expense -= unscheduled;
@@ -1825,7 +1793,7 @@ export function buildYearLanding(
 
 /**
  * 締めていない今月まで（締め忘れた月も）の、その月の支出の見込み＝予算と実績の大きいほうの合計。
- * 変動費は大分類ごと（月の予算）、予備費・固定費は小分類ごと（その月に発生する明細）。発生月なしの小分類・予算の無いもの・
+ * 変動費は大分類ごと（月の予算）、固定費は小分類ごと（その月に発生する明細）。発生月なしの小分類・予算の無いもの・
  * カテゴリの無い品目は実績（発生月なしの残りは12月に入れる）。
  */
 function expenseWithActuals(
@@ -2033,11 +2001,10 @@ export function buildCategoryAnalysis(
 }
 
 // ---- 振り返りの種類ごとの一覧（docs/kakei.md §0.9。2026-10-24） ----
-// 振り返り（月・年）は、予算に対して見る。並びは 変動費 → 予備費 → 固定費（中に確定・見込み）→ カテゴリなし。
+// 振り返り（月・年）は、予算に対して見る。並びは 変動費 → 固定費（中に確定・見込み）→ 特別費 → カテゴリなし。
 // - 変動費: 大分類ごと。予算 − 実績・使った割合の帯（buildBudgetTiles と同じ）
-// - 予備費: 記録のあった小分類だけ。年は年の予算（発生月なしは noMonthYearAmount）と比べる。月は予算が月に割り当たらないので、
-//   年の予算に対して、年初からその月までに使った額で進み具合を出す（yearToDate。2026-10-25）
 // - 固定費: 記録のあった小分類だけ。額は記録の合計で、確定は額だけ、見込みは記録のあった月の予算との差を添える
+// - 特別費: 記録のあった小分類（大分類に直接付けた品目は品名）ごとの額だけ。予算は無い（2026-10-31に予備費を特別費の小分類にした。docs/kakei.md §0.10）
 // - カテゴリなし: カテゴリの無い品目（削除したカテゴリの品目を含む）
 
 export interface ReviewSubRow {
@@ -2045,23 +2012,20 @@ export interface ReviewSubRow {
   category: MoneyCategory;
   /** 期間の実績。 */
   actual: number;
-  /** 比べる予算（無ければ null）。予備費は年だけ、見込みは記録のあった月の分（年は発生月なしも）、確定は null。 */
+  /** 比べる予算（無ければ null）。見込みは記録のあった月の分（年は発生月なしも）、確定・特別費は null。 */
   budget: number | null;
-  /** 月の予備費だけ: 年の予算と、年初からその月までの実績（進み具合。年の予算が無ければ null）。 */
-  yearToDate: { actual: number; budget: number } | null;
 }
 
 export interface ReviewSections {
   variable: BudgetTile[];
-  reserve: ReviewSubRow[];
   confirmed: ReviewSubRow[];
   estimate: ReviewSubRow[];
-  /** 特別費（記録した品名ごと。予算は無い。固定費の下に出す。docs/kakei.md §0.10）。 */
+  /** 特別費（記録した小分類ごと。大分類に直接付けた品目は品名ごと。予算は無い。固定費の下に出す。docs/kakei.md §0.10）。 */
   temporary: ReviewSubRow[];
   /** カテゴリの無い品目（削除したカテゴリの品目を含む）。 */
   uncategorized: { count: number; amount: number };
   /** 種類ごとの実績（目標割合に使う。固定費は確定＋見込み。カテゴリの無い品目は入れない）。 */
-  spend: { variable: number; reserve: number; fixed: number };
+  spend: { variable: number; fixed: number };
 }
 
 /** 振り返りの「カテゴリなし」の行を開いたときの、仮のカテゴリ。 */
@@ -2077,13 +2041,14 @@ export const UNCATEGORIZED: MoneyCategory = {
   budgetGroup: 'variable',
 };
 
-/** 特別費の行の id の頭（振り返りの行を押したとき、品名で記録を絞る。buildSubcategoryAnalysis）。 */
+/** 特別費の、大分類に直接付けた品目の行の id の頭（振り返りの行を押したとき、品名で記録を絞る。buildSubcategoryAnalysis）。 */
 export const TEMPORARY_ROW_PREFIX = 'temporary:';
 
-/** 特別費の品目の、振り返りの行の名前（品名。無ければ大分類の名前）。特別費でない品目は null。 */
+/** 特別費の大分類に直接付けた品目の、振り返りの行の名前（品名。無ければ大分類の名前）。それ以外（小分類に付けた品目・特別費でない品目）は null。 */
 function temporaryLabelOf(categories: readonly MoneyCategory[], item: Pick<MoneyItem, 'categoryId' | 'name'>): string | null {
   if (item.categoryId === null) return null;
   const topId = topCategoryIdOf(categories, item.categoryId);
+  if (topId !== item.categoryId) return null;
   const top = categories.find((category) => category.id === topId);
   if (top === undefined || top.budgetGroup !== 'temporary') return null;
   return item.name.trim() || top.name;
@@ -2103,12 +2068,12 @@ export function buildReviewSections(
   year: boolean,
 ): ReviewSections {
   const keys = new Set(monthKeys);
-  // 小分類ごと・月ごとの実績（予備費・固定費）
+  // 小分類ごと・月ごとの実績（固定費）
   const subActual = new Map<string, Map<string, number>>();
-  const spend = { variable: 0, reserve: 0, fixed: 0 };
+  const spend = { variable: 0, fixed: 0 };
   const uncategorized = { count: 0, amount: 0 };
-  // 特別費: 品名ごとの額（予算が無いので月ごとには持たない）
-  const temporary = new Map<string, { top: MoneyCategory; amount: number }>();
+  // 特別費: 小分類（大分類に直接付けた品目は品名）ごとの額（予算が無いので月ごとには持たない）
+  const temporary = new Map<string, { category: MoneyCategory; amount: number }>();
   for (const record of records) {
     if (record.kind !== 'expense') continue;
     const monthKey = monthKeyOf(record.occurredOn);
@@ -2123,17 +2088,19 @@ export function buildReviewSections(
       }
       const group = spendGroupOf(item.categoryId, categories);
       if (group === 'temporary') {
-        const label = temporaryLabelOf(categories, item) as string;
-        const top = categories.find((category) => category.id === topCategoryIdOf(categories, item.categoryId as string)) as MoneyCategory;
-        temporary.set(label, { top, amount: (temporary.get(label)?.amount ?? 0) + item.amount });
+        const label = temporaryLabelOf(categories, item);
+        const own = knownCategory(categories, item.categoryId) as MoneyCategory;
+        // 小分類は小分類の id（押すとその小分類の記録）、大分類に直接付けた品目は品名（TEMPORARY_ROW_PREFIX）
+        const key = label === null ? own.id : `${TEMPORARY_ROW_PREFIX}${label}`;
+        const category = label === null ? own : { ...own, id: key, name: label };
+        temporary.set(key, { category, amount: (temporary.get(key)?.amount ?? 0) + item.amount });
         continue;
       }
       if (group === 'variable') {
         spend.variable += item.amount;
         continue;
       }
-      if (group === 'reserve') spend.reserve += item.amount;
-      else spend.fixed += item.amount;
+      spend.fixed += item.amount;
       const byMonth = subActual.get(item.categoryId as string) ?? new Map<string, number>();
       byMonth.set(monthKey, (byMonth.get(monthKey) ?? 0) + item.amount);
       subActual.set(item.categoryId as string, byMonth);
@@ -2157,25 +2124,9 @@ export function buildReviewSections(
     return total;
   };
   const subBudget = (categoryId: string, group: SpendGroup, byMonth: Map<string, number>): number | null => {
-    if (group === 'confirmed' || (group === 'reserve' && !year)) return null;
-    // 予備費は見ている期間の月すべて、見込みは記録のあった月だけ
-    return linesBudget(categoryId, group, group === 'reserve' ? monthKeys : [...byMonth.keys()], year);
-  };
-  // 月の予備費の進み具合: その年の数える月の予算（年の振り返りと同じ額）と、年初からその月までの実績
-  const lastKey = monthKeys[monthKeys.length - 1];
-  const yearKeys = year || lastKey === undefined ? [] : yearActiveMonthKeys(records, yearOfMonth(lastKey));
-  const yearToDateOf = (categoryId: string): ReviewSubRow['yearToDate'] => {
-    // 集計を始める前の月は出さない
-    if (!yearKeys.includes(lastKey)) return null;
-    const budget = linesBudget(categoryId, 'reserve', yearKeys, true);
-    if (budget === null) return null;
-    const upTo = new Set(yearKeys.filter((key) => key <= lastKey));
-    let actual = 0;
-    for (const record of records) {
-      if (record.kind !== 'expense' || !upTo.has(monthKeyOf(record.occurredOn))) continue;
-      for (const item of record.items) if (item.categoryId === categoryId) actual += item.amount;
-    }
-    return { actual, budget };
+    if (group === 'confirmed') return null;
+    // 見込みは記録のあった月だけ
+    return linesBudget(categoryId, group, [...byMonth.keys()], year);
   };
   // 小分類の行（カテゴリの並び。大分類の並び → その中の並び。大分類に直接付けた品目は大分類の名前で先頭に）
   const rowsOf = (group: SpendGroup): ReviewSubRow[] => {
@@ -2186,12 +2137,7 @@ export function buildReviewSections(
         const byMonth = subActual.get(category.id);
         if (byMonth === undefined) continue;
         const actual = [...byMonth.values()].reduce((sum, value) => sum + value, 0);
-        rows.push({
-          category,
-          actual,
-          budget: subBudget(category.id, group, byMonth),
-          yearToDate: group === 'reserve' && !year ? yearToDateOf(category.id) : null,
-        });
+        rows.push({ category, actual, budget: subBudget(category.id, group, byMonth) });
       }
     }
     return rows;
@@ -2200,18 +2146,12 @@ export function buildReviewSections(
     variable: buildBudgetTiles(records, categories, budgets, monthKeys, lines).filter(
       (tile) => tile.category.budgetGroup === 'variable' && (tile.budget !== null || tile.actual > 0),
     ),
-    reserve: rowsOf('reserve'),
     confirmed: rowsOf('confirmed'),
     estimate: rowsOf('estimate'),
-    // 額の多い順。行を押すと、その品名の記録を見る（id の頭が TEMPORARY_ROW_PREFIX）
-    temporary: [...temporary]
-      .sort((a, b) => b[1].amount - a[1].amount || a[0].localeCompare(b[0], 'ja'))
-      .map(([label, entry]) => ({
-        category: { ...entry.top, id: `${TEMPORARY_ROW_PREFIX}${label}`, name: label },
-        actual: entry.amount,
-        budget: null,
-        yearToDate: null,
-      })),
+    // 額の多い順。行を押すと、その小分類（大分類に直接付けた品目は品名。id の頭が TEMPORARY_ROW_PREFIX）の記録を見る
+    temporary: [...temporary.values()]
+      .sort((a, b) => b.amount - a.amount || a.category.name.localeCompare(b.category.name, 'ja'))
+      .map((entry) => ({ category: entry.category, actual: entry.amount, budget: null })),
     uncategorized,
     spend,
   };
@@ -2221,7 +2161,7 @@ export function buildReviewSections(
 export const spendRatio = (spend: number, income: number): number | null => (income > 0 ? Math.round((spend / income) * 100) : null);
 
 /**
- * 予備費・固定費の小分類（categoryId）、特別費の品名（TEMPORARY_ROW_PREFIX + 品名）、またはカテゴリの無い品目（UNCATEGORIZED.id）の、見ている期間の記録と実績。
+ * 固定費・特別費の小分類（categoryId）、特別費の大分類に直接付けた品目の品名（TEMPORARY_ROW_PREFIX + 品名）、またはカテゴリの無い品目（UNCATEGORIZED.id）の、見ている期間の記録と実績。
  * 振り返りの小分類の行を押したときの画面（記録の一覧）に使う。budget は行と同じ比べる予算。
  */
 export function buildSubcategoryAnalysis(
@@ -2275,14 +2215,13 @@ export function usageStartMonth(records: readonly MoneyRecord[]): string | null 
 
 /**
  * 発生月なしの予算の、その年に数える額（かからない年は0）。集計を始めた年（2026年）だけは、数える月が3か月なので、
- * 予備費は年の額 × 数える月 / 12（円に丸める）、固定費（確定・見込み。ふるさと納税・自治会費・祭礼費）はその年はもう済んでいたので0
+ * 固定費（確定・見込み。ふるさと納税・自治会費・祭礼費）はその年はもう済んでいたので0
  * （2026-10-24。docs/kakei.md §0.9）。年間予算の画面（年の予算そのもの）には使わない。
  */
 export function noMonthYearAmount(line: MoneyBudgetLine, group: BudgetLineGroup, year: number): number {
   if (!budgetLineInYear(line, year)) return 0;
   if (year !== yearOfMonth(MONEY_COUNT_START)) return line.amount;
   if (group === 'confirmed' || group === 'estimate') return 0;
-  if (group === 'reserve') return Math.round((line.amount * (13 - Number(MONEY_COUNT_START.slice(5, 7)))) / 12);
   return line.amount;
 }
 

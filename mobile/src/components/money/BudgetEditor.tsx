@@ -74,14 +74,15 @@ import { Chip, ChipRow, Field, WalletChoices } from '@/components/money/feedPart
 // - 上の枠: 円グラフ（1周＝収入）。支出の種類を青の濃淡で並べ、残りが収支見込み（緑）。赤字の年は、支出の種類を1周に並べ、
 //   収入からはみ出した分を外側の赤い弧で出す。円の下に収支見込み・収入・支出と、支出の種類（収入に対する割合）。
 //   行を押すと、下の一覧はその種類だけになる（もう一度押すと全部）
-// - 下の一覧: 収入・変動費・予備費・固定費（確定）・固定費（見込み）の見出しごと（見出しを押すと折りたたむ）。収入の見出しの下線は緑、
+// - 下の一覧: 収入・変動費・固定費（確定）・固定費（見込み）の見出しごと（見出しを押すと折りたたむ）。収入の見出しの下線は緑、
 //   ほかはグレー。行は名前と年の額だけ（詳細は押して開く枠で見る）。その年に発生しない予算は、グレーにして「期間外」を付け、各見出しの一番下
 // - 変動費の行は大分類。押すと予算の枠が開く（大分類の画面は無くした。2026-10-24）
 // - 予算の枠（追加・編集）は、種類で「分類」の項目が変わる（どの種類も「予算の1行」で数える。docs/kakei.md §0.8）:
 //   変動費＝1行が大分類: 種類・名前・アイコン・小分類（大分類の名前とアイコン、小分類の足す・直す・移す・消すをここで）
-//   固定費（確定）・固定費（見込み）・予備費＝1行が小分類（品目）: 種類・名前（大分類は種類そのもの。名前が小分類の名前になる）
+//   固定費（確定）・固定費（見込み）＝1行が小分類（品目）: 種類・名前（大分類は種類そのもの。名前が小分類の名前になる）
 //   収入＝1行が小分類（種別）: 種類・大分類・小分類・品目（品目名は同じ小分類に予算が複数あるときの区別）
-//   予算（金額・いつ・期間）、自動記録（オン／オフ・日・出金元・お店）。種類を変えて保存できるのは、予備費・固定費の間だけ（小分類が選んだ種類へ移る）
+//   予算（金額・いつ・期間）、自動記録（オン／オフ・日・出金元・お店）。種類を変えて保存できるのは、固定費（確定・見込み）の間だけ（小分類が選んだ種類へ移る）
+// 予備費は2026-10-31にやめ、特別費の小分類にした（予算を持たず、使った額だけを振り返りで見る。docs/kakei.md §0.10）
 
 interface BudgetEditorProps {
   familyId: string;
@@ -107,7 +108,6 @@ const GROUP_LABEL: Record<BudgetLineGroup, string> = {
   variable: '変動費',
   confirmed: '固定費・確定',
   estimate: '固定費・見込み',
-  reserve: '予備費',
 };
 
 /** 上の枠の内訳の名前。 */
@@ -115,11 +115,10 @@ const PART_LABEL: Record<SpendGroup, string> = {
   variable: '変動費',
   confirmed: '固定費・確定',
   estimate: '固定費・見込み',
-  reserve: '予備費',
 };
 
-// 並びは 変動費 → 予備費 → 固定費（確定・見込み）。家計全体で予算を並べるときの順（2026-10-24。docs/kakei.md §0.9）。
-const SPEND_GROUPS: SpendGroup[] = ['variable', 'reserve', 'confirmed', 'estimate'];
+// 並びは 変動費 → 固定費（確定・見込み）。家計全体で予算を並べるときの順（2026-10-24。docs/kakei.md §0.9）。
+const SPEND_GROUPS: SpendGroup[] = ['variable', 'confirmed', 'estimate'];
 const GROUPS: BudgetLineGroup[] = ['income', ...SPEND_GROUPS];
 
 /** 円グラフの色（支出の種類は青の濃淡。収支見込みは収入の緑、赤字は赤）。 */
@@ -127,18 +126,16 @@ const PART_COLOR: Record<SpendGroup, string> = {
   variable: '#1e3a8a',
   confirmed: '#3b82f6',
   estimate: '#93c5fd',
-  reserve: '#cbd5e1',
 };
 const DEFICIT_COLOR = '#dc2626';
 
 /** 支出の種類 → 大分類の予算の分け方。 */
 const budgetGroupOf = (group: SpendGroup): MoneyBudgetGroup => (group === 'confirmed' ? 'fixed' : group);
 
-/** 大分類＝種類のもの（固定費・予備費）の大分類の名前。 */
+/** 大分類＝種類のもの（固定費）の大分類の名前。 */
 const TYPE_TOP_NAME: Record<Exclude<SpendGroup, 'variable'>, string> = {
   confirmed: '固定費・確定',
   estimate: '固定費・見込み',
-  reserve: '予備費',
 };
 
 /** 大分類を選ぶ種類（変動費・収入）。ほかは大分類＝種類。 */
@@ -150,7 +147,7 @@ type CategoryPlan =
   | { group: Exclude<SpendGroup, 'variable'>; name: string }
   | { group: 'income' };
 
-const isItemGroup = (group: BudgetLineGroup): group is Exclude<SpendGroup, 'variable'> => group === 'reserve' || group === 'confirmed' || group === 'estimate';
+const isItemGroup = (group: BudgetLineGroup): group is Exclude<SpendGroup, 'variable'> => group === 'confirmed' || group === 'estimate';
 
 type Screen = { type: 'list' } | { type: 'form'; ruleId: string | null; group?: BudgetLineGroup; topId?: string };
 
@@ -159,7 +156,6 @@ const byPosition = (a: MoneyRecurring, b: MoneyRecurring) => a.position - b.posi
 /** 目標割合（種類ごと。固定費は確定＋見込みで1つ）の行。 */
 const RATIO_ROWS: { key: keyof MoneyRatioTargets; label: string }[] = [
   { key: 'variable', label: '変動費' },
-  { key: 'reserve', label: '予備費' },
   { key: 'fixed', label: '固定費' },
 ];
 
@@ -271,7 +267,6 @@ export default function BudgetEditor({
       income: [],
       confirmed: [],
       estimate: [],
-      reserve: [],
     };
     const order = (rule: MoneyRecurring) => {
       const own = categories.find((entry) => entry.id === rule.categoryId);
@@ -304,9 +299,8 @@ export default function BudgetEditor({
     variable: sumOf(variableTops),
     confirmed: sumOf(sections.confirmed),
     estimate: sumOf(sections.estimate),
-    reserve: sumOf(sections.reserve),
   };
-  const expense = totals.variable + totals.confirmed + totals.estimate + totals.reserve;
+  const expense = totals.variable + totals.confirmed + totals.estimate;
   const balance = totals.income - expense;
 
   // ---- 保存 ----
@@ -315,7 +309,7 @@ export default function BudgetEditor({
     onRecurring((prev) => [...prev.filter((rule) => rule.id !== saved.id), saved].sort(byPosition));
   const putCategory = (saved: MoneyCategory) => onCategories((prev) => [...prev.filter((entry) => entry.id !== saved.id), saved]);
 
-  /** その種類の大分類（固定費・予備費は種類そのもの。無ければ作る）。 */
+  /** その種類の大分類（固定費は種類そのもの。無ければ作る）。 */
   const typeTop = async (group: Exclude<SpendGroup, 'variable'>): Promise<MoneyCategory> => {
     const found = topCategories(categories, 'living').find((top) => spendGroupOf(top.id, categories) === group);
     if (found) return found;
@@ -474,7 +468,7 @@ export default function BudgetEditor({
     );
   };
 
-  /** 固定費・予備費の品目（小分類＝予算の1行）を消す。小分類も一緒に消える。 */
+  /** 固定費の品目（小分類＝予算の1行）を消す。小分類も一緒に消える。 */
   const removeItem = (rule: MoneyRecurring) => {
     const own = category(rule.categoryId);
     if (own === null) return removeRule(rule);
@@ -489,7 +483,7 @@ export default function BudgetEditor({
     );
   };
 
-  /** 予算の行の種類に合わせて消す（変動費は大分類ごと、固定費・予備費は品目〔小分類〕ごと、収入は行だけ）。 */
+  /** 予算の行の種類に合わせて消す（変動費は大分類ごと、固定費は品目〔小分類〕ごと、収入は行だけ）。 */
   const removeBudget = (rule: MoneyRecurring) => {
     const own = category(rule.categoryId);
     if (own !== null && own.kind === 'living') {
@@ -504,7 +498,7 @@ export default function BudgetEditor({
 
   /**
    * 予算を保存する。種類ごとに、先にカテゴリを作る・直す。
-   * 変動費は大分類（名前・アイコン・小分類）、固定費・予備費は小分類（名前。選んだ種類の大分類の下へ。種類を変えたら移す）、収入は選んだ小分類。
+   * 変動費は大分類（名前・アイコン・小分類）、固定費は小分類（名前。選んだ種類の大分類の下へ。種類を変えたら移す）、収入は選んだ小分類。
    */
   const saveBudget = async (
     target: MoneyRecurring | null,
@@ -767,7 +761,6 @@ export default function BudgetEditor({
 
           {shown('income') && section('income', ruleList('income'), totals.income)}
           {shown('variable') && section('variable', variableList, totals.variable)}
-          {shown('reserve') && section('reserve', ruleList('reserve'), totals.reserve)}
           {shown('confirmed') && section('confirmed', ruleList('confirmed'), totals.confirmed)}
           {shown('estimate') && section('estimate', ruleList('estimate'), totals.estimate)}
           {selected === null && orphans.length > 0 && (
@@ -1048,7 +1041,7 @@ function BudgetForm({
   const [categoryId, setCategoryId] = useState<string | null>(rule?.categoryId ?? null);
   const initialTop = categories.find((entry) => entry.id === initialTopId) ?? null;
   const initialOwn = categories.find((entry) => entry.id === rule?.categoryId) ?? null;
-  // 変動費の大分類の名前とアイコン、固定費・予備費の名前（小分類の名前）。
+  // 変動費の大分類の名前とアイコン、固定費の名前（小分類の名前）。
   const [catName, setCatName] = useState(
     initialGroup === 'variable' ? (initialTop?.name ?? '') : isItemGroup(initialGroup) ? (initialOwn?.name ?? '') : '',
   );
@@ -1090,7 +1083,7 @@ function BudgetForm({
   const auto = makesRecord && !noMonth;
   const top = categories.find((entry) => entry.id === topId) ?? null;
   const topKids = top && group === 'variable' ? childCategories(categories, top.id) : [];
-  /** 種類を変えられるか。変動費・収入は、消して作り直す（固定費・予備費の間だけ、小分類が選んだ種類へ移る）。 */
+  /** 種類を変えられるか。変動費・収入は、消して作り直す（固定費〔確定・見込み〕の間だけ、小分類が選んだ種類へ移る）。 */
   const typeLocked = rule !== null && !isItemGroup(initialGroup);
   const selectedCategory = categories.find((entry) => entry.id === categoryId) ?? null;
   // 小分類の選択肢。変動費・収入は選んだ大分類（まとめての予算は大分類そのもの）、ほかはその種類の小分類。
@@ -1101,7 +1094,7 @@ function BudgetForm({
     : topsOf(group).flatMap((entry) => childCategories(categories, entry.id).map((child) => ({ category: child, label: child.name })));
   const categoryLabel = selectedCategory === null ? '選ぶ' : selectedCategory.parentId === null ? 'まとめて（大分類）' : selectedCategory.name;
 
-  /** 種類の選択肢。直すときは、固定費・予備費の間だけ（変動費・収入は、消して作り直す）。 */
+  /** 種類の選択肢。直すときは、固定費（確定・見込み）の間だけ（変動費・収入は、消して作り直す）。 */
   const groupChoices: BudgetLineGroup[] = rule !== null ? GROUPS.filter(isItemGroup) : GROUPS;
 
   const changeGroup = (next: BudgetLineGroup) => {
@@ -1109,7 +1102,7 @@ function BudgetForm({
     if (next === group) return;
     setGroup(next);
     setTopId(next === 'income' ? (topsOf('income')[0]?.id ?? null) : null);
-    // 収入の小分類は、収入と支出をまたぐなら選び直す。固定費・予備費は、保存のときに選んだ種類へ移す。
+    // 収入の小分類は、収入と支出をまたぐなら選び直す。固定費は、保存のときに選んだ種類へ移す。
     const own = selectedCategory;
     if (own === null || own.parentId === null || (own.kind === 'income') !== (next === 'income')) setCategoryId(null);
   };
@@ -1726,13 +1719,12 @@ function NameSheet({
 }
 
 /**
- * 目標割合（docs/kakei.md §0.9）。上の枠の下に折りたたんで出す（はじめは閉じる）。開くと、種類ごと（変動費・予備費・固定費）の
+ * 目標割合（docs/kakei.md §0.9）。上の枠の下に折りたたんで出す（はじめは閉じる）。開くと、種類ごと（変動費・固定費）の
  * 目標と、貯金（100% − 合計）。「編集」でその場で直す（合計が100%を超えると保存できない。空は目標なし）。
  */
 function RatioPanel({ familyId, targets, onSaved }: { familyId: string; targets: MoneyRatioTargets; onSaved: (targets: MoneyRatioTargets) => void }) {
   const textsOf = (value: MoneyRatioTargets): Record<keyof MoneyRatioTargets, string> => ({
     variable: value.variable === null ? '' : String(value.variable),
-    reserve: value.reserve === null ? '' : String(value.reserve),
     fixed: value.fixed === null ? '' : String(value.fixed),
   });
   const [open, setOpen] = useState(false);
@@ -1757,7 +1749,7 @@ function RatioPanel({ familyId, targets, onSaved }: { familyId: string; targets:
   };
   const save = async () => {
     if (invalid || over || saving) return;
-    const next: MoneyRatioTargets = { variable: parsed[0] ?? null, reserve: parsed[1] ?? null, fixed: parsed[2] ?? null };
+    const next: MoneyRatioTargets = { variable: parsed[0] ?? null, fixed: parsed[1] ?? null };
     setSaving(true);
     try {
       await saveMoneyRatioTargets(supabase, familyId, next);
