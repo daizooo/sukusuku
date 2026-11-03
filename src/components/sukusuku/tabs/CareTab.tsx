@@ -505,7 +505,6 @@ export default function CareTab({
         show={logModal?.type === 'milk'}
         log={logModal?.log?.type === 'milk' ? logModal.log : null}
         baseDate={logDate}
-        nextSide={nextBreastSide}
         timer={nursingTimer}
         pumpedBatches={pumpedBatches}
         onDiscardBatch={onDiscardPumpedBatch}
