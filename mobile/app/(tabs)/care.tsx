@@ -992,7 +992,6 @@ export default function CareScreen() {
         show={editing !== null}
         log={editing?.log ?? null}
         baseDate={logDate}
-        nextSide={nextBreastSide}
         timer={timer}
         pumpedBatches={pumpedBatches}
         onDiscardBatch={(id, discarded) => void handleDiscardBatch(id, discarded)}

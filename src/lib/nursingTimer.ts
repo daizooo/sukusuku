@@ -511,6 +511,11 @@ export interface NursingTimer {
    * 記録に入る合計を返すので、そのまま分数の入力欄へ反映できる。
    */
   toggleSide: (side: BreastSide) => NursingSideValues;
+  /**
+   * 左右の時間を手で決め直す（「編集」の完了）。計測は止まった状態になる。
+   * どちらも0なら、計測が残っていない状態（リセットと同じ）に戻す。
+   */
+  setElapsed: (values: NursingSideValues) => void;
   reset: () => void;
 }
 
@@ -557,6 +562,31 @@ export function useNursingTimer(): NursingTimer {
     return next.elapsed;
   }, []);
 
+  const setElapsed = useCallback((values: NursingSideValues) => {
+    const clamp = (ms: number) => Math.min(NURSING_MAX_MS, Math.max(0, Math.round(ms)));
+    const next: NursingSideValues = { left: clamp(values.left), right: clamp(values.right) };
+    if (!hasElapsed(next)) {
+      store(EMPTY);
+      return;
+    }
+    const at = Date.now();
+    const prev = getSnapshot();
+    store({
+      ...prev,
+      elapsed: next,
+      runningSide: null,
+      startedAt: null,
+      // 手で入れた場合も、記録の日時の初期値や「授乳は済んだ」の印が要る。
+      sessionStartedAt: prev.sessionStartedAt ?? at,
+      stoppedAt: prev.stoppedAt ?? at,
+      // すでに過ぎた5分は鳴らし済みとして扱う（入れ直した直後に鳴らさない）。
+      notified: {
+        left: Math.floor(next.left / NURSING_ALARM_MS),
+        right: Math.floor(next.right / NURSING_ALARM_MS),
+      },
+    });
+  }, []);
+
   const reset = useCallback(() => {
     stopVibration();
     store(EMPTY);
@@ -569,6 +599,7 @@ export function useNursingTimer(): NursingTimer {
     lastSide: active.lastSide,
     hasSession: hasSession(active) || hasElapsed(elapsed),
     toggleSide,
+    setElapsed,
     reset,
   };
 }

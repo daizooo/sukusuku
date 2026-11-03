@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type {
   BreastSide,
   FeedingEntryMode,
@@ -62,8 +62,6 @@ interface MilkLogModalProps {
   log: MilkLog | null;
   /** 新規追加時に記録する日。過去の日を表示中でもその日に登録する。 */
   baseDate: Date;
-  /** 直近の授乳から割り出した「次に飲ませる側」。判断材料がなければ null。 */
-  nextSide: BreastSide | null;
   /** 母乳の左右別ストップウォッチ。新規に記録するときだけ使う。 */
   timer: NursingTimer;
   /** 搾乳ストックの全量（使用済みも含む）。「搾乳」を選んだときの選択肢に使う。 */
@@ -83,10 +81,6 @@ const SIDE_OPTIONS: { value: BreastSide; label: string }[] = [
   { value: 'left', label: '左' },
   { value: 'right', label: '右' },
 ];
-
-/** 分数の入力欄に出す文字。未入力なら空。 */
-const toMinutesText = (minutes: number | undefined): string =>
-  minutes === undefined ? '' : String(minutes);
 
 /**
  * 計測を始めた時刻を、記録の日時の初期値として使えるならその時刻を返す。
@@ -128,7 +122,6 @@ export default function MilkLogModal({ show, ...props }: MilkLogModalProps & { s
 function MilkLogModalBody({
   log,
   baseDate,
-  nextSide,
   timer,
   pumpedBatches,
   onDiscardBatch,
@@ -151,22 +144,16 @@ function MilkLogModalBody({
   const [drankEdited, setDrankEdited] = useState(
     () => !!(log?.method === 'pumped' && log.discardedMl),
   );
-  // 計測した時間があれば、開き直したときもその値から始める。
-  const measured = !log && timer.hasSession;
-  // 未選択と「0分」を区別するため、初期値は undefined にしておく。
-  const initialLeft = log?.leftMinutes ?? (measured ? nursingMinutes(timer.elapsed.left) : undefined);
-  const initialRight =
-    log?.rightMinutes ?? (measured ? nursingMinutes(timer.elapsed.right) : undefined);
-  const [leftMinutes, setLeftMinutes] = useState<number | undefined>(initialLeft);
-  const [rightMinutes, setRightMinutes] = useState<number | undefined>(initialRight);
-  // ボタンに無い分数は直接入力欄の側で持つ。
-  const [customLeft, setCustomLeft] = useState(() => toMinutesText(initialLeft));
-  const [customRight, setCustomRight] = useState(() => toMinutesText(initialRight));
+  // 既存の記録を編集するときの左右の時間(ミリ秒)。計測は使わず、保存されている分数から始める。
+  // 新規のときは計測タイマーの値をそのまま使うので、これは使わない。
+  const [logElapsed, setLogElapsed] = useState<NursingSideValues>(() => ({
+    left: (log?.leftMinutes ?? 0) * 60_000,
+    right: (log?.rightMinutes ?? 0) * 60_000,
+  }));
+  // タイマーの時間を手で直している間（「編集」を押してから「完了」まで）。
+  const [editingTimer, setEditingTimer] = useState(false);
   const [lastSide, setLastSide] = useState<BreastSide | undefined>(log?.lastSide);
-  // 分数を手で選び直した側は、計測した値より手入力を優先する。
-  const [editedLeft, setEditedLeft] = useState(false);
-  const [editedRight, setEditedRight] = useState(false);
-  // 「最後に飲ませた側」を手で選び直したときも、計測した側より手入力を優先する。
+  // 「最後に飲ませた側」を手で選び直したときは、計測した側より手入力を優先する。
   const [editedSide, setEditedSide] = useState(false);
   // 新規は表示中の日 + 今の時刻。編集は保存されている日時をそのまま出す。
   // ただし母乳を測っているなら、その計測を始めた時刻（＝飲ませ始めた時刻）を出す。
@@ -225,65 +212,37 @@ function MilkLogModalBody({
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
 
-  // 計測した時間をそのまま記録する。計測中のまま保存されても、その分を含める。
-  // 分数を手で選び直した側は、その値を優先する。
+  // タイマーの時間（手で直した分を含む）をそのまま記録する。計測中のまま保存されても、その分を含める。
+  // 既存の記録を編集するときは、その記録の時間を直したもの。
+  const shownElapsed = showTimer ? timer.elapsed : logElapsed;
   const measuring = showTimer && timer.hasSession;
-  const recordedLeft =
-    measuring && !editedLeft ? nursingMinutes(timer.elapsed.left) : (leftMinutes ?? 0);
-  const recordedRight =
-    measuring && !editedRight ? nursingMinutes(timer.elapsed.right) : (rightMinutes ?? 0);
-  // 「最後に飲ませた側」も分数と同じで、計測中は計測した側をそのまま出す。
+  const recordedLeft = nursingMinutes(shownElapsed.left);
+  const recordedRight = nursingMinutes(shownElapsed.right);
+  // 「最後に飲ませた側」も時間と同じで、計測中は計測した側をそのまま出す。
   //
   // PWA版は開いた時点の計測を初期値に入れているが、ネイティブ版は控えの読み戻しが
   // 非同期なので、それでは間に合わないことがある（お知らせのタップで起動と同時に
-  // この画面が開く場合など）。分数は計測から出し直していて埋まるのに側だけ空、
+  // この画面が開く場合など）。時間は計測から出し直していて埋まるのに側だけ空、
   // という食い違いが出るため、側も同じ出し方にそろえる。
   const recordedSide = measuring && !editedSide ? (timer.lastSide ?? undefined) : lastSide;
 
-  // 分数を手で決め直したときの反映。ボタン・直接入力のどちらからでもここを通る。
-  const applyMinutes = (side: BreastSide, minutes: number | undefined, custom: string) => {
-    if (side === 'left') {
-      setLeftMinutes(minutes);
-      setCustomLeft(custom);
-      setEditedLeft(true);
-    } else {
-      setRightMinutes(minutes);
-      setCustomRight(custom);
-      setEditedRight(true);
-    }
-  };
-
-  const handleCustomMinutes = (side: BreastSide, value: string) => {
-    const parsed = Number(value);
-    // 読めない値を入れている途中でも入力欄は書き換えられるようにする。
-    const minutes =
-      value !== '' && Number.isFinite(parsed) && parsed >= 0
-        ? Math.round(parsed)
-        : side === 'left'
-          ? leftMinutes
-          : rightMinutes;
-    applyMinutes(side, minutes, value);
-  };
-
-  // 計測した時間を分数の入力欄へ入れる。
-  const applyTotal = (total: NursingSideValues) => {
-    const left = nursingMinutes(total.left);
-    const right = nursingMinutes(total.right);
-    setLeftMinutes(left);
-    setRightMinutes(right);
-    setCustomLeft(toMinutesText(left));
-    setCustomRight(toMinutesText(right));
-  };
-
-  // 計測を始める・止める・切り替えるたびに、その時点の合計を分数の入力欄へ入れる。
-  // 押した側が「最後に飲ませた側」になる。
+  // 計測を始める・止める・切り替える。押した側が「最後に飲ませた側」になる。
   const handleToggleSide = (side: BreastSide) => {
-    applyTotal(timer.toggleSide(side));
+    timer.toggleSide(side);
     setLastSide(side);
     setEditedSide(false);
-    // 測り直した側は計測の値に戻す。
-    if (side === 'left') setEditedLeft(false);
-    else setEditedRight(false);
+  };
+
+  // 「編集」を押すと計測は止まる（動いたまま直すと、入れた時間とずれていくため）。
+  const handleStartEdit = () => {
+    if (timer.runningSide) timer.toggleSide(timer.runningSide);
+    setEditingTimer(true);
+  };
+
+  // 「完了」で、手で直した時間をタイマーの値にする。
+  const handleFinishEdit = (values: NursingSideValues) => {
+    timer.setElapsed(values);
+    setEditingTimer(false);
   };
 
   /** 測り始めた授乳ごと取りやめる。記録は作らず、計測だけを捨てて画面を閉じる。 */
@@ -294,15 +253,14 @@ function MilkLogModalBody({
 
   const handleResetTimer = () => {
     timer.reset();
-    setLeftMinutes(undefined);
-    setRightMinutes(undefined);
-    setCustomLeft('');
-    setCustomRight('');
     setLastSide(undefined);
-    setEditedLeft(false);
-    setEditedRight(false);
     setEditedSide(false);
+    setEditingTimer(false);
   };
+
+  // 計測を取りやめるボタンは、押し間違えやすい保存ボタンの近くには置かず、スクロールする中身の
+  // 一番下に出す。計測中（いずれかの側が動いている間）と、時間を直している間は出さない。
+  const showSessionDelete = !log && timer.hasSession && !timer.runningSide && !editingTimer;
 
   const handleSubmit = () => {
     const base = { method, time, note };
@@ -339,10 +297,7 @@ function MilkLogModalBody({
       // 母乳/搾乳/ミルクの切り替えは、選び直したときに動かないよう一番上に固定しておく。
       subheader={
         <View style={styles.switchers}>
-          <View>
-            <FieldLabel>種類</FieldLabel>
-            <Segmented options={FEEDING_METHOD_OPTIONS} value={method} onChange={setMethod} />
-          </View>
+          <Segmented options={FEEDING_METHOD_OPTIONS} value={method} onChange={setMethod} />
           {/* 搾った分は飲ませた分とは別の記録（搾乳ストックの1パック）になるので、押すと
               搾乳の入力画面へ移る。搾乳以外では関わらないため、搾乳を選んだときだけ出す。
               入力欄と一緒にスクロールして流れていかないよう、種類のすぐ下に固定して置く。
@@ -372,48 +327,34 @@ function MilkLogModalBody({
           >
             保存する
           </SubmitButton>
-          {log ? (
-            <DeleteButton onPress={onDelete} />
-          ) : (
-            // 記録にする前でも、測り始めた授乳ごと取りやめられるようにする。
-            // 間違えて始めた計測が、記録するまで消せないままになるのを避ける。
-            timer.hasSession && (
-              <DeleteButton label="計測中の授乳を削除する" onPress={handleDeleteSession} />
-            )
-          )}
+          {log && <DeleteButton onPress={onDelete} />}
         </>
       }
     >
         {method === 'breast' ? (
           <>
-            {!log && nextSide && (
-              <HintBanner accent="milk">
-                前回は{getSideLabel(nextSide === 'left' ? 'right' : 'left')}で終了 → 次は
-                {getSideLabel(nextSide)}からがおすすめ
-              </HintBanner>
+            {/* 左右の時間は、計測と手での直しをこの1か所にまとめる。
+                新規: タイマー（右上の「編集」で分・秒を直せる）。
+                既存の記録の編集: 計測は使わないので、最初から時間を直せる形で出す。 */}
+            {showTimer ? (
+              editingTimer ? (
+                <NursingTimeEditor
+                  title="タイマー"
+                  elapsed={timer.elapsed}
+                  onDone={handleFinishEdit}
+                  onReset={timer.hasSession ? handleResetTimer : undefined}
+                />
+              ) : (
+                <NursingStopwatch
+                  elapsed={timer.elapsed}
+                  runningSide={timer.runningSide}
+                  onToggleSide={handleToggleSide}
+                  onEdit={handleStartEdit}
+                />
+              )
+            ) : (
+              <NursingTimeEditor title="授乳時間" elapsed={logElapsed} onChange={setLogElapsed} />
             )}
-            {showTimer && (
-              <NursingStopwatch
-                elapsed={timer.elapsed}
-                runningSide={timer.runningSide}
-                hasSession={timer.hasSession}
-                onToggleSide={handleToggleSide}
-                onReset={handleResetTimer}
-              />
-            )}
-            {/* 計測中は経過時間（分）をそのまま入れておく。手で直した側はその値を優先する。 */}
-            <View style={styles.minuteRow}>
-              <MinuteField
-                label="左（分）"
-                value={measuring && !editedLeft ? String(recordedLeft) : customLeft}
-                onChange={(value) => handleCustomMinutes('left', value)}
-              />
-              <MinuteField
-                label="右（分）"
-                value={measuring && !editedRight ? String(recordedRight) : customRight}
-                onChange={(value) => handleCustomMinutes('right', value)}
-              />
-            </View>
             <View>
               <FieldLabel>最後に飲ませた側</FieldLabel>
               <OptionGrid
@@ -469,8 +410,18 @@ function MilkLogModalBody({
           </View>
         )}
 
-      <DateTimeField label="日時" value={time} onChange={setTime} maximumDate={new Date()} />
+      <DateTimeField
+        label={method === 'breast' ? '開始日時' : '日時'}
+        value={time}
+        onChange={setTime}
+        maximumDate={new Date()}
+      />
       <NoteField value={note} onChange={setNote} placeholder="よく飲んだ / 途中で寝た など" />
+      {showSessionDelete && (
+        <View style={styles.sessionDelete}>
+          <DeleteButton label="計測中の授乳を削除する" onPress={handleDeleteSession} />
+        </View>
+      )}
     </LogModalShell>
   );
 }
@@ -651,25 +602,108 @@ function DrankAmountField({
   );
 }
 
-interface MinuteFieldProps {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
+/** 分・秒の入力欄に出す文字。 */
+interface TimeTexts {
+  minutes: string;
+  seconds: string;
+}
+
+const toTimeTexts = (ms: number): TimeTexts => {
+  const total = Math.round(ms / 1000);
+  return { minutes: String(Math.floor(total / 60)), seconds: String(total % 60) };
+};
+
+/** 入力欄の文字を時間(ミリ秒)に。読めない・空の欄は0、秒は59までに収める。 */
+const fromTimeTexts = ({ minutes, seconds }: TimeTexts): number => {
+  const m = Number(minutes);
+  const s = Number(seconds);
+  const wholeMinutes = Number.isFinite(m) && m > 0 ? Math.floor(m) : 0;
+  const wholeSeconds = Number.isFinite(s) && s > 0 ? Math.min(59, Math.floor(s)) : 0;
+  return (wholeMinutes * 60 + wholeSeconds) * 1000;
+};
+
+const digitsOnly = (value: string): string => value.replace(/[^0-9]/g, '');
+
+interface NursingTimeEditorProps {
+  title: string;
+  /** 入力欄の初期値になる、左右の時間(ミリ秒)。開いたときの値だけを使う。 */
+  elapsed: NursingSideValues;
+  /** 「完了」を出して、押したときの時間を渡す。タイマーの「編集」から開いたときに使う。 */
+  onDone?: (values: NursingSideValues) => void;
+  /** 入力のたびに時間を渡す。既存の記録の編集（完了を待たずに反映する）で使う。 */
+  onChange?: (values: NursingSideValues) => void;
+  /** 計測を捨てる。タイマーの「編集」から開いたときだけ出す。 */
+  onReset?: () => void;
 }
 
 /**
- * 母乳の授乳時間（分）。計測した経過時間が入り、手で直すこともできる。
- * 計測を止め忘れて長い時間が入ってしまったときも、ここで実際の時間に直せる。
+ * 左右の時間を分・秒で直す。計測を止め忘れて長い時間が入ってしまったときも、
+ * ここで実際の時間に直せる。タイマーの右上の「編集」を押すと、タイマーの代わりに出る。
+ * 入力欄の文字はここで持ち、開き直すたびに作り直す（親は開いたときの値だけを渡す）。
  */
-function MinuteField({ label, value, onChange }: MinuteFieldProps) {
+function NursingTimeEditor({ title, elapsed, onDone, onChange, onReset }: NursingTimeEditorProps) {
+  const [texts, setTexts] = useState<Record<BreastSide, TimeTexts>>(() => ({
+    left: toTimeTexts(elapsed.left),
+    right: toTimeTexts(elapsed.right),
+  }));
+
+  const toValues = (next: Record<BreastSide, TimeTexts>): NursingSideValues => ({
+    left: fromTimeTexts(next.left),
+    right: fromTimeTexts(next.right),
+  });
+
+  const update = (side: BreastSide, key: keyof TimeTexts, value: string) => {
+    const next = { ...texts, [side]: { ...texts[side], [key]: digitsOnly(value) } };
+    setTexts(next);
+    onChange?.(toValues(next));
+  };
+
   return (
-    <View style={styles.minuteField}>
-      <FieldLabel>{label}</FieldLabel>
-      <NumberInput
-        value={value}
-        onChangeText={onChange}
-        accessibilityLabel={label}
-      />
+    <View style={styles.stopwatch}>
+      <View style={styles.stopwatchHeader}>
+        <Text style={styles.stopwatchTitle}>{title}</Text>
+        {onDone && (
+          <Pressable accessibilityRole="button" onPress={() => onDone(toValues(texts))} hitSlop={8}>
+            <Text style={styles.headerLink}>完了</Text>
+          </Pressable>
+        )}
+      </View>
+
+      <View style={styles.phases}>
+        {NURSING_SIDES.map((side) => (
+          <View key={side} style={styles.editCard}>
+            <Text style={styles.phaseLabel}>{getSideLabel(side)}</Text>
+            <View style={styles.editRow}>
+              <TextInput
+                value={texts[side].minutes}
+                onChangeText={(value) => update(side, 'minutes', value)}
+                keyboardType="number-pad"
+                maxLength={3}
+                selectTextOnFocus
+                accessibilityLabel={`${getSideLabel(side)}の分`}
+                style={styles.editInput}
+              />
+              <Text style={styles.editUnit}>分</Text>
+              <TextInput
+                value={texts[side].seconds}
+                onChangeText={(value) => update(side, 'seconds', value)}
+                keyboardType="number-pad"
+                maxLength={2}
+                selectTextOnFocus
+                accessibilityLabel={`${getSideLabel(side)}の秒`}
+                style={styles.editInput}
+              />
+              <Text style={styles.editUnit}>秒</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+
+      {onReset && (
+        <Pressable accessibilityRole="button" onPress={onReset} style={styles.resetButton}>
+          <Text style={styles.resetButtonText}>リセット</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -678,9 +712,9 @@ interface NursingStopwatchProps {
   /** 左右それぞれの時間(ミリ秒)。計測中の分を含む。 */
   elapsed: NursingSideValues;
   runningSide: BreastSide | null;
-  hasSession: boolean;
   onToggleSide: (side: BreastSide) => void;
-  onReset: () => void;
+  /** 右上の「編集」。押すと計測は止まり、左右の時間を分・秒で直せる画面に変わる。 */
+  onEdit: () => void;
 }
 
 /**
@@ -695,21 +729,18 @@ interface NursingStopwatchProps {
 function NursingStopwatch({
   elapsed,
   runningSide,
-  hasSession,
   onToggleSide,
-  onReset,
+  onEdit,
 }: NursingStopwatchProps) {
   const intervalMs = NURSING_ALARM_MINUTES * 60_000;
 
   return (
     <View style={styles.stopwatch}>
       <View style={styles.stopwatchHeader}>
-        <Text style={styles.stopwatchTitle}>授乳を計測</Text>
-        {hasSession && (
-          <Pressable accessibilityRole="button" onPress={onReset} hitSlop={8}>
-            <Text style={styles.reset}>リセット</Text>
-          </Pressable>
-        )}
+        <Text style={styles.stopwatchTitle}>タイマー</Text>
+        <Pressable accessibilityRole="button" onPress={onEdit} hitSlop={8}>
+          <Text style={styles.headerLink}>編集</Text>
+        </Pressable>
       </View>
 
       {/* ボタンの並びは「左・右」で固定する。 */}
@@ -755,9 +786,13 @@ function NursingStopwatch({
 const styles = StyleSheet.create({
   switchers: { gap: 12 },
   note: { fontSize: 11, color: colors.textFaint, marginTop: 6, lineHeight: 16 },
-  // 左右の分数の入力欄は1行に横並びにする。
-  minuteRow: { flexDirection: 'row', gap: 12 },
-  minuteField: { flex: 1 },
+  // 計測を取りやめるボタン。入力欄の下に区切り線を引いて離し、保存ボタンとは別の場所に置く。
+  sessionDelete: {
+    marginTop: 4,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
 
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   stock: { fontSize: 11, color: colors.textMuted, marginBottom: 6, fontWeight: '500', fontVariant: ['tabular-nums'] },
@@ -823,7 +858,44 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   stopwatchTitle: { fontSize: 12, fontWeight: '700', color: colors.milkText },
-  reset: { fontSize: 11, color: colors.milkText },
+  // 右上の「編集」「完了」。
+  headerLink: { fontSize: 12, fontWeight: '700', color: colors.milkText },
+
+  // 時間を直すとき。カードの背景は白、入力欄に枠は付けない。
+  editCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.milkBorder,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    gap: 4,
+  },
+  editRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  editInput: {
+    minWidth: 34,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    backgroundColor: colors.surface,
+    fontVariant: ['tabular-nums'],
+  },
+  editUnit: { fontSize: 12, fontWeight: '500', color: colors.textMuted, marginRight: 4 },
+  resetButton: {
+    marginTop: 10,
+    paddingVertical: 9,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.dangerBorder,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+  },
+  resetButtonText: { fontSize: 13, fontWeight: '500', color: colors.danger },
 
   // 左右のボタン。並びは「左・右」で固定する。
   phases: { flexDirection: 'row', gap: 8, marginTop: 4 },
