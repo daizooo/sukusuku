@@ -34,14 +34,16 @@ const nthLabel = (nth: number): string => (nth === -1 ? '最終' : `第${nth}`);
 const daysInMonth = (date: Date): number =>
   new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 
-// その日が月の第何週の何曜日か。第5週は「最終」(-1)として数える（Googleカレンダーと同じ）。
-const nthWeekdayOf = (date: Date): NthWeekday => {
-  const nth = Math.ceil(date.getDate() / 7);
-  return { nth: nth >= 5 ? -1 : nth, weekday: date.getDay() };
-};
-
-// 第4週でも、その曜日が月内にもう来ないなら「最終」とも数えられる。
+// その曜日が月内にもう来ない（その月の最後のその曜日）か。第4週でも、第5週でもあり得る。
 const isLastWeekdayOfMonth = (date: Date): boolean => date.getDate() + 7 > daysInMonth(date);
+
+// その日が月の第何週の何曜日か。その月の最後のその曜日は、第4・第5週のどちらでも
+// 「最終」(-1)として数える（毎月の予定は「月末の◯曜日」のつもりで入れることが多いため。
+// 例: 2026-11-28 は第4土曜日だが「毎月 最終土曜日」にする）。
+const nthWeekdayOf = (date: Date): NthWeekday => ({
+  nth: isLastWeekdayOfMonth(date) ? -1 : Math.ceil(date.getDate() / 7),
+  weekday: date.getDay(),
+});
 
 const nthWeekdayText = ({ nth, weekday }: NthWeekday): string =>
   `${nthLabel(nth)}${WEEKDAY_LABELS[weekday]}曜日`;
@@ -126,6 +128,7 @@ export const defaultRecurrence = (startDate: string | null): Recurrence => {
 
 // 毎月の数え方の選択肢（「毎月 2日」「毎月 第1金曜日」「毎月 最終金曜日」）。
 // value は 'day'（その日）か 'nth:1' 〜 'nth:4'・'nth:-1'（第n・最終）。
+// 月の最後のその曜日なら「最終」を先に出す（第4週でも同じ）。
 export interface MonthlyOption {
   value: string;
   label: string;
@@ -137,10 +140,11 @@ export const monthlyOptions = (date: Date): MonthlyOption[] => {
     { value: 'day', label: `毎月 ${date.getDate()}日` },
     { value: `nth:${base.nth}`, label: `毎月 ${nthWeekdayText(base)}` },
   ];
-  if (base.nth !== -1 && isLastWeekdayOfMonth(date)) {
+  // 第4週の最終（例: 11月28日）は、「最終」のほかに「第4」でも数えられる。
+  if (base.nth === -1 && Math.ceil(date.getDate() / 7) === 4) {
     options.push({
-      value: 'nth:-1',
-      label: `毎月 ${nthWeekdayText({ nth: -1, weekday: date.getDay() })}`,
+      value: 'nth:4',
+      label: `毎月 ${nthWeekdayText({ nth: 4, weekday: date.getDay() })}`,
     });
   }
   return options;
