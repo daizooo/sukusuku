@@ -64,39 +64,47 @@ export function parseAmazonOrderMail(subject: string, body: string): AmazonOrder
   if (!subject.normalize('NFKC').includes('注文済み')) return null;
 
   const heads = [...body.matchAll(ORDER_NO_RE)];
-  const orders: AmazonOrder[] = [];
-  // 読めたが0円で覚えない注文の数
-  let skipped = 0;
+  // 同じ注文番号のブロックは1つの注文にまとめる。Amazon は同じ注文でもお届けが分かれると、注文番号の見出しを繰り返して
+  // ブロックを分ける（2026-11-08: ロンパース2点とモップが同じ注文番号の2ブロック。「合計」は最後のブロックにだけあり、注文全体の額）。
+  // ブロックごとに別の注文として渡すと、2つ目が DB で重複として捨てられ、品目と合計が欠ける
+  const groups = new Map<string, { lines: AmazonOrderLine[]; free: number; totalText: string | null }>();
   for (const [index, head] of heads.entries()) {
     const start = (head.index ?? 0) + head[0].length;
     const end = heads[index + 1]?.index ?? body.length;
     const block = body.slice(start, end);
 
-    const lines: AmazonOrderLine[] = [];
-    let free = 0;
+    const group = groups.get(head[1]) ?? { lines: [], free: 0, totalText: null };
+    groups.set(head[1], group);
     for (const match of block.matchAll(LINE_RE)) {
       const quantity = Math.min(9999, Math.max(1, Number(match[2])));
       const unitPrice = toInt(match[3] ?? match[4]);
       // 0円の品目（無料の商品・サンプル）は、カードに請求が立たないので覚えない
-      if (unitPrice === 0) free += 1;
+      if (unitPrice === 0) group.free += 1;
       if (!Number.isSafeInteger(unitPrice) || unitPrice <= 0) continue;
       const receiptName = match[1].trim();
-      lines.push({ receiptName, name: shortItemName(receiptName), quantity, unitPrice, amount: unitPrice * quantity });
+      group.lines.push({ receiptName, name: shortItemName(receiptName), quantity, unitPrice, amount: unitPrice * quantity });
     }
+    const totalMatch = TOTAL_RE.exec(block);
+    if (totalMatch) group.totalText = totalMatch[1] ?? totalMatch[2];
+  }
+
+  const orders: AmazonOrder[] = [];
+  // 読めたが0円で覚えない注文の数
+  let skipped = 0;
+  for (const [orderNo, { lines, free, totalText }] of groups) {
     if (lines.length === 0) {
       if (free > 0) skipped += 1;
       continue;
     }
 
-    const totalMatch = TOTAL_RE.exec(block);
     const sum = lines.reduce((acc, line) => acc + line.amount, 0);
-    const total = totalMatch ? toInt(totalMatch[1] ?? totalMatch[2]) : sum;
+    const total = totalText !== null ? toInt(totalText) : sum;
     // 「合計 ￥0」（全額ポイント・ギフト券など）の注文は、カードに請求が立たないので覚えない
-    if (totalMatch && total === 0) {
+    if (totalText !== null && total === 0) {
       skipped += 1;
       continue;
     }
-    orders.push({ orderNo: head[1], lines, total: Number.isSafeInteger(total) && total > 0 ? total : sum });
+    orders.push({ orderNo, lines, total: Number.isSafeInteger(total) && total > 0 ? total : sum });
   }
   if (orders.length > 0) return orders;
   return skipped > 0 ? [] : null;
