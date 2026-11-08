@@ -131,6 +131,55 @@ assert.deepEqual(
   [['A商品', 2, 300]],
 );
 
+// 同じ注文番号がお届けごとに2回出るメール（2026-11-08の実物。宛名は伏せた）。1つの注文にまとめ、「合計」は最後のブロックの注文全体の額
+const splitBody = `注文番号
+249-3450600-7179809
+
+* クリエイト デントファイン 糸ピックス55P ワイド
+  数量: 4
+  203 JPY
+
+合計
+812 JPY
+
+火曜日にお届け
+
+注文番号
+249-3049939-3299068
+
+* [ビームスミニ] ロンパース IVORY 70
+  数量: 1
+  3905 JPY
+
+* [ビームスミニ] ロンパース BROWN 70
+  数量: 1
+  3905 JPY
+
+火曜日にお届け
+
+注文番号
+249-3049939-3299068
+
+* 山崎産業(Yamazaki Sangyo) フローリングワイパー オレンジ
+  数量: 1
+  2220 JPY
+
+合計
+10030 JPY
+`;
+const splitOrders = parseAmazonOrderMail('注文済み:「[ビームスミニ] ロンパース...」とさらに6点の商品', splitBody);
+assert.deepEqual(
+  splitOrders?.map((order) => [order.orderNo, order.total, order.lines.length]),
+  [
+    ['249-3450600-7179809', 812, 1],
+    ['249-3049939-3299068', 10030, 3],
+  ],
+);
+assert.deepEqual(
+  splitOrders?.[1].lines.map((line) => line.unitPrice),
+  [3905, 3905, 2220],
+);
+
 assert.equal(shortItemName('【EC限定】ディアナ'), 'ディアナ');
 assert.equal(shortItemName('【A】【B】 ほげ'), 'ほげ');
 assert.equal(shortItemName('【全部かっこ】'), '【全部かっこ】');
