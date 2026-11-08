@@ -56,10 +56,11 @@ const MAX_MESSAGES = 50;
 const MAX_SYNC_IDS = 2000;
 
 // 注文メールの状態 → 受け取ったメールの扱い（error は書かず、次の同期でまた送られる）
-// 0円の品目だけのメール（skipped）も Amazon のメールなので、ラベルは「Amazon」にする（対象外にはしない。ゴミ箱へは移さない）
+// 取り込まないメール（skipped: 0円の注文・0円の注文に当たる発送メール）は、DB に注文・荷物を覚えず、Apps Script が「対象外」にする
+// （ゴミ箱へは移さない。2026-11-09。それまでは「Amazon」にしていた）
 const AMAZON_OUTCOMES: Record<string, string> = {
   saved: 'order',
-  skipped: 'order',
+  skipped: 'skipped',
   ignored: 'unreadable',
   before_start: 'before_start',
 };
@@ -234,7 +235,8 @@ async function receiveAmazonShipment(
     return 'error';
   }
   const status = String((data as { status?: string })?.status ?? 'error');
-  return status === 'before_start' || status === 'error' ? status : 'saved';
+  // skipped: 注文が DB に1つも無い（0円の注文）。荷物は覚えない
+  return status === 'before_start' || status === 'error' || status === 'skipped' ? status : 'saved';
 }
 
 Deno.serve(async (request) => {
@@ -306,8 +308,10 @@ Deno.serve(async (request) => {
   const remember = (id: string, receivedAt: string, outcome: string) =>
     mails.push({ message_id: id, received_at: new Date(receivedAt).toISOString(), outcome });
 
-  // 届いた順に入れる
+  // 届いた順に入れる（注文メールが発送メールより先になる。発送メールは、DB に注文のある品目だけを荷物にする）
   const sorted = [...messages].sort((a, b) => text(a.received_at).localeCompare(text(b.received_at)));
+  // このバッチで注文メールが書けなかったら、あとの発送メールも書かない（注文が無いものとして捨てないよう、次の同期でまとめてやり直す）
+  let orderFailed = false;
   for (const message of sorted) {
     const id = text(message.id);
     const receivedAt = text(message.received_at);
@@ -325,6 +329,10 @@ Deno.serve(async (request) => {
 
     // Amazon の発送メール（§9.13）。荷物1つにつき未確認の明細を1件作る（注文メールとそろってから）
     if (isAmazonShipmentSender(text(message.from))) {
+      if (orderFailed) {
+        results.push({ id, status: 'error' });
+        continue;
+      }
       const status = await receiveAmazonShipment(supabase, familyId, { id, receivedAt, subject, body });
       results.push({ id, status });
       const outcome = AMAZON_OUTCOMES[status];
@@ -335,6 +343,7 @@ Deno.serve(async (request) => {
     // Amazon の注文メール（§9.10）。注文と品目を覚える（明細は発送メールの荷物ごと）
     if (isAmazonOrderSender(text(message.from))) {
       const status = await receiveAmazonOrders(supabase, familyId, { id, receivedAt, subject, body });
+      if (status === 'error') orderFailed = true;
       results.push({ id, status });
       const outcome = AMAZON_OUTCOMES[status];
       if (outcome) remember(id, receivedAt, outcome);
