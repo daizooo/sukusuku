@@ -33,4 +33,4 @@ jobs:
             echo '::error::Actions の Secrets に SUPABASE_ACCESS_TOKEN が未登録です。'
             exit 1
           fi
-          supabase functions deploy --project-ref jmysgeulujggdmdthqkn --use-api
+          supabase functions deploy --project-ref jmysgeulujggdmdthqkn --use-api --yes
