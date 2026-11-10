@@ -19,11 +19,8 @@ import { SectionHeader, type, fitText } from '@/components/money/moneyVisual';
 // 折れ線（日ごとの残高）・期間の切り替え（はじめは全期間）・対象期間の履歴（残高が変わった日。新しい順）。
 // 総残高と出金元ごとの推移で同じものを使う。親のスクロールの中に置く（この中ではスクロールしない）。
 // グラフに触れる（なぞる）と、その日の日付と残高を線の上に出す。指を離しても、次に触れるか期間を変えるまで残す。
-// 触れて離す（タップ）と、その日を選ぶ。なぞって選ぶのは、グラフを少し押さえてから（長押し）。
-// 押さえずに横へ払うと、画面の切り替えのスワイプ（useSwipeTabs）になる（グラフの上からでも履歴/推移を行き来できるように）。
-
-/** これ以上押さえたままにすると、なぞって日を選ぶモードに入る（ミリ秒）。 */
-const SCRUB_HOLD_MS = 250;
+// グラフに触れたその場から、指の動きは日付の選択に使う。触れている間は親のスクロール（縦・履歴/推移の横のページ送り）を止める
+// （2026-11-10。長押しのあとでないとなぞれず、横のScrollViewに指を取られて1日ずつしか選べなくなっていたため）。
 const TOOLTIP_AREA = 44; // 日付と残高の吹き出しを置く、グラフの上の余白
 const CHART_HEIGHT = 200 + TOOLTIP_AREA;
 const PAD = { left: 52, right: 10, top: 10 + TOOLTIP_AREA, bottom: 24 };
@@ -80,21 +77,15 @@ function Chart({ points, onScrub }: { points: BalancePoint[]; onScrub?: (active:
     const index = Math.min(current.length - 1, Math.max(0, Math.round(ratio * (current.length - 1))));
     setSelected({ points: current, index });
   }).current;
-  const scrub = useRef<{ timer: ReturnType<typeof setTimeout> | null; on: boolean; x: number }>({
-    timer: null,
-    on: false,
-    x: 0,
-  }).current;
+  const scrubbing = useRef(false);
   // 親には、なぞり始め・終わりを知らせる（横のページ送りを、なぞっている間だけ止めるため）。
   const onScrubRef = useRef(onScrub);
   onScrubRef.current = onScrub;
   const endScrub = useRef(() => {
-    if (scrub.timer) clearTimeout(scrub.timer);
-    scrub.timer = null;
-    const wasOn = scrub.on;
-    scrub.on = false;
+    if (!scrubbing.current) return;
+    scrubbing.current = false;
     swipeLock.active = false;
-    if (wasOn) onScrubRef.current?.(false);
+    onScrubRef.current?.(false);
   }).current;
   // 画面が閉じられても、スワイプを止めたままにしない。
   useEffect(() => endScrub, [endScrub]);
@@ -102,30 +93,21 @@ function Chart({ points, onScrub }: { points: BalancePoint[]; onScrub?: (active:
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
-        // 触れた時点では、縦のスクロールや横のページ送り（端末側）を止めない。なぞる（長押し）に入ってから止める。
-        onShouldBlockNativeResponder: () => false,
-        // なぞっている間は、親（画面の切り替えのスワイプ）に取られない。
-        onPanResponderTerminationRequest: () => !scrub.on,
+        onMoveShouldSetPanResponder: () => true,
+        // 触れている間は、親（縦のスクロール・横のページ送り・画面の切り替えのスワイプ）に取られない。
+        // onShouldBlockNativeResponder は既定（true）のままにして、端末側のスクロールにも指を渡さない。
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: (event) => {
-          scrub.x = event.nativeEvent.locationX;
-          scrub.timer = setTimeout(() => {
-            scrub.on = true;
-            swipeLock.active = true;
-            onScrubRef.current?.(true);
-            select(scrub.x);
-          }, SCRUB_HOLD_MS);
+          scrubbing.current = true;
+          swipeLock.active = true;
+          onScrubRef.current?.(true);
+          select(event.nativeEvent.locationX);
         },
-        onPanResponderMove: (event) => {
-          scrub.x = event.nativeEvent.locationX;
-          if (scrub.on) select(scrub.x);
-        },
-        onPanResponderRelease: (event) => {
-          if (!scrub.on) select(event.nativeEvent.locationX);
-          endScrub();
-        },
+        onPanResponderMove: (event) => select(event.nativeEvent.locationX),
+        onPanResponderRelease: endScrub,
         onPanResponderTerminate: endScrub,
       }),
-    [select, scrub, endScrub],
+    [select, endScrub],
   );
 
   const selectedPoint = selectedIndex === null ? null : points[selectedIndex];

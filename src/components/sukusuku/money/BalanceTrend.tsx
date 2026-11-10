@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   balanceChanges,
   filterTrend,
@@ -11,20 +11,15 @@ import {
   type BalancePoint,
   type TrendPeriod,
 } from '@/lib/moneyUtils';
-import { swipeLock } from '../ui/useSwipeNavigation';
+import { swipeBoundary } from '../ui/useSwipeNavigation';
 import { cardClass, minus, SectionHeader, type } from './moneyVisual';
 
 // 残高の推移（docs/kakei.md §9.3）。mobile版の `mobile/src/components/money/BalanceTrend.tsx` と同じ並び・文言。
 // 折れ線（日ごとの残高）・期間の切り替え（はじめは全期間）・対象期間の履歴（残高が変わった日。新しい順）。
 // 総残高と出金元ごとの推移で同じものを使う。親のスクロールの中に置く（この中ではスクロールしない）。
 // グラフに触れる（なぞる）と、その日の日付と残高を線の上に出す。指を離しても、次に触れるか期間を変えるまで残す。
-// 触れて離す（タップ）と、その日を選ぶ。なぞって選ぶのは、グラフを少し押さえてから（長押し。マウスはすぐ）。
-// 押さえずに横へ払うと、画面の切り替えのスワイプ（useSwipeTabs）になる（グラフの上からでも履歴/推移を行き来できるように）。
-
-/** これ以上押さえたままにすると、なぞって日を選ぶモードに入る（ミリ秒。mobile と同じ）。 */
-const SCRUB_HOLD_MS = 250;
-/** 押さえている間にこれ以上動いたら、長押しではなく払う動きとみなす（px）。 */
-const HOLD_SLOP = 6;
+// グラフの中の横の動きは触れたその場から日付の選択に使い、画面の切り替えのスワイプ（useSwipeTabs）へは渡さない
+// （2026-11-10。長押しのあとでないとなぞれない作りをやめた。縦の動きはこれまでどおりスクロール）。
 const WIDTH = 360;
 const TOOLTIP_AREA = 44; // 日付と残高の吹き出しを置く、グラフの上の余白
 const HEIGHT = 200 + TOOLTIP_AREA;
@@ -46,8 +41,6 @@ const fullDateWithWeekday = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number);
   return `${fullDate(dateKey)}(${WEEKDAYS[new Date(year, month - 1, day).getDay()]})`;
 };
-
-type ScrubState = { timer: number | null; on: boolean; x: number; startX: number; startY: number };
 
 function Chart({ points }: { points: BalancePoint[] }) {
   const [selected, setSelected] = useState<{ points: BalancePoint[]; index: number } | null>(null);
@@ -72,21 +65,6 @@ function Chart({ points }: { points: BalancePoint[] }) {
       labels: [...new Set(labelIndexes)],
     };
   }, [points]);
-  // 触れてから長押しになるまでの状態。timer が残っている間は、まだ動いていない押さえ始め。
-  const scrub = useRef<ScrubState>({ timer: null, on: false, x: 0, startX: 0, startY: 0 });
-  const endScrub = () => {
-    if (scrub.current.timer !== null) window.clearTimeout(scrub.current.timer);
-    scrub.current = { timer: null, on: false, x: 0, startX: 0, startY: 0 };
-    swipeLock.active = false;
-  };
-  // 画面が閉じられても、スワイプを止めたままにしない。
-  useEffect(
-    () => () => {
-      if (scrub.current.timer !== null) window.clearTimeout(scrub.current.timer);
-      swipeLock.active = false;
-    },
-    [],
-  );
   if (geometry === null) return null;
 
   // 触れた位置にいちばん近い日を選ぶ。
@@ -110,51 +88,16 @@ function Chart({ points }: { points: BalancePoint[] }) {
       className="mx-auto w-full max-w-[480px] touch-pan-y select-none"
       role="img"
       aria-label="残高の推移"
+      {...swipeBoundary}
       onPointerDown={(event) => {
-        if (event.pointerType === 'mouse') {
-          event.currentTarget.setPointerCapture(event.pointerId);
-          select(event.currentTarget, event.clientX);
-          return;
-        }
-        const svg = event.currentTarget;
-        const { pointerId, clientX, clientY } = event;
-        endScrub();
-        scrub.current.x = clientX;
-        scrub.current.startX = clientX;
-        scrub.current.startY = clientY;
-        scrub.current.timer = window.setTimeout(() => {
-          scrub.current.timer = null;
-          scrub.current.on = true;
-          swipeLock.active = true;
-          svg.setPointerCapture(pointerId);
-          select(svg, scrub.current.x);
-        }, SCRUB_HOLD_MS);
+        event.currentTarget.setPointerCapture(event.pointerId);
+        select(event.currentTarget, event.clientX);
       }}
       onPointerMove={(event) => {
-        if (event.pointerType === 'mouse') {
+        if (event.currentTarget.hasPointerCapture(event.pointerId) || event.pointerType === 'mouse') {
           select(event.currentTarget, event.clientX);
-          return;
-        }
-        const state = scrub.current;
-        state.x = event.clientX;
-        if (state.on) {
-          select(event.currentTarget, event.clientX);
-        } else if (
-          state.timer !== null &&
-          Math.hypot(event.clientX - state.startX, event.clientY - state.startY) > HOLD_SLOP
-        ) {
-          // 押さえずに動かした＝払う動き（切り替えのスワイプ・縦スクロール）。なぞるモードには入らない。
-          window.clearTimeout(state.timer);
-          state.timer = null;
         }
       }}
-      onPointerUp={(event) => {
-        if (event.pointerType !== 'mouse' && !scrub.current.on && scrub.current.timer !== null) {
-          select(event.currentTarget, event.clientX);
-        }
-        endScrub();
-      }}
-      onPointerCancel={endScrub}
     >
       {geometry.ticks.map((tick) => (
         <g key={tick}>
